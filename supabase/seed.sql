@@ -1,0 +1,10 @@
+-- seed.sql — local/staging demo data (runs automatically on `supabase db reset`).
+--
+-- Reference lookups (roles, departments, rating_guide, difficulty_guide) are seeded
+-- by migration 0001_core_schema.sql so they exist in EVERY environment, including
+-- production. Do not duplicate them here.
+--
+-- Demo members / teams / tasks / events / announcements land in Epic 5.2. They require
+-- auth.users rows, so they must be created together with test auth users (the Epic 5.2
+-- issue adds a seed routine that inserts into auth.users + profiles in one transaction).
+-- Intentionally left empty for the foundation slice so `db reset` is clean.
