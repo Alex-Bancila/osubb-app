@@ -33,7 +33,7 @@ Environment checklist per member: Docker Desktop · Node · `npx supabase start`
 ## Work rules
 
 - **Everything is a GitHub issue.** Labels drive flow: `ready-for-agent` = fully specced, do it with Claude; `ready-for-human` = needs judgment/design; `needs-triage` cleared weekly by Alex (see `docs/agents/triage-labels.md`).
-- **One issue = one PR** into protected `main`; CI must be green (migrations apply + pgTAP per-role suite).
+- **One issue = one PR** into `main`; CI must be green (migrations apply + pgTAP per-role suite). *(Enforced branch protection isn't available on a free-plan private repo — the rule is discipline for now; apply for [GitHub for Nonprofits](https://github.com/nonprofit) or move to an org plan to enforce it.)*
 - **Review:** Alex reviews every PR until two volunteers have each landed ~5; then peer review, with Alex retained on migrations/RLS (the security core).
 - **Spec-first for new features:** brainstorm → `docs/superpowers/specs/` → issues. Use `CONTEXT.md` terms everywhere.
 - **Definition of Done:** migration applies on `db reset` · pgTAP green (incl. per-role) · PR reviewed · deployed to staging · issue AC checked off.
