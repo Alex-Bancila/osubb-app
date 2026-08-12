@@ -12,4 +12,4 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-These are the canonical defaults — the repo has no existing labels yet (it has no GitHub remote). Once the GitHub repo exists, `scripts/create-github-issues.sh` creates these five labels along with the backend backlog. Edit the right-hand column here (and the script) if you adopt a different vocabulary instead.
+These are the canonical defaults, created on `Alex-Bancila/osubb-app` by `scripts/create-github-issues.sh` (2026-08-12) alongside the area labels (`backend`, `database`, `auth`, `rls`, `edge-function`, `testing`, `ci`, `docs`, `frontend`). Edit the right-hand column here (and the labels on GitHub) if you adopt a different vocabulary.

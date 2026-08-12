@@ -2,7 +2,7 @@
 
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
-> **Status (2026-08-12):** this repo is a git repository (branch `main`) but has **no remote yet** — `git remote -v` is empty, so it is not on GitHub. These conventions take effect once a GitHub remote is added and pushed. Until then, no issues are created; the maintainer (Alex) will bring issues in "when it's their time." Re-running `/setup-matt-pocock-skills` is not required when that happens — these conventions already apply. Once the repo exists on GitHub, `bash scripts/create-github-issues.sh` creates the labels, milestones, and backend backlog in one shot.
+> **Status (2026-08-12):** live. The repo is at **`Alex-Bancila/osubb-app`** (private); the backlog script has been run once (37 issues, 14 labels, 11 epic milestones). Do **not** re-run `scripts/create-github-issues.sh` — it is not idempotent.
 
 ## Conventions
 
