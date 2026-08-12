@@ -50,4 +50,4 @@ Students: semester starts Oct (recruitment-campaign load), exam sessions mid-Jan
 
 ## Bus-factor mitigations
 
-Recorded trainings · docs/ADRs kept current (they gate PRs) · everything in issues, nothing in DMs · ≥2 people familiar with each area by Nov · secrets in the team password manager, never in git.
+Recorded trainings · docs/ADRs kept current (they gate PRs) · everything in issues, nothing in DMs · ≥2 people familiar with each area by Nov · secrets in the team Bitwarden, never in git.

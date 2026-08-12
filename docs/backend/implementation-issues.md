@@ -11,7 +11,7 @@ Legend: each task lists its **labels** and **acceptance criteria (AC)**. ✅ = a
 ## Epic 0 — Foundation
 - **0.1 Repo & Supabase scaffold** ✅ — git repo, `.gitignore`, `supabase/config.toml`, `supabase start` runs locally. *Delivered.*
 - **0.2 Domain & decision docs** ✅ — `CONTEXT.md`, ADRs 0001–0006, `CLAUDE.md`, mandate docs in `docs/org/`. *Delivered.*
-- **0.3 Hosted staging project** — Create a **free** Supabase cloud project (EU region); `npx supabase link --project-ref <ref>`; `npx supabase db push`. Store the project ref + anon/service keys in the team password manager (not git); set the CI staging secrets (see 7.1).
+- **0.3 Hosted staging project** — Create a **free** Supabase cloud project (EU region); `npx supabase link --project-ref <ref>`; `npx supabase db push`. Store the project ref + anon/service keys in the team **Bitwarden** (not git); set the CI staging secrets (see 7.1).
   - **AC:** staging DB has all migrations applied; `select * from roles;` returns 8 rows on staging.
 
 ## Epic 1 — Database schema
