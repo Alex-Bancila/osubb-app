@@ -38,6 +38,7 @@ label "edge-function" "0052CC" "Supabase Edge Functions"
 label "testing"       "BFD4F2" "Tests"
 label "ci"            "C2E0C6" "CI/CD & deploy"
 label "docs"          "FEF2C0" "Documentation"
+label "frontend"      "E99695" "Ionic/React app work"
 
 # ----------------------------- Milestones -----------------------------
 milestone() { gh api "repos/{owner}/{repo}/milestones" -X POST -f title="$1" >/dev/null 2>&1 && echo "  milestone: $1" || echo "  milestone exists: $1"; }
@@ -50,6 +51,9 @@ milestone "Epic 4 — Edge Functions"
 milestone "Epic 5 — Seed & demo data"
 milestone "Epic 6 — Testing"
 milestone "Epic 7 — Deploy & CI"
+milestone "Epic 8 — Frontend foundation"
+milestone "Epic 9 — Screens"
+milestone "Epic 10 — Launch ops"
 
 # ------------------------------- Issues -------------------------------
 # issue "<title>" "<milestone>" "<comma,labels>"  <<'BODY' ... BODY
@@ -89,9 +93,21 @@ issue "1.5 Events & announcements schema" "Epic 1 — Database schema" "backend,
 BODY
 
 issue "1.6 Notifications & push tokens schema" "Epic 1 — Database schema" "backend,database,ready-for-agent" <<'BODY'
-`notifications`, `notif_suppression` (seed: bc × task/event/deadline), `push_tokens`.
+`notifications`, `notif_suppression` (seed: **bc + bce** × task/event/deadline — own-task notifications always delivered, per spec Revision 3 resolution 2), `push_tokens`.
 
-**AC:** three BC suppression rows exist; `push_tokens` unique per (member, token). Spec §3.4.
+**AC:** six suppression rows exist; `push_tokens` unique per (member, token). Spec §3.4 + Revision 3.
+BODY
+
+issue "1.8 P1 schema deltas (joined_at, sanction semantics)" "Epic 1 — Database schema" "backend,database,ready-for-agent" <<'BODY'
+`profiles.joined_at date` (backfillable from `joined_year`); document `points_ledger.reason` values ('task','manual_award','sanction') and add `note` for sanction reasons. Spec Revision 3 §9.3.
+
+**AC:** `joined_at` exists; a sanction can be recorded with a reason note.
+BODY
+
+issue "1.9 Promotion rules, role history & engine (Phase 2, ADR-0004)" "Epic 1 — Database schema" "backend,database,ready-for-agent" <<'BODY'
+`promotion_rules` (from/to, kind time|points, threshold, enabled), `role_history` (actor incl. 'system'), scheduled job (pg_cron/Edge) for the time rule + ledger-driven check for the points rule, promotion notification. ADR-0004.
+
+**AC:** a recrut with `joined_at` a semester ago is auto-promoted to voluntar (role_history actor=system + notification); a voluntar crossing the points threshold becomes activ; no automatic change for roles level >= 3; no automatic demotion.
 BODY
 
 issue "1.7 AG / Interne views" "Epic 1 — Database schema" "backend,database,ready-for-agent" <<'BODY'
@@ -146,16 +162,10 @@ Upload CSV → parse → magic-link invite each recruit → insert profile/depar
 **AC:** a 3-row CSV creates 3 recruits with correct dept/team + 3 magic links; malformed rows reported, not fatal. Spec §5.1.
 BODY
 
-issue "4.2 Edge Function: push dispatch (OneSignal)" "Epic 4 — Edge Functions" "backend,edge-function,ready-for-human" <<'BODY'
-On new announcement/deadline: compute recipients, drop role-suppressed kinds, write `notifications`, call OneSignal REST with role/dept tags.
+issue "4.2 Edge Function: push dispatch (Phase 2)" "Epic 4 — Edge Functions" "backend,edge-function,ready-for-human" <<'BODY'
+On new announcement/deadline: compute recipients, drop role-suppressed kinds, write `notifications`, call the push provider (default OneSignal — ADR at build time) with role/dept tags.
 
-**AC:** a `task` notification is never delivered to a `bc` member; in-app rows match the delivered set. Spec §5.2.
-BODY
-
-issue "4.3 (Optional) Promotion suggestions job" "Epic 4 — Edge Functions" "backend,edge-function,needs-triage" <<'BODY'
-Flag members crossing a tier threshold for BC review — manual-first, no auto-promote.
-
-**AC:** a member crossing 300 pts appears in a "suggested for AG" list; no role changes automatically.
+**AC:** a `task` notification is never delivered to a `bc`/`bce` member; in-app rows match the delivered set. Spec §5.2 + Revision 3.
 BODY
 
 issue "5.2 Demo dataset seed" "Epic 5 — Seed & demo data" "backend,database,ready-for-agent" <<'BODY'
@@ -171,21 +181,105 @@ A test user per role; assert each role reads/writes exactly what spec §4.3 allo
 BODY
 
 issue "6.2 Points-engine tests" "Epic 6 — Testing" "backend,testing,ready-for-agent" <<'BODY'
-Grading, penalties, re-grading, and leaderboard/dept_cup correctness.
+Grading, penalties, re-grading, sanctions, and leaderboard/dept_cup correctness. Built together with 1.4.
 
-**AC:** deterministic points for known difficulty/rating combos; penalties reduce totals.
+**AC:** deterministic points for known difficulty/rating combos; penalties/sanctions reduce totals.
 BODY
 
-issue "7.1 CI: migrations + tests on PR, push to staging" "Epic 7 — Deploy & CI" "backend,ci,ready-for-human" <<'BODY'
-GitHub Actions: on PR spin up Postgres, apply migrations, run Epic-6 tests; on merge to main `db push` to staging.
+issue "7.1 CI: staging secrets + auto db push on merge" "Epic 7 — Deploy & CI" "backend,ci,ready-for-human" <<'BODY'
+The CI workflow (.github/workflows/ci.yml) landed with the foundation. Remaining: create the staging project (0.3), then set `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD` repo secrets so merges to main push migrations to staging.
 
 **AC:** a PR breaking a policy fails CI; a green merge updates staging automatically.
 BODY
 
 issue "7.2 Production Supabase (Pro) + gated promotion" "Epic 7 — Deploy & CI" "backend,ci,needs-triage" <<'BODY'
-Supabase Pro project with Spend Cap ON + daily backups; migrations promoted to prod via a manual gated step.
+Supabase Pro project (EU) with Spend Cap ON + daily backups; migrations promoted to prod via a manual gated step. Created in Sprint 3, before real data.
 
 **AC:** prod on Pro; spend cap verified; documented one-command migration promotion.
+BODY
+
+issue "8.1 Frontend mini-spec + scaffold" "Epic 8 — Frontend foundation" "frontend,ready-for-human" <<'BODY'
+Short spec (folder structure, routing, data-layer conventions, theming tokens from the mockup), then scaffold `app/`: Vite + React + TypeScript + Ionic + ESLint/Prettier + Vitest. ADR-0002 fixes the stack; the mockup fixes the UX.
+
+**AC:** `npm run dev` serves the shell; `npm run build` + `npm test` pass in CI.
+BODY
+
+issue "8.2 Auth + app shell" "Epic 8 — Frontend foundation" "frontend,auth,ready-for-human" <<'BODY'
+Login (magic link + Google), session handling, role-gated navigation (sidebar desktop / tabs mobile), light/dark OSUBB theming.
+
+**AC:** an invited demo user logs in via magic link; nav shows exactly the screens the role allows (mirrors mockup `OSUBB.access`).
+BODY
+
+issue "8.3 Data layer (typed client + query conventions)" "Epic 8 — Frontend foundation" "frontend,ready-for-agent" <<'BODY'
+Typed supabase-js client, generated DB types (`supabase gen types` as an npm script), TanStack Query conventions (query keys, error/loading), AG Grid Community wrapper.
+
+**AC:** a sample query renders live rows from local Supabase with generated types.
+BODY
+
+issue "9.1 Screen: Task Tracker (demo gate)" "Epic 9 — Screens" "frontend,ready-for-human" <<'BODY'
+Grid (sort/filter), create task (+ scoring-guide button), grade -> ledger, claim `open` tasks, task requests + approval flow.
+
+**AC:** spec §5 mapping works end-to-end for every role; grading updates the leaderboard.
+BODY
+
+issue "9.2 Screen: Dashboard (demo gate)" "Epic 9 — Screens" "frontend,ready-for-human" <<'BODY'
+Greeting, own points/tier/rank + "Ești la Z puncte…" message, mini-leaderboard, dept cup, upcoming events, recent announcements.
+
+**AC:** numbers match `member_points` / `leaderboard` / `dept_cup` for the demo users.
+BODY
+
+issue "9.3 Screen: Calendar" "Epic 9 — Screens" "frontend,ready-for-human" <<'BODY'
+Month grid colored by department, role-filtered events (`event_read`), RSVP (Vin/Nu pot veni), call types, "Evenimente viitoare" zone.
+
+**AC:** each role sees exactly the events §4.4 allows; RSVP writes `event_attendance`.
+BODY
+
+issue "9.4 Screen: Announcements + notifications" "Epic 9 — Screens" "frontend,ready-for-human" <<'BODY'
+Feed with priority styling, critical red pop-ups until read, mark-as-read; in-app notification center.
+
+**AC:** a critical announcement pops up until read; suppressed kinds never appear for bc/bce.
+BODY
+
+issue "9.5 Screen: Volunteers directory" "Epic 9 — Screens" "frontend,ready-for-human" <<'BODY'
+HR-style searchable directory (level >= 5), member detail, edit.
+
+**AC:** level < 5 cannot open the screen or read directory rows.
+BODY
+
+issue "9.6 Screen: BC Panel" "Epic 9 — Screens" "frontend,ready-for-human" <<'BODY'
+Task-request approvals, award points / sanction (reason + notification), role management (writes `role_history`), CSV import UI (calls 4.1). BC to validate scope (Direcții 6).
+
+**AC:** a sanction writes a 'sanction' ledger row + notification; role changes write `role_history`.
+BODY
+
+issue "9.7 Screen: Profile" "Epic 9 — Screens" "frontend,ready-for-human" <<'BODY'
+Own info, tier progress, teams, "Demisie AG" placeholder (P3), theme toggle.
+
+**AC:** a member edits own contact fields only (RLS enforced).
+BODY
+
+issue "10.1 Cloudflare Pages deploy (staging + prod)" "Epic 10 — Launch ops" "ci,frontend,ready-for-human" <<'BODY'
+Staging + production environments, SPA routing config, env vars (anon key/url), deploy on merge.
+
+**AC:** staging URL serves the app against staging Supabase; production is a separate env.
+BODY
+
+issue "10.2 BC/BCE data migration" "Epic 10 — Launch ops" "backend,ready-for-human" <<'BODY'
+Import the real leadership task sheet (Google Sheets export -> script) into `tasks`/`points_ledger`.
+
+**AC:** totals in the app match the current sheet for every BC/BCE member (sign-off from Alex).
+BODY
+
+issue "10.3 BC/BCE onboarding (go-live Oct 1)" "Epic 10 — Launch ops" "docs,ready-for-human" <<'BODY'
+Invite the ~20 BC/BCE members (magic links), 1-page quickstart (RO), collect first-week feedback.
+
+**AC:** every BC/BCE member has logged in at least once by Oct 8.
+BODY
+
+issue "10.4 Org-wide rollout (Phase 2)" "Epic 10 — Launch ops" "backend,needs-triage" <<'BODY'
+Recruit CSV onboarding during the recruitment campaign, promotion engine live (1.9), notification prefs.
+
+**AC:** >=80% of active members have accounts by Dec 1.
 BODY
 
 echo "Done. Review the issues at: $(gh repo view --json url -q .url)/issues"
