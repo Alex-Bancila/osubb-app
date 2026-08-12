@@ -45,6 +45,14 @@ create table task_requests (
   created_at  timestamptz not null default now()
 );
 
+-- RLS on from birth: deny-by-default for anon/authenticated until Epic 3.3
+-- adds the policies (spec §4.3). postgres/service_role bypass RLS, so seeds,
+-- triggers and admin routines keep working. Tables from migration 0001 get
+-- the same treatment in Epic 3.1.
+alter table tasks         enable row level security;
+alter table task_assignees enable row level security;
+alter table task_requests  enable row level security;
+
 -- Indexes on columns used by future RLS policies (§4.3) and screen queries (§5).
 create index tasks_dept_idx            on tasks (dept_id);
 create index tasks_team_idx            on tasks (team_id);
