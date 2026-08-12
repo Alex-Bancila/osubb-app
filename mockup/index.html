@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OSUBB · Aplicația organizației</title>
+  <meta name="description" content="Prototip — aplicația OSUBB: Task Tracker, Calendar, Anunțuri, Voluntari, Recrutare." />
+  <link rel="icon" type="image/png" href="assets/icon-light.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/tokens.css?v=2" />
+  <link rel="stylesheet" href="css/base.css?v=2" />
+  <link rel="stylesheet" href="css/components.css?v=2" />
+  <link rel="stylesheet" href="css/layout.css?v=2" />
+  <script>/* apply saved theme before first paint (no flash) */
+    (function () { try { if (localStorage.getItem('osubb-theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {} })();
+  </script>
+</head>
+<body>
+
+  <!-- ===================== LOGIN ===================== -->
+  <div id="login" class="login">
+    <div class="login-inner">
+      <img class="login-logo lg-light" src="assets/logo-light.png" alt="OSUBB" />
+      <img class="login-logo lg-dark" src="assets/logo-dark.png" alt="OSUBB" />
+      <form class="login-card" id="login-form">
+        <h2>Bine ai venit</h2>
+        <p class="t-muted t-center mt-2 mb-4">Conectează-te cu contul tău OSUBB.</p>
+
+        <button class="btn-google mb-2" type="button" id="google-btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09Z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M5.84 14.11a6.6 6.6 0 0 1 0-4.22V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z"/><path fill="#EA4335" d="M12 4.75c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 1.46 14.97.5 12 .5A11 11 0 0 0 2.18 7.05l3.66 2.84C6.71 6.68 9.14 4.75 12 4.75Z"/></svg>
+          Continuă cu Google
+        </button>
+
+        <div class="or-sep">sau cu emailul</div>
+
+        <div class="field">
+          <label class="label" for="email">Email</label>
+          <input class="input" id="email" type="email" placeholder="nume.prenume@osubb.ro" value="alex.bancila@osubb.ro" />
+        </div>
+        <div class="field">
+          <label class="label" for="pass">Parolă</label>
+          <input class="input" id="pass" type="password" placeholder="••••••••" value="parola123" />
+        </div>
+        <div class="field">
+          <label class="label" for="login-role">Intră ca (demo)</label>
+          <select class="select" id="login-role"></select>
+          <span class="hint">Prototip — poți schimba rolul oricând din bara de sus.</span>
+        </div>
+
+        <button class="btn btn-primary btn-lg btn-block mt-2" type="submit">Intră în cont</button>
+      </form>
+      <p class="login-foot t-xs t-faint">Prototip de prezentare · date demonstrative · OSUBB 2026</p>
+    </div>
+  </div>
+
+  <!-- ===================== APP SHELL ===================== -->
+  <div id="app" class="app hide">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img class="lg-light" src="assets/logo-light.png" alt="OSUBB" />
+        <img class="lg-dark" src="assets/logo-dark.png" alt="OSUBB" />
+      </div>
+      <nav class="nav"><!-- filled by router --></nav>
+      <div class="sidebar-foot">
+        <div class="usercard" id="sidebar-user"><!-- filled by router --></div>
+      </div>
+    </aside>
+
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Meniu">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="topbar-title" id="topbar-title">Panou principal</div>
+      <div class="topbar-spacer"></div>
+
+      <div class="roleswitch">
+        <span class="rs-label">Vezi ca</span>
+        <select id="role-select" aria-label="Schimbă rolul (demo)"></select>
+      </div>
+
+      <div style="position:relative">
+        <button class="icon-btn" id="bell-btn" aria-label="Notificări">
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10.5 20a2 2 0 0 0 3 0"/></svg>
+          <span class="ind" id="bell-ind"></span>
+        </button>
+        <div id="noti-host"></div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div id="view"><!-- active view --></div>
+    </main>
+
+    <nav class="tabbar"><!-- mobile, filled by router --></nav>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root" class="toast-wrap"></div>
+
+  <!-- ===================== SCRIPTS ===================== -->
+  <script src="js/data.js?v=2"></script>
+  <script src="js/icons.js?v=2"></script>
+  <script src="js/state.js?v=2"></script>
+  <script src="js/router.js?v=2"></script>
+  <!-- views (each self-registers) -->
+  <script src="js/views/dashboard.js?v=2"></script>
+  <script src="js/views/tasktracker.js?v=2"></script>
+  <script src="js/views/calendar.js?v=2"></script>
+  <script src="js/views/announcements.js?v=2"></script>
+  <script src="js/views/volunteers.js?v=2"></script>
+  <script src="js/views/profile.js?v=2"></script>
+  <script src="js/views/bcpanel.js?v=2"></script>
+  <script src="js/views/notifications.js?v=2"></script>
+  <!-- bootstrap last -->
+  <script src="js/app.js?v=2"></script>
+</body>
+</html>
