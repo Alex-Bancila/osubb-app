@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+supabase/.env
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# Deno (Edge Functions)
+.deno/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local Claude Code settings (keep shared settings.json, ignore per-machine)
+.claude/settings.local.json
+
+# Large binary source material — keep in a shared drive, not git
+# (Brand Book is ~58MB; GitHub warns >50MB. Use Git LFS if you must track these.)
+*.pdf
