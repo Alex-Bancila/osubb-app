@@ -2,7 +2,7 @@
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
-**This repo is single-context:** one `CONTEXT.md` + `docs/adr/` at the repo root. Both exist — `CONTEXT.md` is the OSUBB domain glossary, and `docs/adr/` holds ADRs 0001–0003. New ADRs get the next number in sequence; the domain-modeling skills add terms and decisions lazily as they get resolved.
+**This repo is single-context:** one `CONTEXT.md` + `docs/adr/` at the repo root. Both exist — `CONTEXT.md` is the OSUBB domain glossary, and `docs/adr/` holds ADRs 0001–0006. New ADRs get the next number in sequence; the domain-modeling skills add terms and decisions lazily as they get resolved.
 
 ## Before exploring, read these
 

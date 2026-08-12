@@ -468,3 +468,91 @@ These don't block the design (the backend is frontend-agnostic) but should be co
 ## 9. Next step
 
 On approval, the next deliverable is the **implementation plan** (writing-plans): the ordered, test-backed task breakdown for Phase 0 — repo scaffold, Supabase project + migrations, auth + the first RLS policies, and porting the first screen (Task Tracker) end-to-end.
+
+---
+
+## Revision 3 (2026-08-12) — mandate traceability, closed decisions, schema deltas
+
+A full-plan review against the mandate documents (now in-repo: `docs/org/plan-managerial.md`, `docs/org/directii-prioritati-it.md`) resolved the open §8 decisions, five inter-document conflicts, and mapped every mandate feature to a delivery phase. Phase calendar and success metrics: `docs/roadmap.md`.
+
+### 9.1 §8 decisions — closed
+
+| §8 item | Resolution |
+|---|---|
+| 8.1 Frontend framework | Closed earlier → **ADR-0002** (Capacitor + React + Ionic + AG Grid) |
+| 8.2 PWA vs native launch | **ADR-0005** — PWA-first; BC/BCE live 1 Oct 2026; org-wide at recruitment (Nov); stores later |
+| 8.3 Push provider | **Deferred to Phase 2** (default: OneSignal). In-app notifications suffice for v1; ADR written when built |
+| 8.4 Promotion automation | **ADR-0004** — automatic ≤ Membru Activ (time / points thresholds in a config table), manual above; demotions never automatic |
+| 8.5 Account creation | Closed earlier → **ADR-0003** (invite-only, magic links, no domain restriction) |
+| 8.6 Data retention | **ADR-0006** — alumni keep history; hard delete only on GDPR request (cascade accepted) |
+
+### 9.2 Conflict resolutions (supersede earlier text where noted)
+
+1. **Promotions** (§8.4 "manual with suggestions" vs mandate "automat… GAMIFICAT") → ADR-0004 hybrid, as above.
+2. **Notification suppression** (§3.4/§4.1 seeds BC-only; Plan IV.2 says BC **and BCE** get only their own tasks' notifications) → notifications about a member's **own** assigned tasks are always delivered; *broadcast* task/event/deadline kinds are suppressed by role default for **`bc` and `bce`** (extend the `notif_suppression` seed); a per-member `notification_prefs` table (Phase 2) overrides role defaults — the mockup's "doar taskurile mele" toggle becomes real.
+3. **CSV import credentials** (§5.1 "random temp password or magic-link invite") → **magic links only**, per ADR-0003. The temp-password option is withdrawn.
+4. **Event modification/cancellation** (Plan IV.2 promises modify/cancel + notify; schema had no event status) → add `events.status` (`scheduled`/`cancelled`) + notify-on-change (Phase 2).
+5. **Recrut→Voluntar threshold** ("6 months" in mockup Revizia 2 vs "one semester" decided 2026-08-12) → configurable in `promotion_rules`, default one semester (ADR-0004).
+
+### 9.3 Schema deltas (planned migrations; DDL sketches, final form at implementation)
+
+| Change | Purpose | Phase |
+|---|---|---|
+| `profiles.joined_at date` | Semester rule for auto-promotion (`joined_year` insufficient) | **P1** (next schema migration) |
+| `points_ledger.reason` documented value `'sanction'` (+ `note`) | BC sanctions with reason + notification (Plan IV.3); AGO report later | **P1** (manual entry), report P3 |
+| `task_templates` (title, default_difficulty, suggested points, dept scope) | Direcții 1.3 standard-tasks dropdown | P2 |
+| `member_departments.is_primary boolean` | Recrut sees primary dept only; Voluntar picks secondary (Plan IV.3) | P2 |
+| `profiles.birthday date` (optional, consent-based) | PR alumni/onorifici birthdays (ADR-0006) | P2 |
+| `promotion_rules` + `role_history` + scheduled job | ADR-0004 engine + audit | P2 (before org-wide) |
+| `notification_prefs` (member × kind) | Per-member overrides of role-default suppression | P2 |
+| `events.status` (`scheduled`/`cancelled`) + change notifications | Conflict resolution 4 | P2 |
+| `projects` + `project_members` (+ task/event links) | `event_scope='project'` currently references nothing; project calls (Plan IV.4) | P3 |
+| `ago_sessions` + AGO report view (tasks since last AGO + sanctions, export) | Plan IV.1.a BC report | P3 |
+| `events.points` + QR check-in RPC writing the ledger | QR → auto points (Plan IV.2) | P3 |
+| Per-member **ICS feed** (read-only calendar URL) | Google/Outlook sync, lightest form first (OAuth write-back only if demanded) | P3 |
+
+### 9.4 Mandate traceability (feature → phase)
+
+Phases: **P1** = v1 core (BC/BCE, Oct 1) · **P2** = org-wide (Nov) · **P3** = Dec–Feb · **P4** = Mar–Jun. Full calendar in `docs/roadmap.md`.
+
+| Mandate item | Source | Where it lands |
+|---|---|---|
+| Scoring formula unchanged (difficulty × rating) | Direcții 1.1 | ✅ §3.3 (delivered in 0001 groundwork) |
+| Scoring legend button + guide | Direcții 1.2 | P1 UI; **content ratified by BC** (agenda item, not code) |
+| Standard-task templates dropdown | Direcții 1.3 | P2 (`task_templates`) |
+| Groups/teams tag-assignment | Direcții 1.4 | P1 — `teams` + `task_assignees` exist; assign-by-team UI |
+| Task request by volunteers | Direcții 1.5 | ✅ §3.3 `task_requests` — P1 |
+| Fișa voluntarului (self + moderators) | Direcții 1.6 | ✅ §4.3 RLS — P1 |
+| Interne: AG threshold + AG members sheets, auto-updating | Direcții 1.7 | ✅ §3.5 views — P1 |
+| Role-based access (8 roles) | Direcții 2.1 | ✅ §4 — P1 |
+| Personal dashboard (depts, teams, own TT, tier) | Direcții 2.2 | P1 (screen 9.2) |
+| Auto tier update, gamified | Direcții 2.2 | P2 (ADR-0004 engine) |
+| Shared calendar, role-filtered, colors, join/RSVP, call types, upcoming zone | Direcții 3.1–3.5 | P1 (screens 9.3; §4.4 policy) |
+| Overlap detection popup (events + task deadlines) | Direcții 3.6; Plan IV.1a/IV.2 | P2 (creation-time RPC + UI) |
+| In-app notifications, critical pop-ups | Direcții 3.7 | P1 in-app; push P2 |
+| Announcements page, priority pop-ups until read | Direcții 4 | P1 |
+| Volunteers DB (HR-style) | Direcții 5 | P1 (directory, level ≥ 5) |
+| BC panel | Direcții 6 (scope TBD by BC) | P1 essentials (requests, award/**sanction**, roles, CSV import); BC to validate scope |
+| BC/BCE tracker migration from Sheets | Plan IV.1.a | P1 launch op (Sprint 3) |
+| Google/Outlook calendar transfer | Plan IV.1.a, IV.2 | P3 (ICS feed first) |
+| Deadline-approach + deadline-day notifications | Plan IV.1.a | P2 (scheduled job) |
+| AGO report export (tasks + sanctions since last AGO) | Plan IV.1.a | P3 (`ago_sessions`) |
+| Sanctions with reason + notification | Plan IV.3 (BC) | P1 (ledger `'sanction'`), report P3 |
+| QR meeting check-in → auto points | Plan IV.2 | P3 |
+| RSVP ("Vin") gates point requests after start | Plan IV.2 | P3 (validation vs `event_attendance`) |
+| BC/BCE notification anti-spam | Plan IV.2 | P1 role defaults (resolution 2), prefs P2 |
+| Secondary departments / change primary | Plan IV.3 (Voluntar) | P2 (`is_primary`) |
+| Adherence flow (form → comisie → interview) | Plan IV.3 (Voluntar activ) | P2 notification+form link (Google Forms); full in-app flow P4 |
+| AG: Demisie AG button; propose agenda point → notify SG/BC | Plan IV.3 (vot) | P3 |
+| HR recruitment pipeline (forms→interview grid→quiz) | Plan IV.4.i | P4 (own spec); CSV import is the v1 path |
+| Contactări campaign + exit feedback form | Plan IV.4.i | P4 (forms engine) |
+| EDU/Tineret header updates + org-wide notification | Plan IV.4.ii/iv | P2 (announcements `critical`+`pinned`, optional banner flag) |
+| PR media plans tracking | Plan IV.4.iii | Covered by tasks + deadline notifications (no new subsystem) |
+| Alumni/onorifici birthdays | Plan IV.4.iii | P2 (`profiles.birthday`, ADR-0006) |
+| 3.5% form (Financiar) | Plan IV.4.v | P4 (link-only until forms engine) |
+| Project calls + project membership/visibility | Plan IV.4 Proiecte | P3 (`projects` entity) |
+| Static sites / GitHub Pages migration, TUDI, site content | Plan IV.4.ii/Proiecte | **Out of app scope** — Echipa Site-uri stream |
+| Feedback engine (permanent, semestrial, per-event mandatory) | Plan IV.5 | P4 (own spec); Google Forms links meanwhile |
+| Forms without personal data (pre-filled from app) | Plan IV.4 Overall | P4 (forms engine) |
+| Volunteer contracts flow | Plan IV.8 | P4 (own spec) |
+| Gamification: profile rank message, Cupa departamentelor | Plan IV.8 | P1 (§3.3 views; screens 9.2/9.7) |

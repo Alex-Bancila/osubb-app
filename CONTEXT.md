@@ -31,7 +31,9 @@ The **ubiquitous language** for the OSUBB app. Use these exact terms in code, ta
 - **Points Ledger** (`points_ledger`) — the append-only source of truth for every point change (graded tasks, manual awards, penalties). A member's total is the **sum** of their ledger; never store a running total on the member.
 - **Task Status** (`task_status`) — `todo` | `progress` | `done` | `overdue` | `open`. **open** = unassigned, first-taker: any member may claim it.
 - **Task Request** (`task_requests`) — a member's proposal to **award points** or **create a task**, awaiting approval by a level ≥ 4 member.
-- **Tier** — a display band derived from points + role (Recrut → Voluntar → Membru Activ → …). Promotions are **manual with suggestions** for now (no auto-promote).
+- **Tier** — a display band derived from points + role (Recrut → Voluntar → Membru Activ → …).
+- **Promotion Rule** (`promotion_rules`) — a configurable threshold that promotes automatically (ADR-0004): Recrut→Voluntar after one semester (time), Voluntar→Membru Activ at a BC-set points threshold. Roles level ≥ 3 (vot, responsabil, bce, bc, moderator) change **only manually**; demotions are never automatic. Every change lands in **Role History** (`role_history`, actor `'system'` for automatic ones).
+- **Sanction** — a negative manual ledger entry granted by BC (`points_ledger.reason = 'sanction'`) with a reason note; the member is notified. Sanctions appear in the AGO report.
 - **Leaderboard** / **Cupa departamentelor** ("Departments' Cup") — rankings of members / departments by total points (SQL views over the ledger).
 
 ## Calendar, announcements, notifications

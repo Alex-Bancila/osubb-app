@@ -14,7 +14,7 @@ Five canonical triage roles, each using its default label string (`needs-triage`
 
 ### Domain docs
 
-**Single-context** — `CONTEXT.md` (domain glossary) + `docs/adr/` (ADRs 0001–0003) exist at the repo root. See `docs/agents/domain.md`.
+**Single-context** — `CONTEXT.md` (domain glossary) + `docs/adr/` (ADRs 0001–0006) exist at the repo root. See `docs/agents/domain.md`. The mandate requirements (source documents) are in `docs/org/`; the delivery calendar is `docs/roadmap.md`; the team operating model is `docs/team/team-plan.md`.
 
 ## Backend / local development
 
