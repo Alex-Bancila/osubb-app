@@ -22,7 +22,10 @@ Single-context repo (this repo):
 ├── docs/adr/
 │   ├── 0001-supabase-postgres-rls.md
 │   ├── 0002-frontend-capacitor.md
-│   └── 0003-invite-only-auth.md
+│   ├── 0003-invite-only-auth.md
+│   ├── 0004-promotion-policy.md
+│   ├── 0005-rollout-strategy.md
+│   └── 0006-data-retention.md
 └── (app source)
 ```
 
