@@ -3,6 +3,8 @@
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
 > **Status (2026-08-12):** live. The repo is at **`Alex-Bancila/osubb-app`** (private); the backlog script has been run once (37 issues, 14 labels, 11 epic milestones). Do **not** re-run `scripts/create-github-issues.sh` — it is not idempotent.
+>
+> **Status (2026-08-19):** the remaining backlog was split (one-shot, also never re-run) into **≤1h issues #43–#112**, labeled **`max-1h`**, each with Goal/Why/How/AC/Est/Depends in the body. The 26 superseded parents were closed with cross-links. Map: `docs/backend/implementation-issues.md`; continuation guide: `docs/agents/onboarding.md`. Pick work with `gh issue list --label max-1h --state open` and respect each issue's "Depends on" line.
 
 ## Conventions
 

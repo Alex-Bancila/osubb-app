@@ -42,7 +42,8 @@ The **ubiquitous language** for the OSUBB app. Use these exact terms in code, ta
 - **Scope** (`event_scope`) — who can see an event: `team` | `dept` | `project` | `org`. Governs calendar visibility together with role level.
 - **Announcement** (`announcements`) — an org message with a **Priority** (`critical` | `important` | `normal`), optionally **pinned**, optionally linking a form.
 - **Notification** (`notifications`) — a per-recipient alert of a **Kind** (`announce`, `deadline`, `event`, `task`, `system`).
-- **Suppression** (`notif_suppression`) — role-based rule that hides certain notification kinds from a role (e.g. **BC do not receive task/event/deadline notifications**).
+- **Suppression** (`notif_suppression`) — role-based rule that hides certain notification kinds from a role: **BC and BCE do not receive broadcast task/event/deadline notifications** (spec Revision 3, resolution 2 — supersedes the older bc-only wording). Notifications about a member's **own** tasks are always delivered.
+- **Fan-out** — the server-side act of turning one event (an announcement, a deadline) into one `notifications` row per intended recipient, applying Suppression via the lookup, never hardcoded roles.
 
 ## Governance thresholds
 
@@ -52,4 +53,8 @@ The **ubiquitous language** for the OSUBB app. Use these exact terms in code, ta
 ## Access model (see ADR-0003)
 
 - **Invite-only** — anyone may *authenticate* (email or Google), but access requires a BC-provisioned `profiles` row. No self-service sign-up; RLS denies everyone without a profile.
-- **RLS** — *Row-Level Security*: all authorization lives in Postgres policies, keyed off the member's Role/Level/Departments/Teams carried in the JWT. The client holds no authority.
+- **Magic link** — the passwordless login email an invited member receives; the only way accounts come into existence. Nobody generates or distributes passwords.
+- **Provisioning** — creating the `profiles` row + department/team links for an invited auth user, atomically, via one shared server-side path (single invite and CSV import both use it).
+- **Claims** — the member's `member_role`, `member_level`, `dept_ids`, `team_ids`, stamped into the JWT at login by the custom access-token hook. RLS helpers (`auth_level()`, `auth_role()`, `auth_in_dept()`, `auth_in_team()`) read only these.
+- **RLS** — *Row-Level Security*: all authorization lives in Postgres policies, keyed off the Claims. The client holds no authority. The database is **deny-by-default**: every table has RLS enabled; a role sees only what an explicit policy grants.
+- **Capability** (`role_capabilities`) — a named permission derived from Level thresholds (e.g. `manageTasks` = level ≥ 4, `manageRoles` = level ≥ 6), stored as data so BC can adjust without code. UI reads it for nav gating; policies use `auth_level()` directly.
