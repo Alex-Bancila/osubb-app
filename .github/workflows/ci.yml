@@ -36,6 +36,14 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: db
     runs-on: ubuntu-latest
+    # Staging has one database, so it gets one deploy at a time. Merging a
+    # batch of PRs used to start a push per merge; they raced, and two failed
+    # on work a neighbour had already applied. Queued runs are superseded by
+    # the newest commit, which is what we want: the last one carries every
+    # pending migration anyway.
+    concurrency:
+      group: staging-deploy
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
