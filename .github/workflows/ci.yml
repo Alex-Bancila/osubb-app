@@ -55,4 +55,8 @@ jobs:
             exit 0
           fi
           supabase link --project-ref "$SUPABASE_PROJECT_REF"
-          supabase db push
+          # --include-all: with several PRs open at once, branches carry
+          # migration timestamps that can land out of order. Without this flag
+          # `db push` refuses any migration older than the newest one already
+          # applied remotely, and staging silently stops tracking main.
+          supabase db push --include-all
