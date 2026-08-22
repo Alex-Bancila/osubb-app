@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(23);
+select plan(24);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -128,8 +128,13 @@ select is(
   4::bigint, 'claims-hook read policies cover all four tables (logins keep working)');
 
 -- ==================== Grant posture ====================
-select ok(has_table_privilege('authenticated', 'profiles', 'select'),
-  'authenticated keeps the SELECT grant — RLS does the denying');
+-- Epic 3.2a narrowed this from a table grant to column grants: members may
+-- select a profile's public columns, never email/phone. The grant still
+-- exists — RLS is what decides *which rows* come back.
+select ok(has_any_column_privilege('authenticated', 'profiles', 'select'),
+  'authenticated keeps a SELECT grant — RLS does the row denying');
+select ok(not has_column_privilege('authenticated', 'profiles', 'email', 'select'),
+  'the contact columns are not part of that grant');
 select ok(not has_table_privilege('authenticated', 'profiles', 'truncate'),
   'authenticated cannot TRUNCATE (not governed by RLS)');
 select ok(not has_table_privilege('anon', 'profiles', 'select'),
