@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(23);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -45,25 +45,57 @@ update tasks set rating = 4 where title = 'rls-t1';
 insert into task_requests (kind, title, from_member)
   values ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006');
 
--- ==================== A normal user reads zero rows anywhere (AC) ====================
+-- ==================== Nothing leaks without an explicit policy (AC) ====================
+-- Written as a sweep rather than a fixed list: as each Epic-3 issue opens a
+-- slice, that table drops out of the sweep automatically and its own suite
+-- asserts the exact rows it now shows. Any *new* table that reaches main
+-- without a considered read policy fails here on the day it lands.
+create function pg_temp.tables_leaking_without_policy() returns text[]
+language plpgsql as $$
+declare
+  t record;
+  n bigint;
+  leaks text[] := '{}';
+begin
+  for t in
+    select c.relname
+      from pg_class c
+      join pg_namespace ns on ns.oid = c.relnamespace
+     where ns.nspname = 'public' and c.relkind = 'r'
+       and not exists (
+         select 1 from pg_policies p
+          where p.schemaname = 'public' and p.tablename = c.relname
+            and p.cmd in ('SELECT', 'ALL')
+            and p.roles && array['authenticated', 'public']::name[])
+     order by c.relname
+  loop
+    execute format('select count(*) from public.%I', t.relname) into n;
+    if n > 0 then
+      leaks := leaks || t.relname;
+    end if;
+  end loop;
+  return leaks;
+end $$;
+
 set local role authenticated;
 
-select is((select count(*) from roles),              0::bigint, 'authenticated: roles hidden');
-select is((select count(*) from departments),        0::bigint, 'authenticated: departments hidden');
-select is((select count(*) from rating_guide),       0::bigint, 'authenticated: rating_guide hidden');
-select is((select count(*) from difficulty_guide),   0::bigint, 'authenticated: difficulty_guide hidden');
-select is((select count(*) from profiles),           0::bigint, 'authenticated: profiles hidden');
-select is((select count(*) from member_departments), 0::bigint, 'authenticated: member_departments hidden');
-select is((select count(*) from teams),              0::bigint, 'authenticated: teams hidden');
-select is((select count(*) from team_members),       0::bigint, 'authenticated: team_members hidden');
-select is((select count(*) from role_capabilities),  0::bigint, 'authenticated: role_capabilities hidden');
-select is((select count(*) from tasks),              0::bigint, 'authenticated: tasks hidden');
-select is((select count(*) from task_assignees),     0::bigint, 'authenticated: task_assignees hidden');
-select is((select count(*) from task_requests),      0::bigint, 'authenticated: task_requests hidden');
-select is((select count(*) from points_ledger),      0::bigint, 'authenticated: points_ledger hidden');
-select is((select count(*) from member_points),      0::bigint, 'authenticated: member_points empty');
-select is((select count(*) from leaderboard),        0::bigint, 'authenticated: leaderboard empty');
-select is((select count(*) from dept_cup),           0::bigint, 'authenticated: dept_cup empty');
+select is(pg_temp.tables_leaking_without_policy(), '{}'::text[],
+  'no table without a read policy returns rows to a member');
+
+-- The sensitive core, named explicitly. `set role authenticated` with no JWT
+-- means no claims, so auth_level() reads 0 and auth.uid() is null: this is
+-- ADR-0003's "authenticated but not provisioned" stranger. Tasks and points
+-- do have policies now (Epic 3.3) — they must still answer nothing here.
+select is((select count(*) from profiles),       0::bigint, 'authenticated: profiles hidden');
+select is((select count(*) from tasks),          0::bigint, 'authenticated: tasks hidden');
+select is((select count(*) from task_assignees), 0::bigint, 'authenticated: task_assignees hidden');
+select is((select count(*) from task_requests),  0::bigint, 'authenticated: task_requests hidden');
+select is((select count(*) from points_ledger),  0::bigint, 'authenticated: points_ledger hidden');
+
+-- Views are security_invoker, so they inherit the tables' answers.
+select is((select count(*) from member_points),  0::bigint, 'authenticated: member_points empty');
+select is((select count(*) from leaderboard),    0::bigint, 'authenticated: leaderboard empty');
+select is((select count(*) from dept_cup),       0::bigint, 'authenticated: dept_cup empty');
 
 select throws_ok(
   $$ insert into task_requests (kind, title) values ('award', 'sneaky') $$,
