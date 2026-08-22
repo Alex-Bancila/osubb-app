@@ -4,12 +4,13 @@ Internal application for OSUBB (Organizația Studenților din Universitatea Babe
 
 **New agent or teammate? Read `docs/agents/onboarding.md` first** — it is the "continue from here" guide (state of the codebase, read order, conventions, current queue).
 
-## Status (2026-08-19)
+## Status (2026-08-22)
 
-- **Backend core is built and tested:** 6 migrations (core schema · tasks/requests · points engine · JWT claims hook · RLS everywhere + capabilities · tasks/points policies), 4 pgTAP suites / 101 tests, all green in CI.
-- **Pipeline is live:** PRs #38–#42 merged; every merge to `main` auto-pushes migrations to the hosted **staging** project. Production does not exist yet (created in Sprint 3 — issue #77).
-- **Not built yet:** remaining v1 tables (events/announcements/notifications — issues #43–#46), remaining RLS policies (#59–#66), the invite flow (#56–#58), demo seed (#74–#76), and the entire frontend (`app/` does not exist yet — Epic 8/9).
-- **Backlog:** 73 open issues, almost all sized **≤1 hour** (label `max-1h`), each with Goal/Why/How/AC/Depends. Map: `docs/backend/implementation-issues.md`. Next batch: #43 #44 #45 #46 (independent), then the invite chain #56→#57→#58.
+- **The whole v1 schema exists and is tested.** 9 migrations on `main` (core schema · tasks/requests · points engine · JWT claims hook · RLS everywhere + capabilities · tasks/points policies · events+attendance · announcements+reads · notifications · suppression+push tokens · provision_profile · reference/teams policies), 10 pgTAP suites, all green in CI and mirrored to staging automatically.
+- **Merged so far:** PRs #38–#42 (Sprint 1 core) and #114–#121 (v1 tables, provisioning RPC, reference-data policies, two CI fixes).
+- **Open PRs awaiting review** — a stack, merge bottom-up: **#122** (3.2a profile reads + contact gating, adds `auth_is_member()`) → **#124** (3.5a announcements policies) → **#125** (3.4a calendar visibility). Each targets the one below; GitHub retargets to `main` as they merge.
+- **Not built yet:** the invite Edge Function (#57–#58), remaining policies (#60 #63 #65 #66 #123), AG views (#47 #48), fan-out (#68), demo seed (#74–#76), and the entire frontend (`app/` does not exist yet — Epic 8/9).
+- **Backlog:** ~65 open issues, almost all sized **≤1 hour** (label `max-1h`), each with Goal/Why/How/AC/Depends. Map: `docs/backend/implementation-issues.md`. Next up: **#57** (invite-member Edge Function — first Deno code in the repo), then #74–#76 (demo seed) and #79–#81 (frontend scaffold).
 
 ## House rules (must follow)
 

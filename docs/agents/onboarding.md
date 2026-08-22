@@ -70,18 +70,26 @@ gh pr checks <pr> --watch                    # CI green, then a HUMAN merges
 
 Definition of done = migration applies on reset · tests pass and would fail without the feature · CI green · the issue's AC boxes checked · PR closes the issue. After merge: staging updates itself; delete the branch.
 
-## Current queue (as of 2026-08-19)
+## Current queue (as of 2026-08-22)
 
-1. **#43 #44 #45 #46** — remaining v1 tables (independent, parallel-safe).
-2. **#56 → #57 → #58** — the invite chain (first real logins; unblocks human task #54).
-3. **#61 #59 #64** — easy high-value policies; then **#62 → #63, #65, #68**.
-4. Then Sprint 2: **#79 → #80 → #81** (frontend), **#74 → #75 → #76** (demo seed), screens.
+Done since the last update: #43–#46 (v1 tables), #56 (provisioning RPC), #61 (reference/teams policies) — merged. In review as a stack: #122 → #124 → #125 (profiles, announcements, calendar policies).
+
+1. **#57 → #58** — the invite chain. First Deno/Edge Function in the repo; #58 proves the magic link end-to-end in Mailpit and writes the BC runbook. Unblocks human task #54.
+2. **#60** (self-edit + role guard, needs #122 merged) · **#63** (RSVP, needs #125) · **#65** (notifications + suppression) · **#123** (apply `auth_is_member()` to the reference-data policies).
+3. **#47 → #48** (AG views) then **#66**; **#68** (fan-out) once #65 lands.
+4. Sprint 2: **#74 → #75 → #76** (demo seed) and **#79 → #80 → #81** (frontend scaffold), then the screens.
 
 Always confirm against live state: `gh issue list --label max-1h --state open`. Dependencies are stated in each issue body — don't start a blocked one.
 
 ## Known traps
 
 - **Suppression is bc + bce** (spec Revision 3 §9.2). Spec §3.4's `insert into notif_suppression values ('bc',…)` is superseded — seeding bc-only fails review.
+- **`to authenticated` is not "a member".** A session can be authenticated with **no org claims** (never invited, or deactivated since its token was issued — ADR-0003 gate 2). `auth_level()` cannot tell them apart from a recrut, who is also level 0. Any "every member may read this" policy uses **`auth_is_member()`**; `using (true)` is a bug.
+- **A column-level `revoke select (col)` is a no-op** while the role still holds table-wide SELECT — a table grant implies every column. Revoke the table grant, then grant the safe columns back (see `20260822225003_profiles_read_policies.sql`).
+- **`reset role` does not clear the JWT.** In per-role tests, the previous `pg_temp.login()` claims survive, so a "stranger sees nothing" block silently runs as the last persona and passes for free. Clear it: `select set_config('request.jwt.claims', '', true);`
+- **A write denied by RLS is not always an error.** INSERT without a matching policy raises 42501; UPDATE/DELETE without one matches zero rows and returns *silently*. Assert the value is unchanged, not `throws_ok`.
+- **Policies should not depend on other tables' policies.** Use a `security definer` helper (`is_assigned`, `in_my_dept`, `team_admits_recruits`) so narrowing one table later cannot silently change another table's visibility.
+- **`profiles_contact` is deliberately owner-rights** (the one exception to house rule 3) because it re-exposes columns revoked from `authenticated`. Its WHERE clause is the security boundary — don't "fix" it to `security_invoker`, that breaks it for everyone it serves.
 - `rating_mult()` already exists (migration 3) — don't recreate it.
 - Enabling RLS on a table read by the auth hook without a `supabase_auth_admin` policy breaks logins — the four needed policies already exist (migration 4); keep the pattern for any new hook-read table.
 - Views without `security_invoker = on` silently bypass RLS. The deny-by-default test suite has a guard that fails any new RLS-less table — that's intentional; fix the table, not the test.

@@ -16,8 +16,8 @@ Legend: ✅ delivered · 🧍 needs a human (browser/account/BC) · everything e
 ## Epic 1 — Database schema
 - ✅ 1.1 Enums/roles/departments/guides · 1.2 Members/teams (migration `0001`)
 - ✅ 1.3 Tasks & requests (#2, PR #38) · 1.4 Points engine (#3, PR #39)
-- **#43 1.5a** events + event_attendance · **#44 1.5b** announcements + reads
-- **#45 1.6a** notifications table · **#46 1.6b** suppression seed (bc+bce) + push_tokens
+- ✅ 1.5a events + attendance (#43, PR #114) · 1.5b announcements + reads (#44, PR #115)
+- ✅ 1.6a notifications (#45, PR #116) · 1.6b suppression bc+bce + push_tokens (#46, PR #117)
 - **#47 1.7a** ag_eligibility view · **#48 1.7b** ag_quorum_top25 view
 - **#6 1.8** P1 deltas: `profiles.joined_at` + `points_ledger.note`
 - *(Phase 2)* **#49 1.9a** promotion_rules · **#50 1.9b** role_history · **#51 1.9c** detect_promotions() · **#52 1.9d** promotion job + notification (ADR-0004)
@@ -25,13 +25,14 @@ Legend: ✅ delivered · 🧍 needs a human (browser/account/BC) · everything e
 ## Epic 2 — Auth & login
 - ✅ 2.2 JWT claims hook + auth_*() helpers (#10, PR #40)
 - **#53 2.1a** verify + document local auth config · 🧍 **#54 2.1b** staging dashboard checklist (hook, URLs) · 🧍 **#55 2.1c** Google OAuth (Phase 2)
-- **#56 2.3a** provision_profile() RPC · **#57 2.3b** invite-member Edge Function · **#58 2.3c** invite e2e + runbook
+- ✅ 2.3a provision_profile() RPC (#56, PR #119) · **#57 2.3b** invite-member Edge Function · **#58 2.3c** invite e2e + runbook
 
 ## Epic 3 — RLS & permissions
 - ✅ 3.1 Capabilities + RLS everywhere (#12, PR #41) · 3.3 Tasks & points policies (#14, PR #42)
-- **#59 3.2a** profiles read + contact gating · **#60 3.2b** self-edit + role-change guard · **#61 3.2c** teams + reference-data policies
-- **#62 3.4a** event visibility + write · **#63 3.4b** RSVP policies
-- **#64 3.5a** announcements · **#65 3.5b** notifications (suppression) · **#66 3.5c** Interne gating + push_tokens
+- 🔎 **#59 3.2a** profiles read + contact gating *(PR #122, in review — adds `auth_is_member()`)* · **#60 3.2b** self-edit + role-change guard · ✅ 3.2c teams + reference-data policies (#61, PR #120) · **#123 3.2d** apply `auth_is_member()` to the reference-data policies
+- 🔎 **#62 3.4a** event visibility + write *(PR #125)* · **#63 3.4b** RSVP policies
+- 🔎 **#64 3.5a** announcements *(PR #124)* · **#65 3.5b** notifications (suppression) · **#66 3.5c** Interne gating + push_tokens
+- Merge the review stack bottom-up: **#122 → #124 → #125**.
 - **#67 6.1u** umbrella: per-role suite complete (tests ship inside each policy issue)
 
 ## Epic 4 — Business logic
