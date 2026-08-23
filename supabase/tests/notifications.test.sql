@@ -18,6 +18,10 @@ select has_index('public', 'notifications', 'notifications_unread_idx',
   'the unread badge has its own partial index');
 
 -- ==================== Fixtures ====================
+-- The demo seed fills this table; the counts below are about this file's
+-- rows. Cleared inside the transaction, which rolls back.
+truncate notifications;
+
 insert into auth.users (id, email) values
   ('a2000000-0000-0000-0000-0000000000a2', 'nadia.noti@test.local');
 insert into profiles (id, full_name, email, role) values

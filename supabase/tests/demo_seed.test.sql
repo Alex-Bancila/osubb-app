@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(16);
+select plan(22);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -101,6 +101,36 @@ select ok(
 select ok(
   exists (select 1 from points_ledger where reason = 'task' and delta < 0),
   'at least one task was graded 1, so the leaderboard shows a real penalty');
+
+-- ==================== Calendar, feed, notifications ====================
+-- The calendar only demos well if switching accounts changes what you see,
+-- which needs one event per branch of the §4.4 visibility rule.
+select ok((select count(*) from events) >= 6,
+  'the calendar has something in it');
+
+select ok(
+  (select count(*) from events where scope = 'org') >= 1
+  and (select count(*) from events where scope = 'dept') >= 1
+  and (select count(*) from events where scope = 'team') >= 1,
+  'org, department and team events all exist — switching demo accounts changes the calendar');
+
+select ok(
+  exists (select 1 from events e join teams t on t.id = e.team_id where t.for_recruits),
+  'a for_recruits team event exists (what a recrut sees without belonging)');
+
+select ok(
+  exists (select 1 from event_attendance where status = 'declined')
+  and exists (select 1 from event_attendance where status = 'going'),
+  'RSVPs go both ways, so the toggle has two visible states');
+
+-- The feed's loudest state and the v1 forms story both need to be visible.
+select ok(
+  exists (select 1 from announcements where priority = 'critical' and pinned),
+  'a critical pinned announcement exists (the feed''s loudest state)');
+
+select ok(
+  exists (select 1 from announcements where form_url is not null),
+  'one announcement links a form — the v1 forms story is a Google Form link');
 
 select * from finish();
 rollback;
