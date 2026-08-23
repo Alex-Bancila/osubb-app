@@ -24,6 +24,11 @@ create function pg_temp.sees(t text) returns boolean language sql stable as $$
 $$;
 
 -- ==================== Fixtures ====================
+-- The demo seed fills these tables, and this suite counts events exactly —
+-- "a recrut sees four" is a claim about the six fixtures below, not about the
+-- demo calendar. Cleared inside the transaction, which rolls back.
+truncate events, event_attendance cascade;
+
 insert into auth.users (id, email) values
   ('01000000-0000-0000-0000-000000000001', 'rares.recrut@test.local'),
   ('02000000-0000-0000-0000-000000000002', 'vlad.pr@test.local'),

@@ -25,6 +25,10 @@ select has_index('public', 'event_attendance', 'event_attendance_member_idx',
   'attendance is indexed by member ("my RSVPs")');
 
 -- ==================== Fixtures ====================
+-- The demo seed fills these tables; the counts below are about this file's
+-- rows. Cleared inside the transaction, which rolls back.
+truncate events, event_attendance cascade;
+
 insert into auth.users (id, email) values
   ('e0000000-0000-0000-0000-0000000000e1', 'elena.events@test.local');
 insert into profiles (id, full_name, email, role) values

@@ -20,6 +20,10 @@ begin
 end $$;
 
 -- ==================== Fixtures ====================
+-- The demo seed fills these tables; the counts below are about this file's
+-- rows. Cleared inside the transaction, which rolls back.
+truncate announcements, announcement_reads cascade;
+
 insert into auth.users (id, email) values
   ('f1000000-0000-0000-0000-0000000000f1', 'ana.ann@test.local'),
   ('f2000000-0000-0000-0000-0000000000f2', 'radu.resp@test.local');
