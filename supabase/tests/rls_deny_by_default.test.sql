@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(24);
+select plan(26);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -28,7 +28,12 @@ select ok(
                  and role not in ('bce', 'bc', 'moderator')),
   'createTeams goes only to bce/bc/moderator');
 
--- ==================== Fixtures: data that could leak ====================
+-- ==================== Fixtures: a row in every table ====================
+-- The sweep below is only as strong as this block. An empty table proves
+-- nothing, so every table in public gets at least one row and an assertion
+-- enforces that. This is not hypothetical: the open-task leak survived
+-- review because the only fixture task defaulted to status 'todo', so the
+-- unconditional `or status = 'open'` branch of task_read was never exercised.
 insert into auth.users (id, email) values
   ('ffffffff-0000-0000-0000-000000000006', 'flavia.rls@test.local');
 insert into profiles (id, full_name, email, role) values
@@ -38,68 +43,114 @@ insert into member_departments (member_id, dept_id)
 insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-rls', 'ffffffff-0000-0000-0000-000000000006');
+
 insert into tasks (title, difficulty) values ('rls-t1', 3);
 insert into task_assignees (task_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from tasks where title = 'rls-t1';
-update tasks set rating = 4 where title = 'rls-t1';
+update tasks set rating = 4 where title = 'rls-t1';   -- writes points_ledger via trigger
 insert into task_requests (kind, title, from_member)
   values ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006');
 
--- ==================== Nothing leaks without an explicit policy (AC) ====================
--- Written as a sweep rather than a fixed list: as each Epic-3 issue opens a
--- slice, that table drops out of the sweep automatically and its own suite
--- asserts the exact rows it now shows. Any *new* table that reaches main
--- without a considered read policy fails here on the day it lands.
-create function pg_temp.tables_leaking_without_policy() returns text[]
+-- An OPEN, already-GRADED task: the shape that leaked, and the one an
+-- unprovisioned session could have joined to collect points.
+insert into tasks (title, difficulty, status) values ('rls-open', 2, 'open');
+update tasks set rating = 3 where title = 'rls-open';
+
+insert into events (title, type, scope) values ('rls-event', 'sedinta', 'org');
+insert into event_attendance (event_id, member_id)
+  select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from events where title = 'rls-event';
+insert into announcements (title, body) values ('rls-announce', 'corp');
+insert into announcement_reads (announcement_id, member_id)
+  select id, 'ffffffff-0000-0000-0000-000000000006'::uuid
+    from announcements where title = 'rls-announce';
+insert into notifications (member_id, kind, title)
+  values ('ffffffff-0000-0000-0000-000000000006', 'announce', 'rls-noti');
+insert into push_tokens (member_id, token, platform)
+  values ('ffffffff-0000-0000-0000-000000000006', 'rls-token', 'web');
+
+-- ==================== The claimless sweep (AC) ====================
+-- `set role authenticated` with no JWT is ADR-0003's gate-2 session: someone
+-- who authenticated but carries no org claims — never invited, or deactivated
+-- since their token was issued. auth_level() reads 0 (same as a recrut) and
+-- auth.uid() is null. Nothing in the app is theirs to see.
+--
+-- Swept over every table rather than a fixed list, so a future policy with an
+-- unconditional branch (`using (true)`, `or status = 'open'`, `or scope =
+-- 'org'`) fails here on the day it lands.
+create function pg_temp.unpopulated_tables() returns text[]
 language plpgsql as $$
 declare
-  t record;
-  n bigint;
-  leaks text[] := '{}';
+  t record; n bigint; empty text[] := '{}';
 begin
   for t in
-    select c.relname
-      from pg_class c
+    select c.relname from pg_class c
       join pg_namespace ns on ns.oid = c.relnamespace
      where ns.nspname = 'public' and c.relkind = 'r'
-       and not exists (
-         select 1 from pg_policies p
-          where p.schemaname = 'public' and p.tablename = c.relname
-            and p.cmd in ('SELECT', 'ALL')
-            and p.roles && array['authenticated', 'public']::name[])
      order by c.relname
   loop
     execute format('select count(*) from public.%I', t.relname) into n;
-    if n > 0 then
-      leaks := leaks || t.relname;
-    end if;
+    if n = 0 then empty := empty || t.relname; end if;
+  end loop;
+  return empty;
+end $$;
+
+create function pg_temp.tables_visible_to_claimless() returns text[]
+language plpgsql as $$
+declare
+  t record; n bigint; leaks text[] := '{}';
+begin
+  for t in
+    select c.relname from pg_class c
+      join pg_namespace ns on ns.oid = c.relnamespace
+     where ns.nspname = 'public' and c.relkind = 'r'
+     order by c.relname
+  loop
+    execute format('select count(*) from public.%I', t.relname) into n;
+    if n > 0 then leaks := leaks || t.relname; end if;
   end loop;
   return leaks;
 end $$;
 
+-- Non-vacuity first: if a table is empty, the sweep below says nothing about it.
+select is(pg_temp.unpopulated_tables(), '{}'::text[],
+  'every table holds a row, so the sweep cannot pass hollow');
+
+-- Row ids captured while we can still see them. A write attempt phrased as
+-- `insert … select … from tasks where …` would insert zero rows once the
+-- claimless session can no longer see the task — no rows, no policy check,
+-- no exception, and a test that passes for the wrong reason.
+create temp table fx as
+  select (select id from tasks where title = 'rls-open') as open_task_id;
+grant select on fx to authenticated;
+
 set local role authenticated;
 
-select is(pg_temp.tables_leaking_without_policy(), '{}'::text[],
-  'no table without a read policy returns rows to a member');
+select is(pg_temp.tables_visible_to_claimless(), '{}'::text[],
+  'a session without org claims reads nothing, from any table');
 
--- The sensitive core, named explicitly. `set role authenticated` with no JWT
--- means no claims, so auth_level() reads 0 and auth.uid() is null: this is
--- ADR-0003's "authenticated but not provisioned" stranger. Tasks and points
--- do have policies now (Epic 3.3) — they must still answer nothing here.
-select is((select count(*) from profiles),       0::bigint, 'authenticated: profiles hidden');
-select is((select count(*) from tasks),          0::bigint, 'authenticated: tasks hidden');
-select is((select count(*) from task_assignees), 0::bigint, 'authenticated: task_assignees hidden');
-select is((select count(*) from task_requests),  0::bigint, 'authenticated: task_requests hidden');
-select is((select count(*) from points_ledger),  0::bigint, 'authenticated: points_ledger hidden');
+-- The sensitive core, named explicitly — a sweep failure reports a table, but
+-- these say what was actually at stake.
+select is((select count(*) from profiles),       0::bigint, 'claimless: profiles hidden');
+select is((select count(*) from tasks),          0::bigint, 'claimless: tasks hidden, open ones included');
+select is((select count(*) from task_assignees), 0::bigint, 'claimless: task_assignees hidden');
+select is((select count(*) from task_requests),  0::bigint, 'claimless: task_requests hidden');
+select is((select count(*) from points_ledger),  0::bigint, 'claimless: points_ledger hidden');
 
 -- Views are security_invoker, so they inherit the tables' answers.
-select is((select count(*) from member_points),  0::bigint, 'authenticated: member_points empty');
-select is((select count(*) from leaderboard),    0::bigint, 'authenticated: leaderboard empty');
-select is((select count(*) from dept_cup),       0::bigint, 'authenticated: dept_cup empty');
+select is((select count(*) from member_points),  0::bigint, 'claimless: member_points empty');
+select is((select count(*) from leaderboard),    0::bigint, 'claimless: leaderboard empty');
+select is((select count(*) from dept_cup),       0::bigint, 'claimless: dept_cup empty');
 
+-- …and writes nothing either.
 select throws_ok(
   $$ insert into task_requests (kind, title) values ('award', 'sneaky') $$,
-  '42501', null, 'authenticated: writes are denied without a policy');
+  '42501', null, 'claimless: cannot file a task request');
+
+select throws_ok(
+  format($$ insert into task_assignees (task_id, member_id)
+            values (%s, 'ffffffff-0000-0000-0000-000000000006') $$,
+         (select open_task_id from fx)),
+  '42501', null, 'claimless: cannot claim an open task');
 
 reset role;
 

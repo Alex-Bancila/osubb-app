@@ -5,7 +5,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(34);
 
 -- ==================== Login simulation ====================
 create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
@@ -16,6 +16,19 @@ begin
     'app_metadata', jsonb_build_object(
       'member_role', r, 'member_level', lvl,
       'dept_ids', depts, 'team_ids', tms))::text, true);
+  perform set_config('role', 'authenticated', true);
+end $$;
+
+-- A session that authenticated but carries no org claims: never invited, or
+-- deactivated since the token was issued. The claims hook stamps member_role
+-- only for an `activ` profile, so a deactivated member's next token looks
+-- exactly like this — real `sub`, no org claims (ADR-0003 gate 2).
+create function pg_temp.login_claimless(uid uuid)
+returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', uid, 'role', 'authenticated',
+    'app_metadata', jsonb_build_object('provider', 'email'))::text, true);
   perform set_config('role', 'authenticated', true);
 end $$;
 
@@ -182,6 +195,59 @@ select is((select count(*) from points_ledger), 2::bigint,
   'a member sees their own sanction (transparency)');
 
 reset role;
+
+-- ==================== A deactivated member (the regression) ====================
+-- Vlad is suspended. His token still carries `sub`, so auth.uid() is real and
+-- his profiles row still exists — which is exactly why the old policies let
+-- him through: `member_id = auth.uid()` was satisfied. Before the membership
+-- gate he could join the open, already-graded task 't-open' and the
+-- SECURITY DEFINER ledger trigger would have paid him for it.
+-- A fresh open task Vlad has never touched, graded and worth points. It is
+-- created here rather than with the other fixtures so the persona counts
+-- above stay untouched — and unclaimed, because Vlad already claimed
+-- 't-open' earlier: reusing it would have made the broken code fail on the
+-- primary key instead of awarding points, and this test would have "passed"
+-- while proving nothing.
+insert into tasks (title, difficulty, dept_id, status)
+  values ('t-open-bait', 4, 'pr', 'open');
+update tasks set rating = 5 where title = 't-open-bait';   -- 4 × 3 = 12 points
+
+create temp table fx_open as
+  select (select id from tasks where title = 't-open-bait') as task_id,
+         (select count(*) from points_ledger
+           where member_id = 'a0000000-0000-0000-0000-000000000011') as vlad_rows;
+grant select on fx_open to authenticated;
+
+update profiles set status = 'inactiv'
+ where id = 'a0000000-0000-0000-0000-000000000011';
+
+select pg_temp.login_claimless('a0000000-0000-0000-0000-000000000011');
+
+select is(auth.uid(), 'a0000000-0000-0000-0000-000000000011'::uuid,
+  'the deactivated member still has a real uid — the gate cannot rely on that');
+select is((select count(*) from tasks), 0::bigint,
+  'a deactivated member sees no tasks, open ones included');
+select is((select count(*) from points_ledger), 0::bigint,
+  'a deactivated member cannot even read their own ledger');
+
+select throws_ok(
+  format($$ insert into task_assignees (task_id, member_id)
+            values (%s, 'a0000000-0000-0000-0000-000000000011') $$,
+         (select task_id from fx_open)),
+  '42501', null, 'a deactivated member cannot claim an open task');
+
+select throws_ok(
+  $$ insert into task_requests (kind, title, from_member)
+     values ('award', 'cerere-suspendat', 'a0000000-0000-0000-0000-000000000011') $$,
+  '42501', null, 'a deactivated member cannot file task requests');
+
+reset role;
+
+select is(
+  (select count(*) from points_ledger
+    where member_id = 'a0000000-0000-0000-0000-000000000011'),
+  (select vlad_rows from fx_open),
+  'no points were awarded to the deactivated member');
 
 select * from finish();
 rollback;
