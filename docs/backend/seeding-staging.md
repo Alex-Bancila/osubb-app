@@ -1,0 +1,109 @@
+# Seeding staging with demo data
+
+Staging gets its schema automatically and its demo data **on request**. This is how you put the demo data there, why it is a separate deliberate act, and what to check afterwards.
+
+## The gap this closes
+
+Merging to `main` runs `supabase db push`, which applies **migrations only**. `supabase/seed.sql` is not a migration: the CLI runs it on `db reset` and `supabase start`, both local. So every demo task, member and announcement we wrote landed on your laptop and nowhere else — staging had the complete schema and **zero rows**.
+
+That is the worst shape a demo can be in, because nothing looks broken. Every screen renders, every query succeeds, and the app is simply empty. Nobody would notice until the day someone opened the staging URL in front of BC.
+
+The workflow **Seed staging demo data** (`.github/workflows/seed-staging.yml`) applies `seed.sql` to staging with `psql`. It is manual on purpose: staging is shared, and re-seeding replaces the demo dataset. That should be a decision someone makes before a demo, not a side effect of a merge.
+
+## One-time setup: the `STAGING_DB_URL` secret
+
+The workflow needs a direct database connection, which `SUPABASE_ACCESS_TOKEN` does not provide.
+
+1. Supabase dashboard → your **staging** project → **Connect**.
+2. Choose **Session pooler** and copy the URI. It looks like
+   `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:5432/postgres`
+3. Replace `[YOUR-PASSWORD]` with the database password (the same one in `SUPABASE_DB_PASSWORD`).
+4. GitHub → repo **Settings → Secrets and variables → Actions → New repository secret**, named `STAGING_DB_URL`.
+
+Use the **session pooler** (port 5432), not the direct `db.<ref>.supabase.co` connection: GitHub runners are IPv4-only and the direct host is IPv6-only on current projects. The transaction pooler (6543) is for application traffic, not for scripts that run in one transaction.
+
+⚠️ Set this from a browser or a real terminal. `gh secret set` piped from a non-interactive prompt stores an **empty value** — that trap has already cost us one silent CI skip (house rule 8).
+
+## Running it
+
+**Actions → Seed staging demo data → Run workflow**, then type the staging **project ref** to confirm the target (Supabase → Settings → General → Reference ID), and run.
+
+The job refuses to do anything unless both are true:
+
+| Check | Fails when |
+|---|---|
+| the ref you typed equals the `SUPABASE_PROJECT_REF` secret | you meant a different project, or mistyped |
+| `STAGING_DB_URL` contains that same ref | the URL secret points somewhere else — production, another project, an old one |
+
+Then it preflights (are the migrations applied? can this role write `auth.users`?) before writing anything, applies the seed **in a single transaction**, and prints the leaderboard it produced.
+
+Production is not reachable from here. It is a different project with different secrets and its own manually-approved deploy workflow (#77, #78) — and the only thing that could aim this job at it is putting a production URL in `STAGING_DB_URL` *and* a production ref in `SUPABASE_PROJECT_REF`. Don't.
+
+## What it actually does
+
+`seed.sql` begins by deleting the **demo cohort** — the eight `@demo.osubb` accounts and the rows they own — and then re-inserts everything. That makes it re-runnable, which matters twice: a demo database that has been clicked through gets restored to a known state, and a rerun after a failure is safe.
+
+The scope is deliberately narrow. A real person invited to staging for testing keeps their profile, the tasks they created and the points they earned; only demo rows are replaced. (Their claim on a *demo* task disappears with that task — the task itself is re-created.)
+
+"Identical" means the data is identical, not the row ids: `tasks.id` and friends come from identity sequences, which keep counting. Nothing in the app depends on a specific id.
+
+Reference data — roles, departments, the rating and difficulty guides, `role_capabilities`, `notif_suppression` — is **not** touched. It lives in migrations, because production needs it too (house rule 6).
+
+## After it runs
+
+The job log ends with the leaderboard and a row count per table. It should match what you get locally after `npx supabase db reset`:
+
+| what | count |
+|---|---|
+| demo members | 8 |
+| tasks | 16 (9 graded) |
+| ledger rows | 12 |
+| events | 7 |
+| announcements | 5 |
+| notifications | 7 |
+
+Then sign in to the app as two different demo accounts and confirm the screens differ. All eight use the password `parola123`:
+
+| Email | Role | Level | Good for showing |
+|---|---|---|---|
+| `recrut@demo.osubb` | Recrut | 0 | the smallest view: 4 events, 6 tasks |
+| `voluntar@demo.osubb` | Voluntar | 1 | a normal member with points and a team |
+| `activ@demo.osubb` | Membru Activ | 2 | a sanction on the ledger |
+| `vot@demo.osubb` | Membru cu Drept de Vot | 3 | top of the leaderboard |
+| `responsabil@demo.osubb` | Responsabil de proiect | 4 | task management, two departments |
+| `bce@demo.osubb` | BCE | 5 | the volunteers directory |
+| `bc@demo.osubb` | BC | 6 | everything: 7 events, 16 tasks, the BC panel |
+| `moderator@demo.osubb` | Moderator | 9 | the moderation view |
+
+These accounts exist only because clicking through a demo with eight magic links is miserable. `@demo.osubb` is a domain nobody can receive mail at, and real onboarding stays invite-only and passwordless (ADR-0003).
+
+## Doing the same thing locally
+
+`npx supabase db reset` re-applies every migration and then the seed. To re-seed **without** dropping your local database — the same thing the workflow does to staging:
+
+```bash
+docker exec -i supabase_db_osubb-app psql -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 --single-transaction < supabase/seed.sql
+```
+
+Run it twice; the data will be the same both times. If you change `seed.sql`, check that this still holds — a seed that only works on an empty database is a seed staging cannot use.
+
+## When it goes wrong
+
+| Message | What it means |
+|---|---|
+| `The ref you typed is not the staging project ref` | typo, or `SUPABASE_PROJECT_REF` is not set to staging. Nothing was written. |
+| `STAGING_DB_URL does not point at the staging project` | the URL secret is for a different project. Nothing was written. |
+| `Migrations are not applied on this project` | staging never got a `db push`. Merge to `main`, let CI finish, then re-run. |
+| `This database role cannot write auth.users` | you are connected as something other than `postgres` — check the URI's username. |
+| `violates foreign key constraint "tasks_team_id_fkey"` (or `events_team_id_fkey`) | somebody's non-demo task or event is attached to a demo team (`t-app`, `t-recruti`), so the team cannot be replaced. The transaction rolled back and nothing was written: move that task to another team, or delete it, then re-run. |
+| `password authentication failed` | the password in `STAGING_DB_URL` is wrong or the secret is empty (see the ⚠️ above). |
+| Logins fail with a 500 and *"converting NULL to string is unsupported"* | GoTrue read a null token column. `seed.sql` sets all eight to `''`; if you add a user by hand, do the same. |
+| Sign-in works but every screen is empty | the **claims hook** is off on staging — the JWT carries no `member_role`, so RLS denies everything. See `docs/backend/auth-config.md` and issue #54. |
+
+## Related
+
+- `supabase/seed.sql` — the data itself, with the reasoning for each block
+- `docs/backend/auth-config.md` — the auth settings staging needs by hand
+- `docs/backend/inviting.md` — how real accounts are created
+- Issue **#139** — the gap this closes · **#54** — the staging dashboard checklist

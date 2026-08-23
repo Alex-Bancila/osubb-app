@@ -1,0 +1,113 @@
+name: Seed staging demo data
+
+# Manual on purpose.
+#
+# Migrations deploy themselves on every merge to main (ci.yml). Demo data does
+# not, and cannot: `supabase db push` applies migrations only, so seed.sql has
+# never once reached a hosted project. Staging therefore had the entire schema
+# and zero rows — screens that render perfectly and show nothing (issue #139).
+#
+# This workflow closes that gap by applying supabase/seed.sql with psql. It
+# stays manual because staging is shared and seeding replaces the demo dataset:
+# that is a decision somebody makes before a demo, not a side effect of a merge.
+#
+# Runbook, including the secrets this needs: docs/backend/seeding-staging.md
+on:
+  workflow_dispatch:
+    inputs:
+      project_ref:
+        description: "Type the staging project ref to confirm the target (Supabase → Settings → General → Reference ID)"
+        required: true
+        type: string
+
+jobs:
+  seed:
+    name: Seed staging demo data
+    runs-on: ubuntu-latest
+    # Staging has one database. Share the migration deploy's queue so a seed
+    # never runs while a `db push` is half-applied.
+    concurrency:
+      group: staging-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      # Two independent checks, both before anything is written. The typed ref
+      # proves intent; the URL check proves the intent matches the target.
+      # Production has its own project, its own secrets and its own deploy
+      # workflow (#77, #78) — it must never be reachable from here.
+      - name: Confirm the target is staging
+        env:
+          TYPED_REF: ${{ inputs.project_ref }}
+          STAGING_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+
+          [ -n "$STAGING_REF" ] || fail "Secret SUPABASE_PROJECT_REF is not set."
+          [ -n "$DB_URL" ] || fail "Secret STAGING_DB_URL is not set — see docs/backend/seeding-staging.md."
+
+          [ "$TYPED_REF" = "$STAGING_REF" ] || \
+            fail "The ref you typed is not the staging project ref. Nothing was touched."
+
+          case "$DB_URL" in
+            *"$STAGING_REF"*) ;;
+            *) fail "STAGING_DB_URL does not point at the staging project. Nothing was touched." ;;
+          esac
+
+          echo "Target confirmed: staging."
+
+      - name: Preflight
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+          # Fail here, with a sentence, rather than halfway through the seed.
+          psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          begin
+            if to_regclass('public.roles') is null then
+              raise exception
+                'Migrations are not applied on this project: public.roles does not exist. Merge to main and let the deploy finish first.';
+            end if;
+            if (select count(*) from public.roles) <> 8 then
+              raise exception
+                'Migrations are only partly applied (public.roles has % rows, expected 8).',
+                (select count(*) from public.roles);
+            end if;
+            if not has_table_privilege('auth.users', 'insert') then
+              raise exception
+                'This database role cannot write auth.users, so the demo logins would fail. Connect as postgres.';
+            end if;
+            raise notice 'Preflight OK.';
+          end $$;
+          SQL
+
+      # --single-transaction: the seed clears the previous demo cohort before
+      # inserting the new one, so a failure halfway must leave staging with the
+      # old data rather than with half of the new.
+      - name: Apply supabase/seed.sql
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f supabase/seed.sql
+
+      # What landed, in the log, so a green tick is not the only evidence.
+      - name: Show what landed
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: |
+          psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          select rank, full_name, role, points from leaderboard order by rank, full_name;
+
+          select 'demo members' as what, count(*) from profiles where email like '%@demo.osubb'
+          union all select 'tasks', count(*) from tasks
+          union all select 'graded tasks', count(*) from tasks where rating is not null
+          union all select 'ledger rows', count(*) from points_ledger
+          union all select 'events', count(*) from events
+          union all select 'announcements', count(*) from announcements
+          union all select 'notifications', count(*) from notifications;
+          SQL

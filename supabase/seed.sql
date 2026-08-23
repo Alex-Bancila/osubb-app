@@ -1,15 +1,73 @@
--- seed.sql — local/staging demo data (runs automatically on `supabase db reset`).
+-- seed.sql — local/staging demo data.
+--
+-- Runs automatically on `supabase db reset` and `supabase start`. It is NOT a
+-- migration and `supabase db push` does not carry it, so a hosted project only
+-- gets this data when someone applies the file deliberately: staging is seeded
+-- by the manual "Seed staging demo data" workflow, which runs exactly this file
+-- with psql. See docs/backend/seeding-staging.md.
 --
 -- Reference lookups (roles, departments, rating_guide, difficulty_guide,
 -- role_capabilities, notif_suppression) are seeded by MIGRATIONS so they exist
 -- in every environment, production included. Do not duplicate them here.
 --
--- Everything in this file is demo data. It never reaches production: the CLI
--- runs seed.sql on `db reset` and against staging, never as a migration.
+-- Everything below is demo data and it never reaches production — production
+-- deploys migrations only, and the seed workflow refuses any project that is
+-- not staging.
 --
 -- Passwords exist only because clicking through a demo with eight magic links
 -- is miserable. Real onboarding is invite-only and passwordless (ADR-0003);
 -- these accounts are @demo.osubb, an address nobody can receive mail at.
+
+-- ==================== Clear the previous demo data ====================
+-- `db reset` drops the database before running this file, so locally these
+-- deletes find nothing and cost nothing. They exist for staging, which is a
+-- live database: applying the seed there must be safe to do twice, and the
+-- second run must leave the same demo data behind rather than a duplicate of
+-- it or an error.
+--
+-- Scope is exactly the demo cohort — the eight @demo.osubb accounts and the
+-- rows they own. A real person invited to staging for testing keeps their
+-- profile, their tasks and their points.
+--
+-- Order matters. `created_by`, `awarded_by`, `lead_id`, `from_member` and
+-- `decided_by` are plain references with no `on delete` clause, so Postgres
+-- refuses to remove a member while any of them still points at that member:
+-- the children go first. Everything else — memberships, team memberships,
+-- assignees, RSVPs, announcement reads, notifications, push tokens — cascades
+-- from `profiles`, which itself cascades from the single `auth.users` delete
+-- at the end.
+
+-- Ledger before tasks: points_ledger.task_id has no cascade either. This also
+-- catches a real tester's points if they were awarded on a demo task.
+delete from points_ledger l
+ where exists (select 1 from profiles p
+                where p.email like '%@demo.osubb'
+                  and p.id in (l.member_id, l.awarded_by))
+    or exists (select 1 from tasks t
+                 join profiles p on p.id = t.created_by
+                where t.id = l.task_id and p.email like '%@demo.osubb');
+
+delete from task_requests r
+ where exists (select 1 from profiles p
+                where p.email like '%@demo.osubb'
+                  and p.id in (r.from_member, r.decided_by));
+
+delete from tasks t
+ using profiles p where t.created_by = p.id and p.email like '%@demo.osubb';
+
+delete from events e
+ using profiles p where e.created_by = p.id and p.email like '%@demo.osubb';
+
+delete from announcements a
+ using profiles p where a.created_by = p.id and p.email like '%@demo.osubb';
+
+-- Teams after tasks and events, which reference them.
+delete from teams t
+ where t.id in ('t-app', 't-recruti')
+    or exists (select 1 from profiles p
+                where p.id = t.lead_id and p.email like '%@demo.osubb');
+
+delete from auth.users where email like '%@demo.osubb';
 
 -- ==================== One login per role ====================
 -- Password for all of them: parola123
