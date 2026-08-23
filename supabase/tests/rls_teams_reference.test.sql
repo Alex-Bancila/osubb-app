@@ -5,7 +5,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(16);
+select plan(22);
 
 -- ==================== Login simulation ====================
 create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
@@ -87,6 +87,27 @@ select lives_ok(
   $$ insert into member_departments (member_id, dept_id)
      values ('c2000000-0000-0000-0000-0000000000c2', 'pr') $$,
   'level >= 5 manages department membership');
+
+reset role;
+
+-- ==================== A session with no org claims ====================
+-- Clear the claims first: `reset role` alone keeps the previous login's JWT,
+-- and these would run as Beniamin the BCE and pass for free.
+select set_config('request.jwt.claims', '', true);
+set local role authenticated;
+
+select is((select count(*) from roles), 0::bigint,
+  'claimless: the role ladder is hidden');
+select is((select count(*) from departments), 0::bigint,
+  'claimless: departments are hidden');
+select is((select count(*) from role_capabilities), 0::bigint,
+  'claimless: the capability matrix is hidden');
+select is((select count(*) from member_departments), 0::bigint,
+  'claimless: the member-to-department map is hidden');
+select is((select count(*) from team_members), 0::bigint,
+  'claimless: team rosters are hidden');
+select is((select count(*) from teams), 0::bigint,
+  'claimless: teams are hidden');
 
 reset role;
 

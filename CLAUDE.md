@@ -25,6 +25,7 @@ Internal application for OSUBB (Organizația Studenților din Universitatea Babe
 9. **Never re-run one-shot scripts**: `scripts/create-github-issues.sh` (historical) and the 2026-08-19 backlog split are done.
 10. **Spec Revision 3 supersedes older spec text where they conflict.** Known trap: notification suppression is **bc + bce** (Revision 3 §9.2), not the bc-only insert shown in spec §3.4.
 11. Use `CONTEXT.md` vocabulary in code, issues, tests. When output contradicts an ADR (`docs/adr/0001–0006`), surface it — don't silently override.
+12. **Every policy on `authenticated` must be unsatisfiable without org claims** — via `auth_level() >= N` (0 without claims) or explicitly via `auth_is_member()`. `to authenticated` is *not* a membership check: it only excludes `anon`. `auth.uid()` is not one either — a deactivated member keeps their uid and their `profiles` row. The claimless sweep in `rls_deny_by_default.test.sql` enforces this; if it fails naming your table, your policy has an unconditional branch.
 
 ## Agent skills
 
