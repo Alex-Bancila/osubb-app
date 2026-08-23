@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(22);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -68,6 +68,69 @@ select is((select count(*) from teams where id in ('t-app', 't-recruti')), 2::bi
 
 select is((select count(*) from teams where id = 't-recruti' and for_recruits), 1::bigint,
   'one team is open to recruits — the branch the calendar rule turns on');
+
+-- ==================== The demo has to look alive ====================
+-- These are about the *demo*, not the engine: a leaderboard where everyone
+-- has the same score, or a tracker with one status, demos badly. The points
+-- engine itself is covered by points_engine.test.sql.
+select ok((select count(*) from tasks) >= 15,
+  'enough tasks to fill a tracker');
+
+select is((select count(distinct status) from tasks), 5::bigint,
+  'every task status appears, so the filters have something to filter');
+
+select ok((select count(*) from tasks where status = 'open') >= 2,
+  'open tasks exist for the "Deschise" tab and the claim flow');
+
+-- Points come only from the grading trigger and two manual rows. If someone
+-- starts hand-writing 'task' ledger rows in the seed, this drifts from the
+-- formula and the number on screen stops meaning anything.
+select is(
+  (select count(*) from points_ledger l
+     join tasks t on t.id = l.task_id
+    where l.reason = 'task' and l.delta <> t.points),
+  0::bigint, 'every task ledger row matches its task''s computed points');
+
+select ok(
+  exists (select 1 from points_ledger where reason = 'sanction')
+  and exists (select 1 from points_ledger where reason = 'manual_award'),
+  'a sanction and a manual award are both present (the BC panel writes these)');
+
+-- A penalty in the data is deliberate: a demo where nobody ever lost points
+-- hides half of the scoring guide.
+select ok(
+  exists (select 1 from points_ledger where reason = 'task' and delta < 0),
+  'at least one task was graded 1, so the leaderboard shows a real penalty');
+
+-- ==================== Calendar, feed, notifications ====================
+-- The calendar only demos well if switching accounts changes what you see,
+-- which needs one event per branch of the §4.4 visibility rule.
+select ok((select count(*) from events) >= 6,
+  'the calendar has something in it');
+
+select ok(
+  (select count(*) from events where scope = 'org') >= 1
+  and (select count(*) from events where scope = 'dept') >= 1
+  and (select count(*) from events where scope = 'team') >= 1,
+  'org, department and team events all exist — switching demo accounts changes the calendar');
+
+select ok(
+  exists (select 1 from events e join teams t on t.id = e.team_id where t.for_recruits),
+  'a for_recruits team event exists (what a recrut sees without belonging)');
+
+select ok(
+  exists (select 1 from event_attendance where status = 'declined')
+  and exists (select 1 from event_attendance where status = 'going'),
+  'RSVPs go both ways, so the toggle has two visible states');
+
+-- The feed's loudest state and the v1 forms story both need to be visible.
+select ok(
+  exists (select 1 from announcements where priority = 'critical' and pinned),
+  'a critical pinned announcement exists (the feed''s loudest state)');
+
+select ok(
+  exists (select 1 from announcements where form_url is not null),
+  'one announcement links a form — the v1 forms story is a Google Form link');
 
 select * from finish();
 rollback;

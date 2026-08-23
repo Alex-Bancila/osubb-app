@@ -64,7 +64,14 @@ insert into member_departments (member_id, dept_id) values
   ('d0000000-0000-0000-0000-000000000006', 'it'),
   ('d0000000-0000-0000-0000-000000000006', 'pr'),
   ('d0000000-0000-0000-0000-000000000007', 'org'),
-  ('d0000000-0000-0000-0000-000000000008', 'it');
+  ('d0000000-0000-0000-0000-000000000008', 'it'),
+  -- Financiar and Resurse Umane get a member each so all five real
+  -- departments appear in the cup. `dept_cup` inner-joins through
+  -- member_departments, so a department with nobody in it disappears from the
+  -- standings entirely (issue #134) — which would be a strange thing for BC
+  -- to notice mid-demo.
+  ('d0000000-0000-0000-0000-000000000007', 'fin'),
+  ('d0000000-0000-0000-0000-000000000005', 'hr');
 
 -- Two teams, deliberately different in kind: one ordinary working team, one
 -- open to recruits — the flag the calendar rule turns on (a recrut sees a
@@ -78,3 +85,172 @@ insert into team_members (team_id, member_id) values
   ('t-app',     'd0000000-0000-0000-0000-000000000008'),
   ('t-recruti', 'd0000000-0000-0000-0000-000000000002'),
   ('t-recruti', 'd0000000-0000-0000-0000-000000000005');
+
+-- ==================== Demo work: tasks, grades, points ====================
+-- Graded tasks are NOT accompanied by hand-written ledger rows: the grading
+-- trigger writes those. Setting `rating` here therefore exercises the points
+-- engine on every reset, which is the point — a seed that inserted ledger
+-- rows directly could drift from the formula it is supposed to illustrate.
+
+insert into tasks (title, type, dept_id, team_id, status, difficulty, deadline, description, created_by) values
+  -- Educational
+  ('Workshop CV pentru boboci', 'proiect', 'edu', null, 'done',     4, current_date - 14, 'Sesiune practică de redactare CV.',        'd0000000-0000-0000-0000-000000000005'),
+  ('Materiale curs Excel',      'content', 'edu', null, 'done',     2, current_date - 10, 'Slide-uri pentru cursul de Excel.',        'd0000000-0000-0000-0000-000000000005'),
+  ('Contactare lectori',        'logistic','edu', null, 'progress', 3, current_date + 5,  'Confirmări pentru semestrul viitor.',      'd0000000-0000-0000-0000-000000000005'),
+  ('Minuta ședinței EDU',       'admin',   'edu', null, 'done',     1, current_date - 7,  'Redactare și distribuire minută.',         'd0000000-0000-0000-0000-000000000005'),
+  -- Imagine & PR
+  ('Grafică eveniment toamnă',  'design',  'pr',  null, 'done',     4, current_date - 12, 'Set complet de materiale vizuale.',        'd0000000-0000-0000-0000-000000000006'),
+  ('Postare Instagram recrutare','content','pr',  null, 'done',     2, current_date - 6,  'Anunț oficial de recrutare.',              'd0000000-0000-0000-0000-000000000006'),
+  ('Plan media noiembrie',      'plan',    'pr',  null, 'todo',     3, current_date + 12, 'Calendar de postări pentru noiembrie.',    'd0000000-0000-0000-0000-000000000006'),
+  ('Fotografii eveniment',      'content', 'pr',  null, 'done',     2, current_date - 9,  'Poze de la evenimentul de deschidere.',    'd0000000-0000-0000-0000-000000000006'),
+  -- Tineret
+  ('Logistică Tabăra de Toamnă','logistic','youth',null,'done',     5, current_date - 20, 'Transport, cazare, program.',              'd0000000-0000-0000-0000-000000000007'),
+  ('Contactare parteneri',      'extern',  'youth',null,'overdue',  3, current_date - 3,  'Sponsorizări pentru tabără.',              'd0000000-0000-0000-0000-000000000007'),
+  -- Financiar & HR
+  ('Buget trimestrial',         'admin',   'fin', null, 'done',     4, current_date - 5,  'Raport de buget pentru BC.',               'd0000000-0000-0000-0000-000000000007'),
+  ('Interviuri recrutare',      'hr',      'hr',  null, 'progress', 3, current_date + 8,  'Programare și susținere interviuri.',      'd0000000-0000-0000-0000-000000000007'),
+  -- Echipa Aplicație
+  ('Migrare bază de date',      'tehnic',  'it',  't-app', 'done',   5, current_date - 2,  'Migrare completă cu teste automate.',      'd0000000-0000-0000-0000-000000000006'),
+  ('Testare aplicație',         'tehnic',  'it',  't-app', 'progress',3, current_date + 6, 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
+  -- Open: anyone may claim these, which is what the tracker's "Deschise" tab is for
+  ('Share story recrutare',     'promo',   'pr',  null, 'open',     1, current_date + 3,  'Distribuie story-ul de recrutare.',        'd0000000-0000-0000-0000-000000000006'),
+  ('Ajutor la standul de recrutare','logistic','edu',null,'open',   2, current_date + 9,  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005');
+
+insert into task_assignees (task_id, member_id)
+select t.id, a.member_id
+  from (values
+    ('Workshop CV pentru boboci',      'd0000000-0000-0000-0000-000000000002'::uuid),
+    ('Materiale curs Excel',           'd0000000-0000-0000-0000-000000000001'::uuid),
+    ('Contactare lectori',             'd0000000-0000-0000-0000-000000000002'::uuid),
+    ('Minuta ședinței EDU',            'd0000000-0000-0000-0000-000000000001'::uuid),
+    ('Grafică eveniment toamnă',       'd0000000-0000-0000-0000-000000000003'::uuid),
+    ('Postare Instagram recrutare',    'd0000000-0000-0000-0000-000000000003'::uuid),
+    ('Plan media noiembrie',           'd0000000-0000-0000-0000-000000000006'::uuid),
+    ('Fotografii eveniment',           'd0000000-0000-0000-0000-000000000003'::uuid),
+    ('Logistică Tabăra de Toamnă',     'd0000000-0000-0000-0000-000000000004'::uuid),
+    ('Contactare parteneri',           'd0000000-0000-0000-0000-000000000004'::uuid),
+    ('Buget trimestrial',              'd0000000-0000-0000-0000-000000000007'::uuid),
+    ('Interviuri recrutare',           'd0000000-0000-0000-0000-000000000005'::uuid),
+    ('Migrare bază de date',           'd0000000-0000-0000-0000-000000000006'::uuid),
+    ('Migrare bază de date',           'd0000000-0000-0000-0000-000000000008'::uuid),
+    ('Testare aplicație',              'd0000000-0000-0000-0000-000000000008'::uuid)
+  ) as a (title, member_id)
+  join tasks t on t.title = a.title;
+
+-- Grading. Each update fires the trigger, which writes one ledger row per
+-- assignee: points = difficulty × multiplier(rating).
+update tasks set rating = 5 where title = 'Workshop CV pentru boboci';      -- 4 × 3 = 12
+update tasks set rating = 3 where title = 'Materiale curs Excel';           -- 2 × 1 = 2
+update tasks set rating = 4 where title = 'Minuta ședinței EDU';            -- 1 × 2 = 2
+update tasks set rating = 5 where title = 'Grafică eveniment toamnă';       -- 4 × 3 = 12
+update tasks set rating = 4 where title = 'Postare Instagram recrutare';    -- 2 × 2 = 4
+update tasks set rating = 5 where title = 'Logistică Tabăra de Toamnă';     -- 5 × 3 = 15
+update tasks set rating = 4 where title = 'Buget trimestrial';              -- 4 × 2 = 8
+update tasks set rating = 5 where title = 'Migrare bază de date';           -- 5 × 3 = 15 each
+-- A rating of 1 is a penalty, not a zero — the leaderboard should show that
+-- honestly, and this is the row that proves the formula subtracts.
+update tasks set rating = 1 where title = 'Fotografii eveniment';           -- 2 × −1 = −2
+
+-- Manual entries: an award and a BC sanction, the two things the BC panel
+-- writes by hand. Both are signed by whoever granted them.
+insert into points_ledger (member_id, delta, reason, awarded_by) values
+  ('d0000000-0000-0000-0000-000000000005', 10, 'manual_award',
+   'd0000000-0000-0000-0000-000000000007'),
+  ('d0000000-0000-0000-0000-000000000003', -5, 'sanction',
+   'd0000000-0000-0000-0000-000000000007');
+
+-- ==================== Calendar ====================
+-- One event per branch of the visibility rule (spec §4.4), so switching
+-- demo accounts visibly changes the calendar rather than showing everyone
+-- the same list: org-wide, per-department, a closed team, a for_recruits
+-- team, and a recruitment event that reaches everyone by type.
+insert into events (title, type, dept_id, team_id, scope, starts_at, ends_at, location, capacity, description, created_by) values
+  ('Adunarea Generală de toamnă', 'sedinta',   null,   null,       'org',
+   now() + interval '9 days',  now() + interval '9 days 3 hours',  'Aula Magna',        200,
+   'Raport de activitate și vot.',                    'd0000000-0000-0000-0000-000000000007'),
+  ('Ședință Educational',        'sedinta',   'edu',  null,       'dept',
+   now() + interval '2 days',  now() + interval '2 days 2 hours',  'Sala 305',           25,
+   'Planificarea activităților lunii.',               'd0000000-0000-0000-0000-000000000005'),
+  ('Brainstorming campanie PR',  'activitate','pr',   null,       'dept',
+   now() + interval '4 days',  now() + interval '4 days 2 hours',  'Sediu OSUBB',        15,
+   'Idei pentru campania de iarnă.',                  'd0000000-0000-0000-0000-000000000006'),
+  ('Sprint review Echipa Aplicație', 'sedinta','it',  't-app',    'team',
+   now() + interval '1 day',   now() + interval '1 day 1 hour',    'Online',             10,
+   'Demo intern al aplicației.',                      'd0000000-0000-0000-0000-000000000006'),
+  ('Training pentru recruți',    'activitate','edu',  't-recruti','team',
+   now() + interval '6 days',  now() + interval '6 days 3 hours',  'Sala 210',           40,
+   'Prima întâlnire cu echipa.',                      'd0000000-0000-0000-0000-000000000005'),
+  ('Recrutare de toamnă — stand','recrutare', 'hr',   null,       'dept',
+   now() + interval '3 days',  now() + interval '3 days 6 hours',  'Campus FSEGA',      null,
+   'Stand de promovare, două ture.',                  'd0000000-0000-0000-0000-000000000005'),
+  ('Deadline: raport trimestrial','deadline', 'fin',  null,       'dept',
+   now() + interval '7 days',  null,                                null,               null,
+   'Trimiterea raportului către BC.',                 'd0000000-0000-0000-0000-000000000007');
+
+-- RSVPs, including one declined — a calendar where everyone always attends
+-- does not show that the toggle has two states.
+insert into event_attendance (event_id, member_id, status)
+select e.id, a.member_id, a.status
+  from (values
+    ('Adunarea Generală de toamnă', 'd0000000-0000-0000-0000-000000000002'::uuid, 'going'),
+    ('Adunarea Generală de toamnă', 'd0000000-0000-0000-0000-000000000003'::uuid, 'going'),
+    ('Adunarea Generală de toamnă', 'd0000000-0000-0000-0000-000000000004'::uuid, 'declined'),
+    ('Ședință Educational',         'd0000000-0000-0000-0000-000000000002'::uuid, 'going'),
+    ('Ședință Educational',         'd0000000-0000-0000-0000-000000000001'::uuid, 'going'),
+    ('Training pentru recruți',     'd0000000-0000-0000-0000-000000000001'::uuid, 'going'),
+    ('Sprint review Echipa Aplicație','d0000000-0000-0000-0000-000000000006'::uuid, 'going')
+  ) as a (title, member_id, status)
+  join events e on e.title = a.title;
+
+-- ==================== Announcements ====================
+-- One critical + pinned (the feed's loudest state), one with a form link
+-- (the v1 forms story — a Google Form, not a native engine), one scoped to a
+-- single department, and ordinary ones underneath.
+insert into announcements (title, body, dept_id, author, priority, category, pinned, form_label, form_url, published_at, created_by) values
+  ('Ședință extraordinară BC — vineri',
+   'Vineri, ora 18:00, Aula Magna. Prezența tuturor coordonatorilor este obligatorie.',
+   null, 'BC', 'critical', 'organizatoric', true, null, null,
+   now() - interval '1 day',  'd0000000-0000-0000-0000-000000000007'),
+  ('Feedback eveniment de deschidere',
+   'Spune-ne cum ți s-a părut. Durează două minute și chiar ne ajută.',
+   null, 'Imagine & PR', 'important', 'feedback', false,
+   'Completează formularul', 'https://forms.gle/exemplu-osubb',
+   now() - interval '3 days', 'd0000000-0000-0000-0000-000000000006'),
+  ('Materiale de la cursul de Excel',
+   'Slide-urile și exercițiile sunt în drive-ul departamentului.',
+   'edu', 'Educational', 'normal', 'resurse', false, null, null,
+   now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005'),
+  ('Recrutarea de toamnă începe luni',
+   'Standul din campus are nevoie de voluntari pentru două ture pe zi.',
+   null, 'Resurse Umane', 'important', 'recrutare', true, null, null,
+   now() - interval '2 days', 'd0000000-0000-0000-0000-000000000005'),
+  ('Noul ghid de punctaj',
+   'Dificultatea și nota se înmulțesc — detaliile sunt în aplicație, la Ghid.',
+   null, 'BC', 'normal', 'organizatoric', false, null, null,
+   now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007');
+
+-- A few members have already read things, so the unread badge shows a real
+-- number instead of "everything" or "nothing".
+insert into announcement_reads (announcement_id, member_id)
+select a.id, r.member_id
+  from (values
+    ('Noul ghid de punctaj',              'd0000000-0000-0000-0000-000000000002'::uuid),
+    ('Noul ghid de punctaj',              'd0000000-0000-0000-0000-000000000003'::uuid),
+    ('Materiale de la cursul de Excel',   'd0000000-0000-0000-0000-000000000002'::uuid),
+    ('Recrutarea de toamnă începe luni',  'd0000000-0000-0000-0000-000000000003'::uuid)
+  ) as r (title, member_id)
+  join announcements a on a.title = r.title;
+
+-- ==================== Notifications ====================
+-- Written here by hand only because the fan-out trigger is issue #68; once
+-- that lands, announcements will produce these rows themselves.
+-- Note the suppression rule at work: BC and BCE get the announcement, never
+-- the task/deadline broadcasts.
+insert into notifications (member_id, kind, icon, title, body, critical, read, link, created_at) values
+  ('d0000000-0000-0000-0000-000000000002', 'announce', '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, '/anunturi', now() - interval '1 day'),
+  ('d0000000-0000-0000-0000-000000000002', 'task',     '✅', 'Task nou: Contactare lectori',      'Deadline peste 5 zile.',  false, false, '/tracker',  now() - interval '2 days'),
+  ('d0000000-0000-0000-0000-000000000002', 'event',    '📅', 'Ședință Educational',               'Poimâine, sala 305.',     false, true,  '/calendar', now() - interval '3 days'),
+  ('d0000000-0000-0000-0000-000000000001', 'announce', '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, '/anunturi', now() - interval '1 day'),
+  ('d0000000-0000-0000-0000-000000000001', 'event',    '📅', 'Training pentru recruți',           'Peste 6 zile, sala 210.', false, false, '/calendar', now() - interval '1 day'),
+  ('d0000000-0000-0000-0000-000000000003', 'system',   '⚠️', 'Ai primit o sancțiune',             'Contactează BC pentru detalii.', true, false, '/profil', now() - interval '4 days'),
+  ('d0000000-0000-0000-0000-000000000007', 'announce', '📢', 'Recrutarea de toamnă începe luni',  'Standul are nevoie de voluntari.', false, false, '/anunturi', now() - interval '2 days');

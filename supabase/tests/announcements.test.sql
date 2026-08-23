@@ -25,6 +25,10 @@ select has_index('public', 'announcement_reads', 'announcement_reads_member_idx'
   'read receipts are indexed by member (unread counter)');
 
 -- ==================== Fixtures ====================
+-- The demo seed fills these tables; the counts below are about this file's
+-- rows. Cleared inside the transaction, which rolls back.
+truncate announcements, announcement_reads cascade;
+
 insert into auth.users (id, email) values
   ('a1000000-0000-0000-0000-0000000000a1', 'andrei.ann@test.local');
 insert into profiles (id, full_name, email, role) values
