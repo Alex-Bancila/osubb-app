@@ -54,7 +54,12 @@ enabled = true
 uri = "pg-functions://postgres/public/custom_access_token_hook"
 
 [auth.email]
-enable_signup = false
+# The email PROVIDER must be on — magic links are the only way into the app
+# (ADR-0003). Without this the CLI renders GOTRUE_EXTERNAL_EMAIL_ENABLED=false
+# and every login fails with "Email logins are disabled", invites included.
+# Distinct from enable_signup below, which is what keeps the app invite-only.
+enabled = true
+enable_signup = true
 enable_confirmations = true
 double_confirm_changes = true
 
@@ -63,3 +68,12 @@ double_confirm_changes = true
 enabled = false
 client_id = ""
 secret = ""
+
+# Epic 2.3b — BC invites a member (magic link + provisioning).
+# verify_jwt keeps unauthenticated noise out at the gateway; the function
+# still does the real authorization (level >= 6, read from the database).
+[functions.invite-member]
+enabled = true
+verify_jwt = true
+import_map = "./functions/invite-member/deno.json"
+entrypoint = "./functions/invite-member/index.ts"
