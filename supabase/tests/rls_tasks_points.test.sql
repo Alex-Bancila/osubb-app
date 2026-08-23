@@ -33,6 +33,13 @@ begin
 end $$;
 
 -- ==================== Fixtures (as postgres) ====================
+-- The demo seed (5.2) fills these tables on every reset, and the assertions
+-- below count rows exactly — "a voluntar sees three tasks" is only meaningful
+-- about this file's fixtures. Clear them inside the transaction, which rolls
+-- back at the end, so the suite describes its own world and stays stable
+-- however the demo data grows.
+truncate tasks, task_assignees, task_requests, points_ledger cascade;
+
 insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-000000000011', 'vlad.rls@test.local'),
   ('b0000000-0000-0000-0000-000000000012', 'bianca.rls@test.local'),
