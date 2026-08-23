@@ -31,6 +31,25 @@ jobs:
             echo "No db tests yet — skipping (Epic 6 adds them)."
           fi
 
+  functions:
+    name: Edge Function checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Runs on every PR rather than behind a path filter: the job takes well
+      # under a minute and runs beside the database job, and a filter that
+      # silently skips is worse than a fast job that always speaks.
+      - name: Type-check
+        run: deno check --config supabase/functions/invite-member/deno.json supabase/functions/**/*.ts
+
+      - name: Test
+        run: deno test --allow-env --config supabase/functions/invite-member/deno.json supabase/functions/
+
   push-staging:
     name: Push migrations to staging
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
