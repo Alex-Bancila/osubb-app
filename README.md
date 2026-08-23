@@ -23,7 +23,7 @@ Windows note: if start/reset fails with "port is not available", run `net stop w
 
 ## Contributing (team + agents)
 
-Work is cut into **≤1-hour issues** (label `max-1h`), each with goal, reasoning, steps, and acceptance criteria: `gh issue list --label max-1h --state open`. The loop: branch → build → `db reset` + `test db` green → PR with `Closes #n` → CI green → review → merge (staging updates automatically).
+Work is cut into **≤1-hour issues** (label `max-1h`), each with goal, reasoning, steps, and acceptance criteria: `gh issue list --label max-1h --state open`. The loop: branch → build → `db reset` + `test db` green → PR with `Closes #n` → CI green → review → merge (staging's **schema** updates automatically; its demo data is a separate manual workflow — `docs/backend/seeding-staging.md`).
 
 - **People:** start with `docs/team/team-plan.md` and the kickoff handout.
 - **AI agents:** start with `CLAUDE.md` (rules) and **`docs/agents/onboarding.md`** (state of the codebase, patterns to copy, current queue, known traps).

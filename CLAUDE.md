@@ -4,13 +4,12 @@ Internal application for OSUBB (Organizația Studenților din Universitatea Babe
 
 **New agent or teammate? Read `docs/agents/onboarding.md` first** — it is the "continue from here" guide (state of the codebase, read order, conventions, current queue).
 
-## Status (2026-08-22)
+## Status (2026-08-23)
 
-- **The whole v1 schema exists and is tested.** 9 migrations on `main` (core schema · tasks/requests · points engine · JWT claims hook · RLS everywhere + capabilities · tasks/points policies · events+attendance · announcements+reads · notifications · suppression+push tokens · provision_profile · reference/teams policies), 10 pgTAP suites, all green in CI and mirrored to staging automatically.
-- **Merged so far:** PRs #38–#42 (Sprint 1 core) and #114–#121 (v1 tables, provisioning RPC, reference-data policies, two CI fixes).
-- **Open PRs awaiting review** — a stack, merge bottom-up: **#122** (3.2a profile reads + contact gating, adds `auth_is_member()`) → **#124** (3.5a announcements policies) → **#125** (3.4a calendar visibility). Each targets the one below; GitHub retargets to `main` as they merge.
-- **Not built yet:** the invite Edge Function (#57–#58), remaining policies (#60 #63 #65 #66 #123), AG views (#47 #48), fan-out (#68), demo seed (#74–#76), and the entire frontend (`app/` does not exist yet — Epic 8/9).
-- **Backlog:** ~65 open issues, almost all sized **≤1 hour** (label `max-1h`), each with Goal/Why/How/AC/Depends. Map: `docs/backend/implementation-issues.md`. Next up: **#57** (invite-member Edge Function — first Deno code in the repo), then #74–#76 (demo seed) and #79–#81 (frontend scaffold).
+- **The whole v1 schema exists and is tested.** 17 migrations on `main` (core schema · tasks/requests · points engine · JWT claims hook · RLS everywhere + capabilities · tasks/points policies · events+attendance · announcements+reads · notifications · suppression+push tokens · provision_profile · reference/teams policies · profile reads + contact gating · announcements policies · calendar visibility · `member_level()` · membership required on every policy), **15 pgTAP suites / 266 tests**, all green in CI and mirrored to staging automatically.
+- **Also built:** the `invite-member` Edge Function (Deno, 11 tests, its own CI job) · the demo seed — 8 logins, 16 tasks, 7 events, 5 announcements — plus the manual workflow that puts it on staging · the frontend mini-spec (`docs/superpowers/specs/frontend-mini-spec.md`).
+- **Not built yet:** the remaining policies (#60 #63 #65 #66), AG views (#47 #48), notification fan-out (#68), and the entire frontend (`app/` does not exist yet — Epic 8/9).
+- **Backlog:** 60 open issues, almost all sized **≤1 hour** (label `max-1h`), each with Goal/Why/How/AC/Depends. Map: `docs/backend/implementation-issues.md`. Next up: **#80 → #81** (scaffold `app/`, then its CI), then the screens.
 
 ## House rules (must follow)
 
@@ -19,7 +18,7 @@ Internal application for OSUBB (Organizația Studenților din Universitatea Babe
 3. **New views get `with (security_invoker = on)`** — otherwise they run as owner and bypass RLS.
 4. **Functions used by triggers/policies:** `security definer` only when needed, always `set search_path = ''` with fully-qualified names.
 5. **Tests ship with the feature, same PR** (`supabase/tests/*.sql`, pgTAP). A test must fail if the feature is removed. Verify locally: `npx supabase db reset && npx supabase test db` — both green before any PR.
-6. **Reference data** (roles, departments, guides, suppression, promotion rules) lives **in migrations**; **demo data** lives in `supabase/seed.sql` (local/staging only, never production).
+6. **Reference data** (roles, departments, guides, suppression, promotion rules) lives **in migrations**; **demo data** lives in `supabase/seed.sql` (local/staging only, never production). **`db push` does not carry `seed.sql`** — a hosted project only gets demo data from the manual *Seed staging demo data* workflow, so the file must stay re-runnable against a live database (CI checks this). See `docs/backend/seeding-staging.md`.
 7. **One issue = one branch = one PR**, body says `Closes #n`. CI must be green. **Merging is a human act** — never merge or push to `main` directly (docs-only commits to `main` are the exception).
 8. **Secrets never in git** — Bitwarden (humans) + GitHub Actions secrets (CI). Set secrets from a real terminal or browser; `gh secret set` through a non-interactive prompt stores an empty value.
 9. **Never re-run one-shot scripts**: `scripts/create-github-issues.sh` (historical) and the 2026-08-19 backlog split are done.
