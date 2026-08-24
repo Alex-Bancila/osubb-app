@@ -4,12 +4,12 @@ Internal application for OSUBB (Organizația Studenților din Universitatea Babe
 
 **New agent or teammate? Read `docs/agents/onboarding.md` first** — it is the "continue from here" guide (state of the codebase, read order, conventions, current queue).
 
-## Status (2026-08-23)
+## Status (2026-08-24)
 
 - **The whole v1 schema exists and is tested.** 17 migrations on `main` (core schema · tasks/requests · points engine · JWT claims hook · RLS everywhere + capabilities · tasks/points policies · events+attendance · announcements+reads · notifications · suppression+push tokens · provision_profile · reference/teams policies · profile reads + contact gating · announcements policies · calendar visibility · `member_level()` · membership required on every policy), **15 pgTAP suites / 266 tests**, all green in CI and mirrored to staging automatically.
-- **Also built:** the `invite-member` Edge Function (Deno, 11 tests, its own CI job) · the demo seed — 8 logins, 16 tasks, 7 events, 5 announcements — plus the manual workflow that puts it on staging · the frontend mini-spec (`docs/superpowers/specs/frontend-mini-spec.md`).
-- **Not built yet:** the remaining policies (#60 #63 #65 #66), AG views (#47 #48), notification fan-out (#68), and the entire frontend (`app/` does not exist yet — Epic 8/9).
-- **Backlog:** 60 open issues, almost all sized **≤1 hour** (label `max-1h`), each with Goal/Why/How/AC/Depends. Map: `docs/backend/implementation-issues.md`. Next up: **#80 → #81** (scaffold `app/`, then its CI), then the screens.
+- **Also built:** the `invite-member` Edge Function (Deno, 11 tests, its own CI job), proven end-to-end · the demo seed — 8 logins, 16 tasks, 7 events, 5 announcements — plus the manual, guarded workflow that puts it on staging (`.github/workflows/seed-staging.yml`, `docs/backend/seeding-staging.md`) · the frontend mini-spec (`docs/superpowers/specs/frontend-mini-spec.md`).
+- **Not built yet:** the remaining policies (#60 #63 #65 #66, then the #67 final sweep), AG views (#47 #48), notification fan-out (#68), and the entire frontend (`app/` does not exist yet — Epic 8/9; **#80 → #81** scaffold it next).
+- **Backlog:** 58 open issues, almost all sized **≤1 hour** (label `max-1h`), each with Goal/Why/How/AC/Depends. Map: `docs/backend/implementation-issues.md`. Human-only right now: **#54** (staging dashboard checklist, needs a new `STAGING_DB_URL` secret) before anyone demos off staging.
 
 ## House rules (must follow)
 
@@ -45,6 +45,8 @@ Five canonical triage roles with default strings (`needs-triage`, `needs-info`, 
 The backend is **Supabase** (PostgreSQL + Row-Level Security + Auth + Edge Functions), managed as migrations in `supabase/`. Design: `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md` (incl. **Revision 3**). Task breakdown: `docs/backend/implementation-issues.md`.
 
 **Prerequisites:** Docker Desktop running; Node. The Supabase CLI runs via `npx supabase` (no global install). Deno only for Edge Functions.
+
+**Why Docker:** `npx supabase start` doesn't install anything on your machine — it starts ~9 Docker containers (Postgres, GoTrue/Auth, PostgREST/Kong, Studio, Mailpit, the edge runtime, …), pre-wired to match the hosted projects exactly. That's what makes "local" a real Supabase stack rather than a simulation, and why `db reset` can rebuild everything from zero in under a minute: containers are disposable, nothing on the host OS is ever touched.
 
 **Run locally:**
 - `npx supabase start` — bring up the local stack (first run pulls several GB of images).
