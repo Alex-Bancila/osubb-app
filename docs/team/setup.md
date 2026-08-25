@@ -164,7 +164,7 @@ cp .env.example .env.local     # Windows PowerShell: copy .env.example .env.loca
 npm run dev
 ```
 
-`.env.local` tells the app where the backend is. It's git-ignored on purpose — everyone has their own, and real keys must never land in the repository. (If `app/.env.example` isn't there yet, skip that line — the app still starts, it just can't reach the backend until the connection code lands.)
+`.env.local` tells the app where the backend is. It's git-ignored on purpose — everyone has their own, and real keys must never land in the repository.
 
 Open <http://localhost:5173>. Leave this terminal running; it rebuilds as you edit. Open a **second terminal** for everything else.
 
