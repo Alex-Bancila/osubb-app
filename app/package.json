@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ionic/react": "^9.0.0",
+    "@supabase/supabase-js": "^2.112.4",
     "ionicons": "^8.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
