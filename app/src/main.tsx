@@ -24,6 +24,7 @@ import '@ionic/react/css/display.css';
 /* Ours, last, so the OSUBB palette wins over Ionic's defaults. */
 import './theme/tokens.css';
 import './theme/global.css';
+import './theme/auth-screens.css';
 
 import { AuthProvider } from './lib/auth';
 import App from './App';
