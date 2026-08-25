@@ -30,35 +30,50 @@ app/
 ├── public/icon.png       # OSUBB mark (favicon)
 └── src/
     ├── main.tsx          # bootstrap: Ionic CSS, our theme, AuthProvider
-    ├── App.tsx           # routes + the three session guards
+    ├── App.tsx           # routes + the session and capability guards
     ├── lib/
-    │   ├── supabase.ts   # the one shared client, env-driven
-    │   └── auth.tsx      # session + decoded claims, useAuth()
+    │   ├── supabase.ts     # the one shared client, env-driven
+    │   ├── auth.tsx        # session + decoded claims, useAuth()
+    │   └── capabilities.ts # level thresholds, named as the database names them
+    ├── components/
+    │   └── shell/          # sidebar, topbar, tab bar — one list drives all three
     ├── screens/
-    │   ├── login/        # magic-link request + the /auth/callback landing
-    │   ├── no-profile/   # signed in, not a member (ADR-0003 gate 2)
-    │   └── home/         # placeholder dashboard — the real shell is #84
+    │   ├── Placeholder.tsx # stands in for a screen; says which issue builds it
+    │   ├── login/          # magic-link request + the /auth/callback landing
+    │   └── no-profile/     # signed in, not a member (ADR-0003 gate 2)
     └── theme/
         ├── tokens.css       # Brand Book palette, copied from mockup/css/tokens.css
         ├── global.css       # maps those tokens onto Ionic's --ion-* variables
-        └── auth-screens.css # the card the three pre-app screens share
+        ├── auth-screens.css # the card the three pre-app screens share
+        └── shell.css        # the app frame, lifted from mockup/css/layout.css
 ```
 
-`src/queries/` and `src/components/` don't exist yet on purpose — each arrives
-with the issue that first needs it, in the shape the mini-spec §2 describes.
+`src/queries/` doesn't exist yet on purpose — it arrives with #87, in the shape
+the mini-spec §5 describes. Each screen gets its own folder under `screens/`
+when there is something real to put in it.
 
-## Routes so far
+## Routes
 
-| Path             | Who reaches it                                                                           |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| `/login`         | signed out. Signed-in visitors are sent home (or to `/no-profile`).                      |
-| `/auth/callback` | anyone — its job is to turn a magic link into a session, so it runs before there is one. |
-| `/no-profile`    | signed in without org claims.                                                            |
-| `/`              | members. Everything unknown redirects here and the guard decides.                        |
+| Path             | Who reaches it                                                                    | Screen                   |
+| ---------------- | --------------------------------------------------------------------------------- | ------------------------ |
+| `/login`         | signed out                                                                        | magic-link request       |
+| `/auth/callback` | anyone — its job is turning a link into a session, so it runs before there is one | —                        |
+| `/no-profile`    | signed in without org claims                                                      | ADR-0003 gate 2          |
+| `/`              | members                                                                           | dashboard (#93–#95)      |
+| `/tracker`       | members                                                                           | task tracker (#88–#92)   |
+| `/calendar`      | members                                                                           | calendar (#96–#98)       |
+| `/anunturi`      | members                                                                           | announcements (#99–#101) |
+| `/voluntari`     | level >= 5                                                                        | directory (#102–#103)    |
+| `/profil`        | members                                                                           | profile (#108)           |
+| `/bc`            | level >= 6                                                                        | BC panel (#104–#107)     |
 
-The guards are **navigation, not security**: the database returns nothing to a
-session without claims whatever the URL says. What they buy is that someone in
-that position sees an explanation rather than an app that is silently empty.
+Everything unknown redirects to `/`, where the guard decides.
+
+The guards, and the nav items a role does not see, are **navigation, not
+security**: the database returns nothing to a session that may not see it,
+whatever the URL says. Someone who types `/bc` by hand gets the screen and no
+data. What the guards buy is that a member sees an explanation, or a tab they
+can actually use, instead of an app that is silently empty.
 
 ## Conventions worth knowing on day one
 

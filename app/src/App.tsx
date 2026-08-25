@@ -3,10 +3,12 @@ import { IonApp, IonContent, IonPage, IonSpinner } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './lib/auth';
+import { can, type Capability } from './lib/capabilities';
+import AppShell from './components/shell/AppShell';
 import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
-import HomePlaceholder from './screens/home/HomePlaceholder';
+import Placeholder from './screens/Placeholder';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -40,6 +42,18 @@ function RequireMember({ children }: { children: ReactElement }) {
   if (!session) return <Navigate to="/login" replace />;
   if (!claims) return <Navigate to="/no-profile" replace />;
   return children;
+}
+
+/** Same idea one level in: a route the navigation never offers you. */
+function RequireCapability({
+  capability,
+  children,
+}: {
+  capability: Capability;
+  children: ReactElement;
+}) {
+  const { claims } = useAuth();
+  return can(claims, capability) ? children : <Navigate to="/" replace />;
 }
 
 /** Keeps a signed-in member off the front door. */
@@ -80,14 +94,51 @@ export default function App() {
 
           <Route path="/no-profile" element={<NoProfileScreen />} />
 
+          {/* Everything a member sees renders inside the shell. */}
           <Route
-            path="/"
             element={
               <RequireMember>
-                <HomePlaceholder />
+                <AppShell />
               </RequireMember>
             }
-          />
+          >
+            <Route
+              path="/"
+              element={<Placeholder title="Acasă" issue="#93–#95" />}
+            />
+            <Route
+              path="/tracker"
+              element={<Placeholder title="Taskuri" issue="#88–#92" />}
+            />
+            <Route
+              path="/calendar"
+              element={<Placeholder title="Calendar" issue="#96–#98" />}
+            />
+            <Route
+              path="/anunturi"
+              element={<Placeholder title="Anunțuri" issue="#99–#101" />}
+            />
+            <Route
+              path="/voluntari"
+              element={
+                <RequireCapability capability="seeDirectory">
+                  <Placeholder title="Voluntari" issue="#102–#103" />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="/profil"
+              element={<Placeholder title="Profil" issue="#108" />}
+            />
+            <Route
+              path="/bc"
+              element={
+                <RequireCapability capability="manageRoles">
+                  <Placeholder title="Panou BC" issue="#104–#107" />
+                </RequireCapability>
+              }
+            />
+          </Route>
 
           {/* Anything unknown goes home and lets the guard sort it out. Note
               there is no "return to the page you wanted" here, on purpose: a

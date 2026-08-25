@@ -25,6 +25,7 @@ import '@ionic/react/css/display.css';
 import './theme/tokens.css';
 import './theme/global.css';
 import './theme/auth-screens.css';
+import './theme/shell.css';
 
 import { AuthProvider } from './lib/auth';
 import App from './App';
