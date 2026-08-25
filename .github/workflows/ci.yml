@@ -75,6 +75,21 @@ jobs:
           fi
           echo "seed.sql applied twice, same data: $before"
 
+      # The frontend's database.types.ts is generated from this schema and
+      # committed. Regenerate it here and compare: a migration that renames a
+      # column then fails the PR that ships it, instead of failing the demo
+      # three screens away. This is the only job with a live database, which is
+      # why the check lives here rather than beside the other frontend gates.
+      - name: Generated types match the schema
+        run: |
+          supabase gen types typescript --local > /tmp/database.types.ts
+          if ! diff -q /tmp/database.types.ts app/src/lib/database.types.ts >/dev/null; then
+            echo "::error::app/src/lib/database.types.ts is stale. Run 'npm run gen:types' in app/ and commit the result."
+            diff -u app/src/lib/database.types.ts /tmp/database.types.ts | head -60
+            exit 1
+          fi
+          echo "Generated types are current."
+
   functions:
     name: Edge Function checks
     runs-on: ubuntu-latest
