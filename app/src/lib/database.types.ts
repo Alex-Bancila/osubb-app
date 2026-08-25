@@ -1,0 +1,1544 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  public: {
+    Tables: {
+      announcement_reads: {
+        Row: {
+          announcement_id: number
+          member_id: string
+          read_at: string
+        }
+        Insert: {
+          announcement_id: number
+          member_id: string
+          read_at?: string
+        }
+        Update: {
+          announcement_id?: number
+          member_id?: string
+          read_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          author: string | null
+          body: string
+          category: string | null
+          created_by: string | null
+          dept_id: string | null
+          form_label: string | null
+          form_url: string | null
+          id: number
+          pinned: boolean
+          priority: Database["public"]["Enums"]["announce_priority"]
+          published_at: string
+          title: string
+        }
+        Insert: {
+          author?: string | null
+          body: string
+          category?: string | null
+          created_by?: string | null
+          dept_id?: string | null
+          form_label?: string | null
+          form_url?: string | null
+          id?: never
+          pinned?: boolean
+          priority?: Database["public"]["Enums"]["announce_priority"]
+          published_at?: string
+          title: string
+        }
+        Update: {
+          author?: string | null
+          body?: string
+          category?: string | null
+          created_by?: string | null
+          dept_id?: string | null
+          form_label?: string | null
+          form_url?: string | null
+          id?: never
+          pinned?: boolean
+          priority?: Database["public"]["Enums"]["announce_priority"]
+          published_at?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "dept_cup"
+            referencedColumns: ["dept_id"]
+          },
+        ]
+      }
+      departments: {
+        Row: {
+          color: string
+          id: string
+          kind: string
+          name: string
+          short: string
+        }
+        Insert: {
+          color: string
+          id: string
+          kind?: string
+          name: string
+          short: string
+        }
+        Update: {
+          color?: string
+          id?: string
+          kind?: string
+          name?: string
+          short?: string
+        }
+        Relationships: []
+      }
+      difficulty_guide: {
+        Row: {
+          note: string | null
+          stars: number
+        }
+        Insert: {
+          note?: string | null
+          stars: number
+        }
+        Update: {
+          note?: string | null
+          stars?: number
+        }
+        Relationships: []
+      }
+      event_attendance: {
+        Row: {
+          checked_in: boolean | null
+          event_id: number
+          member_id: string
+          status: string
+        }
+        Insert: {
+          checked_in?: boolean | null
+          event_id: number
+          member_id: string
+          status?: string
+        }
+        Update: {
+          checked_in?: boolean | null
+          event_id?: number
+          member_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_attendance_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendance_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "event_attendance_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "event_attendance_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendance_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendance_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          capacity: number | null
+          created_by: string | null
+          dept_id: string | null
+          description: string | null
+          ends_at: string | null
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          scope: Database["public"]["Enums"]["event_scope"]
+          starts_at: string | null
+          team_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+        }
+        Insert: {
+          capacity?: number | null
+          created_by?: string | null
+          dept_id?: string | null
+          description?: string | null
+          ends_at?: string | null
+          has_qr?: boolean | null
+          id?: never
+          location?: string | null
+          scope: Database["public"]["Enums"]["event_scope"]
+          starts_at?: string | null
+          team_id?: string | null
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+        }
+        Update: {
+          capacity?: number | null
+          created_by?: string | null
+          dept_id?: string | null
+          description?: string | null
+          ends_at?: string | null
+          has_qr?: boolean | null
+          id?: never
+          location?: string | null
+          scope?: Database["public"]["Enums"]["event_scope"]
+          starts_at?: string | null
+          team_id?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["event_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "dept_cup"
+            referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_departments: {
+        Row: {
+          dept_id: string
+          member_id: string
+        }
+        Insert: {
+          dept_id: string
+          member_id: string
+        }
+        Update: {
+          dept_id?: string
+          member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_departments_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_departments_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "dept_cup"
+            referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "member_departments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_departments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_departments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_departments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_departments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notif_suppression: {
+        Row: {
+          kind: Database["public"]["Enums"]["noti_kind"]
+          role: Database["public"]["Enums"]["member_role"]
+        }
+        Insert: {
+          kind: Database["public"]["Enums"]["noti_kind"]
+          role: Database["public"]["Enums"]["member_role"]
+        }
+        Update: {
+          kind?: Database["public"]["Enums"]["noti_kind"]
+          role?: Database["public"]["Enums"]["member_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notif_suppression_role_fkey"
+            columns: ["role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          critical: boolean
+          icon: string | null
+          id: number
+          kind: Database["public"]["Enums"]["noti_kind"]
+          link: string | null
+          member_id: string
+          read: boolean
+          title: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          critical?: boolean
+          icon?: string | null
+          id?: never
+          kind: Database["public"]["Enums"]["noti_kind"]
+          link?: string | null
+          member_id: string
+          read?: boolean
+          title: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          critical?: boolean
+          icon?: string | null
+          id?: never
+          kind?: Database["public"]["Enums"]["noti_kind"]
+          link?: string | null
+          member_id?: string
+          read?: boolean
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notifications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notifications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      points_ledger: {
+        Row: {
+          awarded_by: string | null
+          created_at: string
+          delta: number
+          id: number
+          member_id: string
+          reason: string
+          task_id: number | null
+        }
+        Insert: {
+          awarded_by?: string | null
+          created_at?: string
+          delta: number
+          id?: never
+          member_id: string
+          reason: string
+          task_id?: number | null
+        }
+        Update: {
+          awarded_by?: string | null
+          created_at?: string
+          delta?: number
+          id?: never
+          member_id?: string
+          reason?: string
+          task_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_ledger_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "points_ledger_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "points_ledger_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "points_ledger_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "points_ledger_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_color: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          joined_year: number | null
+          phone: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          tier: string | null
+        }
+        Insert: {
+          avatar_color?: string | null
+          created_at?: string
+          email: string
+          full_name: string
+          id: string
+          joined_year?: number | null
+          phone?: string | null
+          role?: Database["public"]["Enums"]["member_role"]
+          status?: Database["public"]["Enums"]["member_status"]
+          tier?: string | null
+        }
+        Update: {
+          avatar_color?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          joined_year?: number | null
+          phone?: string | null
+          role?: Database["public"]["Enums"]["member_role"]
+          status?: Database["public"]["Enums"]["member_status"]
+          tier?: string | null
+        }
+        Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string
+          platform: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id: string
+          platform: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          platform?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_tokens_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "push_tokens_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "push_tokens_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_tokens_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_tokens_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rating_guide: {
+        Row: {
+          label: string
+          multiplier: number
+          note: string | null
+          rating: number
+        }
+        Insert: {
+          label: string
+          multiplier: number
+          note?: string | null
+          rating: number
+        }
+        Update: {
+          label?: string
+          multiplier?: number
+          note?: string | null
+          rating?: number
+        }
+        Relationships: []
+      }
+      role_capabilities: {
+        Row: {
+          capability: string
+          role: Database["public"]["Enums"]["member_role"]
+        }
+        Insert: {
+          capability: string
+          role: Database["public"]["Enums"]["member_role"]
+        }
+        Update: {
+          capability?: string
+          role?: Database["public"]["Enums"]["member_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_capabilities_role_fkey"
+            columns: ["role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          id: Database["public"]["Enums"]["member_role"]
+          level: number
+          name: string
+        }
+        Insert: {
+          id: Database["public"]["Enums"]["member_role"]
+          level: number
+          name: string
+        }
+        Update: {
+          id?: Database["public"]["Enums"]["member_role"]
+          level?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      task_assignees: {
+        Row: {
+          member_id: string
+          task_id: number
+        }
+        Insert: {
+          member_id: string
+          task_id: number
+        }
+        Update: {
+          member_id?: string
+          task_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_assignees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_assignees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_assignees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignees_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_requests: {
+        Row: {
+          created_at: string
+          decided_by: string | null
+          dept_id: string | null
+          from_member: string | null
+          id: number
+          kind: Database["public"]["Enums"]["request_kind"]
+          note: string | null
+          points: number | null
+          status: Database["public"]["Enums"]["request_status"]
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          decided_by?: string | null
+          dept_id?: string | null
+          from_member?: string | null
+          id?: never
+          kind: Database["public"]["Enums"]["request_kind"]
+          note?: string | null
+          points?: number | null
+          status?: Database["public"]["Enums"]["request_status"]
+          title: string
+        }
+        Update: {
+          created_at?: string
+          decided_by?: string | null
+          dept_id?: string | null
+          from_member?: string | null
+          id?: never
+          kind?: Database["public"]["Enums"]["request_kind"]
+          note?: string | null
+          points?: number | null
+          status?: Database["public"]["Enums"]["request_status"]
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "dept_cup"
+            referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "task_requests_from_member_fkey"
+            columns: ["from_member"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_requests_from_member_fkey"
+            columns: ["from_member"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_requests_from_member_fkey"
+            columns: ["from_member"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_from_member_fkey"
+            columns: ["from_member"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_requests_from_member_fkey"
+            columns: ["from_member"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          dept_id: string | null
+          description: string | null
+          difficulty: number
+          id: number
+          points: number | null
+          rating: number | null
+          status: Database["public"]["Enums"]["task_status"]
+          team_id: string | null
+          title: string
+          type: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          dept_id?: string | null
+          description?: string | null
+          difficulty: number
+          id?: never
+          points?: number | null
+          rating?: number | null
+          status?: Database["public"]["Enums"]["task_status"]
+          team_id?: string | null
+          title: string
+          type?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          dept_id?: string | null
+          description?: string | null
+          difficulty?: number
+          id?: never
+          points?: number | null
+          rating?: number | null
+          status?: Database["public"]["Enums"]["task_status"]
+          team_id?: string | null
+          title?: string
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "dept_cup"
+            referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "tasks_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          member_id: string
+          team_id: string
+        }
+        Insert: {
+          member_id: string
+          team_id: string
+        }
+        Update: {
+          member_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "team_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "team_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          dept_id: string | null
+          for_recruits: boolean
+          id: string
+          is_interne: boolean
+          lead_id: string | null
+          name: string
+        }
+        Insert: {
+          dept_id?: string | null
+          for_recruits?: boolean
+          id: string
+          is_interne?: boolean
+          lead_id?: string | null
+          name: string
+        }
+        Update: {
+          dept_id?: string | null
+          for_recruits?: boolean
+          id?: string
+          is_interne?: boolean
+          lead_id?: string | null
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "dept_cup"
+            referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "teams_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "teams_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "teams_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      dept_cup: {
+        Row: {
+          dept_id: string | null
+          members: number | null
+          name: string | null
+          points: number | null
+        }
+        Relationships: []
+      }
+      leaderboard: {
+        Row: {
+          full_name: string | null
+          member_id: string | null
+          points: number | null
+          rank: number | null
+          role: Database["public"]["Enums"]["member_role"] | null
+        }
+        Relationships: []
+      }
+      member_points: {
+        Row: {
+          member_id: string | null
+          points: number | null
+        }
+        Relationships: []
+      }
+      profiles_contact: {
+        Row: {
+          email: string | null
+          id: string | null
+          phone: string | null
+        }
+        Insert: {
+          email?: string | null
+          id?: string | null
+          phone?: string | null
+        }
+        Update: {
+          email?: string | null
+          id?: string | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      profiles_directory: {
+        Row: {
+          avatar_color: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string | null
+          joined_year: number | null
+          role: Database["public"]["Enums"]["member_role"] | null
+          status: Database["public"]["Enums"]["member_status"] | null
+          tier: string | null
+        }
+        Insert: {
+          avatar_color?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          joined_year?: number | null
+          role?: Database["public"]["Enums"]["member_role"] | null
+          status?: Database["public"]["Enums"]["member_status"] | null
+          tier?: string | null
+        }
+        Update: {
+          avatar_color?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          joined_year?: number | null
+          role?: Database["public"]["Enums"]["member_role"] | null
+          status?: Database["public"]["Enums"]["member_status"] | null
+          tier?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Functions: {
+      auth_in_dept: { Args: { d: string }; Returns: boolean }
+      auth_in_team: { Args: { t: string }; Returns: boolean }
+      auth_is_member: { Args: never; Returns: boolean }
+      auth_level: { Args: never; Returns: number }
+      auth_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["member_role"]
+      }
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      in_my_dept: { Args: { member: string }; Returns: boolean }
+      is_assigned: { Args: { tid: number }; Returns: boolean }
+      member_level: { Args: { p_member: string }; Returns: number }
+      provision_profile: {
+        Args: {
+          p_dept_ids?: string[]
+          p_email: string
+          p_full_name: string
+          p_role?: Database["public"]["Enums"]["member_role"]
+          p_team_ids?: string[]
+          p_user_id: string
+        }
+        Returns: string
+      }
+      rating_mult: { Args: { r: number }; Returns: number }
+      team_admits_recruits: { Args: { t: string }; Returns: boolean }
+    }
+    Enums: {
+      announce_priority: "critical" | "important" | "normal"
+      event_scope: "team" | "dept" | "project" | "org"
+      event_type:
+        | "sedinta"
+        | "activitate"
+        | "call"
+        | "eveniment"
+        | "deadline"
+        | "recrutare"
+      member_role:
+        | "recrut"
+        | "voluntar"
+        | "activ"
+        | "vot"
+        | "responsabil"
+        | "bce"
+        | "bc"
+        | "moderator"
+      member_status: "activ" | "inactiv" | "alumni"
+      noti_kind: "announce" | "deadline" | "event" | "task" | "system"
+      request_kind: "award" | "new_task"
+      request_status: "pending" | "approved" | "rejected"
+      task_status: "todo" | "progress" | "done" | "overdue" | "open"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
+  public: {
+    Enums: {
+      announce_priority: ["critical", "important", "normal"],
+      event_scope: ["team", "dept", "project", "org"],
+      event_type: [
+        "sedinta",
+        "activitate",
+        "call",
+        "eveniment",
+        "deadline",
+        "recrutare",
+      ],
+      member_role: [
+        "recrut",
+        "voluntar",
+        "activ",
+        "vot",
+        "responsabil",
+        "bce",
+        "bc",
+        "moderator",
+      ],
+      member_status: ["activ", "inactiv", "alumni"],
+      noti_kind: ["announce", "deadline", "event", "task", "system"],
+      request_kind: ["award", "new_task"],
+      request_status: ["pending", "approved", "rejected"],
+      task_status: ["todo", "progress", "done", "overdue", "open"],
+    },
+  },
+} as const
+

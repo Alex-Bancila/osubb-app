@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from './database.types';
 
 /* The one client the whole app shares. Everything — queries, auth, realtime
    later — goes through this instance; creating a second one would mean two
@@ -18,7 +19,12 @@ if (!url || !anonKey) {
   );
 }
 
-export const supabase = createClient(url, anonKey);
+/* Typed with the generated `Database`, so `.from('taskss')` and
+   `.select('titel')` are build errors rather than empty results at the demo.
+   `database.types.ts` is generated — never edit it by hand; run
+   `npm run gen:types` after a migration and commit what comes out. CI
+   regenerates it and fails if the committed copy has drifted. */
+export const supabase = createClient<Database>(url, anonKey);
 
 /* Dev convenience: poke at the client from the browser console —
    `await __supabase.from('tasks').select('*')` is the fastest way to find out
