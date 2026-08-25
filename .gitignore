@@ -18,6 +18,9 @@ supabase/.temp/
 dist/
 build/
 
+# Playwright MCP scratch output (screenshots, page snapshots)
+.playwright-mcp/
+
 # Logs
 *.log
 npm-debug.log*
