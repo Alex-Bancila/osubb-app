@@ -1,0 +1,50 @@
+/* ============================================================================
+   The three screens that exist before the app does: login, the magic-link
+   callback, and "your account is not active". They share one narrow centred
+   card and nothing else, so they share one small stylesheet rather than each
+   carrying a copy. Everything past the front door gets the real shell (#84).
+   ========================================================================== */
+
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 26rem;
+  margin: min(12vh, 6rem) auto 0;
+  padding: 0 var(--s-2);
+}
+
+.auth-card--centered {
+  align-items: center;
+  text-align: center;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.auth-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.auth-card .muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.auth-card .auth-error {
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.auth-card a {
+  color: var(--primary);
+  text-underline-offset: 3px;
+}

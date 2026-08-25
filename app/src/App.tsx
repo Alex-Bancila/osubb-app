@@ -1,92 +1,103 @@
-import {
-  IonApp,
-  IonButton,
-  IonContent,
-  IonHeader,
-  IonPage,
-  IonTitle,
-  IonToolbar,
-} from '@ionic/react';
+import type { ReactElement } from 'react';
+import { IonApp, IonContent, IonPage, IonSpinner } from '@ionic/react';
+import { IonReactRouter } from '@ionic/react-router';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './lib/auth';
+import LoginScreen from './screens/login/LoginScreen';
+import AuthCallback from './screens/login/AuthCallback';
+import NoProfileScreen from './screens/no-profile/NoProfileScreen';
+import HomePlaceholder from './screens/home/HomePlaceholder';
 
-/* Still a placeholder — the real shell, navigation and routes are #84/#85.
-   What it does now is show the three session states this app has, because
-   those three are the whole point of #82 and each one gets a real screen
-   later: signed out (#83), signed in without membership (#85), signed in as a
-   member (everything else). */
-function SessionReadout() {
-  const { session, claims, loading, signOut } = useAuth();
-
-  if (loading) return <p>Se încarcă…</p>;
-
-  if (!session) {
-    return (
-      <>
-        <h1 style={{ fontSize: 'var(--fs-xl)', fontWeight: 'var(--fw-bold)' }}>
-          Nu ești autentificat
-        </h1>
-        <p style={{ color: 'var(--text-muted)' }}>
-          Ecranul de login (link magic) este issue-ul #83. Până atunci, poți
-          testa sesiunea din consolă:{' '}
-          <code>
-            await __supabase.auth.signInWithPassword(&#123; email:
-            &apos;voluntar@demo.osubb&apos;, password: &apos;parola123&apos;
-            &#125;)
-          </code>
-        </p>
-      </>
-    );
-  }
-
-  /* Signed in, but the token carries no org claims: never invited, or
-     deactivated since it was issued. Not an error — ADR-0003 working. The kind
-     version of this screen is #85. */
-  if (!claims) {
-    return (
-      <>
-        <h1 style={{ fontSize: 'var(--fs-xl)', fontWeight: 'var(--fw-bold)' }}>
-          Contul tău nu este activ
-        </h1>
-        <p style={{ color: 'var(--text-muted)' }}>
-          Ești autentificat ca <strong>{session.user.email}</strong>, dar nu ai
-          un profil activ în organizație. Contactează BC.
-        </p>
-        <IonButton onClick={signOut}>Deconectare</IonButton>
-      </>
-    );
-  }
-
+/* Shown while the stored session is being read — a beat, not a screen. It
+   matters that this is not a redirect: `loading` is true for a moment on every
+   page load, and treating it as "signed out" would bounce a signed-in member to
+   the login screen every single time they refresh. */
+function Splash() {
   return (
-    <>
-      <h1 style={{ fontSize: 'var(--fs-xl)', fontWeight: 'var(--fw-bold)' }}>
-        Bun venit, {session.user.email}
-      </h1>
-      <dl style={{ color: 'var(--text-muted)', lineHeight: 1.9 }}>
-        <div>
-          rol: <strong>{claims.member_role}</strong> (nivel{' '}
-          <strong>{claims.member_level}</strong>)
+    <IonPage>
+      <IonContent className="ion-padding">
+        <div className="auth-card auth-card--centered">
+          <IonSpinner aria-label="Se încarcă" />
         </div>
-        <div>departamente: {claims.dept_ids.join(', ') || '—'}</div>
-        <div>echipe: {claims.team_ids.join(', ') || '—'}</div>
-      </dl>
-      <IonButton onClick={signOut}>Deconectare</IonButton>
-    </>
+      </IonContent>
+    </IonPage>
   );
+}
+
+/**
+ * The three session states, decided in one place (mini-spec §3).
+ *
+ * This is navigation, not security. Every redirect here is cosmetic: the
+ * database returns nothing to a session without claims whatever the URL bar
+ * says, so someone who types their way past a guard sees an empty app, never
+ * somebody else's data. What the guard buys is that they see an explanation
+ * instead of that emptiness.
+ */
+function RequireMember({ children }: { children: ReactElement }) {
+  const { session, claims, loading } = useAuth();
+
+  if (loading) return <Splash />;
+  if (!session) return <Navigate to="/login" replace />;
+  if (!claims) return <Navigate to="/no-profile" replace />;
+  return children;
+}
+
+/** Keeps a signed-in member off the front door. */
+function FrontDoor({ children }: { children: ReactElement }) {
+  const { session, claims, loading } = useAuth();
+
+  if (loading) return <Splash />;
+  if (session && claims) return <Navigate to="/" replace />;
+  // Signed in without claims: /no-profile explains it and offers a way out.
+  if (session) return <Navigate to="/no-profile" replace />;
+  return children;
 }
 
 export default function App() {
   return (
     <IonApp>
-      <IonPage>
-        <IonHeader>
-          <IonToolbar>
-            <IonTitle>OSUBB</IonTitle>
-          </IonToolbar>
-        </IonHeader>
-        <IonContent className="ion-padding">
-          <SessionReadout />
-        </IonContent>
-      </IonPage>
+      {/* Opting into both v7 behaviours now: it silences the deprecation
+          warnings React Router otherwise prints on every page load — a console
+          that always has warnings in it is a console nobody reads — and it
+          means the eventual v7/v8 upgrade is a version bump rather than a
+          behaviour change. */}
+      <IonReactRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              <FrontDoor>
+                <LoginScreen />
+              </FrontDoor>
+            }
+          />
+
+          {/* Deliberately unguarded: this route's whole job is to turn a link
+              into a session, so it has to run before there is one. */}
+          <Route path="/auth/callback" element={<AuthCallback />} />
+
+          <Route path="/no-profile" element={<NoProfileScreen />} />
+
+          <Route
+            path="/"
+            element={
+              <RequireMember>
+                <HomePlaceholder />
+              </RequireMember>
+            }
+          />
+
+          {/* Anything unknown goes home and lets the guard sort it out. Note
+              there is no "return to the page you wanted" here, on purpose: a
+              magic link leaves the app entirely and comes back in a new tab, so
+              the intent would not survive the trip anyway — and carrying no
+              destination in the URL means this app has no redirect target for
+              anyone to aim somewhere else. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </IonReactRouter>
     </IonApp>
   );
 }

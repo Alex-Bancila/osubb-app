@@ -9,8 +9,8 @@ Local settings live in `supabase/config.toml`. **Hosted projects do not read tha
 | `config.toml` | Value | Renders to | Why |
 |---|---|---|---|
 | `[auth] enabled` | `true` | — | Auth is on. |
-| `[auth] site_url` | `http://127.0.0.1:3000` | `GOTRUE_SITE_URL` | Where a magic link sends the member back. Must become the real app URL once the frontend deploys (#109). |
-| `[auth] additional_redirect_urls` | `["http://127.0.0.1:3000"]` | allow-list | Any other URL a link may return to. Keep it short: it is an allow-list against open-redirect abuse. |
+| `[auth] site_url` | `http://localhost:5173` | `GOTRUE_SITE_URL` | Where a magic link sends the member back — the Vite dev server. Must become the real app URL once the frontend deploys (#109). |
+| `[auth] additional_redirect_urls` | the dev server + `/auth/callback`, both spellings of localhost | `GOTRUE_URI_ALLOW_LIST` | Every URL a link may return to. GoTrue refuses anything not on it, so a link to an unlisted origin silently falls back to `site_url` and the sign-in appears to do nothing. Keep it short and exact: it is the defence against open-redirect abuse. |
 | `[auth] jwt_expiry` | `3600` | `GOTRUE_JWT_EXP` | One hour. This is also the **deactivation window**: a member set to `inactiv` keeps their claims until this expires (ADR-0003 amendment). |
 | `[auth] enable_refresh_token_rotation` | `true` | `GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED` | A refresh token is single-use; reuse signals theft. |
 | `[auth] refresh_token_reuse_interval` | `10` | — | Ten seconds of grace, so a double-tap or a flaky network doesn't log someone out. |
