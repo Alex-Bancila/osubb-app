@@ -25,12 +25,15 @@ import '@ionic/react/css/display.css';
 import './theme/tokens.css';
 import './theme/global.css';
 
+import { AuthProvider } from './lib/auth';
 import App from './App';
 
 setupIonicReact();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </StrictMode>,
 );
