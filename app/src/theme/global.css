@@ -1,0 +1,43 @@
+/* ============================================================================
+   Wires the OSUBB tokens (tokens.css, lifted from the mockup) into the
+   variables Ionic's components actually read.
+
+   Only this file maps `--ion-*`. Components use the OSUBB tokens directly and
+   never hardcode a hex value — a new department needs a database row, not CSS
+   (frontend mini-spec §6).
+
+   Note there is no separate dark block below: every `--ion-*` here points at an
+   OSUBB token, and those already flip under `:root[data-theme="dark"]`. One
+   mapping, both themes.
+   ========================================================================== */
+
+:root {
+  /* Brand red as Ionic's primary. The -rgb pairs are literals because Ionic
+     composes them into rgba() and CSS cannot do that with a var() colour. */
+  --ion-color-primary: var(--red);
+  --ion-color-primary-rgb: 237, 32, 37;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: var(--red-600);
+  --ion-color-primary-tint: var(--red-100);
+
+  --ion-color-success: var(--success);
+  --ion-color-warning: var(--warning);
+  --ion-color-danger: var(--danger);
+
+  --ion-background-color: var(--surface-2);
+  --ion-text-color: var(--text);
+  --ion-border-color: var(--border);
+
+  --ion-toolbar-background: var(--surface);
+  --ion-item-background: var(--surface);
+  --ion-card-background: var(--surface);
+
+  --ion-font-family: var(--font);
+}
+
+body {
+  font-family: var(--font);
+  background: var(--surface-2);
+  color: var(--text);
+}

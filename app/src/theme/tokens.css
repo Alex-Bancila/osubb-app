@@ -1,0 +1,159 @@
+/* ============================================================================
+   OSUBB Design Tokens — master palette: RED #ED2025 + BLACK + WHITE
+   Department accent colors come from the OSUBB Brand Book 2025.
+   ========================================================================== */
+:root {
+  /* --- Brand core --- */
+  --red: #ED2025;
+  --red-600: #D11620;
+  --red-700: #A8101A;
+  --red-050: #FEEAEB;
+  --red-100: #FBD2D4;
+
+  --black: #000000;
+  --white: #FFFFFF;
+
+  /* --- Neutral ramp (near-blacks / greys for hierarchy) --- */
+  --ink-900: #0B0B0C;   /* page-dark surfaces, login */
+  --ink-800: #161617;
+  --ink-700: #232325;
+  --ink-600: #3A3A3D;
+  --ink-500: #5C5C61;   /* secondary text */
+  --ink-400: #8A8A90;   /* muted text / icons */
+  --ink-300: #BFBFC4;   /* borders on dark */
+  --ink-200: #E4E4E7;   /* borders */
+  --ink-150: #EDEDEF;
+  --ink-100: #F4F4F6;   /* subtle surface */
+  --ink-050: #FAFAFB;   /* app background */
+
+  /* --- Semantic --- */
+  --text:        var(--ink-900);
+  --text-muted:  var(--ink-500);
+  --text-faint:  var(--ink-400);
+  --surface:     var(--white);
+  --surface-2:   var(--ink-050);
+  --surface-3:   var(--ink-100);
+  --border:      var(--ink-200);
+  --border-soft: var(--ink-150);
+
+  --primary: var(--red);
+  --primary-ink: var(--white);
+
+  --success: #007F33;   /* brand-book Financial green doubles as success */
+  --success-050: #E6F4EC;
+  --warning: #F2A700;   /* brand-book HR amber doubles as warning */
+  --warning-050: #FEF5E0;
+  --danger:  #ED2025;   /* critical = brand red, per priorities doc */
+  --danger-050: #FEEAEB;
+  --info:    #284C93;   /* brand-book Educational blue */
+  --info-050: #EAEFF8;
+
+  /* --- Department accent colors (Brand Book) --- */
+  --dept-edu:  #284C93;  /* Educațional */
+  --dept-hr:   #F2A700;  /* Resurse Umane */
+  --dept-fin:  #007F33;  /* Financiar */
+  --dept-pr:   #7500A0;  /* Imagine & PR */
+  --dept-youth:#FF3B3B;  /* Tineret */
+  --dept-org:  #ED2025;  /* Organizație (general) */
+  --dept-ext:  #5C5C61;  /* Activități externe */
+
+  /* --- Typography --- */
+  --font: "Montserrat", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
+
+  --fs-xs: 11.5px;
+  --fs-sm: 13px;
+  --fs-base: 14.5px;
+  --fs-md: 16px;
+  --fs-lg: 19px;
+  --fs-xl: 24px;
+  --fs-2xl: 31px;
+  --fs-3xl: 40px;
+
+  /* --- Radius --- */
+  --r-xs: 6px;
+  --r-sm: 9px;
+  --r-md: 13px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+
+  /* --- Spacing scale --- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 56px;
+
+  /* --- Shadows --- */
+  --sh-sm: 0 1px 2px rgba(11,11,12,.06), 0 1px 3px rgba(11,11,12,.05);
+  --sh-md: 0 4px 12px rgba(11,11,12,.07), 0 2px 4px rgba(11,11,12,.05);
+  --sh-lg: 0 14px 40px rgba(11,11,12,.13), 0 4px 12px rgba(11,11,12,.07);
+  --sh-red: 0 8px 22px rgba(237,32,37,.28);
+
+  /* --- Layout --- */
+  --sidebar-w: 248px;
+  --topbar-h: 64px;
+  --content-max: 1240px;
+  --transition: 160ms cubic-bezier(.4,0,.2,1);
+}
+
+/* ============================================================================
+   DARK THEME — brand red stays; neutrals/surfaces invert; tints become
+   dark translucent; "text-on-tint" accent colors lighten for contrast.
+   ========================================================================== */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* neutral ramp (now dark→light) */
+  --ink-900: #26262b;   /* "dark chip" bg (role-badge, btn-dark, toast, pts) */
+  --ink-800: #1c1c20;
+  --ink-700: #3a3a42;   /* default avatar bg */
+  --ink-600: #c4c4cb;   /* default badge text */
+  --ink-500: #9a9aa3;
+  --ink-400: #74747d;
+  --ink-300: #4a4a52;
+  --ink-200: #34343b;
+  --ink-150: #2b2b31;
+  --ink-100: #232328;
+  --ink-050: #1b1b1f;
+
+  /* semantic surfaces / text / borders */
+  --text:        #ECECEF;
+  --text-muted:  #A7A7AF;
+  --text-faint:  #74747d;
+  --surface:     #17171b;
+  --surface-2:   #0e0e11;
+  --surface-3:   #1f1f24;
+  --border:      #2f2f36;
+  --border-soft: #26262b;
+
+  /* lighten accent colors used as TEXT on tints (not the dept solids) */
+  --red-700: #FF8585;
+  --red-600: #F0454C;
+  --success: #3ECF8E;
+  --warning: #F4B73C;
+  --info:    #84A9EC;
+
+  /* dark translucent tints (blend over dark surfaces) */
+  --red-050:     rgba(237,32,37,.16);
+  --red-100:     rgba(237,32,37,.30);
+  --danger-050:  rgba(237,32,37,.16);
+  --success-050: rgba(62,207,142,.15);
+  --warning-050: rgba(244,183,60,.16);
+  --info-050:    rgba(132,169,236,.15);
+
+  /* shadows: deeper, since light shadows vanish on dark */
+  --sh-sm: 0 1px 2px rgba(0,0,0,.5);
+  --sh-md: 0 4px 14px rgba(0,0,0,.55);
+  --sh-lg: 0 16px 44px rgba(0,0,0,.6);
+  --sh-red: 0 8px 22px rgba(237,32,37,.34);
+}

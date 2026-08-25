@@ -1,8 +1,12 @@
-# Normalize line endings; force LF where CRLF breaks tooling.
-* text=auto
-*.sh text eol=lf
-*.sql text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
+# Line endings: LF everywhere, on every platform.
+#
+# `text=auto eol=lf` means git stores LF (as always) *and* checks LF out, rather
+# than converting to CRLF on Windows. That matters now that the frontend exists:
+# Prettier is configured with `endOfLine: "lf"`, so a CRLF checkout would make
+# `npm run format:check` fail on every file for a teammate on Windows while
+# passing in CI — a confusing first hour for exactly the people we onboard.
+* text=auto eol=lf
+
 *.png binary
 *.pdf binary
+*.ico binary
