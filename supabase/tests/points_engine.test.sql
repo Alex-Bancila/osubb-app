@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(28);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -173,12 +173,32 @@ select ok(
     where relname = 'points_ledger' and relnamespace = 'public'::regnamespace),
   'RLS is enabled on points_ledger');
 
+-- The two views a member reads directly run as the caller, so the policies on
+-- profiles and member_departments still decide who gets rows at all.
 select ok(
   exists (select 1 from pg_class
-           where relname = 'member_points'
+           where relname = 'leaderboard'
              and relnamespace = 'public'::regnamespace
              and 'security_invoker=on' = any (reloptions)),
-  'views run with security_invoker (caller''s RLS applies)');
+  'leaderboard runs with security_invoker (caller''s RLS applies)');
+select ok(
+  exists (select 1 from pg_class
+           where relname = 'dept_cup'
+             and relnamespace = 'public'::regnamespace
+             and 'security_invoker=on' = any (reloptions)),
+  'dept_cup runs with security_invoker (caller''s RLS applies)');
+
+-- `member_points` is the deliberate exception (1.4b): owner rights, so a total
+-- is summed over the whole ledger rather than over the rows the caller happens
+-- to be allowed to read. Totals are public inside the org; the ledger behind
+-- them is not. Its own auth_is_member() clause is what keeps it gated, and
+-- points_visibility.test.sql is where that behaviour is proven.
+select ok(
+  not exists (select 1 from pg_class
+               where relname = 'member_points'
+                 and relnamespace = 'public'::regnamespace
+                 and 'security_invoker=on' = any (reloptions)),
+  'member_points deliberately runs with owner rights (1.4b)');
 
 select * from finish();
 rollback;
