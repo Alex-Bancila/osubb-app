@@ -35,22 +35,52 @@ app/
     │   ├── supabase.ts     # the one shared client, env-driven
     │   ├── auth.tsx        # session + decoded claims, useAuth()
     │   └── capabilities.ts # level thresholds, named as the database names them
+    │   └── format.ts       # dates, points, initials — Romanian locale
+    ├── queries/
+    │   ├── client.ts       # QueryClient defaults; a refusal is not retried
+    │   ├── keys.ts         # the key conventions — read this before adding a hook
+    │   ├── points.ts       # useMyPoints, useLeaderboard, useDeptCup
+    │   └── tasks.ts        # useMyTasks, useOpenTasks
     ├── components/
-    │   └── shell/          # sidebar, topbar, tab bar — one list drives all three
+    │   ├── shell/          # sidebar, topbar, tab bar — one list drives all three
+    │   └── states/         # Loading, Empty, ErrorState — every query renders all three
     ├── screens/
     │   ├── Placeholder.tsx # stands in for a screen; says which issue builds it
+    │   ├── dashboard/      # points + leaderboard (plain; #93–#95 design it)
+    │   ├── tracker/        # my tasks (plain; #88–#92 build the real one)
     │   ├── login/          # magic-link request + the /auth/callback landing
     │   └── no-profile/     # signed in, not a member (ADR-0003 gate 2)
     └── theme/
         ├── tokens.css       # Brand Book palette, copied from mockup/css/tokens.css
         ├── global.css       # maps those tokens onto Ionic's --ion-* variables
         ├── auth-screens.css # the card the three pre-app screens share
-        └── shell.css        # the app frame, lifted from mockup/css/layout.css
+        ├── shell.css        # the app frame, lifted from mockup/css/layout.css
+        └── screens.css      # cards, query states, the two lists
 ```
 
-`src/queries/` doesn't exist yet on purpose — it arrives with #87, in the shape
-the mini-spec §5 describes. Each screen gets its own folder under `screens/`
-when there is something real to put in it.
+Each screen gets its own folder under `screens/` when there is something real
+to put in it.
+
+## Adding a query
+
+Read `src/queries/keys.ts` first — the two rules there (keys mirror the data,
+most general segment first) are what make one invalidation refresh everything
+that should change. Then copy the shape of `points.ts`:
+
+```tsx
+const tasks = useMyTasks();
+
+if (tasks.isPending) return <Loading />;
+if (tasks.isError)
+  return <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />;
+if (tasks.data.length === 0)
+  return <Empty text="Nu ai niciun task asignat acum." />;
+```
+
+All three states, every time — an empty list is not an error and must say
+something a member can act on. Never filter by department, team or role in the
+hook: RLS already returned exactly the rows this member may see, and a second
+copy of that rule in TypeScript is a weaker one.
 
 ## Routes
 

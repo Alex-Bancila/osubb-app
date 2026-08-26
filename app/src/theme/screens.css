@@ -1,0 +1,134 @@
+/* ============================================================================
+   Shared building blocks for screen content: the card, the three query states,
+   and the two lists the first screens need. Everything is a token.
+   ========================================================================== */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-5);
+  margin: 0 0 var(--s-4);
+  box-shadow: var(--sh-sm);
+}
+
+.card-title {
+  margin: 0 0 var(--s-4);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+}
+
+.bignum {
+  margin: 0;
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- query states ---------- */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+}
+.state-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ---------- leaderboard ---------- */
+.rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rank-list li {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.rank-list li:last-child {
+  border-bottom: 0;
+}
+.rank {
+  font-weight: var(--fw-bold);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.rank-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-points {
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- task list ---------- */
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.task-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.task-list li:last-child {
+  border-bottom: 0;
+}
+.task-title {
+  font-weight: var(--fw-semibold);
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.task-meta {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status reads as shape and colour, not only as a word — a list of work should
+   be scannable without being read. */
+.chip {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.chip--done {
+  background: var(--success-050);
+  color: var(--success);
+}
+.chip--progress {
+  background: var(--info-050);
+  color: var(--info);
+}
+.chip--overdue {
+  background: var(--danger-050);
+  color: var(--danger);
+}
+.chip--open {
+  background: var(--warning-050);
+  color: var(--warning);
+}
