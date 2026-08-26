@@ -9,6 +9,8 @@ import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
+import DashboardScreen from './screens/dashboard/DashboardScreen';
+import TrackerScreen from './screens/tracker/TrackerScreen';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -102,14 +104,8 @@ export default function App() {
               </RequireMember>
             }
           >
-            <Route
-              path="/"
-              element={<Placeholder title="Acasă" issue="#93–#95" />}
-            />
-            <Route
-              path="/tracker"
-              element={<Placeholder title="Taskuri" issue="#88–#92" />}
-            />
+            <Route path="/" element={<DashboardScreen />} />
+            <Route path="/tracker" element={<TrackerScreen />} />
             <Route
               path="/calendar"
               element={<Placeholder title="Calendar" issue="#96–#98" />}
