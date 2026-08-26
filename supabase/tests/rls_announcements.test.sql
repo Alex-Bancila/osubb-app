@@ -5,7 +5,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(13);
+select plan(19);
 
 -- ==================== Login simulation ====================
 create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
@@ -88,6 +88,66 @@ select is((select count(*) from announcement_reads), 0::bigint,
   'read receipts stay private even at level 4');
 
 reset role;
+
+-- ==================== A deactivated member: real uid, no org claims ====================
+-- A deactivated member can keep a valid auth uid until their JWT expires, but the
+-- access-token hook removes all organisation claims. This is different from the
+-- claimless block below: auth.uid() is real, so a self-only policy is insufficient.
+insert into announcements (title, body)
+  values ('Anunț de securitate', 'Fixture pentru politica de read receipts.');
+insert into announcement_reads (announcement_id, member_id, read_at)
+  select id, 'f1000000-0000-0000-0000-0000000000f1'::uuid, '2000-01-01 00:00:00+00'
+    from announcements where title = 'Materiale PR';
+update announcement_reads
+   set read_at = '2000-01-01 00:00:00+00'
+ where announcement_id = (
+   select id from announcements where title = 'Ședință extraordinară'
+ );
+
+create temp table receipt_fx as
+select
+  (select id from announcements where title = 'Ședință extraordinară') as update_id,
+  (select id from announcements where title = 'Materiale PR') as delete_id,
+  (select id from announcements where title = 'Anunț de securitate') as insert_id;
+grant select on receipt_fx to authenticated;
+
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', 'f1000000-0000-0000-0000-0000000000f1'::uuid,
+  'role', 'authenticated',
+  'app_metadata', '{}'::jsonb)::text, true);
+set local role authenticated;
+
+select is(auth_is_member(), false,
+  'a real uid without organisation claims is not an active member');
+select is((select count(*) from announcement_reads), 0::bigint,
+  'a deactivated member cannot read their old receipts');
+select throws_ok(
+  format($$ insert into announcement_reads (announcement_id, member_id)
+            values (%s, 'f1000000-0000-0000-0000-0000000000f1') $$,
+         (select insert_id from receipt_fx)),
+  '42501', null, 'a deactivated member cannot create a receipt');
+
+update announcement_reads
+   set read_at = '2001-01-01 00:00:00+00'
+ where announcement_id = (select update_id from receipt_fx);
+delete from announcement_reads
+ where announcement_id = (select delete_id from receipt_fx);
+
+reset role;
+
+select is(
+  (select read_at from announcement_reads
+    where announcement_id = (select update_id from receipt_fx)),
+  '2000-01-01 00:00:00+00'::timestamptz,
+  'a deactivated member cannot update an old receipt');
+select ok(
+  exists (select 1 from announcement_reads
+           where announcement_id = (select delete_id from receipt_fx)),
+  'a deactivated member cannot delete an old receipt');
+select ok(
+  not exists (select 1 from announcement_reads
+               where announcement_id = (select insert_id from receipt_fx)),
+  'the denied insert leaves no receipt behind');
 
 -- ==================== The stranger: authenticated without claims ====================
 -- `reset role` keeps the previous login's JWT, so clear it explicitly —
