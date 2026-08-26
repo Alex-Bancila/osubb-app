@@ -4,12 +4,10 @@ import { IonIcon } from '@ionic/react';
 import { logOutOutline, menuOutline } from 'ionicons/icons';
 import { useAuth } from '../../lib/auth';
 import { can } from '../../lib/capabilities';
+import { initials } from '../../lib/format';
+import { useMyProfile } from '../../queries/profile';
+import { useRoles } from '../../queries/reference';
 import { NAV_ITEMS, TAB_ORDER } from './navItems';
-
-function initials(email: string | undefined) {
-  if (!email) return '?';
-  return email.slice(0, 2).toUpperCase();
-}
 
 /**
  * The frame every signed-in screen renders inside: sidebar on desktop, a
@@ -23,6 +21,17 @@ export default function AppShell() {
   const { claims, session, signOut } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  /* The sidebar identifies the person, not the account: their name and their
+     own avatar colour, with the address as the fallback for the moment before
+     the profile arrives. Both queries are shared with the screens — the shell
+     costs no extra requests. */
+  const profile = useMyProfile();
+  const roles = useRoles();
+  const roleLabel =
+    (claims && roles.data?.get(claims.member_role)?.name) ??
+    claims?.member_role ??
+    '';
 
   const visible = NAV_ITEMS.filter(
     (item) => !item.capability || can(claims, item.capability),
@@ -67,15 +76,17 @@ export default function AppShell() {
           <div className="usercard">
             <span
               className="avatar"
-              style={{ background: 'var(--red)' }}
+              style={{ background: profile.data?.avatar_color ?? 'var(--red)' }}
               aria-hidden="true"
             >
-              {initials(session?.user.email)}
+              {initials(profile.data?.full_name ?? session?.user.email)}
             </span>
             <span style={{ minWidth: 0 }}>
-              <span className="usercard-name">{session?.user.email}</span>
+              <span className="usercard-name">
+                {profile.data?.full_name ?? session?.user.email}
+              </span>
               <span className="usercard-role" style={{ display: 'block' }}>
-                {claims?.member_role} · nivel {claims?.member_level}
+                {roleLabel} · nivel {claims?.member_level}
               </span>
             </span>
           </div>

@@ -17,8 +17,22 @@ export const keys = {
   points: {
     all: ['points'] as const,
     me: () => ['points', 'me'] as const,
+    standing: () => ['points', 'standing'] as const,
     leaderboard: () => ['points', 'leaderboard'] as const,
     deptCup: () => ['points', 'deptCup'] as const,
+  },
+  profile: {
+    all: ['profile'] as const,
+    me: () => ['profile', 'me'] as const,
+  },
+  /* Reference data — roles, departments, the scoring guides. It changes in a
+     migration, never at runtime, so these are fetched once and kept (see
+     `reference.ts`). Same family for all of it: one `['reference']`
+     invalidation after a deploy is the whole cache-busting story. */
+  reference: {
+    all: ['reference'] as const,
+    departments: () => ['reference', 'departments'] as const,
+    roles: () => ['reference', 'roles'] as const,
   },
   tasks: {
     all: ['tasks'] as const,

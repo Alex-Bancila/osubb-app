@@ -1,7 +1,51 @@
 /* ============================================================================
-   Shared building blocks for screen content: the card, the three query states,
-   and the two lists the first screens need. Everything is a token.
+   Shared building blocks for screen content: the page frame, the card, the
+   three query states, and the two lists the first screens need. Everything is
+   a token.
    ========================================================================== */
+
+/* ---------- page frame ----------
+   Every screen's content sits in one of these, so margins and the reading
+   width are decided once rather than per screen. The shell scrolls it; the
+   page never sets its own height. */
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--s-6);
+}
+
+.page-head {
+  margin: 0 0 var(--s-6);
+}
+
+.page-title {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* Romanian dates start lowercase — `miercuri, 26 august 2026`. Capitalising in
+   CSS keeps `formatLongDate` returning the correct string for every other
+   place a date appears mid-sentence. */
+.page-date {
+  margin: var(--s-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+.page-date::first-letter {
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding: var(--s-4);
+  }
+  .page-title {
+    font-size: var(--fs-xl);
+  }
+}
 
 .card {
   background: var(--surface);
@@ -16,6 +60,25 @@
   margin: 0 0 var(--s-4);
   font-size: var(--fs-md);
   font-weight: var(--fw-bold);
+}
+
+/* A title row, for cards that will grow a link or a filter on the right. */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: 0 0 var(--s-4);
+}
+.card-head .card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+}
+.card-title ion-icon {
+  font-size: 18px;
+  color: var(--text-faint);
 }
 
 .bignum {
@@ -50,25 +113,67 @@
 }
 .rank-list li {
   display: grid;
-  grid-template-columns: 2rem 1fr auto;
+  grid-template-columns: 1.6rem auto 1fr auto;
   align-items: center;
   gap: var(--s-3);
-  padding: var(--s-2) 0;
+  padding: var(--s-2) var(--s-2);
   border-bottom: 1px solid var(--border-soft);
 }
 .rank-list li:last-child {
   border-bottom: 0;
 }
+
+/* My own row, wherever it lands. Losing the rule under it as well as gaining
+   the tint is what makes it read as one block rather than a coloured row in a
+   table. */
+.rank-list li.is-me {
+  background: var(--red-050);
+  border-radius: var(--r-sm);
+  border-bottom-color: transparent;
+}
+
 .rank {
   font-weight: var(--fw-bold);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
+/* The podium, in brand red — three positions, not a gradient of importance. */
+.rank--top {
+  color: var(--red);
+}
+
 .rank-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: var(--fw-medium);
+}
+
+.avatar--sm {
+  width: 26px;
+  height: 26px;
+  font-size: var(--fs-xs);
+}
+
+/* Marks the jump from the top ten down to my own row. */
+.rank-break {
+  text-align: center;
+  color: var(--text-faint);
+  letter-spacing: 0.35em;
+  line-height: 1;
+  padding: var(--s-2) 0;
+}
+
+.tag--me {
+  margin-left: var(--s-2);
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--red);
+  color: var(--white);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
 }
 .rank-points {
   font-weight: var(--fw-bold);

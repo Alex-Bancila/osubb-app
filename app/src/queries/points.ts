@@ -32,6 +32,70 @@ export function useMyPoints() {
 }
 
 /**
+ * Where I stand: my rank, out of how many, and what closes the gap.
+ *
+ * Three round trips rather than one, because the answer genuinely is three
+ * questions and PostgREST cannot join them without an RPC:
+ *
+ *  - my row on the board — the top-10 the dashboard also shows is no help here,
+ *    since rank 11 is exactly the member who most wants to know;
+ *  - how many members the board has, so "#4" can say "of 8";
+ *  - the member directly above me, which is what makes the number actionable.
+ *
+ * The gap is `their points − mine`, with no `+ 1`: `rank()` gives ties the same
+ * rank, so drawing level with them really does take their place.
+ *
+ * A member absent from the board (`status <> 'activ'`) has no rank, and this
+ * returns `null` for it rather than inventing one.
+ */
+export function useMyStanding() {
+  const { session } = useAuth();
+  const id = session?.user.id;
+
+  return useQuery({
+    queryKey: keys.points.standing(),
+    enabled: Boolean(id),
+    queryFn: async () => {
+      const mine = await supabase
+        .from('leaderboard')
+        .select('rank, points')
+        .eq('member_id', id!)
+        .maybeSingle();
+      if (mine.error) throw mine.error;
+
+      const total = await supabase
+        .from('leaderboard')
+        .select('member_id', { count: 'exact', head: true });
+      if (total.error) throw total.error;
+
+      if (!mine.data?.rank) {
+        return { rank: null, total: total.count ?? 0, next: null };
+      }
+
+      const above = await supabase
+        .from('leaderboard')
+        .select('rank, points')
+        .gt('points', mine.data.points ?? 0)
+        .order('points', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (above.error) throw above.error;
+
+      return {
+        rank: mine.data.rank,
+        total: total.count ?? 0,
+        next: above.data
+          ? {
+              rank: above.data.rank!,
+              gap: (above.data.points ?? 0) - (mine.data.points ?? 0),
+            }
+          : null,
+      };
+    },
+  });
+}
+
+/**
  * The leaderboard, ranked, active members only — the view handles both.
  *
  * `rank` comes from the database, so ties tie properly (three members on 15
