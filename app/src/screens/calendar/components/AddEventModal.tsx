@@ -7,8 +7,6 @@ import {
   IonButtons,
   IonButton,
   IonContent,
-  IonItem,
-  IonLabel,
   IonInput,
   IonSelect,
   IonSelectOption,
@@ -101,20 +99,20 @@ export function AddEventModal({
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
-        <IonItem>
+        <div className="col gap-3">
           <IonInput
             label="Titlu activitate"
             labelPlacement="stacked"
             placeholder="ex. Ședință de departament"
+            fill="outline"
             value={title}
-            onIonInput={(e) => setTitle(e.detail.value!)}
+            onIonInput={(e) => setTitle(e.detail.value ?? '')}
           />
-        </IonItem>
 
-        <IonItem>
           <IonSelect
             label="Tip"
             labelPlacement="stacked"
+            fill="outline"
             value={type}
             onIonChange={(e) => setType(e.detail.value)}
           >
@@ -125,12 +123,11 @@ export function AddEventModal({
             <IonSelectOption value="deadline">Deadline</IonSelectOption>
             <IonSelectOption value="recrutare">Recrutare</IonSelectOption>
           </IonSelect>
-        </IonItem>
 
-        <IonItem>
           <IonSelect
             label="Vizibilitate (Scope)"
             labelPlacement="stacked"
+            fill="outline"
             value={scope}
             onIonChange={(e) => {
               setScope(e.detail.value);
@@ -145,13 +142,12 @@ export function AddEventModal({
             <IonSelectOption value="team">Echipă (Team)</IonSelectOption>
             <IonSelectOption value="project">Proiect</IonSelectOption>
           </IonSelect>
-        </IonItem>
 
-        {(scope === 'dept' || scope === 'team') && (
-          <IonItem>
+          {(scope === 'dept' || scope === 'team') && (
             <IonSelect
               label="Departament"
               labelPlacement="stacked"
+              fill="outline"
               value={deptId}
               onIonChange={(e) => {
                 setDeptId(e.detail.value);
@@ -164,14 +160,13 @@ export function AddEventModal({
                 </IonSelectOption>
               ))}
             </IonSelect>
-          </IonItem>
-        )}
+          )}
 
-        {scope === 'team' && (
-          <IonItem>
+          {scope === 'team' && (
             <IonSelect
               label="Echipă"
               labelPlacement="stacked"
+              fill="outline"
               value={teamId}
               onIonChange={(e) => setTeamId(e.detail.value)}
             >
@@ -181,63 +176,74 @@ export function AddEventModal({
                 </IonSelectOption>
               ))}
             </IonSelect>
-          </IonItem>
-        )}
+          )}
 
-        <IonItem>
-          <IonLabel position="stacked">Începe la</IonLabel>
-          <IonDatetimeButton datetime="startsAt" />
-          <IonModal keepContentsMounted={true}>
-            <IonDatetime
-              id="startsAt"
-              value={startsAt}
-              onIonChange={(e) => setStartsAt(e.detail.value as string)}
-            />
-          </IonModal>
-        </IonItem>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span
+              style={{
+                fontSize: '14px',
+                color: 'var(--ion-color-step-600, #666)',
+              }}
+            >
+              Începe la
+            </span>
+            <IonDatetimeButton datetime="startsAt" />
+            <IonModal keepContentsMounted={true}>
+              <IonDatetime
+                id="startsAt"
+                value={startsAt}
+                onIonChange={(e) => setStartsAt(e.detail.value as string)}
+              />
+            </IonModal>
+          </div>
 
-        <IonItem>
-          <IonLabel position="stacked">Se termină la (Opțional)</IonLabel>
-          <IonDatetimeButton datetime="endsAt" />
-          <IonModal keepContentsMounted={true}>
-            <IonDatetime
-              id="endsAt"
-              value={endsAt}
-              onIonChange={(e) => setEndsAt(e.detail.value as string)}
-              showClearButton={true}
-            />
-          </IonModal>
-        </IonItem>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span
+              style={{
+                fontSize: '14px',
+                color: 'var(--ion-color-step-600, #666)',
+              }}
+            >
+              Se termină la (Opțional)
+            </span>
+            <IonDatetimeButton datetime="endsAt" />
+            <IonModal keepContentsMounted={true}>
+              <IonDatetime
+                id="endsAt"
+                value={endsAt}
+                onIonChange={(e) => setEndsAt(e.detail.value as string)}
+                showClearButton={true}
+              />
+            </IonModal>
+          </div>
 
-        <IonItem>
           <IonInput
             label="Locație (Opțional)"
             labelPlacement="stacked"
+            fill="outline"
             value={location}
-            onIonInput={(e) => setLocation(e.detail.value!)}
+            onIonInput={(e) => setLocation(e.detail.value ?? '')}
           />
-        </IonItem>
 
-        <IonItem>
           <IonInput
             type="number"
             label="Capacitate (Opțional)"
             labelPlacement="stacked"
+            fill="outline"
             value={capacity}
             onIonInput={(e) =>
               setCapacity(e.detail.value ? parseInt(e.detail.value) : null)
             }
           />
-        </IonItem>
 
-        <IonItem>
           <IonTextarea
             label="Descriere (Opțional)"
             labelPlacement="stacked"
+            fill="outline"
             value={description}
-            onIonInput={(e) => setDescription(e.detail.value!)}
+            onIonInput={(e) => setDescription(e.detail.value ?? '')}
           />
-        </IonItem>
+        </div>
       </IonContent>
     </IonModal>
   );
