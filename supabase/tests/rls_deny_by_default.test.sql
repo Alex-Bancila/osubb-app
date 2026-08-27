@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(36);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -35,9 +35,11 @@ select ok(
 -- review because the only fixture task defaulted to status 'todo', so the
 -- unconditional `or status = 'open'` branch of task_read was never exercised.
 insert into auth.users (id, email) values
-  ('ffffffff-0000-0000-0000-000000000006', 'flavia.rls@test.local');
-insert into profiles (id, full_name, email, role) values
-  ('ffffffff-0000-0000-0000-000000000006', 'Flavia Test', 'flavia.rls@test.local', 'voluntar');
+  ('ffffffff-0000-0000-0000-000000000006', 'flavia.rls@test.local'),
+  ('eeeeeeee-0000-0000-0000-000000000156', 'dana.claimless@test.local');
+insert into profiles (id, full_name, email, role, status) values
+  ('ffffffff-0000-0000-0000-000000000006', 'Flavia Test', 'flavia.rls@test.local', 'voluntar', 'activ'),
+  ('eeeeeeee-0000-0000-0000-000000000156', 'Dana Claimless', 'dana.claimless@test.local', 'voluntar', 'inactiv');
 insert into member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
 insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
@@ -49,7 +51,9 @@ insert into task_assignees (task_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from tasks where title = 'rls-t1';
 update tasks set rating = 4 where title = 'rls-t1';   -- writes points_ledger via trigger
 insert into task_requests (kind, title, from_member)
-  values ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006');
+  values
+    ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006'),
+    ('award', 'rls-req-claimless', 'eeeeeeee-0000-0000-0000-000000000156');
 
 -- An OPEN, already-GRADED task: the shape that leaked, and the one an
 -- unprovisioned session could have joined to collect points.
@@ -59,20 +63,27 @@ update tasks set rating = 3 where title = 'rls-open';
 insert into events (title, type, scope) values ('rls-event', 'sedinta', 'org');
 insert into event_attendance (event_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from events where title = 'rls-event';
-insert into announcements (title, body) values ('rls-announce', 'corp');
+insert into announcements (title, body) values
+  ('rls-announce', 'corp'),
+  ('rls-announce-unread', 'corp');
 insert into announcement_reads (announcement_id, member_id)
-  select id, 'ffffffff-0000-0000-0000-000000000006'::uuid
-    from announcements where title = 'rls-announce';
+  select id, member_id
+    from announcements
+    cross join (values
+      ('ffffffff-0000-0000-0000-000000000006'::uuid),
+      ('eeeeeeee-0000-0000-0000-000000000156'::uuid)
+    ) as claimless_fixture(member_id)
+   where title = 'rls-announce';
 insert into notifications (member_id, kind, title)
   values ('ffffffff-0000-0000-0000-000000000006', 'announce', 'rls-noti');
 insert into push_tokens (member_id, token, platform)
   values ('ffffffff-0000-0000-0000-000000000006', 'rls-token', 'web');
 
 -- ==================== The claimless sweep (AC) ====================
--- `set role authenticated` with no JWT is ADR-0003's gate-2 session: someone
--- who authenticated but carries no org claims — never invited, or deactivated
--- since their token was issued. auth_level() reads 0 (same as a recrut) and
--- auth.uid() is null. Nothing in the app is theirs to see.
+-- `set role authenticated` with no JWT has no caller identity at all:
+-- auth_level() reads 0 (same as a recrut) and auth.uid() is null. It proves
+-- the anonymous JWT shape fails closed, but cannot exercise self policies
+-- against a deactivated member, whose JWT retains a real auth uid.
 --
 -- Swept over every table rather than a fixed list, so a future policy with an
 -- unconditional branch (`using (true)`, `or status = 'open'`, `or scope =
@@ -111,6 +122,19 @@ begin
   return leaks;
 end $$;
 
+-- This is ADR-0003 gate 2's real deactivated-user shape: the id belongs to an
+-- actual auth user and retained inactive profile, while the JWT deliberately
+-- omits member_role, member_level, dept_ids, and team_ids.
+create function pg_temp.login_without_org_claims(uid uuid) returns void
+language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', uid,
+    'role', 'authenticated',
+    'app_metadata', jsonb_build_object('provider', 'email')
+  )::text, true);
+end $$;
+
 -- Non-vacuity first: if a table is empty, the sweep below says nothing about it.
 select is(pg_temp.unpopulated_tables(), '{}'::text[],
   'every table holds a row, so the sweep cannot pass hollow');
@@ -120,9 +144,15 @@ select is(pg_temp.unpopulated_tables(), '{}'::text[],
 -- claimless session can no longer see the task — no rows, no policy check,
 -- no exception, and a test that passes for the wrong reason.
 create temp table fx as
-  select (select id from tasks where title = 'rls-open') as open_task_id;
+  select
+    (select id from tasks where title = 'rls-open') as open_task_id,
+    (select id from announcements where title = 'rls-announce-unread') as unread_announcement_id;
 grant select on fx to authenticated;
 
+-- Be explicit: a missing JWT and a real uid with no org claims are distinct
+-- security shapes. `reset role` alone does not clear a JWT from a previous
+-- test persona.
+select set_config('request.jwt.claims', '', true);
 set local role authenticated;
 
 select is(pg_temp.tables_visible_to_claimless(), '{}'::text[],
@@ -151,6 +181,42 @@ select throws_ok(
             values (%s, 'ffffffff-0000-0000-0000-000000000006') $$,
          (select open_task_id from fx)),
   '42501', null, 'claimless: cannot claim an open task');
+
+reset role;
+
+-- ==================== Real uid without organisation claims ====================
+select pg_temp.login_without_org_claims('eeeeeeee-0000-0000-0000-000000000156');
+set local role authenticated;
+
+select is(auth.uid(), 'eeeeeeee-0000-0000-0000-000000000156'::uuid,
+  'real claimless user: JWT sub remains a real auth uid');
+select ok(not auth_is_member(),
+  'real claimless user: no organisation metadata means not a member');
+select is(pg_temp.tables_visible_to_claimless(), '{}'::text[],
+  'real claimless user: no public table is readable, including owned rows');
+
+-- These views are protected independently of their source tables: two run
+-- with owner rights, while the others inherit RLS through security_invoker.
+select is((select count(*) from profiles_directory), 0::bigint,
+  'real claimless user: profiles_directory is empty');
+select is((select count(*) from profiles_contact), 0::bigint,
+  'real claimless user: profiles_contact is empty');
+select is((select count(*) from member_points), 0::bigint,
+  'real claimless user: member_points is empty');
+select is((select count(*) from leaderboard), 0::bigint,
+  'real claimless user: leaderboard is empty');
+select is((select count(*) from dept_cup), 0::bigint,
+  'real claimless user: dept_cup is empty');
+
+select throws_ok(
+  $$ insert into task_requests (kind, title, from_member)
+     values ('award', 'real-uid-sneaky', 'eeeeeeee-0000-0000-0000-000000000156') $$,
+  '42501', null, 'real claimless user: cannot file a self-owned task request');
+select throws_ok(
+  format($$ insert into announcement_reads (announcement_id, member_id)
+            values (%s, 'eeeeeeee-0000-0000-0000-000000000156') $$,
+         (select unread_announcement_id from fx)),
+  '42501', null, 'real claimless user: cannot create a self-owned announcement read receipt');
 
 reset role;
 
