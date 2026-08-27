@@ -1,7 +1,6 @@
 import type { ReactElement } from 'react';
 import { IonApp, IonContent, IonPage, IonSpinner } from '@ionic/react';
-import { IonReactRouter } from '@ionic/react-router';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { useAuth } from './lib/auth';
 import { can, type Capability } from './lib/capabilities';
 import AppShell from './components/shell/AppShell';
@@ -72,14 +71,7 @@ function FrontDoor({ children }: { children: ReactElement }) {
 export default function App() {
   return (
     <IonApp>
-      {/* Opting into both v7 behaviours now: it silences the deprecation
-          warnings React Router otherwise prints on every page load — a console
-          that always has warnings in it is a console nobody reads — and it
-          means the eventual v7/v8 upgrade is a version bump rather than a
-          behaviour change. */}
-      <IonReactRouter
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
+      <BrowserRouter>
         <Routes>
           <Route
             path="/login"
@@ -144,7 +136,7 @@ export default function App() {
               anyone to aim somewhere else. */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </IonReactRouter>
+      </BrowserRouter>
     </IonApp>
   );
 }
