@@ -1,9 +1,15 @@
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/setupTests.ts',
+  },
   server: {
     /* Pinned, and `strictPort` so a busy port is an error rather than a silent
        move to 5174. Magic links only come back to an origin on GoTrue's

@@ -1,52 +1,77 @@
-import { IonContent, IonPage } from '@ionic/react';
+import React, { Suspense, useMemo } from 'react';
+import {
+  IonPage,
+  IonHeader,
+  IonToolbar,
+  IonTitle,
+  IonContent,
+  IonSpinner,
+  IonText,
+  IonButton,
+} from '@ionic/react';
 import { useMyTasks } from '../../queries/tasks';
-import { Empty, ErrorState, Loading } from '../../components/states';
-import { formatDate, formatPoints } from '../../lib/format';
+import { mapTask } from '../../lib/task-mapper';
+import { TaskCard } from '../../components/TaskCard';
 
-const STATUS_LABEL: Record<string, string> = {
-  todo: 'De făcut',
-  progress: 'În lucru',
-  done: 'Gata',
-  overdue: 'Întârziat',
-  open: 'Deschis',
-};
+// Lazy load the AG Grid wrapper for desktop
+const TaskGrid = React.lazy(() => import('../../components/TaskGrid'));
 
-/* Deliberately plain: it exists to show the query layer returning live data
-   (#87). The AG Grid tracker with tabs, claiming and grading is #88–#92. */
 export default function TrackerScreen() {
-  const tasks = useMyTasks();
+  const { data, error, isLoading, refetch } = useMyTasks();
+
+  const presentationTasks = useMemo(() => {
+    return data ? data.map(mapTask) : [];
+  }, [data]);
 
   return (
     <IonPage>
+      <IonHeader>
+        <IonToolbar>
+          <IonTitle>Taskurile mele</IonTitle>
+        </IonToolbar>
+      </IonHeader>
       <IonContent className="ion-padding">
-        <section className="card">
-          <h2 className="card-title">Taskurile mele</h2>
+        {isLoading && (
+          <div className="ion-text-center ion-padding" data-testid="loading-state">
+            <IonSpinner name="crescent" />
+          </div>
+        )}
 
-          {tasks.isPending ? (
-            <Loading />
-          ) : tasks.isError ? (
-            <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
-          ) : tasks.data.length === 0 ? (
-            <Empty text="Nu ai niciun task asignat acum." />
-          ) : (
-            <ul className="task-list">
-              {tasks.data.map((task) => (
-                <li key={task.id}>
-                  <span className="task-title">{task.title}</span>
-                  <span className={`chip chip--${task.status}`}>
-                    {STATUS_LABEL[task.status] ?? task.status}
-                  </span>
-                  <span className="task-meta">{formatDate(task.deadline)}</span>
-                  <span className="task-meta">
-                    {task.rating === null
-                      ? `dificultate ${task.difficulty}`
-                      : `${formatPoints(task.points ?? 0)} p`}
-                  </span>
-                </li>
+        {error && (
+          <div className="ion-text-center ion-padding" data-testid="error-state">
+            <IonText color="danger">
+              <h2>A apărut o eroare la încărcarea taskurilor.</h2>
+              <p>Vă rugăm să încercați din nou.</p>
+            </IonText>
+            <IonButton onClick={() => refetch()}>Reîncearcă</IonButton>
+          </div>
+        )}
+
+        {!isLoading && !error && presentationTasks.length === 0 && (
+          <div className="ion-text-center ion-padding" data-testid="empty-state">
+            <IonText color="medium">
+              <p>Nu ai niciun task asignat.</p>
+            </IonText>
+          </div>
+        )}
+
+        {!isLoading && !error && presentationTasks.length > 0 && (
+          <div data-testid="success-state">
+            {/* Desktop View (AG Grid) - Hidden on medium and down */}
+            <div className="ion-hide-md-down">
+              <Suspense fallback={<div className="ion-text-center"><IonSpinner /></div>}>
+                <TaskGrid tasks={presentationTasks} />
+              </Suspense>
+            </div>
+
+            {/* Mobile View (Cards) - Hidden on large and up */}
+            <div className="ion-hide-lg-up">
+              {presentationTasks.map((task) => (
+                <TaskCard key={task.id} task={task} />
               ))}
-            </ul>
-          )}
-        </section>
+            </div>
+          </div>
+        )}
       </IonContent>
     </IonPage>
   );
