@@ -86,10 +86,8 @@ select is((select count(*) from task_assignees ta
   'assignees of a hidden task are hidden');
 
 select lives_ok(
-  $$ insert into task_assignees (task_id, member_id)
-     select id, 'a0000000-0000-0000-0000-000000000011'::uuid
-       from tasks where title = 't-open' $$,
-  'a member may claim an open task for themselves');
+  $$ select claim_open_task((select id from tasks where title = 't-open')) $$,
+  'a member may claim an open task through the atomic command');
 select throws_ok(
   $$ insert into task_assignees (task_id, member_id)
      select id, 'b0000000-0000-0000-0000-000000000012'::uuid

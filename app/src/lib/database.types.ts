@@ -1341,6 +1341,30 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
       }
+      claim_open_task: {
+        Args: { p_task_id: number }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          dept_id: string | null
+          description: string | null
+          difficulty: number
+          id: number
+          points: number | null
+          rating: number | null
+          status: Database["public"]["Enums"]["task_status"]
+          team_id: string | null
+          title: string
+          type: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       in_my_dept: { Args: { member: string }; Returns: boolean }
       is_assigned: { Args: { tid: number }; Returns: boolean }
