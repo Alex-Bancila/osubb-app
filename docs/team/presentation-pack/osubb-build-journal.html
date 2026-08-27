@@ -1,0 +1,614 @@
+<title>OSUBB Build Journal</title>
+<style>
+  :root {
+    --bg: #FBFAF8;
+    --ink: #241F1E;
+    --muted: #6F6561;
+    --accent: #C0161C;
+    --accent-ink: #FFFFFF;
+    --line: #E7E1DC;
+    --surface: #F3EFEA;
+    --surface-2: #EDE8E2;
+    --good: #1D7A3E;
+    --code-bg: #F3EFEA;
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161415;
+      --ink: #EBE6E3;
+      --muted: #A69C97;
+      --accent: #F0555B;
+      --accent-ink: #1C1213;
+      --line: #322D2E;
+      --surface: #201D1E;
+      --surface-2: #282425;
+      --good: #5BBF7E;
+      --code-bg: #201D1E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161415;
+    --ink: #EBE6E3;
+    --muted: #A69C97;
+    --accent: #F0555B;
+    --accent-ink: #1C1213;
+    --line: #322D2E;
+    --surface: #201D1E;
+    --surface-2: #282425;
+    --good: #5BBF7E;
+    --code-bg: #201D1E;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0;
+  }
+  .wrap {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.25rem 6rem;
+  }
+
+  /* ---------- type ---------- */
+  h1 {
+    font-size: clamp(2rem, 6vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    margin: 0.4rem 0 0.8rem;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 1.55rem;
+    font-weight: 750;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+    margin: 0 0 0.9rem;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 2rem 0 0.5rem;
+  }
+  p { margin: 0 0 1.05rem; }
+  section { margin: 3.6rem 0 0; padding-top: 2.2rem; border-top: 1px solid var(--line); }
+  .eyebrow {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.55rem;
+  }
+  .lede { font-size: 1.13rem; color: var(--muted); margin-bottom: 0; text-wrap: balance; }
+  .meta { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  strong { font-weight: 700; }
+  ul, ol { margin: 0 0 1.05rem; padding-left: 1.3rem; }
+  li { margin-bottom: 0.35rem; }
+  li::marker { color: var(--muted); }
+
+  /* ---------- plain-words callout ---------- */
+  .plain {
+    background: var(--surface);
+    border-left: 3px solid var(--accent);
+    padding: 0.85rem 1.05rem;
+    margin: 1.2rem 0 1.4rem;
+    border-radius: 0 6px 6px 0;
+  }
+  .plain .tag {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.3rem;
+  }
+  .plain p { margin: 0 0 0.6rem; font-size: 0.97rem; }
+  .plain p:last-child { margin-bottom: 0; }
+
+  /* ---------- code ---------- */
+  code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.08em 0.35em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.9rem 1.1rem;
+    overflow-x: auto;
+    margin: 1.1rem 0 1.4rem;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.55; }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; margin: 1.1rem 0 1.5rem; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.92rem;
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    text-align: left;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 0.45rem 0.9rem 0.45rem 0;
+    border-bottom: 2px solid var(--line);
+    white-space: nowrap;
+  }
+  td {
+    padding: 0.5rem 0.9rem 0.5rem 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  td.num, th.num { text-align: right; padding-right: 0.4rem; }
+  .swatch {
+    display: inline-block;
+    width: 0.7em; height: 0.7em;
+    border-radius: 2px;
+    margin-right: 0.45em;
+    vertical-align: baseline;
+    border: 1px solid var(--line);
+  }
+
+  /* ---------- pipeline diagram ---------- */
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 1.4rem 0 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.4rem;
+  }
+  .pipe-step {
+    flex: 1 1 0;
+    min-width: 8.2rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.7rem 0.8rem;
+  }
+  .pipe-step b { display: block; font-size: 0.86rem; margin-bottom: 0.15rem; }
+  .pipe-step span { font-size: 0.78rem; color: var(--muted); line-height: 1.4; display: block; }
+  .pipe-arrow {
+    align-self: center;
+    flex: 0 0 auto;
+    padding: 0 0.35rem;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .pipe-caption { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.4rem; }
+
+  /* ---------- formula exhibit ---------- */
+  .formula {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    margin: 1.2rem 0 1.4rem;
+    text-align: center;
+  }
+  .formula .expr {
+    font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .formula .expr em { color: var(--accent); font-style: normal; }
+  .formula .note { font-size: 0.82rem; color: var(--muted); margin-top: 0.45rem; }
+
+  /* ---------- TOC ---------- */
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    margin: 2rem 0 0;
+    font-size: 0.95rem;
+  }
+  nav.toc ol { margin: 0; padding-left: 1.4rem; columns: 2; column-gap: 2rem; }
+  nav.toc li { margin-bottom: 0.3rem; break-inside: avoid; }
+  nav.toc a { text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  @media (max-width: 560px) { nav.toc ol { columns: 1; } }
+
+  /* ---------- status chips ---------- */
+  .chip {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 0.1rem 0.5rem;
+    border-radius: 99px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--good);
+    white-space: nowrap;
+  }
+
+  /* ---------- footer ---------- */
+  footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">OSUBB · aplicația internă · mandat 2026–2027</span>
+  <h1>OSUBB Build Journal</h1>
+  <p class="lede">Everything we've built so far, in order, and the reason behind every step — written so you don't need a computer-science degree to follow it. Updated August 24, 2026.</p>
+
+  <nav class="toc" aria-label="Contents">
+    <ol>
+      <li><a href="#part1">What we're building</a></li>
+      <li><a href="#part2">The starting point</a></li>
+      <li><a href="#part3">Fixing the plan first</a></li>
+      <li><a href="#part4">The machinery</a></li>
+      <li><a href="#part5">The database foundation</a></li>
+      <li><a href="#part6">The points engine</a></li>
+      <li><a href="#part7">Security, in layers</a></li>
+      <li><a href="#part8">The safety net: tests</a></li>
+      <li><a href="#part9">Where we are now</a></li>
+      <li><a href="#part9b">Update — Aug 20 to Aug 24</a></li>
+      <li><a href="#part10">Lessons picked up</a></li>
+      <li><a href="#glossary">Mini-glossary</a></li>
+    </ol>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<section id="part1">
+  <span class="eyebrow">Part 1</span>
+  <h2>What we're building</h2>
+  <p>The OSUBB app is the internal tool your mandate promised: one place where members see their <strong>tasks</strong>, earn <strong>points</strong> for graded work, follow the <strong>calendar</strong> and RSVP to events, read <strong>announcements</strong>, and get <strong>notifications</strong> — with BC managing roles, awards, and sanctions from the same place.</p>
+  <p>The delivery calendar (written down in <code>docs/roadmap.md</code>) has three dates that shape everything:</p>
+  <ul>
+    <li><strong>~September 15</strong> — a full demo of the core app for BC;</li>
+    <li><strong>October 1</strong> — live for BC/BCE (~20 leadership members);</li>
+    <li><strong>November</strong> — org-wide, timed with autumn recruitment.</li>
+  </ul>
+  <p>We deliberately cut version 1 down to the core (tasks/points/requests, accounts &amp; roles, dashboard, calendar + RSVP, announcements, in-app notifications). Calendar sync, QR check-in, the recruitment pipeline, a native forms engine, contracts and push notifications are all <em>planned</em>, but pushed to later phases — because a small team hits October 1 only if version 1 is small.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part2">
+  <span class="eyebrow">Part 2</span>
+  <h2>The starting point</h2>
+  <p>Before this build sprint, the project already had good bones — but they existed only on your laptop:</p>
+  <ul>
+    <li>a detailed <strong>architecture specification</strong> (the technical blueprint: database tables, permission rules, screen-by-screen data needs);</li>
+    <li>a clickable HTML <strong>mockup</strong> (the one you presented to BC);</li>
+    <li>three <strong>ADRs</strong> — Architecture Decision Records;</li>
+    <li>one database <strong>migration</strong> with the core tables;</li>
+    <li>the two mandate PDFs (the requirements source).</li>
+  </ul>
+
+  <div class="plain">
+    <span class="tag">In plain words — ADR</span>
+    <p>An <strong>Architecture Decision Record</strong> is a one-page document that says: "we decided X, here's the context, here's what we considered, here's why X won." Six months from now, when someone asks "why is sign-up disabled?!", the answer is a file in the repo, not a memory in someone's head. ADRs are how a team avoids re-arguing settled questions.</p>
+  </div>
+
+  <p>The three existing decisions: <strong>ADR-0001</strong> — use Supabase (a hosted PostgreSQL database with authentication built in) with Row-Level Security as the permission engine; <strong>ADR-0002</strong> — build the frontend with React + Ionic, wrapped by Capacitor for phone apps later; <strong>ADR-0003</strong> — access is invite-only (more on that in Part 7).</p>
+  <p>What was <em>missing</em> was everything that turns a design into a project: no git history, no GitHub repository, no task backlog anyone could pick up, no automated checks, and a handful of open questions and contradictions inside the documents themselves.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part3">
+  <span class="eyebrow">Part 3</span>
+  <h2>Fixing the plan before writing code</h2>
+  <p>The first real work wasn't code — it was reading everything (spec, mockup, both mandate PDFs) side by side and listing where they disagreed. That surfaced <strong>5 contradictions</strong> and <strong>~19 mandate features</strong> the technical spec had no answer for. Building on top of contradictions means rebuilding later, so each one got a written resolution first. The important ones:</p>
+  <ul>
+    <li><strong>Promotions.</strong> The spec said "manual, with suggestions"; the mandate said "automatic and gamified". You decided the final policy: Recrut → Voluntar happens <em>automatically after one semester</em>, Voluntar → Membru Activ <em>automatically at a points threshold</em>, and everything above (Drept de Vot, Responsabil, BCE, BC) stays strictly manual. Recorded as <strong>ADR-0004</strong>, with thresholds stored as configuration so BC can change them without a programmer.</li>
+    <li><strong>Account creation.</strong> Three documents described three different mechanisms (temporary passwords, random passwords, magic links). Resolution: <strong>magic links everywhere</strong> — nobody ever generates or distributes a password.</li>
+    <li><strong>Notification quiet-mode for leadership.</strong> Documents disagreed on whether only BC or also BCE get reduced notifications. Resolution: both BC and BCE, but notifications about <em>their own tasks</em> always arrive.</li>
+    <li><strong>Rollout</strong> (<strong>ADR-0005</strong>): web app first, BC/BCE first, org-wide at recruitment, phone-store apps later. <strong>Data retention</strong> (<strong>ADR-0006</strong>): alumni keep their history.</li>
+  </ul>
+  <p>The 19 gaps (projects, task templates, QR check-in, AGO reports, birthday tracking, and so on) were each assigned a phase, so nothing from the mandate is forgotten — it's all in a traceability table appended to the spec ("Revision 3"). The two mandate PDFs were also converted to markdown inside the repo (<code>docs/org/</code>), so the requirements live next to the code they justify.</p>
+  <p>Finally, two standing documents came out of this: <code>docs/roadmap.md</code> (the sprint calendar, success metrics, and a log of deliberately-deferred decisions) and <code>docs/team/team-plan.md</code> (roles for your 1–3 volunteers, training sessions, review rules). And the whole plan was broken into <strong>37 GitHub issues</strong> across 11 epics — each one a self-contained task with acceptance criteria, so any team member (or an AI agent) can pick one up without extra context.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part4">
+  <span class="eyebrow">Part 4</span>
+  <h2>The machinery: repo, reviews, robots</h2>
+  <p>Everything now lives at <strong>github.com/Alex-Bancila/osubb-app</strong> (private). Three habits were set up around it, and they're worth understanding because they're how professional teams work:</p>
+
+  <h3>1. Version control (git)</h3>
+  <p>Every change is a <strong>commit</strong> — a snapshot with a description of what changed and why. The full history is preserved forever: anything can be inspected, compared, or undone. Nothing important exists "only on someone's laptop" anymore.</p>
+
+  <h3>2. Pull requests — one issue, one review</h3>
+  <p>Work never lands directly on the main copy of the code. It goes on a side <strong>branch</strong>, then a <strong>pull request</strong> (PR) proposes merging it. The PR shows exactly what would change, line by line. You review and press merge. That's the quality gate — and it's why every feature below arrived as a numbered PR you merged yourself.</p>
+
+  <h3>3. CI — a robot that distrusts everyone equally</h3>
+  <div class="plain">
+    <span class="tag">In plain words — CI</span>
+    <p><strong>Continuous Integration</strong> is a script that runs automatically on every pull request, on GitHub's servers. Ours builds a fresh, empty database from scratch, applies every migration, and runs the entire test suite. If anything fails, the PR gets a red ✗ and shouldn't be merged. It takes 3–5 minutes and it never gets tired, skips a step, or says "it worked on my machine".</p>
+  </div>
+
+  <p>The same robot has a second job. When you merge to <code>main</code>, it automatically applies any new migrations to the <strong>staging</strong> server:</p>
+
+  <div class="pipeline" role="img" aria-label="Delivery pipeline: code, pull request, CI tests, your merge, staging deploy">
+    <div class="pipe-step"><b>Code</b><span>a migration + its tests, on a branch</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>Pull request</b><span>proposed change, visible line by line</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>CI robot</b><span>fresh database + all 101 tests</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>You merge</b><span>the human gate</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>Staging updates</b><span>automatically, seconds later</span></div>
+  </div>
+  <p class="pipe-caption">The pipeline every change travels. Nobody deploys by hand; nobody <em>can</em> forget a step.</p>
+
+  <h3>Docker — what actually runs "local"</h3>
+  <div class="plain">
+    <span class="tag">In plain words — Docker</span>
+    <p>A <strong>container</strong> is a small, isolated, disposable copy of a machine, pre-loaded with one piece of software and everything it needs to run — no "works on my machine" arguments about library versions, because the library <em>is</em> the container. <strong>Docker</strong> is the tool that downloads, starts and stops containers.</p>
+    <p>When you run <code>npx supabase start</code>, Docker starts about nine containers at once — Postgres itself, the Auth server (GoTrue), the API gateway (PostgREST/Kong), Studio, Mailpit, and a few more — already wired to talk to each other exactly as they will on the hosted project. That's why "local" isn't a simplified stand-in for Supabase; it <em>is</em> Supabase, just running on your machine instead of theirs. And because containers are throwaway, <code>npx supabase stop</code> or a bad experiment costs nothing — delete the containers, run <code>start</code> again, you're back to a clean slate in under a minute.</p>
+  </div>
+
+  <h3>Three environments</h3>
+  <p><strong>Local</strong> — the full backend running in Docker on your machine, as above; safe to break, rebuilt in one command. <strong>Staging</strong> — the hosted Supabase project you created; a shared test server that always mirrors <code>main</code>'s <em>schema</em> automatically, and its demo <em>data</em> on request (more on that split in the update below). <strong>Production</strong> — doesn't exist yet, on purpose; it gets created in Sprint 3, right before real data, on the paid plan with backups and a spending cap.</p>
+
+  <h3>Secrets</h3>
+  <p>Passwords, tokens and keys never go into git — git history is forever, so a leaked secret in a commit stays leaked. They live in two places only: your <strong>Bitwarden</strong> vault (for humans) and <strong>GitHub Actions secrets</strong> (for the robot). That's why the CI can deploy to staging without the credentials appearing anywhere in the code.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part5">
+  <span class="eyebrow">Part 5</span>
+  <h2>The database foundation</h2>
+  <div class="plain">
+    <span class="tag">In plain words — migration</span>
+    <p>A <strong>migration</strong> is a numbered SQL file that changes the database's shape: "create this table, add that column." The database is never edited by hand — you write a migration, and every environment (your laptop, a teammate's laptop, staging, production) replays the same files in the same order and ends up identical. The database's structure becomes code: reviewable, versioned, reproducible. We have six migrations so far.</p>
+  </div>
+
+  <p>The first migration created the vocabulary of the organization as tables:</p>
+  <ul>
+    <li><strong><code>roles</code></strong> — the 8 roles, each with a numeric <em>level</em>. This number is the heart of the whole permission model: instead of writing rules per-role, rules say "level ≥ 4 may grade tasks", and adding a future role never breaks them.</li>
+    <li><strong><code>departments</code></strong> — the five real departments plus IT coordination, with their brand colors:
+      <span class="swatch" style="background:#284C93"></span>EDU,
+      <span class="swatch" style="background:#7500A0"></span>Imagine &amp; PR,
+      <span class="swatch" style="background:#FF3B3B"></span>Tineret,
+      <span class="swatch" style="background:#007F33"></span>Financiar,
+      <span class="swatch" style="background:#F2A700"></span>HR.</li>
+    <li><strong><code>profiles</code></strong> — one row per member (name, email, role, status), linked to their login account.</li>
+    <li><strong><code>teams</code></strong> + membership tables — who belongs to which department and team.</li>
+    <li><strong><code>rating_guide</code></strong> and <strong><code>difficulty_guide</code></strong> — the official scoring guide, as data BC can amend, not as numbers buried in code.</li>
+  </ul>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Role</th><th class="num">Level</th><th>Promotion (ADR-0004)</th></tr></thead>
+      <tbody>
+        <tr><td>Recrut</td><td class="num">0</td><td>→ Voluntar automatically, after one semester</td></tr>
+        <tr><td>Voluntar</td><td class="num">1</td><td>→ Membru Activ automatically, at a points threshold</td></tr>
+        <tr><td>Membru Activ</td><td class="num">2</td><td rowspan="5">everything above this line: manual only, decided by BC</td></tr>
+        <tr><td>Membru cu Drept de Vot</td><td class="num">3</td></tr>
+        <tr><td>Responsabil de proiect</td><td class="num">4</td></tr>
+        <tr><td>BCE</td><td class="num">5</td></tr>
+        <tr><td>BC</td><td class="num">6</td></tr>
+        <tr><td>Moderator</td><td class="num">9</td><td>technical role</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>One convention matters here: <strong>reference data</strong> (roles, departments, the scoring guide) is inserted <em>inside migrations</em>, so it reaches staging and production automatically. <strong>Demo data</strong> (fake members and tasks for testing) goes in a separate seed file that only runs locally. Production will never accidentally contain "Ana Test".</p>
+
+  <p>The second migration (PR #38) added the work itself: <strong><code>tasks</code></strong> (title, department/team, difficulty 1–5, rating 1–5 once graded, deadline, status), <strong><code>task_assignees</code></strong> (who's on each task — several people can share one), and <strong><code>task_requests</code></strong> (a member proposing "give me points for X" or "create this task", waiting for approval).</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part6">
+  <span class="eyebrow">Part 6</span>
+  <h2>The points engine</h2>
+  <p>This is the mechanism the whole gamification stands on, so it got built early and tested hardest (PR #39). The rule from your scoring guide:</p>
+
+  <div class="formula">
+    <div class="expr">points&nbsp;=&nbsp;<em>difficulty</em>&nbsp;×&nbsp;<em>multiplier(rating)</em></div>
+    <div class="note">Example: a difficulty-3 task graded 4 ("Foarte bun") earns 3 × 2 = <strong>6 points</strong> for each assignee.</div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="num">Rating</th><th>Meaning</th><th class="num">Multiplier</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>Foarte slab — done wrong, hurt the team</td><td class="num">−1 (subtracts!)</td></tr>
+        <tr><td class="num">2</td><td>Insuficient</td><td class="num">0</td></tr>
+        <tr><td class="num">3</td><td>Bun</td><td class="num">+1</td></tr>
+        <tr><td class="num">4</td><td>Foarte bun</td><td class="num">+2</td></tr>
+        <tr><td class="num">5</td><td>Excelent</td><td class="num">+3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>How it's built, piece by piece:</p>
+  <ul>
+    <li><strong>The ledger (<code>points_ledger</code>).</strong> Think of it as a bank statement: one row per points event — "+6 from task 12", "+5 manual award from Radu", "−3 sanction from BC". A member's total is never stored anywhere; it's always the <em>sum of their statement</em>. Stored totals drift out of sync; a sum cannot.</li>
+    <li><strong>Triggers — the robot clerk.</strong> A <em>trigger</em> is a small program the database runs by itself when something happens. When a Responsabil grades a task, the trigger instantly writes one ledger row per assignee, with the computed points. If the grade is later corrected, it <em>updates</em> the existing row (no duplicates — enforced by a uniqueness rule, not by trust). If a grade is removed, the rows disappear. If someone joins a task after grading, they get their row; if they're removed, it's taken back. Nobody has to remember any of this — the database does it, every time, atomically.</li>
+    <li><strong>Views — live spreadsheets.</strong> <code>member_points</code> (everyone's total), <code>leaderboard</code> (ranked, active members only), <code>dept_cup</code> (department totals for the cup) are <em>views</em>: saved queries that always compute from the ledger at the moment you look. They can never be stale.</li>
+    <li><strong>Append-only for humans.</strong> No app user — not even BC — can edit or delete ledger rows. BC can <em>add</em> a signed sanction or award; history is never rewritten. That's what makes the ledger trustworthy at AGO time.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="part7">
+  <span class="eyebrow">Part 7</span>
+  <h2>Security, in layers</h2>
+  <p>This app will hold personal data of ~200 students, so security wasn't an afterthought — it's four of the six migrations. The design is layered: each layer assumes the one above it might fail.</p>
+
+  <h3>Layer 1 — Who gets in: invite-only (ADR-0003)</h3>
+  <p>There is no "Register" button. Public sign-up is disabled at the server; accounts come into existence only when BC invites someone — a <strong>magic link</strong> arrives by email, they click it, they're in. No passwords to create, distribute, or leak. Volunteers keep using their personal Gmail; later they can attach "Sign in with Google" to the same invited address.</p>
+
+  <h3>Layer 2 — Who is who: the JWT with claims (PR #40)</h3>
+  <div class="plain">
+    <span class="tag">In plain words — JWT</span>
+    <p>When you log in, the server hands you a <strong>signed token</strong> (a JWT) — like a festival wristband. Every request you make shows the wristband. Ours gets stamped, at login, with your <em>role</em>, your <em>level</em>, your <em>departments</em> and your <em>teams</em>. The stamp is cryptographically signed, so it can't be forged — and because the information rides inside the token, the database can check permissions without extra lookups on every row. Fast <em>and</em> safe.</p>
+  </div>
+  <p>The stamping is done by a small function (the "claims hook") that runs at token time. Crucially, it <strong>fails closed</strong>: an account that was never invited, or a member whose status isn't active, gets <em>no stamps at all</em> — and an unstamped wristband opens nothing.</p>
+
+  <h3>Layer 3 — Who sees what: Row-Level Security</h3>
+  <div class="plain">
+    <span class="tag">In plain words — RLS</span>
+    <p><strong>Row-Level Security</strong> is a bouncer living <em>inside</em> the database. Every query, from anyone, gets filtered row by row against written policies: "you can see this task because it's your department's; you cannot see that one." The permission logic exists in exactly one place — the database — so there is no bug in any screen, today or ever, that can leak data the policies forbid. Even a stolen API key sees only what the policies allow that identity.</p>
+  </div>
+  <p>PR #41 flipped the whole database to <strong>deny-by-default</strong>: RLS on, zero policies — a logged-in user could read <em>nothing at all</em>, from any table. Verified by tests, table by table. Then PR #42 opened exactly the intended slices for tasks and points:</p>
+  <ul>
+    <li>a member sees <em>their own</em> tasks, their department's, their team's, and open-to-claim tasks — a Responsabil (level ≥ 4) sees and manages everything;</li>
+    <li>anyone may claim an open task — but only <em>for themselves</em>; the database rejects claiming in someone else's name;</li>
+    <li>you always see your own points (including sanctions — transparency is in the mandate); a Responsabil sees their department's; BC sees all;</li>
+    <li>awards need level ≥ 4, sanctions are a BC act (level ≥ 6), and both must be signed by whoever gives them;</li>
+    <li>requests are filed as yourself, always start "pending", and decisions are signed by the decider.</li>
+  </ul>
+  <p>One real hole was found and closed along the way: the platform's default permissions quietly allowed any client key to <strong>TRUNCATE</strong> tables — an "empty the whole table" command that RLS does <em>not</em> govern. That privilege is now revoked everywhere, and anonymous (not-logged-in) visitors lost every last permission, which is correct for an invite-only app.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part8">
+  <span class="eyebrow">Part 8</span>
+  <h2>The safety net: 101 tests</h2>
+  <div class="plain">
+    <span class="tag">In plain words — automated test</span>
+    <p>A test is a tiny script that sets up a situation, does the thing, and checks the outcome: <em>"create a difficulty-3 task, grade it 4, assert the assignee got exactly 6 points."</em> Run one by hand, it proves today's code works. Run all of them automatically on every future change (that's the CI robot), and they become a tripwire: anyone — you, a volunteer, an AI — who accidentally breaks the points formula or opens a data leak gets a red ✗ <em>before</em> the change can reach main.</p>
+  </div>
+  <p>The suite currently holds <strong>101 tests in 4 files</strong>, and they encode the project's promises:</p>
+  <ul>
+    <li><strong>Points engine (26)</strong> — the multiplier table; grading writes correct rows; a rating of 1 subtracts; re-grading updates instead of duplicating; un-grading restores totals; sanctions reduce them; leaderboard and dept cup sum correctly.</li>
+    <li><strong>Claims hook (17)</strong> — a BCE token carries level 5 and the right departments; existing token data is preserved; un-invited and inactive users get nothing; only the auth server may call the hook.</li>
+    <li><strong>Deny-by-default (30)</strong> — with bait data planted, a normal user reads zero rows from every single table and view; writes are rejected; anonymous is locked out; no table may ever lack RLS (this one guards all <em>future</em> tables too).</li>
+    <li><strong>Per-role policies (28)</strong> — four simulated people (two Voluntari from different departments, a Responsabil, a BC member) each try everything they should and shouldn't be able to do.</li>
+  </ul>
+  <p>An honest detail from this week, because it teaches something: one of my own security tests initially <em>passed for the wrong reason</em> — the "forbidden" insert targeted a task the user couldn't even see, so it inserted zero rows and nothing was there to deny. The lesson: a test must fail when the rule is removed, or it's decoration. It was rewritten against a visible task, and now it genuinely bites.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part9">
+  <span class="eyebrow">Part 9</span>
+  <h2>Where we stood on August 19</h2>
+  <p class="lede" style="font-size:0.95rem;margin-bottom:1.4rem;">This part is kept as-written, as the snapshot it was. <a href="#part9b">Part 9b</a> below covers everything that happened in the five days after it — which is most of the remaining backend.</p>
+  <p>Five pull requests written, tested, reviewed and merged by you; every one deployed itself to staging on merge. <strong>8 of 37 backlog issues closed</strong>, in Sprint 1 of 3 before the October launch.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>PR</th><th>What it delivered</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>#38</td><td>Tasks &amp; task-requests schema (issue 1.3), locked down from birth</td><td><span class="chip">merged ✓</span></td></tr>
+        <tr><td>#39</td><td>Points engine: ledger, grading triggers, leaderboard views + 26 tests (1.4 + 6.2)</td><td><span class="chip">merged ✓</span></td></tr>
+        <tr><td>#40</td><td>JWT claims hook + permission helper functions (2.2)</td><td><span class="chip">merged ✓</span></td></tr>
+        <tr><td>#41</td><td>RLS everywhere, deny-by-default + capabilities lookup + TRUNCATE fix (3.1)</td><td><span class="chip">merged ✓</span></td></tr>
+        <tr><td>#42</td><td>Tasks &amp; points permission policies + per-role test suite (3.3 + part of 6.1)</td><td><span class="chip">merged ✓</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Also done around the code: staging project linked to CI (your merges auto-deploy), secrets in Bitwarden + GitHub, the 37-issue backlog filed with labels and milestones, roadmap and team plan committed, spec updated to Revision 3, ADRs 0004–0006 accepted, mandate PDFs extracted into the repo.</p>
+
+  <p style="font-size:0.9rem;color:var(--muted);"><em>The "next, in order" list that lived here on August 19 has all been done — see Part 9b.</em></p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part9b">
+  <span class="eyebrow">Part 9b</span>
+  <h2>Update — August 20 to 24: the rest of the backend</h2>
+  <p>Five more days, thirteen more merged pull requests (#122–#141), and the backend went from "core schema, half-secured" to "every v1 table exists, every table is correctly locked down, real accounts work end to end, and there's a believable demo sitting on staging." This part covers what changed and, more importantly, <em>why</em> two of these took longer than planned — both are worth understanding, not just skimming past.</p>
+
+  <h3>The rest of the schema, and the rest of the policies</h3>
+  <p>The four tables Part 5 didn't get to — <code>events</code> + <code>event_attendance</code>, <code>announcements</code> + <code>announcement_reads</code>, <code>notifications</code>, <code>notif_suppression</code> + <code>push_tokens</code> — all landed, each locked at birth the same way tasks were. Then their policies followed: who can read/write a calendar event depends on its scope (org-wide, department, team, and a special case for recruit-only teams); who reads an announcement is everyone, who posts one is level ≥ 4; notification suppression means BC and BCE stop drowning in routine task/event noise but still hear about their own work. A new helper, <code>auth_is_member()</code>, was added specifically to make "you must be an actual member, not just logged in" easy to write and easy to spot when it's missing — which turns out to matter a great deal (next section).</p>
+
+  <div class="plain">
+    <span class="tag">In plain words — the difference between "logged in" and "a member"</span>
+    <p>Supabase's built-in <code>authenticated</code> role means exactly one thing: this request presented a valid login token. It does <strong>not</strong> mean the person behind it was ever invited, and — this is the subtle part — it does not mean they're still <em>active</em>. A member BC deactivates keeps their old login token, and that token keeps working, until it naturally expires (up to an hour later). So "logged in" and "a real, current member" are two different facts, and a policy that only checks the first one is checking the wrong thing.</p>
+  </div>
+
+  <h3>The security audit: 12 policies fixed before anyone got hurt by them</h3>
+  <p>Before writing more code, a full pass was made through every existing RLS policy asking one question: <em>could a session that's authenticated but has no real membership — never invited, or deactivated — still get in?</em> Twelve policies said yes. The worst one was serious: a deactivated member could still insert themselves onto an already-graded open task, and because the points trigger runs automatically and doesn't know the difference, it would have handed them points they had no business earning.</p>
+  <p>All twelve were fixed in one migration, and — this is the important part, the part that makes it a fix and not a promise — a permanent test was added that checks <em>every table</em> against a claims-less session and fails, by name, if any of them ever leak again. The rule is now written down as house rule 12: <em>every policy on <code>authenticated</code> must be impossible to satisfy without real membership claims.</em> This is exactly the kind of mistake that's easy to make once and then copy-paste eleven more times — which is what had happened — and exactly the kind of mistake a good test makes structurally hard to repeat.</p>
+
+  <h3>Real accounts: the invite-member function, and what it took to trust it</h3>
+  <p>The first Deno code in the repo: an Edge Function that lets a BC-level member type in an email and have a real account come into being — magic link sent, profile provisioned, department and team memberships attached, atomically. It's now proven over real HTTP, not just in theory: sign in as BC, invite an address, watch Mailpit receive the link, click it, land signed in with the correct role and level stamped on the token.</p>
+  <p>Getting there surfaced three bugs worth naming, because each one teaches something:</p>
+  <ul>
+    <li><strong>Re-inviting an existing address didn't fail — it returned the existing user.</strong> The provisioning step then hit a duplicate-key error and the automatic cleanup code, written to undo a failed invite, deleted a <em>real, existing member's account</em> as collateral damage. Fixed by checking for the existing account <em>first</em>, and by never deleting on that specific error again.</li>
+    <li><strong>A typo in an email would have gone out before any validation ran.</strong> Department and team IDs are now checked before the invite is sent, not after.</li>
+    <li><strong>The email provider itself was accidentally switched off</strong> while tightening an unrelated setting — the two settings are both called "enable_signup" in different sections of the config and mean opposite things. With the provider off, <em>every</em> login failed, not just new invites. This is now a documented trap (<code>docs/backend/auth-config.md</code>) with the exact two lines to check.</li>
+  </ul>
+  <p>The function is also now genuinely testable — its logic sits behind a small interface so eleven scenarios, including all three bugs above, run as automated tests in under a second, with no real server involved.</p>
+
+  <h3>Demo data — and the gap that would have embarrassed us on September 15</h3>
+  <p>Eight logins, one per role, password <code>parola123</code>; sixteen tasks in every status with real graded history so the leaderboard looks alive; a calendar covering every visibility rule; five announcements; notifications with suppression visibly at work. All of it built by <em>letting the real triggers run</em> — grades are set and the points engine computes the ledger itself, the same as it will for a real task, which means the demo doubles as a live proof the engine works.</p>
+  <p>Then a genuinely important gap turned up while double-checking staging: merging this data changed <em>nothing</em> there. The deploy step that pushes migrations to staging on every merge does exactly that — pushes <em>migrations</em> — and demo data isn't a migration, so it had never once reached the shared server. Staging had the correct schema and zero rows in it. On its own, that's not a bug; it's just an incomplete story. But the September 15 demo runs on staging, and an app with a perfect schema and no data doesn't show an error — it shows nothing, silently, which is the one failure mode nobody notices until they're standing in the room.</p>
+  <p>The fix has two parts. First, the demo data file was rewritten to be safely re-runnable against a <em>live</em> database — it clears only the eight demo accounts and everything they own before re-inserting them, carefully ordered so real people's data (anyone testing on staging) is never touched. Second, a manual, guarded workflow was added that applies it to staging on request: it refuses to run unless you type the staging project's ID to confirm the target, and refuses again if the connection string doesn't match — nothing about seeding a shared server should ever happen by accident. It's a deliberate button, not a side effect of a merge, and CI itself now applies the file twice on every PR to prove it stays safe to re-run.</p>
+
+  <h3>Where the number 266 comes from</h3>
+  <p>The test suite grew from 101 tests in 4 files to <strong>266 tests in 15 files</strong>: the four new tables each got their own suite, the claimless-session sweep got its behavioral guard, the invite function got its 11, and the demo seed got a suite of its own proving the leaderboard it produces is the one everyone expects.</p>
+
+  <h3>What this unlocks</h3>
+  <p>The backend for v1's entire core scope is now complete and secured. The frontend mini-spec — folder layout, routes, data-fetching conventions, how the mockup's theme tokens carry over — is written, so the next thing to exist in the repo is the actual application people will click on. That starts now.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="part10">
+  <span class="eyebrow">Part 10</span>
+  <h2>Lessons picked up on the way</h2>
+  <ul>
+    <li><strong>Setting GitHub secrets needs a real terminal.</strong> The first attempt stored three <em>empty</em> secrets because the command was run through a prompt with no keyboard input attached. Symptom: CI said "secrets not configured" even though they existed. Fix: set them in the browser, or pipe from the clipboard: <code>Get-Clipboard | gh secret set NAME</code>.</li>
+    <li><strong>Windows sometimes reserves the local database ports.</strong> If <code>supabase start</code> ever fails with "port not available / access permissions", Windows' NAT driver grabbed the port range after a reboot. Fix, in an <em>administrator</em> PowerShell: <code>net stop winnat</code> then <code>net start winnat</code>.</li>
+    <li><strong>Access tokens should outlive your critical dates.</strong> The staging token was set to ~90 days instead of 30, so it can't expire in the middle of demo week. Expiry date noted in Bitwarden with a calendar reminder.</li>
+    <li><strong>The staging job "skipping" on a PR is correct.</strong> Deploys happen only on merge to <code>main</code> — unreviewed branches must never touch the shared server.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="glossary">
+  <span class="eyebrow">Appendix</span>
+  <h2>Mini-glossary</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Term</th><th>One-liner</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Repository (repo)</strong></td><td>The project's home on GitHub: all code, docs and history.</td></tr>
+        <tr><td><strong>Commit</strong></td><td>One recorded snapshot of changes, with a message saying why.</td></tr>
+        <tr><td><strong>Branch / Pull request</strong></td><td>A side copy for work in progress / the proposal to merge it, reviewed before it counts.</td></tr>
+        <tr><td><strong>CI</strong></td><td>The robot that rebuilds the database and runs all tests on every PR.</td></tr>
+        <tr><td><strong>Migration</strong></td><td>A numbered SQL file that changes the database's shape; replayed identically everywhere.</td></tr>
+        <tr><td><strong>Seed</strong></td><td>Demo data for local testing; never ships to production.</td></tr>
+        <tr><td><strong>Staging</strong></td><td>The shared test server that always mirrors <code>main</code>.</td></tr>
+        <tr><td><strong>Trigger</strong></td><td>A mini-program the database runs automatically when data changes (our "robot clerk").</td></tr>
+        <tr><td><strong>View</strong></td><td>A saved query that behaves like a live, always-fresh table (leaderboard, dept cup).</td></tr>
+        <tr><td><strong>RLS / policy</strong></td><td>Row-Level Security: per-row permission rules enforced inside the database itself.</td></tr>
+        <tr><td><strong>JWT / claims</strong></td><td>The signed login token; claims are the role/level/department stamps we put in it.</td></tr>
+        <tr><td><strong>pgTAP</strong></td><td>The framework our 266 database tests are written in.</td></tr>
+        <tr><td><strong>Magic link</strong></td><td>A one-time login link sent by email — sign-in without passwords.</td></tr>
+        <tr><td><strong>Docker / container</strong></td><td>A disposable, self-contained copy of a machine running one piece of software; "local" is Docker running the same Supabase stack as the hosted projects.</td></tr>
+        <tr><td><strong>Edge Function</strong></td><td>A small server function (Deno/TypeScript) for the few actions a client must never be trusted with — right now, inviting a member.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  OSUBB app · build journal through August 24, 2026 · sources of truth: the repo's <code>docs/</code>, ADRs 0001–0006, spec Revision 3, <code>docs/roadmap.md</code>.
+</footer>
+
+</div>

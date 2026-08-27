@@ -1,0 +1,654 @@
+<title>Road to October</title>
+<style>
+  :root {
+    --bg: #FBFAF8;
+    --ink: #241F1E;
+    --muted: #6F6561;
+    --accent: #C0161C;
+    --line: #E7E1DC;
+    --surface: #F3EFEA;
+    --surface-2: #ECE7E1;
+    --good: #1D7A3E;
+    --warn: #9A6A00;
+    --code-bg: #F3EFEA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161415; --ink: #EBE6E3; --muted: #A69C97; --accent: #F0555B;
+      --line: #322D2E; --surface: #201D1E; --surface-2: #282425;
+      --good: #5BBF7E; --warn: #E0A93E; --code-bg: #201D1E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161415; --ink: #EBE6E3; --muted: #A69C97; --accent: #F0555B;
+    --line: #322D2E; --surface: #201D1E; --surface-2: #282425;
+    --good: #5BBF7E; --warn: #E0A93E; --code-bg: #201D1E;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px; line-height: 1.62; margin: 0;
+  }
+  .wrap { max-width: 47rem; margin: 0 auto; padding: 3.5rem 1.25rem 6rem; }
+
+  h1 { font-size: clamp(2rem, 6vw, 3rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.08; margin: 0.4rem 0 0.8rem; text-wrap: balance; }
+  h2 { font-size: 1.5rem; font-weight: 750; letter-spacing: -0.015em; margin: 0 0 0.9rem; text-wrap: balance; }
+  h3 { font-size: 1.08rem; font-weight: 700; margin: 2rem 0 0.6rem; }
+  p { margin: 0 0 1.05rem; }
+  section { margin: 3.4rem 0 0; padding-top: 2.1rem; border-top: 1px solid var(--line); }
+  .eyebrow { display: block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.55rem; }
+  .lede { font-size: 1.12rem; color: var(--muted); text-wrap: balance; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  ul, ol { margin: 0 0 1.05rem; padding-left: 1.3rem; }
+  li { margin-bottom: 0.35rem; }
+  li::marker { color: var(--muted); }
+  code { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 0.88em; background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.08em 0.35em; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 0.9rem 1.1rem; overflow-x: auto; margin: 1rem 0 1.3rem; }
+  pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.55; }
+
+  .plain { background: var(--surface); border-left: 3px solid var(--accent); padding: 0.85rem 1.05rem; margin: 1.2rem 0 1.4rem; border-radius: 0 6px 6px 0; }
+  .plain .tag { display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.3rem; }
+  .plain p { margin: 0 0 0.6rem; font-size: 0.96rem; }
+  .plain p:last-child { margin-bottom: 0; }
+
+  nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.3rem; margin: 2rem 0 0; font-size: 0.95rem; }
+  nav.toc ol { margin: 0; padding-left: 1.4rem; columns: 2; column-gap: 2rem; }
+  nav.toc li { margin-bottom: 0.3rem; break-inside: avoid; }
+  nav.toc a { text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  @media (max-width: 560px) { nav.toc ol { columns: 1; } }
+
+  /* stats strip */
+  .stats { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.6rem 0 0; }
+  .stat { flex: 1 1 8rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem 0.9rem; }
+  .stat b { display: block; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 0.76rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+
+  /* issue rows */
+  .issue { border: 1px solid var(--line); border-radius: 8px; padding: 0.8rem 1rem; margin: 0 0 0.8rem; background: var(--bg); }
+  .issue .head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .issue .num { font-family: ui-monospace, Consolas, monospace; font-weight: 700; color: var(--accent); font-size: 0.9rem; white-space: nowrap; }
+  .issue .title { font-weight: 700; }
+  .issue .est { margin-left: auto; font-size: 0.72rem; font-weight: 700; color: var(--muted); border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 0.05rem 0.5rem; white-space: nowrap; }
+  .issue .est.human { color: var(--warn); }
+  .issue .est.done { color: var(--good); border-color: var(--good); }
+  .issue.is-done { opacity: 0.62; }
+  .issue.is-done .title::after { content: " — done"; font-weight: 700; color: var(--good); opacity: 1; }
+  .issue p { margin: 0.45rem 0 0; font-size: 0.95rem; }
+  .issue .deps { margin-top: 0.45rem; font-size: 0.8rem; color: var(--muted); }
+  .issue .deps b { color: var(--ink); font-weight: 600; }
+
+  .sprintband { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.2rem; margin: 1.1rem 0; }
+  .sprintband b { display: block; margin-bottom: 0.2rem; }
+  .sprintband span { font-size: 0.9rem; color: var(--muted); }
+  .goal { color: var(--good); font-weight: 700; }
+
+  .tablewrap { overflow-x: auto; margin: 1rem 0 1.4rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 0.45rem 0.9rem 0.45rem 0; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  td { padding: 0.5rem 0.9rem 0.5rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+
+  .pipeline { display: flex; align-items: stretch; margin: 1.3rem 0 0.4rem; overflow-x: auto; padding-bottom: 0.4rem; }
+  .pipe-step { flex: 1 1 0; min-width: 7.6rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem 0.75rem; }
+  .pipe-step b { display: block; font-size: 0.84rem; margin-bottom: 0.15rem; }
+  .pipe-step span { font-size: 0.76rem; color: var(--muted); line-height: 1.4; display: block; }
+  .pipe-arrow { align-self: center; flex: 0 0 auto; padding: 0 0.3rem; color: var(--accent); font-weight: 700; }
+  .pipe-caption { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.2rem; }
+
+  footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">OSUBB · implementation guide · updated august 24, 2026</span>
+  <h1>Road to October</h1>
+  <p class="lede">Every remaining piece of the OSUBB app — what it is, why it exists, how to build it — cut into tasks a student can finish in one sitting. Companion to the <em>OSUBB Build Journal</em>, which explains everything already done.</p>
+
+  <div class="stats">
+    <div class="stat"><b>58</b><span>open issues (was 73)</span></div>
+    <div class="stat"><b>≤ 1h</b><span>each (label max-1h)</span></div>
+    <div class="stat"><b>Sep 15</b><span>BC demo</span></div>
+    <div class="stat"><b>Oct 1</b><span>BC/BCE live</span></div>
+  </div>
+
+  <div class="plain" style="margin-top:1.6rem;">
+    <span class="tag">Update — August 24</span>
+    <p>Since this was written: <strong>Section A</strong> is done except the two views (#47, #48); <strong>Section B</strong>, the whole invite chain, is done except the human dashboard step (#54); <strong>Section C</strong> gained its four easiest policies (#59, #61, #62, #64) but #60, #63, #65, #66 and the final sweep (#67) are still open; <strong>Section D</strong> (#68, fan-out) is still open; <strong>Section F</strong>, all the demo data, is fully done; <strong>Section G</strong> got its first issue (#79, the mini-spec) but not yet the scaffold itself (#80, #81). Closed issues below are marked <span style="color:var(--good);font-weight:700;">done</span> and dimmed rather than deleted, so this stays one document. One thing that happened that wasn't planned here at all: finishing Section C's policies triggered a full security audit that found and fixed 12 policies with the same class of bug — that work is issue #129/#130 and is written up in the Build Journal, not here. <a href="#queue">Jump to the corrected queue.</a></p>
+  </div>
+
+  <nav class="toc" aria-label="Contents">
+    <ol>
+      <li><a href="#loop">How to work one issue</a></li>
+      <li><a href="#order">Why this order</a></li>
+      <li><a href="#sprints">The sprint map</a></li>
+      <li><a href="#data">A · Remaining data tables</a></li>
+      <li><a href="#invite">B · The invite flow</a></li>
+      <li><a href="#policies">C · Remaining permissions</a></li>
+      <li><a href="#fanout">D · Notification fan-out</a></li>
+      <li><a href="#csv">E · CSV recruit import</a></li>
+      <li><a href="#demo">F · Demo data</a></li>
+      <li><a href="#foundation">G · Frontend foundation</a></li>
+      <li><a href="#screens">H · The seven screens</a></li>
+      <li><a href="#launch">I · Launch operations</a></li>
+      <li><a href="#phase2">J · Phase 2 (Oct–Nov)</a></li>
+      <li><a href="#queue">Your suggested queue</a></li>
+      <li><a href="#human">Human-only checklist</a></li>
+    </ol>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<section id="loop">
+  <span class="eyebrow">Method</span>
+  <h2>How to work one issue, start to finish</h2>
+  <p>Every issue below follows the same loop. Once you've done it twice it takes zero thought — that's the point: all creativity goes into the task, none into the process.</p>
+
+  <div class="pipeline" role="img" aria-label="Work loop: pick issue, branch, build, verify locally, PR, CI, merge">
+    <div class="pipe-step"><b>1 · Pick</b><span>an open issue whose "Depends on" is done</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>2 · Branch</b><span>git checkout -b feat/…</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>3 · Build</b><span>follow the issue's How steps</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>4 · Verify</b><span>db reset + test db green locally</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>5 · PR</b><span>push, open PR "Closes #n"</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>6 · Merge</b><span>CI green → review → merge → staging updates itself</span></div>
+  </div>
+  <p class="pipe-caption">The loop. Steps 4 and 6 are the two safety gates — never skip them.</p>
+
+  <p>The commands, concretely (backend issue shown; frontend swaps step 4 for <code>npm run build</code> + the app in the browser):</p>
+  <pre><code># 1–2
+git checkout main &amp;&amp; git pull
+git checkout -b feat/1.5a-events
+
+# 3 — for a schema issue:
+npx supabase migration new events_attendance
+#    …write SQL in the new file under supabase/migrations/…
+#    …add tests in supabase/tests/…
+
+# 4 — the two green lights:
+npx supabase db reset     # every migration applies from scratch
+npx supabase test db      # all pgTAP suites pass
+
+# 5
+git add -A &amp;&amp; git commit -m "feat(db): events + attendance (1.5a)"
+git push -u origin feat/1.5a-events
+gh pr create --title "1.5a Events + attendance" --body "Closes #43"</code></pre>
+
+  <div class="plain">
+    <span class="tag">Definition of done</span>
+    <p>An issue is done when: the migration applies on <code>db reset</code> · its pgTAP tests pass (and would fail if the feature were removed) · CI is green on the PR · the acceptance-criteria boxes in the issue are checked · the PR says <code>Closes #n</code> so the issue closes itself on merge.</p>
+  </div>
+
+  <p>House rules that every issue already assumes: new tables get <code>enable row level security</code> in the migration that creates them; new views get <code>with (security_invoker = on)</code>; functions used by policies or triggers get <code>set search_path = ''</code> and fully-qualified names; reference data goes in migrations, demo data in <code>seed.sql</code>; secrets never in git.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="order">
+  <span class="eyebrow">Strategy</span>
+  <h2>Why this order and not another</h2>
+  <p>The sequence below isn't taste — it follows three dependency rules:</p>
+  <ul>
+    <li><strong>Tables before policies before screens.</strong> A policy can't protect a table that doesn't exist; a screen can't render data it isn't allowed to read. So every feature travels: schema → RLS → UI.</li>
+    <li><strong>The invite flow before any real login.</strong> ADR-0003 means there is no other way to get a user. Every end-to-end test of auth, and the demo logins' magic-link path, sit behind it.</li>
+    <li><strong>Demo data before the first screen.</strong> A screen built against an empty database looks done and lies. Seeding one login per role first means every screen PR can be reviewed by actually clicking through it as each role.</li>
+  </ul>
+  <p>And one scheduling rule: anything only a human can do (create accounts, click dashboards, talk to BC) is pulled <em>early</em>, because human steps have calendar latency — the code can wait an hour, a BC meeting can't happen tonight.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="sprints">
+  <span class="eyebrow">Calendar</span>
+  <h2>The sprint map</h2>
+
+  <div class="sprintband">
+    <b>Sprint 1 — now → Aug 26 <span class="goal">· goal: backend feature-complete for the demo scope</span></b>
+    <span>Sections A (tables), B (invite flow), C (policies), D (fan-out), F-start (mini-spec + scaffold). Everything here is backend or setup; roughly 18 one-hour issues.</span>
+  </div>
+  <div class="sprintband">
+    <b>Sprint 2 — Aug 30 → Sep 12 <span class="goal">· goal: demo on staging, Sep 15</span></b>
+    <span>Sections E (demo data), G (frontend foundation), H-core (Tracker 9.1a–e + Dashboard 9.2a–c), first Cloudflare deploy (10.1a). Demo gate = login as any role → tracker + dashboard work end-to-end.</span>
+  </div>
+  <div class="sprintband">
+    <b>Sprint 3 — Sep 16 → Sep 29 <span class="goal">· goal: BC/BCE live Oct 1</span></b>
+    <span>Remaining screens (calendar, announcements, volunteers, BC panel, profile), CSV import (E), production project + gated deploy (I), real BC/BCE data migration, onboarding.</span>
+  </div>
+  <div class="sprintband">
+    <b>Phase 2 — Oct → Nov <span class="goal">· goal: org-wide at recruitment</span></b>
+    <span>Section J: promotion engine (ADR-0004), deadline reminders, push provider, Google OAuth, recruit CSV onboarding at scale.</span>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="data">
+  <span class="eyebrow">Section A · Sprint 1 · ~5 issues, all independent</span>
+  <h2>Remaining data tables</h2>
+  <p><strong>Why this exists:</strong> four v1 features (calendar, announcements, notifications, AG sheets) still have no tables. These five issues finish the entire v1 schema. They don't depend on each other — perfect parallel work, and perfect first issues for a volunteer because the spec literally contains the SQL to adapt.</p>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#43</span><span class="title">1.5a Events + attendance tables</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> <code>events</code> (title, type, scope, dept/team, start/end, location, capacity) and <code>event_attendance</code> (who RSVPed what). <strong>How:</strong> new migration, DDL from spec §3.4, RLS on both, indexes on dept/team/starts_at. <strong>Why:</strong> the calendar and its whole policy tree (#62–63) stand on these two tables. The composite primary key (event, member) is what makes double-RSVP <em>physically impossible</em> — a nice example of letting the database enforce a business rule.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §3.4</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#44</span><span class="title">1.5b Announcements + reads tables</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> <code>announcements</code> (title, body, priority, pinned, optional Google-Forms link) and <code>announcement_reads</code> (read receipts). <strong>Why:</strong> the org megaphone — and <code>form_label</code> is the whole v1 "forms engine": a link to Google Forms, native forms deferred to Phase 4. Read receipts power both the unread badge and the "critical pop-up until read" behavior.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §3.4</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#45</span><span class="title">1.6a Notifications table</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> <code>notifications</code> — one row per (recipient × event): kind, title, body, read flag, link. <strong>Why:</strong> in-app notifications are v1; Phase-2 push will deliver <em>these same rows</em> to phones, so getting the shape right now means push later is delivery-only.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §3.4</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#46</span><span class="title">1.6b Suppression seed + push tokens</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> <code>notif_suppression</code> seeded with six rows — <strong>bc AND bce</strong> × task/event/deadline — plus <code>push_tokens</code> for future devices. <strong>Why:</strong> this seed <em>is</em> the resolution of conflict C2 from the plan analysis: leadership stops drowning in broadcast noise. Careful: the spec's original insert says bc-only; Revision 3 supersedes it — seed both roles.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §3.4 + Revision 3 §9.2</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#47</span><span class="title">1.7a ag_eligibility view</span><span class="est">~30 min</span></div>
+    <p><strong>What:</strong> a view listing active members with their totals and <code>eligible = points ≥ 300</code>. <strong>Why:</strong> the AG attendance sheet becomes a live query instead of a maintained spreadsheet — it can never be out of date. Remember the house rule: <code>security_invoker = on</code>.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §3.5</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#48</span><span class="title">1.7b ag_quorum_top25 view</span><span class="est">~45 min</span></div>
+    <p><strong>What:</strong> of the eligible, the top 25% by points keep voting rights (<code>keeps_vote</code>), via a <code>percent_rank()</code> window function. <strong>Why:</strong> statute rule from the mockup. It's also a gentle introduction to window functions for whoever takes it — the test fixture (4 members, exactly one keeps the vote) teaches the concept.</p>
+    <div class="deps"><b>Depends:</b> #47 · Spec §3.5</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#6</span><span class="title">1.8 joined_at + sanction note</span><span class="est">~30 min</span></div>
+    <p><strong>What:</strong> add <code>profiles.joined_at</code> (backfilled from <code>joined_year</code>) and <code>points_ledger.note</code>. <strong>Why:</strong> the semester promotion rule (#51) computes from a real date, and the mandate says sanctions carry a written reason — the reason belongs next to the points, not in someone's chat history.</p>
+    <div class="deps"><b>Depends:</b> nothing · Revision 3 §9.3</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="invite">
+  <span class="eyebrow">Section B · Sprint 1 · sequential chain</span>
+  <h2>The invite flow — how people get in</h2>
+  <p><strong>Why this exists:</strong> ADR-0003 says accounts are created <em>only</em> by invitation. Right now that flow doesn't exist, which means no real person can log in at all. This chain builds it in three strictly-ordered steps, smallest possible pieces: pure database function → web function → proof + manual.</p>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#56</span><span class="title">2.3a provision_profile() RPC</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> one SQL function that, given a user id + role + departments + teams, creates the <code>profiles</code> row and all membership rows <em>atomically</em> (all or nothing). Callable by the server only. <strong>Why:</strong> both single invites and the CSV import must share one provisioning path — one code path means a member can never be half-created, and there's one set of bugs to fix, not two. <strong>How:</strong> SECURITY DEFINER migration, revoke execute from clients, pgTAP proves atomicity (a bad dept id rolls back everything) and that clients get 42501.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §5.1</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#57</span><span class="title">2.3b Edge Function: invite-member</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> a small server function (Deno/TypeScript — first one in the repo): checks the caller's JWT is level ≥ 6, calls Supabase's admin API to send the magic-link invite, then calls #56 to provision. <strong>Why:</strong> this is the button BC will press. Edge Functions are where logic goes when it needs the service key — which clients must never hold. <strong>How:</strong> <code>npx supabase functions new invite-member</code>, read caller claims, <code>auth.admin.inviteUserByEmail</code>, clear errors (duplicate → 409).</p>
+    <div class="deps"><b>Depends:</b> #56 · Spec §5.1</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#58</span><span class="title">2.3c Invite e2e check + runbook</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> invite a test member locally, open the magic link in Mailpit (the local fake inbox at <code>127.0.0.1:54324</code>), log in, confirm the token carries role/level claims; write <code>docs/backend/inviting.md</code> — the BC manual. <strong>Why:</strong> "it probably works" is not a launch plan; this issue converts the flow from code into a <em>demonstrated capability</em> plus instructions a non-technical BC member can follow.</p>
+    <div class="deps"><b>Depends:</b> #57</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#53</span><span class="title">2.1a Verify + document auth config</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> a written table of every auth setting (signup off, confirmations on, hook enabled) with the reason for each, cross-checked against ADR-0003. <strong>Why:</strong> configuration is the easiest thing to break silently six months later — the doc is the tripwire.</p>
+    <div class="deps"><b>Depends:</b> nothing</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#54</span><span class="title">2.1b Staging dashboard checklist</span><span class="est human">🧍 ~20 min</span></div>
+    <p><strong>What (you, in the browser):</strong> enable the JWT hook on staging (Authentication → Hooks → Customize Access Token → <code>public.custom_access_token_hook</code>) and set the Site URL once the frontend exists. <strong>Why:</strong> hosted projects don't read <code>config.toml</code> — without this, staging logins would produce tokens with no role stamps and every screen would look empty.</p>
+    <div class="deps"><b>Depends:</b> #58 (needs an invited user to verify with)</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="policies">
+  <span class="eyebrow">Section C · Sprint 1 · after their tables exist</span>
+  <h2>Remaining permissions (RLS)</h2>
+  <p><strong>Why this exists:</strong> the database is deny-by-default since PR #41 — tasks and points got their policies in PR #42, but profiles, teams, calendar, announcements and notifications are still fully locked. Each issue here opens exactly one slice of the spec's §4.3 matrix and ships the per-role tests that prove the fence. Pattern to copy every time: PR #42's migration + test file.</p>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#59</span><span class="title">3.2a Profiles read + contact gating</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> everyone reads names/roles (the app is unusable otherwise); email + phone visible only to yourself or level ≥ 5. <strong>Why:</strong> personal data of ~200 students — GDPR-mindedness is not optional for an NGO. <strong>How:</strong> the subtlety is that RLS filters <em>rows</em>, not columns, so contact fields need column-level gating (a directory view without the columns + a gated path with them) — the issue describes the pattern; it's the trickiest of the three.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §4.3</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#60</span><span class="title">3.2b Self-edit + role-change guard</span><span class="est">~60 min</span></div>
+    <p><strong>What:</strong> you may edit your own contact info; nobody below level 6 can change <code>role</code> or <code>status</code> — including their own. <strong>Why:</strong> self-service without self-promotion. <strong>How:</strong> UPDATE policy + a small BEFORE UPDATE trigger that raises if a protected column changes under level 6 (RLS alone can't compare old vs new values — the trigger can).</p>
+    <div class="deps"><b>Depends:</b> #59 · Spec §4.3</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#61</span><span class="title">3.2c Teams + reference-data policies</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> read-for-everyone on the vocabulary tables (roles, departments, scoring guides, capabilities, teams, memberships); team management at level ≥ 5. <strong>Why:</strong> currently even the list of departments is invisible to a logged-in member — screens can't render a dept chip without this.</p>
+    <div class="deps"><b>Depends:</b> nothing · Spec §4.3</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#62</span><span class="title">3.4a Event visibility + write</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> THE calendar rule: level ≥ 4 sees all; org-scope and call/recrutare types are for everyone; dept events for dept members; team events for team members — plus recruits when the team is a recruit team. Writes at level ≥ 4. <strong>Why:</strong> this one policy is the mockup's <code>eventVisible()</code> function relocated to the only place it can't be bypassed. <strong>How:</strong> the spec §4.4 sketch is 90% copy-paste; the tests (one event per branch × three personas) are the real work.</p>
+    <div class="deps"><b>Depends:</b> #43 · Spec §4.4</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#63</span><span class="title">3.4b RSVP policies</span><span class="est">~45 min</span></div>
+    <p><strong>What:</strong> RSVP is self-only, and only to events you can see (the policy queries <code>events</code>, whose own RLS applies transitively — the same elegant trick task_assignees uses). <strong>Why:</strong> the one thing every member writes weekly must be forge-proof.</p>
+    <div class="deps"><b>Depends:</b> #62</div>
+  </div>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#64</span><span class="title">3.5a Announcements policies</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> everyone reads; level ≥ 4 posts; read-receipts are self-only. The simplest policy issue — a good first RLS task for a volunteer.</p>
+    <div class="deps"><b>Depends:</b> #44 · Spec §4.3</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#65</span><span class="title">3.5b Notifications policies (suppression!)</span><span class="est">~50 min</span></div>
+    <p><strong>What:</strong> you read only your own notifications, minus the kinds your role suppresses (a lookup into #46's table); clients can't insert at all. <strong>Why:</strong> conflict C2 enforced at the database — a bug in any screen can never re-flood BC with task noise. The test that matters: a bc persona does NOT see a task-kind row addressed to them; a voluntar does.</p>
+    <div class="deps"><b>Depends:</b> #45, #46 · Spec §4.4</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#66</span><span class="title">3.5c Interne gating + push tokens</span><span class="est">~45 min</span></div>
+    <p><strong>What:</strong> the AG views answer only for level ≥ 6 (<code>seeInterne</code>); device tokens are strictly personal. <strong>Why:</strong> who keeps voting rights is sensitive leadership information.</p>
+    <div class="deps"><b>Depends:</b> #47, #48, #46 · Spec §4.3</div>
+  </div>
+
+  <div class="issue">
+    <div class="head"><span class="num">#67</span><span class="title">6.1u Umbrella: per-role suite complete</span><span class="est">final sweep ~45 min</span></div>
+    <p><strong>What:</strong> a tracking issue — every policy issue above ships its own tests; when the last one merges, one final sweep adds any missing cross-role case from the original 6.1 acceptance list, then this closes. <strong>Why:</strong> so "the permission model is fully tested" is a checkbox someone actually ticks, not an assumption.</p>
+    <div class="deps"><b>Depends:</b> #59–#66</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="fanout">
+  <span class="eyebrow">Section D · Sprint 1 · one issue</span>
+  <h2>Notification fan-out</h2>
+  <div class="issue">
+    <div class="head"><span class="num">#68</span><span class="title">4.2a In-app notification fan-out</span><span class="est">~60 min</span></div>
+    <p><strong>What:</strong> when an announcement is posted, a trigger writes one <code>notifications</code> row per intended recipient (dept announcements → that dept), consulting the suppression table instead of hardcoding roles. <strong>Why:</strong> without this, the notifications screen has nothing to show — this issue was deliberately pulled <em>out</em> of the Phase-2 "push" epic into v1, because in-app delivery is just rows in a table. <strong>How:</strong> SECURITY DEFINER trigger (it writes rows <em>for other members</em>, which client RLS rightly forbids), plus exact-count tests.</p>
+    <div class="deps"><b>Depends:</b> #44, #45, #46</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="csv">
+  <span class="eyebrow">Section E · Sprint 3 (needed for recruitment, not the demo)</span>
+  <h2>CSV recruit import</h2>
+  <p><strong>Why this exists:</strong> at recruitment you'll onboard dozens of recruits from a spreadsheet in one evening. The chain reuses the single-invite path (#56/#57) in a loop — deliberately boring.</p>
+
+  <div class="issue">
+    <div class="head"><span class="num">#71</span><span class="title">4.1a CSV parse + validation module</span><span class="est">~50 min</span></div>
+    <p><strong>What:</strong> a pure function: CSV text in → {valid rows, per-row errors} out. No network, no database — which is exactly why it can be tested exhaustively in milliseconds. <strong>Why separate:</strong> parsing is where imports die at 23:00 before recruitment; a malformed row must be <em>reported</em>, never fatal.</p>
+    <div class="deps"><b>Depends:</b> nothing</div>
+  </div>
+  <div class="issue">
+    <div class="head"><span class="num">#72</span><span class="title">4.1b Edge Function: csv-import</span><span class="est">~60 min</span></div>
+    <p><strong>What:</strong> level ≥ 6 uploads CSV → parse (#71) → invite+provision each valid row (#56/#57) → return {created, skipped, errors}. Duplicate emails count as skipped, not failures.</p>
+    <div class="deps"><b>Depends:</b> #71, #56, #57</div>
+  </div>
+  <div class="issue">
+    <div class="head"><span class="num">#73</span><span class="title">4.1c CSV e2e + runbook</span><span class="est">~40 min</span></div>
+    <p><strong>What:</strong> prove a 3-row CSV creates 3 complete recruits with 3 magic links in Mailpit; extend the inviting runbook with the bulk flow + a template CSV.</p>
+    <div class="deps"><b>Depends:</b> #72</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="demo">
+  <span class="eyebrow">Section F · start of Sprint 2 · sequential</span>
+  <h2>Demo data — one login per role</h2>
+  <p><strong>Why this exists:</strong> the Sep 15 demo, every screen review, and every volunteer's local testing all need the same thing: log in as any role, see believable data. Seeds run only locally and on staging — production stays clean by construction.</p>
+
+  <div class="issue is-done">
+    <div class="head"><span class="num">#74</span><span class="title">5.2a Demo people</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> 8 logins, one per role (<code>voluntar@demo…</code>, password <code>parola123</code>), with profiles, departments, two teams. The known-tricky part (creating auth users in SQL with a working password) is spelled out in the issue.</p>
+    <div class="deps"><b>Depends:</b> nothing</div>
+  </div>
+  <div class="issue is-done">
+    <div class="head"><span class="num">#75</span><span class="title">5.2b Demo tasks + points</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> ~15 tasks in all statuses, most graded (mixed ratings including one penalty and one sanction) — but ledger rows come from <em>letting the trigger grade them</em>, never inserted by hand, so the seed also exercises the engine. Result: a leaderboard that looks alive.</p>
+    <div class="deps"><b>Depends:</b> #74</div>
+  </div>
+  <div class="issue is-done">
+    <div class="head"><span class="num">#76</span><span class="title">5.2c Demo events + announcements</span><span class="est done">done</span></div>
+    <p><strong>What:</strong> ~6 events across scopes (including a recruit-team one — it proves the visibility rule live), ~5 announcements (one critical+pinned, one with a form link), RSVPs, a few notifications.</p>
+    <div class="deps"><b>Depends:</b> #74, #43, #44, #45</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="foundation">
+  <span class="eyebrow">Section G · Sprint 2 · mostly sequential</span>
+  <h2>Frontend foundation</h2>
+  <p><strong>Why this exists:</strong> the first React code in the repo. These nine issues build the skeleton every screen hangs on: project, login, navigation, typed data access. After #87, a screen issue is genuinely one hour, because it's "call a hook, render a list".</p>
+
+  <div class="issue is-done"><div class="head"><span class="num">#79</span><span class="title">8.1a Frontend mini-spec</span><span class="est done">done</span></div>
+  <p><strong>What:</strong> one document fixing folder structure, the route map, data-layer conventions and theming tokens lifted from the mockup's CSS. <strong>Why:</strong> so every screen PR looks the same and two volunteers don't invent two architectures.</p>
+  <div class="deps"><b>Depends:</b> nothing · ADR-0002</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#80</span><span class="title">8.1b Scaffold app/</span><span class="est">~45 min</span></div>
+  <p><strong>What:</strong> Vite + React + TypeScript + Ionic, lint/format, <code>npm run dev</code> shows a hello shell. Keep the diff boring: generated files + minimal glue.</p>
+  <div class="deps"><b>Depends:</b> #79</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#81</span><span class="title">8.1c Frontend CI</span><span class="est">~30 min</span></div>
+  <p><strong>What:</strong> typecheck + lint + build on every PR touching <code>app/</code>. Same promise as the database CI: a broken screen can't merge.</p>
+  <div class="deps"><b>Depends:</b> #80</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#82</span><span class="title">8.2a Supabase client + session provider</span><span class="est">~45 min</span></div>
+  <p><strong>What:</strong> the connection to the backend + a <code>useAuth()</code> hook exposing the session and the decoded claims (role, level, departments, teams). Decode once, use everywhere.</p>
+  <div class="deps"><b>Depends:</b> #80</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#83</span><span class="title">8.2b Login screen (magic link)</span><span class="est">~60 min</span></div>
+  <p><strong>What:</strong> email in → magic link out → session. The front door, and ADR-0003 made visible: there is no password field at all.</p>
+  <div class="deps"><b>Depends:</b> #82, #74</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#84</span><span class="title">8.2c App shell + role-gated nav</span><span class="est">~60 min</span></div>
+  <p><strong>What:</strong> the tab/menu layout from the mockup; Volunteers appears at level ≥ 5, BC Panel at ≥ 6. Hiding tabs is UX — the database still enforces underneath (defense in depth).</p>
+  <div class="deps"><b>Depends:</b> #82</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#85</span><span class="title">8.2d Route guards + no-profile screen</span><span class="est">~40 min</span></div>
+  <p><strong>What:</strong> signed-out → login; signed-in without claims → a kind "contul tău nu este activ — contactează BC" page. ADR-0003's expected edge case must look intentional, not broken.</p>
+  <div class="deps"><b>Depends:</b> #83, #84</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#86</span><span class="title">8.3a Generated DB types</span><span class="est">~30 min</span></div>
+  <p><strong>What:</strong> one command generates TypeScript types from the real schema. From then on a renamed column breaks the build, not the demo.</p>
+  <div class="deps"><b>Depends:</b> #82</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#87</span><span class="title">8.3b Query conventions + first hooks</span><span class="est">~60 min</span></div>
+  <p><strong>What:</strong> TanStack Query set up once, properly (keys, loading, errors), plus the first three hooks: my points, leaderboard, my tasks — against the seeded local database.</p>
+  <div class="deps"><b>Depends:</b> #86, #74, #75</div></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="screens">
+  <span class="eyebrow">Section H · Sprints 2–3 · parallel after G</span>
+  <h2>The seven screens</h2>
+  <p><strong>Why in this order:</strong> Tracker and Dashboard are the <strong>demo gate</strong> — they carry Sep 15 and come first. Everything else is Sprint 3. Screens are wonderfully parallel: once Section G is merged, three people can each own a screen without touching each other's files.</p>
+
+  <h3>Task Tracker (demo gate)</h3>
+  <div class="issue"><div class="head"><span class="num">#88</span><span class="title">9.1a My tasks list</span><span class="est">~60 min</span></div>
+  <p>AG Grid of my tasks — title, dept chip, deadline, status, points. First real proof the whole stack works: RLS decides the rows, the hook fetches, the grid renders.</p>
+  <div class="deps"><b>Depends:</b> #87, #75</div></div>
+  <div class="issue"><div class="head"><span class="num">#89</span><span class="title">9.1b Open tasks + claim</span><span class="est">~50 min</span></div>
+  <p>The "Deschise" tab + Revendică button. The interesting part is the error path: if the claim is rejected (someone was faster), show a friendly toast — the database said no, the UI translates.</p>
+  <div class="deps"><b>Depends:</b> #88</div></div>
+  <div class="issue"><div class="head"><span class="num">#90</span><span class="title">9.1c Create task (level ≥ 4)</span><span class="est">~60 min</span></div>
+  <p>The "Task nou" form with difficulty stars and assignee picker.</p>
+  <div class="deps"><b>Depends:</b> #88</div></div>
+  <div class="issue"><div class="head"><span class="num">#91</span><span class="title">9.1d Grading dialog</span><span class="est">~50 min</span></div>
+  <p>Grade 1–5 with the official guide labels shown. The UI only sets the rating — the trigger does the points. Watch the leaderboard move.</p>
+  <div class="deps"><b>Depends:</b> #88</div></div>
+  <div class="issue"><div class="head"><span class="num">#92</span><span class="title">9.1e Requests: file + decide</span><span class="est">~60 min</span></div>
+  <p>Members file "cere puncte / propune task"; level ≥ 4 approves or rejects, signed.</p>
+  <div class="deps"><b>Depends:</b> #88</div></div>
+
+  <h3>Dashboard (demo gate)</h3>
+  <div class="issue"><div class="head"><span class="num">#93</span><span class="title">9.2a My points card</span><span class="est">~45 min</span></div>
+  <p>Total, tier, rank — the numbers a member opens the app for.</p>
+  <div class="deps"><b>Depends:</b> #87</div></div>
+  <div class="issue"><div class="head"><span class="num">#94</span><span class="title">9.2b Mini-leaderboard</span><span class="est">~30 min</span></div>
+  <p>Top 10 with my row highlighted wherever it is.</p>
+  <div class="deps"><b>Depends:</b> #93</div></div>
+  <div class="issue"><div class="head"><span class="num">#95</span><span class="title">9.2c Dept cup</span><span class="est">~30 min</span></div>
+  <p>Department standings, each in its brand color.</p>
+  <div class="deps"><b>Depends:</b> #93</div></div>
+
+  <h3>Calendar · Announcements · Directory · BC panel · Profile (Sprint 3)</h3>
+  <div class="issue"><div class="head"><span class="num">#96</span><span class="title">9.3a Upcoming events list</span><span class="est">~45 min</span></div>
+  <p>Grouped by day; visibility comes free from RLS — the screen just selects.</p>
+  <div class="deps"><b>Depends:</b> #87, #62, #76</div></div>
+  <div class="issue"><div class="head"><span class="num">#97</span><span class="title">9.3b RSVP</span><span class="est">~45 min</span></div>
+  <p>Vin / Nu vin, capacity when set.</p><div class="deps"><b>Depends:</b> #96, #63</div></div>
+  <div class="issue"><div class="head"><span class="num">#98</span><span class="title">9.3c Create/edit event</span><span class="est">~60 min</span></div>
+  <p>Level ≥ 4 event form.</p><div class="deps"><b>Depends:</b> #96</div></div>
+  <div class="issue"><div class="head"><span class="num">#99</span><span class="title">9.4a Announcements feed</span><span class="est">~60 min</span></div>
+  <p>Pinned-first, priority styling, form-link button, opening marks read.</p>
+  <div class="deps"><b>Depends:</b> #87, #64, #76</div></div>
+  <div class="issue"><div class="head"><span class="num">#100</span><span class="title">9.4b Compose announcement</span><span class="est">~45 min</span></div>
+  <p>Level ≥ 4 compose; posting fans out notifications automatically via #68.</p>
+  <div class="deps"><b>Depends:</b> #99, #68</div></div>
+  <div class="issue"><div class="head"><span class="num">#101</span><span class="title">9.4c Notifications screen + badge</span><span class="est">~60 min</span></div>
+  <p>List, unread badge, mark read. Suppressed kinds simply never arrive — the DB already handled it.</p>
+  <div class="deps"><b>Depends:</b> #87, #65, #68</div></div>
+  <div class="issue"><div class="head"><span class="num">#102</span><span class="title">9.5a Volunteers directory (level ≥ 5)</span><span class="est">~60 min</span></div>
+  <p>Searchable HR grid; contact columns appear only because the database allows them at this level.</p>
+  <div class="deps"><b>Depends:</b> #87, #59, #61</div></div>
+  <div class="issue"><div class="head"><span class="num">#103</span><span class="title">9.5b Member detail + edit</span><span class="est">~60 min</span></div>
+  <p>Profile, points history, editors enabled per level.</p>
+  <div class="deps"><b>Depends:</b> #102, #60</div></div>
+  <div class="issue"><div class="head"><span class="num">#104</span><span class="title">9.6a BC panel: award / sanction</span><span class="est">~50 min</span></div>
+  <p>Signed ledger inserts; the sanctioned member sees it — transparency per mandate.</p>
+  <div class="deps"><b>Depends:</b> #87, #102</div></div>
+  <div class="issue"><div class="head"><span class="num">#105</span><span class="title">9.6b BC panel: role management</span><span class="est">~45 min</span></div>
+  <p>Role/status changes over the #60 rules; writes history once #50 exists.</p>
+  <div class="deps"><b>Depends:</b> #103, #60</div></div>
+  <div class="issue"><div class="head"><span class="num">#106</span><span class="title">9.6c BC panel: requests queue</span><span class="est">~30 min</span></div>
+  <p>Org-wide pending queue for level ≥ 6 — the #92 widget, unfiltered.</p>
+  <div class="deps"><b>Depends:</b> #92</div></div>
+  <div class="issue"><div class="head"><span class="num">#107</span><span class="title">9.6d BC panel: CSV import UI</span><span class="est">~60 min</span></div>
+  <p>Upload → Edge Function → created/skipped/errors report, template downloadable.</p>
+  <div class="deps"><b>Depends:</b> #72, #84</div></div>
+  <div class="issue"><div class="head"><span class="num">#108</span><span class="title">9.7a Profile screen</span><span class="est">~60 min</span></div>
+  <p>Own info, points summary, theme toggle.</p>
+  <div class="deps"><b>Depends:</b> #87, #60</div></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="launch">
+  <span class="eyebrow">Section I · Sprint 2 (deploy) + Sprint 3 (production)</span>
+  <h2>Launch operations</h2>
+
+  <div class="issue"><div class="head"><span class="num">#109</span><span class="title">10.1a First Cloudflare Pages deploy</span><span class="est human">🧍 + ~45 min</span></div>
+  <p><strong>What:</strong> connect the repo to Cloudflare Pages, build <code>app/</code>, point it at staging. <strong>Why early (Sprint 2, right after the shell exists):</strong> deploy problems must die young — the Sep 15 demo runs on this URL, and you don't debug hosting on demo morning. Needs your Cloudflare account.</p>
+  <div class="deps"><b>Depends:</b> #84</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#110</span><span class="title">10.1b Preview deployments</span><span class="est">~30 min</span></div>
+  <p><strong>What:</strong> every PR gets its own URL — reviewers click a link instead of running the app.</p>
+  <div class="deps"><b>Depends:</b> #109</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#77</span><span class="title">7.2a Production project (Pro)</span><span class="est human">🧍 ~30 min</span></div>
+  <p><strong>What (you):</strong> the real Supabase project — Pro plan ($25/mo), Spend Cap ON, backups confirmed, signup off, hook on. <strong>Why Sprint 3 and not sooner:</strong> production existing = real-data responsibility; it's created days before real data arrives, not months.</p>
+  <div class="deps"><b>Depends:</b> Sprint 3 start</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#78</span><span class="title">7.2b Gated production deploy</span><span class="est">~45 min</span></div>
+  <p><strong>What:</strong> a manual "Promote to production" button in GitHub Actions, protected by a required approval from you. <strong>Why:</strong> staging updates automatically; production must always be a deliberate human act with a paper trail.</p>
+  <div class="deps"><b>Depends:</b> #77</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#111</span><span class="title">10.2a BC/BCE sheet mapping doc</span><span class="est human">🧍 ~45 min</span></div>
+  <p><strong>What (you — you know the sheet):</strong> column-by-column mapping of the current leadership task spreadsheet onto the schema, including what gets dropped. <strong>Why:</strong> writing it exposes every "wait, which column is that" <em>before</em> import night.</p>
+  <div class="deps"><b>Depends:</b> the real sheet</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#112</span><span class="title">10.2b Import script (one-shot)</span><span class="est">~60 min</span></div>
+  <p><strong>What:</strong> a script implementing #111 via the invite path, with <code>--dry-run</code> first against staging. Acceptance: the dry run matches the sheet row-for-row before it ever touches production.</p>
+  <div class="deps"><b>Depends:</b> #111, #56, #57, #77</div></div>
+
+  <div class="issue"><div class="head"><span class="num">#36</span><span class="title">10.3 BC/BCE onboarding (Oct 1)</span><span class="est human">🧍 go-live day</span></div>
+  <p><strong>What (you + BC):</strong> invite the ~20 leadership members, a one-page quickstart in Romanian, collect first-week feedback. Success metric: everyone logged in by Oct 8.</p>
+  <div class="deps"><b>Depends:</b> everything above</div></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="phase2">
+  <span class="eyebrow">Section J · Phase 2 · Oct–Nov, after go-live</span>
+  <h2>Phase 2 — the org-wide layer</h2>
+  <p><strong>Why it waits:</strong> none of this blocks 20 leadership members using the app; all of it matters when 200 members join at recruitment.</p>
+
+  <div class="issue"><div class="head"><span class="num">#49</span><span class="title">1.9a promotion_rules table</span><span class="est">~40 min</span></div>
+  <p>The two automatic rules as data: recrut→voluntar after a semester, voluntar→activ at a points threshold (number ratified by BC). ADR-0004's "thresholds are configuration, not code".</p>
+  <div class="deps"><b>Depends:</b> nothing</div></div>
+  <div class="issue"><div class="head"><span class="num">#50</span><span class="title">1.9b role_history audit</span><span class="est">~45 min</span></div>
+  <p>Append-only log of every role change, human or automatic. Promotions must be explainable at AGO.</p>
+  <div class="deps"><b>Depends:</b> nothing</div></div>
+  <div class="issue"><div class="head"><span class="num">#51</span><span class="title">1.9c detect_promotions()</span><span class="est">~60 min</span></div>
+  <p>Pure, testable candidate detection — who qualifies right now.</p>
+  <div class="deps"><b>Depends:</b> #49, #6</div></div>
+  <div class="issue"><div class="head"><span class="num">#52</span><span class="title">1.9d Promotion job + 🎉 notification</span><span class="est">~60 min</span></div>
+  <p>Daily job: apply, audit (actor <code>system</code>), congratulate. The mandate's "automat + gamificat", running on schedule. Idempotence test included — running twice never double-promotes.</p>
+  <div class="deps"><b>Depends:</b> #50, #51, #45</div></div>
+  <div class="issue"><div class="head"><span class="num">#69</span><span class="title">4.2b Deadline reminder job</span><span class="est">~60 min</span></div>
+  <p>Daily: tasks due in 48h → one reminder per assignee, exactly once per day.</p>
+  <div class="deps"><b>Depends:</b> #45, #46</div></div>
+  <div class="issue"><div class="head"><span class="num">#70</span><span class="title">4.2c Push provider (OneSignal)</span><span class="est human">🧍 several sessions</span></div>
+  <p>Real phone pushes for the rows #68/#69 already write. Starts with its own ADR; re-split when scheduled.</p>
+  <div class="deps"><b>Depends:</b> #68, frontend shell</div></div>
+  <div class="issue"><div class="head"><span class="num">#55</span><span class="title">2.1c Google OAuth</span><span class="est human">🧍 ~45 min</span></div>
+  <p>"Sign in with Google" for invited members — convenience at 200-member scale; magic links suffice until then.</p>
+  <div class="deps"><b>Depends:</b> invite flow live</div></div>
+  <div class="issue"><div class="head"><span class="num">#37</span><span class="title">10.4 Org-wide rollout umbrella</span><span class="est">tracking</span></div>
+  <p>Recruit CSV onboarding at recruitment, promotion engine live, ≥80% of active members with accounts by Dec 1.</p>
+  <div class="deps"><b>Depends:</b> Phase 2 items above</div></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="queue">
+  <span class="eyebrow">Priorities · rewritten August 24</span>
+  <h2>Your suggested queue — what's actually next</h2>
+  <p>The original six-row queue here is entirely done — rows 1, 2, 3 (minus #60/#63/#65/#66, corrected below), and 6 closed; row 4 partly (#62 done, #63/#65/#68 didn't move); row 5 half (#79 done, #80/#81 didn't). This is the queue as it stands today. Items on one line are independent — split them across people freely.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Order</th><th>Issues</th><th>Why now</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>#80 → #81</td><td>The frontend workspace doesn't exist yet — everything in Sections G and H (27 issues) is blocked behind it. This is the highest-leverage single thing left.</td></tr>
+        <tr><td>2</td><td>#60 · #63 · #65 · #66</td><td>The remaining permission policies — self-edit guard, RSVP, notifications+suppression, Interne gating. Independent of each other and of #80.</td></tr>
+        <tr><td>3</td><td>#67</td><td>The final cross-role sweep, once #60/#63/#65/#66 are in — closes the entire security epic.</td></tr>
+        <tr><td>4</td><td>#68</td><td>Notification fan-out — the notifications screen (#101) has nothing to show without it.</td></tr>
+        <tr><td>5</td><td>#47 → #48</td><td>The two AG views, still outstanding from Section A. Small, independent, no urgency.</td></tr>
+        <tr><td>6</td><td>#88–#95</td><td>Once #80/#81 land: Tracker and Dashboard, the demo gate for Sep 15. Parallel across people.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="human">
+  <span class="eyebrow">You, specifically · rewritten August 24</span>
+  <h2>Human-only checklist</h2>
+  <p>Everything in this guide an AI or volunteer <em>cannot</em> do for you, in rough date order. #53 (auth config doc) is done; #56/#57/#58 (the invite chain) are done — <strong>this list got shorter</strong>, not longer:</p>
+  <ul>
+    <li><strong>Now:</strong> #54 — the staging dashboard checklist, four settings plus one new secret (<code>STAGING_DB_URL</code>, added when #139 shipped the seeding workflow). ~25 min in a browser. Create the free Cloudflare account (before #109).</li>
+    <li><strong>BC meeting:</strong> ratify the scoring-guide contents; pick the Membru Activ points threshold (#49 seeds it); confirm the Oct 1 date.</li>
+    <li><strong>Team:</strong> name your 1–3 volunteers → slot into <code>docs/team/team-plan.md</code> → run the three Sprint-0 training sessions. The <code>max-1h</code> label was designed exactly for their first weeks.</li>
+    <li><strong>Before Sep 15:</strong> once #54 is done, run the <strong>Seed staging demo data</strong> GitHub Actions workflow — staging currently has the schema but no demo data (issue #139, fixed as of PR #141, but someone still has to press the button).</li>
+    <li><strong>Sprint 3:</strong> #77 — create the production project (Pro, spend cap, backups). #111 — write the BC/BCE sheet mapping. Approve the first gated production deploy (#78).</li>
+    <li><strong>Oct 1:</strong> #36 — invite the leadership, hand out the quickstart, collect feedback.</li>
+  </ul>
+</section>
+
+<footer>
+  OSUBB app · implementation guide, written August 19, updated August 24, 2026 · live status: <code>gh issue list --label max-1h</code> · companion: the OSUBB Build Journal (what's already done) · sources of truth: GitHub issues, <code>docs/backend/implementation-issues.md</code>, <code>docs/roadmap.md</code>, spec Revision 3.
+</footer>
+
+</div>

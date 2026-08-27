@@ -1,0 +1,605 @@
+<title>Setting Up Your Laptop</title>
+<style>
+  :root {
+    --bg: #FBFAF8;
+    --ink: #241F1E;
+    --muted: #6F6561;
+    --faint: #8C817C;
+    --accent: #C0161C;
+    --good: #1D7A3E;
+    --warn: #8A5D00;
+    --surface: #F3EFEA;
+    --surface-2: #ECE6DF;
+    --line: #E3DCD5;
+    --line-strong: #D3C9C1;
+    --code-ink: #2E2724;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161415;
+      --ink: #EBE6E3;
+      --muted: #A69C97;
+      --faint: #8B817C;
+      --accent: #F0555B;
+      --good: #5BBF7E;
+      --warn: #E0A93E;
+      --surface: #201D1E;
+      --surface-2: #282425;
+      --line: #322D2E;
+      --line-strong: #423B3C;
+      --code-ink: #DFD9D6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161415;
+    --ink: #EBE6E3;
+    --muted: #A69C97;
+    --faint: #8B817C;
+    --accent: #F0555B;
+    --good: #5BBF7E;
+    --warn: #E0A93E;
+    --surface: #201D1E;
+    --surface-2: #282425;
+    --line: #322D2E;
+    --line-strong: #423B3C;
+    --code-ink: #DFD9D6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap { max-width: 48rem; margin: 0 auto; padding: 3.5rem 1.25rem 6rem; }
+
+  h1 {
+    font-size: clamp(2.1rem, 6vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    margin: 0.5rem 0 0.7rem;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 750;
+    letter-spacing: -0.015em;
+    margin: 0 0 0.7rem;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 1.6rem 0 0.4rem;
+  }
+  p { margin: 0 0 0.95rem; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  ol, ul { margin: 0 0 0.95rem; padding-left: 1.25rem; }
+  li { margin-bottom: 0.3rem; }
+  li::marker { color: var(--faint); }
+  strong { font-weight: 700; }
+
+  .eyebrow {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.6rem;
+  }
+  .lede { font-size: 1.1rem; color: var(--muted); text-wrap: balance; margin-bottom: 1.4rem; }
+
+  /* ---------- header facts strip ---------- */
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.6rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .facts li {
+    flex: 1 1 9rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 0.6rem 0.8rem;
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .facts b {
+    display: block;
+    font-size: 1.05rem;
+    color: var(--ink);
+    font-weight: 750;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.05rem;
+  }
+
+  /* ---------- code ---------- */
+  code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
+    font-size: 0.86em;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.06em 0.34em;
+    color: var(--code-ink);
+  }
+
+  /* A command block always says which folder it runs in — "ran it in the wrong
+     directory" is the single most common way a setup goes sideways. */
+  .cmd {
+    margin: 0.9rem 0 1.1rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .cmd .where {
+    display: block;
+    padding: 0.35rem 0.85rem;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    color: var(--faint);
+  }
+  .cmd pre {
+    margin: 0;
+    padding: 0.8rem 0.95rem;
+    overflow-x: auto;
+  }
+  .cmd pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.85rem;
+    line-height: 1.65;
+    color: var(--code-ink);
+  }
+  .cmd .hint { color: var(--faint); }
+
+  /* ---------- the step spine ---------- */
+  .step {
+    display: grid;
+    grid-template-columns: 2.4rem 1fr;
+    column-gap: 1.15rem;
+    position: relative;
+    padding-bottom: 2.4rem;
+  }
+  .step::before {
+    content: "";
+    position: absolute;
+    left: 1.15rem;
+    top: 2.6rem;
+    bottom: 0.4rem;
+    width: 2px;
+    background: var(--line-strong);
+  }
+  .step:last-of-type::before { display: none; }
+  .step-num {
+    grid-column: 1;
+    position: relative;
+    z-index: 1;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step-body { grid-column: 2; min-width: 0; padding-top: 0.2rem; }
+  .step-body > :last-child { margin-bottom: 0; }
+
+  /* ---------- checkpoint ---------- */
+  .check {
+    border-left: 3px solid var(--good);
+    background: var(--surface);
+    border-radius: 0 6px 6px 0;
+    padding: 0.7rem 0.95rem;
+    margin: 1rem 0 0;
+  }
+  .check b {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--good);
+    margin-bottom: 0.25rem;
+  }
+  .check p { margin: 0; font-size: 0.95rem; }
+  .check pre {
+    margin: 0.5rem 0 0;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--muted);
+    overflow-x: auto;
+  }
+
+  /* ---------- caution ---------- */
+  .note {
+    border-left: 3px solid var(--warn);
+    background: var(--surface);
+    border-radius: 0 6px 6px 0;
+    padding: 0.7rem 0.95rem;
+    margin: 1rem 0;
+  }
+  .note b {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--warn);
+    margin-bottom: 0.25rem;
+  }
+  .note p { margin: 0 0 0.5rem; font-size: 0.95rem; }
+  .note p:last-child { margin-bottom: 0; }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; margin: 0.9rem 0 1.2rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th {
+    text-align: left;
+    font-size: 0.68rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 700;
+    padding: 0.4rem 0.9rem 0.4rem 0;
+    border-bottom: 2px solid var(--line-strong);
+    white-space: nowrap;
+  }
+  td {
+    padding: 0.48rem 0.9rem 0.48rem 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  td:last-child, th:last-child { padding-right: 0; }
+
+  section {
+    margin: 3rem 0 0;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+  }
+  section.steps-section { border-top: none; padding-top: 0; margin-top: 2.4rem; }
+
+  footer {
+    margin-top: 3.5rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--line);
+    color: var(--faint);
+    font-size: 0.84rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">OSUBB · echipa IT · ziua 1</span>
+  <h1>Setting up your laptop</h1>
+  <p class="lede">From nothing to a working copy of the whole OSUBB backend running on your own machine. It assumes you have never opened a terminal. Follow it top to bottom.</p>
+
+  <ul class="facts">
+    <li><b>60–90 min</b>mostly downloads</li>
+    <li><b>~10 GB</b>free disk space needed</li>
+    <li><b>5 tools</b>all free</li>
+    <li><b>292 tests</b>your finish line</li>
+  </ul>
+
+  <p style="margin-top:1.6rem;">Every step ends with a <strong>checkpoint</strong> — one thing that proves it worked. If a checkpoint doesn't match, stop and fix it there. Everything after it depends on it.</p>
+</header>
+
+<section class="steps-section">
+
+  <!-- 0 -->
+  <div class="step">
+    <div class="step-num">0</div>
+    <div class="step-body">
+      <h2>Accept the two invitations</h2>
+      <p>Two emails are waiting for you, and they do different things.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Invitation</th><th>What it gives you</th><th>Needed today?</th></tr></thead>
+          <tbody>
+            <tr><td><strong>GitHub</strong><br><code>Alex-Bancila/osubb-app</code></td><td>the code, the issue list, the ability to open pull requests</td><td><strong>Yes</strong> — essential</td></tr>
+            <tr><td><strong>Supabase</strong><br>the OSUBB project</td><td>a look at the <em>staging</em> server's database</td><td>No</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>That second one surprises people, so to be explicit: <strong>you do not need Supabase access to develop.</strong> Everything you build runs against a complete copy of the backend on your own machine. The dashboard invite is so you can look at staging once we deploy — reading, mostly, not working.</p>
+      <p>Accept both anyway.</p>
+      <div class="check">
+        <b>Checkpoint</b>
+        <p>You can open the repository on github.com and see code, not a 404.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1 -->
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h2>Install five tools</h2>
+      <p>All free. On Windows, take the default options in every installer.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Tool</th><th>Where</th><th>What it's for</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Git</strong></td><td>git-scm.com</td><td>tracks every change to the code</td></tr>
+            <tr><td><strong>Node.js</strong> (LTS)</td><td>nodejs.org</td><td>runs the frontend and our command-line tools</td></tr>
+            <tr><td><strong>Docker Desktop</strong></td><td>docker.com</td><td>runs the whole backend on your machine</td></tr>
+            <tr><td><strong>GitHub CLI</strong></td><td>cli.github.com</td><td><code>gh</code> — sign in, open pull requests from the terminal</td></tr>
+            <tr><td><strong>VS Code</strong></td><td>code.visualstudio.com</td><td>the editor</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>About Docker, because it's the one that gives trouble</h3>
+      <p>A <strong>container</strong> is a small, disposable, self-contained copy of a machine with one piece of software already installed and configured inside it. Docker is the program that downloads and runs containers.</p>
+      <p>This matters because our backend isn't one program — it's PostgreSQL, an authentication server, an API layer, a database browser, a fake email inbox and several more, wired together. Installing that by hand would be an afternoon per laptop, and a different afternoon on every operating system. Instead, one command starts about nine containers that already <em>are</em> that stack, identically for everyone on the team.</p>
+      <p>It also means <strong>you cannot break anything permanently.</strong> Containers are throwaway. Delete them, start again, and you have a clean backend in under a minute — nothing on your actual machine was ever touched.</p>
+
+      <div class="note">
+        <b>Windows only</b>
+        <p>Docker needs WSL 2, a small Linux layer Windows provides. The installer usually handles it. If it complains: open PowerShell <strong>as Administrator</strong>, run <code>wsl --install</code>, restart.</p>
+        <p>If it still complains about virtualization, it's switched off in your BIOS — search for "enable virtualization" plus your laptop model. One-time setting.</p>
+      </div>
+
+      <p>After installing, <strong>start Docker Desktop and leave it running.</strong> There's a whale icon in the system tray (Windows) or menu bar (Mac). No whale, no backend.</p>
+
+      <div class="check">
+        <b>Checkpoint</b>
+        <p>Close every terminal, open a fresh one, and run these four. Each prints a version number.</p>
+        <pre>git --version
+node --version
+docker --version
+gh --version</pre>
+        <p style="margin-top:0.55rem;">A "command not found" almost always means the terminal was open before you installed — close it and open a new one.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h2>Tell Git who you are</h2>
+      <p>Your name goes on every commit you make. Use your real name and the email on your GitHub account.</p>
+      <div class="cmd">
+        <span class="where">anywhere</span>
+        <pre><code>git config --global user.name "Prenume Nume"
+git config --global user.email "adresa@de-pe-github.com"</code></pre>
+      </div>
+      <div class="check">
+        <b>Checkpoint</b>
+        <p><code>git config --global user.name</code> prints your name back.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h2>Sign in to GitHub from the terminal</h2>
+      <div class="cmd">
+        <span class="where">anywhere</span>
+        <pre><code>gh auth login</code></pre>
+      </div>
+      <p>Answer: <strong>GitHub.com</strong> → <strong>HTTPS</strong> → <strong>yes</strong>, authenticate Git with your GitHub credentials → <strong>Login with a web browser</strong>. Copy the code it shows you and paste it into the page that opens.</p>
+      <div class="check">
+        <b>Checkpoint</b>
+        <p><code>gh auth status</code> says you're logged in as you.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <h2>Get the code</h2>
+      <p>Pick a folder you'll remember — <code>C:\Users\&lt;you&gt;\dev</code> on Windows, <code>~/dev</code> on Mac.</p>
+      <div class="cmd">
+        <span class="where">your dev folder</span>
+        <pre><code>git clone https://github.com/Alex-Bancila/osubb-app.git
+cd osubb-app</code></pre>
+      </div>
+      <p>Every command from here on runs <strong>inside <code>osubb-app</code></strong> unless the label above it says otherwise.</p>
+      <div class="check">
+        <b>Checkpoint</b>
+        <p><code>ls</code> shows <code>CLAUDE.md</code>, <code>supabase</code>, <code>app</code>, <code>docs</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <h2>Start the backend</h2>
+      <p>Docker Desktop must be running. Then:</p>
+      <div class="cmd">
+        <span class="where">osubb-app</span>
+        <pre><code>npx supabase start</code></pre>
+      </div>
+      <p><strong>The first run downloads several GB</strong> and can take 10–20 minutes. It will look frozen at times; it isn't. Every run after that takes about 30 seconds.</p>
+      <p><code>npx</code> means "fetch this tool and run it" — we don't install the Supabase CLI globally, so everyone always uses the same version.</p>
+      <p>When it finishes it prints a block of URLs. The three you'll use:</p>
+      <div class="tablewrap">
+        <table>
+          <tbody>
+            <tr><td>API</td><td><code>http://127.0.0.1:54321</code></td></tr>
+            <tr><td><strong>Studio</strong> — browse the database</td><td><code>http://127.0.0.1:54323</code></td></tr>
+            <tr><td><strong>Mailpit</strong> — catches every email sent locally</td><td><code>http://127.0.0.1:54324</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="check">
+        <b>Checkpoint</b>
+        <p><code>npx supabase status</code> prints those URLs instead of an error.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <h2>Build the database and prove it works</h2>
+      <div class="cmd">
+        <span class="where">osubb-app</span>
+        <pre><code>npx supabase db reset
+npx supabase test db</code></pre>
+      </div>
+      <p>The first rebuilds the database from scratch: it applies all 18 migrations in order, then loads the demo data. The second runs the entire test suite.</p>
+      <p><code>db reset</code> is your undo button for the rest of your life on this project. Broke something? Unsure what state your data is in? Run it. Half a minute later you have a pristine database with the demo data back. This is exactly why experimenting locally is safe.</p>
+      <div class="check">
+        <b>Checkpoint</b>
+        <p>The tests end with:</p>
+        <pre>All tests successful.
+Files=16, Tests=292
+Result: PASS</pre>
+        <p style="margin-top:0.55rem;">292 passing tests means your backend is complete and correct. You just built it from source.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="step">
+    <div class="step-num">7</div>
+    <div class="step-body">
+      <h2>Start the app</h2>
+      <p>The frontend lives in <code>app/</code> and has its own dependencies.</p>
+      <div class="cmd">
+        <span class="where">osubb-app / app</span>
+        <pre><code>cd app
+npm install
+cp .env.example .env.local      <span class="hint"># PowerShell: copy .env.example .env.local</span>
+npm run dev</code></pre>
+      </div>
+      <p><code>.env.local</code> tells the app where the backend is. It's git-ignored on purpose — everyone has their own, and real keys must never land in the repository.</p>
+      <p>Open <code>http://localhost:5173</code>. Leave this terminal running; it rebuilds as you edit. Open a <strong>second terminal</strong> for everything else.</p>
+      <div class="check">
+        <b>Checkpoint</b>
+        <p>The browser shows an OSUBB page rather than an error.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="step">
+    <div class="step-num">8</div>
+    <div class="step-body">
+      <h2>Look around</h2>
+      <p>Three things worth five minutes each.</p>
+      <p><strong>Studio</strong> (<code>127.0.0.1:54323</code>) — the database in a browser. Table Editor → <code>profiles</code>, <code>tasks</code>, <code>points_ledger</code>. Real data you can query. <strong>Look, don't edit:</strong> anything you click in here disappears at your next <code>db reset</code>, because the only durable way to change the database is a migration file.</p>
+      <p><strong>Mailpit</strong> (<code>127.0.0.1:54324</code>) — a fake inbox that catches every email the app sends locally. Empty right now. When you test an invitation, the magic link lands here instead of at a real address.</p>
+      <p><strong>The demo accounts.</strong> The seed creates eight, one per role. Password for all of them: <code>parola123</code>.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Email</th><th>Role</th><th>What they show</th></tr></thead>
+          <tbody>
+            <tr><td><code>recrut@demo.osubb</code></td><td>Recrut</td><td>the smallest view: 4 events, 6 tasks</td></tr>
+            <tr><td><code>voluntar@demo.osubb</code></td><td>Voluntar</td><td>a normal member with points and a team</td></tr>
+            <tr><td><code>activ@demo.osubb</code></td><td>Membru Activ</td><td>a sanction on the ledger</td></tr>
+            <tr><td><code>vot@demo.osubb</code></td><td>Drept de Vot</td><td>top of the leaderboard</td></tr>
+            <tr><td><code>responsabil@demo.osubb</code></td><td>Responsabil</td><td>task management, two departments</td></tr>
+            <tr><td><code>bce@demo.osubb</code></td><td>BCE</td><td>the volunteers directory</td></tr>
+            <tr><td><code>bc@demo.osubb</code></td><td>BC</td><td>everything: 7 events, 16 tasks</td></tr>
+            <tr><td><code>moderator@demo.osubb</code></td><td>Moderator</td><td>the moderation view</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Signing in as two of them and seeing different data — with no conditional code anywhere in the app — is the clearest demonstration of how this project works. The database decides what you can see.</p>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="step">
+    <div class="step-num">9</div>
+    <div class="step-body">
+      <h2>Your first change</h2>
+      <p>The loop, every time, forever:</p>
+      <div class="cmd">
+        <span class="where">osubb-app</span>
+        <pre><code>git checkout main &amp;&amp; git pull          <span class="hint"># start from the latest code</span>
+git checkout -b feat/scurta-descriere  <span class="hint"># your own branch — never work on main</span>
+
+<span class="hint"># … make your change …</span>
+
+npx supabase db reset &amp;&amp; npx supabase test db   <span class="hint"># backend work</span>
+cd app &amp;&amp; npm run typecheck &amp;&amp; npm run lint &amp;&amp; npm run build   <span class="hint"># frontend work</span>
+
+git add -A
+git commit -m "feat: ce ai făcut"
+git push -u origin feat/scurta-descriere
+gh pr create --title "Titlu" --body "Closes #&lt;numărul issue-ului&gt;"</code></pre>
+      </div>
+      <p>Then the robot tests your pull request, someone reviews it, and it gets merged. Pick work from <code>gh issue list --label max-1h --state open</code> — every issue carries its goal, the reasoning, the steps and its acceptance criteria.</p>
+      <p>Read <code>docs/agents/onboarding.md</code> before your first real issue. It's the tour of the codebase and the list of traps we have already fallen into.</p>
+    </div>
+  </div>
+
+</section>
+
+<section>
+  <span class="eyebrow">Troubleshooting</span>
+  <h2>When something breaks</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>What you see</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td><code>Cannot connect to the Docker daemon</code></td><td>Docker Desktop isn't running. Start it, wait for the whale, retry.</td></tr>
+        <tr><td><code>port is not available</code> / <code>access permissions</code> <em>(Windows)</em></td><td>Windows grabbed our ports after a reboot. Administrator PowerShell: <code>net stop winnat</code> then <code>net start winnat</code>, retry.</td></tr>
+        <tr><td><code>wsl</code> errors while installing Docker</td><td>Administrator PowerShell: <code>wsl --install</code>, restart. If it mentions virtualization, enable it in the BIOS.</td></tr>
+        <tr><td><code>npx: command not found</code></td><td>Node isn't installed, or the terminal predates the install. Open a new terminal.</td></tr>
+        <tr><td><code>supabase start</code> hangs for ages on the first run</td><td>Normal — it's downloading several GB. Leave it alone.</td></tr>
+        <tr><td>Tests fail on a fresh clone</td><td>Run <code>npx supabase db reset</code> first; the tests need the migrations applied.</td></tr>
+        <tr><td>Blank page, console says <code>Missing VITE_SUPABASE_URL</code></td><td>You skipped the <code>.env.local</code> copy in step 7. Copy it and restart <code>npm run dev</code>.</td></tr>
+        <tr><td>App says <em>“Contul tău nu este activ”</em></td><td>You signed in with an account that has no profile. Use one of the demo addresses.</td></tr>
+        <tr><td>Everything worked yesterday, nothing starts today</td><td>Docker restarted or updated. <code>npx supabase stop</code>, then <code>npx supabase start</code>.</td></tr>
+        <tr><td>Anything else</td><td>Screenshot it in the group chat with what you were doing. Setup problems are normal and are never “your fault”.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Afterwards</span>
+  <h2>The daily rhythm</h2>
+  <div class="cmd">
+    <span class="where">osubb-app</span>
+    <pre><code>npx supabase start     <span class="hint"># morning, once — needs Docker Desktop running</span>
+npx supabase stop      <span class="hint"># evening, frees the memory</span></code></pre>
+  </div>
+  <p>Your database survives a <code>stop</code>. <code>db reset</code> is what wipes and rebuilds it.</p>
+  <p>Rule of thumb: <strong>before you push, run the same checks CI will run.</strong> For backend work that's <code>db reset</code> and <code>test db</code>; for frontend work it's <code>typecheck</code>, <code>lint</code> and <code>build</code> inside <code>app/</code>. Green locally means green in CI, and a green CI means your work can be merged.</p>
+</section>
+
+<footer>
+  OSUBB app · laptop setup, from zero · the same guide lives in the repository at <code>docs/team/setup.md</code> · companions: <em>OSUBB Team Kickoff</em> (what we're building and why), <em>OSUBB Build Journal</em> (everything done so far), <em>Road to October</em> (everything left)
+</footer>
+
+</div>
