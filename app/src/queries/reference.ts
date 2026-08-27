@@ -62,3 +62,23 @@ export function useRoles() {
     },
   });
 }
+
+export type Team = {
+  id: string;
+  name: string;
+  dept_id: string | null;
+};
+
+export function useTeams() {
+  return useQuery({
+    queryKey: ['reference', 'teams'],
+    staleTime: Infinity,
+    queryFn: async (): Promise<Team[]> => {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('id, name, dept_id');
+      if (error) throw error;
+      return data;
+    },
+  });
+}

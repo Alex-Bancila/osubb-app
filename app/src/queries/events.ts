@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import type { Database } from '../lib/database.types';
@@ -34,6 +34,23 @@ export function useUpcomingEvents() {
 
       if (error) throw error;
       return data as EventRow[];
+    },
+  });
+}
+
+export type EventInsert = Database['public']['Tables']['events']['Insert'];
+
+export function useCreateEventMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (event: EventInsert) => {
+      const { data, error } = await supabase.from('events').insert(event);
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.events.upcoming() });
     },
   });
 }

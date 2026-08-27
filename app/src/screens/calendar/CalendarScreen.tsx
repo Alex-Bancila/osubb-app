@@ -1,7 +1,11 @@
-import { IonPage, IonContent, IonIcon } from '@ionic/react';
+import { useState } from 'react';
+import { IonPage, IonContent, IonIcon, IonButton } from '@ionic/react';
 import { useUpcomingEvents, type EventRow } from '../../queries/events';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { formatDate } from '../../lib/format';
+import { useAuth } from '../../lib/auth';
+import { can } from '../../lib/capabilities';
+import { AddEventModal } from './components/AddEventModal';
 import {
   alertOutline,
   calendarOutline,
@@ -10,6 +14,7 @@ import {
   peopleOutline,
   starOutline,
   personAddOutline,
+  addOutline,
 } from 'ionicons/icons';
 
 function getEventIcon(type: string) {
@@ -109,6 +114,10 @@ function EventLine({ event }: { event: EventRow }) {
 
 export default function CalendarScreen() {
   const { data: events, isLoading, error, refetch } = useUpcomingEvents();
+  const { claims } = useAuth();
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  const seesAllEvents = can(claims, 'seeAllEvents');
 
   if (isLoading) {
     return (
@@ -134,7 +143,30 @@ export default function CalendarScreen() {
     return (
       <IonPage>
         <IonContent className="ion-padding">
+          <div
+            className="page-head"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <div>
+              <h1 className="page-title">Calendar</h1>
+              <p className="page-sub">Evenimente viitoare programate</p>
+            </div>
+            {seesAllEvents && (
+              <IonButton onClick={() => setIsAddModalOpen(true)}>
+                <IonIcon slot="start" icon={addOutline} />
+                Adaugă activitate
+              </IonButton>
+            )}
+          </div>
           <Empty text="Niciun eveniment viitor." />
+          <AddEventModal
+            isOpen={isAddModalOpen}
+            onDidDismiss={() => setIsAddModalOpen(false)}
+          />
         </IonContent>
       </IonPage>
     );
@@ -158,11 +190,28 @@ export default function CalendarScreen() {
   return (
     <IonPage>
       <IonContent className="ion-padding">
-        <div className="page-head">
+        <div
+          className="page-head"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+          }}
+        >
           <div>
             <h1 className="page-title">Calendar</h1>
-            <p className="page-sub">Evenimente viitoare programate</p>
+            <p className="page-sub">
+              {seesAllEvents
+                ? 'Toate evenimentele organizației.'
+                : 'Evenimentele viitoare la care ai acces.'}
+            </p>
           </div>
+          {seesAllEvents && (
+            <IonButton onClick={() => setIsAddModalOpen(true)}>
+              <IonIcon slot="start" icon={addOutline} />
+              Adaugă activitate
+            </IonButton>
+          )}
         </div>
 
         <div className="col gap-5">
@@ -200,6 +249,11 @@ export default function CalendarScreen() {
             );
           })}
         </div>
+
+        <AddEventModal
+          isOpen={isAddModalOpen}
+          onDidDismiss={() => setIsAddModalOpen(false)}
+        />
       </IonContent>
     </IonPage>
   );
