@@ -10,7 +10,7 @@ The official *BRAND BOOK OSUBB 2025* and the repository's domain/capability mode
 
 ## Colour and department meaning
 
-Primary OSUBB colours are red `#ED2025`, black `#000000`, and white `#FFFFFF`. Use them for defining brand elements; the Brand Book reserves primary colours for representative elements such as logos, banners, and staging.
+Primary OSUBB colours are red `#ED2025`, black `#000000`, and white `#FFFFFF`. Use them for defining brand elements; the Brand Book uses primary colours preferentially for representative elements such as logos, banners, and staging.
 
 Department colour conveys department context, not role or permission:
 
@@ -34,7 +34,7 @@ The approved logo forms are:
 - **Logo principal cu extensie:** icon + acronym + full name
 - **Logo simplificat:** icon
 
-Use the approved full-colour, black, or white variants on a contrasting background, preserving the Brand Book clear space. Do not recolour, distort, alter elements, add shadows or other effects, or place a logo on a low-contrast background. Existing verified logo variants remain in `mockup/assets`; introducing or copying assets is outside this reference issue.
+Use the approved full-colour, black, or white variants on a contrasting background, preserving the Brand Book clear space. Do not recolour, distort, alter elements, add shadows or other effects, or place a logo on a low-contrast background. Candidate logo assets in `mockup/assets` are non-authoritative and must be verified against these approved Brand Book forms before use; introducing or copying assets is outside this reference issue.
 
 ## Voice and accessible interaction
 
