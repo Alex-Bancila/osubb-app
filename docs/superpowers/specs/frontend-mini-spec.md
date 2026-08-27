@@ -4,6 +4,8 @@
 
 ADR-0002 chose the stack. This fixes *how we use it*, so that every screen PR looks the same, two volunteers don't invent two architectures, and an Epic-9 issue can say "per §4 of the mini-spec" instead of re-deciding.
 
+Before frontend work, read the [OSUBB brand reference](../../brand/reference.md).
+
 Read this once before your first frontend issue. It is deliberately short; where it doesn't say, copy the nearest existing screen.
 
 ---
