@@ -1,0 +1,324 @@
+<title>OSUBB Team Kickoff</title>
+<style>
+  :root {
+    --bg: #FBFAF8; --ink: #241F1E; --muted: #6F6561; --accent: #C0161C;
+    --line: #E7E1DC; --surface: #F3EFEA; --good: #1D7A3E; --warn: #9A6A00; --code-bg: #F3EFEA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161415; --ink: #EBE6E3; --muted: #A69C97; --accent: #F0555B;
+      --line: #322D2E; --surface: #201D1E; --good: #5BBF7E; --warn: #E0A93E; --code-bg: #201D1E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161415; --ink: #EBE6E3; --muted: #A69C97; --accent: #F0555B;
+    --line: #322D2E; --surface: #201D1E; --good: #5BBF7E; --warn: #E0A93E; --code-bg: #201D1E;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 17px; line-height: 1.62; margin: 0; }
+  .wrap { max-width: 47rem; margin: 0 auto; padding: 3.5rem 1.25rem 6rem; }
+  h1 { font-size: clamp(2rem, 6vw, 3rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.08; margin: 0.4rem 0 0.8rem; text-wrap: balance; }
+  h2 { font-size: 1.55rem; font-weight: 750; letter-spacing: -0.015em; margin: 0 0 0.9rem; text-wrap: balance; }
+  h3 { font-size: 1.08rem; font-weight: 700; margin: 1.9rem 0 0.5rem; }
+  p { margin: 0 0 1.05rem; }
+  section { margin: 3.3rem 0 0; padding-top: 2.1rem; border-top: 1px solid var(--line); }
+  .eyebrow { display: block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.55rem; }
+  .lede { font-size: 1.12rem; color: var(--muted); text-wrap: balance; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  ul, ol { margin: 0 0 1.05rem; padding-left: 1.3rem; }
+  li { margin-bottom: 0.4rem; }
+  li::marker { color: var(--muted); }
+  code { font-family: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace; font-size: 0.88em; background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.08em 0.35em; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 0.9rem 1.1rem; overflow-x: auto; margin: 1rem 0 1.3rem; }
+  pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.6; }
+  .plain { background: var(--surface); border-left: 3px solid var(--accent); padding: 0.85rem 1.05rem; margin: 1.2rem 0 1.4rem; border-radius: 0 6px 6px 0; }
+  .plain .tag { display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.3rem; }
+  .plain p { margin: 0 0 0.6rem; font-size: 0.96rem; }
+  .plain p:last-child { margin-bottom: 0; }
+  .stats { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.6rem 0 0; }
+  .stat { flex: 1 1 7.5rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem 0.9rem; }
+  .stat b { display: block; font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 0.74rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.3rem; margin: 2rem 0 0; font-size: 0.95rem; }
+  nav.toc ol { margin: 0; padding-left: 1.4rem; }
+  nav.toc li { margin-bottom: 0.3rem; }
+  nav.toc a { text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  .tech { border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.2rem; margin: 0 0 1rem; }
+  .tech h3 { margin: 0 0 0.4rem; }
+  .tech .role { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 0.5rem; }
+  .tech p { font-size: 0.96rem; margin-bottom: 0.7rem; }
+  .tech p:last-child { margin-bottom: 0; }
+  .tablewrap { overflow-x: auto; margin: 1rem 0 1.4rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 0.45rem 0.9rem 0.45rem 0; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  td { padding: 0.5rem 0.9rem 0.5rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .pipeline { display: flex; align-items: stretch; margin: 1.3rem 0 0.4rem; overflow-x: auto; padding-bottom: 0.4rem; }
+  .pipe-step { flex: 1 1 0; min-width: 7.6rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem 0.75rem; }
+  .pipe-step b { display: block; font-size: 0.84rem; margin-bottom: 0.15rem; }
+  .pipe-step span { font-size: 0.76rem; color: var(--muted); line-height: 1.4; display: block; }
+  .pipe-arrow { align-self: center; flex: 0 0 auto; padding: 0 0.3rem; color: var(--accent); font-weight: 700; }
+  .pipe-caption { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.2rem; }
+  .check { list-style: none; padding-left: 0; }
+  .check li { padding-left: 1.7rem; position: relative; margin-bottom: 0.55rem; }
+  .check li::before { content: "☐"; position: absolute; left: 0.2rem; color: var(--accent); font-weight: 700; }
+  .chip { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.1rem 0.5rem; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--good); white-space: nowrap; }
+  footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">OSUBB · echipa IT · prima ședință de echipă</span>
+  <h1>OSUBB Team Kickoff</h1>
+  <p class="lede">Welcome to the team. This is everything you need for today's meeting: what we're building, what already works, the technologies we use (what each one is, why we picked it, how you'll actually use it), how we work together — and how to get your laptop ready before you leave. Updated August 24, 2026.</p>
+
+  <div class="stats">
+    <div class="stat"><b>Sep 15</b><span>demo for BC</span></div>
+    <div class="stat"><b>Oct 1</b><span>live · BC/BCE</span></div>
+    <div class="stat"><b>Nov</b><span>whole org</span></div>
+    <div class="stat"><b>≤1h</b><span>per task, by design</span></div>
+  </div>
+
+  <nav class="toc" aria-label="Agenda">
+    <ol>
+      <li><a href="#what">What we're building, in two minutes</a></li>
+      <li><a href="#done">What already works (live demo)</a></li>
+      <li><a href="#stack">The technologies — what, why, how</a></li>
+      <li><a href="#how">How we work together</a></li>
+      <li><a href="#setup">Set up your laptop (do this today)</a></li>
+      <li><a href="#first">Your first week</a></li>
+      <li><a href="#faq">Questions you'll probably ask</a></li>
+    </ol>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<section id="what">
+  <span class="eyebrow">1 · The mission</span>
+  <h2>What we're building, in two minutes</h2>
+  <p>One internal app for the whole organization: every member sees their <strong>tasks</strong>, earns <strong>points</strong> when work is graded (difficulty × quality — the official scoring guide), follows the <strong>calendar</strong> and RSVPs, reads <strong>announcements</strong>, gets <strong>notifications</strong>. BC manages roles, awards and sanctions in the same place. Promotions up to Membru Activ happen <em>automatically</em> (time / points thresholds); everything above stays a BC decision.</p>
+  <p>It replaces the spreadsheet-and-WhatsApp system with something that is always up to date, visible to exactly the right people, and fun enough (leaderboard, dept cup 🏆) that people actually use it.</p>
+  <p>Three dates matter: <strong>September 15</strong> — full demo for BC · <strong>October 1</strong> — live for the ~20 BC/BCE members · <strong>November</strong> — the whole organization, timed with recruitment. Version 1 is deliberately small so a student team actually hits these dates; QR check-in, native forms, calendar sync and phone-store apps are all planned for later phases, in writing.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="done">
+  <span class="eyebrow">2 · Status</span>
+  <h2>What already works — things I can show you right now</h2>
+
+  <div class="plain">
+    <span class="tag">Update — August 24</span>
+    <p>Everything below is now true, not aspirational: the backend for the whole v1 core is complete, secured, tested, and has real demo data sitting on our shared staging server. The only thing missing is the screen you'd click on — that starts this week.</p>
+  </div>
+
+  <ul>
+    <li><strong>The entire database backend of v1's core is built and tested:</strong> members, roles (8 levels), departments, teams, tasks, the points engine, calendar/RSVP, announcements, notifications, and the full security model — <strong>17 migrations</strong>.</li>
+    <li><strong>266 automated tests across 15 suites</strong> guard all of it — the points math, every permission fence, the demo data itself. They run on every proposed change, automatically.</li>
+    <li><strong>Accounts are real, not theoretical:</strong> the invite-member function exists, is tested (11 of its own tests), and has been proven end-to-end — BC invites an email, a magic link arrives, the person logs in with the right role stamped on their token.</li>
+    <li><strong>Security done properly, and re-checked:</strong> the app is invite-only, RLS enforces every row, and a dedicated audit found and closed 12 policies that would have let a <em>deactivated</em> member keep reading or writing data — the fix is now a permanent rule (house rule 12) with a test that fails by name if it's ever reintroduced.</li>
+    <li><strong>Demo data is live on staging:</strong> 8 logins (one per role, password <code>parola123</code>), 16 tasks with a real leaderboard, a full calendar, announcements — and a workflow that can refresh it before any demo without touching real people's accounts.</li>
+    <li><strong>The whole remaining plan exists as 58 open GitHub issues,</strong> almost all sized at <strong>≤1 hour each</strong>, every one with steps and acceptance criteria.</li>
+  </ul>
+  <p>What does <em>not</em> exist yet: the user interface. That's this sprint — and it's where you come in. The plan for how (folder structure, routes, data conventions, theming) is already written down, so nobody has to invent it mid-screen.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="stack">
+  <span class="eyebrow">3 · The stack</span>
+  <h2>The technologies — what each is, why we chose it, how you'll use it</h2>
+
+  <div class="tech">
+    <h3>Git + GitHub</h3>
+    <span class="role">version control · collaboration · the backlog</span>
+    <p><strong>What:</strong> Git records every change to the code as a snapshot ("commit") with a message; GitHub hosts the shared copy plus our task list (Issues) and code review (Pull Requests). Nothing important lives only on someone's laptop, and anything can be undone.</p>
+    <p><strong>Why:</strong> it's the universal standard — every internship and job you'll ever apply to uses it. For us specifically: review-before-merge is how a team of beginners ships safely, and the issue tracker <em>is</em> our project plan.</p>
+    <p><strong>How you'll use it:</strong> <code>git checkout -b feat/my-task</code> → edit → <code>git commit</code> → <code>git push</code> → open a Pull Request → I review → merge. You'll do this loop so often it becomes muscle memory. Issues labeled <code>max-1h</code> are your menu; each contains its own instructions.</p>
+  </div>
+
+  <div class="tech">
+    <h3>Docker</h3>
+    <span class="role">runs the entire backend on your laptop, identically for everyone</span>
+    <p><strong>What:</strong> Docker packages a piece of software together with everything it needs to run — the exact OS libraries, the exact database version — into a <strong>container</strong>: a small, isolated, disposable copy of a whole machine. When you run <code>npx supabase start</code>, it isn't installing a database on your computer; it's downloading and starting eight or nine containers (Postgres, the Auth server, the API gateway, Studio, Mailpit, and a few more) that together <em>are</em> Supabase, wired up to talk to each other.</p>
+    <p><strong>Why:</strong> without it, "install Postgres 17.4 with these exact extensions, this auth server, this API layer, configured to match production" would be an afternoon per laptop, and a different afternoon for every OS. With it, everyone on the team — Windows, Mac, Linux — runs <em>the same backend</em>, because a container doesn't care what's installed around it. It's also the reason nothing you do locally can damage anything real: containers are throwaway. Delete them, they're gone; nothing on your actual machine was ever touched.</p>
+    <p><strong>How you'll use it:</strong> mostly you won't think about it directly — <code>npx supabase start</code>/<code>stop</code> manages the containers for you. What you <em>do</em> need: Docker Desktop installed and <strong>running</strong> (there's a whale icon in your system tray/menu bar — if it's not there, nothing else in section 5 will work) before you run any Supabase command. If a command ever says "cannot connect to Docker", that whale isn't running yet.</p>
+  </div>
+
+  <div class="tech">
+    <h3>Supabase</h3>
+    <span class="role">the entire backend: database + login + server functions</span>
+    <p><strong>What:</strong> a hosted backend service built on <strong>PostgreSQL</strong>, the world's most trusted open-source database. Supabase gives us the database, the login system (magic links — no passwords!), auto-generated APIs, and small server functions, all in one. Locally, the exact same stack runs on your laptop in Docker (see above).</p>
+    <p><strong>Why:</strong> we compared it against Firebase and building our own server. Supabase won because (1) it's just Postgres — real SQL, a skill worth learning, no vendor lock-in; (2) its <strong>Row-Level Security</strong> is a perfect fit for our 8-roles × 5-departments permission model; (3) the free tier covers development, and production costs ~$25/month total. An NGO budget likes that.</p>
+    <p><strong>How you'll use it:</strong> three commands, honestly: <code>npx supabase start</code> (boot the local backend), <code>npx supabase db reset</code> (rebuild the database from scratch, migrations + demo data — your safety net: you literally cannot break anything permanently), <code>npx supabase test db</code> (run all tests). Plus two local websites: <strong>Studio</strong> at <code>127.0.0.1:54323</code> — a visual browser for your database — and <strong>Mailpit</strong> at <code>127.0.0.1:54324</code> — a fake inbox that catches every email the app sends locally.</p>
+  </div>
+
+  <div class="tech">
+    <h3>SQL migrations</h3>
+    <span class="role">how the database changes, safely</span>
+    <p><strong>What:</strong> we never click around editing the database by hand. Every change to its structure is a numbered file of SQL in <code>supabase/migrations/</code>. Every environment — your laptop, mine, the test server, production — replays the same files in the same order and ends up identical.</p>
+    <p><strong>Why:</strong> "it works on my machine" dies here. Database structure becomes code: reviewable in a PR, versioned in git, reproducible forever. It's also how professionals do it everywhere.</p>
+    <p><strong>How:</strong> <code>npx supabase migration new my_change</code> creates the file, you write SQL in it, <code>db reset</code> applies it. The issue you picked tells you exactly what SQL — usually adapted from the architecture spec.</p>
+  </div>
+
+  <div class="tech">
+    <h3>Row-Level Security (RLS) + JWT claims</h3>
+    <span class="role">who sees what — enforced by the database itself</span>
+    <p><strong>What:</strong> RLS is a bouncer living <em>inside</em> Postgres: written policies filter every query row by row ("your department's tasks: yes; another's ledger: no"). When you log in, your token (JWT) gets stamped with your role, level, departments and teams, and the policies read those stamps.</p>
+    <p><strong>Why:</strong> permission logic lives in exactly ONE place. No bug in any screen — today or two years from now — can leak data the policies forbid. For an app holding personal data of 200 students, this is the difference between "we hope it's fine" and "it's enforced" — and we proved the difference matters: an audit this week found 12 policies that only excluded logged-out visitors, not <em>un-invited or deactivated</em> ones, and closed every one.</p>
+    <p><strong>How:</strong> mostly you'll just <em>benefit</em>: your screen queries return exactly what the logged-in user may see, automatically. When you do write a policy (some ≤1h issues are policies), you copy the pattern from an existing one and write tests proving who can't see what.</p>
+  </div>
+
+  <div class="tech">
+    <h3>pgTAP tests + GitHub Actions (CI)</h3>
+    <span class="role">the safety net that lets beginners ship</span>
+    <p><strong>What:</strong> pgTAP is how we write database tests ("grade a difficulty-3 task with rating 4 → assert exactly 6 points"). GitHub Actions is the robot that, on every PR, builds a fresh database from zero, applies all migrations, and runs all 266 tests. Red ✗ = not mergeable. Green ✓ = safe.</p>
+    <p><strong>Why:</strong> because of this robot, <em>you cannot break the app</em>. Worst case, your PR goes red and you try again — nothing bad ever reaches the main code or the servers. This is what makes it safe to hand real work to new contributors in week one.</p>
+    <p><strong>How:</strong> run the same checks locally before pushing (<code>db reset</code> + <code>test db</code>); when your issue says "add tests", copy an existing test file's structure — fixtures, action, assertions.</p>
+  </div>
+
+  <div class="tech">
+    <h3>Deno (Edge Functions)</h3>
+    <span class="role">the small amount of logic too privileged for the database or the client</span>
+    <p><strong>What:</strong> Deno is a JavaScript/TypeScript runtime, like Node.js but simpler and more secure by default. Supabase runs our server-side functions on it — right now, exactly one: <code>invite-member</code>, the function BC calls to invite someone.</p>
+    <p><strong>Why:</strong> RLS answers "who can read/write which row", but "send an email inviting a brand-new person" needs a privilege no logged-in client should ever hold (the ability to create accounts). That belongs in a small, auditable server function, not scattered in the frontend.</p>
+    <p><strong>How:</strong> you likely won't touch this early on — it's one function, already built and tested. If you do: the logic lives behind a small interface (<code>deps.ts</code>) so it can be tested without a real server, which is how its 11 tests run in under a second.</p>
+  </div>
+
+  <div class="tech">
+    <h3>React + TypeScript + Ionic (+ Capacitor later)</h3>
+    <span class="role">the user interface — starts this sprint</span>
+    <p><strong>What:</strong> React builds the interface out of components; TypeScript is JavaScript with types (the editor catches your mistakes before you run anything); Ionic provides polished mobile-feeling components (tabs, lists, dialogs); Capacitor can later wrap the same app into real Android/iOS store apps without rewriting.</p>
+    <p><strong>Why:</strong> our "desktop" is really a browser and our members live on phones → one web codebase that works everywhere, installable as an app (PWA), store apps later for free. React+TS is also the single most employable frontend skill you can practice right now. (We seriously evaluated Flutter — decision and reasoning written down in ADR-0002.)</p>
+    <p><strong>How:</strong> <code>npm run dev</code> inside <code>app/</code>, edit a component, the browser refreshes instantly. Screen issues are sliced ≤1h: "render this list", "add this button". Two helpers do the heavy lifting: <strong>TanStack Query</strong> (fetching + caching + loading/error states) and <strong>AG Grid</strong> (the powerful tables for tracker &amp; directory). Exactly how we use all of this is written down in the frontend mini-spec — read it once before your first screen issue.</p>
+  </div>
+
+  <div class="tech">
+    <h3>Cloudflare Pages · Bitwarden · Claude</h3>
+    <span class="role">hosting · secrets · the AI teammate</span>
+    <p><strong>Cloudflare Pages</strong> will host the frontend for free once it exists — every merge deploys automatically; every PR even gets its own preview link reviewers can click.</p>
+    <p><strong>Bitwarden</strong> holds all passwords/keys/tokens. Iron rule: <strong>secrets never go into git</strong> — git history is forever. If you ever see a key in code, say something immediately; that's a save, not a mistake.</p>
+    <p><strong>Claude</strong> (AI coding agent) is a teammate here: issues labeled <code>ready-for-agent</code> are specified precisely enough that Claude can implement them under review. It built most of the current backend — every line still went through PR review, tests and CI like anyone else's work. You'll learn to drive it in training session 2; "supervising an AI + reviewing its output" is a genuinely modern skill.</p>
+  </div>
+
+  <h3>How it all fits together</h3>
+  <div class="pipeline" role="img" aria-label="Architecture: app in browser talks to Supabase which contains auth, Postgres with RLS, and edge functions">
+    <div class="pipe-step"><b>The app</b><span>React + Ionic, in your browser / on your phone</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>Supabase Auth</b><span>magic-link login, stamps your role into the token</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>PostgreSQL + RLS</b><span>data + permissions + points engine (triggers, views)</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>Edge Functions</b><span>admin actions: invites, CSV import</span></div>
+  </div>
+  <p class="pipe-caption">No custom server to babysit: the database does data <em>and</em> permissions <em>and</em> the points math; tiny functions handle the few admin superpowers. Docker is what runs all four boxes on your laptop, identically to everyone else's.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="how">
+  <span class="eyebrow">4 · The operating model</span>
+  <h2>How we work together</h2>
+
+  <div class="pipeline" role="img" aria-label="Work loop: pick issue, branch, build, verify, PR, merge and auto-deploy">
+    <div class="pipe-step"><b>1 · Pick</b><span>an open <code>max-1h</code> issue whose dependencies are done</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>2 · Branch</b><span>never work on <code>main</code></span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>3 · Build</b><span>follow the issue's steps</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>4 · Verify</b><span>reset + tests green locally</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>5 · PR</b><span>"Closes #n" → CI runs</span></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><b>6 · Merge</b><span>review → merge → staging updates itself</span></div>
+  </div>
+  <p class="pipe-caption">One issue = one branch = one PR. Small, boring, unstoppable. One extra rule learned the hard way: never open a PR whose base is another unmerged branch (a "stacked" PR) — it cost us two recoveries. If your work depends on something not yet on <code>main</code>, ask first.</p>
+
+  <ul>
+    <li><strong>Sprints:</strong> two weeks of building + a 3-day review buffer. Weekly 30-minute sync; quick async check-ins Monday &amp; Thursday in the group chat. Demo at every sprint end.</li>
+    <li><strong>Review:</strong> I review every PR while we ramp up; after your ~5th merged PR we move to peer review (I stay on migrations &amp; security). Reviews are teaching, not gatekeeping — expect comments, they're the fastest way to learn.</li>
+    <li><strong>Definition of done:</strong> migration applies on reset · tests pass (and would fail if your feature were removed) · CI green · the issue's checkboxes ticked · PR says <code>Closes #n</code>.</li>
+    <li><strong>Where everything is written down:</strong> <code>CONTEXT.md</code> (our vocabulary) · <code>docs/adr/</code> (why each big decision) · <code>docs/roadmap.md</code> (the calendar) · <code>docs/team/team-plan.md</code> (this operating model) · <code>docs/agents/onboarding.md</code> (the "continue from here" guide, codebase tour + known traps) · <code>docs/backend/implementation-issues.md</code> (the backlog map) · the architecture spec in <code>docs/superpowers/specs/</code>. If you wonder "why is X like this?" — the answer has a file.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="setup">
+  <span class="eyebrow">5 · Hands-on</span>
+  <h2>Set up your laptop — do this before you leave today</h2>
+  <p>Install (all free): <strong>Git</strong> (git-scm.com) · <strong>Node.js LTS</strong> (nodejs.org) · <strong>Docker Desktop</strong> (docker.com — start it and let it finish, then leave it running) · <strong>GitHub CLI</strong> (cli.github.com) · <strong>VS Code</strong> (code.visualstudio.com). Make a GitHub account if you don't have one and send me your username for repo access.</p>
+
+  <pre><code># 1 · connect GitHub and get the code
+gh auth login                        # browser login, defaults are fine
+git clone https://github.com/Alex-Bancila/osubb-app.git
+cd osubb-app
+
+# 2 · boot the backend (first run downloads ~2–3 GB of Docker images, be patient)
+npx supabase start
+
+# 3 · build the database + run every test
+npx supabase db reset                # applies migrations, then seeds demo data
+npx supabase test db                 # expect: "All tests successful" ✅ (266 tests)
+
+# 4 · look around
+#   Studio (database browser):  http://127.0.0.1:54323
+#   Mailpit (fake email inbox): http://127.0.0.1:54324
+#   Try logging into the app once it exists with voluntar@demo.osubb / parola123
+</code></pre>
+
+  <p>If all four steps worked: <strong>you are fully set up</strong> — you just built the entire OSUBB backend from source, populated it with realistic demo data, and proved it correct on your own machine.</p>
+
+  <div class="plain">
+    <span class="tag">If something breaks</span>
+    <p><strong>"Cannot connect to Docker"</strong> → Docker Desktop isn't running; start it, wait for the whale, retry.</p>
+    <p><strong>"Port is not available / access permissions" (Windows)</strong> → Windows reserved our ports after a reboot. In an <em>administrator</em> PowerShell: <code>net stop winnat</code> then <code>net start winnat</code>, retry.</p>
+    <p><strong>Anything else</strong> → screenshot in the group chat. Setup problems are normal and are never "your fault".</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="first">
+  <span class="eyebrow">6 · Onboarding</span>
+  <h2>Your first week</h2>
+  <ul class="check">
+    <li>Laptop set up (section 5) and repo access confirmed.</li>
+    <li>Read <code>CONTEXT.md</code> (15 min) — our shared vocabulary: tiers, points, suppression, the role ladder.</li>
+    <li>Read <code>docs/agents/onboarding.md</code> (15 min) — the current state of the codebase and the known traps, written for exactly this moment.</li>
+    <li>Training 1: <strong>Git &amp; the PR loop</strong> — we do one tiny PR together, end to end.</li>
+    <li>Training 2: <strong>working with Claude</strong> — pick a <code>ready-for-agent</code> issue, watch it implemented, learn to review the result.</li>
+    <li>Training 3: <strong>architecture walkthrough</strong> — the spec, the RLS mental model, where answers live. (All three sessions are recorded for whoever joins later.)</li>
+    <li>Your first issue, <strong>paired with me</strong>: something from the starter menu — <a href="https://github.com/Alex-Bancila/osubb-app/issues/6">#6</a> (two small schema columns), <a href="https://github.com/Alex-Bancila/osubb-app/issues/47">#47</a> (AG eligibility view), <a href="https://github.com/Alex-Bancila/osubb-app/issues/134">#134</a> (a small, well-described bug fix) — or, if screens interest you more than SQL, <a href="https://github.com/Alex-Bancila/osubb-app/issues/80">#80</a> (scaffold the frontend workspace) is the very next thing on the board. Each is under an hour and fully spelled out.</li>
+    <li>Your second issue, solo (I review). By week two you're a contributor, not a trainee.</li>
+  </ul>
+  <p>Capacity honesty, because we're students: the plan already assumes recruitment load in October and exams in January and June. Real life wins; the sprint buffer exists precisely so nobody has to be a hero.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="faq">
+  <span class="eyebrow">7 · FAQ</span>
+  <h2>Questions you'll probably ask</h2>
+
+  <h3>"What if I break something?"</h3>
+  <p>You can't, structurally. Your work happens on a branch; the robot tests every PR on a throwaway database; nothing reaches <code>main</code> or the servers without a green ✓ and a review; and your local database rebuilds from zero with one command. The system is <em>designed</em> to make experimenting safe.</p>
+
+  <h3>"Why no passwords anywhere?"</h3>
+  <p>Sign-up is disabled — accounts exist only by BC invitation, delivered as a <strong>magic link</strong> by email. Nobody generates, distributes, forgets or leaks passwords. And even an account that somehow authenticates without being invited (or was invited and later deactivated) sees exactly zero rows — the database denies by default, and we specifically re-audited that this holds for deactivated members too, not just strangers (ADR-0003).</p>
+
+  <h3>"Why not Firebase like every YouTube tutorial?"</h3>
+  <p>Firebase is a document store with permission rules bolted on; our app is <em>relational</em> (members ↔ departments ↔ tasks ↔ points) with a subtle 8-role permission model. Postgres + RLS fits that natively, SQL is a better skill to learn, and there's no lock-in. The full comparison is written down in the tech-stack doc and ADR-0001.</p>
+
+  <h3>"Why can't I just edit the database in Studio?"</h3>
+  <p>Locally, for <em>looking around</em> — absolutely, that's what Studio is for. But changes that should persist must be migrations, or they exist only on your laptop and die at the next reset. Rule: Studio to explore, migrations to change.</p>
+
+  <h3>"An AI wrote the backend — is that safe? What's left for me?"</h3>
+  <p>Every AI-written line went through the same review, tests and CI as human code — that's the point of the pipeline: it doesn't trust <em>anyone</em>. It even caught its own mistake once — a security audit found and fixed 12 leaky policies before they reached real data. What's left for you is plenty: the entire UI, the remaining policies, reviewing, and learning to direct AI effectively — which is how software is increasingly built everywhere. You're not competing with the tool; you're learning to conduct it.</p>
+
+  <h3>"What do I do when I'm stuck?"</h3>
+  <p>15-minute rule: try for 15 minutes, then ask in the chat with a screenshot and what you tried. Asking early is a team norm here, not a weakness — it's literally in the team plan.</p>
+</section>
+
+<footer>
+  OSUBB app · team kickoff handout · updated August 24, 2026 · companions: the <em>OSUBB Build Journal</em> (everything done so far, explained) and <em>Road to October</em> (every remaining task, with instructions) — ask Alex for the links · repo: github.com/Alex-Bancila/osubb-app
+</footer>
+
+</div>
