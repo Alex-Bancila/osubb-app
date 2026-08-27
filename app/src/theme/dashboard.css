@@ -1,0 +1,231 @@
+/* ============================================================================
+   Acasă (#93–#95): the points hero, and the two standings cards under it.
+
+   Nothing here is a colour — the department bars take theirs from the
+   `departments.color` column at runtime, through the `--dept` variable each
+   row sets. This file only decides how much of it to show.
+   ========================================================================== */
+
+/* ---------- the hero: my total, my role, my rank ---------- */
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-5);
+  padding: var(--s-6);
+}
+
+.hero-main {
+  min-width: 0;
+}
+
+.hero-label {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.hero-value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-extrabold);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-unit {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px 4px 9px;
+  border-radius: var(--r-pill);
+  background: var(--ink-900);
+  color: var(--white);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+}
+.role-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+/* The rank sits in its own tinted well rather than as a third line of text:
+   it is the answer to a different question from "how many points", and the
+   eye should be able to go straight to it. */
+.hero-rank {
+  flex: 0 1 auto;
+  min-width: 168px;
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-md);
+  background: var(--red-050);
+  text-align: center;
+}
+
+.hero-rank-value {
+  display: block;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-extrabold);
+  line-height: 1.1;
+  color: var(--red-600);
+  font-variant-numeric: tabular-nums;
+}
+.hero-rank-hash {
+  font-size: var(--fs-md);
+  vertical-align: 0.12em;
+  margin-right: 1px;
+  opacity: 0.75;
+}
+
+.hero-rank-total {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.hero-rank-note {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* ---------- the two standings cards ---------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  align-items: start;
+  gap: var(--s-5);
+}
+
+@media (max-width: 900px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero {
+    padding: var(--s-5);
+  }
+  .hero-rank {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---------- Cupa Departamentelor ---------- */
+.cup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.cup-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.cup-tag {
+  min-width: 3.6rem;
+  padding: 3px var(--s-2);
+  border-radius: var(--r-xs);
+  text-align: center;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: 0.04em;
+  color: var(--dept);
+  background: color-mix(in srgb, var(--dept) 13%, transparent);
+}
+
+.cup-body {
+  min-width: 0;
+}
+
+.cup-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.cup-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.cup-points {
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.cup-track {
+  height: 7px;
+  margin-top: var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.cup-bar {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--dept);
+  transition: width var(--transition);
+}
+
+.cup-members {
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below ~420px the row cannot hold tag + name + points + "3 membri". The count
+   drops to the second line, under the bar, where it is still readable. */
+@media (max-width: 420px) {
+  .cup-list li {
+    grid-template-columns: auto 1fr;
+  }
+  .cup-members {
+    grid-column: 2;
+    margin-top: 2px;
+  }
+}
+
+/* The brand colours are chosen for white paper: Educational's navy and PR's
+   purple are unreadable as text on a dark surface. Lighten the label (only the
+   label — the bars stay the real colour) and lift the tint to match. */
+:root[data-theme='dark'] .cup-tag {
+  color: color-mix(in srgb, var(--dept) 52%, white);
+  background: color-mix(in srgb, var(--dept) 24%, transparent);
+}

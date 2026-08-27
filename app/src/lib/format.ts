@@ -27,6 +27,26 @@ export function formatDate(iso: string | null): string {
   }).format(new Date(iso));
 }
 
+/** `miercuri, 26 august 2026` — long form, for the one date a screen leads with. */
+export function formatLongDate(date: Date): string {
+  return new Intl.DateTimeFormat('ro-RO', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+/**
+ * `Ioana` from `Ioana Popescu`.
+ *
+ * The app greets a person, not a row — and a Romanian first name is the first
+ * word here, unlike the surname-first order some registries use.
+ */
+export function firstName(fullName: string | null | undefined): string {
+  return fullName?.trim().split(/\s+/)[0] ?? '';
+}
+
 /** Two letters for an avatar, from a name if we have one, else an address. */
 export function initials(nameOrEmail: string | undefined | null): string {
   if (!nameOrEmail) return '?';
