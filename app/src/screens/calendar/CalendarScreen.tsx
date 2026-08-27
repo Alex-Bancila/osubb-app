@@ -1,5 +1,9 @@
 import { IonPage, IonContent, IonIcon } from '@ionic/react';
-import { useUpcomingEvents, type EventRow } from '../../queries/events';
+import {
+  useUpcomingEvents,
+  useRsvpMutation,
+  type UpcomingEvent,
+} from '../../queries/events';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { formatDate } from '../../lib/format';
 import {
@@ -10,6 +14,7 @@ import {
   peopleOutline,
   starOutline,
   personAddOutline,
+  checkmarkOutline,
 } from 'ionicons/icons';
 
 function getEventIcon(type: string) {
@@ -53,7 +58,8 @@ function getDeptColorClass(deptId: string | null) {
   return `dept-${deptId}`;
 }
 
-function EventLine({ event }: { event: EventRow }) {
+function EventLine({ event }: { event: UpcomingEvent }) {
+  const { mutate: rsvp } = useRsvpMutation();
   const isCall = event.type === 'call';
   const isDl = event.type === 'deadline';
   const deptClass = getDeptColorClass(event.dept_id);
@@ -61,6 +67,10 @@ function EventLine({ event }: { event: EventRow }) {
     event.starts_at && event.starts_at.includes('T')
       ? event.starts_at.substring(11, 16)
       : '—';
+
+  const attendance = event.event_attendance?.[0];
+  const isGoing = attendance?.status === 'going';
+  const isDeclined = attendance?.status === 'declined';
 
   return (
     <div
@@ -103,6 +113,77 @@ function EventLine({ event }: { event: EventRow }) {
           <span>{timeStr !== '—' ? timeStr : '—'}</span>
         </div>
       </div>
+
+      {!isDl && (
+        <div
+          className="list-side"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            alignItems: 'flex-end',
+          }}
+        >
+          {event.capacity != null && (
+            <span
+              style={{
+                fontSize: '11px',
+                color: 'var(--gray-500)',
+                fontWeight: 500,
+              }}
+            >
+              Cap: {event.capacity}
+            </span>
+          )}
+          {isGoing ? (
+            <span
+              className="badge badge--green"
+              onClick={(e) => {
+                e.stopPropagation();
+                rsvp({ eventId: event.id, status: 'declined' });
+              }}
+            >
+              <IonIcon icon={checkmarkOutline} style={{ marginRight: '4px' }} />{' '}
+              Vin
+            </span>
+          ) : isDeclined ? (
+            <span
+              className="badge badge--red"
+              onClick={(e) => {
+                e.stopPropagation();
+                rsvp({ eventId: event.id, status: 'going' });
+              }}
+            >
+              Nu vin
+            </span>
+          ) : (
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  rsvp({ eventId: event.id, status: 'going' });
+                }}
+              >
+                Vin
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{
+                  color: 'var(--danger-500)',
+                  borderColor: 'var(--danger-200)',
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  rsvp({ eventId: event.id, status: 'declined' });
+                }}
+              >
+                Nu
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -141,7 +222,7 @@ export default function CalendarScreen() {
   }
 
   // Group events by local date string
-  const groupedEvents: Record<string, EventRow[]> = {};
+  const groupedEvents: Record<string, UpcomingEvent[]> = {};
   events.forEach((event) => {
     // get just the date part for grouping
     const datePart = event.starts_at
