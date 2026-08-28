@@ -18,13 +18,32 @@ export function formatPoints(points: number): string {
   return points < 0 ? `−${formatted}` : formatted;
 }
 
+/** Parse a PostgreSQL `date` as a local calendar date, never as a UTC instant. */
+export function parseLocalDate(value: string | null): Date | null {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(year, month - 1, day);
+
+  return date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+    ? date
+    : null;
+}
+
 /** `12 mar.` — short, because task lists are scanned, not read. */
 export function formatDate(iso: string | null): string {
-  if (!iso) return '—';
+  const date = parseLocalDate(iso);
+  if (!date) return '—';
   return new Intl.DateTimeFormat('ro-RO', {
     day: 'numeric',
     month: 'short',
-  }).format(new Date(iso));
+  }).format(date);
 }
 
 /** `miercuri, 26 august 2026` — long form, for the one date a screen leads with. */
