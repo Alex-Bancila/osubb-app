@@ -103,7 +103,7 @@ export function useMyStanding() {
  */
 export function useLeaderboard(limit = 10) {
   return useQuery({
-    queryKey: keys.points.leaderboard(),
+    queryKey: keys.points.leaderboard(limit),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leaderboard')
