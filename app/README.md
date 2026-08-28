@@ -130,16 +130,7 @@ can actually use, instead of an app that is silently empty.
   return to an origin on GoTrue's allow-list, and 5174 is not on it — so letting
   Vite quietly move to the next free port would produce a sign-in that fails for
   a reason nothing on screen explains. Better to be told the port is busy.
-- **`npm audit` reports two moderate advisories in `react-router` 6.** They are
-  real and they do not apply to us, so please don't "fix" them by force:
-  - _Arbitrary constructor injection in `deserializeErrors()`_ — server-side
-    rendering only. We are a pure SPA; the code path does not exist here.
-  - _Open redirect via backslash in `<Link>`/`useNavigate`_ — needs a navigation
-    target the user controls. Every destination in this app is a literal, and
-    `App.tsx` deliberately carries no "return to the page you wanted" through
-    the URL, so there is nothing to aim.
-
-  The fix is `react-router` 8, which `@ionic/react-router` 9 does not support
-  (it pins `>=6.4 <7`). We take Ionic's navigation — the thing ADR-0002 chose
-  Ionic for, and what makes tabs and native transitions work — and revisit when
-  Ionic supports a newer router.
+- **Routing uses `react-router` 7.18.2 directly.** The app uses declarative
+  `BrowserRouter` routing and retains Ionic as its component layer, without the
+  `@ionic/react-router` compatibility wrapper. `npm audit` has no router
+  advisories at this version.

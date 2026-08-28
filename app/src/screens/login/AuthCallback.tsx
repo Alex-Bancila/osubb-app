@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router';
 import { IonContent, IonPage, IonSpinner } from '@ionic/react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
