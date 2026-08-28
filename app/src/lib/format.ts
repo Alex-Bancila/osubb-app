@@ -28,8 +28,10 @@ export function parseLocalDate(value: string | null): Date | null {
   const month = Number(monthText);
   const day = Number(dayText);
   const date = new Date(year, month - 1, day);
+  date.setFullYear(year);
 
-  return date.getFullYear() === year &&
+  return year > 0 &&
+    date.getFullYear() === year &&
     date.getMonth() === month - 1 &&
     date.getDate() === day
     ? date
