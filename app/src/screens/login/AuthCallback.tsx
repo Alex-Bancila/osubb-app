@@ -1,32 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { IonContent, IonPage, IonSpinner } from '@ionic/react';
+import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 
-/* The failures a member can actually cause, said in the language the rest of
-   the app speaks. Anything unmapped falls through to GoTrue's own wording,
-   which is English but at least specific — better than swallowing a cause we
-   have not seen before. */
-const REASONS: Record<string, string> = {
-  otp_expired:
-    'Linkul a expirat sau a fost deja folosit. Cere unul nou mai jos.',
-  access_denied: 'Linkul nu mai este valabil.',
-  otp_disabled: 'Conectarea prin link nu este disponibilă pentru acest cont.',
-};
-
 /** Reads the failure GoTrue reports, whichever half of the URL it used. */
-function errorFromUrl(): string | null {
+function errorFromUrl(): { code?: string; message?: string } | null {
   const url = new URL(window.location.href);
   const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
   const pick = (key: string) =>
     url.searchParams.get(key) ?? hash.get(key) ?? null;
 
   const code = pick('error_code') ?? pick('error');
-  if (code && REASONS[code]) return REASONS[code];
-
   const description = pick('error_description') ?? code;
-  return description ? description.replace(/\+/g, ' ') : null;
+  if (!code && !description) return null;
+
+  return {
+    code: code ?? undefined,
+    message: description?.replace(/\+/g, ' '),
+  };
 }
 
 /**
@@ -43,20 +36,39 @@ export default function AuthCallback() {
 
   // The URL is already here on the first render, so a failure GoTrue reported
   // is initial state — not something to discover in an effect.
-  const [urlError] = useState(errorFromUrl);
+  const [urlFailure] = useState(errorFromUrl);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
-  const error = urlError ?? exchangeError;
+  const error = urlFailure ? toAuthErrorMessage(urlFailure) : exchangeError;
 
   useEffect(() => {
-    if (urlError) return;
+    if (urlFailure) {
+      if (import.meta.env.DEV) {
+        console.error('Supabase Auth callback URL failure', urlFailure);
+      }
+      return;
+    }
 
     const code = new URL(window.location.href).searchParams.get('code');
     if (!code) return;
 
-    void supabase.auth.exchangeCodeForSession(code).then(({ error: e }) => {
-      if (e) setExchangeError(e.message);
-    });
-  }, [urlError]);
+    void (async () => {
+      try {
+        const { error: failure } =
+          await supabase.auth.exchangeCodeForSession(code);
+        if (!failure) return;
+
+        if (import.meta.env.DEV) {
+          console.error('Supabase Auth callback exchange failed', failure);
+        }
+        setExchangeError(toAuthErrorMessage(failure));
+      } catch (failure) {
+        if (import.meta.env.DEV) {
+          console.error('Supabase Auth callback exchange failed', failure);
+        }
+        setExchangeError(toAuthErrorMessage(failure));
+      }
+    })();
+  }, [urlFailure]);
 
   if (error) {
     return (
