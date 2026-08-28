@@ -11,7 +11,7 @@ import { NAV_ITEMS, TAB_ORDER } from './navItems';
 
 /**
  * The frame every signed-in screen renders inside: sidebar on desktop, a
- * drawer plus a five-item tab bar below 1024px, exactly as in the mockup.
+ * drawer plus a five-item tab bar below 1024px.
  *
  * The navigation is the permission model made visible — but only visible.
  * Hiding a tab is a kindness, not a fence: someone who types /bc by hand gets

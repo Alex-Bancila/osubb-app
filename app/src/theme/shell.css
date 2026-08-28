@@ -1,10 +1,7 @@
 /* ============================================================================
    The app shell: sidebar, topbar, mobile tab bar.
 
-   Lifted from mockup/css/layout.css and kept close to it on purpose — that
-   prototype is the design BC approved, so "does it look like the mockup" is a
-   real acceptance test (mini-spec §8). Everything is a token; there is not a
-   raw hex in here.
+   Everything is a token; there is not a raw hex in here.
    ========================================================================== */
 
 .app {
@@ -83,11 +80,17 @@ button.nav-item {
   background: var(--ink-050);
   color: var(--text);
 }
+.nav-item:focus-visible,
+.icon-btn:focus-visible,
+.tab-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
 .nav-item.is-active {
   background: var(--red-050);
   color: var(--red-700);
 }
-/* The rail that marks the current section, exactly as in the mockup. */
+/* The rail marks the current section. */
 .nav-item.is-active::before {
   content: '';
   position: absolute;
@@ -96,7 +99,7 @@ button.nav-item {
   bottom: 8px;
   width: 4px;
   border-radius: 0 4px 4px 0;
-  background: var(--red);
+  background: var(--action-primary-default);
 }
 
 .sidebar-foot {
@@ -266,7 +269,7 @@ button.nav-item {
     font-size: 22px;
   }
   .tab-link.is-active {
-    color: var(--red);
+    color: var(--action-primary-default);
   }
 }
 

@@ -9,7 +9,7 @@ import { firstName, formatLongDate } from '../../lib/format';
  * Acasă (#93–#95): where a member stands, in one screen.
  *
  * Only the gamification is here yet — "ce urmează săptămâna asta" and the
- * announcements column from the mockup arrive with the calendar (#96–#98) and
+ * announcements column arrives with the calendar (#96–#98) and
  * the feed (#99–#101), and an empty card promising them would be worse than
  * their absence.
  *
