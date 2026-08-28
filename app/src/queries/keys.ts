@@ -3,7 +3,7 @@
  *
  * Two rules make caching behave (mini-spec §5):
  *
- *  1. **Keys mirror the data, not the screen.** `['points','leaderboard']`, not
+ *  1. **Keys mirror the data, not the screen.** `['points','leaderboard',{ limit }]`, not
  *     `['dashboard','leaderboardCard']`. Two screens showing the same thing then
  *     share one cache entry and one request, and a change in one is a change in
  *     both — for free.
@@ -18,7 +18,7 @@ export const keys = {
     all: ['points'] as const,
     me: () => ['points', 'me'] as const,
     standing: () => ['points', 'standing'] as const,
-    leaderboard: () => ['points', 'leaderboard'] as const,
+    leaderboard: (limit = 10) => ['points', 'leaderboard', { limit }] as const,
     deptCup: () => ['points', 'deptCup'] as const,
   },
   profile: {
