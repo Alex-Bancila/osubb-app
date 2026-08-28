@@ -4,14 +4,19 @@
    ========================================================================== */
 :root {
   /* --- Brand core --- */
-  --red: #ED2025;
+  --brand-red: #ED2025;
+  --brand-black: #000000;
+  --brand-white: #FFFFFF;
+
+  /* Compatibility aliases used by existing screens. */
+  --red: var(--brand-red);
   --red-600: #D11620;
   --red-700: #A8101A;
   --red-050: #FEEAEB;
   --red-100: #FBD2D4;
 
-  --black: #000000;
-  --white: #FFFFFF;
+  --black: var(--brand-black);
+  --white: var(--brand-white);
 
   /* --- Neutral ramp (near-blacks / greys for hierarchy) --- */
   --ink-900: #0B0B0C;   /* page-dark surfaces, login */
@@ -39,13 +44,19 @@
   --primary: var(--red);
   --primary-ink: var(--white);
 
-  --success: #007F33;   /* brand-book Financial green doubles as success */
+  /* Feedback semantics are independent of department context. */
+  --feedback-success: #007F33;
+  --feedback-warning: #F2A700;
+  --feedback-danger: #ED2025;
+  --feedback-info: #284C93;
+
+  --success: var(--feedback-success);
   --success-050: #E6F4EC;
-  --warning: #F2A700;   /* brand-book HR amber doubles as warning */
+  --warning: var(--feedback-warning);
   --warning-050: #FEF5E0;
-  --danger:  #ED2025;   /* critical = brand red, per priorities doc */
+  --danger:  var(--feedback-danger);
   --danger-050: #FEEAEB;
-  --info:    #284C93;   /* brand-book Educational blue */
+  --info:    var(--feedback-info);
   --info-050: #EAEFF8;
 
   /* --- Department accent colors (Brand Book) --- */
@@ -54,11 +65,11 @@
   --dept-fin:  #007F33;  /* Financiar */
   --dept-pr:   #7500A0;  /* Imagine & PR */
   --dept-youth:#FF3B3B;  /* Tineret */
-  --dept-org:  #ED2025;  /* Organizație (general) */
-  --dept-ext:  #5C5C61;  /* Activități externe */
+  --scope-org: var(--brand-red);
 
   /* --- Typography --- */
-  --font: "Montserrat", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --font-family-base: "Montserrat", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --font: var(--font-family-base);
   --fw-regular: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
@@ -99,11 +110,22 @@
   --sh-lg: 0 14px 40px rgba(11,11,12,.13), 0 4px 12px rgba(11,11,12,.07);
   --sh-red: 0 8px 22px rgba(237,32,37,.28);
 
+  /* --- Interaction --- */
+  --action-primary-default: var(--brand-red);
+  --action-primary-hover: var(--red-600);
+  --action-primary-pressed: var(--red-700);
+  --action-disabled-opacity: 0.5;
+  --focus-ring-color: var(--brand-red);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --duration-fast: 160ms;
+  --easing-standard: cubic-bezier(.4,0,.2,1);
+
   /* --- Layout --- */
   --sidebar-w: 248px;
   --topbar-h: 64px;
   --content-max: 1240px;
-  --transition: 160ms cubic-bezier(.4,0,.2,1);
+  --transition: var(--duration-fast) var(--easing-standard);
 }
 
 /* ============================================================================
@@ -139,9 +161,9 @@
   /* lighten accent colors used as TEXT on tints (not the dept solids) */
   --red-700: #FF8585;
   --red-600: #F0454C;
-  --success: #3ECF8E;
-  --warning: #F4B73C;
-  --info:    #84A9EC;
+  --feedback-success: #3ECF8E;
+  --feedback-warning: #F4B73C;
+  --feedback-info:    #84A9EC;
 
   /* dark translucent tints (blend over dark surfaces) */
   --red-050:     rgba(237,32,37,.16);

@@ -25,7 +25,7 @@ export type NavItem = {
  * three can never disagree about what exists or what it is called.
  *
  * Paths are Romanian because members read them; the identifiers around them
- * stay English (CONTEXT.md). Order is the mockup's.
+ * stay English (CONTEXT.md).
  */
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Acasă', icon: gridOutline, onTabBar: true },
@@ -57,6 +57,6 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-/* The mockup's mobile bar carries five, in a different order from the sidebar:
+/* The mobile bar carries five, in a different order from the sidebar:
    the two things people open the app for come first. */
 export const TAB_ORDER = ['/', '/calendar', '/tracker', '/anunturi', '/profil'];
