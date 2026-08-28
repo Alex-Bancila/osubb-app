@@ -6,6 +6,7 @@ import {
   IonPage,
   IonSpinner,
 } from '@ionic/react';
+import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { supabase } from '../../lib/supabase';
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
@@ -24,16 +25,26 @@ export default function LoginScreen() {
     if (!address) return;
 
     setStatus('sending');
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email: address,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        // Belt and braces: sign-up is already disabled server-side, but saying
-        // so here means this screen can never become an account-creation path
-        // by a change of configuration somewhere else.
-        shouldCreateUser: false,
-      },
-    });
+    let authError;
+    try {
+      ({ error: authError } = await supabase.auth.signInWithOtp({
+        email: address,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          // Belt and braces: sign-up is already disabled server-side, but saying
+          // so here means this screen can never become an account-creation path
+          // by a change of configuration somewhere else.
+          shouldCreateUser: false,
+        },
+      }));
+    } catch (failure) {
+      if (import.meta.env.DEV) {
+        console.error('Supabase Auth link request failed', failure);
+      }
+      setError(toAuthErrorMessage(failure));
+      setStatus('error');
+      return;
+    }
 
     if (!authError) {
       setStatus('sent');
@@ -58,11 +69,10 @@ export default function LoginScreen() {
       return;
     }
 
-    setError(
-      code === 'over_email_send_rate_limit'
-        ? 'Prea multe cereri într-un timp scurt. Încearcă din nou peste un minut.'
-        : 'Nu am putut trimite linkul. Încearcă din nou; dacă tot nu merge, anunță BC.',
-    );
+    if (import.meta.env.DEV) {
+      console.error('Supabase Auth link request failed', authError);
+    }
+    setError(toAuthErrorMessage(authError));
     setStatus('error');
   }
 
