@@ -131,7 +131,7 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Same four gates the app README tells you to run before pushing, in the
+      # Same five gates the app README tells you to run before pushing, in the
       # order that fails fastest. Deliberately NOT behind a `paths: app/**`
       # filter, for the reason already written on the Edge Function job above: a
       # check that silently skips is worse than a fast job that always speaks —
@@ -144,6 +144,9 @@ jobs:
 
       - name: Format check
         run: npm run format:check
+
+      - name: Test
+        run: npm run test:run
 
       - name: Build
         run: npm run build
