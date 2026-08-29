@@ -3,24 +3,36 @@
 React + TypeScript + Ionic, built by Vite. This is the app members will actually
 open; the backend it talks to lives one directory up, in `supabase/`.
 
+Use Node.js 24 or newer—the frontend and its test tooling are developed and
+verified on Node 24, matching GitHub Actions.
+
 **Before your first screen issue, read
 [`docs/superpowers/specs/frontend-mini-spec.md`](../docs/superpowers/specs/frontend-mini-spec.md)** —
 folder layout, routes, query conventions and theming are already decided there,
 so screen PRs look alike and nobody invents a second architecture.
 
-## The three commands
+## The main commands
 
 ```bash
 npm install     # once, after cloning
 npm run dev     # http://localhost:5173, hot-reloads as you edit
+npm test        # Vitest watch mode while you code
+npm run test:run  # run the test suite once, like CI
 npm run build   # typecheck + production build (what CI runs)
 ```
 
 Also available: `npm run lint` (oxlint), `npm run format` (Prettier, writes),
-`npm run format:check` (Prettier, reports), `npm run typecheck`, `npm run preview`
-(serve the built output).
+`npm run format:check` (Prettier, reports), `npm run typecheck`, and
+`npm run preview` (serve the built output).
 
-Before pushing, the same three that CI runs: `npm run typecheck && npm run lint && npm run build`.
+Before pushing, run the same gates as CI: typecheck, lint, format check,
+`npm run test:run`, and the production build.
+
+Tests use Vitest with jsdom and React Testing Library. Put a component test next
+to the component as `*.test.tsx`; shared browser-test setup lives in
+`src/test/setup.ts`. Test user-visible behavior through roles, labels, and text,
+not private component state or CSS class names. Use `user-event` for real user
+interactions rather than calling event handlers directly.
 
 ## What's here so far
 
