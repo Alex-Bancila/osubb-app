@@ -38,10 +38,10 @@ insert into teams (id, name, dept_id) values ('t-ev', 'Events Team', 'edu');
 -- ==================== An event carries scope + optional team (AC) ====================
 insert into events (title, type, scope, dept_id, starts_at, ends_at)
   values ('Ședință EDU', 'sedinta', 'dept', 'edu', now(), now() + interval '2 hours');
-insert into events (title, type, scope, team_id)
-  values ('Call Echipa Events', 'call', 'team', 't-ev');
-insert into events (title, type, scope)
-  values ('Adunare Generală', 'sedinta', 'org');
+insert into events (title, type, scope, dept_id, team_id, starts_at)
+  values ('Call Echipa Events', 'call', 'team', 'edu', 't-ev', now());
+insert into events (title, type, scope, starts_at)
+  values ('Adunare Generală', 'sedinta', 'org', now());
 
 select is((select count(*) from events), 3::bigint,
   'events accept dept, team and org scopes');

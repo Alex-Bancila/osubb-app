@@ -304,7 +304,7 @@ export type Database = {
           id: number
           location: string | null
           scope: Database["public"]["Enums"]["event_scope"]
-          starts_at: string | null
+          starts_at: string
           team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
@@ -319,7 +319,7 @@ export type Database = {
           id?: never
           location?: string | null
           scope: Database["public"]["Enums"]["event_scope"]
-          starts_at?: string | null
+          starts_at: string
           team_id?: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
@@ -334,7 +334,7 @@ export type Database = {
           id?: never
           location?: string | null
           scope?: Database["public"]["Enums"]["event_scope"]
-          starts_at?: string | null
+          starts_at?: string
           team_id?: string | null
           title?: string
           type?: Database["public"]["Enums"]["event_type"]
@@ -390,11 +390,11 @@ export type Database = {
             referencedColumns: ["dept_id"]
           },
           {
-            foreignKeyName: "events_team_id_fkey"
-            columns: ["team_id"]
+            foreignKeyName: "events_team_department_fkey"
+            columns: ["team_id", "dept_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "dept_id"]
           },
         ]
       }

@@ -60,7 +60,8 @@ insert into task_requests (kind, title, from_member)
 insert into tasks (title, difficulty, status) values ('rls-open', 2, 'open');
 update tasks set rating = 3 where title = 'rls-open';
 
-insert into events (title, type, scope) values ('rls-event', 'sedinta', 'org');
+insert into events (title, type, scope, starts_at)
+  values ('rls-event', 'sedinta', 'org', now());
 insert into event_attendance (event_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from events where title = 'rls-event';
 insert into announcements (title, body) values
