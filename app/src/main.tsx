@@ -22,6 +22,9 @@ import '@ionic/react/css/text-transformation.css';
 import '@ionic/react/css/flex-utils.css';
 import '@ionic/react/css/display.css';
 
+/* Bundled official typeface (Montserrat variable) */
+import '@fontsource-variable/montserrat';
+
 /* Ours, last, so the OSUBB palette wins over Ionic's defaults. */
 import './theme/tokens.css';
 import './theme/global.css';
