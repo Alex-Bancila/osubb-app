@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(18);
 
 -- ==================== Helper defaults (no JWT in this session) ====================
 select is(auth_level(), 0, 'auth_level() defaults to 0 without a JWT');
@@ -82,6 +82,19 @@ select set_config('request.jwt.claims',
 
 select is(auth_level(), 5, 'auth_level() reads member_level from the JWT');
 select is(auth_role(), 'bce'::member_role, 'auth_role() reads member_role from the JWT');
+
+create function pg_temp.auth_role_beneath_empty_path()
+returns text
+language sql
+stable
+set search_path = ''
+as $$ select public.auth_role()::text $$;
+
+select is(
+  pg_temp.auth_role_beneath_empty_path(),
+  'bce',
+  'auth_role() resolves member_role beneath an empty caller search_path');
+
 select is(auth_in_dept('edu'), true,  'auth_in_dept() true for the member''s department');
 select is(auth_in_dept('fin'), false, 'auth_in_dept() false for other departments');
 select is(auth_in_team('t-test'), true,  'auth_in_team() true for the member''s team');
