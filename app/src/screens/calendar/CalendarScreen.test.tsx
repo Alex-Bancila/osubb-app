@@ -8,6 +8,8 @@ import type { Department } from '../../queries/reference';
 const hooks = vi.hoisted(() => ({
   useUpcomingEvents: vi.fn(),
   useDepartments: vi.fn(),
+  useEventRsvp: vi.fn(),
+  useSetEventRsvp: vi.fn(),
 }));
 
 vi.mock('../../queries/events', () => ({
@@ -16,6 +18,12 @@ vi.mock('../../queries/events', () => ({
 
 vi.mock('../../queries/reference', () => ({
   useDepartments: hooks.useDepartments,
+}));
+
+vi.mock('../../queries/event-rsvp', () => ({
+  EventRsvpMutationError: class EventRsvpMutationError extends Error {},
+  useEventRsvp: hooks.useEventRsvp,
+  useSetEventRsvp: hooks.useSetEventRsvp,
 }));
 
 import CalendarScreen from './CalendarScreen';
@@ -73,6 +81,17 @@ describe('CalendarScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hooks.useDepartments.mockReturnValue({ data: departments });
+    hooks.useEventRsvp.mockReturnValue({
+      data: null,
+      error: null,
+      isError: false,
+      isPending: false,
+      refetch: vi.fn(),
+    });
+    hooks.useSetEventRsvp.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    });
   });
 
   it('shows a screen-specific loading state', () => {
@@ -175,6 +194,16 @@ describe('CalendarScreen', () => {
       within(card).getByText('Capacitate: 30 de persoane'),
     ).toBeInTheDocument();
     expect(screen.queryByText('edu')).not.toBeInTheDocument();
+  });
+
+  it('offers an RSVP choice on every visible event card', () => {
+    setEventsQuery({ data: [event()] });
+
+    render(<CalendarScreen />);
+
+    expect(
+      screen.getByLabelText('Răspuns pentru Ședință Educațional'),
+    ).toBeInTheDocument();
   });
 
   it('omits absent optional event details instead of rendering placeholders', () => {
