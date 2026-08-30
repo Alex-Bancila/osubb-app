@@ -1,0 +1,260 @@
+/* ============================================================================
+   Calendar — a chronological OSUBB agenda.
+
+   The red spine is the screen's signature: it communicates sequence. Event
+   accents come from department reference data, but every colour is paired
+   with a written scope label so meaning never depends on colour alone.
+   ========================================================================== */
+
+.calendar-page {
+  max-width: 1080px;
+}
+
+.calendar-head {
+  max-width: 700px;
+}
+
+.calendar-kicker {
+  margin: 0 0 var(--s-2);
+  color: var(--red-600);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.calendar-intro {
+  max-width: 38rem;
+  margin: var(--s-2) 0 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.calendar-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-7);
+}
+
+.calendar-day {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.32fr) minmax(0, 1fr);
+  gap: var(--s-6);
+}
+
+.calendar-day-head {
+  align-self: start;
+  position: sticky;
+  top: var(--s-5);
+  padding-top: var(--s-2);
+}
+
+.calendar-day-rule {
+  display: block;
+  width: 34px;
+  height: 4px;
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--red);
+}
+
+.calendar-day-head h2 {
+  max-width: 13rem;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-extrabold);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.calendar-day-head h2::first-letter {
+  text-transform: uppercase;
+}
+
+.calendar-day-count {
+  display: block;
+  margin-top: var(--s-2);
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.calendar-event-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  margin: 0;
+  padding: 0 0 0 var(--s-6);
+  border-left: 2px solid var(--red-100);
+  list-style: none;
+}
+
+.calendar-event-list > li {
+  position: relative;
+}
+
+.calendar-event-list > li::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: 25px;
+  left: calc(-1 * var(--s-6) - 7px);
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--surface-2);
+  border-radius: 50%;
+  background: var(--red);
+}
+
+.event-card {
+  position: relative;
+  overflow: hidden;
+  padding: var(--s-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--sh-sm);
+}
+
+.event-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--event-accent);
+}
+
+.event-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.event-type,
+.event-scope {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+}
+
+.event-type {
+  padding: 3px 10px;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-scope {
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.event-scope-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--event-accent);
+}
+
+.event-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-extrabold);
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.event-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  margin: var(--s-4) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.event-details > div {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.event-details dt,
+.event-details dd {
+  margin: 0;
+}
+
+.event-details dt {
+  color: var(--event-accent);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-details time {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-semibold);
+}
+
+.event-description {
+  max-width: 62ch;
+  margin: var(--s-4) 0 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .calendar-agenda {
+    gap: var(--s-8);
+  }
+
+  .calendar-day {
+    grid-template-columns: 1fr;
+    gap: var(--s-4);
+  }
+
+  .calendar-day-head {
+    position: static;
+    padding: 0;
+  }
+
+  .calendar-day-head h2 {
+    max-width: none;
+  }
+
+  .calendar-event-list {
+    padding-left: var(--s-5);
+  }
+
+  .calendar-event-list > li::before {
+    left: calc(-1 * var(--s-5) - 7px);
+  }
+}
+
+@media (max-width: 420px) {
+  .event-card {
+    padding: var(--s-4);
+  }
+
+  .event-details {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-2);
+  }
+}
+
+:root[data-theme='dark'] .calendar-event-list > li::before {
+  border-color: var(--surface-2);
+}
+
+:root[data-theme='dark'] .event-details dt {
+  color: color-mix(in srgb, var(--event-accent) 55%, white);
+}
