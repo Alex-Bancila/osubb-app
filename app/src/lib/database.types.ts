@@ -1381,6 +1381,21 @@ export type Database = {
         Returns: string
       }
       rating_mult: { Args: { r: number }; Returns: number }
+      set_event_rsvp: {
+        Args: { p_event_id: number; p_status: string }
+        Returns: {
+          checked_in: boolean | null
+          event_id: number
+          member_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "event_attendance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       team_admits_recruits: { Args: { t: string }; Returns: boolean }
     }
     Enums: {
