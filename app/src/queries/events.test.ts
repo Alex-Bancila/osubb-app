@@ -6,6 +6,7 @@ const query = vi.hoisted(() => ({
   from: vi.fn(),
   select: vi.fn(),
   gte: vi.fn(),
+  neq: vi.fn(),
   order: vi.fn(),
 }));
 
@@ -71,7 +72,8 @@ describe('upcoming-events query', () => {
     vi.clearAllMocks();
     query.from.mockReturnValue({ select: query.select });
     query.select.mockReturnValue({ gte: query.gte });
-    query.gte.mockReturnValue({ order: query.order });
+    query.gte.mockReturnValue({ neq: query.neq });
+    query.neq.mockReturnValue({ order: query.order });
   });
 
   it('loads visible events from the current instant in chronological order', async () => {
@@ -85,6 +87,7 @@ describe('upcoming-events query', () => {
       'id, title, type, scope, dept_id, team_id, starts_at, ends_at, location, capacity, description',
     );
     expect(query.gte).toHaveBeenCalledWith('starts_at', now.toISOString());
+    expect(query.neq).toHaveBeenCalledWith('scope', 'project');
     expect(query.order).toHaveBeenCalledWith('starts_at', { ascending: true });
     expect(result).toHaveLength(1);
     expect(result[0]?.dayKey).toBe('2026-08-30');

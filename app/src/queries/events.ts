@@ -85,6 +85,7 @@ export async function fetchUpcomingEvents(
     .from('events')
     .select(EVENT_FIELDS)
     .gte('starts_at', now.toISOString())
+    .neq('scope', 'project')
     .order('starts_at', { ascending: true });
   if (error) throw error;
 
