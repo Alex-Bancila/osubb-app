@@ -29,6 +29,7 @@ import './theme/auth-screens.css';
 import './theme/shell.css';
 import './theme/screens.css';
 import './theme/dashboard.css';
+import './theme/calendar.css';
 
 import { createQueryClient } from './queries/client';
 import { AuthProvider } from './lib/auth';

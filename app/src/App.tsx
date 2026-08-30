@@ -10,6 +10,7 @@ import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
+import CalendarScreen from './screens/calendar/CalendarScreen';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -98,10 +99,7 @@ export default function App() {
           >
             <Route path="/" element={<DashboardScreen />} />
             <Route path="/tracker" element={<TrackerScreen />} />
-            <Route
-              path="/calendar"
-              element={<Placeholder title="Calendar" issue="#96–#98" />}
-            />
+            <Route path="/calendar" element={<CalendarScreen />} />
             <Route
               path="/anunturi"
               element={<Placeholder title="Anunțuri" issue="#99–#101" />}
