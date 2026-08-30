@@ -44,6 +44,8 @@ export const keys = {
     all: ['events'] as const,
     upcoming: (memberId: string) =>
       ['events', 'upcoming', { memberId }] as const,
+    rsvp: (eventId: number, memberId: string) =>
+      ['events', 'rsvp', { eventId, memberId }] as const,
   },
   announcements: {
     all: ['announcements'] as const,
