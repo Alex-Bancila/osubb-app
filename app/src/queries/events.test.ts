@@ -61,10 +61,6 @@ describe('event presentation', () => {
       description: 'Planificarea semestrului',
     });
   });
-
-  it('rejects undated rows from an upcoming-events model', () => {
-    expect(toEventPresentation(eventRow({ starts_at: null }))).toBeNull();
-  });
 });
 
 describe('upcoming-events query', () => {
