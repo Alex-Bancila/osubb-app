@@ -1365,6 +1365,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_event: {
+        Args: {
+          p_capacity?: number
+          p_dept_id?: string
+          p_description?: string
+          p_ends_at?: string
+          p_location?: string
+          p_scope: string
+          p_starts_at: string
+          p_team_id?: string
+          p_title: string
+          p_type: string
+        }
+        Returns: {
+          capacity: number | null
+          created_by: string | null
+          dept_id: string | null
+          description: string | null
+          ends_at: string | null
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          scope: Database["public"]["Enums"]["event_scope"]
+          starts_at: string
+          team_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       in_my_dept: { Args: { member: string }; Returns: boolean }
       is_assigned: { Args: { tid: number }; Returns: boolean }

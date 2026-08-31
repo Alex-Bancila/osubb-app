@@ -88,9 +88,9 @@ select throws_ok(
      values ('Eveniment neautorizat', 'sedinta', 'org', now()) $$,
   '42501', null, 'a voluntar cannot create events');
 
-update events set title = 'Redenumit' where title = 'Ședință PR';
-select is((select count(*) from events where title = 'Redenumit'), 0::bigint,
-  'a voluntar cannot edit events (silent no-op)');
+select throws_ok(
+  $$ update events set title = 'Redenumit' where title = 'Ședință PR' $$,
+  '42501', null, 'a voluntar cannot edit events');
 
 reset role;
 
@@ -100,12 +100,16 @@ select pg_temp.login('03000000-0000-0000-0000-000000000003', 'responsabil', 4, '
 select is((select count(*) from events), 6::bigint,
   'level >= 4 sees every event (seeAllEvents)');
 select lives_ok(
-  $$ insert into events (title, type, scope, dept_id, starts_at)
-     values ('Workshop CV', 'activitate', 'dept', 'edu', now()) $$,
-  'level >= 4 creates events');
-select lives_ok(
+  $$ select public.create_event(
+       p_title := 'Workshop CV',
+       p_type := 'activitate',
+       p_scope := 'dept',
+       p_starts_at := now(),
+       p_dept_id := 'edu') $$,
+  'level >= 4 creates events through the validated command');
+select throws_ok(
   $$ update events set location = 'Sala 5' where title = 'Ședință PR' $$,
-  'level >= 4 edits events in any department');
+  '42501', null, 'direct event updates are disabled until the update command lands');
 
 reset role;
 
