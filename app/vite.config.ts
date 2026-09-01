@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    css: true,
   },
   server: {
     /* Pinned, and `strictPort` so a busy port is an error rather than a silent
