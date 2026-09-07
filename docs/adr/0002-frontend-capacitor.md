@@ -1,20 +1,57 @@
-# ADR-0002 — Capacitor + React + Ionic for the cross-platform client
+# ADR-0002 — React and shadcn browser-first PWA
 
-- **Status:** Accepted (2026-07-07) — frontend decision, recorded here because it shapes the app but does not affect the backend.
+- **Status:** Accepted (rewritten 2026-09-07)
 - **Deciders:** Alex Băncilă + team
-- **Context docs:** `docs/osubb-app-tech-stack.md` §9.1 / §10.1
+- **Supersedes:** the earlier Capacitor + Ionic + AG Grid decision recorded in this file
+- **Related:** ADR-0001, ADR-0003, ADR-0005, `docs/brand/reference.md`
 
 ## Context
 
-The app must run on Android, iPhone, and desktop (Windows/Mac **browsers**). Its heaviest surface is a permission-dense **admin dashboard** (tables, sheets, leaderboards, CSV import) used mostly on desktop by coordinators; the phone surface is lighter (tasks, calendar, feed, notifications). Judged on technical merit (mockup-reuse and learning curve set aside), the deciding factor is which stack best delivers a dense, accessible, browser-delivered dashboard while still shipping real phone apps.
+OSUBB needs one internal application that works well on volunteers' phones and on the wider desktop screens used by coordinators. Maintaining separate browser, iOS, Android, and desktop applications is not realistic for the available student team. The product therefore needs a web architecture that is easy to learn, deploy, review, and progressively install as a PWA.
+
+The rushed HTML mockup is historical exploration, not a design authority. The official OSUBB Brand Book, the domain rules, accessibility requirements, and tested user journeys determine the finished interface.
 
 ## Decision
 
-Build **one web app** with **Vite + React + Ionic** plus a real data grid (**AG Grid Community**, MIT), and wrap the same bundle with **Capacitor** for native iOS/Android. The browser build *is* the desktop deliverable.
+Build one **browser-first, installable PWA** in the existing `app/` Vite workspace with:
+
+- **Vite + React 19 + TypeScript** for the application;
+- **React Router 7** for browser routing;
+- **TanStack Query** for server-state fetching, invalidation, and refetching;
+- **Tailwind CSS** plus **shadcn/ui using Base UI and the Nova style** for accessible, locally owned interface components;
+- **TanStack Table** for dense desktop tables, with shadcn-rendered markup;
+- **Supabase** for authentication, PostgreSQL, Row-Level Security, Realtime, and atomic server commands;
+- **Cloudflare** for the future hosted web application at `app.osubb.ro`.
+
+The application remains responsive rather than becoming separate mobile and desktop products. Mobile volunteer journeys use touch-first cards and controls. Coordinator journeys may use denser desktop tables while retaining a usable mobile representation.
+
+The finished architecture does **not** include React Native, Expo, Capacitor, AG Grid, TanStack Router, or TanStack Start. Ionic may coexist temporarily while routes are migrated, but no new finished screen or shared primitive should depend on it. Remove Ionic only after every route has an equivalent shadcn implementation.
+
+## Design and accessibility boundary
+
+- The Brand Book overrides shadcn presets and the mockup.
+- Official logo files, Montserrat, OSUBB red, and department colors remain unchanged.
+- Role hierarchy uses neutral badges; department color communicates department context.
+- Color is never the only cue.
+- Every interactive target is at least 44×44 CSS pixels where practical.
+- Keyboard focus, contrast, reduced motion, mobile layout, and Romanian copy are acceptance criteria, not later polish.
+
+## PWA boundary
+
+The service worker may precache only hashed application-shell and brand assets. Supabase Auth, REST, and Realtime traffic is network-only. Member/API responses are never persisted in an offline cache, and offline writes or background synchronization are not queued.
+
+Start with `vite-plugin-pwa` in `generateSW` mode and prompt-based updates. If Web Push later requires a custom service-worker handler, record that design and migrate to `injectManifest` deliberately.
 
 ## Consequences
 
-- **+** Real DOM/CSS + a mature grid make the desktop dashboard first-class; single codebase covers desktop browser + phones.
-- **+** Backend-agnostic — this choice does not affect the Supabase backend, which is the current focus.
-- **−** WebView gives a slightly less "native" mobile feel (fine for this app's light phone surface); no managed cloud build (use **Codemagic** for no-Mac iOS builds).
-- **Alternative:** **Flutter** is a close co-leader — revisit if the desktop should ship as a *free native* app or the phone experience must become truly native. **Expo/React Native** was rejected: React Native Web would force a second web codebase for the dashboard.
+- **Positive:** one deployable codebase serves phone and desktop browsers and can be installed without app-store operations.
+- **Positive:** shadcn components are owned in the repository and can follow OSUBB's visual identity without fighting a mobile framework theme.
+- **Positive:** TanStack Table supplies behavior without owning markup, making accessible branded tables easier to review.
+- **Positive:** React Router and the existing Vite application remain; the team avoids an unnecessary framework rewrite.
+- **Cost:** the existing Ionic shell and screens must be migrated route by route, so both systems will coexist briefly.
+- **Cost:** the team owns responsive and accessibility quality instead of inheriting a complete mobile component system.
+- **Constraint:** a future native application, if ever justified, is a separate decision. It may share non-visual TypeScript contracts and business logic, not web UI components.
+
+## Migration rule
+
+Each migration issue must leave the application runnable. Do not remove an Ionic dependency until no merged route imports it. Do not add AG Grid while the old Tracker is replaced; use shadcn Table with TanStack Table for the new manager views.
