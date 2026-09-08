@@ -68,7 +68,7 @@
   --scope-org: var(--brand-red);
 
   /* --- Typography --- */
-  --font-family-base: "Montserrat", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --font-family-base: "Montserrat Variable", "Montserrat", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   --font: var(--font-family-base);
   --fw-regular: 400;
   --fw-medium: 500;
