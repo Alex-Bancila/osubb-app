@@ -6,15 +6,15 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(11);
 
-create function pg_temp.login(uid uuid)
+create function pg_temp.login_leadership(uid uuid)
 returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims', jsonb_build_object(
     'sub', uid,
     'role', 'authenticated',
     'app_metadata', jsonb_build_object(
-      'member_role', 'voluntar',
-      'member_level', 1,
+      'member_role', 'bce',
+      'member_level', 5,
       'dept_ids', '["edu"]'::jsonb,
       'team_ids', '[]'::jsonb
     )
@@ -33,7 +33,7 @@ insert into auth.users (id, email) values
   ('c3000000-0000-0000-0000-000000000003', 'cup.alumni@test.local');
 
 insert into public.profiles (id, full_name, email, role, status) values
-  ('c1000000-0000-0000-0000-000000000001', 'Membru Activ',   'cup.active@test.local',   'voluntar', 'activ'),
+  ('c1000000-0000-0000-0000-000000000001', 'Membru BCE',     'cup.active@test.local',   'bce',       'activ'),
   ('c2000000-0000-0000-0000-000000000002', 'Membru Inactiv', 'cup.inactive@test.local', 'voluntar', 'inactiv'),
   ('c3000000-0000-0000-0000-000000000003', 'Fost Membru',    'cup.alumni@test.local',   'voluntar', 'alumni');
 
@@ -55,10 +55,10 @@ select ok(
   ),
   'dept_cup remains a security-invoker view');
 
-select pg_temp.login('c1000000-0000-0000-0000-000000000001');
+select pg_temp.login_leadership('c1000000-0000-0000-0000-000000000001');
 
 select is((select count(*) from public.dept_cup), 5::bigint,
-  'an active member sees all five canonical departments');
+  'BCE sees all five canonical departments');
 select is((select points from public.dept_cup where dept_id = 'edu'), 10,
   'the cup keeps the active member points total');
 select is((select members from public.dept_cup where dept_id = 'edu'), 1::bigint,
