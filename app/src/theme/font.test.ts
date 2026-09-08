@@ -1,9 +1,13 @@
+/// <reference types="node" />
+
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import indexHtml from '../../index.html?raw';
 import packageJson from '../../package.json';
 import mainTsx from '../main.tsx?raw';
-import tokensCss from './tokens.css?raw';
+
+const tokensCss = readFileSync('src/theme/tokens.css', 'utf8');
 
 describe('Montserrat local bundling (#214)', () => {
   it('removes Google Fonts runtime links from index.html', () => {
