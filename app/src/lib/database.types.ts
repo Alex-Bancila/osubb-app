@@ -708,6 +708,67 @@ export type Database = {
         }
         Relationships: []
       }
+      project_members: {
+        Row: {
+          member_id: string
+          project_id: number
+          project_role: string
+        }
+        Insert: {
+          member_id: string
+          project_id: number
+          project_role: string
+        }
+        Update: {
+          member_id?: string
+          project_id?: number
+          project_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "project_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "project_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
