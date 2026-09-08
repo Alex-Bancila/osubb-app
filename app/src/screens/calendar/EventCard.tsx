@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import type { EventPresentation } from '../../queries/events';
 import type { Department } from '../../queries/reference';
 import { eventScopeLabel, eventTypeLabel } from './calendar-presentation';
+import EventRsvpControls from './EventRsvpControls';
 
 type EventCardProps = {
   event: EventPresentation;
@@ -66,6 +67,8 @@ export default function EventCard({ event, departments }: EventCardProps) {
       {event.description && (
         <p className="event-description">{event.description}</p>
       )}
+
+      <EventRsvpControls eventId={event.id} eventTitle={event.title} />
     </article>
   );
 }

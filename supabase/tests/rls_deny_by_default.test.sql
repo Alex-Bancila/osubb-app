@@ -40,6 +40,10 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role, status) values
   ('ffffffff-0000-0000-0000-000000000006', 'Flavia Test', 'flavia.rls@test.local', 'voluntar', 'activ'),
   ('eeeeeeee-0000-0000-0000-000000000156', 'Dana Claimless', 'dana.claimless@test.local', 'voluntar', 'inactiv');
+insert into projects (name, leader_id, created_by) values
+  ('RLS Project',
+   'ffffffff-0000-0000-0000-000000000006',
+   'ffffffff-0000-0000-0000-000000000006');
 insert into member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
 insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
@@ -60,7 +64,8 @@ insert into task_requests (kind, title, from_member)
 insert into tasks (title, difficulty, status) values ('rls-open', 2, 'open');
 update tasks set rating = 3 where title = 'rls-open';
 
-insert into events (title, type, scope) values ('rls-event', 'sedinta', 'org');
+insert into events (title, type, scope, starts_at)
+  values ('rls-event', 'sedinta', 'org', now());
 insert into event_attendance (event_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from events where title = 'rls-event';
 insert into announcements (title, body) values

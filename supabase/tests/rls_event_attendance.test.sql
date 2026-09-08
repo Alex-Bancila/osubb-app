@@ -76,10 +76,10 @@ insert into member_departments (member_id, dept_id) values
   ('c3000000-0000-0000-0000-000000000063', 'edu'),
   ('d4000000-0000-0000-0000-000000000063', 'edu');
 
-insert into events (title, type, scope, dept_id) values
-  ('RSVP organizație', 'sedinta', 'org', null),
-  ('RSVP educațional', 'sedinta', 'dept', 'edu'),
-  ('RSVP imagine', 'sedinta', 'dept', 'pr');
+insert into events (title, type, scope, dept_id, starts_at) values
+  ('RSVP organizație', 'sedinta', 'org', null, now() + interval '1 day'),
+  ('RSVP educațional', 'sedinta', 'dept', 'edu', now() + interval '2 days'),
+  ('RSVP imagine', 'sedinta', 'dept', 'pr', now() + interval '3 days');
 
 insert into event_attendance (event_id, member_id, status)
 select id, 'a1000000-0000-0000-0000-000000000063'::uuid, 'going'

@@ -50,13 +50,13 @@ insert into team_members (team_id, member_id)
 
 -- One event per branch of §4.4. Team events use type 'sedinta' so the
 -- "calls reach everyone" branch cannot mask a team-visibility failure.
-insert into events (title, type, scope, dept_id, team_id) values
-  ('AG org',        'sedinta',   'org',  null,  null),   -- branch 2 (scope)
-  ('Ședință EDU',   'sedinta',   'dept', 'edu', null),   -- branches 3 & 5
-  ('Ședință PR',    'sedinta',   'dept', 'pr',  null),   -- branches 3 & 5
-  ('Call intern PR','sedinta',   'team', 'pr',  't-pr'), -- branch 4 (team)
-  ('Activitate recruți', 'activitate', 'team', 'edu', 't-rec'), -- branch 4 (recruits)
-  ('Recrutare toamnă',   'recrutare',  'dept', 'hr',  null);    -- branch 2 (type)
+insert into events (title, type, scope, dept_id, team_id, starts_at) values
+  ('AG org',        'sedinta',   'org',  null,  null, now() + interval '1 day'),   -- branch 2 (scope)
+  ('Ședință EDU',   'sedinta',   'dept', 'edu', null, now() + interval '2 days'), -- branches 3 & 5
+  ('Ședință PR',    'sedinta',   'dept', 'pr',  null, now() + interval '3 days'), -- branches 3 & 5
+  ('Call intern PR','sedinta',   'team', 'pr',  't-pr', now() + interval '4 days'), -- branch 4 (team)
+  ('Activitate recruți', 'activitate', 'team', 'edu', 't-rec', now() + interval '5 days'), -- branch 4 (recruits)
+  ('Recrutare toamnă',   'recrutare',  'dept', 'hr',  null, now() + interval '6 days');    -- branch 2 (type)
 
 -- ==================== Recrut: dept EDU, no teams ====================
 select pg_temp.login('01000000-0000-0000-0000-000000000001', 'recrut', 0, '["edu"]', '[]');
@@ -84,12 +84,13 @@ select ok(not pg_temp.sees('Activitate recruți'),
 select is((select count(*) from events), 4::bigint, 'voluntar sees exactly four events');
 
 select throws_ok(
-  $$ insert into events (title, type, scope) values ('Eveniment neautorizat', 'sedinta', 'org') $$,
+  $$ insert into events (title, type, scope, starts_at)
+     values ('Eveniment neautorizat', 'sedinta', 'org', now()) $$,
   '42501', null, 'a voluntar cannot create events');
 
-update events set title = 'Redenumit' where title = 'Ședință PR';
-select is((select count(*) from events where title = 'Redenumit'), 0::bigint,
-  'a voluntar cannot edit events (silent no-op)');
+select throws_ok(
+  $$ update events set title = 'Redenumit' where title = 'Ședință PR' $$,
+  '42501', null, 'a voluntar cannot edit events');
 
 reset role;
 
@@ -99,12 +100,16 @@ select pg_temp.login('03000000-0000-0000-0000-000000000003', 'responsabil', 4, '
 select is((select count(*) from events), 6::bigint,
   'level >= 4 sees every event (seeAllEvents)');
 select lives_ok(
-  $$ insert into events (title, type, scope, dept_id)
-     values ('Workshop CV', 'activitate', 'dept', 'edu') $$,
-  'level >= 4 creates events');
-select lives_ok(
+  $$ select public.create_event(
+       p_title := 'Workshop CV',
+       p_type := 'activitate',
+       p_scope := 'dept',
+       p_starts_at := now(),
+       p_dept_id := 'edu') $$,
+  'level >= 4 creates events through the validated command');
+select throws_ok(
   $$ update events set location = 'Sala 5' where title = 'Ședință PR' $$,
-  'level >= 4 edits events in any department');
+  '42501', null, 'direct event updates are disabled until the update command lands');
 
 reset role;
 
