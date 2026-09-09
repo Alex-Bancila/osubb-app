@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(42);
+select plan(43);
 
 create function pg_temp.login(uid uuid, member_role text, member_level int)
 returns void
@@ -274,9 +274,12 @@ select is(
   'Project Read Active', 'direct BC project update changes no row');
 
 select pg_temp.login('a7200000-0000-0000-0000-000000000006', 'bc', 6);
-delete from public.project_members
- where project_id = (select active_project_id from fx)
-   and member_id = 'a7200000-0000-0000-0000-000000000003';
+select throws_ok(
+  $$ delete from public.project_members
+      where project_id = (select active_project_id from fx)
+        and member_id = 'a7200000-0000-0000-0000-000000000003' $$,
+  '42501', null,
+  'BC cannot bypass membership commands with a direct roster delete');
 reset role;
 select is(
   (select count(*) from public.project_members
