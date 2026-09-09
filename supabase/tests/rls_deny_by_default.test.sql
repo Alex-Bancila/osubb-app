@@ -44,10 +44,8 @@ insert into projects (name, leader_id, created_by) values
   ('RLS Project',
    'ffffffff-0000-0000-0000-000000000006',
    'ffffffff-0000-0000-0000-000000000006');
-insert into project_members (project_id, member_id, project_role)
-  select id, 'ffffffff-0000-0000-0000-000000000006', 'member'
-    from projects
-   where name = 'RLS Project';
+-- The project-manager invariant creates the leader membership, keeping this
+-- fixture non-vacuous without a duplicate manual insert.
 insert into member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
 insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');

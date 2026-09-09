@@ -76,18 +76,20 @@ select has_index(
 insert into auth.users (id, email) values
   ('a6900000-0000-0000-0000-000000000001', 'project.member@test.local'),
   ('a6900000-0000-0000-0000-000000000002', 'project.responsible@test.local'),
-  ('a6900000-0000-0000-0000-000000000003', 'project.invalid-role@test.local');
+  ('a6900000-0000-0000-0000-000000000003', 'project.invalid-role@test.local'),
+  ('a6900000-0000-0000-0000-000000000004', 'project.lead@test.local');
 insert into public.profiles (id, full_name, email, role) values
   ('a6900000-0000-0000-0000-000000000001', 'Project Member', 'project.member@test.local', 'voluntar'),
   ('a6900000-0000-0000-0000-000000000002', 'Project Responsible', 'project.responsible@test.local', 'responsabil'),
-  ('a6900000-0000-0000-0000-000000000003', 'Invalid Project Role', 'project.invalid-role@test.local', 'voluntar');
+  ('a6900000-0000-0000-0000-000000000003', 'Invalid Project Role', 'project.invalid-role@test.local', 'voluntar'),
+  ('a6900000-0000-0000-0000-000000000004', 'Project Lead', 'project.lead@test.local', 'responsabil');
 
 insert into public.projects (id, name, leader_id, created_by)
 overriding system value
 values (
   690001,
   'Project membership fixture',
-  'a6900000-0000-0000-0000-000000000002',
+  'a6900000-0000-0000-0000-000000000004',
   'a6900000-0000-0000-0000-000000000002'
 );
 
@@ -110,6 +112,10 @@ select is(
     select count(*)
       from public.project_members pm
      where pm.project_id = 690001
+       and pm.member_id in (
+         'a6900000-0000-0000-0000-000000000001',
+         'a6900000-0000-0000-0000-000000000002'
+       )
   ),
   2::bigint,
   'both approved project roles are stored'
