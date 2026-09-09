@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(41);
+select plan(42);
 
 create function pg_temp.login(uid uuid, member_role text, member_level int)
 returns void
@@ -262,9 +262,12 @@ select throws_ok(
           values (%s, 'a7200000-0000-0000-0000-000000000004', 'member') $$,
     (select active_project_id from fx)),
   '42501', null, 'BC cannot directly add project members');
-update public.projects
-   set name = 'Forbidden Direct Rename'
- where id = (select active_project_id from fx);
+select throws_ok(
+  $$ update public.projects
+        set name = 'Forbidden Direct Rename'
+      where id = (select active_project_id from fx) $$,
+  '42501', null,
+  'BC cannot bypass lifecycle commands with a direct project update');
 reset role;
 select is(
   (select name from public.projects where id = (select active_project_id from fx)),
