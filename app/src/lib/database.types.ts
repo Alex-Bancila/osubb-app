@@ -1495,6 +1495,20 @@ export type Database = {
       }
     }
     Functions: {
+      add_project_member: {
+        Args: { p_member_id: string; p_project_id: number }
+        Returns: {
+          member_id: string
+          project_id: number
+          project_role: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       archive_project: {
         Args: { p_project_id: number }
         Returns: {
@@ -1599,6 +1613,20 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      grant_project_responsible: {
+        Args: { p_member_id: string; p_project_id: number }
+        Returns: {
+          member_id: string
+          project_id: number
+          project_role: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       in_my_dept: { Args: { member: string }; Returns: boolean }
       is_assigned: { Args: { tid: number }; Returns: boolean }
       member_level: { Args: { p_member: string }; Returns: number }
@@ -1614,6 +1642,24 @@ export type Database = {
         Returns: string
       }
       rating_mult: { Args: { r: number }; Returns: number }
+      remove_project_member: {
+        Args: { p_member_id: string; p_project_id: number }
+        Returns: boolean
+      }
+      revoke_project_responsible: {
+        Args: { p_member_id: string; p_project_id: number }
+        Returns: {
+          member_id: string
+          project_id: number
+          project_role: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_event_rsvp: {
         Args: { p_event_id: number; p_status: string }
         Returns: {
