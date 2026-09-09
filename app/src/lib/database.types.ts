@@ -1495,6 +1495,24 @@ export type Database = {
       }
     }
     Functions: {
+      archive_project: {
+        Args: { p_project_id: number }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: number
+          leader_id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       auth_in_dept: { Args: { d: string }; Returns: boolean }
       auth_in_team: { Args: { t: string }; Returns: boolean }
       auth_is_member: { Args: never; Returns: boolean }
@@ -1558,6 +1576,24 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_project: {
+        Args: { p_leader_id: string; p_name: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          id: number
+          leader_id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
           isOneToOne: true
           isSetofReturn: false
         }
