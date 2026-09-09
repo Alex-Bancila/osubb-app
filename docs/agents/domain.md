@@ -2,7 +2,7 @@
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
-**This repo is single-context:** one `CONTEXT.md` + `docs/adr/` at the repo root. Both exist — `CONTEXT.md` is the OSUBB domain glossary, and `docs/adr/` holds ADRs 0001–0006. New ADRs get the next number in sequence; the domain-modeling skills add terms and decisions lazily as they get resolved.
+**This repo is single-context:** one `CONTEXT.md` + `docs/adr/` at the repo root. Both exist — `CONTEXT.md` is the OSUBB domain glossary, and `docs/adr/` holds ADRs 0001–0008. ADR-0007 is authoritative for the Task Tracker model and ADR-0008 for Calendar behavior. New ADRs get the next number in sequence; the domain-modeling skills add terms and decisions lazily as they get resolved.
 
 ## Before exploring, read these
 
@@ -25,7 +25,9 @@ Single-context repo (this repo):
 │   ├── 0003-invite-only-auth.md
 │   ├── 0004-promotion-policy.md
 │   ├── 0005-rollout-strategy.md
-│   └── 0006-data-retention.md
+│   ├── 0006-data-retention.md
+│   ├── 0007-task-tracker-lifecycle.md
+│   └── 0008-calendar-visibility.md
 └── (app source)
 ```
 

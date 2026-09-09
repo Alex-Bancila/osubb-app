@@ -1,60 +1,197 @@
-# OSUBB App — Domain Context & Glossary
+# OSUBB App — Domain Context
 
-The **ubiquitous language** for the OSUBB app. Use these exact terms in code, table/column names, issue titles, tests, and docs. Romanian terms are the organization's real vocabulary; the English is the code-level name.
+The shared language for the OSUBB app. Use these terms consistently in product discussions, issue titles, tests, and user-facing Romanian copy. Architectural and implementation decisions belong in `docs/adr/`, not in this glossary.
 
-> Consumed by the engineering skills via `docs/agents/domain.md`. The authoritative data model lives in `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md`; this file is the shared glossary.
+## Organization
 
-## The organization
+**OSUBB**:
+Organizația Studenților din Universitatea Babeș-Bolyai, the student NGO whose internal work this application supports.
 
-- **OSUBB** — *Organizația Studenților din Universitatea Babeș-Bolyai*, a student NGO in Cluj. This app is its internal tool for tasks, points, calendar, announcements, and the volunteer database.
-- **BC** — *Biroul de Conducere* (the board / leadership). Highest operational authority in-app.
-- **BCE** — *Biroul de Conducere Extins* (extended board, e.g. the IT Coordinator). One level below BC.
-- **AG / AGO** — *Adunarea Generală (Ordinară)*, the general assembly where voting members decide org matters.
+**BC**:
+Biroul de Conducere, the organization’s highest operational leadership group.
 
-## People & structure
+**BCE**:
+Biroul de Conducere Extins, the extended leadership group immediately below BC.
 
-- **Member** (`profiles`) — one person in the org, tied to a Supabase Auth user. Has a **Role**, a **Status**, and belongs to one or more **Departments** and **Teams**.
-- **Role** (`member_role`) — one of eight, each with a numeric **Level** that drives permissions:
-  `recrut`(0) · `voluntar`(1) · `activ`/Membru Activ(2) · `vot`/Drept de vot(3) · `responsabil`(4) · `bce`(5) · `bc`(6) · `moderator`(9).
-- **Level** — the integer rank of a Role. Permissions are expressed as thresholds (e.g. "manage tasks = level ≥ 4"), **not** as per-role lists.
-- **Status** (`member_status`) — `activ` | `inactiv` | `alumni`. `alumni` keeps history for people who left.
-- **Department** (`departments`) — the five real ones: **Educational** (`edu`), **Imagine & PR** (`pr`), **Tineret** (`youth`), **Financiar** (`fin`), **Resurse Umane** (`hr`). Plus two non-department units: **IT** (`it`, a *coordination* unit led by the IT Coordinator — not a department) and **org** (a pseudo-scope meaning "whole organization").
-- **Team** (`teams`) — a working group inside a department (e.g. *Echipa Aplicație*). Has a **lead**, a `for_recruits` flag (recruits may see it), and an `is_interne` flag (the VP-Interne team).
-- **Interne** — the *Vicepreședinte Interne* + *Echipa Interne*, who track AG eligibility. Their sheets are visible only to BC-level members.
+**AG / AGO**:
+Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions.
 
-## Tasks & points
+## Members and structure
 
-- **Task** (`tasks`) — a unit of work. Has a **Difficulty**, an optional **Rating** (null until graded), a **Status**, a deadline, a department/team, and one or more assignees.
-- **Difficulty** — 1–5 stars; how hard the task is.
-- **Rating** — 1–5; the quality grade a task receives when reviewed. Drives a **Multiplier**: 1→−1, 2→0, 3→+1, 4→+2, 5→+3.
-- **Points** — awarded per graded task: `Points = Difficulty × Multiplier(Rating)`. A rating of 1 is a **penalty** (negative points).
-- **Points Ledger** (`points_ledger`) — the append-only source of truth for every point change (graded tasks, manual awards, penalties). A member's total is the **sum** of their ledger; never store a running total on the member.
-- **Task Status** (`task_status`) — `todo` | `progress` | `done` | `overdue` | `open`. **open** = unassigned, first-taker: any member may claim it.
-- **Task Request** (`task_requests`) — a member's proposal to **award points** or **create a task**, awaiting approval by a level ≥ 4 member.
-- **Tier** — a display band derived from points + role (Recrut → Voluntar → Membru Activ → …).
-- **Promotion Rule** (`promotion_rules`) — a configurable threshold that promotes automatically (ADR-0004): Recrut→Voluntar after one semester (time), Voluntar→Membru Activ at a BC-set points threshold. Roles level ≥ 3 (vot, responsabil, bce, bc, moderator) change **only manually**; demotions are never automatic. Every change lands in **Role History** (`role_history`, actor `'system'` for automatic ones).
-- **Sanction** — a negative manual ledger entry granted by BC (`points_ledger.reason = 'sanction'`) with a reason note; the member is notified. Sanctions appear in the AGO report.
-- **Leaderboard** / **Cupa departamentelor** ("Departments' Cup") — rankings of members / departments by total points (SQL views over the ledger).
+**Member**:
+A person recognized as part of OSUBB. A Member has one organizational Role, one membership Status, and may belong to Departments, Teams, and Projects.
+_Avoid_: User, account, volunteer when referring to every possible role
 
-## Calendar, announcements, notifications
+**Role**:
+One of the eight organization positions: Recrut, Voluntar, Membru Activ, Voluntar cu Drept de Vot, Responsabil, BCE, BC, or Moderator.
 
-- **Event** (`events`) — calendar entry with a **Type** (`sedinta`, `activitate`, `call`, `eveniment`, `deadline`, `recrutare`) and a **Scope**.
-- **Scope** (`event_scope`) — who can see an event: `team` | `dept` | `project` | `org`. Governs calendar visibility together with role level.
-- **Announcement** (`announcements`) — an org message with a **Priority** (`critical` | `important` | `normal`), optionally **pinned**, optionally linking a form.
-- **Notification** (`notifications`) — a per-recipient alert of a **Kind** (`announce`, `deadline`, `event`, `task`, `system`).
-- **Suppression** (`notif_suppression`) — role-based rule that hides certain notification kinds from a role: **BC and BCE do not receive broadcast task/event/deadline notifications** (spec Revision 3, resolution 2 — supersedes the older bc-only wording). Notifications about a member's **own** tasks are always delivered.
-- **Fan-out** — the server-side act of turning one event (an announcement, a deadline) into one `notifications` row per intended recipient, applying Suppression via the lookup, never hardcoded roles.
+**Level**:
+The ordered authority associated with a Role. A higher Level may grant broader organizational responsibility, but membership in a Department, Team, or Project still determines local authority.
 
-## Governance thresholds
+**Membership Status**:
+Whether a Member is active, inactive, or alumni. Only an active Member may perform organization work in the application.
+_Avoid_: Task status
 
-- **AG eligibility** — a member with **≥ 300 points** may participate in the AG.
-- **Quorum / top-25%** — the top 25% of eligible members keep their voting right at each AGO.
+**Department**:
+One of the five OSUBB departments: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane.
 
-## Access model (see ADR-0003)
+**Project**:
+A temporary or ongoing body of work independent of Departments. A Project has one Project Lead, Members, and may have Project Responsibles.
 
-- **Invite-only** — anyone may *authenticate* (email or Google), but access requires a BC-provisioned `profiles` row. No self-service sign-up; RLS denies everyone without a profile.
-- **Magic link** — the passwordless login email an invited member receives; the only way accounts come into existence. Nobody generates or distributes passwords.
-- **Provisioning** — creating the `profiles` row + department/team links for an invited auth user, atomically, via one shared server-side path (single invite and CSV import both use it).
-- **Claims** — the member's `member_role`, `member_level`, `dept_ids`, `team_ids`, stamped into the JWT at login by the custom access-token hook. RLS helpers (`auth_level()`, `auth_role()`, `auth_in_dept()`, `auth_in_team()`, `auth_is_member()`) read only these. A session can be `authenticated` (a valid login token) with **no claims at all** — never invited, or a member deactivated since their token was issued (their token stays valid up to `jwt_expiry`, 1h). `auth_is_member()` is the explicit check for "has real claims"; it exists because `auth.uid()` cannot tell a deactivated member from an active one — both still have a `profiles` row.
-- **RLS** — *Row-Level Security*: all authorization lives in Postgres policies, keyed off the Claims. The client holds no authority. The database is **deny-by-default**: every table has RLS enabled; a role sees only what an explicit policy grants.
-- **Capability** (`role_capabilities`) — a named permission derived from Level thresholds (e.g. `manageTasks` = level ≥ 4, `manageRoles` = level ≥ 6), stored as data so BC can adjust without code. UI reads it for nav gating; policies use `auth_level()` directly.
+**Project Lead**:
+The active Project Member who manages Project membership, Project Responsibles, and Project work.
+_Avoid_: Team lead
+
+**Project Responsible**:
+An active Project Member trusted to manage Project work alongside the Project Lead.
+_Avoid_: Project manager when the organizational role is meant
+
+**Team**:
+A working group whose Members share a work context. A Team is either a Department Team or an Independent Team and does not have a single internal lead.
+
+**Department Team**:
+A Team belonging to exactly one Department and overseen by that Department’s leadership.
+
+**Independent Team**:
+A Team with no parent Department. Its active Members jointly manage its planned work, while BC or Moderator manages membership.
+
+**Interne**:
+The Vicepreședinte Interne and Echipa Interne, responsible for tracking AG eligibility and voting-right information.
+
+## Task Tracker
+
+**Task**:
+A planned or recognized unit of OSUBB work with one Origin, one Audience, one Assignment Mode, and a defined lifecycle.
+
+**Task Origin**:
+The Department, Project, or Team that owns a Task. Every Task has exactly one Origin.
+_Avoid_: Scope when ownership is meant
+
+**Task Audience**:
+Whether a public Task opportunity is local to its Origin or open across OSUBB.
+
+**Assignment Mode**:
+Whether a Task is assigned directly to one eligible Member or offered publicly through the Candidate Queue.
+
+**Executor**:
+The one Member currently accountable for completing a Task.
+_Avoid_: Assignee for the current accountable person
+
+**Assignment**:
+A historical record of a Member serving as a Task’s Executor. A Task may have several Assignments over time but at most one active Executor.
+
+**Opportunity**:
+A public Task whose Candidate Queue is open to eligible Members.
+_Avoid_: Open status
+
+**Candidate**:
+A Member who has expressed interest in a public Task and is waiting, selected, withdrawn, or closed in its queue.
+
+**Candidate Queue**:
+The ordered list of Candidates for a public Task after the first eligible Member becomes Executor.
+
+**Give Up**:
+An Executor’s recorded decision to leave a Task before review, with a required explanation and preserved history.
+
+**Task Status**:
+The current lifecycle stage: To do, In progress, In review, Completed, or Cancelled.
+_Avoid_: Open and Overdue as statuses
+
+**Overdue**:
+An unfinished Task whose deadline has passed. Overdue is a condition derived from time, not a lifecycle stage.
+
+**Task Activity**:
+The immutable chronological history of Task lifecycle, assignment, queue, evaluation, and cancellation events.
+
+**Evaluation**:
+The final review that sets effective Difficulty and Rating and determines Task Points for the active Executor.
+
+**Difficulty**:
+A 1–5 estimate of how demanding a Task is.
+
+**Rating**:
+A 1–5 assessment of the quality of completed work.
+
+**Task Points**:
+Points produced by a completed Task’s Difficulty and Rating. They belong only to the evaluated Executor.
+
+**Points Ledger**:
+The append-only history of every change contributing to a Member’s Personal Score.
+
+**Personal Score**:
+The total visible to an individual Member from their own Points Ledger entries.
+
+**Leadership Leaderboard**:
+A BCE/BC/Moderator view of Members ordered by Task Points only.
+
+**Department Cup**:
+A BCE/BC/Moderator comparison of Task Points earned through Department Tasks and Department-Team Tasks.
+
+**Completed-work Request**:
+A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together.
+_Avoid_: Award request, new-task request
+
+**Sanction**:
+A deferred BC/Moderator action that may reduce a Member’s Personal Score and must include a visible explanation.
+
+## Calendar
+
+**Event**:
+A future or past OSUBB activity owned by the organization, a Department, a Team, or a Project.
+
+**Event Scope**:
+The organization structure that owns an Event: organization, Department, Team, or Project.
+
+**Minimum Level**:
+The lowest organizational Level allowed to discover an Event, such as Everyone, AG+, Responsible+, BCE+, or BC+.
+
+**Relevant Event**:
+An organization Event or an Event belonging to one of the Member’s Departments, Teams, or Projects.
+
+**Other OSUBB Event**:
+A visible Event outside the Member’s own structures, presented separately until the Member answers “Vin”.
+
+**RSVP**:
+A Member’s “Vin” or “Nu vin” response to an Event.
+
+**Capacity**:
+Informational attendance guidance for an Event. It does not reject an RSVP or create a waitlist.
+
+## Communication
+
+**Announcement**:
+An OSUBB message that may have normal, important, or critical Priority and may link to an external form.
+
+**Notification**:
+A personal in-app alert delivered to one intended Member.
+
+**Suppression**:
+A rule preventing selected broadcast notification kinds from reaching a Role while preserving direct notifications about a Member’s own work.
+
+**Fan-out**:
+Turning one organization event into targeted Notifications for its intended recipients.
+
+## Governance
+
+**AG Eligibility**:
+The qualification that allows a Member to participate in the AG after reaching the accepted Task-Point threshold.
+
+**Quorum / Top 25%**:
+The ranking rule used to determine which eligible Members retain voting rights at an AGO.
+
+## Access
+
+**Invite-only Access**:
+The rule that only a person provisioned by OSUBB leadership becomes a Member of the application.
+
+**Magic Link**:
+The passwordless email link used by a provisioned Member to sign in.
+
+**Provisioning**:
+Creating the organization membership information associated with an invited person.
+
+**Organization Claims**:
+The signed membership facts attached to a session, including Role, Level, Departments, and Teams.
+
+**Capability**:
+A named product action available at or above an organizational Level, without replacing local Department, Team, or Project authority.
