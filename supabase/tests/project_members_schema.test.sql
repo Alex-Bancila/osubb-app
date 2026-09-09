@@ -71,8 +71,8 @@ select has_index(
   'memberships can be found efficiently by member'
 );
 
--- Data-integrity fixtures use the table owner so the still-empty policy set
--- cannot make a constraint test pass for the wrong reason.
+-- Data-integrity fixtures use the table owner so RLS cannot make a constraint
+-- test pass for the wrong reason by hiding its target rows.
 insert into auth.users (id, email) values
   ('a6900000-0000-0000-0000-000000000001', 'project.member@test.local'),
   ('a6900000-0000-0000-0000-000000000002', 'project.responsible@test.local'),
@@ -155,8 +155,8 @@ select throws_ok(
 );
 
 select policies_are(
-  'public', 'project_members', array[]::text[],
-  'project memberships start with no client-facing policies'
+  'public', 'project_members', array['project_members_read'],
+  'project memberships expose only the read policy added by #272'
 );
 select ok(
   not has_table_privilege('anon', 'public.project_members', 'select'),
@@ -164,7 +164,7 @@ select ok(
 );
 select ok(
   has_table_privilege('authenticated', 'public.project_members', 'select'),
-  'authenticated receives the table privilege needed by future RLS policies'
+  'authenticated receives the table privilege required by its read policy'
 );
 select ok(
   not has_table_privilege('authenticated', 'public.project_members', 'truncate'),
