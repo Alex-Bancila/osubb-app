@@ -8,7 +8,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(30);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -70,6 +70,17 @@ select is((select count(*) from teams where id in ('t-app', 't-recruti')), 2::bi
 
 select is((select count(*) from teams where id = 't-recruti' and for_recruits), 1::bigint,
   'one team is open to recruits — the branch the calendar rule turns on');
+
+select ok(
+  exists (select 1 from member_departments
+           where member_id = 'd0000000-0000-0000-0000-000000000006' and dept_id = 'diverse'),
+  'bce@ demo account belongs to Diverse'
+);
+select ok(
+  exists (select 1 from team_members
+           where member_id = 'd0000000-0000-0000-0000-000000000008' and team_id = 'it'),
+  'moderator@ demo account is on the IT team'
+);
 
 -- ==================== Project authorization scenarios ====================
 -- These rows are local/staging fixtures for Project policy and future Task
