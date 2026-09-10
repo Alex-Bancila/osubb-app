@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 type Listener = (event: string, session: unknown) => void;
@@ -25,7 +25,7 @@ vi.mock('./supabase', () => ({
   },
 }));
 
-import { AuthProvider } from './auth';
+import { AuthProvider, useAuth } from './auth';
 
 function sessionFor(id: string) {
   return { user: { id }, access_token: 'x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y' };
@@ -35,6 +35,13 @@ function notifyListener() {
   const notify = auth.listener();
   if (!notify) throw new Error('no auth listener registered');
   return notify;
+}
+
+// Renders inside AuthProvider so a test can trigger the explicit signOut()
+// path directly, independent of the onAuthStateChange listener.
+function SignOutButton() {
+  const { signOut } = useAuth();
+  return <button onClick={() => void signOut()}>Sign out</button>;
 }
 
 describe('AuthProvider cache hygiene', () => {
@@ -75,6 +82,35 @@ describe('AuthProvider cache hygiene', () => {
     });
     notifyListener()('SIGNED_IN', sessionFor('b'));
 
+    await waitFor(() =>
+      expect(
+        client.getQueryData(['profile', 'me', { memberId: 'a' }]),
+      ).toBeUndefined(),
+    );
+  });
+
+  it('clears the query cache when signOut() is called, independent of the listener', async () => {
+    // The mocked supabase.auth.signOut above never invokes the registered
+    // listener, unlike the real client (which emits SIGNED_OUT through
+    // onAuthStateChange too). That is what isolates this test to the
+    // explicit signOut() path in AuthProvider's memoised value, rather than
+    // the listener path already covered above.
+    const client = new QueryClient();
+    client.setQueryData(['profile', 'me', { memberId: 'a' }], {
+      full_name: 'A',
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <SignOutButton />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
     await waitFor(() =>
       expect(
         client.getQueryData(['profile', 'me', { memberId: 'a' }]),
