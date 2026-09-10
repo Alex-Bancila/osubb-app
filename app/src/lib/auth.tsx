@@ -97,7 +97,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // What is in storage right now (a returning member, still signed in).
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
-      lastUserId.current = data.session?.user.id ?? null;
+      // Guard: onAuthStateChange can fire (e.g. SIGNED_IN for a different
+      // member on a shared device) before this promise settles, since it is
+      // registered synchronously right after this call but resolves later.
+      // Only seed lastUserId here when nothing has claimed it yet — writing
+      // unconditionally would let a slow-resolving stored session for member
+      // A stomp the id an already-processed event just set for member B,
+      // and the next real transition away from B would then compare against
+      // A and silently skip the clear.
+      if (lastUserId.current === null) {
+        lastUserId.current = data.session?.user.id ?? null;
+      }
       setSession(data.session);
       setLoading(false);
     });
