@@ -79,10 +79,11 @@ select pg_temp.login('c2000000-0000-0000-0000-0000000000c2', 'bce', 5, '["edu"]'
 select lives_ok(
   $$ insert into teams (id, name, dept_id) values ('t-new', 'Echipa Nouă', 'edu') $$,
   'level >= 5 creates teams');
-select lives_ok(
+select throws_ok(
   $$ insert into team_members (team_id, member_id)
      values ('t-new', 'c1000000-0000-0000-0000-0000000000c1') $$,
-  'level >= 5 assigns members to teams');
+  '42501', null,
+  'legacy direct Team roster writes are retired pending scoped commands');
 select lives_ok(
   $$ insert into member_departments (member_id, dept_id)
      values ('c2000000-0000-0000-0000-0000000000c2', 'pr') $$,
