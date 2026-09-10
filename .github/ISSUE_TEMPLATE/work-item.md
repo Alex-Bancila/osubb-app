@@ -1,6 +1,6 @@
 ---
 name: Work item
-about: One issue = one branch = one PR. Link concrete #numbers under Blocked by.
+about: "One issue = one branch = one PR. Link concrete #numbers under Blocked by."
 labels: needs-triage
 ---
 

@@ -1,1 +1,4 @@
+# Auto review-requests from CODEOWNERS need branch protection, which the current
+# free-plan private repo cannot enable (see docs/team/team-plan.md, Work rules).
+# The file is committed now so ownership is recorded and takes effect on upgrade.
 * @Alex-Bancila
