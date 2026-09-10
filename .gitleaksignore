@@ -1,0 +1,22 @@
+# Narrow, per-finding suppressions for gitleaks (#378) — never a rule- or
+# path-wide allowlist. Each line is one exact commit:file:rule:line
+# fingerprint from `gitleaks git --redact -v`, individually inspected below.
+
+# The fixed local Supabase demo `anon` JWT: ships with every Supabase CLI
+# install, identical on every developer's machine (`npx supabase status`
+# prints the same value), and already documented as public/non-sensitive by
+# the comment above it in this file — the anon key grants nothing by itself,
+# RLS decides access.
+e06dbb65641bbcf31c25cf883a3914517afeeea5:app/.env.example:jwt:15
+
+# A synthetic, structurally-invalid JWT-shaped test fixture
+# ('x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y' — the header segment is literally "x", not
+# valid base64url JSON, and the signature is "y") used only as a mock session
+# token against a fully mocked auth client (vi.mock('./supabase')). It cannot
+# authenticate against anything and was never issued by Supabase or anyone
+# else.
+5231865444552927f33fecb0448bb4d81651b14c:app/src/lib/auth.test.tsx:generic-api-key:31
+
+# The identical fixture string, copied verbatim into a planning document's
+# code excerpt of the same test.
+96a87dc490254b6db0555e68d1bc77fd5753ef1d:docs/superpowers/plans/2026-09-10-alex-assigned-issues.md:generic-api-key:687
