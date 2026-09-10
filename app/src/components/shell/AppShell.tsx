@@ -5,6 +5,7 @@ import { logOutOutline, menuOutline } from 'ionicons/icons';
 import { useAuth } from '../../lib/auth';
 import { can } from '../../lib/capabilities';
 import { initials } from '../../lib/format';
+import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
 import { NAV_ITEMS, TAB_ORDER } from './navItems';
@@ -21,6 +22,7 @@ export default function AppShell() {
   const { claims, session, signOut } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const signOutAction = useSignOutAction(signOut);
 
   /* The sidebar identifies the person, not the account: their name and their
      own avatar colour, with the address as the fallback for the moment before
@@ -90,10 +92,23 @@ export default function AppShell() {
               </span>
             </span>
           </div>
-          <button type="button" className="nav-item" onClick={signOut}>
+          <button
+            type="button"
+            className="nav-item"
+            disabled={signOutAction.pending}
+            aria-describedby={
+              signOutAction.error ? 'sign-out-error' : undefined
+            }
+            onClick={() => void signOutAction.run()}
+          >
             <IonIcon icon={logOutOutline} aria-hidden="true" />
-            Deconectare
+            {signOutAction.pending ? 'Se deconectează…' : 'Deconectare'}
           </button>
+          {signOutAction.error && (
+            <p id="sign-out-error" className="auth-error" role="alert">
+              {signOutAction.error}
+            </p>
+          )}
         </div>
       </aside>
 
