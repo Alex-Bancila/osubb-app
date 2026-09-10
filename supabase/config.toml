@@ -87,5 +87,5 @@ secret = ""
 [functions.invite-member]
 enabled = true
 verify_jwt = true
-import_map = "./functions/invite-member/deno.json"
+import_map = "./functions/deno.json"
 entrypoint = "./functions/invite-member/index.ts"
