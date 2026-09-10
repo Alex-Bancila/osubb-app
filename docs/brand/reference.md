@@ -22,6 +22,8 @@ Department colour conveys department context, not role or permission:
 | Imagine & PR | `#7500A0` |
 | Tineret | `#FF3B3B` |
 
+- Structuri de coordonare (Diverse, Secretariat): neutru `#5C5C61`; numele structurii apare întotdeauna lângă culoare.
+
 Render role badges neutrally; roles and capabilities come from the domain/capability model, never from a department colour. Department UI must also name the department (and may use its short label or icon): colour is never the only carrier of meaning.
 
 ## Typography and logo
