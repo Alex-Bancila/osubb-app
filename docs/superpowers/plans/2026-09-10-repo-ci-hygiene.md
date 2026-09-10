@@ -48,12 +48,17 @@ Alex's decisions for #356 (asked 2026-09-10): delete the 640 KB root transcript,
 
 Why this stack shape: 2 needs 1's root `package.json` (license field); 3 needs 2's file (version pin check) and edits `ci.yml`; 4 and 5 edit `ci.yml` too (removing lines 42–152 and adding a job) — a linear stack avoids three-way rebases. Task 0 shares no file with anything and goes straight to `main`.
 
-### Merge protocol for Alex (the part that prevents a repeat of #391/#392)
+### Merge protocol for Alex (the part that prevents a repeat of #391/#392, and recurred anyway as the 2026-09-10 Stack A mishap)
 
-1. Merge only a PR whose **base is `main`**. At any moment exactly one PR of the stack has that base.
-2. In the merge dialog tick **Delete branch**. GitHub then automatically retargets the next PR in the stack to `main` and re-runs CI on it.
-3. Wait for that CI, merge, repeat. If a PR still shows a feature branch as base after its parent merged, run `gh pr edit <n> --base main` (I can do this on request).
-4. Never merge a PR whose “base” field names a `chore/…` or `ci/…` branch — that is the mishap.
+**What happened on 2026-09-10:** PR #396 merged into `main` correctly, but #397, #398, #399 and #400 each merged into their *stacked base branch* instead, because that base branch was never deleted — GitHub had nothing to retarget. `main` was left missing the work from #358, #357, #373 and #378 even though every PR read "Merged". Recovered by the `fix/stack-a-recovery` PR (built from `ci/378-secret-scan-deno-cors`, the superset branch, merged up to date with `main`).
+
+The corrected facts, in place of the older assumptions above:
+
+1. GitHub retargets a stacked PR to `main` **only when its base branch is deleted**. This repo has "Automatically delete head branches" **off**, and "Delete branch" is a button on the merged PR's page — not a tick-box inside the merge dialog itself. Skip it and the next PR keeps its stale base and merges into that branch, not `main`.
+2. Retargeting a PR's base fires a `pull_request: edited` event, which `ci.yml` does not listen to — CI does **not** automatically re-run against `main` after a retarget. Close and reopen the PR (or push a new commit to it) to force a fresh run before merging.
+3. Always use "Create a merge commit" for a stack; squash or rebase on a lower PR rewrites its history and forces conflicts on the PR above it.
+4. Before merging any PR, read its base field yourself; merge only when it says `main`. Never merge a PR whose base names a `chore/…` or `ci/…` branch — that is the mishap.
+5. After merging, click "Delete branch" on that PR's page before moving to the next one in the stack — this is the step that makes step 1 above actually happen.
 
 ---
 
