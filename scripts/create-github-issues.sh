@@ -7,13 +7,21 @@
 #      (or create it in the GitHub UI, then `git remote add origin <url>`)
 #   2. Be authenticated: `gh auth status`
 #
-# Run ONCE (gh issue create is not idempotent — re-running duplicates issues):
-#   bash scripts/create-github-issues.sh
+# HISTORICAL — EXECUTED 2026-08-12. DO NOT RUN.
+# This created the original backlog once. `gh issue create` is not idempotent:
+# running it again duplicates ~100 issues (CLAUDE.md house rule 9).
 #
 # Mirrors docs/backend/implementation-issues.md. Foundation issues 0.1/0.2/1.1/1.2/5.1
 # are already delivered in the repo, so they are intentionally NOT created here.
 
 set -euo pipefail
+
+if [ "${I_REALLY_WANT_TO_RECREATE_THE_BACKLOG:-}" != "1" ]; then
+  echo "HISTORICAL — EXECUTED 2026-08-12. DO NOT RUN." >&2
+  echo "This script would duplicate the whole GitHub backlog. Refusing." >&2
+  echo "Override only on a fresh, empty repository: I_REALLY_WANT_TO_RECREATE_THE_BACKLOG=1 bash $0" >&2
+  exit 1
+fi
 
 command -v gh >/dev/null || { echo "gh CLI not found. Install from https://cli.github.com"; exit 1; }
 gh auth status >/dev/null 2>&1 || { echo "Not logged in. Run: gh auth login"; exit 1; }
