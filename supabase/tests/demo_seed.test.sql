@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(28);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -68,6 +68,82 @@ select is((select count(*) from teams where id in ('t-app', 't-recruti')), 2::bi
 
 select is((select count(*) from teams where id = 't-recruti' and for_recruits), 1::bigint,
   'one team is open to recruits — the branch the calendar rule turns on');
+
+-- ==================== Project authorization scenarios ====================
+-- These rows are local/staging fixtures for Project policy and future Task
+-- origin work. Test the relationships by stable names and demo identities;
+-- generated Project ids may advance when staging is seeded again.
+select is(
+  (select count(*) from projects
+    where name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025')),
+  2::bigint,
+  'the demo contains one active and one historical Project');
+
+select ok(
+  exists (select 1 from projects
+           where name = 'Festivalul Studențesc 2026' and status = 'active')
+  and exists (select 1 from projects
+               where name = 'Gala Voluntarilor 2025' and status = 'archived'),
+  'active and archived Project lifecycles are both represented');
+
+select is(
+  (select count(*)
+     from projects p
+     join project_members pm
+       on pm.project_id = p.id
+      and pm.member_id = p.leader_id
+    where p.name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025')),
+  2::bigint,
+  'each demo Project lead is also an explicit Project member');
+
+select ok(
+  exists (
+    select 1
+      from projects p
+      join project_members pm on pm.project_id = p.id
+     where p.name = 'Festivalul Studențesc 2026'
+       and pm.member_id = 'd0000000-0000-0000-0000-000000000003'
+       and pm.project_role = 'responsible'
+  )
+  and exists (
+    select 1
+      from projects p
+      join project_members pm on pm.project_id = p.id
+     where p.name = 'Festivalul Studențesc 2026'
+       and pm.member_id = 'd0000000-0000-0000-0000-000000000002'
+       and pm.project_role = 'member'
+  ),
+  'the active Project has a Responsible and an ordinary member');
+
+select ok(
+  exists (
+    select 1
+      from projects p
+      join project_members pm on pm.project_id = p.id
+     where p.name = 'Gala Voluntarilor 2025'
+       and pm.member_id = 'd0000000-0000-0000-0000-000000000006'
+       and pm.project_role = 'responsible'
+  )
+  and exists (
+    select 1
+      from projects p
+      join project_members pm on pm.project_id = p.id
+     where p.name = 'Gala Voluntarilor 2025'
+       and pm.member_id = 'd0000000-0000-0000-0000-000000000001'
+       and pm.project_role = 'member'
+  ),
+  'the archived Project preserves a representative historical roster');
+
+select is(
+  (select count(*)
+     from projects p
+     left join project_members pm
+       on pm.project_id = p.id
+      and pm.member_id = 'd0000000-0000-0000-0000-000000000001'
+    where p.name = 'Festivalul Studențesc 2026'
+      and pm.member_id is null),
+  1::bigint,
+  'the active Project has a known outsider for authorization checks');
 
 -- ==================== The demo has to look alive ====================
 -- These are about the *demo*, not the engine: a leaderboard where everyone

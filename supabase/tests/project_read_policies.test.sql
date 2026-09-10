@@ -6,6 +6,11 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(43);
 
+-- This suite owns its Project fixtures and asserts exact visible row counts.
+-- Keep those assertions independent from the representative demo Projects in
+-- seed.sql; the transaction rollback restores the seeded rows after the test.
+truncate table public.projects restart identity cascade;
+
 create function pg_temp.login(uid uuid, member_role text, member_level int)
 returns void
 language plpgsql

@@ -29,13 +29,36 @@
 -- rows they own. A real person invited to staging for testing keeps their
 -- profile, their tasks and their points.
 --
--- Order matters. `created_by`, `awarded_by`, `lead_id`, `from_member` and
+-- Order matters. `created_by`, `awarded_by`, Project `leader_id`, team
+-- `lead_id`, `from_member` and
 -- `decided_by` are plain references with no `on delete` clause, so Postgres
 -- refuses to remove a member while any of them still points at that member:
 -- the children go first. Everything else — memberships, team memberships,
 -- assignees, RSVPs, announcement reads, notifications, push tokens — cascades
 -- from `profiles`, which itself cascades from the single `auth.users` delete
 -- at the end.
+
+-- A real tester may create a Project and temporarily choose a demo account as
+-- its lead. That Project is not demo-owned, so deleting it would be data loss;
+-- preserving it while deleting its lead would violate the foreign key. Abort
+-- the transaction with a precise message and let a human reassign the lead.
+do $$
+begin
+  if exists (
+    select 1
+      from projects project
+      join profiles leader on leader.id = project.leader_id
+      join profiles creator on creator.id = project.created_by
+     where leader.email like '%@demo.osubb'
+       and creator.email not like '%@demo.osubb'
+  ) then
+    raise exception using
+      errcode = 'P0001',
+      message = 'seed_refuses_cross_owned_demo_project',
+      detail = 'Reassign every non-demo-owned Project away from demo leads before re-seeding.';
+  end if;
+end;
+$$;
 
 -- Ledger before tasks: points_ledger.task_id has no cascade either. This also
 -- catches a real tester's points if they were awarded on a demo task.
@@ -60,6 +83,15 @@ delete from events e
 
 delete from announcements a
  using profiles p where a.created_by = p.id and p.email like '%@demo.osubb';
+
+-- Project memberships cascade from their Project. A Project is demo-owned
+-- only when its creator belongs to the demo cohort; names are not ownership.
+delete from projects project
+ where exists (
+   select 1 from profiles creator
+    where creator.id = project.created_by
+      and creator.email like '%@demo.osubb'
+ );
 
 -- Teams after tasks and events, which reference them.
 delete from teams t
@@ -143,6 +175,39 @@ insert into team_members (team_id, member_id) values
   ('t-app',     'd0000000-0000-0000-0000-000000000008'),
   ('t-recruti', 'd0000000-0000-0000-0000-000000000002'),
   ('t-recruti', 'd0000000-0000-0000-0000-000000000005');
+
+-- ==================== Representative Projects ====================
+-- Projects are independent from departments. These two fixtures cover the
+-- active and archived lifecycles as well as lead, Responsible, ordinary
+-- member, and outsider authorization scenarios. The database assigns their
+-- ids; tests and dependent seed rows locate them by stable content instead.
+insert into projects (name, status, leader_id, created_by) values
+  ('Festivalul Studențesc 2026', 'active',
+   'd0000000-0000-0000-0000-000000000005',
+   'd0000000-0000-0000-0000-000000000007'),
+  ('Gala Voluntarilor 2025', 'archived',
+   'd0000000-0000-0000-0000-000000000004',
+   'd0000000-0000-0000-0000-000000000007');
+
+-- The leader membership is inserted automatically by the Project invariant
+-- trigger. Add only the non-leader roles here. Vlad deliberately has the
+-- ordinary OSUBB role `activ` while being a Project Responsible: Project
+-- authority is independent from the organization-wide `responsabil` role.
+insert into project_members (project_id, member_id, project_role)
+select project.id, fixture.member_id, fixture.project_role
+  from (values
+    ('Festivalul Studențesc 2026',
+     'd0000000-0000-0000-0000-000000000003'::uuid, 'responsible'),
+    ('Festivalul Studențesc 2026',
+     'd0000000-0000-0000-0000-000000000002'::uuid, 'member'),
+    ('Gala Voluntarilor 2025',
+     'd0000000-0000-0000-0000-000000000006'::uuid, 'responsible'),
+    ('Gala Voluntarilor 2025',
+     'd0000000-0000-0000-0000-000000000001'::uuid, 'member')
+  ) as fixture (project_name, member_id, project_role)
+  join projects project
+    on project.name = fixture.project_name
+   and project.created_by = 'd0000000-0000-0000-0000-000000000007';
 
 -- ==================== Demo work: tasks, grades, points ====================
 -- Graded tasks are NOT accompanied by hand-written ledger rows: the grading
