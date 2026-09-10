@@ -22,7 +22,11 @@ export function isAllowedOrigin(origin: string | null): boolean {
 export function corsHeaders(origin: string | null): Record<string, string> {
   const allowed = isAllowedOrigin(origin);
   return {
-    ...(allowed ? { "Access-Control-Allow-Origin": origin as string, "Vary": "Origin" } : {}),
+    // Origin decides these headers, so every response varies on it — including
+    // the ones that get no Access-Control-Allow-Origin, or a shared cache could
+    // replay a rejected origin's response to an allowed one.
+    "Vary": "Origin",
+    ...(allowed ? { "Access-Control-Allow-Origin": origin as string } : {}),
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };

@@ -36,7 +36,9 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
   const origin = req.headers.get("origin");
 
   if (req.method === "OPTIONS") {
-    if (!isAllowedOrigin(origin)) return new Response(null, { status: 403 });
+    if (!isAllowedOrigin(origin)) {
+      return new Response(null, { status: 403, headers: corsHeaders(origin) });
+    }
     return new Response("ok", { headers: corsHeaders(origin) });
   }
   if (req.method !== "POST") return json({ error: "Use POST." }, 405, origin);

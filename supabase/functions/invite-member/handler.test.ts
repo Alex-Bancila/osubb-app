@@ -233,6 +233,7 @@ Deno.test("an unlisted origin gets no Access-Control-Allow-Origin header", async
     const { deps } = fakeDeps();
     const res = await handleInvite(request(validBody, { origin: "https://evil.example" }), deps);
     assertEquals(res.headers.has("Access-Control-Allow-Origin"), false);
+    assertEquals(res.headers.get("Vary"), "Origin");
   });
 });
 
@@ -248,6 +249,7 @@ Deno.test("preflight from an unlisted origin is refused with 403 and no ACAO", a
     );
     assertEquals(res.status, 403);
     assertEquals(res.headers.has("Access-Control-Allow-Origin"), false);
+    assertEquals(res.headers.get("Vary"), "Origin");
   });
 });
 
@@ -263,6 +265,7 @@ Deno.test("preflight from an allowed origin succeeds with the origin echoed", as
     );
     assertEquals(res.status, 200);
     assertEquals(res.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173");
+    assertEquals(res.headers.get("Vary"), "Origin");
   });
 });
 
@@ -271,10 +274,12 @@ Deno.test("ALLOWED_ORIGINS parses a comma-separated list and trims whitespace", 
     const { deps: depsA } = fakeDeps();
     const resA = await handleInvite(request(validBody, { origin: "https://a.example" }), depsA);
     assertEquals(resA.headers.get("Access-Control-Allow-Origin"), "https://a.example");
+    assertEquals(resA.headers.get("Vary"), "Origin");
 
     const { deps: depsB } = fakeDeps();
     const resB = await handleInvite(request(validBody, { origin: "https://b.example" }), depsB);
     assertEquals(resB.headers.get("Access-Control-Allow-Origin"), "https://b.example");
+    assertEquals(resB.headers.get("Vary"), "Origin");
   });
 });
 
@@ -283,5 +288,13 @@ Deno.test("the default origin applies when ALLOWED_ORIGINS is unset", async () =
     const { deps } = fakeDeps();
     const res = await handleInvite(request(validBody, { origin: "http://localhost:5173" }), deps);
     assertEquals(res.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173");
+    assertEquals(res.headers.get("Vary"), "Origin");
   });
+});
+
+Deno.test("a request with no Origin header gets Vary: Origin and no ACAO", async () => {
+  const { deps } = fakeDeps();
+  const res = await handleInvite(request(validBody), deps);
+  assertEquals(res.headers.get("Vary"), "Origin");
+  assertEquals(res.headers.has("Access-Control-Allow-Origin"), false);
 });
