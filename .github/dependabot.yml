@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # GitHub Actions: root directory, weekly, grouped into one PR per week
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # npm: /app only, weekly with a minor-and-patch group
+  # Note: No root npm entry — Supabase CLI pin at root moves in lockstep with
+  # SUPABASE_CLI_VERSION in CI (enforced by the "CLI pin matches root
+  # package.json" step in .github/workflows/ci.yml) and must stay a
+  # deliberate manual bump, not automatic.
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        dependency-types:
+          - production
+          - development
+        update-types:
+          - minor
+          - patch

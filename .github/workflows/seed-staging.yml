@@ -20,17 +20,21 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   seed:
     name: Seed staging demo data
     runs-on: ubuntu-latest
+    environment: staging
     # Staging has one database. Share the migration deploy's queue so a seed
     # never runs while a `db push` is half-applied.
     concurrency:
       group: staging-deploy
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Two independent checks, both before anything is written. The typed ref
       # proves intent; the URL check proves the intent matches the target.

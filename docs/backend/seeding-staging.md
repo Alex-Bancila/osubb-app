@@ -88,6 +88,8 @@ docker exec -i supabase_db_osubb-app psql -U postgres -d postgres \
 
 Run it twice; the data will be the same both times. If you change `seed.sql`, check that this still holds — a seed that only works on an empty database is a seed staging cannot use.
 
+**Verify locally:** `bash scripts/check-seed-rerunnable.sh` does the above for you — same content-fingerprint check CI runs on every PR. Prerequisites: Docker running and `npx supabase start` (or `npx supabase db reset`) already applied to the local stack.
+
 ## When it goes wrong
 
 | Message | What it means |

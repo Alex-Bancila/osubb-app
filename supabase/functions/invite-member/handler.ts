@@ -13,7 +13,7 @@
 // is there because of a bug this function actually shipped with — see the
 // comments, and handler.test.ts, which fails if any of them is undone.
 
-import { corsHeaders, json } from "../_shared/cors.ts";
+import { corsHeaders, isAllowedOrigin, json } from "../_shared/cors.ts";
 import type { InviteDeps } from "./deps.ts";
 
 const INVITE_LEVEL = 6; // BC and above — capability manageRoles (spec §4.1)
@@ -27,15 +27,28 @@ interface InviteRequest {
 }
 
 export async function handleInvite(req: Request, deps: InviteDeps): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "Use POST." }, 405);
+  // Server-to-server calls (curl, another function, CI) send no Origin header
+  // at all — only browsers do. isAllowedOrigin(null) is false, so those calls
+  // never get an Access-Control-Allow-Origin echoed back, but they also never
+  // need one: CORS only gates browser fetches. A null origin is therefore
+  // refused on preflight (a real browser preflight always carries Origin) but
+  // POSTs without one still reach the normal auth checks below.
+  const origin = req.headers.get("origin");
+
+  if (req.method === "OPTIONS") {
+    if (!isAllowedOrigin(origin)) {
+      return new Response(null, { status: 403, headers: corsHeaders(origin) });
+    }
+    return new Response("ok", { headers: corsHeaders(origin) });
+  }
+  if (req.method !== "POST") return json({ error: "Use POST." }, 405, origin);
 
   if (!(req.headers.get("Authorization") ?? "").startsWith("Bearer ")) {
-    return json({ error: "Autentifică-te pentru a invita membri." }, 401);
+    return json({ error: "Autentifică-te pentru a invita membri." }, 401, origin);
   }
 
   const callerId = await deps.callerId();
-  if (!callerId) return json({ error: "Sesiune invalidă sau expirată." }, 401);
+  if (!callerId) return json({ error: "Sesiune invalidă sau expirată." }, 401, origin);
 
   // Authorization reads the level from the DATABASE, not from the caller's
   // claims: a token issued before a demotion still carries the old level for
@@ -46,23 +59,23 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
     callerLevel = await deps.memberLevel(callerId);
   } catch (error) {
     console.error("caller lookup failed", error);
-    return json({ error: "Nu am putut verifica permisiunile." }, 500);
+    return json({ error: "Nu am putut verifica permisiunile." }, 500, origin);
   }
   if (callerLevel < INVITE_LEVEL) {
-    return json({ error: "Doar BC poate invita membri." }, 403);
+    return json({ error: "Doar BC poate invita membri." }, 403, origin);
   }
 
   let body: InviteRequest;
   try {
     body = await req.json();
   } catch {
-    return json({ error: "Corp de cerere invalid (JSON)." }, 400);
+    return json({ error: "Corp de cerere invalid (JSON)." }, 400, origin);
   }
 
   const email = body.email?.trim().toLowerCase();
   const fullName = body.full_name?.trim();
-  if (!email || !email.includes("@")) return json({ error: "Email invalid." }, 400);
-  if (!fullName) return json({ error: "Numele este obligatoriu." }, 400);
+  if (!email || !email.includes("@")) return json({ error: "Email invalid." }, 400, origin);
+  if (!fullName) return json({ error: "Numele este obligatoriu." }, 400, origin);
 
   const deptIds = body.dept_ids ?? [];
   const teamIds = body.team_ids ?? [];
@@ -79,7 +92,7 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
     ] as const) {
       const missing = await deps.missingIds(table, ids);
       if (missing.length > 0) {
-        return json({ error: `${label}: ${missing.join(", ")}.` }, 400);
+        return json({ error: `${label}: ${missing.join(", ")}.` }, 400, origin);
       }
     }
 
@@ -91,7 +104,7 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
     // points ledger with it. Re-inviting a colleague must never be
     // destructive.
     if (await deps.profileExists(email)) {
-      return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409);
+      return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409, origin);
     }
 
     // 3 · the magic-link invite creates the auth user and emails them.
@@ -100,10 +113,10 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
       const known = invited.error?.status === 422 ||
         /already been registered|already exists/i.test(invited.error?.message ?? "");
       if (known) {
-        return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409);
+        return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409, origin);
       }
       console.error("invite failed", invited.error);
-      return json({ error: "Trimiterea invitației a eșuat." }, 502);
+      return json({ error: "Trimiterea invitației a eșuat." }, 502, origin);
     }
 
     // 4 · provisioning — one atomic call (profile + departments + teams).
@@ -121,7 +134,7 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
       // step 2 and now. Their profile is the real one — leave the auth user
       // alone. Deleting here is what destroyed a member once.
       if (provisionError.code === "23505") {
-        return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409);
+        return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409, origin);
       }
 
       // Otherwise the data was bad and the user we just created has no
@@ -134,12 +147,12 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
       return json({
         error: "Datele membrului nu sunt valide (departament sau echipă inexistentă).",
         details: provisionError.message,
-      }, 400);
+      }, 400, origin);
     }
 
-    return json({ user_id: invited.userId, email }, 201);
+    return json({ user_id: invited.userId, email }, 201, origin);
   } catch (error) {
     console.error("invite-member failed", error);
-    return json({ error: "Ceva n-a mers. Încearcă din nou." }, 500);
+    return json({ error: "Ceva n-a mers. Încearcă din nou." }, 500, origin);
   }
 }

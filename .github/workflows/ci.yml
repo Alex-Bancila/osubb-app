@@ -5,16 +5,31 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  SUPABASE_CLI_VERSION: 2.117.0
+
 jobs:
   db:
     name: Migrations + db tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: supabase/setup-cli@v1
+      - name: CLI pin matches root package.json
+        run: |
+          pinned="$(node -p "require('./package.json').devDependencies.supabase")"
+          test "$pinned" = "$SUPABASE_CLI_VERSION" || { echo "::error::root package.json pins supabase $pinned but CI uses $SUPABASE_CLI_VERSION"; exit 1; }
+
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
         with:
-          version: 2.117.0
+          version: ${{ env.SUPABASE_CLI_VERSION }}
 
       # Starts the local stack and applies every migration in supabase/migrations/
       - name: Start local Supabase (applies migrations)
@@ -35,121 +50,10 @@ jobs:
         run: bash supabase/tests/remove_team_lead_upgrade.test.sh
 
       # `supabase start` already applied seed.sql to an empty database. Staging
-      # gets the same file applied to a LIVE one (docs/backend/seeding-staging.md),
-      # so it has to be re-runnable: applying it twice must leave the same demo
-      # data, not a duplicate of it and not an error. Compare a content
-      # fingerprint — row ids advance with the sequences and are not part of it.
+      # gets the same file applied to a LIVE one — see docs/backend/seeding-staging.md
+      # and scripts/check-seed-rerunnable.sh for what this proves and why.
       - name: seed.sql is re-runnable
-        run: |
-          cat > fingerprint.sql <<'SQL'
-          select md5(string_agg(x, '|' order by x))
-            from (
-              select format('member:%s:%s:%s', full_name, role, status) from profiles
-              union all select format('points:%s:%s:%s', full_name, points, rank) from leaderboard
-              union all select format('dept:%s:%s', member_id, dept_id) from member_departments
-              union all select format('team:%s:%s:%s', id, name, for_recruits) from teams
-              union all select format('project:%s:%s:%s:%s', project.name, project.status, leader.full_name, creator.full_name)
-                          from projects project
-                          join profiles leader on leader.id = project.leader_id
-                          join profiles creator on creator.id = project.created_by
-              union all select format('project-member:%s:%s:%s', project.name, member.full_name, membership.project_role)
-                          from project_members membership
-                          join projects project on project.id = membership.project_id
-                          join profiles member on member.id = membership.member_id
-              union all select format('task:%s:%s:%s', title, status, coalesce(rating::text, '-')) from tasks
-              union all select format('assignee:%s:%s', t.title, p.full_name)
-                          from task_assignees a
-                          join tasks t on t.id = a.task_id
-                          join profiles p on p.id = a.member_id
-              union all select format('ledger:%s:%s:%s', p.full_name, l.delta, l.reason)
-                          from points_ledger l join profiles p on p.id = l.member_id
-              union all select format('event:%s:%s', title, scope) from events
-              union all select format('rsvp:%s:%s:%s', e.title, p.full_name, a.status)
-                          from event_attendance a
-                          join events e on e.id = a.event_id
-                          join profiles p on p.id = a.member_id
-              union all select format('announce:%s:%s:%s', title, priority, pinned) from announcements
-              union all select format('notif:%s:%s:%s', p.full_name, n.kind, n.title)
-                          from notifications n join profiles p on p.id = n.member_id
-            ) s (x);
-          SQL
-
-          db() { docker exec -i supabase_db_osubb-app psql -U postgres -d postgres "$@"; }
-
-          # A same-name Project owned by a non-demo account is a sentinel for
-          # the most dangerous seed regression: deleting real staging data.
-          # Use a complete auth/profile pair so the invariant triggers exercise
-          # the same foreign keys as an invited tester.
-          db -q -v ON_ERROR_STOP=1 <<'SQL'
-          insert into auth.users (
-            instance_id, id, aud, role, email, encrypted_password,
-            email_confirmed_at, created_at, updated_at, raw_app_meta_data,
-            raw_user_meta_data, confirmation_token, recovery_token,
-            email_change_token_new, email_change, email_change_token_current,
-            phone_change, phone_change_token, reauthentication_token
-          ) values (
-            '00000000-0000-0000-0000-000000000000',
-            'e2750000-0000-0000-0000-000000000001',
-            'authenticated', 'authenticated', 'seed-preservation@test.local',
-            extensions.crypt('temporary', extensions.gen_salt('bf')),
-            now(), now(), now(),
-            jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
-            jsonb_build_object(), '', '', '', '', '', '', '', ''
-          );
-          insert into profiles (id, full_name, email, role, joined_year, avatar_color)
-          values ('e2750000-0000-0000-0000-000000000001', 'Seed Preservation',
-                  'seed-preservation@test.local', 'responsabil', 2026, '#000000');
-          insert into projects (name, status, leader_id, created_by)
-          values ('Cross-owned seed guard', 'active',
-                  'd0000000-0000-0000-0000-000000000005',
-                  'e2750000-0000-0000-0000-000000000001');
-          SQL
-
-          # Re-seeding must abort before changing anything when a real-owned
-          # Project still points at a demo lead. Silently deleting that Project
-          # would be data loss; deleting the demo user would violate its FK.
-          if db -q -v ON_ERROR_STOP=1 --single-transaction < supabase/seed.sql; then
-            echo "::error::seed.sql accepted a non-demo-owned Project with a demo lead."
-            exit 1
-          fi
-          guarded=$(db -tA -c "select format('%s:%s', (select count(*) from projects where name = 'Cross-owned seed guard' and created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from auth.users where email like '%@demo.osubb'))")
-          if [ "$guarded" != "1:8" ]; then
-            echo "::error::The cross-owned Project guard did not roll back cleanly ($guarded)."
-            exit 1
-          fi
-
-          db -q -v ON_ERROR_STOP=1 <<'SQL'
-          delete from projects
-           where name = 'Cross-owned seed guard'
-             and created_by = 'e2750000-0000-0000-0000-000000000001';
-          insert into projects (name, status, leader_id, created_by)
-          values ('Festivalul Studențesc 2026', 'active',
-                  'e2750000-0000-0000-0000-000000000001',
-                  'e2750000-0000-0000-0000-000000000001');
-          SQL
-
-          before=$(db -tA < fingerprint.sql)
-          db -q -v ON_ERROR_STOP=1 --single-transaction < supabase/seed.sql
-          after=$(db -tA < fingerprint.sql)
-
-          if [ "$before" != "$after" ]; then
-            echo "::error::Applying supabase/seed.sql twice changed the data ($before -> $after). Staging applies this file to a live database; it must be safe to run again."
-            exit 1
-          fi
-
-          preserved=$(db -tA -c "select format('%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'))")
-          if [ "$preserved" != "1:1:1" ]; then
-            echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project sentinel ($preserved)."
-            exit 1
-          fi
-
-          db -q -v ON_ERROR_STOP=1 <<'SQL'
-          delete from projects
-           where created_by = 'e2750000-0000-0000-0000-000000000001';
-          delete from auth.users
-           where id = 'e2750000-0000-0000-0000-000000000001';
-          SQL
-          echo "seed.sql applied twice, same data: $before"
+        run: bash scripts/check-seed-rerunnable.sh
 
       # The frontend's database.types.ts is generated from this schema and
       # committed. Regenerate it here and compare: a migration that renames a
@@ -166,13 +70,34 @@ jobs:
           fi
           echo "Generated types are current."
 
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    # gitleaks-action lists the PR's own commits via the GitHub API to scan
+    # just that range (GET /pulls/:number/commits) even with comments off, so
+    # it needs pull-requests: read on top of the workflow's default
+    # contents: read — verified by a 403 "Resource not accessible by
+    # integration" without it. Still no pull-requests: write: comments stay
+    # disabled below.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { fetch-depth: 0 }
+
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false" # no pull-requests: write granted
+
   functions:
     name: Edge Function checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
 
@@ -180,10 +105,10 @@ jobs:
       # under a minute and runs beside the database job, and a filter that
       # silently skips is worse than a fast job that always speaks.
       - name: Type-check
-        run: deno check --config supabase/functions/invite-member/deno.json supabase/functions/**/*.ts
+        run: deno check --config supabase/functions/deno.json supabase/functions/**/*.ts
 
       - name: Test
-        run: deno test --allow-env --config supabase/functions/invite-member/deno.json supabase/functions/
+        run: deno test --allow-env --config supabase/functions/deno.json supabase/functions/
 
   frontend:
     name: Frontend checks
@@ -192,13 +117,15 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      # 24 matches the version the app is developed on. `cache: npm` keyed on the
-      # lockfile makes `npm ci` a ~10s restore on every run after the first.
-      - uses: actions/setup-node@v4
+      # app/.nvmrc pins the version the app is developed on. `cache: npm` keyed
+      # on the lockfile makes `npm ci` a ~10s restore on every run after the
+      # first. node-version-file is workspace-relative even though this job's
+      # working-directory is app.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 24
+          node-version-file: app/.nvmrc
           cache: npm
           cache-dependency-path: app/package-lock.json
 
@@ -241,11 +168,11 @@ jobs:
       group: staging-deploy
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
         with:
-          version: 2.117.0
+          version: ${{ env.SUPABASE_CLI_VERSION }}
 
       # No-ops politely until the staging secrets exist (issue 7.1 / 0.3).
       - name: db push

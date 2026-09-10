@@ -78,6 +78,18 @@ Setting the second one to `false` renders `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`,
 
 Hosted projects don't read `config.toml`: the same two settings live in the dashboard under Authentication → Sign In / Providers (issue #54).
 
+## CORS: who is allowed to call this function from a browser
+
+`invite-member` answers CORS preflight only for origins listed in the `ALLOWED_ORIGINS` environment variable (comma-separated; whitespace around each entry is trimmed). An origin not on the list gets `403` with no `Access-Control-Allow-Origin` header, and its preflight never reaches the handler's own auth checks. A request with no `Origin` header at all (server-to-server calls — curl, another function) is never CORS-gated; it goes straight to the normal `Authorization`/level checks, and only its response never carries `Access-Control-Allow-Origin` (browsers are the only caller that reads that header).
+
+Locally the variable is unset, so the default `http://localhost:5173` applies — matching Vite's dev server. **No hosted app origin exists yet** (Cloudflare Pages deployment is issue #109), so `ALLOWED_ORIGINS` stays unset on staging/production until then; do not set it early to a guessed URL.
+
+Once a hosted app origin exists, a human sets it from a real terminal (house rule 8 — secrets are never set from a non-interactive shell or CI):
+
+```bash
+npx supabase secrets set ALLOWED_ORIGINS=https://<app-origin>
+```
+
 ## Checking the whole flow still works (local, ~3 minutes)
 
 ```bash
