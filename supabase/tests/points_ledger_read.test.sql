@@ -132,12 +132,12 @@ select results_eq(
 );
 reset role;
 
--- BCE remains own-only in #256. Issue #257 deliberately adds BCE global read.
+-- BCE joins BC and Moderator as a global ledger reader in #257.
 select pg_temp.login('b5600000-0000-0000-0000-000000000005', 'bce', 5);
-select results_eq(
-  $$ select member_id, delta from public.points_ledger order by id $$,
-  $$ values ('b5600000-0000-0000-0000-000000000005'::uuid, -6) $$,
-  'BCE reads only their own ledger rows until the leadership policy lands'
+select is(
+  (select count(*) from public.points_ledger),
+  9::bigint,
+  'BCE reads the complete global ledger'
 );
 reset role;
 
