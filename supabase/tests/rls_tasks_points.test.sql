@@ -139,8 +139,8 @@ select lives_ok(
   'level >= 4 grades tasks (trigger fires as owner)');    -- Vlad +3 (1 × 3)
 
 select is((select count(*) from points_ledger
-            where member_id = 'a0000000-0000-0000-0000-000000000011'), 2::bigint,
-  'level >= 4 reads their dept members'' ledger');
+            where member_id = 'a0000000-0000-0000-0000-000000000011'), 0::bigint,
+  'level >= 4 cannot read another member''s ledger, even in their department');
 select is((select count(*) from points_ledger
             where member_id = 'b0000000-0000-0000-0000-000000000012'), 0::bigint,
   'other departments'' ledgers stay hidden at level 4');
