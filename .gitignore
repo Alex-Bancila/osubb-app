@@ -38,3 +38,12 @@ Thumbs.db
 # Large binary source material — keep in a shared drive, not git
 # (Brand Book is ~58MB; GitHub warns >50MB. Use Git LFS if you must track these.)
 *.pdf
+
+# Coverage and TypeScript incremental build info
+coverage/
+*.tsbuildinfo
+
+# Agent/session artefacts — never project history
+.codex-artifacts/
+*-this-session-is-being-continued-*.txt
+.claude/launch.json
