@@ -1,26 +1,13 @@
 -- dept_cup.test.sql — issue #134: complete, active-only department standings.
 -- Runs in one transaction and rolls back, leaving the local demo seed intact.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(11);
 
-create function pg_temp.login_leadership(uid uuid)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', 'bce',
-      'member_level', 5,
-      'dept_ids', '["edu"]'::jsonb,
-      'team_ids', '[]'::jsonb
-    )
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 -- Remove the demo members and every dependent row inside this rolled-back
 -- transaction. Reference departments stay untouched: those five rows are the
@@ -62,7 +49,7 @@ select ok(
   ),
   'dept_cup remains a security-invoker view');
 
-select pg_temp.login_leadership('c1000000-0000-0000-0000-000000000001');
+select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
 
 select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE sees all five canonical departments');
@@ -88,7 +75,7 @@ select results_eq(
 
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 select is((select count(*) from public.dept_cup), 0::bigint,
   'a claimless authenticated session still sees no standings');

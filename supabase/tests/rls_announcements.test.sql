@@ -2,22 +2,12 @@
 -- Part of the Epic 6.1 per-role suite (#67).
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(19);
-
--- ==================== Login simulation ====================
-create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r, 'member_level', lvl,
-      'dept_ids', depts, 'team_ids', tms))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 -- ==================== Fixtures ====================
 -- The demo seed fills these tables; the counts below are about this file's
@@ -40,7 +30,12 @@ insert into announcements (title, body, dept_id)
   values ('Materiale PR', 'În drive.', 'pr');
 
 -- ==================== A voluntar: reads everything, posts nothing ====================
-select pg_temp.login('f1000000-0000-0000-0000-0000000000f1', 'voluntar', 1, '["edu"]', '[]');
+select pg_temp.test_login('f1000000-0000-0000-0000-0000000000f1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select is((select count(*) from announcements), 2::bigint,
   'a member reads the whole feed, including other departments'' posts');
@@ -72,7 +67,12 @@ select is((select count(*) from announcement_reads), 1::bigint,
 reset role;
 
 -- ==================== A responsabil: posts and edits ====================
-select pg_temp.login('f2000000-0000-0000-0000-0000000000f2', 'responsabil', 4, '["edu"]', '[]');
+select pg_temp.test_login('f2000000-0000-0000-0000-0000000000f2', jsonb_build_object(
+    'member_role', 'responsabil',
+    'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select lives_ok(
   $$ insert into announcements (title, body, priority, created_by)
@@ -152,7 +152,7 @@ select ok(
 -- ==================== The stranger: authenticated without claims ====================
 -- `reset role` keeps the previous login's JWT, so clear it explicitly —
 -- otherwise these assertions run as the responsabil and pass for free.
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 
 select is((select count(*) from announcements), 0::bigint,

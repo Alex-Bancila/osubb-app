@@ -1,26 +1,13 @@
 -- my_points.test.sql — #255: each active member can read only their own total.
 -- Runs in one transaction and rolls back, leaving demo data untouched.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(13);
 
-create function pg_temp.login(uid uuid, r text, lvl int)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r,
-      'member_level', lvl,
-      'dept_ids', '[]'::jsonb,
-      'team_ids', '[]'::jsonb
-    )
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 select has_view(
   'public',
@@ -88,11 +75,10 @@ insert into public.points_ledger (member_id, delta, reason) values
   ('a5100000-0000-0000-0000-000000000003', -11, 'sanction'),
   ('a5100000-0000-0000-0000-000000000004', -7, 'sanction');
 
-select pg_temp.login(
-  'a5100000-0000-0000-0000-000000000001',
-  'voluntar',
-  1
-);
+select pg_temp.test_login('a5100000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, points from public.my_points $$,
   $$ values ('a5100000-0000-0000-0000-000000000001'::uuid, 4::int) $$,
@@ -106,11 +92,10 @@ select is(
 );
 reset role;
 
-select pg_temp.login(
-  'a5100000-0000-0000-0000-000000000002',
-  'recrut',
-  0
-);
+select pg_temp.test_login('a5100000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'recrut', 'member_level', 0,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, points from public.my_points $$,
   $$ values ('a5100000-0000-0000-0000-000000000002'::uuid, 0::int) $$,
@@ -118,11 +103,10 @@ select results_eq(
 );
 reset role;
 
-select pg_temp.login(
-  'a5100000-0000-0000-0000-000000000003',
-  'bce',
-  5
-);
+select pg_temp.test_login('a5100000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'bce', 'member_level', 5,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, points from public.my_points $$,
   $$ values ('a5100000-0000-0000-0000-000000000003'::uuid, -11::int) $$,
@@ -149,11 +133,10 @@ select is(
 );
 reset role;
 
-select pg_temp.login(
-  'a5100000-0000-0000-0000-000000000005',
-  'voluntar',
-  1
-);
+select pg_temp.test_login('a5100000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select count(*) from public.my_points),
   0::bigint,
@@ -163,11 +146,10 @@ reset role;
 
 -- This models a stale token after deactivation: the JWT still has valid org
 -- claims, while the current profile row is already inactive.
-select pg_temp.login(
-  'a5100000-0000-0000-0000-000000000004',
-  'voluntar',
-  1
-);
+select pg_temp.test_login('a5100000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select count(*) from public.my_points),
   0::bigint,
@@ -175,7 +157,7 @@ select is(
 );
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(
   $$ select * from public.my_points $$,

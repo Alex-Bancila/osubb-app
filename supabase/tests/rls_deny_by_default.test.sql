@@ -1,6 +1,8 @@
 -- rls_deny_by_default.test.sql — Epic 3.1: RLS everywhere, deny-by-default.
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
@@ -132,15 +134,6 @@ end $$;
 -- This is ADR-0003 gate 2's real deactivated-user shape: the id belongs to an
 -- actual auth user and retained inactive profile, while the JWT deliberately
 -- omits member_role, member_level, dept_ids, and team_ids.
-create function pg_temp.login_without_org_claims(uid uuid) returns void
-language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object('provider', 'email')
-  )::text, true);
-end $$;
 
 -- Non-vacuity first: if a table is empty, the sweep below says nothing about it.
 select is(pg_temp.unpopulated_tables(), '{}'::text[],
@@ -159,7 +152,7 @@ grant select on fx to authenticated;
 -- Be explicit: a missing JWT and a real uid with no org claims are distinct
 -- security shapes. `reset role` alone does not clear a JWT from a previous
 -- test persona.
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 
 select is(pg_temp.tables_visible_to_claimless(), '{}'::text[],
@@ -192,7 +185,7 @@ select throws_ok(
 reset role;
 
 -- ==================== Real uid without organisation claims ====================
-select pg_temp.login_without_org_claims('eeeeeeee-0000-0000-0000-000000000156');
+select pg_temp.test_login('eeeeeeee-0000-0000-0000-000000000156', jsonb_build_object('provider', 'email'));
 set local role authenticated;
 
 select is(auth.uid(), 'eeeeeeee-0000-0000-0000-000000000156'::uuid,

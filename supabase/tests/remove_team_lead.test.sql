@@ -1,5 +1,7 @@
 -- remove_team_lead.test.sql — issue #277: retire the single Team lead model.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local client_min_messages = warning;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;

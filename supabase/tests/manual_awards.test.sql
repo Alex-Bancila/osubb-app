@@ -1,6 +1,8 @@
 -- manual_awards.test.sql — #261: manual awards are retired.
 -- Historical rows are not removed, but no new row may be created.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
@@ -44,16 +46,8 @@ insert into profiles (id, full_name, email, role, status) values
   ('26100000-0000-0000-0000-000000000001', '261 BC', '261.bc@test.local', 'bc', 'activ'),
   ('26100000-0000-0000-0000-000000000002', '261 Inactive', '261.inactive@test.local', 'bc', 'inactiv');
 
-create function pg_temp.login(uid uuid, claims jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated', 'app_metadata', claims
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
-select pg_temp.login('26100000-0000-0000-0000-000000000001', jsonb_build_object(
+select pg_temp.test_login('26100000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(
   $$ insert into public.points_ledger (member_id, delta, reason, awarded_by)
@@ -66,7 +60,7 @@ select lives_ok(
              '26100000-0000-0000-0000-000000000001') $$,
   'an active BC may still create a sanction');
 
-select pg_temp.login('26100000-0000-0000-0000-000000000002', jsonb_build_object(
+select pg_temp.test_login('26100000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(
   $$ insert into public.points_ledger (member_id, delta, reason, awarded_by)
@@ -79,7 +73,7 @@ select throws_ok(
              '26100000-0000-0000-0000-000000000002') $$,
   '42501', null, 'an inactive BC cannot create a sanction');
 
-select pg_temp.login('26100000-0000-0000-0000-000000000001', '{}'::jsonb);
+select pg_temp.test_login('26100000-0000-0000-0000-000000000001', '{}'::jsonb);
 select throws_ok(
   $$ insert into public.points_ledger (member_id, delta, reason, awarded_by)
      values ('26100000-0000-0000-0000-000000000001', 10, 'manual_award',

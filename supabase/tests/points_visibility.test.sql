@@ -1,26 +1,13 @@
 -- points_visibility.test.sql — #254: global metrics are leadership-only.
 -- Runs in one transaction and rolls back, leaving the demo seed untouched.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(26);
 
-create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r,
-      'member_level', lvl,
-      'dept_ids', depts,
-      'team_ids', '[]'::jsonb
-    )
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 select ok(
   not exists (
@@ -83,9 +70,12 @@ where t.title like 'pv-%';
 update public.tasks set rating = 3 where title like 'pv-%';
 
 -- Ordinary members, including Responsabil, receive no global metrics.
-select pg_temp.login(
-  'f1000000-0000-0000-0000-0000000000f1', 'voluntar', 1, '["edu"]'
-);
+select pg_temp.test_login('f1000000-0000-0000-0000-0000000000f1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.member_points), 0::bigint,
   'a voluntar reads no global member totals');
 select is((select count(*) from public.leaderboard), 0::bigint,
@@ -103,9 +93,12 @@ select is(
   'a voluntar still reads exactly their own ledger row');
 reset role;
 
-select pg_temp.login(
-  'f2000000-0000-0000-0000-0000000000f2', 'responsabil', 4, '["edu"]'
-);
+select pg_temp.test_login('f2000000-0000-0000-0000-0000000000f2', jsonb_build_object(
+    'member_role', 'responsabil',
+    'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.member_points), 0::bigint,
   'a Responsabil reads no global member totals');
 select is((select count(*) from public.leaderboard), 0::bigint,
@@ -115,9 +108,12 @@ select is((select count(*) from public.dept_cup), 0::bigint,
 reset role;
 
 -- BCE, BC, and Moderator retain leadership visibility.
-select pg_temp.login(
-  'f3000000-0000-0000-0000-0000000000f3', 'bce', 5, '["pr"]'
-);
+select pg_temp.test_login('f3000000-0000-0000-0000-0000000000f3', jsonb_build_object(
+    'member_role', 'bce',
+    'member_level', 5,
+    'dept_ids', '["pr"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.member_points), 5::bigint,
   'BCE reads every member total');
 select is((select count(*) from public.leaderboard), 5::bigint,
@@ -126,9 +122,12 @@ select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE reads all five Department Cup rows');
 reset role;
 
-select pg_temp.login(
-  'f4000000-0000-0000-0000-0000000000f4', 'bc', 6, '["fin"]'
-);
+select pg_temp.test_login('f4000000-0000-0000-0000-0000000000f4', jsonb_build_object(
+    'member_role', 'bc',
+    'member_level', 6,
+    'dept_ids', '["fin"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.member_points), 5::bigint,
   'BC reads every member total');
 select is((select count(*) from public.leaderboard), 5::bigint,
@@ -142,9 +141,12 @@ select is(
   'BC retains access to the ledger rows behind another member''s total');
 reset role;
 
-select pg_temp.login(
-  'f5000000-0000-0000-0000-0000000000f5', 'moderator', 9, '["hr"]'
-);
+select pg_temp.test_login('f5000000-0000-0000-0000-0000000000f5', jsonb_build_object(
+    'member_role', 'moderator',
+    'member_level', 9,
+    'dept_ids', '["hr"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.member_points), 5::bigint,
   'Moderator reads every member total');
 select is((select count(*) from public.leaderboard), 5::bigint,

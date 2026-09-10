@@ -1,6 +1,8 @@
 -- project_read_policies.test.sql — #272: project context is private to
 -- active project members, with the ADR-0007 BC/Moderator global override.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
@@ -11,24 +13,6 @@ select plan(43);
 -- seed.sql; the transaction rollback restores the seeded rows after the test.
 truncate table public.projects restart identity cascade;
 
-create function pg_temp.login(uid uuid, member_role text, member_level int)
-returns void
-language plpgsql
-as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', member_role,
-      'member_level', member_level,
-      'dept_ids', '[]'::jsonb,
-      'team_ids', '[]'::jsonb
-    )
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end;
-$$;
 
 insert into auth.users (id, email) values
   ('a7200000-0000-0000-0000-000000000001', 'project.read.lead@test.local'),
@@ -131,8 +115,10 @@ select is(
 );
 
 -- ==================== Project participants ====================
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 2::bigint,
   'lead reads their active and archived projects only');
 select is(
@@ -148,24 +134,30 @@ select is(
 );
 reset role;
 
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000002', 'responsabil', 4);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 2::bigint,
   'Project Responsible reads both projects they belong to');
 select is((select count(*) from public.project_members), 10::bigint,
   'Project Responsible reads each complete project roster');
 reset role;
 
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000003', 'voluntar', 1);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 2::bigint,
   'ordinary project member reads both projects they belong to');
 select is((select count(*) from public.project_members), 10::bigint,
   'ordinary project member reads each complete project roster');
 reset role;
 
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000008', 'bce', 5);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000008', jsonb_build_object(
+    'member_role', 'bce', 'member_level', 5,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 1::bigint,
   'BCE reads only the project where they are a member');
 select is((select count(*) from public.project_members), 1::bigint,
@@ -173,8 +165,10 @@ select is((select count(*) from public.project_members), 1::bigint,
 reset role;
 
 -- ==================== Denied identities ====================
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000004', 'voluntar', 1);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 0::bigint,
   'active outsider reads no project');
 select is((select count(*) from public.project_members), 0::bigint,
@@ -183,16 +177,20 @@ reset role;
 
 -- A demotion may leave an older JWT alive. Database role, not the stale
 -- member_level claim, decides whether global read access still exists.
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000004', 'bc', 6);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 0::bigint,
   'demoted outsider cannot use stale BC claims to read projects');
 select is((select count(*) from public.project_members), 0::bigint,
   'demoted outsider cannot use stale BC claims to read rosters');
 reset role;
 
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000005', 'bc', 6);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 0::bigint,
   'inactive BC project member receives no project global override');
 select is((select count(*) from public.project_members), 0::bigint,
@@ -213,7 +211,7 @@ select is((select count(*) from public.project_members), 0::bigint,
   'claimless project member reads no roster');
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 select is((select count(*) from public.projects), 0::bigint,
   'authenticated session without a JWT reads no project');
@@ -224,8 +222,10 @@ reset role;
 -- ==================== ADR-0007 global readers ====================
 -- A recent promotion can leave a lower-level token alive briefly. Current
 -- database role grants the new authority without trusting stale JWT level.
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000006', 'voluntar', 1);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 3::bigint,
   'current BC reads every project despite stale lower JWT claims');
 select is((select count(*) from public.project_members), 11::bigint,
@@ -234,8 +234,10 @@ select is((select count(*) from public.projects where status = 'archived'), 1::b
   'BC global read includes archived history');
 reset role;
 
-select pg_temp.login(
-  'a7200000-0000-0000-0000-000000000007', 'moderator', 9);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000007', jsonb_build_object(
+    'member_role', 'moderator', 'member_level', 9,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select count(*) from public.projects), 3::bigint,
   'Moderator reads every active and archived project');
 select is((select count(*) from public.project_members), 11::bigint,
@@ -254,7 +256,10 @@ select throws_ok(
 reset role;
 
 -- ==================== Mutation boundary stays closed ====================
-select pg_temp.login('a7200000-0000-0000-0000-000000000006', 'bc', 6);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   $$ insert into public.projects (name, leader_id, created_by)
      values ('Forbidden Direct Project',
@@ -278,7 +283,10 @@ select is(
   (select name from public.projects where id = (select active_project_id from fx)),
   'Project Read Active', 'direct BC project update changes no row');
 
-select pg_temp.login('a7200000-0000-0000-0000-000000000006', 'bc', 6);
+select pg_temp.test_login('a7200000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   $$ delete from public.project_members
       where project_id = (select active_project_id from fx)

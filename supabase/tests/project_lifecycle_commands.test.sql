@@ -1,6 +1,8 @@
 -- project_lifecycle_commands.test.sql — #273: BC/Moderator-only project lifecycle commands.
 -- Runs in one transaction and rolls back, leaving no local residue.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
@@ -8,31 +10,6 @@ create extension if not exists pgrowlocks with schema extensions;
 
 select plan(54);
 
-create function pg_temp.login(
-  uid uuid,
-  member_role text,
-  member_level integer,
-  with_org_claims boolean default true
-) returns void
-language plpgsql
-as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', case
-      when with_org_claims then jsonb_build_object(
-        'member_role', member_role,
-        'member_level', member_level,
-        'dept_ids', '[]'::jsonb,
-        'team_ids', '[]'::jsonb
-      )
-      else jsonb_build_object('provider', 'email')
-    end
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end;
-$$;
 
 -- Keep result assertions runnable during RED while archive_project does not
 -- exist yet. Returning NULL produces an ordinary pgTAP failure instead of a
@@ -234,8 +211,10 @@ select ok(not has_sequence_privilege(
   'authenticated has no project identity-sequence SELECT privilege');
 
 -- A current BC succeeds even when their token still contains lower role data.
-select pg_temp.login(
-  'a7300000-0000-0000-0000-000000000002', 'voluntar', 1);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok($$
   select public.create_project(
     E'\t  Proiect creat de BC  \n',
@@ -341,8 +320,10 @@ select extensions.dblink_exec(
 );
 select extensions.dblink_disconnect('project_leader_lock');
 
-select pg_temp.login(
-  'a7300000-0000-0000-0000-000000000003', 'moderator', 9);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'moderator', 'member_level', 9,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok($$
   select public.create_project(
     'Proiect creat de Moderator',
@@ -352,44 +333,56 @@ $$, 'an active Moderator creates a project');
 reset role;
 
 -- Wrong roles and stale/deprovisioned identities fail before any write.
-select pg_temp.login('a7300000-0000-0000-0000-000000000004', 'bce', 5);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'bce', 'member_level', 5,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_project('BCE interzis', 'a7300000-0000-0000-0000-000000000001')
 $$, '42501', 'project_admin_forbidden', 'BCE cannot create projects');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000005', 'responsabil', 4);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_project('Responsabil interzis', 'a7300000-0000-0000-0000-000000000001')
 $$, '42501', 'project_admin_forbidden', 'Responsabil cannot create projects');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_project('Voluntar interzis', 'a7300000-0000-0000-0000-000000000001')
 $$, '42501', 'project_admin_forbidden', 'ordinary members cannot create projects');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000006', 'bc', 6);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_project('BC inactiv interzis', 'a7300000-0000-0000-0000-000000000001')
 $$, '42501', 'project_admin_forbidden', 'an inactive BC cannot create projects');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000007', 'bc', 6, false);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000007', jsonb_build_object('provider', 'email'));
 select throws_ok($$
   select public.create_project('Fără claims', 'a7300000-0000-0000-0000-000000000001')
 $$, '42501', 'project_admin_forbidden', 'a real BC uid without organization claims is denied');
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 select throws_ok($$
   select public.create_project('Fără JWT', 'a7300000-0000-0000-0000-000000000001')
 $$, '42501', 'project_admin_forbidden', 'authenticated without a JWT is denied');
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok($$
   select public.create_project('Anon', 'a7300000-0000-0000-0000-000000000001')
@@ -397,7 +390,10 @@ $$, '42501', null, 'anonymous callers cannot execute create_project');
 reset role;
 
 -- Stable validation errors replace raw check/FK failures.
-select pg_temp.login('a7300000-0000-0000-0000-000000000002', 'bc', 6);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_project('   ', 'a7300000-0000-0000-0000-000000000001')
 $$, 'PT400', 'invalid_project_name', 'blank project names have a stable error');
@@ -410,7 +406,10 @@ $$, 'PT400', 'project_leader_not_eligible', 'missing leaders have a stable error
 reset role;
 
 -- Archive preserves identity and roster, and a repeated call is idempotent.
-select pg_temp.login('a7300000-0000-0000-0000-000000000002', 'bc', 6);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select pg_temp.archive_status(existing_project_id) from fx),
   'archived', 'BC archives an active project and receives the archived row');
@@ -446,7 +445,10 @@ select is((
 ), 'a7300000-0000-0000-0000-000000000002'::uuid,
   'archiving preserves the project creator');
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000002', 'bc', 6);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select pg_temp.archive_status(existing_project_id) from fx),
   'archived', 'repeated archive returns the unchanged archived project');
@@ -459,44 +461,56 @@ select is((
    where project.id = (select existing_project_id from fx)
 ), true, 'repeated archive does not advance updated_at');
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000003', 'moderator', 9);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'moderator', 'member_level', 9,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok($$
   select public.archive_project((select id from public.projects where name = 'Proiect creat de Moderator'))
 $$, 'Moderator can archive a project');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000004', 'bce', 5);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'bce', 'member_level', 5,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.archive_project((select protected_project_id from fx))
 $$, '42501', 'project_admin_forbidden', 'BCE cannot archive projects');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000005', 'responsabil', 4);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.archive_project((select protected_project_id from fx))
 $$, '42501', 'project_admin_forbidden', 'Responsabil cannot archive projects');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000006', 'bc', 6);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.archive_project((select protected_project_id from fx))
 $$, '42501', 'project_admin_forbidden', 'inactive BC cannot archive projects');
 reset role;
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000007', 'bc', 6, false);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000007', jsonb_build_object('provider', 'email'));
 select throws_ok($$
   select public.archive_project((select protected_project_id from fx))
 $$, '42501', 'project_admin_forbidden', 'claimless BC uid cannot archive projects');
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 select throws_ok($$
   select public.archive_project((select protected_project_id from fx))
 $$, '42501', 'project_admin_forbidden', 'authenticated without a JWT cannot archive projects');
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok($$
   select public.archive_project((select protected_project_id from fx))
@@ -512,7 +526,10 @@ select is((
 ), 'active:a7300000-0000-0000-0000-000000000001:a7300000-0000-0000-0000-000000000002:1',
   'every denied archive preserves state, identity, and the complete roster');
 
-select pg_temp.login('a7300000-0000-0000-0000-000000000002', 'bc', 6);
+select pg_temp.test_login('a7300000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.archive_project(9223372036854775807)
 $$, 'PT404', 'project_not_found', 'authorized callers receive a stable missing-project error');

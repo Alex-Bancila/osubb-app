@@ -1,6 +1,8 @@
 -- project_manager_invariants.test.sql — #270: project leaders and
 -- Responsibles remain valid project members.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 

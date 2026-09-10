@@ -1,31 +1,13 @@
 -- set_event_rsvp.test.sql — issue #237: one atomic, self-owned RSVP command.
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(22);
 
-create function pg_temp.login(
-  uid uuid,
-  r text,
-  lvl int,
-  depts jsonb,
-  with_org_claims boolean default true
-) returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', case when with_org_claims then jsonb_build_object(
-      'member_role', r,
-      'member_level', lvl,
-      'dept_ids', depts,
-      'team_ids', '[]'::jsonb
-    ) else jsonb_build_object('provider', 'email') end
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 truncate public.events, public.event_attendance cascade;
 
@@ -105,8 +87,10 @@ select ok(not coalesce((
 ), true), 'anon cannot execute the RSVP command');
 
 -- An active member creates and then changes exactly one self-owned answer.
-select pg_temp.login(
-  'a1000000-0000-0000-0000-000000000237', 'voluntar', 1, '["edu"]');
+select pg_temp.test_login('a1000000-0000-0000-0000-000000000237', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok(
   format($$ select public.set_event_rsvp(%s, 'going') $$,
          (select edu_event_id from rsvp_fx)),
@@ -133,8 +117,10 @@ update public.event_attendance
  where event_id = (select edu_event_id from rsvp_fx)
    and member_id = 'a1000000-0000-0000-0000-000000000237';
 
-select pg_temp.login(
-  'a1000000-0000-0000-0000-000000000237', 'voluntar', 1, '["edu"]');
+select pg_temp.test_login('a1000000-0000-0000-0000-000000000237', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok(
   format($$ select public.set_event_rsvp(%s, 'declined') $$,
          (select edu_event_id from rsvp_fx)),
@@ -158,8 +144,10 @@ select is(
   true, 'changing an RSVP preserves the server-owned checked_in value');
 
 -- Invalid, hidden, missing, and inactive requests fail with stable errors.
-select pg_temp.login(
-  'a1000000-0000-0000-0000-000000000237', 'voluntar', 1, '["edu"]');
+select pg_temp.test_login('a1000000-0000-0000-0000-000000000237', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   format($$ select public.set_event_rsvp(%s, 'poate') $$,
          (select org_event_id from rsvp_fx)),
@@ -173,16 +161,17 @@ select throws_ok(
   'PT404', 'event_not_visible', 'an unknown event has the same stable not-found error');
 reset role;
 
-select pg_temp.login(
-  'd4000000-0000-0000-0000-000000000237', 'voluntar', 1, '["edu"]');
+select pg_temp.test_login('d4000000-0000-0000-0000-000000000237', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   format($$ select public.set_event_rsvp(%s, 'going') $$,
          (select org_event_id from rsvp_fx)),
   '42501', 'not_active_member', 'an inactive profile is denied even with stale org claims');
 reset role;
 
-select pg_temp.login(
-  'e5000000-0000-0000-0000-000000000237', 'voluntar', 1, '[]', false);
+select pg_temp.test_login('e5000000-0000-0000-0000-000000000237', jsonb_build_object('provider', 'email'));
 select throws_ok(
   format($$ select public.set_event_rsvp(%s, 'going') $$,
          (select org_event_id from rsvp_fx)),
@@ -190,8 +179,10 @@ select throws_ok(
 reset role;
 
 -- Manager read authority never changes whose RSVP the command owns.
-select pg_temp.login(
-  'c3000000-0000-0000-0000-000000000237', 'responsabil', 4, '["edu"]');
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000237', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok(
   format($$ select public.set_event_rsvp(%s, 'going') $$,
          (select org_event_id from rsvp_fx)),
@@ -203,7 +194,7 @@ select is(
       and member_id = 'b2000000-0000-0000-0000-000000000237'),
   'declined', 'a manager call leaves another member response unchanged');
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(
   format($$ select public.set_event_rsvp(%s, 'going') $$,

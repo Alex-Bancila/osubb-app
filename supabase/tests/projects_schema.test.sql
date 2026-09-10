@@ -1,6 +1,8 @@
 -- projects_schema.test.sql — #268: project lifecycle table foundation.
 -- Runs in one transaction and rolls back, leaving the demo seed untouched.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 

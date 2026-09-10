@@ -2,22 +2,12 @@
 -- (reference data + memberships + teams; part of the Epic 6.1 suite, #67).
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(22);
-
--- ==================== Login simulation ====================
-create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r, 'member_level', lvl,
-      'dept_ids', depts, 'team_ids', tms))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -33,7 +23,12 @@ insert into team_members (team_id, member_id)
   values ('t-ref', 'c1000000-0000-0000-0000-0000000000c1');
 
 -- ==================== A voluntar reads the vocabulary (AC) ====================
-select pg_temp.login('c1000000-0000-0000-0000-0000000000c1', 'voluntar', 1, '["edu"]', '["t-ref"]');
+select pg_temp.test_login('c1000000-0000-0000-0000-0000000000c1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '["t-ref"]'::jsonb
+  ));
 
 select is((select count(*) from roles), 8::bigint,
   'voluntar reads the role ladder');
@@ -45,12 +40,22 @@ select is((select count(*) from difficulty_guide), 5::bigint,
   'voluntar reads the difficulty guide');
 select is((select count(*) from role_capabilities), 17::bigint,
   'voluntar reads the capability lookup (the UI gates nav with it)');
-select ok((select count(*) from teams) >= 1,
-  'voluntar reads teams');
-select ok((select count(*) from member_departments) >= 1,
-  'voluntar reads department memberships (visibility rules join them)');
-select ok((select count(*) from team_members) >= 1,
-  'voluntar reads team memberships');
+select is(
+  (select count(*) from teams where id = 't-ref'),
+  1::bigint,
+  'voluntar reads the fixture team');
+select is(
+  (select count(*) from member_departments
+    where member_id = 'c1000000-0000-0000-0000-0000000000c1'
+      and dept_id = 'edu'),
+  1::bigint,
+  'voluntar reads the fixture department membership');
+select is(
+  (select count(*) from team_members
+    where member_id = 'c1000000-0000-0000-0000-0000000000c1'
+      and team_id = 't-ref'),
+  1::bigint,
+  'voluntar reads the fixture team membership');
 
 -- ==================== …but changes nothing ====================
 select throws_ok(
@@ -74,7 +79,12 @@ select is((select multiplier from rating_guide where rating = 5), 3,
 reset role;
 
 -- ==================== BCE manages structure (AC) ====================
-select pg_temp.login('c2000000-0000-0000-0000-0000000000c2', 'bce', 5, '["edu"]', '[]');
+select pg_temp.test_login('c2000000-0000-0000-0000-0000000000c2', jsonb_build_object(
+    'member_role', 'bce',
+    'member_level', 5,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select lives_ok(
   $$ insert into teams (id, name, dept_id) values ('t-new', 'Echipa Nouă', 'edu') $$,
@@ -94,7 +104,7 @@ reset role;
 -- ==================== A session with no org claims ====================
 -- Clear the claims first: `reset role` alone keeps the previous login's JWT,
 -- and these would run as Beniamin the BCE and pass for free.
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 
 select is((select count(*) from roles), 0::bigint,

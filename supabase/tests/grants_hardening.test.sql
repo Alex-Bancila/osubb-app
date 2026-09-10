@@ -1,6 +1,8 @@
 -- #363: helper functions are not anon RPC surface, views are read-only,
 -- JWT helpers pin search_path, the dead in_my_dept helper is gone.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap;
 select plan(15);
