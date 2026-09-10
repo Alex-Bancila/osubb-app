@@ -50,6 +50,8 @@ insert into projects (name, leader_id, created_by) values
 -- fixture non-vacuous without a duplicate manual insert.
 insert into member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
+insert into campaigns (department_id, name, created_by)
+  values ('edu', 'RLS Campaign', 'ffffffff-0000-0000-0000-000000000006');
 insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-rls', 'ffffffff-0000-0000-0000-000000000006');
