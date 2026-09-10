@@ -175,12 +175,14 @@ select is(
 );
 reset role;
 
--- Even forged/stale organization metadata is insufficient without a profile.
-select pg_temp.login('b5600000-0000-0000-0000-000000000011', 'voluntar', 1);
+-- Even forged/stale leadership metadata is insufficient without a current
+-- profile. Level 6 is deliberate: without the live-profile guard, this
+-- identity would satisfy the global BC branch and expose every ledger row.
+select pg_temp.login('b5600000-0000-0000-0000-000000000011', 'bc', 6);
 select is(
   (select count(*) from public.points_ledger),
   0::bigint,
-  'an authenticated identity without a profile reads no ledger rows'
+  'a no-profile identity with forged BC claims reads no ledger rows'
 );
 reset role;
 
