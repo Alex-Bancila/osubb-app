@@ -52,7 +52,7 @@ export function useMyStanding() {
   const id = session?.user.id;
 
   return useQuery({
-    queryKey: keys.points.standing(),
+    queryKey: keys.points.standing(id),
     queryFn: id ? () => fetchStanding(id) : skipToken,
   });
 }
