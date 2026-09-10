@@ -18,10 +18,10 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    /* A budget, not a moving target. Ionic's React wrappers plus supabase-js and
-       the router are ~1.6 MB raw (~355 kB gzipped) before we write a real
-       screen, so Vite's 500 kB default fires on every build and stops meaning
-       anything. 2 MB (~450 kB gzipped) is roughly what we are willing to send a
+    /* A budget, not a moving target. supabase-js, the router and the Ionic
+       wrappers that ADR-0002 retires route by route are ~1.6 MB raw (~355 kB
+       gzipped) before we write a real screen, so Vite's 500 kB default fires on
+       every build and stops meaning anything. 2 MB (~450 kB gzipped) is roughly what we are willing to send a
        member on mobile data for a first visit.
 
        When a build crosses it, the answer is route-level code splitting —

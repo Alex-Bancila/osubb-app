@@ -2,6 +2,8 @@
 
 **Status:** proposed (issue #79) · **Stack fixed by:** ADR-0002 · **UX source:** `mockup/`
 
+> **Partly superseded (2026-09-07/10):** ADR-0002 now fixes Tailwind + shadcn/ui (Base UI, Nova) + TanStack Table in a browser-first PWA. The Ionic and AG Grid guidance in §2 (`DataGrid.tsx`) and §7, and the PWA timing in §9, are historical. Folder layout, routes, auth, data layer and theming rules still apply.
+
 ADR-0002 chose the stack. This fixes *how we use it*, so that every screen PR looks the same, two volunteers don't invent two architectures, and an Epic-9 issue can say "per §4 of the mini-spec" instead of re-deciding.
 
 Before frontend work, read the [OSUBB brand reference](../../brand/reference.md).
@@ -37,7 +39,7 @@ app/
 │   ├── queries/                 # one file per domain: tasks.ts, points.ts, …
 │   ├── components/              # shared, screen-agnostic
 │   │   ├── DeptChip.tsx  RoleBadge.tsx  PointsPill.tsx
-│   │   ├── DataGrid.tsx         # the single AG Grid wrapper (§7)
+│   │   ├── DataGrid.tsx         # historical — ADR-0002 uses TanStack Table + shadcn Table instead
 │   │   └── states/              # Loading, Empty, ErrorState
 │   ├── screens/                 # one folder per route (§3)
 │   │   └── tracker/ dashboard/ calendar/ announcements/ volunteers/ bcpanel/ profile/
@@ -132,6 +134,8 @@ Use the tokens; do not introduce raw hex in a component. Department colours come
 Dark mode is a client-side toggle on `data-theme`, persisted in `localStorage`, defaulting to the system preference.
 
 ## 7. Components
+
+> **Superseded by ADR-0002:** new screens use shadcn/ui (Base UI, Nova) with Tailwind; dense tables use TanStack Table with shadcn markup. Do not add Ionic or AG Grid to new work. The paragraphs below describe the transitional code only.
 
 **Ionic** provides the shell, navigation, modals and form controls — use `IonPage`/`IonContent` per screen so mobile gestures and safe areas work. Don't hand-roll a modal.
 
