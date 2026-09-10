@@ -7,7 +7,7 @@
 // the function's environment; unset it locally and Vite's default origin
 // applies. See docs/backend/inviting.md for the hosted deployment story.
 
-const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173"];
+const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
 
 export function allowedOrigins(): string[] {
   const raw = Deno.env.get("ALLOWED_ORIGINS");

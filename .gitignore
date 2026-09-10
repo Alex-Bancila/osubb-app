@@ -47,3 +47,4 @@ coverage/
 .codex-artifacts/
 *-this-session-is-being-continued-*.txt
 .claude/launch.json
+.superpowers/

@@ -289,6 +289,12 @@ Deno.test("the default origin applies when ALLOWED_ORIGINS is unset", async () =
     const res = await handleInvite(request(validBody, { origin: "http://localhost:5173" }), deps);
     assertEquals(res.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173");
     assertEquals(res.headers.get("Vary"), "Origin");
+
+    // Vite's origin when opened via IP, not just via `localhost`.
+    const { deps: depsIp } = fakeDeps();
+    const resIp = await handleInvite(request(validBody, { origin: "http://127.0.0.1:5173" }), depsIp);
+    assertEquals(resIp.headers.get("Access-Control-Allow-Origin"), "http://127.0.0.1:5173");
+    assertEquals(resIp.headers.get("Vary"), "Origin");
   });
 });
 

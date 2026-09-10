@@ -12,8 +12,9 @@ updates:
 
   # npm: /app only, weekly with a minor-and-patch group
   # Note: No root npm entry — Supabase CLI pin at root moves in lockstep with
-  # SUPABASE_CLI_VERSION in CI (Task 3 manages this) and must stay a deliberate
-  # manual bump, not automatic.
+  # SUPABASE_CLI_VERSION in CI (enforced by the "CLI pin matches root
+  # package.json" step in .github/workflows/ci.yml) and must stay a
+  # deliberate manual bump, not automatic.
   - package-ecosystem: npm
     directory: /app
     schedule:

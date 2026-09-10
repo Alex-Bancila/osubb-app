@@ -60,7 +60,7 @@ The backend is **Supabase** (PostgreSQL + Row-Level Security + Auth + Edge Funct
 - `npx supabase db reset` — re-apply every migration + `seed.sql`.
 - `npx supabase test db` — run all pgTAP suites.
 - `npx supabase stop` — shut down.
-- **Windows gotcha:** if start/reset fails with "port is not available / access permissions", Windows reserved our ports after a reboot → admin PowerShell: `net stop winnat` then `net start winnat`. If `git ls-files --eol | grep w/crlf` lists files, an editor wrote CRLF into your checkout: delete those files and `git checkout -- .` (the index is LF; `.editorconfig` keeps it that way).
+- **Windows gotcha:** if start/reset fails with "port is not available / access permissions", Windows reserved our ports after a reboot → admin PowerShell: `net stop winnat` then `net start winnat`. If `git ls-files --eol | grep w/crlf` lists files, an editor wrote CRLF into your checkout: restore only those files — `git ls-files --eol | grep w/crlf | cut -f2 | xargs git checkout --` (the tab-delimited second field is the path) — rather than `git checkout -- .`, which would discard any other uncommitted work in the tree. `.gitattributes` (`eol=lf`) is what keeps checkouts LF; `.editorconfig` only keeps editors writing LF going forward.
 
 **Environments:** local (Docker) → **staging** (hosted, auto-updated on merge to `main` via CI) → **production** (Supabase Pro, Spend Cap ON — created in Sprint 3, deploys only via a manually-approved workflow, issue #78). The CI staging job **skipping on PR builds is correct** — deploys happen on merge only.
 
