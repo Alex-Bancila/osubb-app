@@ -158,9 +158,9 @@ select is((select count(distinct status) from tasks), 5::bigint,
 select ok((select count(*) from tasks where status = 'open') >= 2,
   'open tasks exist for the "Deschise" tab and the claim flow');
 
--- Points come only from the grading trigger and two manual rows. If someone
--- starts hand-writing 'task' ledger rows in the seed, this drifts from the
--- formula and the number on screen stops meaning anything.
+-- Points come only from the grading trigger. If someone starts hand-writing
+-- 'task' ledger rows in the seed, this drifts from the formula and the number
+-- on screen stops meaning anything.
 select is(
   (select count(*) from points_ledger l
      join tasks t on t.id = l.task_id
@@ -168,9 +168,8 @@ select is(
   0::bigint, 'every task ledger row matches its task''s computed points');
 
 select ok(
-  exists (select 1 from points_ledger where reason = 'sanction')
-  and exists (select 1 from points_ledger where reason = 'manual_award'),
-  'a sanction and a manual award are both present (the BC panel writes these)');
+  exists (select 1 from points_ledger where reason = 'sanction'),
+  'a sanction is present as a separate governance adjustment');
 
 -- A penalty in the data is deliberate: a demo where nobody ever lost points
 -- hides half of the scoring guide.

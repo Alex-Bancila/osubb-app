@@ -274,11 +274,8 @@ update tasks set rating = 5 where title = 'Migrare bază de date';           -- 
 -- honestly, and this is the row that proves the formula subtracts.
 update tasks set rating = 1 where title = 'Fotografii eveniment';           -- 2 × −1 = −2
 
--- Manual entries: an award and a BC sanction, the two things the BC panel
--- writes by hand. Both are signed by whoever granted them.
+-- A BC sanction is separate from task points and is signed by its author.
 insert into points_ledger (member_id, delta, reason, awarded_by) values
-  ('d0000000-0000-0000-0000-000000000005', 10, 'manual_award',
-   'd0000000-0000-0000-0000-000000000007'),
   ('d0000000-0000-0000-0000-000000000003', -5, 'sanction',
    'd0000000-0000-0000-0000-000000000007');
 
