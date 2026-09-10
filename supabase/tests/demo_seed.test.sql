@@ -8,7 +8,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(32);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -173,6 +173,17 @@ select is((select count(distinct status) from tasks), 5::bigint,
 
 select ok((select count(*) from tasks where status = 'open') >= 2,
   'open tasks exist for the "Deschise" tab and the claim flow');
+
+select ok(
+  not exists (
+    select 1
+      from tasks task
+      join profiles creator on creator.id = task.created_by
+     where task.status = 'open'
+       and task.audience <> 'org'
+       and creator.email like '%@demo.osubb'
+  ),
+  'legacy open demo Tasks retain organization-wide reach');
 
 -- Points come only from the grading trigger. If someone starts hand-writing
 -- 'task' ledger rows in the seed, this drifts from the formula and the number

@@ -1281,6 +1281,7 @@ export type Database = {
       }
       tasks: {
         Row: {
+          audience: string
           created_at: string
           created_by: string | null
           deadline: string | null
@@ -1296,6 +1297,7 @@ export type Database = {
           type: string | null
         }
         Insert: {
+          audience?: string
           created_at?: string
           created_by?: string | null
           deadline?: string | null
@@ -1311,6 +1313,7 @@ export type Database = {
           type?: string | null
         }
         Update: {
+          audience?: string
           created_at?: string
           created_by?: string | null
           deadline?: string | null
@@ -1652,6 +1655,7 @@ export type Database = {
       claim_open_task: {
         Args: { p_task_id: number }
         Returns: {
+          audience: string
           created_at: string
           created_by: string | null
           deadline: string | null
