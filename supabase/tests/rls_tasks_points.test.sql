@@ -105,7 +105,7 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', 99, 'manual_award',
              'a0000000-0000-0000-0000-000000000011') $$,
-  '42501', null, 'a voluntar cannot award points');
+  '23514', null, 'a voluntar cannot create retired manual awards');
 
 select is((select count(*) from task_requests), 1::bigint,
   'voluntar sees only their own requests');
@@ -145,11 +145,11 @@ select is((select count(*) from points_ledger
             where member_id = 'b0000000-0000-0000-0000-000000000012'), 0::bigint,
   'other departments'' ledgers stay hidden at level 4');
 
-select lives_ok(
+select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', 5, 'manual_award',
              'c0000000-0000-0000-0000-000000000013') $$,
-  'level >= 4 may award manual points');                  -- Vlad +5
+  '23514', null, 'a responsabil cannot create retired manual awards');
 select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', -5, 'sanction',
@@ -159,7 +159,7 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', 5, 'manual_award',
              'a0000000-0000-0000-0000-000000000011') $$,
-  '42501', null, 'awards must be signed by the actual awarder');
+  '23514', null, 'retired manual awards remain unavailable even with a forged author');
 
 update task_requests
    set status = 'approved', decided_by = 'c0000000-0000-0000-0000-000000000013'
@@ -175,7 +175,7 @@ reset role;
 -- ==================== Bogdan: bc (level 6), no dept claims ====================
 select pg_temp.login('d0000000-0000-0000-0000-000000000014', 'bc', 6, '[]', '[]');
 
-select is((select count(*) from points_ledger), 4::bigint,
+select is((select count(*) from points_ledger), 3::bigint,
   'level >= 6 reads the whole ledger');
 select lives_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)

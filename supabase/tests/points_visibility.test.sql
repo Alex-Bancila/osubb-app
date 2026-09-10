@@ -67,12 +67,20 @@ insert into public.member_departments (member_id, dept_id) values
   ('f4000000-0000-0000-0000-0000000000f4', 'fin'),
   ('f5000000-0000-0000-0000-0000000000f5', 'hr');
 
-insert into public.points_ledger (member_id, delta, reason) values
-  ('f1000000-0000-0000-0000-0000000000f1', 10, 'manual_award'),
-  ('f2000000-0000-0000-0000-0000000000f2', 20, 'manual_award'),
-  ('f3000000-0000-0000-0000-0000000000f3', 30, 'manual_award'),
-  ('f4000000-0000-0000-0000-0000000000f4', 40, 'manual_award'),
-  ('f5000000-0000-0000-0000-0000000000f5', 50, 'manual_award');
+insert into public.tasks (title, difficulty) values
+  ('pv-flor', 1), ('pv-felix', 2), ('pv-fiona', 3),
+  ('pv-frida', 4), ('pv-fane', 5);
+insert into public.task_assignees (task_id, member_id)
+select t.id, case t.title
+  when 'pv-flor' then 'f1000000-0000-0000-0000-0000000000f1'::uuid
+  when 'pv-felix' then 'f2000000-0000-0000-0000-0000000000f2'::uuid
+  when 'pv-fiona' then 'f3000000-0000-0000-0000-0000000000f3'::uuid
+  when 'pv-frida' then 'f4000000-0000-0000-0000-0000000000f4'::uuid
+  else 'f5000000-0000-0000-0000-0000000000f5'::uuid
+end
+from public.tasks t
+where t.title like 'pv-%';
+update public.tasks set rating = 3 where title like 'pv-%';
 
 -- Ordinary members, including Responsabil, receive no global metrics.
 select pg_temp.login(
@@ -168,8 +176,8 @@ reset role;
 select is((select count(*) from public.member_points), 5::bigint,
   'the database owner can still aggregate member totals');
 select is((select points from public.member_points
-            where member_id = 'f5000000-0000-0000-0000-0000000000f5'),
-          50,
+           where member_id = 'f5000000-0000-0000-0000-0000000000f5'),
+           5,
   'the owner-rights aggregate preserves the real total');
 
 select * from finish();

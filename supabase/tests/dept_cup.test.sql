@@ -42,10 +42,17 @@ insert into public.member_departments (member_id, dept_id) values
   ('c2000000-0000-0000-0000-000000000002', 'pr'),
   ('c3000000-0000-0000-0000-000000000003', 'hr');
 
-insert into public.points_ledger (member_id, delta, reason) values
-  ('c1000000-0000-0000-0000-000000000001',  10, 'manual_award'),
-  ('c2000000-0000-0000-0000-000000000002', 100, 'manual_award'),
-  ('c3000000-0000-0000-0000-000000000003', 200, 'manual_award');
+insert into public.tasks (title, difficulty) values
+  ('cup-active', 5), ('cup-inactive', 5), ('cup-alumni', 5);
+insert into public.task_assignees (task_id, member_id)
+select t.id, case t.title
+  when 'cup-active' then 'c1000000-0000-0000-0000-000000000001'::uuid
+  when 'cup-inactive' then 'c2000000-0000-0000-0000-000000000002'::uuid
+  else 'c3000000-0000-0000-0000-000000000003'::uuid
+end
+from public.tasks t
+where t.title like 'cup-%';
+update public.tasks set rating = 3 where title like 'cup-%';
 
 select ok(
   exists (
@@ -59,7 +66,7 @@ select pg_temp.login_leadership('c1000000-0000-0000-0000-000000000001');
 
 select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE sees all five canonical departments');
-select is((select points from public.dept_cup where dept_id = 'edu'), 10,
+select is((select points from public.dept_cup where dept_id = 'edu'), 5,
   'the cup keeps the active member points total');
 select is((select members from public.dept_cup where dept_id = 'edu'), 1::bigint,
   'the cup counts the active member');
