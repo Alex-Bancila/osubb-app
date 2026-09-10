@@ -6,23 +6,22 @@ import { keys } from './keys';
 /**
  * My points total.
  *
- * Read from `member_points` rather than summing `points_ledger` here: the view
- * is the definition of a total, and the client should never be the second place
- * that arithmetic lives (mini-spec §5 — read from a view where one exists).
+ * Read from the self-scoped `my_points` view rather than summing
+ * `points_ledger` here. The database derives the identity from auth.uid(), so
+ * this query never accepts a member id that a client could forge.
  */
 export function useMyPoints() {
   const { session } = useAuth();
   const id = session?.user.id;
 
   return useQuery({
-    queryKey: keys.points.me(),
+    queryKey: keys.points.me(id),
     // Nothing to ask for until we know who is asking.
     enabled: Boolean(id),
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('member_points')
+        .from('my_points')
         .select('points')
-        .eq('member_id', id!)
         .maybeSingle();
       if (error) throw error;
       // No ledger rows yet is a real answer for a new member: zero, not null.

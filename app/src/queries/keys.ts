@@ -16,7 +16,8 @@
 export const keys = {
   points: {
     all: ['points'] as const,
-    me: () => ['points', 'me'] as const,
+    me: (memberId: string | undefined) =>
+      ['points', 'me', { memberId }] as const,
     standing: () => ['points', 'standing'] as const,
     leaderboard: (limit = 10) => ['points', 'leaderboard', { limit }] as const,
     deptCup: () => ['points', 'deptCup'] as const,
