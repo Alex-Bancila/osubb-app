@@ -95,7 +95,7 @@ delete from projects project
 
 -- Teams after tasks and events, which reference them.
 delete from teams t
- where t.id in ('t-app', 't-recruti');
+ where t.id in ('t-app', 't-recruti', 't-logistica');
 
 delete from auth.users where email like '%@demo.osubb';
 
@@ -161,18 +161,20 @@ insert into member_departments (member_id, dept_id) values
   ('d0000000-0000-0000-0000-000000000007', 'fin'),
   ('d0000000-0000-0000-0000-000000000005', 'hr');
 
--- Two teams, deliberately different in kind: one ordinary working team, one
--- open to recruits — the flag the calendar rule turns on (a recrut sees a
--- for_recruits team's events without belonging to it).
+-- Representative Team kinds: two Department Teams and one Independent Team.
+-- The recruits flag remains covered on its Department Team for Calendar.
 insert into teams (id, name, dept_id, for_recruits, is_interne) values
   ('t-app',     'Echipa Aplicație', 'diverse', false, false),
-  ('t-recruti', 'Echipa Recruți',   'edu',     true,  false);
+  ('t-recruti', 'Echipa Recruți',   'edu',     true,  false),
+  ('t-logistica','Echipa Logistică', null,      false, false);
 
 insert into team_members (team_id, member_id) values
   ('t-app',     'd0000000-0000-0000-0000-000000000006'),
   ('t-app',     'd0000000-0000-0000-0000-000000000008'),
   ('t-recruti', 'd0000000-0000-0000-0000-000000000002'),
   ('t-recruti', 'd0000000-0000-0000-0000-000000000005'),
+  ('t-logistica','d0000000-0000-0000-0000-000000000004'),
+  ('t-logistica','d0000000-0000-0000-0000-000000000007'),
   ('it',        'd0000000-0000-0000-0000-000000000006'),
   ('it',        'd0000000-0000-0000-0000-000000000008');
 

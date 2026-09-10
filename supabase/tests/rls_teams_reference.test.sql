@@ -17,7 +17,9 @@ insert into profiles (id, full_name, email, role) values
   ('c1000000-0000-0000-0000-0000000000c1', 'Vera Voluntar', 'vera.ref@test.local', 'voluntar'),
   ('c2000000-0000-0000-0000-0000000000c2', 'Beniamin BCE',  'beniamin.ref@test.local', 'bce');
 insert into member_departments (member_id, dept_id)
-  values ('c1000000-0000-0000-0000-0000000000c1', 'edu');
+  values
+    ('c1000000-0000-0000-0000-0000000000c1', 'edu'),
+    ('c2000000-0000-0000-0000-0000000000c2', 'edu');
 insert into teams (id, name, dept_id) values ('t-ref', 'Echipa Referință', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-ref', 'c1000000-0000-0000-0000-0000000000c1');
