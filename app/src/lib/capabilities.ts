@@ -1,9 +1,9 @@
 import type { MemberClaims } from './auth';
 
 /**
- * The level thresholds the database already keeps in `role_capabilities`
- * (spec §4.1), named the same way so the two are recognisably one rule rather
- * than two that happen to agree.
+ * Friendly names for the level thresholds enforced by SQL authorization
+ * helpers, RLS policies, and server commands. Keep these UI hints aligned with
+ * those security boundaries.
  *
  * ⚠️ Nothing here is a security control. The database decides, from the same
  * claims, on every single row — these exist so the UI can be *kind*: hide a tab
@@ -15,9 +15,8 @@ export const LEVEL = {
   manageTasks: 4,
   seeAllEvents: 4,
   createTeams: 5,
-  /* Not a `role_capabilities` row: this is the `profiles_contact` gate, which
-     hands out email and phone at level >= 5. The volunteers directory is the
-     screen built on it, so it shares the threshold. */
+  /* Mirrors the `profiles_contact` gate, which hands out email and phone at
+     level >= 5. The volunteers directory is built on it. */
   seeDirectory: 5,
   /* Mirrors 20260907204817_leadership_only_global_points.sql: leaderboard,
      dept_cup and member_points return rows only at level >= 5. */

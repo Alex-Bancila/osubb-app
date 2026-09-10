@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(32);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -15,20 +15,8 @@ select is(
     where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity),
   0::bigint, 'no table in public is missing row level security');
 
--- ==================== role_capabilities seed (spec §4.1) ====================
-select is((select count(*) from role_capabilities), 17::bigint,
-  'capability seed has the expected size');
-select is((select count(*) from role_capabilities where role = 'moderator'), 6::bigint,
-  'moderator holds every capability');
-select is((select count(*) from role_capabilities where role = 'recrut'), 0::bigint,
-  'recrut holds none');
-select is((select count(*) from role_capabilities where capability = 'createTeams'), 3::bigint,
-  'createTeams is level >= 5 (three roles)');
-select ok(
-  not exists (select 1 from role_capabilities
-               where capability = 'createTeams'
-                 and role not in ('bce', 'bc', 'moderator')),
-  'createTeams goes only to bce/bc/moderator');
+select hasnt_table('public', 'role_capabilities',
+  'the unused capability lookup is retired');
 
 -- ==================== Fixtures: a row in every table ====================
 -- The sweep below is only as strong as this block. An empty table proves
