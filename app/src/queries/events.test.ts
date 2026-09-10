@@ -65,7 +65,6 @@ describe('event presentation', () => {
 
 describe('upcoming-events query', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     query.from.mockReturnValue({ select: query.select });
     query.select.mockReturnValue({ gte: query.gte });
     query.gte.mockReturnValue({ neq: query.neq });

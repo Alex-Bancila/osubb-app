@@ -7,6 +7,18 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    /* `restoreMocks` alone resets a spy's implementation but — for a plain
+       `vi.fn()` created once at module scope (the `vi.hoisted()` pattern every
+       mocked-module test file here uses) — does not clear its call history
+       between tests in this Vitest version. `clearMocks` does, and is what the
+       removed per-file `vi.clearAllMocks()` calls were actually relied on for. */
+    clearMocks: true,
+    restoreMocks: true,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.*', 'src/lib/database.types.ts'],
+    },
   },
   server: {
     /* Pinned, and `strictPort` so a busy port is an error rather than a silent

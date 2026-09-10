@@ -72,8 +72,10 @@ export function firstName(fullName: string | null | undefined): string {
 export function initials(nameOrEmail: string | undefined | null): string {
   if (!nameOrEmail) return '?';
   const parts = nameOrEmail.trim().split(/\s+/);
-  if (parts.length >= 2 && !nameOrEmail.includes('@')) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
+  const first = parts[0]?.[0];
+  const second = parts[1]?.[0];
+  if (first && second && !nameOrEmail.includes('@')) {
+    return (first + second).toUpperCase();
   }
   return nameOrEmail.slice(0, 2).toUpperCase();
 }
