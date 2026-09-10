@@ -33,7 +33,13 @@ Whether a Member is active, inactive, or alumni. Only an active Member may perfo
 _Avoid_: Task status
 
 **Department**:
-One of the five OSUBB departments: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane.
+One of the five OSUBB departments: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane; or one of the two coordination structures, Diverse and Secretariat, which use the Department model but never compete in the Department Cup.
+
+**Diverse**:
+The coordination structure hosting the IT and Interne Department Teams. It is a Department for Task Origins and authority and is excluded from the Department Cup.
+
+**Secretariat**:
+The organization's secretariat, modeled as a Department for Task Origins and authority and excluded from the Department Cup.
 
 **Project**:
 A temporary or ongoing body of work independent of Departments. A Project has one Project Lead, Members, and may have Project Responsibles.
@@ -56,7 +62,7 @@ A Team belonging to exactly one Department and overseen by that Department’s l
 A Team with no parent Department. Its active Members jointly manage its planned work, while BC or Moderator manages membership.
 
 **Interne**:
-The Vicepreședinte Interne and Echipa Interne, responsible for tracking AG eligibility and voting-right information.
+The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse flagged `is_interne`, responsible for tracking AG eligibility and voting-right information.
 
 ## Task Tracker
 
@@ -71,7 +77,20 @@ _Avoid_: Scope when ownership is meant
 Whether a public Task opportunity is local to its Origin or open across OSUBB.
 
 **Assignment Mode**:
-Whether a Task is assigned directly to one eligible Member or offered publicly through the Candidate Queue.
+Whether a Task is assigned directly to one active Member or offered publicly through the Candidate Queue.
+
+**Campaign**:
+A Department-owned label grouping Tasks whose Origin is that Department or one of its Department Teams. A Campaign filters the Tracker, Leaderboard, and Department Cup; it is not an Origin and has no members.
+_Avoid_: Campaign as a Task Origin
+
+**Umbrella Task**:
+A Task that groups Subtasks one level deep. It has no Executor, Candidate Queue, Difficulty, Rating, or Task Points and is completed by its Task Manager only when every Subtask is terminal.
+
+**Subtask**:
+An ordinary Task whose Origin is inherited immutably from its Umbrella Task.
+
+**Task Manager**:
+The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Origin's managers receive them instead.
 
 **Executor**:
 The one Member currently accountable for completing a Task.
@@ -94,17 +113,24 @@ The ordered list of Candidates for a public Task after the first eligible Member
 An Executor’s recorded decision to leave a Task before review, with a required explanation and preserved history.
 
 **Task Status**:
-The current lifecycle stage: To do, In progress, In review, Completed, or Cancelled.
+The current lifecycle stage: To do, In progress, In review, Completed, Unfulfilled, or Cancelled.
 _Avoid_: Open and Overdue as statuses
 
 **Overdue**:
-An unfinished Task whose deadline has passed. Overdue is a condition derived from time, not a lifecycle stage.
+An unfinished Task whose deadline has passed. Overdue is a condition derived from time, not a lifecycle stage. A Task completed after its deadline is shown as completed late.
+
+**Feedback pending**:
+The derived condition of an In-progress Task that a Reviewer returned with a note. It is shown as a badge and filter, never stored as a status.
+
+**Unfulfilled**:
+The terminal outcome of an overdue Task evaluated as not delivered. It carries Difficulty and Rating like a completion and may award zero or negative Task Points to the Executor.
+_Avoid_: Failed
 
 **Task Activity**:
 The immutable chronological history of Task lifecycle, assignment, queue, evaluation, and cancellation events.
 
 **Evaluation**:
-The final review that sets effective Difficulty and Rating and determines Task Points for the active Executor.
+The final review that sets Difficulty and Rating together and determines Task Points for the active Executor. Difficulty is not proposed at creation.
 
 **Difficulty**:
 A 1–5 estimate of how demanding a Task is.
@@ -129,7 +155,7 @@ A BCE/BC/Moderator comparison of Task Points earned through Department Tasks and
 
 **Completed-work Request**:
 A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together.
-_Avoid_: Award request, new-task request
+_Avoid_: Award request, new-task request, `task_requests`
 
 **Sanction**:
 A deferred BC/Moderator action that may reduce a Member’s Personal Score and must include a visible explanation.

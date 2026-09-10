@@ -6,7 +6,7 @@ You are picking up a project mid-flight. This file gets you from zero context to
 
 1. `CLAUDE.md` — rules + status (you likely already have it).
 2. `CONTEXT.md` — the ubiquitous language. Use these exact terms everywhere.
-3. `docs/adr/0001…0006` — the six locked decisions (Supabase+RLS · React/Ionic/Capacitor · invite-only auth · promotion policy · rollout strategy · data retention). Never contradict one silently.
+3. `docs/adr/0001…0008` — the locked decisions (Supabase+RLS · browser-first shadcn PWA · invite-only auth · promotion policy · browser-first rollout · data retention · Task Tracker lifecycle · Calendar visibility). ADR-0007 (amended 2026-09-10) and ADR-0008 are authoritative for Tracker/Calendar. Never contradict one silently.
 4. `docs/backend/implementation-issues.md` — the backlog map (issue numbers ↔ epics).
 5. `docs/roadmap.md` — sprint calendar, success metrics, deferred-decisions log.
 6. The architecture spec `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md` — **don't read it linearly**; jump to the section your issue cites (§3.x schema DDL, §4.x RLS matrix + policy sketches, §5.x edge functions, §9 Revision 3 = the newest truth).
@@ -54,7 +54,7 @@ supabase/
         rls_events · rls_announcements · rls_teams_reference                # policy matrix per role
 ```
 
-Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a seed re-runnability check; merge to main = auto `db push` to staging), `.github/workflows/seed-staging.yml` (manual: puts the demo data on staging — `db push` never carries `seed.sql`), `scripts/` (historical one-shots — never re-run), `mockup/` (the clickable HTML prototype = UX source for Epic 9 screens), `docs/org/` (mandate requirements in Romanian), `docs/team/` (operating model). **There is no `app/` yet** — the frontend starts at issue #80, against `docs/superpowers/specs/frontend-mini-spec.md`.
+Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a seed re-runnability check; merge to main = auto `db push` to staging), `.github/workflows/seed-staging.yml` (manual: puts the demo data on staging — `db push` never carries `seed.sql`), `scripts/` (historical one-shots — never re-run), `mockup/` (the clickable HTML prototype = UX source for Epic 9 screens), `docs/org/` (mandate requirements in Romanian), `docs/team/` (operating model). The frontend lives in `app/` (start with `app/README.md`); its Ionic code is temporary per ADR-0002, and new screens use shadcn + TanStack Table.
 
 ## Patterns to copy (don't invent, imitate)
 
@@ -66,7 +66,7 @@ Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a se
 | pgTAP schema tests | `points_engine.test.sql` (fixtures via auth.users+profiles, plan(N), rollback) |
 | per-role RLS tests | `rls_tasks_points.test.sql` (the `pg_temp.login()` JWT simulator — reuse it) |
 | an Edge Function | `functions/invite-member/` — logic in `handler.ts` behind a `Deps` port, `index.ts` only wires the real clients, so every path is testable without a server |
-| a frontend screen | nothing yet — `docs/superpowers/specs/frontend-mini-spec.md` says how, #80 creates the workspace |
+| a frontend screen | `app/src/screens/calendar/` for the query + three-states pattern; build new screens with shadcn per ADR-0002, never Ionic or AG Grid |
 
 ## The work loop
 
@@ -83,7 +83,7 @@ gh pr checks <pr> --watch                    # CI green, then a HUMAN merges
 
 Definition of done = migration applies on reset · tests pass and would fail without the feature · CI green · the issue's AC boxes checked · PR closes the issue. After merge: staging updates itself; delete the branch.
 
-## Current queue (as of 2026-08-23)
+## Queue snapshot (historical, 2026-08-23 — `CLAUDE.md` holds the current queue)
 
 Done since the last update and merged: the v1 tables (#43–#46) · the provisioning RPC (#56) · the invite Edge Function and its end-to-end proof (#57, #58) · every policy that has landed so far (#59 profiles, #61 reference/teams, #62 calendar, #64 announcements, #129 the claimless audit) · the demo seed (#74–#76) · the frontend mini-spec (#79).
 

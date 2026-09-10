@@ -1,15 +1,21 @@
 # `app/` — the OSUBB frontend
 
-React + TypeScript + Ionic, built by Vite. This is the app members will actually
+React + TypeScript, built by Vite. This is the app members will actually
 open; the backend it talks to lives one directory up, in `supabase/`.
+
+Ionic is temporary migration code. ADR-0002 fixes the target as Tailwind +
+shadcn/ui (Base UI, Nova style) + TanStack Table in a browser-first, installable
+PWA, migrated route by route; no new screen or shared primitive should depend
+on Ionic, and AG Grid is not used.
 
 Use Node.js 24 or newer—the frontend and its test tooling are developed and
 verified on Node 24, matching GitHub Actions.
 
-**Before your first screen issue, read
+**Before your first screen issue, read ADR-0002 and
 [`docs/superpowers/specs/frontend-mini-spec.md`](../docs/superpowers/specs/frontend-mini-spec.md)** —
-folder layout, routes, query conventions and theming are already decided there,
-so screen PRs look alike and nobody invents a second architecture.
+folder layout, routes, query conventions and theming are decided there, so
+screen PRs look alike and nobody invents a second architecture. The mini-spec's
+component choices (Ionic, AG Grid) are superseded by ADR-0002.
 
 ## The main commands
 
@@ -143,6 +149,6 @@ can actually use, instead of an app that is silently empty.
   Vite quietly move to the next free port would produce a sign-in that fails for
   a reason nothing on screen explains. Better to be told the port is busy.
 - **Routing uses `react-router` 7.18.2 directly.** The app uses declarative
-  `BrowserRouter` routing and retains Ionic as its component layer, without the
-  `@ionic/react-router` compatibility wrapper. `npm audit` has no router
-  advisories at this version.
+  `BrowserRouter` routing and keeps the remaining Ionic screens working without
+  the `@ionic/react-router` compatibility wrapper while they are migrated to
+  shadcn (ADR-0002). `npm audit` has no router advisories at this version.
