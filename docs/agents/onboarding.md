@@ -54,7 +54,7 @@ supabase/
         rls_events · rls_announcements · rls_teams_reference                # policy matrix per role
 ```
 
-Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a seed re-runnability check; merge to main = auto `db push` to staging), `.github/workflows/seed-staging.yml` (manual: puts the demo data on staging — `db push` never carries `seed.sql`), `scripts/` (historical one-shots — never re-run), `mockup/` (the clickable HTML prototype = UX source for Epic 9 screens), `docs/org/` (mandate requirements in Romanian), `docs/team/` (operating model). The frontend lives in `app/` (start with `app/README.md`); its Ionic code is temporary per ADR-0002, and new screens use shadcn + TanStack Table.
+Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a seed re-runnability check; merge to main = auto `db push` to staging), `.github/workflows/seed-staging.yml` (manual: puts the demo data on staging — `db push` never carries `seed.sql`), `scripts/` (`create-github-issues.sh` is a guarded historical one-shot — never re-run; `check-seed-rerunnable.sh` is the local seed re-runnability check named in `docs/backend/seeding-staging.md`), `mockup/` (the clickable HTML prototype = UX source for Epic 9 screens), `docs/org/` (mandate requirements in Romanian), `docs/team/` (operating model). The frontend lives in `app/` (start with `app/README.md`); its Ionic code is temporary per ADR-0002, and new screens use shadcn + TanStack Table.
 
 ## Patterns to copy (don't invent, imitate)
 
