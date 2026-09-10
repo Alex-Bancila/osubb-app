@@ -76,6 +76,13 @@ export type Database = {
             foreignKeyName: "announcement_reads_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -151,6 +158,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -274,6 +288,13 @@ export type Database = {
             foreignKeyName: "event_attendance_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "event_attendance_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -352,6 +373,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -438,6 +466,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_departments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -542,6 +577,13 @@ export type Database = {
             foreignKeyName: "notifications_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notifications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -608,6 +650,13 @@ export type Database = {
             foreignKeyName: "points_ledger_awarded_by_fkey"
             columns: ["awarded_by"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "points_ledger_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -637,6 +686,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "points_ledger_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -743,6 +799,13 @@ export type Database = {
             foreignKeyName: "project_members_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "project_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -816,6 +879,13 @@ export type Database = {
             foreignKeyName: "projects_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -845,6 +915,13 @@ export type Database = {
             columns: ["leader_id"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "projects_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -905,6 +982,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "push_tokens_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -1024,6 +1108,13 @@ export type Database = {
             foreignKeyName: "task_assignees_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_assignees_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1106,6 +1197,13 @@ export type Database = {
             foreignKeyName: "task_requests_decided_by_fkey"
             columns: ["decided_by"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1149,6 +1247,13 @@ export type Database = {
             columns: ["from_member"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_requests_from_member_fkey"
+            columns: ["from_member"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -1239,6 +1344,13 @@ export type Database = {
             foreignKeyName: "tasks_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1305,6 +1417,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "team_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
           {
@@ -1395,6 +1514,13 @@ export type Database = {
             foreignKeyName: "teams_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "teams_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1436,6 +1562,13 @@ export type Database = {
         Relationships: []
       }
       member_points: {
+        Row: {
+          member_id: string | null
+          points: number | null
+        }
+        Relationships: []
+      }
+      my_points: {
         Row: {
           member_id: string | null
           points: number | null
