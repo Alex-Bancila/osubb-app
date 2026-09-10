@@ -62,6 +62,24 @@ describe('current-member points query', () => {
     expect(keys.points.me(memberId)).not.toEqual(keys.points.me(anotherMember));
   });
 
+  it('scopes standing by member', () => {
+    expect(keys.points.standing('m1')).toEqual([
+      'points',
+      'standing',
+      { memberId: 'm1' },
+    ]);
+    expect(keys.profile.me('m1')).toEqual([
+      'profile',
+      'me',
+      { memberId: 'm1' },
+    ]);
+    expect(keys.tasks.mine('m1')).toEqual([
+      'tasks',
+      'mine',
+      { memberId: 'm1' },
+    ]);
+  });
+
   it('does not query without an authenticated session', () => {
     auth.useAuth.mockReturnValue({ session: null });
     const queryClient = new QueryClient({

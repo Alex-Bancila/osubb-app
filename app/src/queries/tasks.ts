@@ -25,7 +25,7 @@ export function useMyTasks() {
   const id = session?.user.id;
 
   return useQuery({
-    queryKey: keys.tasks.mine(),
+    queryKey: keys.tasks.mine(id),
     queryFn: id ? () => fetchMyTasks(id) : skipToken,
   });
 }

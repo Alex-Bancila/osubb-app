@@ -19,7 +19,7 @@ export function useMyProfile() {
   const id = session?.user.id;
 
   return useQuery({
-    queryKey: keys.profile.me(),
+    queryKey: keys.profile.me(id),
     // Your own name and colour do not change while you look at a screen.
     staleTime: 5 * 60_000,
     queryFn: id ? () => fetchMyProfile(id) : skipToken,
