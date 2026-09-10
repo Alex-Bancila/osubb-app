@@ -1583,6 +1583,19 @@ export type Database = {
       }
     }
     Functions: {
+      add_independent_team_member: {
+        Args: { p_member_id: string; p_team_id: string }
+        Returns: {
+          member_id: string
+          team_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "team_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       add_project_member: {
         Args: { p_member_id: string; p_project_id: number }
         Returns: {
@@ -1729,6 +1742,10 @@ export type Database = {
         Returns: string
       }
       rating_mult: { Args: { r: number }; Returns: number }
+      remove_independent_team_member: {
+        Args: { p_member_id: string; p_team_id: string }
+        Returns: boolean
+      }
       remove_project_member: {
         Args: { p_member_id: string; p_project_id: number }
         Returns: boolean
