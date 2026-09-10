@@ -10,6 +10,7 @@ Local settings live in `supabase/config.toml`. **Hosted projects do not read tha
 |---|---|---|---|
 | `[auth] enabled` | `true` | — | Auth is on. |
 | `[auth] site_url` | `http://localhost:5173` | `GOTRUE_SITE_URL` | Where a magic link sends the member back — the Vite dev server. Must become the real app URL once the frontend deploys (#109). |
+| — | — | — | The moment `site_url` changes to the hosted app origin, the `invite-member` Edge Function's `ALLOWED_ORIGINS` secret must be set to that same origin — see "CORS: who is allowed to call this function from a browser" in `docs/backend/inviting.md` for the `npx supabase secrets set` command. |
 | `[auth] additional_redirect_urls` | the dev server + `/auth/callback`, both spellings of localhost | `GOTRUE_URI_ALLOW_LIST` | Every URL a link may return to. GoTrue refuses anything not on it, so a link to an unlisted origin silently falls back to `site_url` and the sign-in appears to do nothing. Keep it short and exact: it is the defence against open-redirect abuse. |
 | `[auth] jwt_expiry` | `3600` | `GOTRUE_JWT_EXP` | One hour. This is also the **deactivation window**: a member set to `inactiv` keeps their claims until this expires (ADR-0003 amendment). |
 | `[auth] enable_refresh_token_rotation` | `true` | `GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED` | A refresh token is single-use; reuse signals theft. |
