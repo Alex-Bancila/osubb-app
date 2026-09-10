@@ -17,28 +17,39 @@ import { formatPoints } from '../../lib/format';
  * The spec also asks for the next automatic promotion threshold. There is no
  * `promotion_rules` table yet (#51/#52), and the issue says to hide the line
  * until there is — so it is absent rather than faked.
+ *
+ * `showStanding` mirrors the database's `seeLeadership` gate (level >= 5,
+ * `20260907204817_leadership_only_global_points.sql`): below it, `leaderboard`
+ * never returns this member's row, so `useMyStanding` is called with
+ * `enabled: false` and its query stays disabled — `pending` forever rather
+ * than resolving. The loading/error branches below must not wait on it in
+ * that case, or an ordinary member would see a permanent spinner.
  */
-export default function MyPointsCard() {
+export default function MyPointsCard({
+  showStanding,
+}: {
+  showStanding: boolean;
+}) {
   const points = useMyPoints();
-  const standing = useMyStanding();
+  const standing = useMyStanding({ enabled: showStanding });
   const profile = useMyProfile();
   const roles = useRoles();
 
-  if (points.isError || standing.isError) {
+  if (points.isError || (showStanding && standing.isError)) {
     return (
       <section className="card hero">
         <ErrorState
           error={points.error ?? standing.error}
           onRetry={() => {
             void points.refetch();
-            void standing.refetch();
+            if (showStanding) void standing.refetch();
           }}
         />
       </section>
     );
   }
 
-  if (points.isPending || standing.isPending) {
+  if (points.isPending || (showStanding && standing.isPending)) {
     return (
       <section className="card hero">
         <Loading />
@@ -50,7 +61,6 @@ export default function MyPointsCard() {
      with the enum value as the fallback while it loads — never a blank chip. */
   const role = profile.data?.role;
   const roleLabel = (role && roles.data?.get(role)?.name) ?? role ?? '';
-  const { rank, total, next } = standing.data;
 
   return (
     <section className="card hero">
@@ -73,13 +83,23 @@ export default function MyPointsCard() {
         </div>
       </div>
 
-      {/* No rank at all. This is the deactivation window from ADR-0003 made
-          visible: `leaderboard` filters on `profiles.status`, which is live,
-          while the claims that got this page open are up to an hour old — so
-          for that hour a member deactivated mid-session still reads their own
-          total and is correctly absent from the ranking. Verified by
-          deactivating a seeded member with their session open. */}
-      {rank === null ? (
+      {/* Below level 5, `leaderboard` never carries this member's row at all
+          (ADR-0007's leadership-only ranking), so there is no "no rank" case
+          to render here — only the fact that ranking is a leadership view,
+          stated plainly rather than apologised for or promised later. */}
+      {!showStanding ? (
+        <div className="hero-rank">
+          <p className="hero-rank-note">
+            Clasamentul este vizibil pentru BCE și BC.
+          </p>
+        </div>
+      ) : standing.data?.rank == null ? (
+        /* No rank at all. This is the deactivation window from ADR-0003 made
+           visible: `leaderboard` filters on `profiles.status`, which is live,
+           while the claims that got this page open are up to an hour old — so
+           for that hour a member deactivated mid-session still reads their
+           own total and is correctly absent from the ranking. Verified by
+           deactivating a seeded member with their session open. */
         <div className="hero-rank">
           <p className="hero-rank-note">Nu ești în clasament.</p>
         </div>
@@ -87,12 +107,14 @@ export default function MyPointsCard() {
         <div className="hero-rank">
           <span className="hero-rank-value">
             <span className="hero-rank-hash">#</span>
-            {rank}
+            {standing.data.rank}
           </span>
-          <span className="hero-rank-total">din {total} membri</span>
+          <span className="hero-rank-total">
+            din {standing.data.total} membri
+          </span>
           <p className="hero-rank-note">
-            {next
-              ? `${formatPoints(next.gap)} p până la locul ${next.rank}`
+            {standing.data.next
+              ? `${formatPoints(standing.data.next.gap)} p până la locul ${standing.data.next.rank}`
               : 'Locul 1 🏆'}
           </p>
         </div>
