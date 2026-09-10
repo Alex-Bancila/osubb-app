@@ -19,6 +19,9 @@ export const LEVEL = {
      hands out email and phone at level >= 5. The volunteers directory is the
      screen built on it, so it shares the threshold. */
   seeDirectory: 5,
+  /* Mirrors 20260907204817_leadership_only_global_points.sql: leaderboard,
+     dept_cup and member_points return rows only at level >= 5. */
+  seeLeadership: 5,
   seeAllSheets: 6,
   seeInterne: 6,
   manageRoles: 6,
