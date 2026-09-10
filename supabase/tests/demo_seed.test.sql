@@ -8,7 +8,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(31);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -65,8 +65,11 @@ select ok(
       and md.dept_id in (select id from departments where kind = 'department')) >= 3,
   'demo members span several real departments (the dept cup needs something to compare)');
 
-select is((select count(*) from teams where id in ('t-app', 't-recruti')), 2::bigint,
-  'both demo teams exist');
+select is((select count(*) from teams where id in ('t-app', 't-recruti', 't-logistica')), 3::bigint,
+  'all representative demo teams exist');
+
+select is((select count(*) from teams where id = 't-logistica' and dept_id is null), 1::bigint,
+  'the demo cohort includes an Independent Team');
 
 select is((select count(*) from teams where id = 't-recruti' and for_recruits), 1::bigint,
   'one team is open to recruits — the branch the calendar rule turns on');
