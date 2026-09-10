@@ -79,7 +79,6 @@ function setEventsQuery(overrides: Record<string, unknown> = {}): {
 
 describe('CalendarScreen', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     hooks.useDepartments.mockReturnValue({ data: departments });
     hooks.useEventRsvp.mockReturnValue({
       data: null,

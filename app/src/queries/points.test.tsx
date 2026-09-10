@@ -31,7 +31,6 @@ function wrapper(queryClient: QueryClient) {
 
 describe('current-member points query', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     api.from.mockReturnValue({ select: api.select });
     api.select.mockReturnValue({ eq: api.eq, maybeSingle: api.maybeSingle });
     api.eq.mockReturnValue({ maybeSingle: api.maybeSingle });

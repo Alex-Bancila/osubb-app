@@ -46,7 +46,6 @@ function wrapper(queryClient: QueryClient) {
 
 describe('current-member RSVP query', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     api.from.mockReturnValue({ select: api.select });
     api.select.mockReturnValue({ eq: api.byEvent });
     api.byEvent.mockReturnValue({ eq: api.byMember });
@@ -134,10 +133,6 @@ describe('current-member RSVP query', () => {
 });
 
 describe('RSVP mutation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it('sends only event id and status to the self-owned RPC', async () => {
     api.rpc.mockResolvedValue({ data: rsvpRow, error: null });
 

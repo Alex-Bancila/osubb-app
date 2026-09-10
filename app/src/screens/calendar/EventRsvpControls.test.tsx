@@ -37,7 +37,6 @@ function rsvpButton(name: string): HTMLElement {
 
 describe('EventRsvpControls', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     hooks.useEventRsvp.mockReturnValue({
       data: {
         eventId: 7,

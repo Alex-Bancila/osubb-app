@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { keys } from './keys';
@@ -26,20 +26,21 @@ export function useMyTasks() {
 
   return useQuery({
     queryKey: keys.tasks.mine(),
-    enabled: Boolean(id),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('task_assignees')
-        .select(`task:tasks(${TASK_FIELDS})`)
-        .eq('member_id', id!);
-      if (error) throw error;
-
-      return data
-        .map((row) => row.task)
-        .filter((task) => task !== null)
-        .sort(byDeadlineThenTitle);
-    },
+    queryFn: id ? () => fetchMyTasks(id) : skipToken,
   });
+}
+
+async function fetchMyTasks(memberId: string) {
+  const { data, error } = await supabase
+    .from('task_assignees')
+    .select(`task:tasks(${TASK_FIELDS})`)
+    .eq('member_id', memberId);
+  if (error) throw error;
+
+  return data
+    .map((row) => row.task)
+    .filter((task) => task !== null)
+    .sort(byDeadlineThenTitle);
 }
 
 /** Tasks anyone may claim — the tracker's "Deschise" tab (#89). */

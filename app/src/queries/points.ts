@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { keys } from './keys';
@@ -53,45 +53,47 @@ export function useMyStanding() {
 
   return useQuery({
     queryKey: keys.points.standing(),
-    enabled: Boolean(id),
-    queryFn: async () => {
-      const mine = await supabase
-        .from('leaderboard')
-        .select('rank, points')
-        .eq('member_id', id!)
-        .maybeSingle();
-      if (mine.error) throw mine.error;
-
-      const total = await supabase
-        .from('leaderboard')
-        .select('member_id', { count: 'exact', head: true });
-      if (total.error) throw total.error;
-
-      if (!mine.data?.rank) {
-        return { rank: null, total: total.count ?? 0, next: null };
-      }
-
-      const above = await supabase
-        .from('leaderboard')
-        .select('rank, points')
-        .gt('points', mine.data.points ?? 0)
-        .order('points', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (above.error) throw above.error;
-
-      return {
-        rank: mine.data.rank,
-        total: total.count ?? 0,
-        next: above.data
-          ? {
-              rank: above.data.rank!,
-              gap: (above.data.points ?? 0) - (mine.data.points ?? 0),
-            }
-          : null,
-      };
-    },
+    queryFn: id ? () => fetchStanding(id) : skipToken,
   });
+}
+
+async function fetchStanding(memberId: string) {
+  const mine = await supabase
+    .from('leaderboard')
+    .select('rank, points')
+    .eq('member_id', memberId)
+    .maybeSingle();
+  if (mine.error) throw mine.error;
+
+  const total = await supabase
+    .from('leaderboard')
+    .select('member_id', { count: 'exact', head: true });
+  if (total.error) throw total.error;
+
+  if (!mine.data?.rank) {
+    return { rank: null, total: total.count ?? 0, next: null };
+  }
+
+  const above = await supabase
+    .from('leaderboard')
+    .select('rank, points')
+    .gt('points', mine.data.points ?? 0)
+    .order('points', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (above.error) throw above.error;
+
+  return {
+    rank: mine.data.rank,
+    total: total.count ?? 0,
+    next:
+      above.data && above.data.rank !== null
+        ? {
+            rank: above.data.rank,
+            gap: (above.data.points ?? 0) - (mine.data.points ?? 0),
+          }
+        : null,
+  };
 }
 
 /**
