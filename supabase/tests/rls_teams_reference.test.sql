@@ -37,8 +37,8 @@ select pg_temp.login('c1000000-0000-0000-0000-0000000000c1', 'voluntar', 1, '["e
 
 select is((select count(*) from roles), 8::bigint,
   'voluntar reads the role ladder');
-select is((select count(*) from departments), 7::bigint,
-  'voluntar reads the departments');
+select is((select count(*) from departments), 8::bigint,
+  'eight departments (5 + diverse, secretariat, org)');
 select is((select count(*) from rating_guide), 5::bigint,
   'voluntar reads the rating guide (the scoring rules are public)');
 select is((select count(*) from difficulty_guide), 5::bigint,

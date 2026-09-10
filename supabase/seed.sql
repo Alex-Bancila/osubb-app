@@ -149,10 +149,10 @@ insert into member_departments (member_id, dept_id) values
   ('d0000000-0000-0000-0000-000000000003', 'pr'),
   ('d0000000-0000-0000-0000-000000000004', 'youth'),
   ('d0000000-0000-0000-0000-000000000005', 'edu'),
-  ('d0000000-0000-0000-0000-000000000006', 'it'),
+  ('d0000000-0000-0000-0000-000000000006', 'diverse'),
   ('d0000000-0000-0000-0000-000000000006', 'pr'),
   ('d0000000-0000-0000-0000-000000000007', 'org'),
-  ('d0000000-0000-0000-0000-000000000008', 'it'),
+  ('d0000000-0000-0000-0000-000000000008', 'diverse'),
   -- Financiar and Resurse Umane get a member each so all five real
   -- departments appear in the cup. `dept_cup` inner-joins through
   -- member_departments, so a department with nobody in it disappears from the
@@ -165,14 +165,16 @@ insert into member_departments (member_id, dept_id) values
 -- open to recruits — the flag the calendar rule turns on (a recrut sees a
 -- for_recruits team's events without belonging to it).
 insert into teams (id, name, dept_id, for_recruits, is_interne) values
-  ('t-app',     'Echipa Aplicație', 'it',  false, false),
-  ('t-recruti', 'Echipa Recruți',   'edu', true,  false);
+  ('t-app',     'Echipa Aplicație', 'diverse', false, false),
+  ('t-recruti', 'Echipa Recruți',   'edu',     true,  false);
 
 insert into team_members (team_id, member_id) values
   ('t-app',     'd0000000-0000-0000-0000-000000000006'),
   ('t-app',     'd0000000-0000-0000-0000-000000000008'),
   ('t-recruti', 'd0000000-0000-0000-0000-000000000002'),
-  ('t-recruti', 'd0000000-0000-0000-0000-000000000005');
+  ('t-recruti', 'd0000000-0000-0000-0000-000000000005'),
+  ('it',        'd0000000-0000-0000-0000-000000000006'),
+  ('it',        'd0000000-0000-0000-0000-000000000008');
 
 -- ==================== Representative Projects ====================
 -- Projects are independent from departments. These two fixtures cover the
@@ -231,8 +233,8 @@ insert into tasks (title, type, dept_id, team_id, status, difficulty, deadline, 
   ('Buget trimestrial',         'admin',   'fin', null, 'done',     4, current_date - 5,  'Raport de buget pentru BC.',               'd0000000-0000-0000-0000-000000000007'),
   ('Interviuri recrutare',      'hr',      'hr',  null, 'progress', 3, current_date + 8,  'Programare și susținere interviuri.',      'd0000000-0000-0000-0000-000000000007'),
   -- Echipa Aplicație
-  ('Migrare bază de date',      'tehnic',  'it',  't-app', 'done',   5, current_date - 2,  'Migrare completă cu teste automate.',      'd0000000-0000-0000-0000-000000000006'),
-  ('Testare aplicație',         'tehnic',  'it',  't-app', 'progress',3, current_date + 6, 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
+  ('Migrare bază de date',      'tehnic',  'diverse',  't-app', 'done',   5, current_date - 2,  'Migrare completă cu teste automate.',      'd0000000-0000-0000-0000-000000000006'),
+  ('Testare aplicație',         'tehnic',  'diverse',  't-app', 'progress',3, current_date + 6, 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
   -- Open: anyone may claim these, which is what the tracker's "Deschise" tab is for
   ('Share story recrutare',     'promo',   'pr',  null, 'open',     1, current_date + 3,  'Distribuie story-ul de recrutare.',        'd0000000-0000-0000-0000-000000000006'),
   ('Ajutor la standul de recrutare','logistic','edu',null,'open',   2, current_date + 9,  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005');
@@ -292,7 +294,7 @@ insert into events (title, type, dept_id, team_id, scope, starts_at, ends_at, lo
   ('Brainstorming campanie PR',  'activitate','pr',   null,       'dept',
    now() + interval '4 days',  now() + interval '4 days 2 hours',  'Sediu OSUBB',        15,
    'Idei pentru campania de iarnă.',                  'd0000000-0000-0000-0000-000000000006'),
-  ('Sprint review Echipa Aplicație', 'sedinta','it',  't-app',    'team',
+  ('Sprint review Echipa Aplicație', 'sedinta','diverse','t-app',   'team',
    now() + interval '1 day',   now() + interval '1 day 1 hour',    'Online',             10,
    'Demo intern al aplicației.',                      'd0000000-0000-0000-0000-000000000006'),
   ('Training pentru recruți',    'activitate','edu',  't-recruti','team',
