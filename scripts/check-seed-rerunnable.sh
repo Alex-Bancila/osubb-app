@@ -5,18 +5,63 @@
 # it twice must leave the same demo data, not a duplicate of it and not an
 # error. It also proves the seed does not clobber rows a human added.
 #
-# Run it after `npx supabase start` + `npx supabase db reset`:
+# Run it after the local Supabase stack is up and reset (CLI `start` + `db reset`):
 #   bash scripts/check-seed-rerunnable.sh
+#
+# This script only ever talks to the LOCAL Supabase stack. The default URL
+# is derived straight from supabase/config.toml's [db] port (no CLI call —
+# see below); override it with LOCAL_DB_URL if you must, but the resolved
+# host is checked against 127.0.0.1/localhost/::1 and the script refuses
+# to run — before attempting any connection — if it is anything else. This
+# is deliberate: `DB_URL` is the name seed-staging.yml uses for the
+# *staging* connection string, and a scoped, distinct variable name here
+# stops that value ever being picked up by accident and pointed at a live
+# database (which would insert a sentinel row and apply the demo seed —
+# including the published BC/Moderator password — to it).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # The sentinel auth user/profile/Project and the demo lead it borrows are
 # CI's own fixture UUIDs, not generated data — they stay hardcoded on
 # purpose (see the inserts below).
-DB_URL="${DB_URL:-$(npx supabase status -o env 2>/dev/null | sed -n 's/^DB_URL=//p' | tr -d '"')}"
+
+# Read the port from the [db] section specifically — config.toml has other
+# `port = ` lines under [api], [db.pooler], [studio], etc. and the first
+# match is not necessarily the database's.
+db_port=$(awk '
+  /^\[db\]/ { in_db = 1; next }
+  /^\[/     { in_db = 0 }
+  in_db && /^port[[:space:]]*=/ { print $3; exit }
+' supabase/config.toml)
+
+LOCAL_DB_URL="${LOCAL_DB_URL:-postgresql://postgres:postgres@127.0.0.1:${db_port}/postgres}"
+
+# Extract the host from LOCAL_DB_URL and refuse anything non-local, before
+# any connection is attempted. Handles postgres:// and postgresql://, an
+# optional user[:password]@ prefix, an optional :port, an optional
+# /database and ?query suffix, and a bracketed IPv6 host such as [::1].
+if [[ ! "$LOCAL_DB_URL" =~ ^postgres(ql)?://([^/?]*)(.*)$ ]]; then
+  echo "::error::Could not parse LOCAL_DB_URL as a postgres:// or postgresql:// URL." >&2
+  exit 2
+fi
+authority="${BASH_REMATCH[2]}"
+hostport="${authority##*@}"   # drop user[:password]@ if present
+if [[ "$hostport" =~ ^\[([^]]+)\] ]]; then
+  db_host="${BASH_REMATCH[1]}"       # bracketed IPv6, e.g. [::1]:5432 -> ::1
+else
+  db_host="${hostport%%:*}"          # host[:port] -> host
+fi
+case "$db_host" in
+  127.0.0.1|localhost|::1) ;;
+  *)
+    echo "::error::Refusing to run against non-local host '$db_host' (from LOCAL_DB_URL). This script only ever seeds the local Supabase stack." >&2
+    exit 2
+    ;;
+esac
+
 CONTAINER="supabase_db_$(sed -n 's/^project_id = "\(.*\)"/\1/p' supabase/config.toml)"
 
-# Prefer a real psql against the local stack's DB_URL. Fall back to
+# Prefer a real psql against the local stack's LOCAL_DB_URL. Fall back to
 # `docker exec` into the db container supabase_start/reset already brought
 # up (its name is derived from config.toml's project_id, not hardcoded).
 # The container has no view of the repo on disk, so when the docker path is
@@ -24,8 +69,8 @@ CONTAINER="supabase_db_$(sed -n 's/^project_id = "\(.*\)"/\1/p' supabase/config.
 # instead of forwarding the flag — psql running inside the container could
 # never open a host-relative path.
 run_sql() {
-  if command -v psql >/dev/null 2>&1 && [ -n "$DB_URL" ]; then
-    psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -At "$@"
+  if command -v psql >/dev/null 2>&1 && [ -n "$LOCAL_DB_URL" ]; then
+    psql "$LOCAL_DB_URL" -X -q -v ON_ERROR_STOP=1 -At "$@"
     return
   fi
 
@@ -52,7 +97,7 @@ run_sql() {
 
 # Fail loudly — not "success on empty output" — if nothing answers.
 if ! probe=$(run_sql -c "select 1" 2>&1) || [ "$probe" != "1" ]; then
-  echo "::error::Could not reach the local Supabase database (tried psql+DB_URL, then docker exec into $CONTAINER). Is 'npx supabase start' running? Docker output: $probe" >&2
+  echo "::error::Could not reach the local Supabase database (tried psql+LOCAL_DB_URL, then docker exec into $CONTAINER). Is the local Supabase stack running? Docker output: $probe" >&2
   exit 1
 fi
 
