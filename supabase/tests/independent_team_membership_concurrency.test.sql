@@ -4,26 +4,10 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
+\set osubb_test_suite true
+\ir _helpers.sql
 
 select plan(9);
-
-create function pg_temp.wait_until_blocked(p_application_name text)
-returns boolean language plpgsql as $$
-begin
-  for attempt in 1..100 loop
-    perform pg_stat_clear_snapshot();
-    if exists (
-      select 1 from pg_stat_activity
-       where application_name = p_application_name
-         and wait_event_type = 'Lock'
-    ) then
-      return true;
-    end if;
-    perform pg_sleep(0.01);
-  end loop;
-  return false;
-end;
-$$;
 
 select extensions.dblink_connect('team_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
@@ -45,37 +29,23 @@ select extensions.dblink_exec('team_setup', $$
   values ('concurrent-independent-team-278', 'Concurrent Team #278', null);
 $$);
 
-select extensions.dblink_connect('team_a', format(
-  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres application_name=team_membership_a',
+-- A direct probe retains the structural assertion that even a no-op command
+-- locks its Team row. The shared harness owns the two-statement races below.
+select extensions.dblink_connect('team_lock', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
-select extensions.dblink_connect('team_b', format(
-  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres application_name=team_membership_b',
-  current_database()));
-
--- Two adds of the same member wait on the Team lock and converge on one row.
-select extensions.dblink_exec('team_a', $$
+select extensions.dblink_exec('team_lock', $$
   begin;
   set local statement_timeout = '5s';
   set local lock_timeout = '2s';
 $$);
-select extensions.dblink_exec('team_b', $$
-  begin;
-  set local statement_timeout = '5s';
-  set local lock_timeout = '2s';
-$$);
-select * from extensions.dblink('team_a', $$
+select * from extensions.dblink('team_lock', $$
   select set_config('request.jwt.claims', jsonb_build_object(
     'sub','a2780000-0000-0000-0000-000000000020','role','authenticated',
     'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,true)
 $$) as claims(setting text);
-select * from extensions.dblink('team_b', $$
-  select set_config('request.jwt.claims', jsonb_build_object(
-    'sub','a2780000-0000-0000-0000-000000000020','role','authenticated',
-    'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,true)
-$$) as claims(setting text);
-select extensions.dblink_exec('team_a', 'set local role authenticated');
-select extensions.dblink_exec('team_b', 'set local role authenticated');
-select * from extensions.dblink('team_a', $$
+select extensions.dblink_exec('team_lock', 'set local role authenticated');
+select * from extensions.dblink('team_lock', $$
   select public.remove_independent_team_member(
     'concurrent-independent-team-278',
     'a2780000-0000-0000-0000-000000009999')
@@ -86,24 +56,30 @@ select ok(coalesce((
     join public.teams as team on team.ctid = row_lock.locked_row
    where team.id = 'concurrent-independent-team-278'
 ), false), 'even a no-op command holds the Team row FOR UPDATE');
-select * from extensions.dblink('team_a', $$
-  select (public.add_independent_team_member(
-    'concurrent-independent-team-278',
-    'a2780000-0000-0000-0000-000000000021')).member_id
-$$) as first_add(member_id uuid);
-select is(extensions.dblink_send_query('team_b', $$
-  select (public.add_independent_team_member(
-    'concurrent-independent-team-278',
-    'a2780000-0000-0000-0000-000000000021')).member_id
-$$), 1, 'the second concurrent add starts');
-select ok(pg_temp.wait_until_blocked('team_membership_b'),
+select extensions.dblink_exec('team_lock', 'rollback');
+select extensions.dblink_disconnect('team_lock');
+
+select pg_temp.test_login(
+  'a2780000-0000-0000-0000-000000000020',
+  jsonb_build_object('member_role','bc','member_level',6));
+reset role;
+
+create temp table add_race as
+select * from pg_temp.test_race(
+  $$ select (public.add_independent_team_member(
+       'concurrent-independent-team-278',
+       'a2780000-0000-0000-0000-000000000021')).member_id::text $$,
+  $$ select (public.add_independent_team_member(
+       'concurrent-independent-team-278',
+       'a2780000-0000-0000-0000-000000000021')).member_id::text $$
+);
+select is((select result_a from add_race),
+  'a2780000-0000-0000-0000-000000000021', 'the first add succeeds');
+select ok((select b_waited from add_race),
   'the duplicate add waits on the Team lock');
-select extensions.dblink_exec('team_a', 'commit');
-select is((select member_id from extensions.dblink_get_result('team_b')
-  as result(member_id uuid)),
-  'a2780000-0000-0000-0000-000000000021'::uuid,
+select is((select result_b from add_race),
+  'a2780000-0000-0000-0000-000000000021',
   'the waiting add returns the existing membership');
-select extensions.dblink_exec('team_b', 'commit');
 select is((select membership_count from extensions.dblink('team_setup', $$
   select count(*) from public.team_members
    where team_id='concurrent-independent-team-278'
@@ -111,47 +87,21 @@ select is((select membership_count from extensions.dblink('team_setup', $$
 $$) as result(membership_count bigint)), 1::bigint,
   'concurrent duplicate adds commit exactly one row');
 
--- Two removals serialize on the same lock: true first, then stable false.
-select pg_stat_clear_snapshot();
-select extensions.dblink_exec('team_a', $$
-  begin;
-  set local statement_timeout = '5s';
-  set local lock_timeout = '2s';
-$$);
-select extensions.dblink_exec('team_b', $$
-  begin;
-  set local statement_timeout = '5s';
-  set local lock_timeout = '2s';
-$$);
-select * from extensions.dblink('team_a', $$
-  select set_config('request.jwt.claims', jsonb_build_object(
-    'sub','a2780000-0000-0000-0000-000000000020','role','authenticated',
-    'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,true)
-$$) as claims(setting text);
-select * from extensions.dblink('team_b', $$
-  select set_config('request.jwt.claims', jsonb_build_object(
-    'sub','a2780000-0000-0000-0000-000000000020','role','authenticated',
-    'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,true)
-$$) as claims(setting text);
-select extensions.dblink_exec('team_a', 'set local role authenticated');
-select extensions.dblink_exec('team_b', 'set local role authenticated');
-select * from extensions.dblink('team_a', $$
-  select public.remove_independent_team_member(
-    'concurrent-independent-team-278',
-    'a2780000-0000-0000-0000-000000000021')
-$$) as first_remove(removed boolean);
-select is(extensions.dblink_send_query('team_b', $$
-  select public.remove_independent_team_member(
-    'concurrent-independent-team-278',
-    'a2780000-0000-0000-0000-000000000021')
-$$), 1, 'the second concurrent remove starts');
-select ok(pg_temp.wait_until_blocked('team_membership_b'),
+create temp table remove_race as
+select * from pg_temp.test_race(
+  $$ select public.remove_independent_team_member(
+       'concurrent-independent-team-278',
+       'a2780000-0000-0000-0000-000000000021')::text $$,
+  $$ select public.remove_independent_team_member(
+       'concurrent-independent-team-278',
+       'a2780000-0000-0000-0000-000000000021')::text $$
+);
+select is((select result_a from remove_race), 'true',
+  'the first remove reports the deleted row');
+select ok((select b_waited from remove_race),
   'the duplicate remove waits on the Team lock');
-select extensions.dblink_exec('team_a', 'commit');
-select is((select removed from extensions.dblink_get_result('team_b')
-  as result(removed boolean)), false,
+select is((select result_b from remove_race), 'false',
   'the waiting remove reports the committed absence');
-select extensions.dblink_exec('team_b', 'commit');
 select is((select membership_count from extensions.dblink('team_setup', $$
   select count(*) from public.team_members
    where team_id='concurrent-independent-team-278'
@@ -159,8 +109,6 @@ select is((select membership_count from extensions.dblink('team_setup', $$
 $$) as result(membership_count bigint)), 0::bigint,
   'concurrent duplicate removes leave no row');
 
-select extensions.dblink_disconnect('team_a');
-select extensions.dblink_disconnect('team_b');
 select extensions.dblink_exec('team_setup', $$
   delete from public.teams where id = 'concurrent-independent-team-278';
   delete from auth.users where id in (

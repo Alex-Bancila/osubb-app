@@ -5,27 +5,10 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
+\set osubb_test_suite true
+\ir _helpers.sql
 
 select plan(58);
-
-create function pg_temp.login(uid uuid, member_role text, member_level int)
-returns void
-language plpgsql
-as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', member_role,
-      'member_level', member_level,
-      'dept_ids', '[]'::jsonb,
-      'team_ids', '[]'::jsonb
-    )
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end;
-$$;
 
 -- Dynamic dispatch keeps RED reporting behavioral failures instead of
 -- aborting the file while the four public commands do not exist yet.
@@ -247,7 +230,8 @@ select ok(not has_table_privilege('authenticated', 'public.project_members', 'de
   'authenticated has no direct project-membership DELETE');
 
 -- ==================== Lead behavior and idempotency ====================
-select pg_temp.login('a7400000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000001',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 
 select is(pg_temp.membership_role(
   'add_project_member', (select active_project_id from fx),
@@ -336,7 +320,8 @@ select is((select project_role from public.project_members
   'member', 'a rejected self-removal preserves the leader membership');
 
 -- ==================== Archived, missing, and unauthorized ====================
-select pg_temp.login('a7400000-0000-0000-0000-000000000011', 'voluntar', 1);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000011',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member(
     (select archived_project_id from fx),
@@ -362,7 +347,8 @@ reset role;
 update public.profiles
    set status = 'inactiv'
  where id = 'a7400000-0000-0000-0000-000000000011';
-select pg_temp.login('a7400000-0000-0000-0000-000000000011', 'voluntar', 1);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000011',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member(
     (select archived_project_id from fx),
@@ -370,7 +356,8 @@ select throws_ok($$
 $$, '42501', 'project_lead_forbidden', 'an inactive project lead is denied even with stale organization claims');
 reset role;
 
-select pg_temp.login('a7400000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000001',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member(
     (select missing_project_id from fx),
@@ -379,7 +366,8 @@ $$, '42501', 'project_lead_forbidden', 'a missing project does not leak its exis
 reset role;
 
 -- Every command must call the same server-side lead authorization boundary.
-select pg_temp.login('a7400000-0000-0000-0000-000000000004', 'voluntar', 1);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000004',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
@@ -398,54 +386,56 @@ select throws_ok($$
 $$, '42501', 'project_lead_forbidden', 'an outsider cannot revoke Responsible');
 reset role;
 
-select pg_temp.login('a7400000-0000-0000-0000-000000000003', 'voluntar', 1);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000003',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
 $$, '42501', 'project_lead_forbidden', 'an ordinary project member cannot manage the roster');
 reset role;
 
-select pg_temp.login('a7400000-0000-0000-0000-000000000002', 'responsabil', 4);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000002',
+  jsonb_build_object('member_role','responsabil','member_level',4,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
 $$, '42501', 'project_lead_forbidden', 'a Project Responsible cannot manage the roster');
 reset role;
 
-select pg_temp.login('a7400000-0000-0000-0000-000000000007', 'bce', 5);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000007',
+  jsonb_build_object('member_role','bce','member_level',5,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
 $$, '42501', 'project_lead_forbidden', 'BCE without the lead role cannot manage a project roster');
 reset role;
 
-select pg_temp.login('a7400000-0000-0000-0000-000000000008', 'bc', 6);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000008',
+  jsonb_build_object('member_role','bc','member_level',6,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
 $$, '42501', 'project_lead_forbidden', 'global BC authority does not replace the project lead');
 reset role;
 
-select pg_temp.login('a7400000-0000-0000-0000-000000000009', 'moderator', 9);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000009',
+  jsonb_build_object('member_role','moderator','member_level',9,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
 $$, '42501', 'project_lead_forbidden', 'Moderator authority does not replace the project lead');
 reset role;
 
-select set_config('request.jwt.claims', jsonb_build_object(
-  'sub', 'a7400000-0000-0000-0000-000000000001',
-  'role', 'authenticated',
-  'app_metadata', jsonb_build_object('provider', 'email')
-)::text, true);
-set local role authenticated;
+select pg_temp.test_login(
+  'a7400000-0000-0000-0000-000000000001',
+  jsonb_build_object('provider', 'email'));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
 $$, '42501', 'project_lead_forbidden', 'a valid UID without organization claims is denied');
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
@@ -469,7 +459,8 @@ select is((select count(*) from public.project_members
   1::bigint, 'archived-project denials preserve its historical roster');
 
 -- Direct writes cannot bypass the command boundary even for the lead.
-select pg_temp.login('a7400000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000001',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   insert into public.project_members (project_id, member_id, project_role)
   values ((select active_project_id from fx),
@@ -518,21 +509,17 @@ select extensions.dblink_exec('membership_setup', $$
 $$);
 
 select extensions.dblink_connect(
-  'membership_a',
+  'membership_lock',
   format(
     'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
     current_database()
   ));
-select extensions.dblink_connect(
-  'membership_b',
-  format(
-    'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
-    current_database()
-  ));
-
-select extensions.dblink_exec('membership_a', 'begin');
-select extensions.dblink_exec('membership_b', 'begin');
-select * from extensions.dblink('membership_a', $$
+select extensions.dblink_exec('membership_lock', $$
+  begin;
+  set local statement_timeout = '5s';
+  set local lock_timeout = '2s';
+$$);
+select * from extensions.dblink('membership_lock', $$
   select set_config(
     'request.jwt.claims',
     jsonb_build_object(
@@ -546,26 +533,11 @@ select * from extensions.dblink('membership_a', $$
     true
   )
 $$) as remote_claims(setting text);
-select * from extensions.dblink('membership_b', $$
-  select set_config(
-    'request.jwt.claims',
-    jsonb_build_object(
-      'sub', 'a7400000-0000-0000-0000-000000000020',
-      'role', 'authenticated',
-      'app_metadata', jsonb_build_object(
-        'member_role', 'voluntar', 'member_level', 1,
-        'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
-      )
-    )::text,
-    true
-  )
-$$) as remote_claims(setting text);
-select extensions.dblink_exec('membership_a', 'set local role authenticated');
-select extensions.dblink_exec('membership_b', 'set local role authenticated');
+select extensions.dblink_exec('membership_lock', 'set local role authenticated');
 
 -- A no-op removal touches no membership row and fires no table trigger. Any
 -- project lock observed here therefore comes from the shared command guard.
-select * from extensions.dblink('membership_a', $$
+select * from extensions.dblink('membership_lock', $$
   select public.remove_project_member(
     (select id from public.projects where name = 'Membership concurrency probe'),
     'a7400000-0000-0000-0000-000000009999'
@@ -578,29 +550,29 @@ select ok(coalesce((
     join public.projects as project on project.ctid = row_lock.locked_row
    where project.name = 'Membership concurrency probe'
 ), false), 'even a no-op roster command holds the project lock until commit');
+select extensions.dblink_exec('membership_lock', 'rollback');
+select extensions.dblink_disconnect('membership_lock');
 
-select * from extensions.dblink('membership_a', $$
-  select (public.add_project_member(
-    (select id from public.projects where name = 'Membership concurrency probe'),
-    'a7400000-0000-0000-0000-000000000021'
-  )).project_role
-$$) as first_add(project_role text);
-
-select is(extensions.dblink_send_query('membership_b', $$
-  select (public.add_project_member(
-    (select id from public.projects where name = 'Membership concurrency probe'),
-    'a7400000-0000-0000-0000-000000000021'
-  )).project_role
-$$), 1, 'the second concurrent add query starts successfully');
-select pg_sleep(0.1);
-select is(extensions.dblink_is_busy('membership_b'), 1,
+select pg_temp.test_login(
+  'a7400000-0000-0000-0000-000000000020',
+  jsonb_build_object('member_role','voluntar','member_level',1,
+    'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
+reset role;
+create temp table membership_race as
+select * from pg_temp.test_race(
+  $$ select (public.add_project_member(
+       (select id from public.projects where name = 'Membership concurrency probe'),
+       'a7400000-0000-0000-0000-000000000021')).project_role::text $$,
+  $$ select (public.add_project_member(
+       (select id from public.projects where name = 'Membership concurrency probe'),
+       'a7400000-0000-0000-0000-000000000021')).project_role::text $$
+);
+select is((select result_a from membership_race), 'member',
+  'the first concurrent add returns the membership');
+select ok((select b_waited from membership_race),
   'a duplicate add waits behind the project-scoped command lock');
-select extensions.dblink_exec('membership_a', 'commit');
-select is((
-  select project_role from extensions.dblink_get_result('membership_b')
-    as second_add(project_role text)
-), 'member', 'the waiting duplicate add returns the existing membership');
-select extensions.dblink_exec('membership_b', 'commit');
+select is((select result_b from membership_race), 'member',
+  'the waiting duplicate add returns the existing membership');
 select is((
   select membership_count from extensions.dblink('membership_setup', $$
     select count(*)
@@ -611,8 +583,6 @@ select is((
   $$) as remote_count(membership_count bigint)
 ), 1::bigint, 'concurrent duplicate adds commit exactly one membership');
 
-select extensions.dblink_disconnect('membership_a');
-select extensions.dblink_disconnect('membership_b');
 select extensions.dblink_exec('membership_setup', $$
   delete from public.projects where name = 'Membership concurrency probe';
   delete from auth.users where id in (

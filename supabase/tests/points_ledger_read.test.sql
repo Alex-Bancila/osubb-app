@@ -1,26 +1,13 @@
 -- points_ledger_read.test.sql — #256: ordinary members read only their rows.
 -- Runs in one transaction and rolls back, leaving demo data untouched.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(20);
 
-create function pg_temp.login(uid uuid, r text, lvl int)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r,
-      'member_level', lvl,
-      'dept_ids', '["edu"]'::jsonb,
-      'team_ids', '[]'::jsonb
-    )
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 select ok(
   (select relrowsecurity
@@ -86,7 +73,10 @@ insert into public.points_ledger (member_id, delta, reason) values
   ('b5600000-0000-0000-0000-000000000009', -9, 'sanction'),
   ('b5600000-0000-0000-0000-000000000010', -10, 'sanction');
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000000', 'recrut', 0);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000000', jsonb_build_object(
+    'member_role', 'recrut', 'member_level', 0,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, delta from public.points_ledger order by id $$,
   $$ values ('b5600000-0000-0000-0000-000000000000'::uuid, -1) $$,
@@ -94,7 +84,10 @@ select results_eq(
 );
 reset role;
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, delta from public.points_ledger order by id $$,
   $$ values ('b5600000-0000-0000-0000-000000000001'::uuid, -2) $$,
@@ -108,7 +101,10 @@ select is(
 );
 reset role;
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000002', 'activ', 2);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'activ', 'member_level', 2,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, delta from public.points_ledger order by id $$,
   $$ values ('b5600000-0000-0000-0000-000000000002'::uuid, -3) $$,
@@ -116,7 +112,10 @@ select results_eq(
 );
 reset role;
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000003', 'vot', 3);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'vot', 'member_level', 3,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, delta from public.points_ledger order by id $$,
   $$ values ('b5600000-0000-0000-0000-000000000003'::uuid, -4) $$,
@@ -124,7 +123,10 @@ select results_eq(
 );
 reset role;
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000004', 'responsabil', 4);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select results_eq(
   $$ select member_id, delta from public.points_ledger order by id $$,
   $$ values ('b5600000-0000-0000-0000-000000000004'::uuid, -5) $$,
@@ -133,7 +135,10 @@ select results_eq(
 reset role;
 
 -- BCE joins BC and Moderator as a global ledger reader in #257.
-select pg_temp.login('b5600000-0000-0000-0000-000000000005', 'bce', 5);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'bce', 'member_level', 5,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select count(*) from public.points_ledger),
   9::bigint,
@@ -141,7 +146,10 @@ select is(
 );
 reset role;
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000006', 'bc', 6);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select count(*) from public.points_ledger),
   9::bigint,
@@ -149,7 +157,10 @@ select is(
 );
 reset role;
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000009', 'moderator', 9);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000009', jsonb_build_object(
+    'member_role', 'moderator', 'member_level', 9,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select count(*) from public.points_ledger),
   9::bigint,
@@ -178,7 +189,10 @@ reset role;
 -- Even forged/stale leadership metadata is insufficient without a current
 -- profile. Level 6 is deliberate: without the live-profile guard, this
 -- identity would satisfy the global BC branch and expose every ledger row.
-select pg_temp.login('b5600000-0000-0000-0000-000000000011', 'bc', 6);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000011', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select count(*) from public.points_ledger),
   0::bigint,
@@ -187,7 +201,10 @@ select is(
 reset role;
 
 -- A stale token may still contain organization claims after deactivation.
-select pg_temp.login('b5600000-0000-0000-0000-000000000010', 'voluntar', 1);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000010', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(
   (select count(*) from public.points_ledger),
   0::bigint,
@@ -195,7 +212,10 @@ select is(
 );
 reset role;
 
-select pg_temp.login('b5600000-0000-0000-0000-000000000000', 'recrut', 0);
+select pg_temp.test_login('b5600000-0000-0000-0000-000000000000', jsonb_build_object(
+    'member_role', 'recrut', 'member_level', 0,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   $$ insert into public.points_ledger (member_id, delta, reason)
      values ('b5600000-0000-0000-0000-000000000000', -99, 'sanction') $$,
@@ -219,7 +239,7 @@ select throws_ok(
 );
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(
   $$ select * from public.points_ledger $$,

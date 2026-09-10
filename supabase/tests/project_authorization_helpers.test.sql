@@ -1,6 +1,8 @@
 -- project_authorization_helpers.test.sql — #271: one audited definition of
 -- project membership and work-management authority.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
@@ -26,24 +28,6 @@ exception
 end;
 $$;
 
-create function pg_temp.login(uid uuid, member_role text, member_level int)
-returns void
-language plpgsql
-as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', member_role,
-      'member_level', member_level,
-      'dept_ids', '[]'::jsonb,
-      'team_ids', '[]'::jsonb
-    )
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end;
-$$;
 
 insert into auth.users (id, email) values
   ('a7100000-0000-0000-0000-000000000001', 'project.helper.lead@test.local'),
@@ -197,8 +181,10 @@ select ok(
 );
 
 -- ==================== Active project relationships ====================
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select active_project_id from fx)), true,
   'lead: is an active project member');
@@ -213,8 +199,10 @@ select is(pg_temp.call_project_helper(
   'lead: may manage work in an active project');
 reset role;
 
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000002', 'responsabil', 4);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select active_project_id from fx)), true,
   'Responsible: is an active project member');
@@ -229,8 +217,10 @@ select is(pg_temp.call_project_helper(
   'Responsible: may manage work in an active project');
 reset role;
 
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000003', 'voluntar', 1);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select active_project_id from fx)), true,
   'ordinary member: active membership helper is true');
@@ -239,8 +229,10 @@ select is(pg_temp.call_project_helper(
   'ordinary member: cannot manage project work');
 reset role;
 
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000004', 'voluntar', 1);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select active_project_id from fx)), false,
   'outsider: is not a project member');
@@ -257,8 +249,10 @@ reset role;
 
 -- A recent demotion can leave an older JWT alive briefly. Global project
 -- override follows the current profile role, not that stale level claim.
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000004', 'bc', 6);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000004', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'can_manage_project_work', (select active_project_id from fx)), false,
   'demoted outsider: stale elevated claims do not grant global override');
@@ -266,8 +260,10 @@ reset role;
 
 -- A stale JWT still says this person is a member. Current database status is
 -- authoritative for project access, so every answer must fail closed.
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000005', 'voluntar', 1);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select active_project_id from fx)), false,
   'inactive member: stale org claims do not preserve membership access');
@@ -292,7 +288,10 @@ select is(pg_temp.call_project_helper(
   'claimless member row: no organisation claims means no management access');
 reset role;
 
-select pg_temp.login('a7100000-0000-0000-0000-000000000006', 'bc', 6);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select active_project_id from fx)), false,
   'BC outsider: global authority does not invent project membership');
@@ -301,16 +300,20 @@ select is(pg_temp.call_project_helper(
   'BC outsider: receives the documented active-project override');
 reset role;
 
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000007', 'moderator', 9);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000007', jsonb_build_object(
+    'member_role', 'moderator', 'member_level', 9,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'can_manage_project_work', (select active_project_id from fx)), true,
   'Moderator outsider: receives the documented active-project override');
 reset role;
 
 -- ==================== Archived and missing projects ====================
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000001', 'voluntar', 1);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select archived_project_id from fx)), true,
   'archived project: active people retain historical membership identity');
@@ -328,8 +331,10 @@ select is(pg_temp.call_project_helper(
   'missing project: management fails closed');
 reset role;
 
-select pg_temp.login(
-  'a7100000-0000-0000-0000-000000000002', 'responsabil', 4);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'is_project_responsible', (select archived_project_id from fx)), true,
   'archived project: Responsible identity remains queryable');
@@ -338,13 +343,16 @@ select is(pg_temp.call_project_helper(
   'archived project: a Responsible cannot manage new work');
 reset role;
 
-select pg_temp.login('a7100000-0000-0000-0000-000000000006', 'bc', 6);
+select pg_temp.test_login('a7100000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is(pg_temp.call_project_helper(
     'can_manage_project_work', (select archived_project_id from fx)), false,
   'archived project: global BC override cannot create new work');
 reset role;
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 select is(pg_temp.call_project_helper(
     'is_active_project_member', (select active_project_id from fx)), false,

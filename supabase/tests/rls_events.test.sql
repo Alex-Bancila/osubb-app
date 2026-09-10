@@ -2,22 +2,12 @@
 -- One event per branch of spec §4.4 × four personas. Part of #67.
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(19);
-
--- ==================== Login simulation ====================
-create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r, 'member_level', lvl,
-      'dept_ids', depts, 'team_ids', tms))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 create function pg_temp.sees(t text) returns boolean language sql stable as $$
   select exists (select 1 from events where title = t);
@@ -59,7 +49,12 @@ insert into events (title, type, scope, dept_id, team_id, starts_at) values
   ('Recrutare toamnă',   'recrutare',  'dept', 'hr',  null, now() + interval '6 days');    -- branch 2 (type)
 
 -- ==================== Recrut: dept EDU, no teams ====================
-select pg_temp.login('01000000-0000-0000-0000-000000000001', 'recrut', 0, '["edu"]', '[]');
+select pg_temp.test_login('01000000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'recrut',
+    'member_level', 0,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select ok(pg_temp.sees('AG org'),            'recrut sees org-scoped events');
 select ok(pg_temp.sees('Recrutare toamnă'),  'recrut sees recruitment events wherever they sit');
@@ -73,7 +68,12 @@ select is((select count(*) from events), 4::bigint, 'recrut sees exactly four ev
 reset role;
 
 -- ==================== Voluntar: dept PR, team t-pr ====================
-select pg_temp.login('02000000-0000-0000-0000-000000000002', 'voluntar', 1, '["pr"]', '["t-pr"]');
+select pg_temp.test_login('02000000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["pr"]'::jsonb,
+    'team_ids', '["t-pr"]'::jsonb
+  ));
 
 select ok(pg_temp.sees('Call intern PR'), 'a team member sees their team''s events');
 select ok(pg_temp.sees('Ședință PR'),     'a member sees their own department');
@@ -95,7 +95,12 @@ select throws_ok(
 reset role;
 
 -- ==================== Responsabil (level 4): the whole calendar ====================
-select pg_temp.login('03000000-0000-0000-0000-000000000003', 'responsabil', 4, '["edu"]', '[]');
+select pg_temp.test_login('03000000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'responsabil',
+    'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select is((select count(*) from events), 6::bigint,
   'level >= 4 sees every event (seeAllEvents)');
@@ -116,7 +121,7 @@ reset role;
 -- ==================== The stranger: authenticated without claims ====================
 -- `reset role` keeps the previous JWT — clear it, or org-scoped events would
 -- make these pass for the wrong reason.
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 
 select is((select count(*) from events), 0::bigint,

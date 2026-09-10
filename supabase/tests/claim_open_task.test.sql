@@ -1,26 +1,13 @@
 -- claim_open_task.test.sql — issue #157: one atomic winner for an open task.
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(16);
 
-create function pg_temp.login(uid uuid, with_org_claims boolean, active_role text default 'voluntar')
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', case when with_org_claims then jsonb_build_object(
-      'member_role', active_role,
-      'member_level', case when active_role = 'responsabil' then 4 else 1 end,
-      'dept_ids', '[]'::jsonb,
-      'team_ids', '[]'::jsonb
-    ) else jsonb_build_object('provider', 'email') end
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 truncate tasks, task_assignees, task_requests, points_ledger cascade;
 
@@ -78,7 +65,10 @@ select ok(not coalesce((
 ), true), 'anon cannot execute the claim command');
 
 -- First active member wins.
-select pg_temp.login('11000000-0000-0000-0000-000000000001', true);
+select pg_temp.test_login('11000000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok(
   format('select public.claim_open_task(%s)', (select open_id from claim_fx)),
   'an active member claims an open task');
@@ -91,7 +81,10 @@ select is((select member_id from task_assignees where task_id = (select open_id 
   'the caller is the only identity assigned by the command');
 
 -- A second member loses cleanly; the first assignment remains intact.
-select pg_temp.login('22000000-0000-0000-0000-000000000002', true);
+select pg_temp.test_login('22000000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   format('select public.claim_open_task(%s)', (select open_id from claim_fx)),
   'PT409', 'task_not_open', 'a second claim receives a stable conflict');
@@ -100,7 +93,10 @@ select is((select count(*) from task_assignees where task_id = (select open_id f
   1::bigint, 'a conflict never creates a second assignee');
 
 -- The old direct INSERT path is gone: volunteers must use the atomic command.
-select pg_temp.login('22000000-0000-0000-0000-000000000002', true);
+select pg_temp.test_login('22000000-0000-0000-0000-000000000002', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   format($$ insert into public.task_assignees (task_id, member_id)
             values (%s, '22000000-0000-0000-0000-000000000002') $$,
@@ -115,13 +111,16 @@ select throws_ok(
 reset role;
 
 -- Both a live inactive profile and a real uid without org claims fail closed.
-select pg_temp.login('33000000-0000-0000-0000-000000000003', true);
+select pg_temp.test_login('33000000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok(
   format('select public.claim_open_task(%s)', (select inactive_id from claim_fx)),
   '42501', 'not_active_member', 'an inactive profile cannot claim with stale org claims');
 reset role;
 
-select pg_temp.login('11000000-0000-0000-0000-000000000001', false);
+select pg_temp.test_login('11000000-0000-0000-0000-000000000001', jsonb_build_object('provider', 'email'));
 select throws_ok(
   format('select public.claim_open_task(%s)', (select inactive_id from claim_fx)),
   '42501', 'not_active_member', 'a real uid without org claims cannot claim');

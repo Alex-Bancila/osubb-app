@@ -1,21 +1,12 @@
 -- #278: BC/Moderator membership commands for Independent Teams.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(42);
 
-create function pg_temp.login(uid uuid, claimed_role text, claimed_level int)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', claimed_role, 'member_level', claimed_level,
-      'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb))::text, true);
-  perform set_config('role', 'authenticated', true);
-end;
-$$;
 
 insert into auth.users (id, email) values
   ('a2780000-0000-0000-0000-000000000001', 'bc.team@test.local'),
@@ -92,7 +83,10 @@ select ok(has_table_privilege('authenticated','public.teams','SELECT')
   'Team reads and creation remain while update and delete are withheld');
 
 -- Authorized idempotent behavior.
-select pg_temp.login('a2780000-0000-0000-0000-000000000001','bc',6);
+select pg_temp.test_login('a2780000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select format('%s:%s',m.team_id,m.member_id) from public.add_independent_team_member(
   'independent-team-278','a2780000-0000-0000-0000-000000000002') m),
   'independent-team-278:a2780000-0000-0000-0000-000000000002',
@@ -109,7 +103,10 @@ select is((select count(*) from public.team_members where team_id='independent-t
   'a duplicate add stores exactly one row');
 reset role;
 
-select pg_temp.login('a2780000-0000-0000-0000-000000000003','moderator',7);
+select pg_temp.test_login('a2780000-0000-0000-0000-000000000003', jsonb_build_object(
+    'member_role', 'moderator', 'member_level', 7,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select is((select m.member_id from public.add_independent_team_member(
   'independent-team-278','a2780000-0000-0000-0000-000000000004') m),
   'a2780000-0000-0000-0000-000000000004'::uuid, 'Moderator adds a Member');
@@ -120,7 +117,10 @@ select is(public.remove_independent_team_member('independent-team-278',
 reset role;
 
 -- Scope, targets, and live authorization.
-select pg_temp.login('a2780000-0000-0000-0000-000000000001','bc',6);
+select pg_temp.test_login('a2780000-0000-0000-0000-000000000001', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$select public.add_independent_team_member('department-team-278',
   'a2780000-0000-0000-0000-000000000004')$$, 'PT400','independent_team_required',
   'Department Teams are rejected');
@@ -143,7 +143,10 @@ select is((select m.member_id from public.add_independent_team_member('independe
   'a2780000-0000-0000-0000-000000000002'::uuid,
   'BC restores the fixture membership for denial tests');
 reset role;
-select pg_temp.login('a2780000-0000-0000-0000-000000000005','bc',6);
+select pg_temp.test_login('a2780000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$select public.add_independent_team_member('independent-team-278',
   'a2780000-0000-0000-0000-000000000004')$$, '42501','independent_team_membership_forbidden',
   'forged BC claims do not elevate a live BCE');
@@ -151,12 +154,18 @@ select throws_ok($$select public.remove_independent_team_member('independent-tea
   'a2780000-0000-0000-0000-000000000002')$$, '42501','independent_team_membership_forbidden',
   'BCE cannot remove an Independent-Team member');
 reset role;
-select pg_temp.login('a2780000-0000-0000-0000-000000000006','responsabil',4);
+select pg_temp.test_login('a2780000-0000-0000-0000-000000000006', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$select public.add_independent_team_member('independent-team-278',
   'a2780000-0000-0000-0000-000000000004')$$, '42501','independent_team_membership_forbidden',
   'roles below BCE are denied');
 reset role;
-select pg_temp.login('a2780000-0000-0000-0000-000000000007','bc',6);
+select pg_temp.test_login('a2780000-0000-0000-0000-000000000007', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$select public.add_independent_team_member('independent-team-278',
   'a2780000-0000-0000-0000-000000000004')$$, '42501','independent_team_membership_forbidden',
   'inactive BC is denied despite stale claims');
@@ -176,7 +185,10 @@ select throws_ok($$select public.remove_independent_team_member('independent-tea
 reset role;
 
 -- Direct-write and scope-reclassification bypasses.
-select pg_temp.login('a2780000-0000-0000-0000-000000000005','bce',5);
+select pg_temp.test_login('a2780000-0000-0000-0000-000000000005', jsonb_build_object(
+    'member_role', 'bce', 'member_level', 5,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$insert into public.team_members values
   ('independent-team-278','a2780000-0000-0000-0000-000000000004')$$,
   '42501',null,'authenticated cannot bypass add through the table');

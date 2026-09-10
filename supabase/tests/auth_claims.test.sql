@@ -1,6 +1,8 @@
 -- auth_claims.test.sql — Epic 2.2: JWT custom-claims hook + auth_*() helpers.
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 

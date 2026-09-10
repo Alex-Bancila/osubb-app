@@ -2,22 +2,12 @@
 -- Part of the Epic 6.1 per-role suite (#67).
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(26);
-
--- ==================== Login simulation ====================
-create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r, 'member_level', lvl,
-      'dept_ids', depts, 'team_ids', tms))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 -- ==================== Structure ====================
 select has_function('public', 'guard_profile_privileged_columns',
@@ -55,7 +45,12 @@ insert into profiles (id, full_name, email, phone, role, status) values
   ('e5000000-0000-0000-0000-0000000000e5', 'Ela Fostă',       'ela.fost@test.local',   '0700000005', 'voluntar',    'inactiv');
 
 -- ==================== A voluntar edits themselves (AC) ====================
-select pg_temp.login('e1000000-0000-0000-0000-0000000000e1', 'voluntar', 1, '["edu"]', '[]');
+select pg_temp.test_login('e1000000-0000-0000-0000-0000000000e1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 update profiles set full_name = 'Emil Mureșan'
  where id = 'e1000000-0000-0000-0000-0000000000e1';
@@ -105,7 +100,12 @@ reset role;
 -- ==================== Level 4 is not level 6 ====================
 -- A Responsabil manages tasks, not people. The nearest thing to a promotion
 -- attempt by someone who legitimately holds power elsewhere.
-select pg_temp.login('e3000000-0000-0000-0000-0000000000e3', 'responsabil', 4, '["edu"]', '[]');
+select pg_temp.test_login('e3000000-0000-0000-0000-0000000000e3', jsonb_build_object(
+    'member_role', 'responsabil',
+    'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 update profiles set full_name = 'Elena R.' where id = 'e3000000-0000-0000-0000-0000000000e3';
 select is(
@@ -124,7 +124,12 @@ select is(
 reset role;
 
 -- ==================== BC may (AC) ====================
-select pg_temp.login('e4000000-0000-0000-0000-0000000000e4', 'bc', 6, '["org"]', '[]');
+select pg_temp.test_login('e4000000-0000-0000-0000-0000000000e4', jsonb_build_object(
+    'member_role', 'bc',
+    'member_level', 6,
+    'dept_ids', '["org"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 update profiles set role = 'activ' where id = 'e1000000-0000-0000-0000-0000000000e1';
 select is(
@@ -157,7 +162,7 @@ reset role;
 -- ==================== A deactivated member (ADR-0003 gate 2) ====================
 -- The case house rule 12 exists for: same uid, same profiles row, no claims.
 -- `set_config` clears the JWT — `reset role` alone would leave Eduard's.
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role authenticated;
 
 -- Both are denied silently: the policy hides the row, so zero rows are updated.
