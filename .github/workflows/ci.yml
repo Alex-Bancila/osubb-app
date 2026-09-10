@@ -73,6 +73,15 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    # gitleaks-action lists the PR's own commits via the GitHub API to scan
+    # just that range (GET /pulls/:number/commits) even with comments off, so
+    # it needs pull-requests: read on top of the workflow's default
+    # contents: read — verified by a 403 "Resource not accessible by
+    # integration" without it. Still no pull-requests: write: comments stay
+    # disabled below.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { fetch-depth: 0 }
@@ -80,7 +89,7 @@ jobs:
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: "false" # workflow token is contents: read only
+          GITLEAKS_ENABLE_COMMENTS: "false" # no pull-requests: write granted
 
   functions:
     name: Edge Function checks
