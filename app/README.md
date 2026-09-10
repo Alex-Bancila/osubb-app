@@ -8,6 +8,10 @@ shadcn/ui (Base UI, Nova style) + TanStack Table in a browser-first, installable
 PWA, migrated route by route; no new screen or shared primitive should depend
 on Ionic, and AG Grid is not used.
 
+The Tailwind v4 and shadcn Base UI/Nova foundation is installed. Add shared UI
+through `src/components/ui/` and use shadcn for all new work. Keep the Ionic
+bootstrap and CSS until the remaining routes have equivalent shadcn screens.
+
 Use Node.js 24 or newer—the frontend and its test tooling are developed and
 verified on Node 24, matching GitHub Actions.
 
@@ -60,6 +64,7 @@ app/
     │   ├── points.ts       # useMyPoints, useLeaderboard, useDeptCup
     │   └── tasks.ts        # useMyTasks, useOpenTasks
     ├── components/
+    │   ├── ui/             # locally owned shadcn Base UI/Nova primitives
     │   ├── shell/          # sidebar, topbar, tab bar — one list drives all three
     │   └── states/         # Loading, Empty, ErrorState — every query renders all three
     ├── screens/
