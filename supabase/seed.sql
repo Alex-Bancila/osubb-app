@@ -233,8 +233,8 @@ insert into tasks (title, type, dept_id, team_id, status, difficulty, deadline, 
   ('Buget trimestrial',         'admin',   'fin', null, 'done',     4, current_date - 5,  'Raport de buget pentru BC.',               'd0000000-0000-0000-0000-000000000007'),
   ('Interviuri recrutare',      'hr',      'hr',  null, 'progress', 3, current_date + 8,  'Programare și susținere interviuri.',      'd0000000-0000-0000-0000-000000000007'),
   -- Echipa Aplicație
-  ('Migrare bază de date',      'tehnic',  'diverse',  't-app', 'done',   5, current_date - 2,  'Migrare completă cu teste automate.',      'd0000000-0000-0000-0000-000000000006'),
-  ('Testare aplicație',         'tehnic',  'diverse',  't-app', 'progress',3, current_date + 6, 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
+  ('Migrare bază de date',      'tehnic',  'diverse','t-app', 'done',   5, current_date - 2,  'Migrare completă cu teste automate.',      'd0000000-0000-0000-0000-000000000006'),
+  ('Testare aplicație',         'tehnic',  'diverse','t-app', 'progress',3, current_date + 6, 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
   -- Open: anyone may claim these, which is what the tracker's "Deschise" tab is for
   ('Share story recrutare',     'promo',   'pr',  null, 'open',     1, current_date + 3,  'Distribuie story-ul de recrutare.',        'd0000000-0000-0000-0000-000000000006'),
   ('Ajutor la standul de recrutare','logistic','edu',null,'open',   2, current_date + 9,  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005');

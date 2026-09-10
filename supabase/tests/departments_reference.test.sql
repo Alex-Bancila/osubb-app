@@ -3,7 +3,7 @@
 begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap;
-select plan(7);
+select plan(8);
 
 select results_eq(
   $$ select id from departments where kind = 'coordination' order by id $$,
@@ -17,7 +17,19 @@ select is((select is_interne from teams where id = 'interne'), true, 'Interne te
 select is(
   (select count(*) from departments where kind = 'department'),
   5::bigint,
-  'still exactly five cup departments'
+  -- Not revert-sensitive on its own: the legacy 'it' department was already
+  -- kind = 'coordination' in 0001_core_schema.sql, so this count was 5 both
+  -- before and after this migration. It still guards against a department
+  -- cup that has silently grown or shrunk some other way.
+  'department cup still holds exactly five kind=department rows'
+);
+-- The real guard for #310: diverse and secretariat must never be kind =
+-- 'department', or the Department Cup would score coordination structures
+-- against the five real departments.
+select is(
+  (select count(*) from departments where id in ('diverse', 'secretariat') and kind = 'department'),
+  0::bigint,
+  'diverse and secretariat are coordination structures, not Department Cup entries'
 );
 -- No row anywhere still points at the retired department.
 select is(
