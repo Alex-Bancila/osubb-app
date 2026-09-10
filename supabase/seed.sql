@@ -29,8 +29,8 @@
 -- rows they own. A real person invited to staging for testing keeps their
 -- profile, their tasks and their points.
 --
--- Order matters. `created_by`, `awarded_by`, Project `leader_id`, team
--- `lead_id`, `from_member` and
+-- Order matters. `created_by`, `awarded_by`, Project `leader_id`,
+-- `from_member` and
 -- `decided_by` are plain references with no `on delete` clause, so Postgres
 -- refuses to remove a member while any of them still points at that member:
 -- the children go first. Everything else — memberships, team memberships,
@@ -95,9 +95,7 @@ delete from projects project
 
 -- Teams after tasks and events, which reference them.
 delete from teams t
- where t.id in ('t-app', 't-recruti')
-    or exists (select 1 from profiles p
-                where p.id = t.lead_id and p.email like '%@demo.osubb');
+ where t.id in ('t-app', 't-recruti');
 
 delete from auth.users where email like '%@demo.osubb';
 
@@ -166,9 +164,9 @@ insert into member_departments (member_id, dept_id) values
 -- Two teams, deliberately different in kind: one ordinary working team, one
 -- open to recruits — the flag the calendar rule turns on (a recrut sees a
 -- for_recruits team's events without belonging to it).
-insert into teams (id, name, dept_id, lead_id, for_recruits, is_interne) values
-  ('t-app',     'Echipa Aplicație', 'it',  'd0000000-0000-0000-0000-000000000006', false, false),
-  ('t-recruti', 'Echipa Recruți',   'edu', 'd0000000-0000-0000-0000-000000000005', true,  false);
+insert into teams (id, name, dept_id, for_recruits, is_interne) values
+  ('t-app',     'Echipa Aplicație', 'it',  false, false),
+  ('t-recruti', 'Echipa Recruți',   'edu', true,  false);
 
 insert into team_members (team_id, member_id) values
   ('t-app',     'd0000000-0000-0000-0000-000000000006'),

@@ -1462,7 +1462,6 @@ export type Database = {
           for_recruits: boolean
           id: string
           is_interne: boolean
-          lead_id: string | null
           name: string
         }
         Insert: {
@@ -1470,7 +1469,6 @@ export type Database = {
           for_recruits?: boolean
           id: string
           is_interne?: boolean
-          lead_id?: string | null
           name: string
         }
         Update: {
@@ -1478,7 +1476,6 @@ export type Database = {
           for_recruits?: boolean
           id?: string
           is_interne?: boolean
-          lead_id?: string | null
           name?: string
         }
         Relationships: [
@@ -1495,48 +1492,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dept_cup"
             referencedColumns: ["dept_id"]
-          },
-          {
-            foreignKeyName: "teams_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "teams_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "teams_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "teams_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "teams_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_contact"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "teams_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
           },
         ]
       }
