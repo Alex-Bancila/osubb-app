@@ -90,7 +90,7 @@ export default function MyPointsCard({
       {!showStanding ? (
         <div className="hero-rank">
           <p className="hero-rank-note">
-            Clasamentul este vizibil pentru BCE și BC.
+            Clasamentul și Cupa Departamentelor sunt vizibile pentru BCE și BC.
           </p>
         </div>
       ) : standing.data?.rank == null ? (

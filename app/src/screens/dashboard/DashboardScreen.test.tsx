@@ -55,7 +55,9 @@ describe('DashboardScreen leadership gate', () => {
     expect(screen.getByText(/12/)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /clasament/i })).toBeNull();
     expect(screen.queryByText(/din 8 membri/)).toBeNull();
-    expect(screen.getByText(/vizibil pentru BCE/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cupa Departamentelor sunt vizibile pentru BCE și BC/i),
+    ).toBeInTheDocument();
   });
 
   it('shows everything for a level-5 member', () => {
