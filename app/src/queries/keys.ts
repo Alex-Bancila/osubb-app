@@ -12,19 +12,24 @@
  *     member's total, the leaderboard and the cup together, because all three
  *     start with `['points']`. Invalidating each leaf by hand is how one of
  *     them ends up stale.
+ *  3. **Self data is keyed by member.** Anything that answers "mine" carries
+ *     `{ memberId }` so two members on one device never share an entry; the
+ *     provider also clears the cache when the member changes.
  */
 export const keys = {
   points: {
     all: ['points'] as const,
     me: (memberId: string | undefined) =>
       ['points', 'me', { memberId }] as const,
-    standing: () => ['points', 'standing'] as const,
+    standing: (memberId: string | undefined) =>
+      ['points', 'standing', { memberId }] as const,
     leaderboard: (limit = 10) => ['points', 'leaderboard', { limit }] as const,
     deptCup: () => ['points', 'deptCup'] as const,
   },
   profile: {
     all: ['profile'] as const,
-    me: () => ['profile', 'me'] as const,
+    me: (memberId: string | undefined) =>
+      ['profile', 'me', { memberId }] as const,
   },
   /* Reference data — roles, departments, the scoring guides. It changes in a
      migration, never at runtime, so these are fetched once and kept (see
@@ -37,7 +42,8 @@ export const keys = {
   },
   tasks: {
     all: ['tasks'] as const,
-    mine: () => ['tasks', 'mine'] as const,
+    mine: (memberId: string | undefined) =>
+      ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },

@@ -46,14 +46,19 @@ export function useMyPoints() {
  *
  * A member absent from the board (`status <> 'activ'`) has no rank, and this
  * returns `null` for it rather than inventing one.
+ *
+ * `enabled` lets a caller that already knows the leaderboard is hidden below
+ * level 5 (`seeLeadership`, mirroring `20260907204817_leadership_only_global_
+ * points.sql`) skip the round trip entirely, rather than firing it and
+ * discarding rows the database would return empty anyway.
  */
-export function useMyStanding() {
+export function useMyStanding({ enabled = true }: { enabled?: boolean } = {}) {
   const { session } = useAuth();
   const id = session?.user.id;
 
   return useQuery({
-    queryKey: keys.points.standing(),
-    queryFn: id ? () => fetchStanding(id) : skipToken,
+    queryKey: keys.points.standing(id),
+    queryFn: id && enabled ? () => fetchStanding(id) : skipToken,
   });
 }
 

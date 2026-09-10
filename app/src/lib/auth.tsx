@@ -3,10 +3,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 
 /** What the JWT claims hook stamps into every member's token (spec §4.2). */
@@ -75,6 +77,19 @@ function decodeClaims(accessToken: string): MemberClaims | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Everything cached belongs to one member. When the member changes — sign-out,
+  // or a different account signing in on a shared device — drop it all before
+  // the next render can show the previous person's data. Tracked as a ref and
+  // compared inline in the auth callback (not derived from `session` in a
+  // separate effect): two auth events firing back-to-back in the same tick —
+  // exactly what a sign-out-then-sign-in-as-someone-else does — land in one
+  // batched React render, so an effect keyed on the *final* session would see
+  // no change at all and silently skip the clear. `lastUserId` starts `null`
+  // so the very first observed session (nobody signed in yet, or a returning
+  // member's stored session loading in) never wipes a legitimately warm cache.
+  const lastUserId = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -82,6 +97,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // What is in storage right now (a returning member, still signed in).
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
+      // Guard: onAuthStateChange can fire (e.g. SIGNED_IN for a different
+      // member on a shared device) before this promise settles, since it is
+      // registered synchronously right after this call but resolves later.
+      // Only seed lastUserId here when nothing has claimed it yet — writing
+      // unconditionally would let a slow-resolving stored session for member
+      // A stomp the id an already-processed event just set for member B,
+      // and the next real transition away from B would then compare against
+      // A and silently skip the clear.
+      if (lastUserId.current === null) {
+        lastUserId.current = data.session?.user.id ?? null;
+      }
       setSession(data.session);
       setLoading(false);
     });
@@ -93,6 +119,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // the hour rather than staying stale until a manual reload.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       if (!active) return;
+      const nextUserId = next?.user.id ?? null;
+      if (lastUserId.current !== null && lastUserId.current !== nextUserId) {
+        queryClient.clear();
+      }
+      lastUserId.current = nextUserId;
       setSession(next);
       setLoading(false);
     });
@@ -101,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [queryClient]);
 
   // Decoded once per session object, not once per render or per query.
   const claims = useMemo(
@@ -116,9 +147,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signOut: async () => {
         await supabase.auth.signOut();
+        queryClient.clear();
       },
     }),
-    [session, claims, loading],
+    [session, claims, loading, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
