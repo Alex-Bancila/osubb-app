@@ -94,10 +94,11 @@ select throws_ok(
      values ('t-new', 'c1000000-0000-0000-0000-0000000000c1') $$,
   '42501', null,
   'legacy direct Team roster writes are retired pending scoped commands');
-select lives_ok(
+select throws_ok(
   $$ insert into member_departments (member_id, dept_id)
      values ('c2000000-0000-0000-0000-0000000000c2', 'pr') $$,
-  'level >= 5 manages department membership');
+  '42501', null,
+  'BCE cannot directly manage department membership');
 
 reset role;
 
