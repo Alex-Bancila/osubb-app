@@ -3,6 +3,8 @@
 -- (local and staging only — never production). If you run the suite against a
 -- database seeded with `--no-seed`, this file is the one that will complain.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 

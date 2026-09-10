@@ -1,6 +1,8 @@
 -- points_engine.test.sql — Epic 6.2: pgTAP suite for the points engine (Epic 1.4).
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 

@@ -2,35 +2,17 @@
 -- of Epic 6.1; the suite grows with each policy epic).
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(34);
 
--- ==================== Login simulation ====================
-create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r, 'member_level', lvl,
-      'dept_ids', depts, 'team_ids', tms))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
-
 -- A session that authenticated but carries no org claims: never invited, or
 -- deactivated since the token was issued. The claims hook stamps member_role
 -- only for an `activ` profile, so a deactivated member's next token looks
 -- exactly like this — real `sub`, no org claims (ADR-0003 gate 2).
-create function pg_temp.login_claimless(uid uuid)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object('provider', 'email'))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 -- ==================== Fixtures (as postgres) ====================
 -- The demo seed (5.2) fills these tables on every reset, and the assertions
@@ -74,7 +56,12 @@ insert into task_requests (kind, title, from_member, dept_id) values
   ('award', 'req-b', 'b0000000-0000-0000-0000-000000000012', 'pr');
 
 -- ==================== Vlad: voluntar, edu, no team ====================
-select pg_temp.login('a0000000-0000-0000-0000-000000000011', 'voluntar', 1, '["edu"]', '[]');
+select pg_temp.test_login('a0000000-0000-0000-0000-000000000011', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select is((select count(*) from tasks), 3::bigint,
   'voluntar sees own-dept + open tasks only');
@@ -130,7 +117,12 @@ select is((select status from task_requests where title = 'req-a'),
 reset role;
 
 -- ==================== Radu: responsabil (level 4), edu ====================
-select pg_temp.login('c0000000-0000-0000-0000-000000000013', 'responsabil', 4, '["edu"]', '[]');
+select pg_temp.test_login('c0000000-0000-0000-0000-000000000013', jsonb_build_object(
+    'member_role', 'responsabil',
+    'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select is((select count(*) from tasks), 5::bigint,
   'level >= 4 sees every task');
@@ -173,7 +165,12 @@ update task_requests
 reset role;
 
 -- ==================== Bogdan: bc (level 6), no dept claims ====================
-select pg_temp.login('d0000000-0000-0000-0000-000000000014', 'bc', 6, '[]', '[]');
+select pg_temp.test_login('d0000000-0000-0000-0000-000000000014', jsonb_build_object(
+    'member_role', 'bc',
+    'member_level', 6,
+    'dept_ids', '[]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select is((select count(*) from points_ledger), 3::bigint,
   'level >= 6 reads the whole ledger');
@@ -192,7 +189,12 @@ select is((select count(*) from tasks), 5::bigint,
 reset role;
 
 -- ==================== Bianca: voluntar, pr, team t-x ====================
-select pg_temp.login('b0000000-0000-0000-0000-000000000012', 'voluntar', 1, '["pr"]', '["t-x"]');
+select pg_temp.test_login('b0000000-0000-0000-0000-000000000012', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["pr"]'::jsonb,
+    'team_ids', '["t-x"]'::jsonb
+  ));
 
 select is((select count(*) from tasks), 3::bigint,
   'team member sees dept + team + open tasks');
@@ -226,7 +228,7 @@ grant select on fx_open to authenticated;
 update profiles set status = 'inactiv'
  where id = 'a0000000-0000-0000-0000-000000000011';
 
-select pg_temp.login_claimless('a0000000-0000-0000-0000-000000000011');
+select pg_temp.test_login('a0000000-0000-0000-0000-000000000011', jsonb_build_object('provider', 'email'));
 
 select is(auth.uid(), 'a0000000-0000-0000-0000-000000000011'::uuid,
   'the deactivated member still has a real uid — the gate cannot rely on that');

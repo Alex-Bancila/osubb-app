@@ -1,32 +1,13 @@
 -- rls_event_attendance.test.sql — #63: secure RSVP rows and writes.
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(25);
 
--- ==================== Login simulation ====================
-create function pg_temp.login(uid uuid, r text, lvl int, depts jsonb, tms jsonb)
-returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid, 'role', 'authenticated',
-    'app_metadata', jsonb_build_object(
-      'member_role', r, 'member_level', lvl,
-      'dept_ids', depts, 'team_ids', tms))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
-
-create function pg_temp.login_without_org_claims(uid uuid) returns void
-language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', jsonb_build_object('provider', 'email'))::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 -- ==================== Structure and grants ====================
 select policies_are('public', 'event_attendance',
@@ -101,8 +82,12 @@ select
 grant select on attendance_fx to authenticated;
 
 -- ==================== Active member: read and self-write ====================
-select pg_temp.login(
-  'a1000000-0000-0000-0000-000000000063', 'voluntar', 1, '["edu"]', '[]');
+select pg_temp.test_login('a1000000-0000-0000-0000-000000000063', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select is((select count(*) from event_attendance), 1::bigint,
   'a member sees only their own attendance on visible events');
@@ -152,8 +137,12 @@ select throws_ok(
 reset role;
 
 -- ==================== Manager: read all, never rewrite a colleague ====================
-select pg_temp.login(
-  'c3000000-0000-0000-0000-000000000063', 'responsabil', 4, '["edu"]', '[]');
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', jsonb_build_object(
+    'member_role', 'responsabil',
+    'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
 
 select is((select count(*) from event_attendance), 4::bigint,
   'level >= 4 reads attendance across all visible events');
@@ -170,7 +159,7 @@ select is(
   'declined', 'manager read access does not permit rewriting a colleague RSVP');
 
 -- ==================== Real uid without organisation claims ====================
-select pg_temp.login_without_org_claims('d4000000-0000-0000-0000-000000000063');
+select pg_temp.test_login('d4000000-0000-0000-0000-000000000063', jsonb_build_object('provider', 'email'));
 
 select ok(not auth_is_member(),
   'a deactivated identity has a real uid but no active-member claim');
@@ -186,7 +175,7 @@ select throws_ok(
 reset role;
 
 -- ==================== anon ====================
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(
   $$ select count(*) from event_attendance $$,

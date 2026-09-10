@@ -1,31 +1,13 @@
 -- create_event.test.sql — issue #245: one privileged, validated event command.
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
+\set osubb_test_suite true
+\ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(38);
 
-create function pg_temp.login(
-  uid uuid,
-  r text,
-  lvl int,
-  depts jsonb,
-  with_org_claims boolean default true
-) returns void language plpgsql as $$
-begin
-  perform set_config('request.jwt.claims', jsonb_build_object(
-    'sub', uid,
-    'role', 'authenticated',
-    'app_metadata', case when with_org_claims then jsonb_build_object(
-      'member_role', r,
-      'member_level', lvl,
-      'dept_ids', depts,
-      'team_ids', '[]'::jsonb
-    ) else jsonb_build_object('provider', 'email') end
-  )::text, true);
-  perform set_config('role', 'authenticated', true);
-end $$;
 
 truncate public.events, public.event_attendance cascade;
 
@@ -106,8 +88,10 @@ select ok(not has_table_privilege('authenticated', 'public.events', 'delete'),
 
 -- A Responsabil creates an organisation event. The stored creator is the
 -- authenticated caller, not an input that could be forged.
-select pg_temp.login(
-  'c3000000-0000-0000-0000-000000000245', 'responsabil', 4, '["edu"]');
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000245', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok($$
   select public.create_event(
     p_title := 'Adunare generală',
@@ -132,8 +116,10 @@ select is(
 
 -- A BC member creates department and team events. Team department is looked
 -- up by the command and never trusted from client input.
-select pg_temp.login(
-  'd4000000-0000-0000-0000-000000000245', 'bc', 6, '["pr"]');
+select pg_temp.test_login('d4000000-0000-0000-0000-000000000245', jsonb_build_object(
+    'member_role', 'bc', 'member_level', 6,
+    'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select lives_ok($$
   select public.create_event(
     p_title := 'Ședință Educațional', p_type := 'sedinta',
@@ -156,36 +142,43 @@ select is(
 -- Current database membership and org claims are both required. This denies
 -- stale manager tokens after deactivation and real auth users without a
 -- provisioned organization identity.
-select pg_temp.login(
-  'a1000000-0000-0000-0000-000000000245', 'recrut', 0, '["edu"]');
+select pg_temp.test_login('a1000000-0000-0000-0000-000000000245', jsonb_build_object(
+    'member_role', 'recrut', 'member_level', 0,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_event('Recrut', 'sedinta', 'org', now() + interval '1 day')
 $$, '42501', 'calendar_manage_forbidden', 'a Recrut cannot create events');
 reset role;
 
-select pg_temp.login(
-  'b2000000-0000-0000-0000-000000000245', 'voluntar', 1, '["edu"]');
+select pg_temp.test_login('b2000000-0000-0000-0000-000000000245', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_event('Voluntar', 'sedinta', 'org', now() + interval '1 day')
 $$, '42501', 'calendar_manage_forbidden', 'a Voluntar cannot create events');
 reset role;
 
-select pg_temp.login(
-  'c3000000-0000-0000-0000-000000000245', 'responsabil', 4, '["edu"]', false);
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000245', jsonb_build_object('provider', 'email'));
 select throws_ok($$
   select public.create_event('Fără claims', 'sedinta', 'org', now() + interval '1 day')
 $$, '42501', 'calendar_manage_forbidden', 'a profile without org claims is denied');
 reset role;
 
-select pg_temp.login(
-  'e5000000-0000-0000-0000-000000000245', 'responsabil', 4, '["edu"]');
+select pg_temp.test_login('e5000000-0000-0000-0000-000000000245', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_event('Dezactivat', 'sedinta', 'org', now() + interval '1 day')
 $$, '42501', 'calendar_manage_forbidden', 'an inactive manager is denied despite stale claims');
 reset role;
 
-select pg_temp.login(
-  'f6000000-0000-0000-0000-000000000245', 'responsabil', 4, '[]');
+select pg_temp.test_login('f6000000-0000-0000-0000-000000000245', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_event('Fără profil', 'sedinta', 'org', now() + interval '1 day')
 $$, '42501', 'calendar_manage_forbidden', 'an auth user without a profile is denied');
@@ -193,8 +186,10 @@ reset role;
 
 -- Stable errors cover every scope and value that would otherwise leak a raw
 -- constraint or foreign-key error through PostgREST.
-select pg_temp.login(
-  'c3000000-0000-0000-0000-000000000245', 'responsabil', 4, '["edu"]');
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000245', jsonb_build_object(
+    'member_role', 'responsabil', 'member_level', 4,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
+  ));
 select throws_ok($$
   select public.create_event('Proiect', 'sedinta', 'project', now() + interval '1 day')
 $$, 'PT400', 'unsupported_event_scope', 'project scope is rejected in v1');
@@ -263,7 +258,7 @@ reset role;
 select is((select count(*) from public.events), 3::bigint,
   'only the three valid command calls created rows');
 
-select set_config('request.jwt.claims', '', true);
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok($$
   select public.create_event('Anon', 'sedinta', 'org', now() + interval '1 day')
