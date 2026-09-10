@@ -37,6 +37,7 @@ Environment checklist per member: Docker Desktop · Node · `npx supabase start`
 - **Review:** Alex reviews every PR until two volunteers have each landed ~5; then peer review, with Alex retained on migrations/RLS (the security core).
 - **Spec-first for new features:** brainstorm → `docs/superpowers/specs/` → issues. Use `CONTEXT.md` terms everywhere.
 - **Definition of Done:** migration applies on `db reset` · pgTAP green (incl. per-role) · PR reviewed · deployed to staging · issue AC checked off.
+- **Branch protection on `main`:** Required status checks are `Migrations + db tests`, `Edge Function checks`, and `Frontend checks`. One approving review is required; linear history is optional. Enabling protection is a human action in [repo settings](https://github.com/Alex-Bancila/osubb-app/settings/branches).
 
 ## Mentorship & growth
 
