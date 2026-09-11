@@ -55,8 +55,9 @@ insert into task_requests (kind, title, from_member)
 
 -- An OPEN, already-GRADED task: the shape that leaked, and the one an
 -- unprovisioned session could have joined to collect points.
-insert into tasks (title, difficulty, status, dept_id, audience, assignment_mode)
-  values ('rls-open', 2, 'todo', 'edu', 'org', 'public');
+insert into tasks
+  (title, difficulty, status, dept_id, audience, assignment_mode, queue_opened_at)
+  values ('rls-open', 2, 'todo', 'edu', 'org', 'public', now());
 update tasks set rating = 3 where title = 'rls-open';
 
 insert into events (title, type, scope, starts_at)

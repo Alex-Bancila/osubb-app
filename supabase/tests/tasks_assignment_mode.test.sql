@@ -20,8 +20,9 @@ select is(
   'direct',
   'the default Assignment Mode is observable on a new Task');
 select lives_ok(
-  $$ insert into public.tasks (title, difficulty, assignment_mode, dept_id)
-     values ('Public assignment', 1, 'public', 'edu') $$,
+  $$ insert into public.tasks
+       (title, difficulty, assignment_mode, dept_id, queue_opened_at)
+     values ('Public assignment', 1, 'public', 'edu', now()) $$,
   'public Assignment Mode is accepted');
 select throws_ok(
   $$ insert into public.tasks (title, difficulty, assignment_mode, dept_id)

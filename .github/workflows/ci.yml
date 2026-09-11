@@ -46,17 +46,13 @@ jobs:
             echo "No db tests yet — skipping (Epic 6 adds them)."
           fi
 
-      - name: Test Team lead data migration
-        run: bash supabase/tests/remove_team_lead_upgrade.test.sh
-
-      - name: Test Task deadline data migration
-        run: bash supabase/tests/tasks_precise_deadlines_upgrade.test.sh
-
-      - name: Test Task audience data migration
-        run: bash supabase/tests/tasks_audience_upgrade.test.sh
-
-      - name: Test Task Assignment Mode data migration
-        run: bash supabase/tests/tasks_assignment_mode_upgrade.test.sh
+      - name: Test historical data migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for harness in supabase/tests/*_upgrade.test.sh; do
+            bash "$harness"
+          done
 
       # `supabase start` already applied seed.sql to an empty database. Staging
       # gets the same file applied to a LIVE one — see docs/backend/seeding-staging.md

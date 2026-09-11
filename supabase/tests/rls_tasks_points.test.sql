@@ -43,8 +43,9 @@ insert into team_members (team_id, member_id)
 insert into tasks (title, difficulty, dept_id)          values ('t-edu',  3, 'edu');
 insert into tasks (title, difficulty, dept_id)          values ('t-edu2', 2, 'edu');
 insert into tasks (title, difficulty, dept_id)          values ('t-pr',   2, 'pr');
-insert into tasks (title, difficulty, dept_id, status, audience, assignment_mode)
-  values ('t-open', 1, 'pr', 'todo', 'org', 'public');
+insert into tasks
+  (title, difficulty, dept_id, status, audience, assignment_mode, queue_opened_at)
+  values ('t-open', 1, 'pr', 'todo', 'org', 'public', now());
 insert into tasks (title, difficulty, team_id)          values ('t-team', 1, 't-x');
 insert into task_assignees (task_id, member_id)
   select id, 'a0000000-0000-0000-0000-000000000011'::uuid from tasks where title = 't-edu';
@@ -216,8 +217,9 @@ reset role;
 -- 't-open' earlier: reusing it would have made the broken code fail on the
 -- primary key instead of awarding points, and this test would have "passed"
 -- while proving nothing.
-insert into tasks (title, difficulty, dept_id, status, audience, assignment_mode)
-  values ('t-open-bait', 4, 'pr', 'todo', 'org', 'public');
+insert into tasks
+  (title, difficulty, dept_id, status, audience, assignment_mode, queue_opened_at)
+  values ('t-open-bait', 4, 'pr', 'todo', 'org', 'public', now());
 update tasks set rating = 5 where title = 't-open-bait';   -- 4 × 3 = 12 points
 
 create temp table fx_open as

@@ -26,9 +26,10 @@ select extensions.dblink_exec('claim_setup_287', $setup$
     ('28700000-0000-0000-0000-000000000011', 'Claim Outsider 287',
      'claim-outsider-287@test.local', 'voluntar', 'activ');
   insert into public.tasks
-    (title, difficulty, dept_id, status, audience, assignment_mode, created_by)
+    (title, difficulty, dept_id, status, audience, assignment_mode, created_by,
+     queue_opened_at)
   values ('Concurrent public opportunity 287', 1, 'edu', 'todo', 'org', 'public',
-          '28700000-0000-0000-0000-000000000010');
+          '28700000-0000-0000-0000-000000000010', now());
 
   create function public.test_claim_result_287(p_task_id bigint, p_actor_id uuid)
   returns text language plpgsql as $function$

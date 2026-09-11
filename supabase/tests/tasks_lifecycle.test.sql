@@ -14,13 +14,16 @@ select col_has_default('public', 'tasks', 'status',
   'new Tasks have a lifecycle default');
 
 select lives_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status) values
-    ('Lifecycle todo 287', 1, 'edu', 'todo'),
-    ('Lifecycle progress 287', 1, 'edu', 'in_progress'),
-    ('Lifecycle review 287', 1, 'edu', 'in_review'),
-    ('Lifecycle completed 287', 1, 'edu', 'completed'),
-    ('Lifecycle unfulfilled 287', 1, 'edu', 'unfulfilled'),
-    ('Lifecycle cancelled 287', 1, 'edu', 'cancelled') $$,
+  $$ insert into public.tasks
+      (title, difficulty, dept_id, status, started_at, submitted_at,
+       completed_at, unfulfilled_at, cancelled_at)
+     values
+      ('Lifecycle todo 287', 1, 'edu', 'todo', null, null, null, null, null),
+      ('Lifecycle progress 287', 1, 'edu', 'in_progress', now(), null, null, null, null),
+      ('Lifecycle review 287', 1, 'edu', 'in_review', now(), now(), null, null, null),
+      ('Lifecycle completed 287', 1, 'edu', 'completed', null, null, now(), null, null),
+      ('Lifecycle unfulfilled 287', 1, 'edu', 'unfulfilled', null, null, null, now(), null),
+      ('Lifecycle cancelled 287', 1, 'edu', 'cancelled', null, null, null, null, now()) $$,
   'all six lifecycle states are writable');
 
 select throws_ok(

@@ -225,7 +225,15 @@ as $$
   select (p_date::timestamp + time '23:59') at time zone 'Europe/Bucharest'
 $$;
 
-insert into tasks (title, type, dept_id, team_id, status, difficulty, deadline, description, created_by) values
+insert into tasks
+  (title, type, dept_id, team_id, status, difficulty, deadline, description,
+   created_by, started_at, completed_at)
+select fixture.title, fixture.type, fixture.dept_id, fixture.team_id,
+       fixture.status::public.task_status, fixture.difficulty, fixture.deadline,
+       fixture.description, fixture.created_by::uuid,
+       case when fixture.status = 'in_progress' then now() end,
+       case when fixture.status = 'completed' then now() end
+  from (values
   -- Educational
   ('Workshop CV pentru boboci', 'proiect', 'edu', null, 'completed',   4, pg_temp.task_deadline(current_date - 14), 'Sesiune practică de redactare CV.',        'd0000000-0000-0000-0000-000000000005'),
   ('Materiale curs Excel',      'content', 'edu', null, 'completed',   2, pg_temp.task_deadline(current_date - 10), 'Slide-uri pentru cursul de Excel.',        'd0000000-0000-0000-0000-000000000005'),
@@ -247,7 +255,10 @@ insert into tasks (title, type, dept_id, team_id, status, difficulty, deadline, 
   ('Testare aplicație',         'tehnic',  null, 't-app', 'in_progress',3, pg_temp.task_deadline(current_date + 6), 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
   -- Open: anyone may claim these, which is what the tracker's "Deschise" tab is for
   ('Share story recrutare',     'promo',   'pr',  null, 'todo',      1, pg_temp.task_deadline(current_date + 3),  'Distribuie story-ul de recrutare.',        'd0000000-0000-0000-0000-000000000006'),
-  ('Ajutor la standul de recrutare','logistic','edu',null,'todo',    2, pg_temp.task_deadline(current_date + 9),  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005');
+  ('Ajutor la standul de recrutare','logistic','edu',null,'todo',    2, pg_temp.task_deadline(current_date + 9),  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005')
+  ) as fixture
+    (title, type, dept_id, team_id, status, difficulty, deadline,
+     description, created_by);
 
 -- These reproduce legacy organization-wide opportunities on a fresh reset;
 -- the #285 migration gives upgraded `open` rows the same audience.
@@ -262,7 +273,8 @@ update tasks
    );
 
 update tasks
-   set assignment_mode = 'public'
+   set assignment_mode = 'public',
+       queue_opened_at = now()
  where title in ('Share story recrutare', 'Ajutor la standul de recrutare')
    and exists (
      select 1
