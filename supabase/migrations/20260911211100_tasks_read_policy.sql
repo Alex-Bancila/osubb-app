@@ -90,12 +90,32 @@
 --       answers SELECT: it kept handing every Task to any JWT at level >= 4
 --       (a Responsabil, or a demoted or deactivated member's unexpired token)
 --       whatever `tasks_read` said. It is split into insert/update/delete
---       policies with the identical `auth_level() >= 4` predicate. The one
---       behavioural consequence: a direct UPDATE or DELETE now reaches only
---       rows `tasks_read` admits (Postgres applies SELECT policies to the
---       rows such a statement reads); others are skipped, not refused.
---       Direct INSERT is unchanged. #345 drops the three with the rest of
---       the legacy write path.
+--       policies with the identical `auth_level() >= 4` predicate.
+--       Consequences, verified empirically (psql, `begin; ... rollback;`, as
+--       a level-4 Responsabil and as BC):
+--       - INSERT: Postgres applies the table's SELECT policies to the new
+--         row whenever the statement needs SELECT rights on it -- a
+--         RETURNING clause, which is how PostgREST implements
+--         `Prefer: return=representation` (supabase-js `.insert().select()`)
+--         -- as an implicit WITH CHECK evaluated the same way the policy
+--         reads any other row: a fresh query against `tasks`. `can_read_task`
+--         resolves the row by id through such a query, and within the same
+--         command the row it just inserted is not yet visible to it, so the
+--         EXISTS it sits inside is always empty and the check always fails,
+--         `42501`, for every caller INCLUDING BC and Moderator (their R1
+--         branch never gets evaluated, because the whole predicate lives
+--         inside that same EXISTS). A plain INSERT without RETURNING is
+--         unaffected -- no SELECT policy is evaluated for it.
+--       - UPDATE/DELETE: the same implicit SELECT check is added only when
+--         the statement needs to read the target rows -- a WHERE clause, a
+--         RETURNING clause, or a SET expression that references a column.
+--         A blind `update public.tasks set status = 'cancelled';` with none
+--         of those still reaches every row for a level >= 4 JWT, exactly as
+--         under the old FOR ALL policy; only a statement that needs SELECT
+--         is filtered to rows `tasks_read` admits, and silently (UPDATE 0
+--         for the excluded rows), not with an error, unlike the INSERT case
+--         above.
+--       #345 drops the three with the rest of the legacy write path.
 
 -- ==================== Predicates ====================
 
@@ -242,16 +262,15 @@ as $$
                     )
                     or exists (
                       select 1
-                        from public.team_members as membership
-                       where membership.team_id = task.team_id
-                         and membership.member_id = caller.id
-                    )
-                    or exists (
-                      select 1
                         from public.project_members as membership
                        where membership.project_id = task.project_id
                          and membership.member_id = caller.id
                     )
+                    -- A Team-origin local Opportunity needs no branch here:
+                    -- R4 above already admits every Team member
+                    -- unconditionally (open queue or not, Opportunity or
+                    -- plain direct Task), so this rule only has to
+                    -- distinguish Department and Project Origins.
                   )
                 )
               )
@@ -318,9 +337,9 @@ create policy tasks_delete_legacy
 comment on policy tasks_create_legacy on public.tasks is
   'Legacy direct Task insert for JWT level >= 4, split out of task_write by #318 so it no longer answers SELECT. Retired by #345.';
 comment on policy tasks_update_legacy on public.tasks is
-  'Legacy direct Task update for JWT level >= 4, split out of task_write by #318 so it no longer answers SELECT; it reaches only rows tasks_read admits. Retired by #345.';
+  'Legacy direct Task update for JWT level >= 4, split out of task_write by #318 so it no longer answers SELECT. A statement that needs SELECT on its targets (a WHERE, a RETURNING, or a SET expression referencing a column) reaches only rows tasks_read admits; a blind UPDATE with none of those still reaches every row (see the migration header). Retired by #345.';
 comment on policy tasks_delete_legacy on public.tasks is
-  'Legacy direct Task delete for JWT level >= 4, split out of task_write by #318 so it no longer answers SELECT; it reaches only rows tasks_read admits. Retired by #345.';
+  'Legacy direct Task delete for JWT level >= 4, split out of task_write by #318 so it no longer answers SELECT. A statement that needs SELECT on its targets (a WHERE or a RETURNING) reaches only rows tasks_read admits; a blind DELETE with neither still reaches every row (see the migration header). Retired by #345.';
 
 -- task_read was the last consumer of the legacy task_assignees predicate.
 -- private.task_is_unassigned stays: claim_open_task still calls it (#345).

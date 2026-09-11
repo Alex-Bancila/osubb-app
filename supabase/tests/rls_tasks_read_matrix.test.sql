@@ -20,7 +20,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(60);
+select plan(63);
 
 -- ==================== Shape of the read surface ====================
 select policies_are('public', 'tasks',
@@ -237,15 +237,21 @@ select 'm318:PA-dir', project.id, 'cancelled', now()
 -- Participation Tasks in `pr`, where no persona except R1 is a member.
 -- X-busy is an org-wide Opportunity that already has an Executor and is in
 -- progress: its queue is still open, so it is still an Opportunity.
+-- X-review (round 1) pins the same point one status further along: an
+-- Opportunity that has moved to in_review, with a submission recorded,
+-- while its queue is still open, is still an Opportunity too -- a mutant
+-- narrowing R6 to `todo`/`in_progress` must fail wherever org_open() feeds
+-- an expected set.
 insert into public.tasks
   (title, dept_id, audience, assignment_mode, queue_opened_at, queue_closed_at,
-   status, started_at)
+   status, started_at, submitted_at)
 values
-  ('m318:X-busy',           'pr', 'org',   'public', now(), null,  'in_progress', now()),
-  ('m318:X-exec',           'pr', 'local', 'direct', null,  null,  'in_progress', now()),
-  ('m318:X-past',           'pr', 'local', 'direct', null,  null,  'todo',        null),
-  ('m318:X-cand-closed',    'pr', 'local', 'public', now(), now(), 'todo',        null),
-  ('m318:X-cand-withdrawn', 'pr', 'local', 'public', now(), null,  'todo',        null);
+  ('m318:X-busy',           'pr', 'org',   'public', now(), null,  'in_progress', now(), null),
+  ('m318:X-review',         'pr', 'org',   'public', now(), null,  'in_review',   now(), now()),
+  ('m318:X-exec',           'pr', 'local', 'direct', null,  null,  'in_progress', now(), null),
+  ('m318:X-past',           'pr', 'local', 'direct', null,  null,  'todo',        null,  null),
+  ('m318:X-cand-closed',    'pr', 'local', 'public', now(), now(), 'todo',        null,  null),
+  ('m318:X-cand-withdrawn', 'pr', 'local', 'public', now(), null,  'todo',        null,  null);
 
 create temp table fx_task as
 select task.id, substr(task.title, 6) as title
@@ -291,14 +297,15 @@ as $$
 $$;
 
 -- The Opportunities every active Member reads (R6, Audience org, queue open,
--- unfinished): one per Origin kind, the org-wide Subtask, and X-busy.
+-- unfinished): one per Origin kind, the org-wide Subtask, X-busy
+-- (in_progress) and X-review (in_review, round 1).
 create function pg_temp.org_open()
 returns text[]
 language sql
 immutable
 as $$
   select array['D-org-open', 'DT-org-open', 'IT-org-open', 'P-org-open',
-               'DT-umb-sub-open', 'X-busy']
+               'DT-umb-sub-open', 'X-busy', 'X-review']
 $$;
 
 create function pg_temp.every_task()
@@ -365,6 +372,12 @@ reset role;
 select pg_temp.login_as('recrut_out');
 select set_eq('select * from pg_temp.visible_titles()', pg_temp.org_open(),
   'Recrut outside the Origin: org-wide Opportunities only');
+-- Round 1: pin the in_review Opportunity explicitly (X-busy already pins
+-- in_progress the same way); a mutant narrowing R6 to todo/in_progress
+-- must fail here even if it left org_open() itself unedited.
+select ok(
+  exists (select 1 from pg_temp.visible_titles() as title where title = 'X-review'),
+  'an in_review public Opportunity with an open queue is still visible to an eligible outsider');
 
 reset role;
 select pg_temp.login_as('voluntar_out');
@@ -536,6 +549,32 @@ select throws_ok($$ select count(*) from public.tasks $$, '42501', null,
 select throws_ok($$ select count(*) from public.tasks_with_overdue $$, '42501', null,
   'anon has no privilege on tasks_with_overdue either');
 
+-- ==================== Decision 4: writes vs tasks_read ====================
+-- Round 1: pin the corrected consequence of splitting task_write. Postgres
+-- applies the table's SELECT policies to a new row whenever the statement
+-- needs SELECT rights on it (a RETURNING clause -- how PostgREST's
+-- `Prefer: return=representation` / supabase-js `.insert().select()` work).
+-- can_read_task resolves the row by id via a fresh query, and within the
+-- same command the row it just inserted is not yet visible to that query,
+-- so the check always fails -- for every caller, BC included, since R1
+-- never gets evaluated (it lives inside the same failing EXISTS). Without
+-- RETURNING, no SELECT policy applies and the insert succeeds.
+reset role;
+select pg_temp.login_as('bce_local');
+-- A savepoint, not just reliance on throws_ok's own internal rollback: the
+-- lives_ok insert below succeeds and would otherwise leave a stray
+-- 'm318:%' row behind for every later query that scans public.tasks by
+-- that prefix (visible_titles(), every_task()).
+savepoint sp_write_consequence;
+select throws_ok(
+  $$ insert into public.tasks (title, dept_id) values ('m318:write-insert-returning', 'edu') returning id $$,
+  '42501', null,
+  'decision 4: a direct INSERT ... RETURNING is refused even for a BCE -- can_read_task cannot see a row that does not exist yet');
+select lives_ok(
+  $$ insert into public.tasks (title, dept_id) values ('m318:write-insert-noreturning', 'edu') $$,
+  'decision 4: the same direct INSERT without RETURNING still succeeds -- no SELECT policy applies to it');
+rollback to savepoint sp_write_consequence;
+
 -- ==================== The helpers ====================
 reset role;
 select pg_temp.login_as('executor');
@@ -665,14 +704,16 @@ $$;
 
 select is(pg_temp.helper_triples(false), '{}'::text[],
   'no persona manages, executes or queues for a Task it cannot read');
--- Non-vacuity: BC and Moderator manage all 35 Tasks (70), local BCE the 15
--- D/DT Tasks, the lead and the Responsible the 6 active-Project Tasks each,
--- the Independent-Team member the 6 IT Tasks (103 manage); executor 2,
--- filler 1 and past_executor 1 Assignments (4; the deactivated one's is
--- refused); candidate 2, umbrella_candidate 1 and the member behind the
--- claimless persona 1 Candidatures, here logged in with real claims (4).
-select is(cardinality(pg_temp.helper_triples(true)), 111,
-  'the sweep is not vacuous: 111 persona/Task/helper triples hold, all readable');
+-- Non-vacuity: BC and Moderator manage all 36 Tasks (72, round 1's X-review
+-- included -- BC/Moderator's global override reaches it as a `pr` Task,
+-- same as any other), local BCE the 15 D/DT Tasks, the lead and the
+-- Responsible the 6 active-Project Tasks each, the Independent-Team member
+-- the 6 IT Tasks (105 manage); executor 2, filler 1 and past_executor 1
+-- Assignments (4; the deactivated one's is refused); candidate 2,
+-- umbrella_candidate 1 and the member behind the claimless persona 1
+-- Candidatures, here logged in with real claims (4).
+select is(cardinality(pg_temp.helper_triples(true)), 113,
+  'the sweep is not vacuous: 113 persona/Task/helper triples hold, all readable');
 
 reset role;
 select * from finish();
