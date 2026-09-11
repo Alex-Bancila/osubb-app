@@ -2,9 +2,9 @@
 
 Internal application for **OSUBB** (Organizația Studenților din Universitatea Babeș-Bolyai, Cluj): tasks with gamified points, calendar + RSVP, announcements, in-app notifications, and member/role management for an 8-role × 5-department organization.
 
-**Targets:** BC demo ~Sep 15, 2026 · live for BC/BCE Oct 1 · org-wide November.
+**Delivery order:** Task Tracker backend → web foundation → Task Tracker frontend → Calendar → Web Push → Cloudflare production, gated by milestone acceptance rather than a date (see `CLAUDE.md`'s Status block for where that stands now).
 
-**Stack:** Supabase (PostgreSQL + Row-Level Security + Auth magic links + Edge Functions) · migrations-as-code with pgTAP tests · GitHub Actions CI with auto-deploy to staging · frontend (Sprint 2): Vite + React + TypeScript + Ionic, Capacitor later · Cloudflare Pages hosting. Decisions are recorded as ADRs in `docs/adr/`.
+**Stack:** Supabase (PostgreSQL + Row-Level Security + Auth magic links + Edge Functions) · migrations-as-code with pgTAP tests · GitHub Actions CI with auto-deploy to staging · a React 19 + Vite app in `app/` on TypeScript + React Router + TanStack Query, currently on temporary Ionic components; the target (ADR-0002) is a browser-first, installable PWA on Tailwind + shadcn/ui (Base UI, Nova) + TanStack Table, in progress on the web-foundation stack · Cloudflare hosting. Decisions are recorded as ADRs in `docs/adr/` — see `docs/adr/README.md` for the index.
 
 ## Quickstart (local backend)
 
@@ -30,15 +30,14 @@ Work is cut into **≤1-hour issues** (label `max-1h`), each with goal, reasonin
 
 ## Where everything is written down
 
+`docs/README.md` is the index of every document here, marked authoritative or historical, with one line on what still holds — start there if a doc conflicts with what you're reading below.
+
 | Question | File |
 |---|---|
 | What do the words mean? | `CONTEXT.md` (domain glossary) |
-| Why is X built this way? | `docs/adr/0001…0006` |
-| What exists / what's next? | `docs/backend/implementation-issues.md` (backlog map) |
-| When is what due? | `docs/roadmap.md` |
+| Why is X built this way? | `docs/adr/README.md` (index of ADRs 0001–0008) |
+| What exists / what's next? | `CLAUDE.md`'s Status block and the live GitHub issue graph |
 | How do we work as a team? | `docs/team/team-plan.md` |
-| Full technical design | `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md` (incl. Revision 3) |
 | Requirements source (RO) | `docs/org/` |
-| Tech-stack comparison | `docs/osubb-app-tech-stack.md` |
 
 Private repo · secrets live in Bitwarden + GitHub Actions secrets, never in git.
