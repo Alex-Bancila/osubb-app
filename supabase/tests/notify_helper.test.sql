@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(48);
+select plan(54);
 
 -- ==================== Definition and privileges ====================
 select is(
@@ -224,13 +224,31 @@ select 'TM320 project task D', project.id
 insert into public.tasks (title, team_id) values
   ('TM320 emptyteam task E', 'tm320-emptyteam');
 
+-- Department with no BCE member: fallback test fixture
+insert into auth.users (id, email) values
+  ('32000000-0000-0000-0000-000000000701', 'tm.nodeptbce-creator@test.local');
+insert into public.profiles (id, full_name, email, role, status) values
+  ('32000000-0000-0000-0000-000000000701', 'TM No Dept BCE Creator', 'tm.nodeptbce-creator@test.local', 'voluntar', 'activ');
+insert into public.departments (id, name, short, color, kind) values
+  ('zz320dept', 'Test No BCE Dept', 'ZZ', '#000000', 'coordination');
+insert into public.tasks (title, dept_id, created_by) values
+  ('TM320 dept-no-bce task', 'zz320dept', '32000000-0000-0000-0000-000000000701');
+
+-- Department Team with no BCE parent: fallback test fixture
+insert into public.teams (id, name, dept_id) values
+  ('tm320-deptteam-nobce', 'TM320 DeptTeam with No BCE Parent', 'zz320dept');
+insert into public.tasks (title, team_id, created_by) values
+  ('TM320 deptteam-no-bce task', 'tm320-deptteam-nobce', '32000000-0000-0000-0000-000000000701');
+
 create temp table fx as
 select
   (select id from public.tasks where title = 'TM320 dept task A') as dept_task_id,
   (select id from public.tasks where title = 'TM320 deptteam task B') as deptteam_task_id,
   (select id from public.tasks where title = 'TM320 indepteam task C') as indepteam_task_id,
   (select id from public.tasks where title = 'TM320 project task D') as project_task_id,
-  (select id from public.tasks where title = 'TM320 emptyteam task E') as emptyteam_task_id;
+  (select id from public.tasks where title = 'TM320 emptyteam task E') as emptyteam_task_id,
+  (select id from public.tasks where title = 'TM320 dept-no-bce task') as dept_nobce_task_id,
+  (select id from public.tasks where title = 'TM320 deptteam-no-bce task') as deptteam_nobce_task_id;
 
 -- ==================== notify: skip actor / inactive / unknown, collapse duplicates ====================
 select is(
@@ -403,6 +421,34 @@ select throws_ok(
   'notify: a whitespace-only title raises PT400 invalid_notification_title'
 );
 
+-- ==================== task_managers: Department fallback (no BCE) ====================
+select ok(
+  '32000000-0000-0000-0000-000000000501'::uuid in (
+    select member_id from private.task_managers((select dept_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
+  ),
+  'task_managers: a Department with no live BCE member falls back to BC/Moderator -- BC fixture included'
+);
+select ok(
+  '32000000-0000-0000-0000-000000000502'::uuid in (
+    select member_id from private.task_managers((select dept_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
+  ),
+  'task_managers: a Department with no live BCE member falls back to BC/Moderator -- Moderator fixture included'
+);
+
+-- ==================== task_managers: Department-Team fallback (no BCE parent) ====================
+select ok(
+  '32000000-0000-0000-0000-000000000501'::uuid in (
+    select member_id from private.task_managers((select deptteam_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
+  ),
+  'task_managers: a Department-Team whose parent has no live BCE member falls back to BC/Moderator -- BC fixture included'
+);
+select ok(
+  '32000000-0000-0000-0000-000000000502'::uuid in (
+    select member_id from private.task_managers((select deptteam_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
+  ),
+  'task_managers: a Department-Team whose parent has no live BCE member falls back to BC/Moderator -- Moderator fixture included'
+);
+
 -- ==================== task_managers: creator active and not the actor ====================
 select is(
   (select array_agg(member_id order by member_id)
@@ -484,6 +530,20 @@ select is(
   0::bigint,
   'task_managers: an unknown Task returns an empty set'
 );
+
+-- ==================== anon cannot execute either helper ====================
+set local role anon;
+select throws_ok(
+  $$ select private.notify(array[]::uuid[], 'task'::public.noti_kind, 'x', null, null, null, null) $$,
+  '42501', null,
+  'anon cannot execute private.notify'
+);
+select throws_ok(
+  $$ select private.task_managers(1::bigint, null::uuid) $$,
+  '42501', null,
+  'anon cannot execute private.task_managers'
+);
+reset role;
 
 -- ==================== authenticated / service_role cannot execute either helper ====================
 set local role authenticated;

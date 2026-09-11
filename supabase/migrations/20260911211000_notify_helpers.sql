@@ -200,7 +200,11 @@ begin
 
   elsif v_project_id is not null then
     -- Project: the lead plus every Responsible. A plain project_members
-    -- 'member' row does not qualify.
+    -- 'member' row does not qualify. Deliberately not filtered by
+    -- projects.status: notification interest is not management authority. A
+    -- Task on an archived Project still needs its lead and Responsibles told
+    -- about give-ups or submissions; can_manage_project_work's active-only
+    -- rule governs who may act, not who hears.
     select array_agg(distinct candidate.member_id)
       into v_origin_managers
       from (
