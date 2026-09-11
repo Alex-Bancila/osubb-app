@@ -113,12 +113,12 @@ select is(
   'queue reopening preserves the first opening in this public-mode period');
 
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status)
-     values ('Missing completion 293', 1, 'edu', 'completed') $$,
+  $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
+     values ('Missing completion 293', 1, 'edu', 'completed', 3) $$,
   '23514', null, 'completed requires completed_at');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status)
-     values ('Missing unfulfilled 293', 1, 'edu', 'unfulfilled') $$,
+  $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
+     values ('Missing unfulfilled 293', 1, 'edu', 'unfulfilled', 2) $$,
   '23514', null, 'unfulfilled requires unfulfilled_at');
 select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, status)
@@ -167,9 +167,9 @@ select throws_ok(
 select throws_ok($$
   insert into public.tasks
     (title, difficulty, dept_id, status, assignment_mode, completed_at,
-     queue_opened_at)
+     queue_opened_at, rating)
   values
-    ('Terminal open queue 293', 1, 'edu', 'completed', 'public', now(), now())
+    ('Terminal open queue 293', 1, 'edu', 'completed', 'public', now(), now(), 3)
 $$, '23514', null, 'terminal public Tasks require a closed queue');
 select throws_ok($$
   insert into public.tasks
@@ -189,10 +189,10 @@ $$, '23514', null, 'a queue cannot close before it opens');
 select throws_ok($$
   insert into public.tasks
     (title, difficulty, dept_id, status, created_at,
-     submitted_at, completed_at)
+     submitted_at, completed_at, rating)
   values
     ('Completion before submission 293', 1, 'edu', 'completed',
-     '2026-09-01 10:00+00', '2026-09-01 12:00+00', '2026-09-01 11:00+00')
+     '2026-09-01 10:00+00', '2026-09-01 12:00+00', '2026-09-01 11:00+00', 3)
 $$, '23514', null, 'a terminal outcome cannot precede its submission');
 
 select * from finish();

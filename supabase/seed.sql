@@ -240,17 +240,17 @@ $$;
 -- exactly when status is completed/unfulfilled. The fixture rows below still
 -- name each demo Task's eventual status (used for readability and for the
 -- started_at derivation immediately below), but a row headed for `completed`
--- is inserted as `todo` without a Difficulty; the "Grading" block further
--- down moves each one to `completed` in the same statement that sets its
--- Rating, so the row never sits in the disallowed half-evaluated shape. Rows
--- that stay todo/in_progress get no Difficulty at all, matching the target
--- model where a creator does not guess it up front.
+-- or `unfulfilled` is inserted as `todo` without a Difficulty; the "Grading"
+-- block further down moves each one to its terminal status in the same
+-- statement that sets its Rating, so the row never sits in the disallowed
+-- half-evaluated shape. Rows that stay todo/in_progress get no Difficulty at
+-- all, matching the target model where a creator does not guess it up front.
 insert into tasks
   (title, type, dept_id, team_id, status, difficulty, deadline, description,
    created_by, started_at)
 select fixture.title, fixture.type, fixture.dept_id, fixture.team_id,
-       case when fixture.status = 'completed' then 'todo' else fixture.status end::public.task_status,
-       case when fixture.status = 'completed' then fixture.difficulty end,
+       case when fixture.status in ('completed', 'unfulfilled') then 'todo' else fixture.status end::public.task_status,
+       case when fixture.status in ('completed', 'unfulfilled') then fixture.difficulty end,
        fixture.deadline, fixture.description, fixture.created_by::uuid,
        case when fixture.status = 'in_progress' then now() end
   from (values
