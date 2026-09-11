@@ -11,16 +11,18 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(13);
+select plan(20);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
   ('aaaaaaaa-0000-0000-0000-000000000162', 'ana.ledgersemantics@test.local'),
-  ('26200000-0000-0000-0000-000000000001', '262.bc@test.local');
+  ('26200000-0000-0000-0000-000000000001', '262.bc@test.local'),
+  ('26200000-0000-0000-0000-000000000002', '262.bc.inactive@test.local');
 
 insert into profiles (id, full_name, email, role, status) values
   ('aaaaaaaa-0000-0000-0000-000000000162', 'Ana Test', 'ana.ledgersemantics@test.local', 'voluntar', 'activ'),
-  ('26200000-0000-0000-0000-000000000001', '262 BC', '262.bc@test.local', 'bc', 'activ');
+  ('26200000-0000-0000-0000-000000000001', '262 BC', '262.bc@test.local', 'bc', 'activ'),
+  ('26200000-0000-0000-0000-000000000002', '262 BC Inactive', '262.bc.inactive@test.local', 'bc', 'inactiv');
 
 -- A task fixture so 'task'/'task_reversal' rows (which now require a
 -- task_id) can be inserted below.
@@ -75,7 +77,22 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, note)
      values ('aaaaaaaa-0000-0000-0000-000000000162', -3, 'sanction', '   ') $$,
   '23514', null,
-  'a sanction with a whitespace-only note is rejected');
+  'a sanction with a whitespace-only (spaces) note is rejected');
+
+-- btrim() only strips spaces, so the shape check uses a "has a non-space
+-- character" regex instead (same predicate as events_title_not_blank_ck) —
+-- a tab- or newline-only note must be rejected too.
+select throws_ok(
+  $$ insert into points_ledger (member_id, delta, reason, note)
+     values ('aaaaaaaa-0000-0000-0000-000000000162', -3, 'sanction', E'\t') $$,
+  '23514', null,
+  'a sanction with a tab-only note is rejected');
+
+select throws_ok(
+  $$ insert into points_ledger (member_id, delta, reason, note)
+     values ('aaaaaaaa-0000-0000-0000-000000000162', -3, 'sanction', E'\n') $$,
+  '23514', null,
+  'a sanction with a newline-only note is rejected');
 
 select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, note, task_id)
@@ -125,6 +142,53 @@ select lives_ok(
   'an active BC may still create a properly-shaped sanction');
 
 reset role;
+
+-- ==================== an inactive BC is denied both paths ====================
+-- ledger_sanction's WITH CHECK requires the caller's profile.status = 'activ',
+-- checked live against the database (not the JWT) — a stale claim from
+-- before deactivation cannot smuggle a row through. No policy admits
+-- manual_award for anyone, active or not.
+select pg_temp.test_login('26200000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+
+select throws_ok(
+  $$ insert into points_ledger (member_id, delta, reason, awarded_by)
+     values ('26200000-0000-0000-0000-000000000002', 5, 'manual_award',
+             '26200000-0000-0000-0000-000000000002') $$,
+  '42501', null,
+  'an inactive BC cannot create a manual award — RLS denies it');
+
+select throws_ok(
+  $$ insert into points_ledger (member_id, delta, reason, note, awarded_by)
+     values ('26200000-0000-0000-0000-000000000002', -1, 'sanction', 'test sanction',
+             '26200000-0000-0000-0000-000000000002') $$,
+  '42501', null,
+  'an inactive BC cannot create a sanction — RLS denies it');
+
+reset role;
+
+-- ==================== a claimless session is denied too ====================
+-- Same real BC uid as above, but a token with no org claims at all (never
+-- invited, or issued before the claims hook ran) — auth_is_member() fails
+-- before member_level is even consulted.
+select pg_temp.test_login('26200000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+
+select throws_ok(
+  $$ insert into points_ledger (member_id, delta, reason, awarded_by)
+     values ('26200000-0000-0000-0000-000000000001', 5, 'manual_award',
+             '26200000-0000-0000-0000-000000000001') $$,
+  '42501', null,
+  'a claimless session cannot create a manual award — RLS denies it');
+
+reset role;
+
+-- ==================== grants shape who can even reach RLS ====================
+select ok(
+  has_table_privilege('authenticated', 'public.points_ledger', 'insert'),
+  'authenticated retains INSERT for the remaining sanction path');
+select ok(
+  not has_table_privilege('anon', 'public.points_ledger', 'insert'),
+  'anonymous clients cannot insert ledger rows');
 
 select * from finish();
 rollback;
