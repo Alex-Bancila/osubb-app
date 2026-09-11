@@ -4,7 +4,7 @@ Internal application for **OSUBB** (Organizația Studenților din Universitatea 
 
 **Delivery order:** Task Tracker backend → web foundation → Task Tracker frontend → Calendar → Web Push → Cloudflare production, gated by milestone acceptance rather than a date (see `CLAUDE.md`'s Status block for where that stands now).
 
-**Stack:** Supabase (PostgreSQL + Row-Level Security + Auth magic links + Edge Functions) · migrations-as-code with pgTAP tests · GitHub Actions CI with auto-deploy to staging · one browser-first, installable PWA in `app/` on Vite + React + TypeScript + React Router + TanStack Query, styled with Tailwind + shadcn/ui (Base UI, Nova) · Cloudflare hosting. Decisions are recorded as ADRs in `docs/adr/` — see `docs/adr/README.md` for the index.
+**Stack:** Supabase (PostgreSQL + Row-Level Security + Auth magic links + Edge Functions) · migrations-as-code with pgTAP tests · GitHub Actions CI with auto-deploy to staging · a React 19 + Vite app in `app/` on TypeScript + React Router + TanStack Query, currently on temporary Ionic components; the target (ADR-0002) is a browser-first, installable PWA on Tailwind + shadcn/ui (Base UI, Nova) + TanStack Table, in progress on the web-foundation stack · Cloudflare hosting. Decisions are recorded as ADRs in `docs/adr/` — see `docs/adr/README.md` for the index.
 
 ## Quickstart (local backend)
 
