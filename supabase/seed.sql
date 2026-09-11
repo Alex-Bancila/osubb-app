@@ -60,8 +60,9 @@ begin
 end;
 $$;
 
--- Ledger before tasks: points_ledger.task_id has no cascade either. This also
--- catches a real tester's points if they were awarded on a demo task.
+-- Ledger and Assignment history before Tasks: neither Task reference
+-- cascades. Delete only history for demo-owned Tasks, leaving independent
+-- tester-owned history for non-demo Members untouched.
 delete from points_ledger l
  where exists (select 1 from profiles p
                 where p.email like '%@demo.osubb'
@@ -69,6 +70,15 @@ delete from points_ledger l
     or exists (select 1 from tasks t
                  join profiles p on p.id = t.created_by
                 where t.id = l.task_id and p.email like '%@demo.osubb');
+
+delete from task_assignments assignment
+ where exists (
+   select 1
+     from tasks task
+     join profiles creator on creator.id = task.created_by
+    where task.id = assignment.task_id
+      and creator.email like '%@demo.osubb'
+ );
 
 delete from task_requests r
  where exists (select 1 from profiles p
@@ -303,6 +313,52 @@ select t.id, a.member_id
     ('Testare aplicație',              'd0000000-0000-0000-0000-000000000008'::uuid)
   ) as a (title, member_id)
   join tasks t on t.title = a.title;
+
+-- Keep the transitional join table and the new history model aligned until
+-- every legacy consumer has moved. UUID order is deterministic for the one
+-- unfinished demo Executor; terminal participants all remain ended history.
+with ranked_demo_assignees as (
+  select
+    task.id as task_id,
+    legacy.member_id,
+    task.created_at,
+    task.status,
+    task.completed_at,
+    task.unfulfilled_at,
+    task.cancelled_at,
+    row_number() over (
+      partition by task.id order by legacy.member_id
+    ) as member_order
+  from task_assignees legacy
+  join tasks task on task.id = legacy.task_id
+  join profiles creator on creator.id = task.created_by
+  where creator.email like '%@demo.osubb'
+)
+insert into task_assignments
+  (task_id, member_id, assigned_at, assigned_by, ended_at, end_reason, end_note)
+select
+  legacy.task_id,
+  legacy.member_id,
+  legacy.created_at,
+  null,
+  case
+    when legacy.status = 'completed' then legacy.completed_at
+    when legacy.status = 'unfulfilled' then legacy.unfulfilled_at
+    when legacy.status = 'cancelled' then legacy.cancelled_at
+    when legacy.member_order > 1 then legacy.created_at
+  end,
+  case
+    when legacy.status = 'completed' then 'completed'
+    when legacy.status = 'unfulfilled' then 'failed'
+    when legacy.status = 'cancelled' then 'cancelled'
+    when legacy.member_order > 1 then 'legacy_migration'
+  end,
+  case
+    when legacy.status in ('todo', 'in_progress', 'in_review')
+     and legacy.member_order > 1
+      then 'Deterministic migration: another legacy participant was selected as Executor by member UUID order.'
+  end
+from ranked_demo_assignees legacy;
 
 -- Grading. Each update fires the trigger, which writes one ledger row per
 -- assignee: points = difficulty × multiplier(rating).

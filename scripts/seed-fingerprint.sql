@@ -2,9 +2,9 @@
 -- sequences and are not part of it, so this is what CI (and
 -- scripts/check-seed-rerunnable.sh) compares before/after re-applying
 -- supabase/seed.sql to prove the file is safe to run against a live
--- database. Moved verbatim from .github/workflows/ci.yml — do not
--- "improve" this query; issue #296 will extend it when it rebuilds the
--- demo cohort.
+-- database. Dynamic identity values and timestamps are represented by stable
+-- content/shape labels so a safe rerun compares meaning rather than sequence
+-- allocation or wall-clock time.
 select md5(string_agg(x, '|' order by x))
   from (
     select format('member:%s:%s:%s', full_name, role, status) from profiles
@@ -24,6 +24,26 @@ select md5(string_agg(x, '|' order by x))
                 from task_assignees a
                 join tasks t on t.id = a.task_id
                 join profiles p on p.id = a.member_id
+    union all select format('assignment:%s:%s:%s:%s:%s:%s:%s',
+                            task.title,
+                            member.full_name,
+                            coalesce(actor.full_name, '-'),
+                            case when assignment.assigned_at = task.created_at
+                              then 'task-created' else 'other-start' end,
+                            case
+                              when assignment.ended_at is null then 'active'
+                              when assignment.ended_at = task.completed_at then 'completed-at'
+                              when assignment.ended_at = task.unfulfilled_at then 'unfulfilled-at'
+                              when assignment.ended_at = task.cancelled_at then 'cancelled-at'
+                              when assignment.ended_at = assignment.assigned_at then 'at-start'
+                              else 'other-end'
+                            end,
+                            coalesce(assignment.end_reason, '-'),
+                            coalesce(assignment.end_note, '-'))
+                from task_assignments assignment
+                join tasks task on task.id = assignment.task_id
+                join profiles member on member.id = assignment.member_id
+                left join profiles actor on actor.id = assignment.assigned_by
     union all select format('ledger:%s:%s:%s', p.full_name, l.delta, l.reason)
                 from points_ledger l join profiles p on p.id = l.member_id
     union all select format('event:%s:%s', title, scope) from events
