@@ -18,12 +18,7 @@ alter table public.tasks
 drop policy task_read on public.tasks;
 drop function public.claim_open_task(bigint);
 drop function private.task_is_unassigned(bigint);
--- #292: task_activity references tasks, so TRUNCATE ... CASCADE reaches it
--- too; its statement-level immutability trigger would otherwise block this
--- scratch-transaction cleanup. Disable it for this one statement only.
-alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate public.tasks cascade;
-alter table public.task_activity enable trigger task_activity_reject_truncate;
 alter table public.tasks alter column status drop default;
 alter table public.tasks alter column status type text using status::text;
 -- #292: task_activity.from_status/to_status also depend on task_status; this

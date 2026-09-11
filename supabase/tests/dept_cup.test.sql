@@ -12,14 +12,7 @@ select plan(11);
 -- Remove the demo members and every dependent row inside this rolled-back
 -- transaction. Reference departments stay untouched: those five rows are the
 -- production configuration this view must always return.
--- #292: task_activity references profiles (actor_id), so TRUNCATE ... CASCADE
--- reaches it too; its statement-level immutability trigger would otherwise
--- block this scratch-transaction cleanup. Disable it for this one statement
--- only — the transaction rolls back, so re-enabling after is hygiene, not a
--- requirement.
-alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate public.profiles cascade;
-alter table public.task_activity enable trigger task_activity_reject_truncate;
 
 insert into auth.users (id, email) values
   ('c1000000-0000-0000-0000-000000000001', 'cup.active@test.local'),

@@ -20,13 +20,7 @@ select plan(34);
 -- about this file's fixtures. Clear them inside the transaction, which rolls
 -- back at the end, so the suite describes its own world and stays stable
 -- however the demo data grows.
--- #292: task_activity references tasks, so TRUNCATE ... CASCADE reaches it
--- too; its statement-level immutability trigger would otherwise block this
--- scratch-transaction cleanup. Disable it for this one statement only — the
--- transaction rolls back, so re-enabling after is hygiene, not a requirement.
-alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate tasks, task_assignees, task_requests, points_ledger cascade;
-alter table public.task_activity enable trigger task_activity_reject_truncate;
 
 insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-000000000011', 'vlad.rls@test.local'),

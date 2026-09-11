@@ -12,6 +12,14 @@
 -- transaction, so dropping-and-never-recreating is safe) before the enum
 -- drop, or the harness fails with "cannot drop type ... because other
 -- objects depend on it".
+--
+-- TRUNCATE is deliberately left to the table owner: after the grant
+-- narrowing below, no client or server role (public, anon, authenticated,
+-- service_role) holds TRUNCATE on this table, so the only way to run one is
+-- as the owner — and the owner can drop or disable any trigger anyway, so a
+-- statement-level TRUNCATE trigger would buy nothing beyond the grants. The
+-- row-level trigger below still guards UPDATE/DELETE, including from
+-- security definer commands, because those aren't owner-gated the same way.
 
 create table public.task_activity (
   id            bigint generated always as identity primary key,
@@ -66,11 +74,10 @@ comment on column public.task_activity.details is
   'Event-specific structured payload; shape depends on kind.';
 
 -- Immutability: even a security definer command must not be able to rewrite
--- history, so this is enforced by trigger, not merely by revoking grants.
--- A row-level "before update or delete" trigger never fires for TRUNCATE, so
--- a second, statement-level trigger below covers that path too; this
--- function body never references OLD/NEW, so the same function serves both
--- triggers without change.
+-- history, so UPDATE/DELETE are enforced by trigger, not merely by revoking
+-- grants. TRUNCATE is not covered here — see the header comment above for
+-- why a statement-level TRUNCATE trigger isn't worth it once only the owner
+-- can run one.
 create function private.reject_task_activity_change()
 returns trigger
 language plpgsql
@@ -86,13 +93,8 @@ create trigger task_activity_reject_change
   for each row
   execute function private.reject_task_activity_change();
 
-create trigger task_activity_reject_truncate
-  before truncate on public.task_activity
-  for each statement
-  execute function private.reject_task_activity_change();
-
 revoke all on function private.reject_task_activity_change()
   from public, anon, authenticated, service_role;
 
 comment on function private.reject_task_activity_change() is
-  'Blocks every UPDATE/DELETE/TRUNCATE on task_activity, including from security definer commands.';
+  'Blocks every UPDATE/DELETE on task_activity, including from security definer commands. TRUNCATE is left to the table owner by grants — see the table comment.';
