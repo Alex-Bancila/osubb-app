@@ -11,6 +11,7 @@ You are picking up a project mid-flight. This file gets you from zero context to
 5. `docs/roadmap.md` — sprint calendar, success metrics, deferred-decisions log.
 6. The architecture spec `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md` — **don't read it linearly**; jump to the section your issue cites (§3.x schema DDL, §4.x RLS matrix + policy sketches, §5.x edge functions, §9 Revision 3 = the newest truth).
 7. The issue you're working: `gh issue view <n>` — every open issue carries Goal/Why/How/AC/Est/Depends.
+8. `docs/README.md` — the index of every document in this repo, marked authoritative or historical, with one line on what still holds. When two documents disagree, it says which one wins.
 
 ## What exists (the codebase tour)
 
@@ -39,22 +40,56 @@ supabase/
 │   │                                    # notif_suppression (bc+bce)+push_tokens · provision_profile()
 │   │                                    # · reference/teams reads · profiles column grants +
 │   │                                    # profiles_directory/profiles_contact · calendar visibility
-│   └── 20260823*                        # member_level() · auth_is_member() required on all 14
-│                                        # member-facing policies (the claimless audit)
+│   ├── 20260823*                        # member_level() · auth_is_member() required on all 14
+│   │                                    # member-facing policies (the claimless audit)
+│   ├── 20260908083829…20260909151741_project_*.sql (7 files)   # Projects (#268–#274): schema ·
+│   │                                    # memberships · lead/Responsible invariants ·
+│   │                                    # private-schema authorization helpers
+│   │                                    # (`private.can_manage_project_work` et al.) · read
+│   │                                    # policies · BC/Moderator lifecycle + lead-only membership
+│   │                                    # commands
+│   ├── 20260910140508_grants_hardening.sql   # #363: closes default execute grants, pins
+│   │                                         # search_path on the JWT helpers, drops the dead
+│   │                                         # in_my_dept() helper
+│   ├── 20260910144803…20260910210000_scope_team_policies.sql  # Teams (#276–#280): Independent
+│   │                                    # Teams allowed · the legacy single-lead model retired ·
+│   │                                    # actor-derived Independent-/Department-Team membership
+│   │                                    # commands · department-membership hardening · scoped
+│   │                                    # Team discovery and creation (`private.can_read_team` et
+│   │                                    # al.) — this range also contains #310, below
+│   ├── 20260910173341_departments_diverse_secretariat.sql   # #310: Diverse (hosting the IT and
+│   │                                                        # Interne Department Teams) and
+│   │                                                        # Secretariat replace the legacy 'it'
+│   │                                                        # department; both excluded from the
+│   │                                                        # Department Cup
+│   └── 20260911003013_revoke_trigger_function_execute.sql   # #365: no function in public/private
+│                                        # is executable by anon, trigger functions included; backs
+│                                        # the machine-checked conventions sweep
+│                                        # (`supabase/tests/conventions.test.sql`). Read
+│                                        # `docs/backend/conventions.md` before writing your first
+│                                        # migration — it is binding on shape, naming, and grants.
 ├── functions/invite-member/     # the only Deno code, and the only way an account is created:
 │                                # deps.ts (the injectable port) · handler.ts (all the logic) ·
 │                                # index.ts (six lines of wiring) · handler.test.ts (11 tests)
 ├── seed.sql                     # demo data: 8 logins (parola123) · 16 tasks · 7 events ·
 │                                # 5 announcements. Re-runnable — staging gets this same file.
-└── tests/                       # 15 pgTAP suites, 266 tests; run via `npx supabase test db`
+└── tests/                       # pgTAP suites; run `npx supabase test db` for pass/fail, or
+                                 # `ls supabase/migrations | wc -l` / `ls supabase/tests/*.test.sql
+                                 # | wc -l` for the live migration/suite counts — don't hardcode
+                                 # either number here, it's stale the day it's written
     ├── points_engine · auth_claims · provision_profile · member_level      # functions & triggers
     ├── events_attendance · announcements · notifications ·
     │   notif_suppression · demo_seed                                       # tables & seeded data
-    └── rls_deny_by_default · rls_tasks_points · rls_profiles_read ·
-        rls_events · rls_announcements · rls_teams_reference                # policy matrix per role
+    ├── rls_deny_by_default · rls_tasks_points · rls_profiles_read ·
+    │   rls_events · rls_announcements · rls_teams_reference                # policy matrix per role
+    └── projects_schema · project_members_schema · project_authorization_helpers ·
+        project_read_policies · project_lifecycle_commands · project_membership_commands ·
+        teams_schema · team_policies · departments_reference · conventions             # …and more;
+                                                                                        # this list
+                                                                                        # is not exhaustive
 ```
 
-Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a seed re-runnability check; merge to main = auto `db push` to staging), `.github/workflows/seed-staging.yml` (manual: puts the demo data on staging — `db push` never carries `seed.sql`), `scripts/` (`create-github-issues.sh` is a guarded historical one-shot — never re-run; `check-seed-rerunnable.sh` is the local seed re-runnability check named in `docs/backend/seeding-staging.md`), `mockup/` (the clickable HTML prototype = UX source for Epic 9 screens), `docs/org/` (mandate requirements in Romanian), `docs/team/` (operating model). The frontend lives in `app/` (start with `app/README.md`); its Ionic code is temporary per ADR-0002, and new screens use shadcn + TanStack Table.
+Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a seed re-runnability check; merge to main = auto `db push` to staging), `.github/workflows/seed-staging.yml` (manual: puts the demo data on staging — `db push` never carries `seed.sql`), `scripts/` (`create-github-issues.sh` is a guarded historical one-shot — never re-run; `check-seed-rerunnable.sh` is the local seed re-runnability check named in `docs/backend/seeding-staging.md`), `mockup/` (the clickable HTML prototype — historical now that `app/` is the real frontend; kept for provenance of tokens, logos, and the original click-through flows, see `docs/README.md`), `docs/org/` (mandate requirements in Romanian), `docs/team/` (operating model). The frontend lives in `app/` (start with `app/README.md`); its Ionic code is temporary per ADR-0002, and new screens use shadcn + TanStack Table.
 
 ## Patterns to copy (don't invent, imitate)
 
@@ -101,7 +136,7 @@ Always confirm against live state: `gh issue list --label max-1h --state open`. 
 - **A column-level `revoke select (col)` is a no-op** while the role still holds table-wide SELECT — a table grant implies every column. Revoke the table grant, then grant the safe columns back (see `20260822225003_profiles_read_policies.sql`).
 - **`reset role` does not clear the JWT.** In per-role tests, the previous `pg_temp.login()` claims survive, so a "stranger sees nothing" block silently runs as the last persona and passes for free. Clear it: `select set_config('request.jwt.claims', '', true);`
 - **A write denied by RLS is not always an error.** INSERT without a matching policy raises 42501; UPDATE/DELETE without one matches zero rows and returns *silently*. Assert the value is unchanged, not `throws_ok`.
-- **Policies should not depend on other tables' policies.** Use a `security definer` helper (`is_assigned`, `in_my_dept`, `team_admits_recruits`) so narrowing one table later cannot silently change another table's visibility.
+- **Policies should not depend on other tables' policies.** Use a `security definer` helper (`is_assigned`, `private.can_read_team`, `private.can_manage_project_work`) so narrowing one table later cannot silently change another table's visibility.
 - **Conventions are written down:** `docs/backend/conventions.md` — read it before your first migration.
 - **`profiles_contact` is deliberately owner-rights** (one of the two exceptions to house rule 3, alongside `member_points`) because it re-exposes columns revoked from `authenticated`. Its WHERE clause is the security boundary — don't "fix" it to `security_invoker`, that breaks it for everyone it serves.
 - **Never open a stacked PR.** This cost two recoveries (#126, #137). A PR whose base is another feature branch is retargeted to `main` only when that base branch is **deleted** — merging the base is not enough, and neither is waiting. The stacked PR then merges *into the still-existing feature branch*: it reads "Merged", CI is green, the issue stays open, and `main` silently lacks the code. Nothing about the UI says anything is wrong. If work depends on unmerged work, **put both in one PR**, or wait for the base to land on `main` before opening the next one. It is never worth the recovery.
