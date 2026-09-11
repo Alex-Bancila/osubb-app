@@ -8,7 +8,7 @@ Operating model for the volunteer dev team, per the mandate commitments (`docs/o
 |---|---|
 | Alex | Tech lead · product owner · reviewer of every PR (initially) |
 | Volunteer 1 (backend-leaning) | SQL / migrations / RLS — pairs with Claude on `ready-for-agent` issues |
-| Volunteer 2 (frontend-leaning) | Ionic/React screens (Epic 8–9) |
+| Volunteer 2 (frontend-leaning) | shadcn/React screens (Epic 8–9, ADR-0002) |
 | Volunteer 3 (if present) | QA · demo data · docs · release notes |
 
 Names/availability to be slotted by Alex when the core is confirmed.
