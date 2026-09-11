@@ -72,6 +72,10 @@ insert into task_requests (kind, title, from_member)
     ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006'),
     ('award', 'rls-req-claimless', 'eeeeeeee-0000-0000-0000-000000000156');
 
+-- #321: a Completed-work Request row, one Origin only.
+insert into completed_work_requests (requester_id, dept_id, description)
+  values ('ffffffff-0000-0000-0000-000000000006', 'edu', 'rls fixture completed-work request');
+
 -- An OPEN task: the shape that leaked, and the one an unprovisioned session
 -- could have joined. #312's tasks_evaluation_inputs_ck now makes the
 -- historical "already-graded and still open" combination impossible to
