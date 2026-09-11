@@ -25,20 +25,30 @@ Windows note: if start/reset fails with "port is not available", run `net stop w
 
 Work is cut into **≤1-hour issues** (label `max-1h`), each with goal, reasoning, steps, and acceptance criteria: `gh issue list --label max-1h --state open`. The loop: branch → build → `db reset` + `test db` green → PR with `Closes #n` → CI green → review → merge (staging's **schema** updates automatically; its demo data is a separate manual workflow — `docs/backend/seeding-staging.md`).
 
+Install Node 24 and Deno 2, then run the same repository and app gates as CI:
+
+```bash
+npm ci
+npm --prefix app ci
+npm run check
+```
+
+Use `npm run format` to apply the enforced Markdown, YAML, JSON, and Edge Function formatting.
+
 - **People:** start with `docs/team/team-plan.md` and the kickoff handout.
 - **AI agents:** start with `CLAUDE.md` (rules) and **`docs/agents/onboarding.md`** (state of the codebase, patterns to copy, current queue, known traps).
 
 ## Where everything is written down
 
-| Question | File |
-|---|---|
-| What do the words mean? | `CONTEXT.md` (domain glossary) |
-| Why is X built this way? | `docs/adr/0001…0006` |
-| What exists / what's next? | `docs/backend/implementation-issues.md` (backlog map) |
-| When is what due? | `docs/roadmap.md` |
-| How do we work as a team? | `docs/team/team-plan.md` |
-| Full technical design | `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md` (incl. Revision 3) |
-| Requirements source (RO) | `docs/org/` |
-| Tech-stack comparison | `docs/osubb-app-tech-stack.md` |
+| Question                   | File                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| What do the words mean?    | `CONTEXT.md` (domain glossary)                                                          |
+| Why is X built this way?   | `docs/adr/0001…0006`                                                                    |
+| What exists / what's next? | `docs/backend/implementation-issues.md` (backlog map)                                   |
+| When is what due?          | `docs/roadmap.md`                                                                       |
+| How do we work as a team?  | `docs/team/team-plan.md`                                                                |
+| Full technical design      | `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md` (incl. Revision 3) |
+| Requirements source (RO)   | `docs/org/`                                                                             |
+| Tech-stack comparison      | `docs/osubb-app-tech-stack.md`                                                          |
 
 Private repo · secrets live in Bitwarden + GitHub Actions secrets, never in git.

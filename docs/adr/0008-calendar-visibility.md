@@ -16,13 +16,13 @@ Every active OSUBB member, including a Recrut, may read every **future** Event w
 
 Minimum Level is selected from these organization concepts:
 
-| Choice | Required role level |
-|---|---:|
-| Everyone | 0 |
-| AG / Voting Member+ | 3 |
-| Responsible+ | 4 |
-| BCE+ | 5 |
-| BC+ | 6 |
+| Choice              | Required role level |
+| ------------------- | ------------------: |
+| Everyone            |                   0 |
+| AG / Voting Member+ |                   3 |
+| Responsible+        |                   4 |
+| BCE+                |                   5 |
+| BC+                 |                   6 |
 
 An Event creator cannot choose a Minimum Level above their own organizational level. Moderator retains global override.
 

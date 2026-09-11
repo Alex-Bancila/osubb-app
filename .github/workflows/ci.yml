@@ -16,6 +16,28 @@ env:
   SUPABASE_CLI_VERSION: 2.117.0
 
 jobs:
+  repo:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      - name: Install
+        run: npm ci
+
+      - name: Check repository
+        run: npm run check:root
+
   db:
     name: Migrations + db tests
     runs-on: ubuntu-latest
@@ -104,6 +126,12 @@ jobs:
       # Runs on every PR rather than behind a path filter: the job takes well
       # under a minute and runs beside the database job, and a filter that
       # silently skips is worse than a fast job that always speaks.
+      - name: Format check
+        run: deno fmt --check supabase/functions
+
+      - name: Lint
+        run: deno lint --config supabase/functions/deno.json supabase/functions
+
       - name: Type-check
         run: deno check --config supabase/functions/deno.json supabase/functions/**/*.ts
 
