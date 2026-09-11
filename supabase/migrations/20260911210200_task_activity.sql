@@ -2,6 +2,16 @@
 -- queue event is recorded here; nothing may ever be rewritten, not even by a
 -- security definer command, so the trigger below blocks UPDATE/DELETE for
 -- every role including the table owner. Read policies are #319.
+--
+-- task_activity.from_status/to_status are typed public.task_status. Three
+-- historical-data harnesses drop and recreate that enum to replay its
+-- pre-#287 shape: supabase/tests/tasks_lifecycle_upgrade.test.sh,
+-- tasks_assignment_mode_upgrade.test.sh, and tasks_audience_upgrade.test.sh.
+-- Any future task_status-typed column, on this table or another, must be
+-- dropped in all three (each harness is a scratch begin/rollback
+-- transaction, so dropping-and-never-recreating is safe) before the enum
+-- drop, or the harness fails with "cannot drop type ... because other
+-- objects depend on it".
 
 create table public.task_activity (
   id            bigint generated always as identity primary key,
@@ -10,7 +20,7 @@ create table public.task_activity (
                   'created','content_updated','mode_converted','queue_opened','queue_closed',
                   'interest_expressed','interest_withdrawn','candidate_selected','executor_assigned',
                   'gave_up','started','submitted','returned_to_progress','evaluated','reopened',
-                  'cancelled','duplicated','subtask_completed','unfulfilled')),
+                  'cancelled','duplicated','subtask_completed','unfulfilled','umbrella_completed')),
   actor_id      uuid references public.profiles (id),        -- null = system (deadline job)
   assignment_id bigint references public.task_assignments (id),
   from_status   public.task_status,
@@ -30,9 +40,17 @@ alter table public.task_activity enable row level security;
 -- atomic commands, #327-#345), and no read policy exists yet (#319), so the
 -- table starts fully closed to `authenticated` — the same deny-by-default
 -- shape #289 gave `task_assignments` while it awaited its own read policy.
-revoke all on table public.task_activity from public, anon, authenticated;
-revoke all on sequence public.task_activity_id_seq from public, anon, authenticated;
-grant all on table public.task_activity to service_role;
+-- service_role is included here too: 20260819171628_capabilities_and_rls.sql's
+-- default privileges hand every new public table `arwd` (insert/select/
+-- update/delete) to service_role automatically, same as authenticated. That
+-- default must be revoked explicitly, not merely left un-widened, or
+-- service_role keeps update/delete underneath the narrower grant below.
+revoke all on table public.task_activity from public, anon, authenticated, service_role;
+revoke all on sequence public.task_activity_id_seq from public, anon, authenticated, service_role;
+-- service_role only ever appends rows for a server job (e.g. the deadline
+-- job) and reads them back; it gets neither update/delete (the trigger
+-- below blocks those anyway) nor truncate.
+grant select, insert on table public.task_activity to service_role;
 grant usage, select on sequence public.task_activity_id_seq to service_role;
 
 comment on table public.task_activity is
@@ -49,6 +67,10 @@ comment on column public.task_activity.details is
 
 -- Immutability: even a security definer command must not be able to rewrite
 -- history, so this is enforced by trigger, not merely by revoking grants.
+-- A row-level "before update or delete" trigger never fires for TRUNCATE, so
+-- a second, statement-level trigger below covers that path too; this
+-- function body never references OLD/NEW, so the same function serves both
+-- triggers without change.
 create function private.reject_task_activity_change()
 returns trigger
 language plpgsql
@@ -64,8 +86,13 @@ create trigger task_activity_reject_change
   for each row
   execute function private.reject_task_activity_change();
 
+create trigger task_activity_reject_truncate
+  before truncate on public.task_activity
+  for each statement
+  execute function private.reject_task_activity_change();
+
 revoke all on function private.reject_task_activity_change()
   from public, anon, authenticated, service_role;
 
 comment on function private.reject_task_activity_change() is
-  'Blocks every UPDATE/DELETE on task_activity, including from security definer commands.';
+  'Blocks every UPDATE/DELETE/TRUNCATE on task_activity, including from security definer commands.';

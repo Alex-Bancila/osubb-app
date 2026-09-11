@@ -31,7 +31,14 @@ select ok(
   ),
   'dept_cup remains a security-invoker view');
 
+-- #292: task_activity references profiles (actor_id), so TRUNCATE ... CASCADE
+-- reaches it too; its statement-level immutability trigger would otherwise
+-- block this scratch-transaction cleanup. Disable it for this one statement
+-- only — the transaction rolls back, so re-enabling after is hygiene, not a
+-- requirement.
+alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate public.profiles cascade;
+alter table public.task_activity enable trigger task_activity_reject_truncate;
 
 insert into auth.users (id, email) values
   ('f1000000-0000-0000-0000-0000000000f1', 'flor.vol@test.local'),

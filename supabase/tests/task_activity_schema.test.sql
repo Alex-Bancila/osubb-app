@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(33);
 
 select has_table('public', 'task_activity', 'Task activity history exists');
 select ok(
@@ -96,6 +96,10 @@ select throws_ok(
                         where title = 'Activity history fixture 292') $$,
   '23514', 'task_activity_immutable',
   'postgres cannot delete an activity row (the trigger, not a grant, blocks it)');
+select throws_ok(
+  $$ truncate public.task_activity $$,
+  '23514', 'task_activity_immutable',
+  'postgres cannot truncate activity history (a statement-level trigger, not just a row trigger, blocks it)');
 
 -- ==================== grants: commands, not clients, write this table ====================
 select is(has_table_privilege('authenticated', 'public.task_activity', 'SELECT'), false,
@@ -106,6 +110,14 @@ select is(has_table_privilege('authenticated', 'public.task_activity', 'UPDATE')
   'authenticated cannot update activity history directly');
 select is(has_table_privilege('authenticated', 'public.task_activity', 'DELETE'), false,
   'authenticated cannot delete activity history directly');
+select is(has_table_privilege('authenticated', 'public.task_activity', 'TRUNCATE'), false,
+  'authenticated cannot truncate activity history');
+select is(has_table_privilege('service_role', 'public.task_activity', 'TRUNCATE'), false,
+  'service_role cannot truncate activity history either — no server job needs it');
+select is(has_table_privilege('service_role', 'public.task_activity', 'UPDATE'), false,
+  'service_role cannot update activity history — its grant is narrowed to select, insert');
+select is(has_table_privilege('service_role', 'public.task_activity', 'DELETE'), false,
+  'service_role cannot delete activity history — its grant is narrowed to select, insert');
 
 select * from finish();
 rollback;

@@ -32,7 +32,14 @@ select ok(
 -- Own and cross-member rows are deliberately present for every identity.
 -- The two EDU rows also prove a coordinator cannot inherit same-department
 -- ledger access through the historical policy branch.
+-- #292: task_activity references profiles (actor_id), so TRUNCATE ... CASCADE
+-- reaches it too; its statement-level immutability trigger would otherwise
+-- block this scratch-transaction cleanup. Disable it for this one statement
+-- only — the transaction rolls back, so re-enabling after is hygiene, not a
+-- requirement.
+alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate public.profiles cascade;
+alter table public.task_activity enable trigger task_activity_reject_truncate;
 
 insert into auth.users (id, email) values
   ('b5600000-0000-0000-0000-000000000000', 'ledger.recrut@test.local'),

@@ -10,7 +10,12 @@ set local client_min_messages = warning;
 
 -- Reconstruct the pre-#283 column and load dates on both sides of DST.
 drop view public.tasks_with_overdue;
+-- #292: task_activity references tasks, so TRUNCATE ... CASCADE reaches it
+-- too; its statement-level immutability trigger would otherwise block this
+-- scratch-transaction cleanup. Disable it for this one statement only.
+alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate public.tasks cascade;
+alter table public.task_activity enable trigger task_activity_reject_truncate;
 alter table public.tasks
   alter column deadline type date
   using (deadline at time zone 'Europe/Bucharest')::date;

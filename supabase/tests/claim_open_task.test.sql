@@ -9,7 +9,13 @@ create extension if not exists pgtap with schema extensions;
 select plan(18);
 
 
+-- #292: task_activity references tasks, so TRUNCATE ... CASCADE reaches it
+-- too; its statement-level immutability trigger would otherwise block this
+-- scratch-transaction cleanup. Disable it for this one statement only — the
+-- transaction rolls back, so re-enabling after is hygiene, not a requirement.
+alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate tasks, task_assignees, task_requests, points_ledger cascade;
+alter table public.task_activity enable trigger task_activity_reject_truncate;
 
 insert into auth.users (id, email) values
   ('11000000-0000-0000-0000-000000000001', 'claim.one@test.local'),

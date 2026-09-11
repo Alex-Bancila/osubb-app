@@ -11,7 +11,14 @@ select plan(43);
 -- This suite owns its Project fixtures and asserts exact visible row counts.
 -- Keep those assertions independent from the representative demo Projects in
 -- seed.sql; the transaction rollback restores the seeded rows after the test.
+-- #292: task_activity references tasks, which reference projects, so
+-- TRUNCATE ... CASCADE reaches task_activity too; its statement-level
+-- immutability trigger would otherwise block this scratch-transaction
+-- cleanup. Disable it for this one statement only — the transaction rolls
+-- back, so re-enabling after is hygiene, not a requirement.
+alter table public.task_activity disable trigger task_activity_reject_truncate;
 truncate table public.projects restart identity cascade;
+alter table public.task_activity enable trigger task_activity_reject_truncate;
 
 
 insert into auth.users (id, email) values
