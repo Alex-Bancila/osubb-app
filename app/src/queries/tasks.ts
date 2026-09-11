@@ -47,15 +47,22 @@ async function fetchMyTasks(memberId: string) {
 export function useOpenTasks() {
   return useQuery({
     queryKey: keys.tasks.open(),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select(TASK_FIELDS)
-        .eq('status', 'open');
-      if (error) throw error;
-      return data.sort(byDeadlineThenTitle);
-    },
+    queryFn: fetchOpenTasks,
   });
+}
+
+export async function fetchOpenTasks() {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`${TASK_FIELDS}, task_assignees(member_id)`)
+    .eq('status', 'todo')
+    .eq('assignment_mode', 'public')
+    .eq('audience', 'org');
+  if (error) throw error;
+  return data
+    .filter((task) => task.task_assignees.length === 0)
+    .map(({ task_assignees: _assignments, ...task }) => task)
+    .sort(byDeadlineThenTitle);
 }
 
 /* Soonest deadline first, undated last — a list of work should open on what is

@@ -168,18 +168,21 @@ select is(
 select ok((select count(*) from tasks) >= 15,
   'enough tasks to fill a tracker');
 
-select is((select count(distinct status) from tasks), 5::bigint,
-  'every task status appears, so the filters have something to filter');
+select is((select count(distinct status) from tasks), 3::bigint,
+  'the seeded Tasks cover todo, in-progress, and completed work');
 
-select ok((select count(*) from tasks where status = 'open') >= 2,
-  'open tasks exist for the "Deschise" tab and the claim flow');
+select ok((select count(*) from tasks
+            where status = 'todo' and audience = 'org'
+              and assignment_mode = 'public') >= 2,
+  'public organization opportunities exist for the "Deschise" tab');
 
 select ok(
   not exists (
     select 1
       from tasks task
       join profiles creator on creator.id = task.created_by
-     where task.status = 'open'
+     where task.status = 'todo'
+       and task.assignment_mode = 'public'
        and task.audience <> 'org'
        and creator.email like '%@demo.osubb'
   ),
@@ -190,7 +193,8 @@ select ok(
     select 1
       from tasks task
       join profiles creator on creator.id = task.created_by
-     where task.status = 'open'
+     where task.status = 'todo'
+       and task.audience = 'org'
        and task.assignment_mode <> 'public'
        and creator.email like '%@demo.osubb'
   ),
