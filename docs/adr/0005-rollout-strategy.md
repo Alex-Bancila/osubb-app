@@ -1,8 +1,10 @@
 # ADR-0005 — Browser-first rollout through Cloudflare
 
-- **Status:** Accepted (rewritten 2026-09-07)
+- **Status:** Accepted
+- **Date:** 2026-09-07 (rewritten)
 - **Deciders:** Alex Băncilă (IT Coordinator) + team
 - **Supersedes:** the dated BC/BCE-first rollout recorded in the earlier version of this file
+- **Superseded by:** —
 - **Related:** ADR-0001, ADR-0002, ADR-0003, ADR-0006
 
 ## Context
