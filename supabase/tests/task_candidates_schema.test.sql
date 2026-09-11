@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(48);
+select plan(52);
 
 -- ==================== Structure ====================
 select has_table('public', 'task_candidates', 'the candidate queue table exists');
@@ -37,20 +37,23 @@ select fk_ok('public', 'task_candidates', 'assignment_id', 'public', 'task_assig
   'a selection can reference the resulting Assignment');
 select col_not_null('public', 'task_candidates', 'created_at', 'created_at is required');
 select col_has_default('public', 'task_candidates', 'created_at', 'created_at is server-written');
-select has_index('public', 'task_candidates', 'task_candidates_one_live_per_member_uidx',
-  'one-live-candidature lookup is indexed');
+select has_index('public', 'task_candidates', 'task_candidates_one_pending_per_member_uidx',
+  'one-pending-candidature lookup is indexed');
 select has_index('public', 'task_candidates', 'task_candidates_queue_order_idx',
   'queue order lookup is indexed');
 select has_index('public', 'task_candidates', 'task_candidates_member_idx',
   'Member history lookup is indexed');
-select ok(
-  exists (
-    select 1 from pg_catalog.pg_constraint
-     where conrelid = 'public.task_candidates'::regclass
-       and conname = 'task_candidates_status_ck'
-       and contype = 'c'
-  ),
-  'status is constrained to the four approved states');
+-- An invalid-status insert can't be isolated to this check alone (any status
+-- outside the four literals also makes every decision_shape_ck branch false,
+-- since each branch starts "status = '<literal>'"), so assert the
+-- constraint's own definition instead: a narrowed or widened literal list
+-- then fails this test directly.
+select is(
+  (select pg_get_constraintdef(oid) from pg_catalog.pg_constraint
+    where conrelid = 'public.task_candidates'::regclass
+      and conname = 'task_candidates_status_ck'),
+  'CHECK ((status = ANY (ARRAY[''pending''::text, ''selected''::text, ''withdrawn''::text, ''closed''::text])))',
+  'status is constrained to exactly the four approved literals');
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -66,7 +69,10 @@ insert into auth.users (id, email) values
   ('29100000-0000-0000-0000-000000000010', 'chronology-bad-291@test.local'),
   ('29100000-0000-0000-0000-000000000011', 'order-a-291@test.local'),
   ('29100000-0000-0000-0000-000000000012', 'order-b-291@test.local'),
-  ('29100000-0000-0000-0000-000000000013', 'cascade-291@test.local');
+  ('29100000-0000-0000-0000-000000000013', 'cascade-291@test.local'),
+  ('29100000-0000-0000-0000-000000000014', 'selected-then-pending-291@test.local'),
+  ('29100000-0000-0000-0000-000000000015', 'withdrawn-nodecider-291@test.local'),
+  ('29100000-0000-0000-0000-000000000016', 'closed-by-manager-291@test.local');
 insert into public.profiles (id, full_name, email, role) values
   ('29100000-0000-0000-0000-000000000001', 'Decider 291', 'decider-291@test.local', 'responsabil'),
   ('29100000-0000-0000-0000-000000000002', 'Pending Member 291', 'pending-member-291@test.local', 'voluntar'),
@@ -80,7 +86,10 @@ insert into public.profiles (id, full_name, email, role) values
   ('29100000-0000-0000-0000-000000000010', 'Chronology Bad 291', 'chronology-bad-291@test.local', 'voluntar'),
   ('29100000-0000-0000-0000-000000000011', 'Order A 291', 'order-a-291@test.local', 'voluntar'),
   ('29100000-0000-0000-0000-000000000012', 'Order B 291', 'order-b-291@test.local', 'voluntar'),
-  ('29100000-0000-0000-0000-000000000013', 'Cascade 291', 'cascade-291@test.local', 'voluntar');
+  ('29100000-0000-0000-0000-000000000013', 'Cascade 291', 'cascade-291@test.local', 'voluntar'),
+  ('29100000-0000-0000-0000-000000000014', 'Selected Then Pending 291', 'selected-then-pending-291@test.local', 'voluntar'),
+  ('29100000-0000-0000-0000-000000000015', 'Withdrawn Nodecider 291', 'withdrawn-nodecider-291@test.local', 'voluntar'),
+  ('29100000-0000-0000-0000-000000000016', 'Closed By Manager 291', 'closed-by-manager-291@test.local', 'voluntar');
 
 -- A public-mode Task with its queue open, for realism (schema itself does not
 -- restrict candidatures to public Tasks — that guard is a command invariant,
@@ -93,7 +102,9 @@ values ('Candidate queue fixture 291', 1, 'edu', 'public', now());
 insert into public.tasks (title, difficulty, dept_id, assignment_mode, queue_opened_at)
 values ('Candidate queue order fixture 291', 1, 'edu', 'public', now());
 
--- ==================== One live candidature per Member ====================
+-- ==================== One pending candidature per Member (Ruling A) =======
+-- "Live" means pending only: task_candidates_one_pending_per_member_uidx
+-- covers status = 'pending' alone, not 'selected'.
 select lives_ok(
   $$ insert into public.task_candidates (task_id, member_id)
      select id, '29100000-0000-0000-0000-000000000002'
@@ -105,12 +116,36 @@ select throws_ok(
      select id, '29100000-0000-0000-0000-000000000002'
        from public.tasks where title = 'Candidate queue fixture 291' $$,
   '23505', null,
-  'a Member cannot hold two live candidatures for one Task');
+  'a Member cannot hold two pending candidatures for one Task');
+
+-- A member once selected — whose Assignment later ended (gave up, replaced,
+-- ...) — is not blocked from queuing again: a 'selected' row is permanent
+-- history, not a live candidature.
+insert into public.task_assignments (task_id, member_id)
+select id, '29100000-0000-0000-0000-000000000014'
+  from public.tasks where title = 'Candidate queue fixture 291';
+update public.task_assignments
+   set ended_at = now(), end_reason = 'gave_up'
+ where member_id = '29100000-0000-0000-0000-000000000014';
+insert into public.task_candidates
+  (task_id, member_id, status, decided_at, decided_by, assignment_id)
+select id, '29100000-0000-0000-0000-000000000014', 'selected', now(),
+       '29100000-0000-0000-0000-000000000001',
+       (select id from public.task_assignments
+         where member_id = '29100000-0000-0000-0000-000000000014')
+  from public.tasks where title = 'Candidate queue fixture 291';
+
+select lives_ok(
+  $$ insert into public.task_candidates (task_id, member_id)
+     select id, '29100000-0000-0000-0000-000000000014'
+       from public.tasks where title = 'Candidate queue fixture 291' $$,
+  'a member with a selected row and an ended Assignment can queue again as pending');
 
 -- ==================== Rejoin after withdrawal ====================
 select lives_ok(
   $$ update public.task_candidates
-        set status = 'withdrawn', decided_at = now()
+        set status = 'withdrawn', decided_at = now(),
+            decided_by = '29100000-0000-0000-0000-000000000002'
       where member_id = '29100000-0000-0000-0000-000000000002'
         and task_id = (select id from public.tasks
                         where title = 'Candidate queue fixture 291') $$,
@@ -139,25 +174,44 @@ select throws_ok(
   '23514', null,
   'a pending candidature cannot already carry a decision');
 
--- withdrawn: accept with decided_at set, reject without it.
+-- withdrawn (Ruling B): a withdrawal is the member's own act, so decided_by
+-- is required alongside decided_at — accept with both set, reject each
+-- missing in isolation.
 select lives_ok(
-  $$ insert into public.task_candidates (task_id, member_id, status, decided_at)
-     select id, '29100000-0000-0000-0000-000000000004', 'withdrawn', now()
+  $$ insert into public.task_candidates (task_id, member_id, status, decided_at, decided_by)
+     select id, '29100000-0000-0000-0000-000000000004', 'withdrawn', now(),
+            '29100000-0000-0000-0000-000000000004'
        from public.tasks where title = 'Candidate queue fixture 291' $$,
-  'a withdrawn candidature records when it withdrew');
+  'a withdrawn candidature records when it withdrew and who withdrew it');
 select throws_ok(
-  $$ insert into public.task_candidates (task_id, member_id, status)
-     select id, '29100000-0000-0000-0000-000000000005', 'withdrawn'
+  $$ insert into public.task_candidates (task_id, member_id, status, decided_by)
+     select id, '29100000-0000-0000-0000-000000000005', 'withdrawn',
+            '29100000-0000-0000-0000-000000000005'
        from public.tasks where title = 'Candidate queue fixture 291' $$,
   '23514', null,
   'a withdrawn candidature must record when it withdrew');
+select throws_ok(
+  $$ insert into public.task_candidates (task_id, member_id, status, decided_at)
+     select id, '29100000-0000-0000-0000-000000000015', 'withdrawn', now()
+       from public.tasks where title = 'Candidate queue fixture 291' $$,
+  '23514', null,
+  'a withdrawn candidature must record who withdrew it');
 
--- closed: accept with decided_at set, reject without it.
+-- closed (Ruling B): decided_at is always required; decided_by is
+-- unconstrained — accept both the automatic-close shape (decided_by null)
+-- and the manager-closed shape (decided_by set), reject a close missing
+-- decided_at.
 select lives_ok(
   $$ insert into public.task_candidates (task_id, member_id, status, decided_at)
      select id, '29100000-0000-0000-0000-000000000006', 'closed', now()
        from public.tasks where title = 'Candidate queue fixture 291' $$,
-  'a closed candidature records when it closed');
+  'a queue can close automatically, with no decider recorded');
+select lives_ok(
+  $$ insert into public.task_candidates (task_id, member_id, status, decided_at, decided_by)
+     select id, '29100000-0000-0000-0000-000000000016', 'closed', now(),
+            '29100000-0000-0000-0000-000000000001'
+       from public.tasks where title = 'Candidate queue fixture 291' $$,
+  'a manager can close a candidature and be recorded as the decider');
 select throws_ok(
   $$ insert into public.task_candidates (task_id, member_id, status)
      select id, '29100000-0000-0000-0000-000000000007', 'closed'
@@ -257,6 +311,8 @@ select is(has_table_privilege('service_role', 'public.task_candidates', 'DELETE'
   'service_role cannot delete from the candidate queue directly');
 select is(has_table_privilege('service_role', 'public.task_candidates', 'TRUNCATE'), false,
   'service_role cannot truncate the candidate queue');
+select is(has_sequence_privilege('service_role', 'public.task_candidates_id_seq', 'usage'), false,
+  'service_role never allocates a candidature id — it only ever reads (SELECT-only)');
 
 select * from finish();
 rollback;
