@@ -35,6 +35,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     location: 'Sala 1',
     capacity: 30,
     description: 'Planificarea semestrului',
+    created_at: '2026-08-20T10:00:00.000Z',
     created_by: null,
     has_qr: false,
     ...overrides,
