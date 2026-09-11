@@ -29,10 +29,15 @@ declare
   v_kind text;
   v_actor_role public.member_role;
 begin
-  -- Department existence/kind first: departments_read is `to authenticated
-  -- using (true)` (20260822222537_teams_reference_policies.sql), so naming
-  -- an unknown or org-kind department here discloses nothing an active
-  -- member could not already read directly.
+  -- Department existence/kind: departments_read has required org membership
+  -- (`using (auth_is_member())`) since
+  -- 20260823140923_require_membership_policies.sql, not `using (true)` --
+  -- but every caller here has already passed the _impl's pre-lock gate (a
+  -- live active BC/Moderator/BCE), so naming an unknown or invalid-kind
+  -- department discloses nothing new to a caller who already reaches this
+  -- line. Department kind is an allow-list, not a single forbidden value:
+  -- an unrecognized future kind is rejected by default rather than silently
+  -- treated as campaign-eligible.
   select department.kind
     into v_kind
     from public.departments as department
@@ -42,8 +47,8 @@ begin
     raise sqlstate 'PT404' using message = 'department_not_found';
   end if;
 
-  if v_kind = 'org' then
-    raise sqlstate 'PT400' using message = 'campaign_department_invalid';
+  if v_kind not in ('department', 'coordination') then
+    raise sqlstate 'PT400' using message = 'invalid_campaign_department';
   end if;
 
   -- Cheap authority check: #321's private.can_manage_origin, Department
@@ -108,21 +113,55 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_actor uuid;
+  v_actor uuid := (select auth.uid());
+  v_name text;
   v_campaign public.campaigns%rowtype;
+  v_constraint text;
 begin
-  v_actor := private.require_campaign_manager(p_department_id);
+  -- Cheap gate before require_campaign_manager's Department lookup (#343
+  -- review round 1, for symmetry with update/set_campaign_active below): an
+  -- identity that can never manage any Campaign must not be able to use an
+  -- unknown/invalid p_department_id to learn PT404 vs PT400 vs 42501. This
+  -- is the same non-disclosure discipline the Task commands (#318) must
+  -- copy from this template.
+  if v_actor is null
+     or not coalesce(public.auth_is_member(), false)
+     or not exists (
+       select 1
+         from public.profiles as profile
+        where profile.id = v_actor
+          and profile.status = 'activ'
+          and profile.role in ('bc', 'moderator', 'bce')
+     ) then
+    raise exception using
+      errcode = '42501',
+      message = 'campaign_manage_forbidden';
+  end if;
+
+  perform private.require_campaign_manager(p_department_id);
 
   if p_name is null or p_name !~ '[^[:space:]]' then
     raise sqlstate 'PT400' using message = 'invalid_campaign_name';
   end if;
 
+  -- regexp_replace, not btrim: btrim only strips plain spaces, so a
+  -- tab-padded name would dodge the lower(name) uniqueness check below
+  -- while still colliding once trimmed for storage
+  -- (private.create_project_impl's precedent).
+  v_name := regexp_replace(p_name, '^[[:space:]]+|[[:space:]]+$', '', 'g');
+
   begin
     insert into public.campaigns (department_id, name, created_by)
-    values (p_department_id, btrim(p_name), v_actor)
+    values (p_department_id, v_name, v_actor)
     returning * into v_campaign;
   exception
     when unique_violation then
+      get stacked diagnostics v_constraint = constraint_name;
+
+      if v_constraint <> 'campaigns_department_name_uidx' then
+        raise;
+      end if;
+
       raise sqlstate 'PT409' using message = 'campaign_name_taken';
   end;
 
@@ -131,7 +170,7 @@ end;
 $$;
 
 comment on function private.create_campaign_impl(text, text) is
-  'Creates one Campaign for a Department the caller manages; the actor is auth.uid(), never a parameter. Rejects a blank name and re-raises a per-Department unique_violation as campaign_name_taken.';
+  'Creates one Campaign for a Department the caller manages; the actor is auth.uid(), never a parameter. Rejects a blank name, trims a padded one, and re-raises the campaigns_department_name_uidx unique_violation as campaign_name_taken (any other constraint violation propagates unchanged).';
 
 create function private.update_campaign_impl(
   p_campaign_id bigint,
@@ -143,12 +182,39 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_actor uuid := (select auth.uid());
   v_department_id text;
+  v_name text;
   v_campaign public.campaigns%rowtype;
+  v_constraint text;
 begin
-  -- Lock the target before authorizing: an unknown Campaign is PT404 no
-  -- matter who is asking (campaigns_read already lets every active member
-  -- see every Campaign row, so this does not disclose anything new).
+  -- Cheap gate BEFORE the row lock below (#343 review round 1): an identity
+  -- that can never manage any Campaign must not be able to take the
+  -- Campaign row's FOR UPDATE lock, or learn campaign_not_found vs a real
+  -- authorization decision, purely by naming an id. This does not replace
+  -- require_campaign_manager's Department-scoped check below (a BCE of the
+  -- wrong Department still passes this gate and fails there); it only keeps
+  -- a caller who can never manage *anything* from reaching the lock at all
+  -- -- the same non-disclosure discipline the Task commands (#318) must
+  -- copy from this template.
+  if v_actor is null
+     or not coalesce(public.auth_is_member(), false)
+     or not exists (
+       select 1
+         from public.profiles as profile
+        where profile.id = v_actor
+          and profile.status = 'activ'
+          and profile.role in ('bc', 'moderator', 'bce')
+     ) then
+    raise exception using
+      errcode = '42501',
+      message = 'campaign_manage_forbidden';
+  end if;
+
+  -- An unknown Campaign is still PT404 no matter who is asking
+  -- (campaigns_read already lets every active member see every Campaign
+  -- row, so this does not disclose anything new to a caller who already
+  -- passed the gate above).
   select campaign.department_id
     into v_department_id
     from public.campaigns as campaign
@@ -165,14 +231,26 @@ begin
     raise sqlstate 'PT400' using message = 'invalid_campaign_name';
   end if;
 
+  -- regexp_replace, not btrim: btrim only strips plain spaces, so a
+  -- tab-padded name would dodge the lower(name) uniqueness check below
+  -- while still colliding once trimmed for storage
+  -- (private.create_project_impl's precedent).
+  v_name := regexp_replace(p_name, '^[[:space:]]+|[[:space:]]+$', '', 'g');
+
   begin
     update public.campaigns as campaign
-       set name = btrim(p_name),
+       set name = v_name,
            updated_at = clock_timestamp()
      where campaign.id = p_campaign_id
     returning campaign.* into v_campaign;
   exception
     when unique_violation then
+      get stacked diagnostics v_constraint = constraint_name;
+
+      if v_constraint <> 'campaigns_department_name_uidx' then
+        raise;
+      end if;
+
       raise sqlstate 'PT409' using message = 'campaign_name_taken';
   end;
 
@@ -181,7 +259,7 @@ end;
 $$;
 
 comment on function private.update_campaign_impl(bigint, text) is
-  'Renames an existing Campaign; department_id never changes here or anywhere else. Rejects a blank name and re-raises a per-Department unique_violation as campaign_name_taken. Sets updated_at itself (private.set_updated_at(), #368, is not in this stack''s base).';
+  'Renames an existing Campaign; department_id never changes here or anywhere else. Gates on a live BC/Moderator/BCE before locking the Campaign row. Rejects a blank name, trims a padded one, and re-raises the campaigns_department_name_uidx unique_violation as campaign_name_taken (any other constraint violation propagates unchanged). Sets updated_at itself (private.set_updated_at(), #368, is not in this stack''s base).';
 
 create function private.set_campaign_active_impl(
   p_campaign_id bigint,
@@ -193,10 +271,37 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_actor uuid := (select auth.uid());
   v_department_id text;
   v_current_active boolean;
   v_campaign public.campaigns%rowtype;
 begin
+  -- Validate the flag before anything else, including the gate below: a
+  -- null p_active is malformed input for every caller, authorized or not,
+  -- so there is nothing to gain by checking authority first.
+  if p_active is null then
+    raise sqlstate 'PT400' using message = 'invalid_campaign_active';
+  end if;
+
+  -- Cheap gate BEFORE the row lock below (#343 review round 1): see
+  -- update_campaign_impl's identical comment. Also means authority is
+  -- re-checked even when p_active repeats the current value -- an
+  -- unauthorized caller cannot use a same-value call as a way to probe or
+  -- "no-op" past this command.
+  if v_actor is null
+     or not coalesce(public.auth_is_member(), false)
+     or not exists (
+       select 1
+         from public.profiles as profile
+        where profile.id = v_actor
+          and profile.status = 'activ'
+          and profile.role in ('bc', 'moderator', 'bce')
+     ) then
+    raise exception using
+      errcode = '42501',
+      message = 'campaign_manage_forbidden';
+  end if;
+
   select campaign.department_id, campaign.is_active
     into v_department_id, v_current_active
     from public.campaigns as campaign
@@ -233,7 +338,7 @@ end;
 $$;
 
 comment on function private.set_campaign_active_impl(bigint, boolean) is
-  'Activates or deactivates an existing Campaign; setting the current value again is an idempotent no-op that does not bump updated_at. Sets updated_at itself on a real change (private.set_updated_at(), #368, is not in this stack''s base).';
+  'Activates or deactivates an existing Campaign; rejects a null flag, gates on a live BC/Moderator/BCE before locking the Campaign row, and re-checks that authority even for a same-value no-op. Setting the current value again does not bump updated_at. Sets updated_at itself on a real change (private.set_updated_at(), #368, is not in this stack''s base).';
 
 create function public.create_campaign(
   p_department_id text,
@@ -280,8 +385,11 @@ comment on function public.set_campaign_active(bigint, boolean) is
 
 -- Campaigns already ship with no direct-write grant for `authenticated`
 -- (20260911093000_campaigns_schema.sql revokes all and grants back only
--- select), so there is nothing left to revoke here -- these three commands
--- are already the table's only write path.
+-- select), so this is idempotent -- kept anyway so a conventions sweep that
+-- greps for the literal table-DML revoke statement (docs/backend/
+-- conventions.md Sec2/Sec9) finds it here, next to the commands that make
+-- it true, rather than only in a migration three files back.
+revoke insert, update, delete on table public.campaigns from authenticated;
 
 revoke execute on function private.require_campaign_manager(text)
   from public, anon, authenticated, service_role;

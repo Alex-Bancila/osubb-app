@@ -9,8 +9,9 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
+create extension if not exists pgrowlocks with schema extensions;
 
-select plan(63);
+select plan(84);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -205,7 +206,7 @@ reset role;
 select pg_temp.test_login('34300000-0000-0000-0000-000000000003', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.create_campaign('org', 'Org Campaign')$$,
-  'PT400', 'campaign_department_invalid',
+  'PT400', 'invalid_campaign_department',
   'the org pseudo-department cannot own a Campaign, even for BC');
 select throws_ok($$select public.create_campaign('does-not-exist-343', 'X')$$,
   'PT404', 'department_not_found', 'an unknown department is rejected, even for BC');
@@ -241,20 +242,48 @@ reset role;
 select is((select name from fin_alpha_campaign), 'Alpha Campaign',
   'the same name in a different department is allowed');
 
+-- ==================== Name trimming (#343 review round 1) ====================
+-- regexp_replace, not btrim: btrim only strips plain spaces, so a
+-- tab-padded name could otherwise dodge the lower(name) uniqueness check.
+select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.create_campaign('edu', E'\tAlpha Campaign')$$,
+  'PT409', 'campaign_name_taken',
+  'a tab-padded duplicate name is still caught by the lower(name) uniqueness check');
+create temp table trimmed_campaign as
+select * from public.create_campaign('edu', E'\tTrimmed Campaign\t');
+reset role;
+select is((select name from trimmed_campaign), 'Trimmed Campaign',
+  'a tab-padded name is stored trimmed');
+
 -- ==================== update_campaign ====================
 create temp table cids as
 select
   (select id from public.campaigns where department_id = 'edu' and name = 'Alpha Campaign') as alpha_id,
   (select id from public.campaigns where department_id = 'edu' and name = 'BC Campaign') as bc_id,
+  (select id from public.campaigns where department_id = 'fin' and name = 'FIN Campaign') as fin_id,
   9223372036854775807::bigint as missing_id;
 grant select on cids to authenticated;
 
+-- #343 review round 1 (Important 2): the pre-lock gate runs before the
+-- Campaign row is even looked up, so an identity that can never manage any
+-- Campaign now gets 42501 on an unknown id too (was PT404) -- it never
+-- learns whether the id exists. A BCE (who could manage some Campaign) still
+-- reaches the lock and gets a real PT404.
 select pg_temp.test_login('34300000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.update_campaign(
   (select missing_id from cids), 'X')$$,
+  '42501', 'campaign_manage_forbidden',
+  'a Voluntar is denied by the pre-lock gate before an unknown Campaign is even looked up');
+reset role;
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.update_campaign(
+  (select missing_id from cids), 'X')$$,
   'PT404', 'campaign_not_found',
-  'an unknown Campaign is rejected before authorization narrows to a department');
+  'a BCE passes the pre-lock gate and still gets not-found for an unknown Campaign');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -272,6 +301,39 @@ select throws_ok($$select public.update_campaign(
   (select alpha_id from cids), 'Hacked')$$,
   '42501', 'campaign_manage_forbidden', 'a BCE of a different department cannot update this Campaign');
 reset role;
+
+-- #343 review round 1 (Minor 6): persona gaps -- update_campaign only had
+-- BCE-of-another-department, claimless and anon covered.
+select pg_temp.test_login('34300000-0000-0000-0000-000000000005', jsonb_build_object(
+  'member_role', 'responsabil', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.update_campaign(
+  (select alpha_id from cids), 'Hacked')$$,
+  '42501', 'campaign_manage_forbidden', 'Responsabil cannot update a Campaign');
+reset role;
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000007', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.update_campaign(
+  (select alpha_id from cids), 'Hacked')$$,
+  '42501', 'campaign_manage_forbidden',
+  'an inactive EDU BCE cannot update a Campaign despite stale claims');
+reset role;
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000003', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+create temp table fin_renamed_by_bc as
+select * from public.update_campaign((select fin_id from cids), 'FIN Campaign Renamed By BC');
+reset role;
+select is((select name from fin_renamed_by_bc), 'FIN Campaign Renamed By BC',
+  'BC updates a Campaign in a department that is not their own');
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000004', jsonb_build_object(
+  'member_role', 'moderator', 'member_level', 9, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+create temp table fin_renamed_by_moderator as
+select * from public.update_campaign((select fin_id from cids), 'FIN Campaign Renamed By Moderator');
+reset role;
+select is((select name from fin_renamed_by_moderator), 'FIN Campaign Renamed By Moderator',
+  'Moderator updates a Campaign in a department that is not their own');
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -297,6 +359,17 @@ select throws_ok($$select public.update_campaign(
 reset role;
 
 -- ==================== set_campaign_active ====================
+-- #343 review round 1 (Minor 4): a null flag is rejected before anything
+-- else, including the pre-lock gate -- proved here with an otherwise
+-- unauthorized caller, who still gets PT400, not 42501.
+select pg_temp.test_login('34300000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.set_campaign_active(
+  (select alpha_id from cids), null)$$,
+  'PT400', 'invalid_campaign_active',
+  'a null active flag is rejected before anything else, even for an unauthorized caller');
+reset role;
+
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table alpha_deactivated as
@@ -329,13 +402,68 @@ select throws_ok($$select public.set_campaign_active(
   (select alpha_id from cids), false)$$,
   '42501', 'campaign_manage_forbidden',
   'a BCE of a different department cannot deactivate this Campaign');
+
+-- #343 review round 1 (Important 1 / Minor 6): the same FIN BCE, but calling
+-- with alpha's CURRENT value (true, per alpha_reactivated/alpha_noop above)
+-- -- an unauthorized no-op must still be 42501, not a silent success, and
+-- this is exactly what the pgrowlocks probe below re-proves under lock.
+select throws_ok($$select public.set_campaign_active(
+  (select alpha_id from cids), true)$$,
+  '42501', 'campaign_manage_forbidden',
+  'a BCE of a different department cannot no-op this Campaign''s current active value either');
 reset role;
 
+-- #343 review round 1 (Minor 6): persona gaps -- set_campaign_active only
+-- had BCE-of-another-department, claimless and anon covered.
+select pg_temp.test_login('34300000-0000-0000-0000-000000000005', jsonb_build_object(
+  'member_role', 'responsabil', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.set_campaign_active(
+  (select alpha_id from cids), false)$$,
+  '42501', 'campaign_manage_forbidden', 'Responsabil cannot toggle a Campaign');
+reset role;
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000007', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.set_campaign_active(
+  (select alpha_id from cids), false)$$,
+  '42501', 'campaign_manage_forbidden',
+  'an inactive EDU BCE cannot toggle a Campaign despite stale claims');
+reset role;
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000003', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+create temp table fin_deactivated_by_bc as
+select * from public.set_campaign_active((select fin_id from cids), false);
+reset role;
+select is((select is_active from fin_deactivated_by_bc), false,
+  'BC toggles a Campaign in a department that is not their own');
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000004', jsonb_build_object(
+  'member_role', 'moderator', 'member_level', 9, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+create temp table fin_reactivated_by_moderator as
+select * from public.set_campaign_active((select fin_id from cids), true);
+reset role;
+select is((select is_active from fin_reactivated_by_moderator), true,
+  'Moderator toggles a Campaign in a department that is not their own');
+
+-- #343 review round 1 (Important 2): the pre-lock gate runs before the
+-- Campaign row is even looked up, so an identity that can never manage any
+-- Campaign now gets 42501 on an unknown id too (was PT404). A BCE still
+-- reaches the lock and gets a real PT404.
 select pg_temp.test_login('34300000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.set_campaign_active(
   (select missing_id from cids), true)$$,
-  'PT404', 'campaign_not_found', 'set_campaign_active on an unknown Campaign is rejected');
+  '42501', 'campaign_manage_forbidden',
+  'a Voluntar is denied by the pre-lock gate before an unknown Campaign is even looked up');
+reset role;
+
+select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok($$select public.set_campaign_active(
+  (select missing_id from cids), true)$$,
+  'PT404', 'campaign_not_found',
+  'a BCE passes the pre-lock gate and still gets not-found for an unknown Campaign');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000003',
@@ -364,6 +492,135 @@ select throws_ok($$delete from public.campaigns
   where id = (select alpha_id from cids)$$,
   '42501', null, 'authenticated cannot bypass the command boundary with a direct DELETE');
 reset role;
+
+-- ==================== Prove the locks (#343 review round 1, Important 1) ====================
+-- House rule 5: no test failed if the FOR UPDATE / FOR SHARE locks, or the
+-- locked re-validation in require_campaign_manager, were removed -- the
+-- duplicate-create race below only proves the unique index's own wait. This
+-- probe pattern is copied from
+-- department_team_membership_concurrency.test.sql and
+-- project_membership_commands.test.sql: a BCE runs a no-op
+-- set_campaign_active (same value in, same value out) inside an open,
+-- uncommitted transaction on a second connection, and pgrowlocks (visible
+-- across sessions) shows the Campaign row FOR UPDATE and the actor's
+-- profile/member_departments rows FOR SHARE, still held. This also proves
+-- authority is checked on a no-op, not skipped because nothing appears to
+-- change.
+-- Fixtures are committed through a second connection because dblink sessions
+-- cannot see rows inside this pgTAP transaction (supabase/tests/README.md;
+-- same reasoning as the create_campaign race below) -- a dedicated BCE and
+-- Campaign, prefixed ...0021, isolated from the personas fixtured above.
+select extensions.dblink_connect('campaign_lock_setup', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
+  current_database()));
+select extensions.dblink_exec('campaign_lock_setup', $$
+  delete from public.campaigns where department_id = 'edu' and name = 'Lock Probe Campaign #343';
+  delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
+  delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
+  insert into auth.users (id, email) values
+    ('34300000-0000-0000-0000-000000000021', 'lock.probe.bce.campaign@test.local');
+  insert into public.profiles (id, full_name, email, role, status) values
+    ('34300000-0000-0000-0000-000000000021', 'Lock Probe BCE Campaign',
+     'lock.probe.bce.campaign@test.local', 'bce', 'activ');
+  insert into public.member_departments (member_id, dept_id)
+  values ('34300000-0000-0000-0000-000000000021', 'edu');
+  insert into public.campaigns (department_id, name, is_active, created_by) values
+    ('edu', 'Lock Probe Campaign #343', true, '34300000-0000-0000-0000-000000000021');
+$$);
+
+select extensions.dblink_connect('campaign_lock', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
+  current_database()));
+select extensions.dblink_exec('campaign_lock', $$
+  begin;
+  set local statement_timeout = '5s';
+  set local lock_timeout = '2s';
+$$);
+select * from extensions.dblink('campaign_lock', $$
+  select set_config('request.jwt.claims', jsonb_build_object(
+    'sub', '34300000-0000-0000-0000-000000000021', 'role', 'authenticated',
+    'app_metadata', jsonb_build_object('member_role', 'bce', 'member_level', 5,
+      'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb))::text, true)
+$$) as remote_claims(setting text);
+select extensions.dblink_exec('campaign_lock', 'set local role authenticated');
+select * from extensions.dblink('campaign_lock', $$
+  select (public.set_campaign_active(
+    (select id from public.campaigns
+      where department_id = 'edu' and name = 'Lock Probe Campaign #343'),
+    true
+  )).is_active
+$$) as no_op_set(is_active boolean);
+
+select ok(coalesce((
+  select 'For Update' = any(row_lock.modes)
+    from extensions.pgrowlocks('public.campaigns') as row_lock
+    join public.campaigns as campaign on campaign.ctid = row_lock.locked_row
+   where campaign.department_id = 'edu' and campaign.name = 'Lock Probe Campaign #343'
+), false), 'even a no-op set_campaign_active holds the Campaign row FOR UPDATE');
+select ok(coalesce((
+  select 'For Share' = any(row_lock.modes)
+    from extensions.pgrowlocks('public.profiles') as row_lock
+    join public.profiles as profile on profile.ctid = row_lock.locked_row
+   where profile.id = '34300000-0000-0000-0000-000000000021'
+), false), 'a BCE no-op holds their own live profile row FOR SHARE');
+select ok(coalesce((
+  select 'For Share' = any(row_lock.modes)
+    from extensions.pgrowlocks('public.member_departments') as row_lock
+    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+   where membership.member_id = '34300000-0000-0000-0000-000000000021'
+     and membership.dept_id = 'edu'
+), false), 'a BCE no-op holds their Department membership row FOR SHARE');
+
+select extensions.dblink_exec('campaign_lock', 'rollback');
+select extensions.dblink_disconnect('campaign_lock');
+
+-- Two identical set_campaign_active calls on the same Campaign serialize on
+-- the FOR UPDATE lock proved above, the same way as the Team/Project
+-- membership races.
+select pg_temp.test_login('34300000-0000-0000-0000-000000000021', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+create temp table lock_probe_race as
+select * from pg_temp.test_race(
+  format($$ select (public.set_campaign_active(%L, false)).is_active::text $$,
+    (select id from public.campaigns
+      where department_id = 'edu' and name = 'Lock Probe Campaign #343')),
+  format($$ select (public.set_campaign_active(%L, false)).is_active::text $$,
+    (select id from public.campaigns
+      where department_id = 'edu' and name = 'Lock Probe Campaign #343'))
+);
+reset role;
+select is((select result_a from lock_probe_race), 'false',
+  'the first concurrent deactivate succeeds');
+select ok((select b_waited from lock_probe_race),
+  'the second identical deactivate waits behind the Campaign row lock');
+select is((select result_b from lock_probe_race), 'false',
+  'the waiting deactivate reports the already-deactivated Campaign');
+
+select extensions.dblink_exec('campaign_lock_setup', $$
+  delete from public.campaigns where department_id = 'edu' and name = 'Lock Probe Campaign #343';
+  delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
+  delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
+$$);
+select extensions.dblink_disconnect('campaign_lock_setup');
+
+-- ==================== Deactivation blocks new Task attachment (#343 AC2 / #314) ====================
+-- Acceptance criterion 2 of #343 ("a deactivated campaign can no longer be
+-- attached to new tasks") is enforced by #314's tasks_validate_campaign
+-- trigger, not by anything in this migration -- this is the one end-to-end
+-- assertion tying the command to that trigger.
+select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+create temp table ac2_campaign as
+select * from public.create_campaign('edu', 'AC2 Campaign #343');
+select * from public.set_campaign_active((select id from ac2_campaign), false);
+reset role;
+
+select throws_ok(
+  format($$ insert into public.tasks (title, difficulty, dept_id, campaign_id)
+            values ('AC2 task 343', 1, 'edu', %L) $$,
+    (select id from ac2_campaign)),
+  '23514', 'task_campaign_inactive',
+  'a Campaign deactivated via set_campaign_active can no longer be attached to a new Task (#314 trigger)');
 
 -- ==================== Real concurrent duplicate create ====================
 -- Fixtures are committed through a second connection because dblink sessions
