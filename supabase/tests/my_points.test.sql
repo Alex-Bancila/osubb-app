@@ -57,12 +57,13 @@ insert into public.profiles (id, full_name, email, role, status) values
 -- Produce a real +6 task entry through the points trigger, then apply a -2
 -- sanction. The endpoint must return the complete personal total, not only
 -- positive task points.
-insert into public.tasks (title, difficulty, status, created_by)
+insert into public.tasks (title, difficulty, status, created_by, dept_id)
 values (
   'my-points-task',
   3,
   'todo',
-  'a5100000-0000-0000-0000-000000000003'
+  'a5100000-0000-0000-0000-000000000003',
+  'edu'
 );
 insert into public.task_assignees (task_id, member_id)
 select id, 'a5100000-0000-0000-0000-000000000001'::uuid

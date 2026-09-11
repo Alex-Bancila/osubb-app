@@ -145,10 +145,10 @@ values ('Cross-owned seed guard', 'active',
         'd0000000-0000-0000-0000-000000000005',
         'e2750000-0000-0000-0000-000000000001');
 insert into tasks (
-  title, difficulty, status, audience, assignment_mode, created_by
+  title, difficulty, status, audience, assignment_mode, created_by, dept_id
 )
 values ('Non-demo local opportunity', 1, 'open', 'local', 'direct',
-        'e2750000-0000-0000-0000-000000000001');
+        'e2750000-0000-0000-0000-000000000001', 'edu');
 SQL
 
 # Re-seeding must abort before changing anything when a real-owned

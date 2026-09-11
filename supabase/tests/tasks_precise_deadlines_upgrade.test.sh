@@ -14,10 +14,10 @@ alter table public.tasks
   alter column deadline type date
   using (deadline at time zone 'Europe/Bucharest')::date;
 
-insert into public.tasks (title, difficulty, deadline) values
-  ('Legacy winter deadline', 1, date '2026-01-15'),
-  ('Legacy summer deadline', 1, date '2026-07-15'),
-  ('Legacy null deadline', 1, null);
+insert into public.tasks (title, difficulty, deadline, dept_id) values
+  ('Legacy winter deadline', 1, date '2026-01-15', 'edu'),
+  ('Legacy summer deadline', 1, date '2026-07-15', 'edu'),
+  ('Legacy null deadline', 1, null, 'edu');
 SQL
 
   cat supabase/migrations/20260911090000_tasks_precise_deadlines.sql

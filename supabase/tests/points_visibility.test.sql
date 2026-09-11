@@ -54,9 +54,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('f4000000-0000-0000-0000-0000000000f4', 'fin'),
   ('f5000000-0000-0000-0000-0000000000f5', 'hr');
 
-insert into public.tasks (title, difficulty) values
-  ('pv-flor', 1), ('pv-felix', 2), ('pv-fiona', 3),
-  ('pv-frida', 4), ('pv-fane', 5);
+insert into public.tasks (title, difficulty, dept_id) values
+  ('pv-flor', 1, 'edu'), ('pv-felix', 2, 'edu'), ('pv-fiona', 3, 'edu'),
+  ('pv-frida', 4, 'edu'), ('pv-fane', 5, 'edu');
 insert into public.task_assignees (task_id, member_id)
 select t.id, case t.title
   when 'pv-flor' then 'f1000000-0000-0000-0000-0000000000f1'::uuid

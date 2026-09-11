@@ -11,20 +11,20 @@ select col_not_null('public', 'tasks', 'audience',
 select col_default_is('public', 'tasks', 'audience', 'local',
   'new Tasks default to a local audience');
 
-insert into public.tasks (title, difficulty)
-values ('Default local audience', 1);
+insert into public.tasks (title, difficulty, dept_id)
+values ('Default local audience', 1, 'edu');
 
 select is(
   (select audience from public.tasks where title = 'Default local audience'),
   'local',
   'the default audience is observable on a new Task');
 select lives_ok(
-  $$ insert into public.tasks (title, difficulty, audience)
-     values ('Organization audience', 1, 'org') $$,
+  $$ insert into public.tasks (title, difficulty, audience, dept_id)
+     values ('Organization audience', 1, 'org', 'edu') $$,
   'organization audience is accepted');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, audience)
-     values ('Invalid audience', 1, 'department') $$,
+  $$ insert into public.tasks (title, difficulty, audience, dept_id)
+     values ('Invalid audience', 1, 'department', 'edu') $$,
   '23514', null,
   'audiences outside local and org are rejected');
 

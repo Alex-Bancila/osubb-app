@@ -10,9 +10,9 @@ set local client_min_messages = warning;
 
 alter table public.tasks drop column audience;
 truncate public.tasks cascade;
-insert into public.tasks (title, difficulty, status) values
-  ('Legacy open Task', 1, 'open'),
-  ('Legacy direct Task', 1, 'todo');
+insert into public.tasks (title, difficulty, status, dept_id) values
+  ('Legacy open Task', 1, 'open', 'edu'),
+  ('Legacy direct Task', 1, 'todo', 'edu');
 SQL
 
   cat supabase/migrations/20260911091000_tasks_audience.sql

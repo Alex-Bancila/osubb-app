@@ -1355,6 +1355,7 @@ export type Database = {
           difficulty: number
           id: number
           points: number | null
+          project_id: number | null
           rating: number | null
           status: Database["public"]["Enums"]["task_status"]
           team_id: string | null
@@ -1372,6 +1373,7 @@ export type Database = {
           difficulty: number
           id?: never
           points?: number | null
+          project_id?: number | null
           rating?: number | null
           status?: Database["public"]["Enums"]["task_status"]
           team_id?: string | null
@@ -1389,6 +1391,7 @@ export type Database = {
           difficulty?: number
           id?: never
           points?: number | null
+          project_id?: number | null
           rating?: number | null
           status?: Database["public"]["Enums"]["task_status"]
           team_id?: string | null
@@ -1451,6 +1454,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dept_cup"
             referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "tasks_team_id_fkey"
@@ -1732,6 +1742,7 @@ export type Database = {
           difficulty: number
           id: number
           points: number | null
+          project_id: number | null
           rating: number | null
           status: Database["public"]["Enums"]["task_status"]
           team_id: string | null
