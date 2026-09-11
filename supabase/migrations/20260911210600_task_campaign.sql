@@ -80,7 +80,7 @@ begin
   -- never re-checks activity, so a Task keeps a Campaign that is deactivated
   -- later (ADR-0007; on INSERT, old.campaign_id is null, so this is also
   -- true for every first assignment of a Campaign).
-  if new.campaign_id is distinct from old.campaign_id
+  if (tg_op = 'INSERT' or new.campaign_id is distinct from old.campaign_id)
      and not v_campaign_active then
     raise exception using
       errcode = '23514',

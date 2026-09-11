@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(15);
+select plan(17);
 
 -- #314: tasks.campaign_id with origin consistency (ADR-0007 Campaigns). A
 -- Task may carry at most one Campaign, and only when its Origin is that
@@ -106,6 +106,30 @@ select is(
   (select campaign_id from public.tasks where title = 'Deactivate later task 314 (edited)'),
   (select id from public.campaigns where name = 'Campaign Edu Deactivate Later 314'),
   'the now-inactive Campaign reference is preserved, not cleared');
+
+-- Carve-out proof (house rule 5): an origin edit with an inactive campaign.
+-- The "deactivate later" case above edits title (does not fire trigger at all).
+-- This case creates a fresh campaign, a task with it, deactivates the campaign,
+-- then updates an origin column (dept_id) that IS in the trigger's `of` list —
+-- must live_ok because campaign_id is not changing (carve-out applies).
+insert into public.campaigns (department_id, name, is_active, created_by) values
+  ('edu', 'Campaign Edu Carve-out 314', true, '31400000-0000-0000-0000-000000000001');
+
+insert into public.tasks (title, difficulty, dept_id, campaign_id)
+  select 'Carve-out origin edit 314', 1, 'edu',
+    (select id from public.campaigns where name = 'Campaign Edu Carve-out 314');
+
+update public.campaigns set is_active = false
+ where name = 'Campaign Edu Carve-out 314';
+
+select lives_ok(
+  $$ update public.tasks set dept_id = dept_id where title = 'Carve-out origin edit 314' $$,
+  'an origin edit (dept_id) keeps a now-inactive Campaign; carve-out fires (house rule 5)');
+
+select is(
+  (select campaign_id from public.tasks where title = 'Carve-out origin edit 314'),
+  (select id from public.campaigns where name = 'Campaign Edu Carve-out 314'),
+  'the (now-inactive) Campaign reference is preserved on origin edits, not cleared');
 
 select is(
   (select campaign_id from public.tasks_with_overdue where title = 'Dept campaign task 314'),
