@@ -16,15 +16,26 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role) values
   ('aaaaaaaa-0000-0000-0000-000000000161', 'Ana Test', 'ana.ledgernote@test.local', 'voluntar');
 
--- A pre-existing-style sanction row (negative delta, as sanctions must be) with
--- no note — the shape every sanction row had before this column existed, and
--- still a legal row today since the column is nullable until #162.
-insert into points_ledger (member_id, delta, reason)
-  values ('aaaaaaaa-0000-0000-0000-000000000161', -3, 'sanction');
+-- A task fixture so a 'task' row (the shape #162 keeps note-optional for) can
+-- be inserted below. #162 will require: reason in ('task','task_reversal',
+-- 'sanction'); (reason in ('task','task_reversal')) = (task_id is not null);
+-- and sanctions need delta < 0 plus a non-blank note. A 'task' row with no
+-- note stays legal after that migration, so it — not a sanction — is what
+-- proves the column is nullable.
+insert into tasks (title, difficulty, dept_id)
+  values ('ledger-note-fixture-161', 3, 'edu');
+
+-- A pre-existing-style row with no note — the shape every 'task' row had
+-- before this column existed, and still a legal row today since the column
+-- is nullable, and will remain legal under #162 (task rows need a task_id,
+-- not a note).
+insert into points_ledger (member_id, delta, reason, task_id)
+  select 'aaaaaaaa-0000-0000-0000-000000000161', 6, 'task', id
+    from tasks where title = 'ledger-note-fixture-161';
 
 select is(
   (select sum(delta) from points_ledger where member_id = 'aaaaaaaa-0000-0000-0000-000000000161'),
-  -3::bigint, 'baseline total before any note-bearing row exists');
+  6::bigint, 'baseline total before any note-bearing row exists');
 
 -- ==================== Column shape ====================
 select has_column('public', 'points_ledger', 'note', 'points_ledger has a note column');
@@ -55,8 +66,8 @@ select is(
 -- ==================== Totals are unaffected by the note column ====================
 select is(
   (select sum(delta) from points_ledger where member_id = 'aaaaaaaa-0000-0000-0000-000000000161'),
-  -5::bigint,
-  'sum(delta) tracks only deltas — the note column changes nothing (-3 - 2)');
+  4::bigint,
+  'sum(delta) tracks only deltas — the note column changes nothing (6 - 2)');
 
 select * from finish();
 rollback;
