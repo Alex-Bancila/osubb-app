@@ -6,12 +6,27 @@
 --
 -- Also introduces the shared origin-authority predicate
 -- private.can_manage_origin(dept_id, team_id, project_id) — get it right
--- once here and reuse it, rather than re-deriving it three more times:
---   - #343 approve_completed_work_request / reject_completed_work_request
---     (this table's own commands);
+-- once here and reuse it for READING/MANAGING an Origin's work, never for
+-- deciding a request:
+--   - #343 create_campaign / update_campaign / set_campaign_active — a
+--     Campaign's owner is always a Department (never a Team or Project), so
+--     only this predicate's Department branch is the relevant shape, not
+--     the whole predicate;
+--   - #318 the rewritten Task read policy;
+--   - #319 read policies for task_assignments/task_candidates/task_activity/
+--     task_evaluations;
 --   - #320 notification managers (who receives an Origin's routine
---     notifications);
---   - #318 the rewritten Task read policy.
+--     notifications) needs a member-id variant of this predicate — this one
+--     only answers "can auth.uid() manage this Origin", not "can member X",
+--     so #320 cannot call it as-is for an arbitrary recipient;
+--   - #344 (approve_completed_work_request / reject_completed_work_request)
+--     must NOT reuse this predicate to decide a Request. ADR-0007 gives the
+--     decision to roles narrower than "who manages the Origin's work": an
+--     Independent Team is jointly *managed* by every active member, but its
+--     Requests are *decided* by BC/Moderator only; a Project is *managed* by
+--     its lead and every Responsible, but its Requests are *decided* by the
+--     lead/BC/Moderator only — a Responsible does not decide. #344 needs its
+--     own, narrower decider predicate.
 -- ADR-0007 Authorization: Department and Department-Team origins are managed
 -- by local BCE (plus BC/Moderator globally); Independent-Team origins are
 -- jointly managed by their active members (plus BC/Moderator); Project
@@ -131,21 +146,39 @@ create table public.completed_work_requests (
   constraint completed_work_requests_origin_ck check (
     num_nonnulls(dept_id, team_id, project_id) = 1),
 
-  -- A still-pending Request carries no decision trace and no created Task.
+  -- A still-pending Request carries no decision trace, no decision note,
+  -- and no created Task.
   constraint completed_work_requests_pending_shape_ck check (
     status <> 'pending'
-    or (decided_by is null and decided_at is null and task_id is null)
+    or (
+      decided_by is null
+      and decided_at is null
+      and decision_note is null
+      and task_id is null
+    )
   ),
 
   -- Approval must name its decider, its moment, and the Task it created
   -- (ADR-0007: "Approval creates the completed Task ... in one transaction").
+  -- decision_note is optional on approval, but never blank when present —
+  -- guarded with `is null` ahead of the regex (same reasoning as the
+  -- rejected-shape clause below: `null ~ pattern` evaluates to null, not
+  -- false, so a bare regex cannot itself reject a blank value read back as
+  -- "unknown"; here the guard's role is to make the "null or non-blank"
+  -- disjunction explicit rather than to admit nulls through the regex).
   constraint completed_work_requests_approved_shape_ck check (
     status <> 'approved'
-    or (decided_by is not null and decided_at is not null and task_id is not null)
+    or (
+      decided_by is not null
+      and decided_at is not null
+      and task_id is not null
+      and (decision_note is null or decision_note ~ '[^[:space:]]')
+    )
   ),
 
-  -- Rejection must name its decider, its moment, and a non-blank reason
-  -- (ADR-0007: "Rejection requires a note").
+  -- Rejection must name its decider, its moment, and a non-blank reason, and
+  -- names no Task — only approval creates one (ADR-0007: "Rejection
+  -- requires a note").
   -- decision_note is checked with an explicit `is not null` ahead of the
   -- regex: `null ~ pattern` evaluates to null, not false, and a CHECK
   -- constraint only rejects a row when its expression is false — a bare
@@ -158,6 +191,7 @@ create table public.completed_work_requests (
       and decided_at is not null
       and decision_note is not null
       and decision_note ~ '[^[:space:]]'
+      and task_id is null
     )
   ),
 
@@ -177,6 +211,12 @@ create index completed_work_requests_team_idx
 create index completed_work_requests_project_idx
   on public.completed_work_requests (project_id);
 
+-- One approval per Task: approval links task_id to the Task it created
+-- (#344), and a Task is the completed record of exactly one Request.
+create unique index completed_work_requests_task_uidx
+  on public.completed_work_requests (task_id)
+  where task_id is not null;
+
 alter table public.completed_work_requests enable row level security;
 
 create policy completed_work_requests_read
@@ -185,6 +225,16 @@ create policy completed_work_requests_read
   to authenticated
   using (
     public.auth_is_member()
+    -- Live status, not just a live JWT (house rule 12, ledger_read
+    -- precedent in 20260910123134/20260910144445): a deactivated
+    -- requester's still-unexpired token must stop reading their own
+    -- Requests immediately, not merely once can_manage_origin says no.
+    and exists (
+      select 1
+        from public.profiles as caller
+       where caller.id = (select auth.uid())
+         and caller.status = 'activ'
+    )
     and (
       requester_id = (select auth.uid())
       or private.can_manage_origin(dept_id, team_id, project_id)
@@ -192,7 +242,7 @@ create policy completed_work_requests_read
   );
 
 comment on policy completed_work_requests_read on public.completed_work_requests is
-  'A requester reads their own Completed-work Requests; a caller who may manage the Request''s Origin (private.can_manage_origin) reads it too. BC/Moderator read every Request via that same predicate.';
+  'A requester (live status = activ, checked here so a deactivated requester''s unexpired token stops reading immediately) reads their own Completed-work Requests; a caller who may manage the Request''s Origin (private.can_manage_origin) reads it too — including a plain Independent-Team member and a Project Responsible, who may read but must not decide. BC/Moderator read every Request via that same predicate. Reading is broader than deciding: ADR-0007 narrows who may approve or reject (#344) to local BCE/BC/Moderator (Department, Department-Team), the lead/BC/Moderator (Project), or BC/Moderator alone (Independent Team).';
 
 -- No client write path exists yet — approve_completed_work_request and
 -- reject_completed_work_request are #344. 20260819171628_capabilities_and_rls.sql's
@@ -216,7 +266,7 @@ comment on column public.completed_work_requests.status is
   'pending (default), approved, or rejected. Each status implies a fixed shape for decided_by/decided_at/decision_note/task_id — see the *_shape_ck constraints.';
 
 comment on column public.completed_work_requests.decided_by is
-  'The Origin manager who approved or rejected this Request. Null while pending.';
+  'The member who approved or rejected this Request. Deciding is narrower than managing the Origin (ADR-0007): local BCE/BC/Moderator decide Department and Department-Team Requests, the lead/BC/Moderator decide Project Requests, and only BC/Moderator decide Independent-Team Requests — not every Origin manager who can read this row. #344''s commands enforce that narrower rule; this column only records who did. Null while pending.';
 
 comment on column public.completed_work_requests.decided_at is
   'When the Request was decided. Null while pending; required and >= created_at once decided.';
