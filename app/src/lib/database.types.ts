@@ -1608,7 +1608,7 @@ export type Database = {
           created_at: string
           difficulty: number
           evaluated_at: string
-          evaluated_by: string
+          evaluated_by: string | null
           id: number
           note: string
           outcome: string
@@ -1617,6 +1617,7 @@ export type Database = {
           reversal_reason: string | null
           reversed_at: string | null
           reversed_by: string | null
+          source: string
           task_id: number
         }
         Insert: {
@@ -1624,7 +1625,7 @@ export type Database = {
           created_at?: string
           difficulty: number
           evaluated_at?: string
-          evaluated_by: string
+          evaluated_by?: string | null
           id?: never
           note: string
           outcome: string
@@ -1633,6 +1634,7 @@ export type Database = {
           reversal_reason?: string | null
           reversed_at?: string | null
           reversed_by?: string | null
+          source?: string
           task_id: number
         }
         Update: {
@@ -1640,7 +1642,7 @@ export type Database = {
           created_at?: string
           difficulty?: number
           evaluated_at?: string
-          evaluated_by?: string
+          evaluated_by?: string | null
           id?: never
           note?: string
           outcome?: string
@@ -1649,6 +1651,7 @@ export type Database = {
           reversal_reason?: string | null
           reversed_at?: string | null
           reversed_by?: string | null
+          source?: string
           task_id?: number
         }
         Relationships: [

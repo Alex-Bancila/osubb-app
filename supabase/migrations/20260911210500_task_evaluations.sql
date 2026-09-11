@@ -5,6 +5,43 @@
 -- are preserved records, not overwritten. Writers are the evaluation
 -- commands (later work); no read policy exists yet (#319).
 --
+-- Ruling 11 (2026-09-11), applied on top of dobrerares' comment on this
+-- issue: two `source`s share this table, and the single-open-Evaluation
+-- rule is scoped to only one of them.
+--   - `command` (the default): every Evaluation the evaluation commands
+--     (#336-#338) write for new work. A command row always names its
+--     evaluator (`task_evaluations_evaluator_ck`), and at most one command
+--     row per Task may be open at a time
+--     (`task_evaluations_one_open_per_task_uidx`) — ADR-0007's single
+--     Executor, one live Evaluation.
+--   - `legacy_migration`: reserved for #317's one-time backfill of pre-#316
+--     demo/historical Tasks. dobrerares flagged two gaps while preparing
+--     #290/#317: (1) the legacy demo Task "Migrare bază de date" has two
+--     assignees and two legitimate ledger credits, so the backfill needs
+--     one Evaluation per graded legacy Task/assignee pair — more than one
+--     open Evaluation on that Task — which the original per-Task
+--     uniqueness rejected outright; and (2) legacy records do not identify
+--     an evaluator (the Task creator is not evidence), so a bare
+--     `evaluated_by not null` would force #317 to invent one.
+--
+--   `source` lets both coexist without weakening either invariant: the
+--   per-Task open-Evaluation cap now applies only to `command` rows;
+--   `evaluated_by` may be null exclusively on `legacy_migration` rows
+--   (`task_evaluations_evaluator_ck` — unknown historical evaluators are
+--   represented as null, never invented); and a new per-Assignment cap
+--   (`task_evaluations_one_open_per_assignment_uidx`) holds for both
+--   sources unconditionally, so #290's two ended Assignments still bound
+--   the backfill to exactly one open credit each — a single legacy credit
+--   is never double-counted.
+--
+--   Two invariants this schema does not and cannot enforce are left to the
+--   command layer: a command (#336-#338) must never write
+--   `source = 'legacy_migration'` — only #317's backfill does, directly,
+--   outside any command — and `reopen_task` must reverse every open
+--   Evaluation of the Task, legacy ones included, before a new one is
+--   created, so a reopened legacy-credited Task still converges on the
+--   single-Executor model going forward.
+--
 -- `outcome` is `text … check (outcome in (...))`, not `public.task_status`:
 -- three historical-data harnesses (tasks_lifecycle_upgrade.test.sh,
 -- tasks_assignment_mode_upgrade.test.sh, tasks_audience_upgrade.test.sh)
@@ -35,7 +72,10 @@ create table public.task_evaluations (
   id              bigint generated always as identity primary key,
   task_id         bigint not null references public.tasks (id),
   assignment_id   bigint not null references public.task_assignments (id),
-  evaluated_by    uuid not null references public.profiles (id),
+  source          text not null default 'command'
+                  constraint task_evaluations_source_ck check (
+                    source in ('command', 'legacy_migration')),
+  evaluated_by    uuid references public.profiles (id),
   outcome         text not null
                   constraint task_evaluations_outcome_ck check (
                     outcome in ('completed', 'unfulfilled')),
@@ -69,17 +109,37 @@ create table public.task_evaluations (
   constraint task_evaluations_reversal_chronology_ck check (
     reversed_at is null or reversed_at >= evaluated_at
   ),
+  -- Unknown historical evaluators are represented as null only on
+  -- legacy_migration rows (see the header comment) — never invented, and
+  -- never permitted on a command row.
+  constraint task_evaluations_evaluator_ck check (
+    source = 'legacy_migration' or evaluated_by is not null
+  ),
   -- Ties this Evaluation's Task to the same Task its Assignment belongs to
   -- (see the header comment).
   foreign key (assignment_id, task_id)
     references public.task_assignments (id, task_id)
 );
 
--- At most one un-reversed Evaluation per Task — reverse the old one before
--- recording a new one (ADR-0007: reopening reverses the ledger effect
--- atomically, it does not leave two live Evaluations standing).
+-- At most one un-reversed *command* Evaluation per Task — reverse the old
+-- one before recording a new one (ADR-0007: reopening reverses the ledger
+-- effect atomically, it does not leave two live Evaluations standing). This
+-- is scoped to source = 'command': #317's legacy backfill records one
+-- Evaluation per graded legacy Task/assignee pair (see the header comment),
+-- so a multi-assignee legacy Task can carry more than one open
+-- legacy_migration Evaluation at once, each tied to its own ended
+-- Assignment from #290.
 create unique index task_evaluations_one_open_per_task_uidx
   on public.task_evaluations (task_id)
+  where reversed_at is null and source = 'command';
+
+-- At most one un-reversed Evaluation per Assignment, regardless of source —
+-- a given Assignment (a legacy credit or new work) is never double-counted
+-- by two live Evaluations at once. This is what keeps #317's multi-assignee
+-- backfill bounded: two open Evaluations may share a Task, but never an
+-- Assignment.
+create unique index task_evaluations_one_open_per_assignment_uidx
+  on public.task_evaluations (assignment_id)
   where reversed_at is null;
 
 -- Task-scoped history lookup (every Evaluation for a Task, reversed or not),
@@ -108,6 +168,12 @@ grant select on table public.task_evaluations to service_role;
 
 comment on table public.task_evaluations is
   'Append-only record of every Task Evaluation (completed or unfulfilled) and its reversal. Difficulty and Rating are set together at Evaluation time and are preserved even after reversal (ADR-0007).';
+
+comment on column public.task_evaluations.source is
+  'command (default) or legacy_migration. New work always writes command, via the evaluation commands (#336-#338), which must never write legacy_migration themselves. legacy_migration is reserved for #317''s one-time backfill of pre-#316 demo/historical Tasks — see the migration header.';
+
+comment on column public.task_evaluations.evaluated_by is
+  'Evaluator profile. Required when source = command (task_evaluations_evaluator_ck). Null only on legacy_migration rows, where no historical evaluator can be identified — the Task creator is not evidence (dobrerares, #316) — so unknown is represented as null, never invented.';
 
 comment on column public.task_evaluations.outcome is
   'completed or unfulfilled — an Evaluation outcome, deliberately not public.task_status (see the migration header).';
@@ -146,19 +212,19 @@ begin
 
   -- tg_op = 'UPDATE': allowed only when the row is still open (old.reversed_at
   -- is null), the new row sets all three reversal columns together, and
-  -- every other column is left exactly as it was.
+  -- every other column — source included — is left exactly as it was.
   if old.reversed_at is null
      and new.reversed_at is not null
      and new.reversed_by is not null
      and new.reversal_reason is not null
      and (
-       new.id, new.task_id, new.assignment_id, new.evaluated_by, new.outcome,
-       new.difficulty, new.rating, new.points, new.note, new.evaluated_at,
-       new.created_at
+       new.id, new.task_id, new.assignment_id, new.source, new.evaluated_by,
+       new.outcome, new.difficulty, new.rating, new.points, new.note,
+       new.evaluated_at, new.created_at
      ) is not distinct from (
-       old.id, old.task_id, old.assignment_id, old.evaluated_by, old.outcome,
-       old.difficulty, old.rating, old.points, old.note, old.evaluated_at,
-       old.created_at
+       old.id, old.task_id, old.assignment_id, old.source, old.evaluated_by,
+       old.outcome, old.difficulty, old.rating, old.points, old.note,
+       old.evaluated_at, old.created_at
      )
   then
     return new;
@@ -177,4 +243,4 @@ revoke all on function private.guard_task_evaluation_change()
   from public, anon, authenticated, service_role;
 
 comment on function private.guard_task_evaluation_change() is
-  'Blocks every UPDATE/DELETE on task_evaluations except the single permitted reversal transition (setting reversed_at/reversed_by/reversal_reason together on a still-open row, all other columns unchanged). TRUNCATE is left to the table owner by grants — see the table comment.';
+  'Blocks every UPDATE/DELETE on task_evaluations except the single permitted reversal transition (setting reversed_at/reversed_by/reversal_reason together on a still-open row, every other column including source unchanged). TRUNCATE is left to the table owner by grants — see the table comment.';

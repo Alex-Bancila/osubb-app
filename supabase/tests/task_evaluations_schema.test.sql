@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(53);
+select plan(63);
 
 -- ==================== Structure ====================
 select has_table('public', 'task_evaluations', 'the evaluation history table exists');
@@ -15,7 +15,7 @@ select ok(
 
 select columns_are(
   'public', 'task_evaluations',
-  array['id', 'task_id', 'assignment_id', 'evaluated_by', 'outcome',
+  array['id', 'task_id', 'assignment_id', 'source', 'evaluated_by', 'outcome',
         'difficulty', 'rating', 'points', 'note', 'evaluated_at',
         'reversed_at', 'reversed_by', 'reversal_reason', 'created_at'],
   'task_evaluations exposes exactly the requested fields');
@@ -29,9 +29,10 @@ select col_not_null('public', 'task_evaluations', 'assignment_id', 'an Evaluatio
 select fk_ok('public', 'task_evaluations', array['assignment_id', 'task_id'],
   'public', 'task_assignments', array['id', 'task_id'],
   'an Evaluation''s Assignment must belong to the same Task');
-select col_not_null('public', 'task_evaluations', 'evaluated_by', 'an Evaluation names its evaluator');
+select col_not_null('public', 'task_evaluations', 'source', 'source is required (defaults to command)');
+select col_has_default('public', 'task_evaluations', 'source', 'source defaults to command for new work');
 select fk_ok('public', 'task_evaluations', 'evaluated_by', 'public', 'profiles', 'id',
-  'the evaluator references a Profile');
+  'the evaluator, when named, references a Profile');
 select col_not_null('public', 'task_evaluations', 'outcome', 'outcome is required');
 select col_not_null('public', 'task_evaluations', 'difficulty', 'difficulty is required');
 select col_not_null('public', 'task_evaluations', 'rating', 'rating is required');
@@ -45,7 +46,9 @@ select col_not_null('public', 'task_evaluations', 'created_at', 'created_at is r
 select col_has_default('public', 'task_evaluations', 'created_at', 'created_at is server-written');
 
 select has_index('public', 'task_evaluations', 'task_evaluations_one_open_per_task_uidx',
-  'one-open-Evaluation-per-Task lookup is indexed');
+  'one-open-command-Evaluation-per-Task lookup is indexed');
+select has_index('public', 'task_evaluations', 'task_evaluations_one_open_per_assignment_uidx',
+  'one-open-Evaluation-per-Assignment lookup is indexed, regardless of source');
 select has_index('public', 'task_evaluations', 'task_evaluations_task_history_idx',
   'per-Task history lookup is indexed');
 
@@ -67,7 +70,8 @@ insert into public.tasks (title, difficulty, rating, status, completed_at, dept_
 values ('Evaluation fixture Task A 316', 3, 4, 'completed', now(), 'edu');
 
 -- Task B: isolated, so the "assignment from a different task" case has a
--- real Assignment that genuinely belongs elsewhere.
+-- real Assignment that genuinely belongs elsewhere. Also doubles as the
+-- legacy_migration fixture below, once that case is reached.
 insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
 values ('Evaluation fixture Task B 316', 2, 3, 'completed', now(), 'edu');
 
@@ -78,6 +82,20 @@ select id, '31600000-0000-0000-0000-000000000002'
 insert into public.task_assignments (task_id, member_id)
 select id, '31600000-0000-0000-0000-000000000003'
   from public.tasks where title = 'Evaluation fixture Task B 316';
+
+-- ==================== source check ====================
+-- Run before either Task A's or Task B's Assignment carries any Evaluation,
+-- so this failure can only be the source check, not a uniqueness collision.
+select throws_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, evaluated_by, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'imported', '31600000-0000-0000-0000-000000000001',
+            'completed', 3, 4, 6, 'a note'
+       from public.tasks task
+       join public.task_assignments assignment on assignment.task_id = task.id
+      where task.title = 'Evaluation fixture Task B 316' $$,
+  '23514', null,
+  'a source outside command/legacy_migration is rejected');
 
 -- ==================== outcome check ====================
 select throws_ok(
@@ -168,6 +186,20 @@ select throws_ok(
   '23503', null,
   'an Assignment from a different Task is rejected');
 
+-- ==================== evaluator check: command requires evaluated_by ====================
+-- Task A's Assignment still carries no Evaluation at this point, so this
+-- failure can only be the evaluator check, not a uniqueness collision.
+select throws_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'command',
+            'completed', 3, 4, 6, 'a note'
+       from public.tasks task
+       join public.task_assignments assignment on assignment.task_id = task.id
+      where task.title = 'Evaluation fixture Task A 316' $$,
+  '23514', null,
+  'a command Evaluation without evaluated_by is rejected (evaluator check)');
+
 -- ==================== reversal trio: all-or-nothing, at insert ====================
 select throws_ok(
   $$ insert into public.task_evaluations
@@ -207,7 +239,7 @@ select lives_ok(
       where task.title = 'Evaluation fixture Task A 316' $$,
   'a valid Evaluation is recorded');
 
--- ==================== at most one un-reversed Evaluation per Task ====================
+-- ==================== at most one open command Evaluation per Task ====================
 select throws_ok(
   $$ insert into public.task_evaluations
        (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
@@ -217,7 +249,92 @@ select throws_ok(
        join public.task_assignments assignment on assignment.task_id = task.id
       where task.title = 'Evaluation fixture Task A 316' $$,
   '23505', null,
-  'a second un-reversed Evaluation for the same Task is rejected');
+  'a second open command Evaluation for the same Task (and Assignment) is rejected');
+
+-- ==================== source: legacy_migration may omit an evaluator ====================
+-- Task B's Assignment still carries no Evaluation at this point (the
+-- earlier source-check and Assignment-mismatch tests on it never
+-- succeeded), so this is its first real row.
+select lives_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'legacy_migration',
+            'completed', 2, 3, 4, 'backfilled from #317, no historical evaluator identified'
+       from public.tasks task
+       join public.task_assignments assignment on assignment.task_id = task.id
+      where task.title = 'Evaluation fixture Task B 316' $$,
+  'a legacy_migration Evaluation without evaluated_by is accepted (dobrerares, #316)');
+
+-- ==================== source: legacy_migration allows two open Evaluations
+-- on one Task across two different Assignments (the multi-assignee case:
+-- "Migrare bază de date" has two assignees and two legitimate ledger
+-- credits) ====================
+insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
+values ('Evaluation fixture Task C 316 (multi-assignee legacy)', 3, 4, 'completed', now(), 'edu');
+-- Both Assignments are ended, per #290: a multi-assignee legacy Task
+-- preserves every participant as ended Assignment history, never as two
+-- simultaneously active Assignments — task_assignments permits only one
+-- active (ended_at is null) row per Task
+-- (task_assignments_one_active_per_task_uidx). end_reason
+-- 'legacy_migration' exists on that table for exactly this case.
+insert into public.task_assignments (task_id, member_id, ended_at, end_reason)
+select id, '31600000-0000-0000-0000-000000000002', now(), 'legacy_migration'
+  from public.tasks where title = 'Evaluation fixture Task C 316 (multi-assignee legacy)';
+insert into public.task_assignments (task_id, member_id, ended_at, end_reason)
+select id, '31600000-0000-0000-0000-000000000003', now(), 'legacy_migration'
+  from public.tasks where title = 'Evaluation fixture Task C 316 (multi-assignee legacy)';
+
+select lives_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'legacy_migration',
+            'completed', 3, 4, 6, 'legacy credit for executor A'
+       from public.tasks task
+       join public.task_assignments assignment
+         on assignment.task_id = task.id
+        and assignment.member_id = '31600000-0000-0000-0000-000000000002'
+      where task.title = 'Evaluation fixture Task C 316 (multi-assignee legacy)' $$,
+  'the first legacy Evaluation on a multi-assignee legacy Task is accepted');
+
+select lives_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'legacy_migration',
+            'completed', 2, 3, 4, 'legacy credit for executor B'
+       from public.tasks task
+       join public.task_assignments assignment
+         on assignment.task_id = task.id
+        and assignment.member_id = '31600000-0000-0000-0000-000000000003'
+      where task.title = 'Evaluation fixture Task C 316 (multi-assignee legacy)' $$,
+  'a second open legacy Evaluation on the same Task, for a different Assignment, is accepted (the multi-assignee case)');
+
+-- ==================== at most one open Evaluation per Assignment,
+-- regardless of source ====================
+select throws_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'legacy_migration',
+            'completed', 3, 4, 6, 'a second legacy credit for the same Assignment'
+       from public.tasks task
+       join public.task_assignments assignment
+         on assignment.task_id = task.id
+        and assignment.member_id = '31600000-0000-0000-0000-000000000002'
+      where task.title = 'Evaluation fixture Task C 316 (multi-assignee legacy)' $$,
+  '23505', null,
+  'a second open legacy Evaluation for the same Assignment is rejected');
+
+select throws_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, evaluated_by, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'command', '31600000-0000-0000-0000-000000000001',
+            'completed', 3, 4, 6, 'a command Evaluation racing the open legacy credit'
+       from public.tasks task
+       join public.task_assignments assignment
+         on assignment.task_id = task.id
+        and assignment.member_id = '31600000-0000-0000-0000-000000000003'
+      where task.title = 'Evaluation fixture Task C 316 (multi-assignee legacy)' $$,
+  '23505', null,
+  'an open command Evaluation is rejected when its Assignment already carries an open legacy Evaluation (the per-Assignment cap applies regardless of source)');
 
 -- ==================== append-only: DELETE is always rejected ====================
 select throws_ok(
@@ -243,6 +360,21 @@ select lives_ok(
              where task_id = %s $$,
     (select id from public.tasks where title = 'Evaluation fixture Task A 316')),
   'the single permitted reversal transition is accepted');
+
+-- ==================== source is immutable, even alongside a valid reversal ====================
+-- Task B's legacy row (still open at this point) tries to reverse itself
+-- correctly while also relabeling its source — the guard trigger's
+-- unchanged-columns tuple now includes source, so this must still be
+-- rejected as a whole, not silently accepted with source rewritten.
+select throws_ok(
+  format($$ update public.task_evaluations
+               set reversed_at = now(), reversed_by = '31600000-0000-0000-0000-000000000001',
+                   reversal_reason = 'reclassifying during reversal',
+                   source = 'command'
+             where task_id = %s $$,
+    (select id from public.tasks where title = 'Evaluation fixture Task B 316')),
+  '23514', 'task_evaluation_immutable',
+  'a reversal that also changes source is rejected (source is immutable)');
 
 select throws_ok(
   format($$ update public.task_evaluations
