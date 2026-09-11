@@ -1,8 +1,10 @@
 # ADR-0002 — React and shadcn browser-first PWA
 
-- **Status:** Accepted (rewritten 2026-09-07)
+- **Status:** Accepted
+- **Date:** 2026-09-07 (rewritten)
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** the earlier Capacitor + Ionic + AG Grid decision recorded in this file
+- **Superseded by:** —
 - **Related:** ADR-0001, ADR-0003, ADR-0005, `docs/brand/reference.md`
 
 ## Context

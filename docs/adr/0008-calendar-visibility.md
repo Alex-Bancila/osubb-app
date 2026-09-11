@@ -1,7 +1,10 @@
 # ADR-0008 — Calendar visibility, relevance, and management
 
-- **Status:** Accepted (2026-09-07)
+- **Status:** Accepted
+- **Date:** 2026-09-07
 - **Deciders:** Alex Băncilă + team
+- **Supersedes:** —
+- **Superseded by:** —
 - **Related:** ADR-0001, ADR-0003, ADR-0007, `CONTEXT.md`
 
 ## Context

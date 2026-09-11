@@ -1,5 +1,9 @@
 # OSUBB App — Roadmap (mandate 2026–2027)
 
+> **Historical** — superseded by [`CLAUDE.md`](../CLAUDE.md)'s Status section and the live GitHub issue graph for what's next.
+>
+> Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
+
 Delivery calendar for the mandate. Scope authority: architecture spec (incl. **Revision 3** traceability — every mandate item is mapped to a phase there). Issues: `docs/backend/implementation-issues.md`. Team operating model: `docs/team/team-plan.md`. Rollout decisions: ADR-0005.
 
 ## North-star dates

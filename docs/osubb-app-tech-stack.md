@@ -1,5 +1,9 @@
 # OSUBB App — Technology Stack & Decision Document
 
+> **Historical** — superseded by [ADR-0001](adr/0001-supabase-postgres-rls.md) (backend) and [ADR-0002](adr/0002-frontend-browser-pwa.md) (frontend).
+>
+> Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
+
 **Project:** Full-stack OSUBB application
 **Author:** Alex Băncilă (IT Coordinator) + team
 **Date:** 2026-06-29 · **Revision 2**
