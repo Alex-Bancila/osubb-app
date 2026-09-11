@@ -1,13 +1,19 @@
 -- rls_tasks_points.test.sql — Epic 3.3 policies, per-role (tasks/points subset
 -- of Epic 6.1; the suite grows with each policy epic).
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
+--
+-- #318: who reads which Task is proven persona by persona in
+-- rls_tasks_read_matrix.test.sql. The Task counts below follow that rule
+-- (own Tasks, eligible Opportunities, Team Tasks, global BCE/BC/Moderator);
+-- they no longer encode the legacy one (JWT level >= 4 reads everything,
+-- JWT Department membership reads the whole Department).
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(34);
+select plan(35);
 
 -- A session that authenticated but carries no org claims: never invited, or
 -- deactivated since the token was issued. The claims hook stamps member_role
@@ -54,6 +60,21 @@ insert into task_assignees (task_id, member_id)
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 't-edu';   -- Vlad +6
 update tasks set status = 'completed', completed_at = now(), rating = 3 where title = 't-pr';    -- Bianca +2
+-- #318: a member's own Tasks are read through Assignment History
+-- (task_assignments), not the legacy join table. Mirror the two legacy
+-- assignees exactly as the #290 backfill does for a completed Task: one
+-- Assignment ended 'completed' at completed_at.
+insert into task_assignments (task_id, member_id, assigned_at, ended_at, end_reason)
+select task.id, legacy.member_id, task.created_at, task.completed_at, 'completed'
+  from task_assignees as legacy
+  join tasks as task on task.id = legacy.task_id
+ where task.title in ('t-edu', 't-pr');
+-- Captured while postgres can still see every row: an `insert … select …
+-- from tasks` attempt would insert zero rows once the persona cannot read
+-- the Task — no rows, no policy check, no exception.
+create temp table fx_ids as
+  select (select id from tasks where title = 't-edu2') as edu2_id;
+grant select on fx_ids to authenticated;
 insert into task_requests (kind, title, from_member, dept_id) values
   ('award', 'req-a', 'a0000000-0000-0000-0000-000000000011', 'edu'),
   ('award', 'req-b', 'b0000000-0000-0000-0000-000000000012', 'pr');
@@ -66,8 +87,10 @@ select pg_temp.test_login('a0000000-0000-0000-0000-000000000011', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-select is((select count(*) from tasks), 3::bigint,
-  'voluntar sees own-dept + open tasks only');
+-- t-edu (his own, completed) and t-open (an org-wide Opportunity); not
+-- t-edu2 — a Department Task that is neither his nor an Opportunity.
+select is((select count(*) from tasks), 2::bigint,
+  'voluntar sees their own Task and the org-wide Opportunity, not every Department Task');
 select is((select count(*) from task_assignees ta
             join tasks t on t.id = ta.task_id where t.title = 't-edu'), 1::bigint,
   'assignees of a visible task are visible');
@@ -84,10 +107,10 @@ select throws_ok(
        from tasks where title = 't-open' $$,
   '42501', null, 'claiming on behalf of someone else is denied');
 select throws_ok(
-  $$ insert into task_assignees (task_id, member_id)
-     select id, 'a0000000-0000-0000-0000-000000000011'::uuid
-       from tasks where title = 't-edu2' $$,
-  '42501', null, 'claiming a visible but non-open task is denied');
+  format($$ insert into task_assignees (task_id, member_id)
+            values (%s, 'a0000000-0000-0000-0000-000000000011') $$,
+         (select edu2_id from fx_ids)),
+  '42501', null, 'claiming a non-open Department task by direct insert is denied');
 
 select is((select count(*) from points_ledger), 1::bigint,
   'voluntar sees only their own ledger rows');
@@ -129,8 +152,13 @@ select pg_temp.test_login('c0000000-0000-0000-0000-000000000013', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-select is((select count(*) from tasks), 5::bigint,
-  'level >= 4 sees every task');
+-- The organisation role Responsabil is not a global reader (#318): only
+-- t-open, still an org-wide Opportunity after Vlad's legacy claim.
+select is((select count(*) from tasks), 1::bigint,
+  'a Responsabil (level 4) reads only the org-wide Opportunity, not every task');
+-- #318 split the legacy FOR ALL task_write so it no longer answers SELECT;
+-- a direct UPDATE therefore reaches only rows tasks_read admits.
+update tasks set description = 'touched by a responsabil' where title = 't-edu2';
 -- #312: rating may only be set once completed, and 't-open' is public-mode,
 -- so completing it also closes its queue (tasks_queue_timestamp_state_check).
 select lives_ok(
@@ -173,6 +201,9 @@ update task_requests
 
 reset role;
 
+select is((select description from tasks where title = 't-edu2'), null,
+  'a Responsabil''s legacy direct update skips a Task they cannot read (silent no-op)');
+
 -- ==================== Bogdan: bc (level 6), no dept claims ====================
 select pg_temp.test_login('d0000000-0000-0000-0000-000000000014', jsonb_build_object(
     'member_role', 'bc',
@@ -205,8 +236,10 @@ select pg_temp.test_login('b0000000-0000-0000-0000-000000000012', jsonb_build_ob
     'team_ids', '["t-x"]'::jsonb
   ));
 
-select is((select count(*) from tasks), 3::bigint,
-  'team member sees dept + team + open tasks');
+-- t-team (her Team's) and t-pr (her own); not t-open, whose queue closed
+-- when Radu graded it, and not other Department Tasks.
+select is((select count(*) from tasks), 2::bigint,
+  'team member sees their Team''s Task and their own, not every Department Task');
 select is((select count(*) from points_ledger), 2::bigint,
   'a member sees their own sanction (transparency)');
 

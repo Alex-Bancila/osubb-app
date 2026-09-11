@@ -14,7 +14,8 @@ alter table public.tasks
   drop column unfulfilled_at, drop column cancelled_at,
   drop column queue_opened_at, drop column queue_closed_at,
   drop column review_round, drop column returned_to_progress_at;
-drop policy task_read on public.tasks;
+-- #318: today's read policy is tasks_read (it replaced task_read).
+drop policy tasks_read on public.tasks;
 drop function public.claim_open_task(bigint);
 drop function private.task_is_unassigned(bigint);
 truncate public.tasks cascade;

@@ -2848,7 +2848,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      is_assigned: { Args: { tid: number }; Returns: boolean }
       member_level: { Args: { p_member: string }; Returns: number }
       provision_profile: {
         Args: {

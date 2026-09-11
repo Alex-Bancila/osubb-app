@@ -15,10 +15,20 @@ alter table public.tasks
   drop column unfulfilled_at, drop column cancelled_at,
   drop column queue_opened_at, drop column queue_closed_at,
   drop column review_round, drop column returned_to_progress_at;
-drop policy task_read on public.tasks;
+-- #318: today's read policy is tasks_read (it replaced task_read).
+drop policy tasks_read on public.tasks;
 drop function public.claim_open_task(bigint);
 drop function private.task_is_unassigned(bigint);
 truncate public.tasks cascade;
+-- #318 also dropped public.is_assigned with task_read, its last consumer.
+-- The pre-#287 schema had it, and both the legacy task_read recreated
+-- below and the replayed migration's own task_read call it.
+create function public.is_assigned(tid bigint) returns boolean
+  language sql stable security definer set search_path = ''
+as $$
+  select exists (select 1 from public.task_assignees ta
+                  where ta.task_id = tid and ta.member_id = auth.uid());
+$$;
 -- #312: tasks_evaluation_inputs_ck's compiled expression embeds 'completed'/
 -- 'unfulfilled' literals bound to today's task_status OID. Converting the
 -- status column away from that enum (the very next statement) would
