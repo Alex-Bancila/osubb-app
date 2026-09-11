@@ -444,6 +444,13 @@ export type Database = {
             foreignKeyName: "completed_work_requests_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "completed_work_requests_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
@@ -870,6 +877,13 @@ export type Database = {
             foreignKeyName: "notifications_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
@@ -997,6 +1011,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
           },
           {
             foreignKeyName: "points_ledger_task_id_fkey"
@@ -1436,6 +1457,13 @@ export type Database = {
             foreignKeyName: "task_activity_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
@@ -1503,6 +1531,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignees_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
           },
           {
             foreignKeyName: "task_assignees_task_id_fkey"
@@ -1635,6 +1670,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
           },
           {
             foreignKeyName: "task_assignments_task_id_fkey"
@@ -1777,6 +1819,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_candidates_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
           },
           {
             foreignKeyName: "task_candidates_task_id_fkey"
@@ -1937,6 +1986,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_evaluations_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
           },
           {
             foreignKeyName: "task_evaluations_task_id_fkey"
@@ -2251,6 +2307,13 @@ export type Database = {
             foreignKeyName: "tasks_parent_task_id_fkey"
             columns: ["parent_task_id"]
             isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
@@ -2467,6 +2530,24 @@ export type Database = {
         }
         Relationships: []
       }
+      task_queue_summary: {
+        Row: {
+          my_position: number | null
+          pending_count: number | null
+          task_id: number | null
+        }
+        Insert: {
+          my_position?: never
+          pending_count?: never
+          task_id?: number | null
+        }
+        Update: {
+          my_position?: never
+          pending_count?: never
+          task_id?: number | null
+        }
+        Relationships: []
+      }
       tasks_with_overdue: {
         Row: {
           assignment_mode: string | null
@@ -2624,6 +2705,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dept_cup"
             referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
           },
           {
             foreignKeyName: "tasks_parent_task_id_fkey"

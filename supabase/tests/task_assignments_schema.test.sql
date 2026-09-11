@@ -154,11 +154,13 @@ select is(
   array['28900000-0000-0000-0000-000000000002'::uuid],
   'deleting an Executor cascades only that Member history');
 
+-- #319 added task_assignments_read and a SELECT grant; write grants stay
+-- absent below (commands only).
 select is((select count(*) from pg_policies
-  where schemaname = 'public' and tablename = 'task_assignments'), 0::bigint,
-  'Task Assignment history starts with no client policies');
-select is(has_table_privilege('authenticated', 'public.task_assignments', 'SELECT'), false,
-  'authenticated cannot read Assignment history directly');
+  where schemaname = 'public' and tablename = 'task_assignments'), 1::bigint,
+  'Task Assignment history carries exactly the #319 read policy');
+select is(has_table_privilege('authenticated', 'public.task_assignments', 'SELECT'), true,
+  'authenticated holds SELECT on Assignment history now that task_assignments_read exists (#319)');
 select is(has_table_privilege('authenticated', 'public.task_assignments', 'INSERT'), false,
   'authenticated cannot insert Assignment history directly');
 select is(has_table_privilege('authenticated', 'public.task_assignments', 'UPDATE'), false,

@@ -475,12 +475,14 @@ select lives_ok(
   'a new Evaluation is accepted once the previous one is reversed');
 
 -- ==================== grants: commands, not clients, write this table ====================
+-- #319 added task_evaluations_read and a SELECT grant; write grants stay
+-- absent below (commands land in #327-#345).
 select is((select count(*) from pg_policies
-  where schemaname = 'public' and tablename = 'task_evaluations'), 0::bigint,
-  'task_evaluations starts with no client policies (#319)');
+  where schemaname = 'public' and tablename = 'task_evaluations'), 1::bigint,
+  'task_evaluations carries exactly the #319 read policy');
 
-select is(has_table_privilege('authenticated', 'public.task_evaluations', 'SELECT'), false,
-  'authenticated cannot read Evaluations directly (no read policy yet, #319)');
+select is(has_table_privilege('authenticated', 'public.task_evaluations', 'SELECT'), true,
+  'authenticated holds SELECT on Evaluations now that task_evaluations_read exists (#319)');
 select is(has_table_privilege('authenticated', 'public.task_evaluations', 'INSERT'), false,
   'authenticated cannot insert an Evaluation directly (commands only)');
 select is(has_table_privilege('authenticated', 'public.task_evaluations', 'UPDATE'), false,
