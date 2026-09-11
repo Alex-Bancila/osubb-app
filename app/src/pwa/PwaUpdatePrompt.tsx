@@ -22,7 +22,7 @@ function PwaUpdatePrompt() {
   }
 
   return (
-    <div className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 w-[calc(100%-2rem)] max-w-sm">
+    <div className="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 w-[calc(100%-2rem)] max-w-sm lg:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
       <Alert className="bg-card shadow-lg">
         <AlertTitle>Actualizare disponibilă</AlertTitle>
         <AlertDescription>

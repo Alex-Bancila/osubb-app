@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { IonApp, IonContent, IonPage, IonSpinner } from '@ionic/react';
+import { IonApp } from '@ionic/react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { useAuth } from './lib/auth';
 import { can, type Capability } from './lib/capabilities';
@@ -11,6 +11,7 @@ import Placeholder from './screens/Placeholder';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
 import CalendarScreen from './screens/calendar/CalendarScreen';
+import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -18,13 +19,9 @@ import CalendarScreen from './screens/calendar/CalendarScreen';
    the login screen every single time they refresh. */
 function Splash() {
   return (
-    <IonPage>
-      <IonContent className="ion-padding">
-        <div className="auth-card auth-card--centered">
-          <IonSpinner aria-label="Se încarcă" />
-        </div>
-      </IonContent>
-    </IonPage>
+    <SessionScreen centered>
+      <SessionLoader label="Se încarcă" />
+    </SessionScreen>
   );
 }
 
