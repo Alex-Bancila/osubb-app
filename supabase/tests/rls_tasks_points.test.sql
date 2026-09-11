@@ -51,8 +51,9 @@ insert into task_assignees (task_id, member_id)
   select id, 'a0000000-0000-0000-0000-000000000011'::uuid from tasks where title = 't-edu';
 insert into task_assignees (task_id, member_id)
   select id, 'b0000000-0000-0000-0000-000000000012'::uuid from tasks where title = 't-pr';
-update tasks set rating = 4 where title = 't-edu';   -- Vlad +6
-update tasks set rating = 3 where title = 't-pr';    -- Bianca +2
+-- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
+update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 't-edu';   -- Vlad +6
+update tasks set status = 'completed', completed_at = now(), rating = 3 where title = 't-pr';    -- Bianca +2
 insert into task_requests (kind, title, from_member, dept_id) values
   ('award', 'req-a', 'a0000000-0000-0000-0000-000000000011', 'edu'),
   ('award', 'req-b', 'b0000000-0000-0000-0000-000000000012', 'pr');
@@ -130,8 +131,12 @@ select pg_temp.test_login('c0000000-0000-0000-0000-000000000013', jsonb_build_ob
 
 select is((select count(*) from tasks), 5::bigint,
   'level >= 4 sees every task');
+-- #312: rating may only be set once completed, and 't-open' is public-mode,
+-- so completing it also closes its queue (tasks_queue_timestamp_state_check).
 select lives_ok(
-  $$ update tasks set rating = 5 where title = 't-open' $$,
+  $$ update tasks set status = 'completed', completed_at = now(),
+            queue_closed_at = now(), rating = 5
+     where title = 't-open' $$,
   'level >= 4 grades tasks (trigger fires as owner)');    -- Vlad +3 (1 × 3)
 
 select is((select count(*) from points_ledger
@@ -213,16 +218,21 @@ reset role;
 -- him through: `member_id = auth.uid()` was satisfied. Before the membership
 -- gate he could join the open, already-graded task 't-open' and the
 -- SECURITY DEFINER ledger trigger would have paid him for it.
--- A fresh open task Vlad has never touched, graded and worth points. It is
--- created here rather than with the other fixtures so the persona counts
--- above stay untouched — and unclaimed, because Vlad already claimed
--- 't-open' earlier: reusing it would have made the broken code fail on the
--- primary key instead of awarding points, and this test would have "passed"
--- while proving nothing.
+-- A fresh open task Vlad has never touched, worth points the instant it
+-- would be claimed and completed. It is created here rather than with the
+-- other fixtures so the persona counts above stay untouched — and unclaimed,
+-- because Vlad already claimed 't-open' earlier: reusing it would have made
+-- the broken code fail on the primary key instead of awarding points, and
+-- this test would have "passed" while proving nothing.
+-- #312 makes the historical "already-graded and still open" bait shape
+-- impossible to construct at all (a todo Task can no longer carry a
+-- Rating). That is not a gap in this regression: every assertion below
+-- exercises the direct `insert into task_assignees` RLS denial, which never
+-- reaches the grading trigger this Rating used to exist to prove paid out —
+-- the assignee row is rejected before the trigger ever runs, graded or not.
 insert into tasks
   (title, difficulty, dept_id, status, audience, assignment_mode, queue_opened_at)
   values ('t-open-bait', 4, 'pr', 'todo', 'org', 'public', now());
-update tasks set rating = 5 where title = 't-open-bait';   -- 4 × 3 = 12 points
 
 create temp table fx_open as
   select (select id from tasks where title = 't-open-bait') as task_id,

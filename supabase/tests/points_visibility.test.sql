@@ -67,7 +67,9 @@ select t.id, case t.title
 end
 from public.tasks t
 where t.title like 'pv-%';
-update public.tasks set rating = 3 where title like 'pv-%';
+-- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
+update public.tasks set status = 'completed', completed_at = now(), rating = 3
+ where title like 'pv-%';
 
 -- Ordinary members, including Responsabil, receive no global metrics.
 select pg_temp.test_login('f1000000-0000-0000-0000-0000000000f1', jsonb_build_object(

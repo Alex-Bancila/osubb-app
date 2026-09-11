@@ -69,7 +69,9 @@ insert into public.task_assignees (task_id, member_id)
 select id, 'a5100000-0000-0000-0000-000000000001'::uuid
   from public.tasks
  where title = 'my-points-task';
-update public.tasks set rating = 4 where title = 'my-points-task';
+-- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
+update public.tasks set status = 'completed', completed_at = now(), rating = 4
+ where title = 'my-points-task';
 
 insert into public.points_ledger (member_id, delta, reason, note) values
   ('a5100000-0000-0000-0000-000000000001', -2, 'sanction', 'test sanction'),

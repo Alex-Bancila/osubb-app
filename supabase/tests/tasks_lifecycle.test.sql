@@ -13,17 +13,19 @@ select is(
 select col_has_default('public', 'tasks', 'status',
   'new Tasks have a lifecycle default');
 
+-- #312: completed/unfulfilled rows must also carry a rating
+-- (tasks_evaluation_inputs_ck) — every other state must not.
 select lives_ok(
   $$ insert into public.tasks
       (title, difficulty, dept_id, status, started_at, submitted_at,
-       completed_at, unfulfilled_at, cancelled_at)
+       completed_at, unfulfilled_at, cancelled_at, rating)
      values
-      ('Lifecycle todo 287', 1, 'edu', 'todo', null, null, null, null, null),
-      ('Lifecycle progress 287', 1, 'edu', 'in_progress', now(), null, null, null, null),
-      ('Lifecycle review 287', 1, 'edu', 'in_review', now(), now(), null, null, null),
-      ('Lifecycle completed 287', 1, 'edu', 'completed', null, null, now(), null, null),
-      ('Lifecycle unfulfilled 287', 1, 'edu', 'unfulfilled', null, null, null, now(), null),
-      ('Lifecycle cancelled 287', 1, 'edu', 'cancelled', null, null, null, null, now()) $$,
+      ('Lifecycle todo 287', 1, 'edu', 'todo', null, null, null, null, null, null),
+      ('Lifecycle progress 287', 1, 'edu', 'in_progress', now(), null, null, null, null, null),
+      ('Lifecycle review 287', 1, 'edu', 'in_review', now(), now(), null, null, null, null),
+      ('Lifecycle completed 287', 1, 'edu', 'completed', null, null, now(), null, null, 3),
+      ('Lifecycle unfulfilled 287', 1, 'edu', 'unfulfilled', null, null, null, now(), null, 2),
+      ('Lifecycle cancelled 287', 1, 'edu', 'cancelled', null, null, null, null, now(), null) $$,
   'all six lifecycle states are writable');
 
 select throws_ok(

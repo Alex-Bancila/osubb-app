@@ -41,7 +41,9 @@ export default function TrackerScreen() {
                   <span className="task-meta">{formatDate(task.deadline)}</span>
                   <span className="task-meta">
                     {task.rating === null
-                      ? `dificultate ${task.difficulty}`
+                      ? task.difficulty === null
+                        ? 'dificultate —'
+                        : `dificultate ${task.difficulty}`
                       : `${formatPoints(task.points ?? 0)} p`}
                   </span>
                 </li>

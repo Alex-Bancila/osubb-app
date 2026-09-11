@@ -235,14 +235,24 @@ as $$
   select (p_date::timestamp + time '23:59') at time zone 'Europe/Bucharest'
 $$;
 
+-- #312: Difficulty is an Evaluation input, not a creation input (ADR-0007),
+-- and `tasks_evaluation_inputs_ck` requires Difficulty and Rating together
+-- exactly when status is completed/unfulfilled. The fixture rows below still
+-- name each demo Task's eventual status (used for readability and for the
+-- started_at derivation immediately below), but a row headed for `completed`
+-- is inserted as `todo` without a Difficulty; the "Grading" block further
+-- down moves each one to `completed` in the same statement that sets its
+-- Rating, so the row never sits in the disallowed half-evaluated shape. Rows
+-- that stay todo/in_progress get no Difficulty at all, matching the target
+-- model where a creator does not guess it up front.
 insert into tasks
   (title, type, dept_id, team_id, status, difficulty, deadline, description,
-   created_by, started_at, completed_at)
+   created_by, started_at)
 select fixture.title, fixture.type, fixture.dept_id, fixture.team_id,
-       fixture.status::public.task_status, fixture.difficulty, fixture.deadline,
-       fixture.description, fixture.created_by::uuid,
-       case when fixture.status = 'in_progress' then now() end,
-       case when fixture.status = 'completed' then now() end
+       case when fixture.status = 'completed' then 'todo' else fixture.status end::public.task_status,
+       case when fixture.status = 'completed' then fixture.difficulty end,
+       fixture.deadline, fixture.description, fixture.created_by::uuid,
+       case when fixture.status = 'in_progress' then now() end
   from (values
   -- Educational
   ('Workshop CV pentru boboci', 'proiect', 'edu', null, 'completed',   4, pg_temp.task_deadline(current_date - 14), 'Sesiune practică de redactare CV.',        'd0000000-0000-0000-0000-000000000005'),
@@ -314,6 +324,25 @@ select t.id, a.member_id
   ) as a (title, member_id)
   join tasks t on t.title = a.title;
 
+-- Grading. Each update fires the trigger, which writes one ledger row per
+-- assignee: points = difficulty × multiplier(rating). This also moves each
+-- Task to `completed` in the same statement, together with `completed_at`
+-- and the Rating it goes with (#312's tasks_evaluation_inputs_ck requires
+-- Difficulty and Rating together the instant status reaches completed) —
+-- and it runs before the task_assignments backfill just below, which reads
+-- each Task's final status/completed_at to decide how that history ended.
+update tasks set status = 'completed', completed_at = now(), rating = 5 where title = 'Workshop CV pentru boboci';      -- 4 × 3 = 12
+update tasks set status = 'completed', completed_at = now(), rating = 3 where title = 'Materiale curs Excel';           -- 2 × 1 = 2
+update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 'Minuta ședinței EDU';            -- 1 × 2 = 2
+update tasks set status = 'completed', completed_at = now(), rating = 5 where title = 'Grafică eveniment toamnă';       -- 4 × 3 = 12
+update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 'Postare Instagram recrutare';    -- 2 × 2 = 4
+update tasks set status = 'completed', completed_at = now(), rating = 5 where title = 'Logistică Tabăra de Toamnă';     -- 5 × 3 = 15
+update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 'Buget trimestrial';              -- 4 × 2 = 8
+update tasks set status = 'completed', completed_at = now(), rating = 5 where title = 'Migrare bază de date';           -- 5 × 3 = 15 each
+-- A rating of 1 is a penalty, not a zero — the leaderboard should show that
+-- honestly, and this is the row that proves the formula subtracts.
+update tasks set status = 'completed', completed_at = now(), rating = 1 where title = 'Fotografii eveniment';           -- 2 × −1 = −2
+
 -- Keep the transitional join table and the new history model aligned until
 -- every legacy consumer has moved. UUID order is deterministic for the one
 -- unfinished demo Executor; terminal participants all remain ended history.
@@ -359,20 +388,6 @@ select
       then 'Deterministic migration: another legacy participant was selected as Executor by member UUID order.'
   end
 from ranked_demo_assignees legacy;
-
--- Grading. Each update fires the trigger, which writes one ledger row per
--- assignee: points = difficulty × multiplier(rating).
-update tasks set rating = 5 where title = 'Workshop CV pentru boboci';      -- 4 × 3 = 12
-update tasks set rating = 3 where title = 'Materiale curs Excel';           -- 2 × 1 = 2
-update tasks set rating = 4 where title = 'Minuta ședinței EDU';            -- 1 × 2 = 2
-update tasks set rating = 5 where title = 'Grafică eveniment toamnă';       -- 4 × 3 = 12
-update tasks set rating = 4 where title = 'Postare Instagram recrutare';    -- 2 × 2 = 4
-update tasks set rating = 5 where title = 'Logistică Tabăra de Toamnă';     -- 5 × 3 = 15
-update tasks set rating = 4 where title = 'Buget trimestrial';              -- 4 × 2 = 8
-update tasks set rating = 5 where title = 'Migrare bază de date';           -- 5 × 3 = 15 each
--- A rating of 1 is a penalty, not a zero — the leaderboard should show that
--- honestly, and this is the row that proves the formula subtracts.
-update tasks set rating = 1 where title = 'Fotografii eveniment';           -- 2 × −1 = −2
 
 -- A BC sanction is separate from task points and is signed by its author.
 insert into points_ledger (member_id, delta, reason, awarded_by, note) values

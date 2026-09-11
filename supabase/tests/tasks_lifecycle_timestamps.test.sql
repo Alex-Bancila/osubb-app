@@ -33,19 +33,22 @@ select ok(
         'review_round', 'returned_to_progress_at')),
   'the overdue query surface exposes all lifecycle markers');
 
+-- #312: a completed row must carry a rating alongside its difficulty
+-- (tasks_evaluation_inputs_ck); reopening it away from completed must clear
+-- the rating just as atomically, since a non-terminal status may not hold one.
 select lives_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, created_at, completed_at)
+    (title, difficulty, dept_id, status, created_at, completed_at, rating)
   values
     ('Completed work then reopen 293', 2, 'edu', 'completed',
-     '2026-09-01 10:00+00', '2026-09-01 10:00+00')
+     '2026-09-01 10:00+00', '2026-09-01 10:00+00', 3)
 $$, 'completed work may have no invented start timestamp');
 select is(
   (select started_at from public.tasks where title = 'Completed work then reopen 293'),
   null::timestamptz, 'completed-work history keeps its unknown start null');
 select lives_ok($$
   update public.tasks
-     set status = 'in_progress', completed_at = null
+     set status = 'in_progress', completed_at = null, rating = null
    where title = 'Completed work then reopen 293'
 $$, 'reopening completed work changes its lifecycle markers atomically');
 select ok(

@@ -32,13 +32,18 @@ select is(rating_mult(4),  2, 'rating 4 → multiplier 2');
 select is(rating_mult(5),  3, 'rating 5 → multiplier 3');
 
 -- ==================== Grading writes ledger rows ====================
+-- #312: Rating may only be set once a Task is completed/unfulfilled
+-- (tasks_evaluation_inputs_ck), so every grading update below also moves the
+-- fixture Task to `completed` (and stamps `completed_at`) in the same
+-- statement — the trigger under test only cares about the rating/difficulty
+-- change, not the status transition riding alongside it.
 insert into tasks (title, difficulty, dept_id) values ('pe-t1', 3, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'aaaaaaaa-0000-0000-0000-000000000001'::uuid from tasks where title = 'pe-t1'
   union all
   select id, 'bbbbbbbb-0000-0000-0000-000000000002'::uuid from tasks where title = 'pe-t1';
 
-update tasks set rating = 4 where title = 'pe-t1';
+update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 'pe-t1';
 
 select is(
   (select count(*) from points_ledger l join tasks t on t.id = l.task_id
@@ -79,7 +84,7 @@ insert into tasks (title, difficulty, dept_id) values ('pe-t2', 2, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'aaaaaaaa-0000-0000-0000-000000000001'::uuid from tasks where title = 'pe-t2';
 
-update tasks set rating = 1 where title = 'pe-t2';
+update tasks set status = 'completed', completed_at = now(), rating = 1 where title = 'pe-t2';
 
 select is(
   (select l.delta from points_ledger l join tasks t on t.id = l.task_id
@@ -95,7 +100,7 @@ insert into tasks (title, difficulty, dept_id) values ('pe-t3', 5, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'bbbbbbbb-0000-0000-0000-000000000002'::uuid from tasks where title = 'pe-t3';
 
-update tasks set rating = 2 where title = 'pe-t3';
+update tasks set status = 'completed', completed_at = now(), rating = 2 where title = 'pe-t3';
 
 select is(
   (select l.delta from points_ledger l join tasks t on t.id = l.task_id
@@ -107,7 +112,9 @@ select is(
   12, 'zero-point grade does not change the total (12 + 0)');
 
 -- ==================== Clearing the grade removes the rows ====================
-update tasks set rating = null where title = 'pe-t2';
+-- #312: a non-terminal status may not carry a rating, so "un-grading" also
+-- reopens the Task away from completed in the same statement.
+update tasks set status = 'in_progress', completed_at = null, rating = null where title = 'pe-t2';
 
 select is(
   (select count(*) from points_ledger l join tasks t on t.id = l.task_id
@@ -123,7 +130,7 @@ insert into tasks (title, difficulty, dept_id) values ('pe-t4', 2, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'aaaaaaaa-0000-0000-0000-000000000001'::uuid from tasks where title = 'pe-t4';
 
-update tasks set rating = 3 where title = 'pe-t4';
+update tasks set status = 'completed', completed_at = now(), rating = 3 where title = 'pe-t4';
 
 insert into task_assignees (task_id, member_id)
   select id, 'bbbbbbbb-0000-0000-0000-000000000002'::uuid from tasks where title = 'pe-t4';
