@@ -6,8 +6,13 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(5);
 
-select col_not_null('public', 'tasks', 'audience',
-  'every Task has an audience');
+-- #315: audience dropped its column-level `not null` so an Umbrella Task can
+-- carry an explicit null; an ordinary Task still requires it, now enforced
+-- by tasks_task_shape_ck (proved in tasks_umbrella.test.sql).
+select ok(
+  not (select attnotnull from pg_attribute
+        where attrelid = 'public.tasks'::regclass and attname = 'audience'),
+  'audience is nullable at the column level (Umbrella Tasks require null, #315)');
 select col_default_is('public', 'tasks', 'audience', 'local',
   'new Tasks default to a local audience');
 

@@ -6,8 +6,13 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(5);
 
-select col_not_null('public', 'tasks', 'assignment_mode',
-  'every Task has an Assignment Mode');
+-- #315: assignment_mode dropped its column-level `not null` so an Umbrella
+-- Task can carry an explicit null; an ordinary Task still requires it, now
+-- enforced by tasks_task_shape_ck (proved in tasks_umbrella.test.sql).
+select ok(
+  not (select attnotnull from pg_attribute
+        where attrelid = 'public.tasks'::regclass and attname = 'assignment_mode'),
+  'assignment_mode is nullable at the column level (Umbrella Tasks require null, #315)');
 select col_default_is('public', 'tasks', 'assignment_mode', 'direct',
   'new Tasks default to direct assignment');
 

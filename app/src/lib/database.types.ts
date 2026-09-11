@@ -1902,8 +1902,8 @@ export type Database = {
       }
       tasks: {
         Row: {
-          assignment_mode: string
-          audience: string
+          assignment_mode: string | null
+          audience: string | null
           campaign_id: number | null
           cancelled_at: string | null
           completed_at: string | null
@@ -1914,6 +1914,8 @@ export type Database = {
           description: string | null
           difficulty: number | null
           id: number
+          kind: string
+          parent_task_id: number | null
           points: number | null
           project_id: number | null
           queue_closed_at: string | null
@@ -1930,8 +1932,8 @@ export type Database = {
           unfulfilled_at: string | null
         }
         Insert: {
-          assignment_mode?: string
-          audience?: string
+          assignment_mode?: string | null
+          audience?: string | null
           campaign_id?: number | null
           cancelled_at?: string | null
           completed_at?: string | null
@@ -1942,6 +1944,8 @@ export type Database = {
           description?: string | null
           difficulty?: number | null
           id?: never
+          kind?: string
+          parent_task_id?: number | null
           points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
@@ -1958,8 +1962,8 @@ export type Database = {
           unfulfilled_at?: string | null
         }
         Update: {
-          assignment_mode?: string
-          audience?: string
+          assignment_mode?: string | null
+          audience?: string | null
           campaign_id?: number | null
           cancelled_at?: string | null
           completed_at?: string | null
@@ -1970,6 +1974,8 @@ export type Database = {
           description?: string | null
           difficulty?: number | null
           id?: never
+          kind?: string
+          parent_task_id?: number | null
           points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
@@ -2048,6 +2054,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dept_cup"
             referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks_with_overdue"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "tasks_project_id_fkey"
@@ -2270,6 +2290,8 @@ export type Database = {
           difficulty: number | null
           id: number | null
           is_overdue: boolean | null
+          kind: string | null
+          parent_task_id: number | null
           points: number | null
           project_id: number | null
           queue_closed_at: string | null
@@ -2299,6 +2321,8 @@ export type Database = {
           difficulty?: number | null
           id?: number | null
           is_overdue?: never
+          kind?: string | null
+          parent_task_id?: number | null
           points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
@@ -2328,6 +2352,8 @@ export type Database = {
           difficulty?: number | null
           id?: number | null
           is_overdue?: never
+          kind?: string | null
+          parent_task_id?: number | null
           points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
@@ -2406,6 +2432,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dept_cup"
             referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks_with_overdue"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "tasks_project_id_fkey"
@@ -2494,8 +2534,8 @@ export type Database = {
       claim_open_task: {
         Args: { p_task_id: number }
         Returns: {
-          assignment_mode: string
-          audience: string
+          assignment_mode: string | null
+          audience: string | null
           campaign_id: number | null
           cancelled_at: string | null
           completed_at: string | null
@@ -2506,6 +2546,8 @@ export type Database = {
           description: string | null
           difficulty: number | null
           id: number
+          kind: string
+          parent_task_id: number | null
           points: number | null
           project_id: number | null
           queue_closed_at: string | null
