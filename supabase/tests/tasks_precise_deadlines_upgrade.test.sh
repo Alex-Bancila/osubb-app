@@ -9,6 +9,7 @@ begin;
 set local client_min_messages = warning;
 
 -- Reconstruct the pre-#283 column and load dates on both sides of DST.
+drop view public.tasks_with_overdue;
 truncate public.tasks cascade;
 alter table public.tasks
   alter column deadline type date

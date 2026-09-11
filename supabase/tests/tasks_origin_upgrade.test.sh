@@ -9,6 +9,7 @@ migration="supabase/migrations/20260911101000_tasks_exactly_one_origin.sql"
 begin;
 set local client_min_messages = warning;
 
+drop view public.tasks_with_overdue;
 alter table public.tasks drop constraint tasks_exactly_one_origin_check;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
@@ -94,6 +95,7 @@ failure_output=$({
 begin;
 set local client_min_messages = warning;
 
+drop view public.tasks_with_overdue;
 alter table public.tasks drop constraint tasks_exactly_one_origin_check;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
