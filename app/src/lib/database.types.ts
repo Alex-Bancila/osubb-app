@@ -1904,6 +1904,7 @@ export type Database = {
         Row: {
           assignment_mode: string
           audience: string
+          campaign_id: number | null
           cancelled_at: string | null
           completed_at: string | null
           created_at: string
@@ -1931,6 +1932,7 @@ export type Database = {
         Insert: {
           assignment_mode?: string
           audience?: string
+          campaign_id?: number | null
           cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1958,6 +1960,7 @@ export type Database = {
         Update: {
           assignment_mode?: string
           audience?: string
+          campaign_id?: number | null
           cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1983,6 +1986,13 @@ export type Database = {
           unfulfilled_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_created_by_fkey"
             columns: ["created_by"]
@@ -2249,6 +2259,7 @@ export type Database = {
         Row: {
           assignment_mode: string | null
           audience: string | null
+          campaign_id: number | null
           cancelled_at: string | null
           completed_at: string | null
           created_at: string | null
@@ -2277,6 +2288,7 @@ export type Database = {
         Insert: {
           assignment_mode?: string | null
           audience?: string | null
+          campaign_id?: number | null
           cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string | null
@@ -2305,6 +2317,7 @@ export type Database = {
         Update: {
           assignment_mode?: string | null
           audience?: string | null
+          campaign_id?: number | null
           cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string | null
@@ -2331,6 +2344,13 @@ export type Database = {
           unfulfilled_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_created_by_fkey"
             columns: ["created_by"]
@@ -2476,6 +2496,7 @@ export type Database = {
         Returns: {
           assignment_mode: string
           audience: string
+          campaign_id: number | null
           cancelled_at: string | null
           completed_at: string | null
           created_at: string

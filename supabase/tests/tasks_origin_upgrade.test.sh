@@ -10,6 +10,11 @@ begin;
 set local client_min_messages = warning;
 
 drop view public.tasks_with_overdue;
+-- #314: tasks_validate_campaign fires "of ... project_id", which registers a
+-- dependency on the column the same way the view above does; drop it here
+-- too so project_id can be dropped and replayed. The rollback below restores
+-- it, same as the view.
+drop trigger tasks_validate_campaign on public.tasks;
 alter table public.tasks drop constraint tasks_exactly_one_origin_check;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
@@ -97,6 +102,7 @@ begin;
 set local client_min_messages = warning;
 
 drop view public.tasks_with_overdue;
+drop trigger tasks_validate_campaign on public.tasks;
 alter table public.tasks drop constraint tasks_exactly_one_origin_check;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
