@@ -12,15 +12,29 @@
 --   private.is_global_task_reader() (live role level >= 5): every row, all
 --            four tables — decision (a), for #260's drill-down;
 --   private.is_task_team_member(task_id): task_activity ONLY — decision (b),
---            the ADR's literal "complete Task Activity for their Team".
+--            the ADR's literal "complete Task Activity for their Team";
+--   private.is_own_assignment(assignment_id): task_activity and
+--            task_evaluations ONLY — Ruling 13 (fix round 1): the Executor
+--            reads feedback about their own Assignment (started/submitted/
+--            returned_to_progress/evaluated/reopened, and their Evaluation),
+--            current or former, without gaining the Task's whole timeline —
+--            a candidate-queue row (assignment_id null) never matches.
 -- Every branch is additionally gated by private.can_read_task(task_id).
+--
+-- Fix round 1, Important 2: the deactivated persona and the sweep's
+-- well-known claimless uid (eeeeeeee-0000-0000-0000-000000000156, following
+-- the completed_work_requests precedent in rls_deny_by_default.test.sql)
+-- each get an Assignment and a Candidature of their own on Task M below, so
+-- a mutation hoisting the own-row check out of the auth_is_member()/
+-- can_read_task conjunction is caught by an assertion here instead of
+-- passing silently for lack of a fixture row to expose.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(60);
 
 -- ==================== Shape ====================
 select policies_are('public', 'task_assignments', array['task_assignments_read'],
@@ -60,6 +74,21 @@ select is(
       and g.grantee = 'anon'),
   0::bigint,
   'anon holds no grant on any of the four tables or the view');
+
+-- Important 1 (fix round 1): task_queue_summary is auto-updatable on
+-- task_id, and the original revoke covered only public/anon — leaving
+-- authenticated with inherited INSERT/UPDATE/DELETE and service_role with
+-- all four. PostgREST would have exposed PATCH/DELETE on a view with no
+-- meaningful primary key of its own.
+select is(
+  (select count(*)
+     from information_schema.role_table_grants g
+    where g.table_schema = 'public'
+      and g.table_name = 'task_queue_summary'
+      and g.grantee in ('authenticated', 'service_role')
+      and g.privilege_type in ('INSERT', 'UPDATE', 'DELETE')),
+  0::bigint,
+  'Important 1: authenticated and service_role hold no INSERT/UPDATE/DELETE on task_queue_summary');
 
 select is(
   (select count(*)
@@ -116,8 +145,13 @@ insert into fx_persona_319 (code, id, role, status, dept_id) values
   ('bce_foreign',       '31900000-0000-0000-0000-000000000007', 'bce',      'activ',   'fin'),
   ('stranger',          '31900000-0000-0000-0000-000000000008', 'voluntar', 'activ',   null),
   ('deactivated_bce',   '31900000-0000-0000-0000-000000000009', 'bce',      'inactiv', 'edu'),
-  ('claimless_member',  '31900000-0000-0000-0000-000000000010', 'voluntar', 'activ',   'edu'),
-  ('task_m_candidate',  '31900000-0000-0000-0000-000000000011', 'voluntar', 'activ',   'edu');
+  -- Fix round 1, Important 2: the sweep's well-known claimless uid, not a
+  -- fresh 319-prefixed one — see the header comment.
+  ('claimless_member',  'eeeeeeee-0000-0000-0000-000000000156', 'voluntar', 'activ',   'edu'),
+  ('task_m_candidate',  '31900000-0000-0000-0000-000000000011', 'voluntar', 'activ',   'edu'),
+  -- Ruling 13: a second Executor on Task R, so a former Executor's own
+  -- (reversed) Evaluation is distinguishable from their successor's.
+  ('successor_executor', '31900000-0000-0000-0000-000000000012', 'voluntar', 'activ',  'edu');
 
 insert into auth.users (id, email)
 select persona.id, 'm319.' || persona.code || '@test.local' from fx_persona_319 as persona;
@@ -147,20 +181,56 @@ select task.id, persona.id, now() - interval '2 days',
   from public.tasks as task, fx_persona_319 as persona
  where task.title = 'm319:M' and persona.code = 'executor';
 
-insert into public.task_activity (task_id, kind, actor_id, from_status, to_status, occurred_at)
-select task.id, 'submitted', persona.id, 'in_progress', 'in_review', now() - interval '1 day'
+-- Ruling 13 (fix round 1): assignment_id is stamped on every row about the
+-- Executor's own work — submitted/returned_to_progress/evaluated — as the
+-- command wave (#334-#338) must, per the migration header's consequence
+-- note. 'returned_to_progress' in particular is the ADR-0007 "Feedback
+-- pending" sub-state: its actor is the reviewer, not the Executor, so only
+-- the new private.is_own_assignment branch (not actor_id) lets the Executor
+-- read it.
+insert into public.task_activity (task_id, kind, actor_id, assignment_id, from_status, to_status, occurred_at)
+select task.id, 'submitted', persona.id,
+       (select assignment.id from public.task_assignments as assignment
+         where assignment.task_id = task.id and assignment.member_id = persona.id),
+       'in_progress', 'in_review', now() - interval '2 days'
   from public.tasks as task, fx_persona_319 as persona
  where task.title = 'm319:M' and persona.code = 'executor';
-insert into public.task_activity (task_id, kind, actor_id, from_status, to_status, occurred_at)
-select task.id, 'evaluated', persona.id, 'in_review', 'completed', now()
+insert into public.task_activity (task_id, kind, actor_id, assignment_id, from_status, to_status, occurred_at)
+select task.id, 'returned_to_progress', reviewer.id,
+       (select assignment.id
+          from public.task_assignments as assignment, fx_persona_319 as executor_p
+         where assignment.task_id = task.id
+           and assignment.member_id = executor_p.id
+           and executor_p.code = 'executor'),
+       'in_review', 'in_progress', now() - interval '1 day'
+  from public.tasks as task, fx_persona_319 as reviewer
+ where task.title = 'm319:M' and reviewer.code = 'manager_bce_local';
+insert into public.task_activity (task_id, kind, actor_id, assignment_id, from_status, to_status, occurred_at)
+select task.id, 'evaluated', persona.id,
+       (select assignment.id
+          from public.task_assignments as assignment, fx_persona_319 as executor_p
+         where assignment.task_id = task.id
+           and assignment.member_id = executor_p.id
+           and executor_p.code = 'executor'),
+       'in_review', 'completed', now()
   from public.tasks as task, fx_persona_319 as persona
  where task.title = 'm319:M' and persona.code = 'manager_bce_local';
+-- A candidate-queue event on the same Task, assignment_id left null by
+-- construction (the migration header's discipline) — proves the Executor's
+-- new assignment-scoped branch does not leak it (Ruling 13's third required
+-- test: "the Executor does not see interest_expressed rows of candidates on
+-- their Task").
+insert into public.task_activity (task_id, kind, actor_id, occurred_at)
+select task.id, 'interest_expressed', persona.id, now() - interval '3 days'
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:M' and persona.code = 'task_m_candidate';
 
 insert into public.task_evaluations
   (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
 select task.id, assignment.id, evaluator.id, 'completed', 3, 4, 12, 'm319 fixture evaluation'
   from public.tasks as task
   join public.task_assignments as assignment on assignment.task_id = task.id
+  join fx_persona_319 as assignee on assignee.id = assignment.member_id and assignee.code = 'executor'
   cross join (select id from fx_persona_319 where code = 'manager_bce_local') as evaluator
  where task.title = 'm319:M';
 
@@ -173,6 +243,22 @@ insert into public.task_candidates (task_id, member_id)
 select task.id, persona.id
   from public.tasks as task, fx_persona_319 as persona
  where task.title = 'm319:M' and persona.code = 'task_m_candidate';
+
+-- Important 2 (fix round 1): the deactivated persona and the sweep's
+-- claimless uid each get an Assignment and a Candidature of their own here
+-- — see the header comment for why this is what catches the own-row
+-- mutation.
+insert into public.task_assignments (task_id, member_id, assigned_at, assigned_by, ended_at, end_reason)
+select task.id, persona.id, now() - interval '30 days',
+       (select id from fx_persona_319 where code = 'manager_bce_local'),
+       now() - interval '29 days', 'gave_up'
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:M' and persona.code in ('deactivated_bce', 'claimless_member');
+
+insert into public.task_candidates (task_id, member_id)
+select task.id, persona.id
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:M' and persona.code in ('deactivated_bce', 'claimless_member');
 
 -- Task Q — Department 'edu' origin, public, org-wide, open queue: the
 -- candidate-privacy demo. Two pending Candidates in join order.
@@ -206,6 +292,55 @@ insert into public.task_activity (task_id, kind, actor_id, from_status, to_statu
 select task.id, 'started', persona.id, 'todo', 'in_progress', now() - interval '1 hour'
   from public.tasks as task, fx_persona_319 as persona
  where task.title = 'm319:T' and persona.code = 'bystander';
+
+-- Task R — Department 'edu' origin, reopened after grading: 'executor' was
+-- replaced by 'successor_executor', whose own Evaluation later completed
+-- it. Ruling 13's second required test: a former Executor still reads
+-- their own (now reversed) Evaluation via private.is_own_assignment, since
+-- that matches the Assignment row itself, not "the currently active one" —
+-- but not their successor's, whose assignment_id names a different row.
+insert into public.tasks (title, dept_id, difficulty) values ('m319:R', 'edu', 2);
+update public.tasks set status = 'completed', completed_at = now(), rating = 5
+ where title = 'm319:R';
+
+insert into public.task_assignments (task_id, member_id, assigned_at, assigned_by, ended_at, end_reason)
+select task.id, persona.id, now() - interval '10 days',
+       (select id from fx_persona_319 where code = 'manager_bce_local'),
+       now() - interval '8 days', 'replaced'
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:R' and persona.code = 'executor';
+insert into public.task_assignments (task_id, member_id, assigned_at, assigned_by, ended_at, end_reason)
+select task.id, persona.id, now() - interval '7 days',
+       (select id from fx_persona_319 where code = 'manager_bce_local'),
+       now(), 'completed'
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:R' and persona.code = 'successor_executor';
+
+-- The former Executor's Evaluation, reversed when the Task was reopened —
+-- reversal does not affect private.is_own_assignment, which reads the
+-- Assignment row, not the Evaluation's live/reversed state.
+insert into public.task_evaluations
+  (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note,
+   evaluated_at, reversed_at, reversed_by, reversal_reason)
+select task.id, assignment.id, evaluator.id, 'completed', 2, 3, 6,
+       'm319 former executor evaluation',
+       now() - interval '9 days', now() - interval '8 days', evaluator.id, 'reopened for rework'
+  from public.tasks as task
+  join public.task_assignments as assignment on assignment.task_id = task.id
+  join fx_persona_319 as assignee on assignee.id = assignment.member_id and assignee.code = 'executor'
+  cross join (select id from fx_persona_319 where code = 'manager_bce_local') as evaluator
+ where task.title = 'm319:R';
+
+-- The successor's own, still-open Evaluation on the same Task.
+insert into public.task_evaluations
+  (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
+select task.id, assignment.id, evaluator.id, 'completed', 2, 5, 10,
+       'm319 successor evaluation'
+  from public.tasks as task
+  join public.task_assignments as assignment on assignment.task_id = task.id
+  join fx_persona_319 as assignee on assignee.id = assignment.member_id and assignee.code = 'successor_executor'
+  cross join (select id from fx_persona_319 where code = 'manager_bce_local') as evaluator
+ where task.title = 'm319:R';
 
 create temp table fx_task_319 as
 select task.id, substr(task.title, 6) as title
@@ -267,20 +402,42 @@ language sql stable as $$
 $$;
 
 -- ==================== Executor ====================
--- Own assignment; only the activity they caused (not the manager's
--- 'evaluated' row on the same Task); no Evaluation (decision (c): "own row"
--- is evaluated_by, not the graded Assignment's member); no Candidature.
+-- Own assignment; the activity they caused PLUS the reviewer's
+-- returned_to_progress/evaluated rows on their own Assignment (Ruling 13,
+-- fix round 1: private.is_own_assignment) but not the candidate's
+-- interest_expressed row on the same Task (assignment_id null); their own
+-- Evaluation via the same new branch (decision (c)'s evaluated_by branch
+-- still would not admit it — this is a separate branch); no Candidature.
 select pg_temp.login_319('executor');
 select set_eq('select * from pg_temp.visible_assignment_codes(''M'')', array['executor'],
   'Executor sees their own Assignment on Task M');
-select set_eq('select * from pg_temp.visible_activity_kinds(''M'')', array['submitted'],
-  'Executor sees the activity row they caused, not the manager''s ''evaluated'' row on the same Task');
-select is_empty('select * from pg_temp.visible_evaluation_notes(''M'')',
-  'decision (c): Executor does not see their own Evaluation merely by being the graded Assignment''s member');
+select set_eq('select * from pg_temp.visible_activity_kinds(''M'')',
+  array['submitted', 'returned_to_progress', 'evaluated'],
+  'Ruling 13: Executor sees every activity row tied to their own Assignment — the reviewer''s returned_to_progress and evaluated rows included, via private.is_own_assignment, not just the submitted row they themself caused');
+select ok(
+  not exists (select 1 from pg_temp.visible_activity_kinds('M') as kind where kind = 'interest_expressed'),
+  'Ruling 13: Executor does not see the candidate''s interest_expressed row (assignment_id null) on their own Task');
+select set_eq('select * from pg_temp.visible_evaluation_notes(''M'')', array['m319 fixture evaluation'],
+  'Ruling 13: Executor now reads their own Evaluation via private.is_own_assignment, though decision (c)''s evaluated_by branch alone still would not admit it');
 select is_empty('select * from pg_temp.visible_candidate_codes(''M'')',
   'Executor has no Candidature to see on Task M');
 
+-- ==================== Former/successor Executor Evaluation (Ruling 13) ====================
+-- Task R: a former Executor reads their own (now reversed) Evaluation, not
+-- their successor's, and vice versa — private.is_own_assignment matches the
+-- Assignment row itself, not "whichever is currently active".
+select set_eq('select * from pg_temp.visible_evaluation_notes(''R'')',
+  array['m319 former executor evaluation'],
+  'Ruling 13: former Executor reads their own reversed Evaluation, not their successor''s');
+
+reset role;
+select pg_temp.login_319('successor_executor');
+select set_eq('select * from pg_temp.visible_evaluation_notes(''R'')',
+  array['m319 successor evaluation'],
+  'Ruling 13: successor Executor reads their own Evaluation, not the former Executor''s reversed one');
+
 -- ==================== Candidate privacy (Task Q) ====================
+reset role;
 select pg_temp.login_319('candidate1');
 select set_eq('select * from pg_temp.visible_candidate_codes(''Q'')', array['candidate1'],
   'candidate1 sees only their own Candidature row, not candidate2''s');
@@ -304,14 +461,17 @@ select results_eq('select * from pg_temp.queue_summary_row(''Q'')',
 -- Candidatures (own department).
 reset role;
 select pg_temp.login_319('manager_bce_local');
-select set_eq('select * from pg_temp.visible_assignment_codes(''M'')', array['executor'],
-  'manager: sees the managed Task''s Assignment');
-select set_eq('select * from pg_temp.visible_activity_kinds(''M'')', array['submitted', 'evaluated'],
+select set_eq('select * from pg_temp.visible_assignment_codes(''M'')',
+  array['executor', 'deactivated_bce', 'claimless_member'],
+  'manager: sees every Assignment of the managed Task, including the two fixture-only rows added for Important 2''s mutation test');
+select set_eq('select * from pg_temp.visible_activity_kinds(''M'')',
+  array['submitted', 'returned_to_progress', 'evaluated', 'interest_expressed'],
   'manager: sees every activity row of the managed Task, not just their own');
 select set_eq('select * from pg_temp.visible_evaluation_notes(''M'')', array['m319 fixture evaluation'],
   'manager: sees the managed Task''s Evaluation');
-select set_eq('select * from pg_temp.visible_candidate_codes(''M'')', array['task_m_candidate'],
-  'manager: sees the managed Task''s Candidature too — all four tables for one managed Task');
+select set_eq('select * from pg_temp.visible_candidate_codes(''M'')',
+  array['task_m_candidate', 'deactivated_bce', 'claimless_member'],
+  'manager: sees every Candidature of the managed Task, including the two fixture-only rows added for Important 2''s mutation test — all four tables for one managed Task');
 select set_eq('select * from pg_temp.visible_candidate_codes(''Q'')', array['candidate1', 'candidate2'],
   'manager: sees every Candidate of another Task in the same managed Department, identities included');
 
@@ -322,9 +482,11 @@ reset role;
 select pg_temp.login_319('bce_foreign');
 select is(private.can_manage_task(pg_temp.task_id_319('M')), false,
   'sanity: the foreign BCE does not manage Task M');
-select set_eq('select * from pg_temp.visible_assignment_codes(''M'')', array['executor'],
-  'global reader: Task M''s Assignment');
-select set_eq('select * from pg_temp.visible_activity_kinds(''M'')', array['submitted', 'evaluated'],
+select set_eq('select * from pg_temp.visible_assignment_codes(''M'')',
+  array['executor', 'deactivated_bce', 'claimless_member'],
+  'global reader: every Assignment of Task M, including the two fixture-only rows added for Important 2''s mutation test');
+select set_eq('select * from pg_temp.visible_activity_kinds(''M'')',
+  array['submitted', 'returned_to_progress', 'evaluated', 'interest_expressed'],
   'global reader: every activity row of Task M');
 select set_eq('select * from pg_temp.visible_evaluation_notes(''M'')', array['m319 fixture evaluation'],
   'global reader: Task M''s Evaluation');
@@ -373,11 +535,13 @@ select is_empty('select * from pg_temp.visible_activity_kinds(''T'')',
 reset role;
 select pg_temp.login_319('deactivated_bce');
 select is_empty('select * from pg_temp.visible_assignment_codes(''M'')',
-  'deactivated BCE with stale bce/level-5 claims: no Assignment on Task M');
+  'Important 2: deactivated BCE with stale bce/level-5 claims owns an Assignment on Task M (fixture above) but still sees none — the own-row branch stays inside the auth_is_member()/can_read_task conjunction');
 select is_empty('select * from pg_temp.visible_activity_kinds(''M'')',
   'deactivated BCE with stale claims: no activity on Task M');
 select is_empty('select * from pg_temp.visible_evaluation_notes(''M'')',
   'deactivated BCE with stale claims: no Evaluation on Task M');
+select is_empty('select * from pg_temp.visible_candidate_codes(''M'')',
+  'Important 2: deactivated BCE owns a Candidature on Task M (fixture above) but still sees none');
 select is_empty('select * from pg_temp.queue_summary_row(''Q'')',
   'deactivated BCE with stale claims: no row in task_queue_summary for Task Q');
 
@@ -387,7 +551,9 @@ select pg_temp.test_login(
   (select id from fx_persona_319 where code = 'claimless_member'),
   '{"provider": "email"}'::jsonb);
 select is_empty('select * from pg_temp.visible_assignment_codes(''M'')',
-  'claimless session: no Assignment on Task M');
+  'Important 2: claimless session owns an Assignment on Task M (the sweep''s well-known uid, fixture above) but still sees none — same conjunction proof as the deactivated persona');
+select is_empty('select * from pg_temp.visible_candidate_codes(''M'')',
+  'Important 2: claimless session owns a Candidature on Task M but still sees none');
 select is_empty('select * from pg_temp.visible_candidate_codes(''Q'')',
   'claimless session: no Candidature on Task Q');
 select is_empty('select * from pg_temp.queue_summary_row(''Q'')',

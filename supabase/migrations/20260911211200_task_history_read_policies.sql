@@ -47,11 +47,48 @@
 -- evaluator), not the Executor being evaluated, matching the brief's
 -- literal column mapping ("member_id/actor_id/evaluated_by as applies") and
 -- issue #319's AC, which lists what the Executor sees as "their assignment
--- and activity" and does not mention Evaluations. An Executor who neither
--- evaluated their own work (ADR-0007: "the lead may evaluate their own
--- Task") nor manages the Task does not read the raw Evaluation row through
--- this policy; they still read their own point total through the existing
--- points_ledger / my_points path, which this PR does not touch.
+-- and activity" and does not mention Evaluations. The `evaluated_by` branch
+-- alone does not read the raw Evaluation row for an Executor who neither
+-- graded their own work nor manages the Task — see Ruling 13 below for the
+-- separate branch that does.
+--
+-- ==================== Ruling 13 (fix round 1, 2026-09-12) ====================
+-- As first shipped, a graded Executor could not read the Evaluation `note`
+-- or the Reviewer's `returned_to_progress` activity row about their own
+-- work, while a *peer* Team member could, through decision (b)'s complete-
+-- activity branch, depending only on whether the Task happened to be
+-- Team-origin. ADR-0007 makes "Feedback pending" a visible sub-state that
+-- carries a note, so the Executor must be able to read it. Two new
+-- **assignment-scoped** branches, not blanket Executor access (which would
+-- leak Candidate identities: an `interest_expressed` row's `actor_id` is the
+-- candidate, and a blanket "any row about my Task" branch would expose it):
+--   - `task_activity_read` gains `or (assignment_id is not null and exists
+--     (select 1 from public.task_assignments a where a.id =
+--     task_activity.assignment_id and a.member_id = (select auth.uid())))`,
+--     via the new `private.is_own_assignment(assignment_id)` helper below.
+--   - `task_evaluations_read` gains the same helper applied to
+--     `task_evaluations.assignment_id`.
+-- This deliberately does NOT give the Executor the whole Task Activity
+-- timeline — only the rows tied to an Assignment that is theirs. A
+-- candidate-queue event (`interest_expressed`, `interest_withdrawn`,
+-- `candidate_selected`, ...) keeps `assignment_id` null by construction, so
+-- it is invisible through this branch no matter whose Task it is on.
+--
+-- Consequence for the command wave: #334/#335/#336/#337/#338 MUST stamp
+-- `assignment_id` on every task_activity row about the Executor's own work —
+-- `started`, `submitted`, `returned_to_progress`, `evaluated`, `reopened` —
+-- with the Assignment currently open on the Task, or the Executor will not
+-- see that row through this policy. Candidate-queue rows must keep
+-- `assignment_id` null; stamping it there would let this same branch leak a
+-- Candidate's identity to the Executor via a spurious Assignment row (there
+-- is none, but the discipline is the same reason `assignment_id` is not a
+-- general "about this Task" pointer).
+--
+-- A former Executor (an ended Assignment) keeps reading their own Evaluation
+-- through this branch after a reopen replaces them, because
+-- `private.is_own_assignment` matches the Assignment row, not "the current
+-- one" — it does not, however, gain their successor's Evaluation, whose
+-- `assignment_id` points at a different Assignment they never held.
 --
 -- ==================== Candidate privacy (issue #319) ====================
 -- RLS cannot hide a column, so task_candidates_read admits only the
@@ -136,13 +173,36 @@ $$;
 comment on function private.is_task_team_member(bigint) is
   'Whether the active caller is a member of this Task''s Team (Department Team or Independent Team). Backs task_activity_read''s "complete Task Activity for their Team" branch only (#319, decision (b)) — not extended to the other three history tables.';
 
+create function private.is_own_assignment(p_assignment_id bigint)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(public.auth_is_member(), false)
+     and p_assignment_id is not null
+     and exists (
+       select 1
+         from public.task_assignments as assignment
+        where assignment.id = p_assignment_id
+          and assignment.member_id = (select auth.uid())
+     );
+$$;
+
+comment on function private.is_own_assignment(bigint) is
+  'Ruling 13 (fix round 1): whether p_assignment_id names an Assignment the active caller themself holds or once held. Backs the assignment-scoped Executor-feedback branch on task_activity_read and task_evaluations_read only — deliberately not blanket Executor access, which would also surface candidate-queue rows (assignment_id null by construction) through the same branch. p_assignment_id is not null guards the common case where it is called with a nullable column directly, though `assignment.id = null` alone would already never match.';
+
 revoke execute on function private.is_global_task_reader()
   from public, anon, authenticated, service_role;
 revoke execute on function private.is_task_team_member(bigint)
   from public, anon, authenticated, service_role;
+revoke execute on function private.is_own_assignment(bigint)
+  from public, anon, authenticated, service_role;
 
 grant execute on function private.is_global_task_reader() to authenticated;
 grant execute on function private.is_task_team_member(bigint) to authenticated;
+grant execute on function private.is_own_assignment(bigint) to authenticated;
 
 -- ==================== Grants: the four tables now have a read path ====================
 
@@ -162,8 +222,8 @@ create policy task_assignments_read
     and private.can_read_task(task_id)
     and (
       member_id = (select auth.uid())
-      or private.can_manage_task(task_id)
       or private.is_global_task_reader()
+      or private.can_manage_task(task_id)
     )
   );
 
@@ -179,8 +239,8 @@ create policy task_candidates_read
     and private.can_read_task(task_id)
     and (
       member_id = (select auth.uid())
-      or private.can_manage_task(task_id)
       or private.is_global_task_reader()
+      or private.can_manage_task(task_id)
     )
   );
 
@@ -196,14 +256,15 @@ create policy task_activity_read
     and private.can_read_task(task_id)
     and (
       actor_id = (select auth.uid())
-      or private.can_manage_task(task_id)
+      or private.is_own_assignment(assignment_id)
       or private.is_global_task_reader()
+      or private.can_manage_task(task_id)
       or private.is_task_team_member(task_id)
     )
   );
 
 comment on policy task_activity_read on public.task_activity is
-  'ADR-0007 (#319): the caller''s own actor rows, every event of a Task they manage, every event when they are a global Task reader, or — decision (b), the literal ADR-0007 text — every event of a Task belonging to their Team ("Team members see all Tasks and complete Task Activity for their Team").';
+  'ADR-0007 (#319): the caller''s own actor rows, every event of a Task they manage, every event when they are a global Task reader, or — decision (b), the literal ADR-0007 text — every event of a Task belonging to their Team ("Team members see all Tasks and complete Task Activity for their Team"). Ruling 13 (fix round 1) adds: every event tied to an Assignment the caller themself holds or once held (private.is_own_assignment), so the Executor reads feedback about their own work — started/submitted/returned_to_progress/evaluated/reopened rows the command wave (#334-#338) stamps with assignment_id — without gaining the Task''s whole timeline: a candidate-queue event keeps assignment_id null, so it stays invisible through this branch.';
 
 create policy task_evaluations_read
   on public.task_evaluations
@@ -214,13 +275,14 @@ create policy task_evaluations_read
     and private.can_read_task(task_id)
     and (
       evaluated_by = (select auth.uid())
-      or private.can_manage_task(task_id)
+      or private.is_own_assignment(assignment_id)
       or private.is_global_task_reader()
+      or private.can_manage_task(task_id)
     )
   );
 
 comment on policy task_evaluations_read on public.task_evaluations is
-  'ADR-0007 (#319): the caller''s own Evaluations as evaluator, every Evaluation of a Task they manage, or every Evaluation when they are a global Task reader. Decision (c): "own row" is evaluated_by, not the Executor being evaluated — the brief''s literal column mapping and issue #319''s AC (silent on the Executor seeing raw Evaluations). No Team-member branch (decision (b)).';
+  'ADR-0007 (#319): the caller''s own Evaluations as evaluator, every Evaluation of a Task they manage, or every Evaluation when they are a global Task reader. Decision (c): "own row" is evaluated_by, not the Executor being evaluated — the brief''s literal column mapping and issue #319''s AC (silent on the Executor seeing raw Evaluations). No Team-member branch (decision (b)). Ruling 13 (fix round 1) adds a separate branch: the Executor of the graded Assignment (private.is_own_assignment) reads the Evaluation of their own work — current or former Executor alike, since it matches the Assignment row, not "the current one" — without gaining a successor Assignment''s Evaluation on the same Task.';
 
 -- ==================== Candidate-queue privacy view ====================
 
@@ -240,6 +302,7 @@ as $$
          and candidate.status = 'pending'
     ) as ordered
    where ordered.member_id = p_member_id
+     and coalesce(public.auth_is_member(), false)
      and (
        p_member_id = (select auth.uid())
        or private.can_manage_task(p_task_id)
@@ -248,7 +311,7 @@ as $$
 $$;
 
 comment on function private.queue_position(bigint, uuid) is
-  '1-based position of p_member_id in p_task_id''s pending Candidate Queue, ordered (joined_at, id); null when not pending. Self-gated: answers only for the caller''s own id, a manager of the Task, or a global Task reader — otherwise null, so granting EXECUTE to authenticated (required for the security_invoker task_queue_summary view) cannot be used to probe another candidate''s position (#319 candidate privacy).';
+  '1-based position of p_member_id in p_task_id''s pending Candidate Queue, ordered (joined_at, id); null when not pending. Self-gated: answers only for a live, active member (coalesce(auth_is_member(), false), fix round 1 minor 5 — unlike its siblings, this predicate had no membership/active gate of its own) asking about their own id, a manager of the Task, or a global Task reader — otherwise null, so granting EXECUTE to authenticated (required for the security_invoker task_queue_summary view) cannot be used to probe another candidate''s position (#319 candidate privacy).';
 
 create function private.pending_candidate_count(p_task_id bigint)
 returns integer
@@ -257,15 +320,19 @@ stable
 security definer
 set search_path = ''
 as $$
-  select count(*)::integer
-    from public.task_candidates as candidate
-   where candidate.task_id = p_task_id
-     and candidate.status = 'pending'
-     and private.can_read_task(p_task_id);
+  select case
+           when private.can_read_task(p_task_id) then (
+             select count(*)::integer
+               from public.task_candidates as candidate
+              where candidate.task_id = p_task_id
+                and candidate.status = 'pending'
+           )
+           else null
+         end;
 $$;
 
 comment on function private.pending_candidate_count(bigint) is
-  'Count of pending Candidates for p_task_id, or null when the caller cannot read the Task. A count carries no per-identity information, so unlike queue_position it is not further self-gated. Bypasses task_candidates RLS (security definer, reads as the table owner) so the count reflects every pending candidate, not just the caller''s own visible rows.';
+  'Count of pending Candidates for p_task_id, or null when the caller cannot read the Task. Fix round 1 minor 4: the original body ANDed can_read_task into the count''s own WHERE clause, so a caller who could not read the Task got 0 (an empty count), not null as this comment always said — indistinguishable from "an empty queue on a Task I can read". The `case` above now actually returns null in that case, matching queue_position''s contract; a count carries no per-identity information, so unlike queue_position it is not further self-gated. Bypasses task_candidates RLS (security definer, reads as the table owner) so the count reflects every pending candidate, not just the caller''s own visible rows.';
 
 revoke execute on function private.queue_position(bigint, uuid)
   from public, anon, authenticated, service_role;
@@ -286,5 +353,13 @@ select
 comment on view public.task_queue_summary is
   'Per-Task Candidate Queue summary for the current caller: pending_count (visible to anyone who can read the Task) and my_position (the caller''s own 1-based pending position, null if not queued). security_invoker, so selecting from public.tasks here is already restricted by tasks_read to Tasks the caller can read — no separate predicate is needed. Both columns are computed by SECURITY DEFINER helpers that bypass task_candidates RLS on purpose (#319 candidate privacy): a fellow candidate reads their own position and the total count, never another candidate''s identity or row.';
 
-revoke all on public.task_queue_summary from public, anon;
-grant select on public.task_queue_summary to authenticated;
+-- Important 1 (fix round 1): the view was created auto-updatable on
+-- task_id, and revoking only public/anon left `authenticated` holding
+-- INSERT/UPDATE/DELETE inherited from the 20260819171628 default privilege
+-- grant, and service_role all four — PostgREST would have exposed
+-- PATCH/DELETE on a view with no meaningful primary key of its own. Same
+-- idiom as public.tasks_with_overdue: revoke everything from every role,
+-- then grant back SELECT only (minor 8: including service_role, the repo's
+-- standard shape for a read-only view).
+revoke all on public.task_queue_summary from public, anon, authenticated, service_role;
+grant select on public.task_queue_summary to authenticated, service_role;
