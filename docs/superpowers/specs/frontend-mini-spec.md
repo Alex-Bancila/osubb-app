@@ -8,7 +8,7 @@
 
 > **Partly superseded (2026-09-07/10):** ADR-0002 now fixes Tailwind + shadcn/ui (Base UI, Nova) + TanStack Table in a browser-first PWA. The Ionic and AG Grid guidance in §2 (`DataGrid.tsx`) and §7, and the PWA timing in §9, are historical. Folder layout, routes, auth, data layer and theming rules still apply.
 
-ADR-0002 chose the stack. This fixes _how we use it_, so that every screen PR looks the same, two volunteers don't invent two architectures, and an Epic-9 issue can say "per §4 of the mini-spec" instead of re-deciding.
+ADR-0002 chose the stack. This fixes *how we use it*, so that every screen PR looks the same, two volunteers don't invent two architectures, and an Epic-9 issue can say "per §4 of the mini-spec" instead of re-deciding.
 
 Before frontend work, read the [OSUBB brand reference](../../brand/reference.md).
 
@@ -22,7 +22,7 @@ Read this once before your first frontend issue. It is deliberately short; where
 
 Every table is protected by RLS keyed on the member's JWT claims. A query for tasks returns exactly the tasks that member may see — the frontend does not filter by department, does not check levels before fetching, and never re-implements a policy in TypeScript.
 
-Role checks in the UI exist for **cosmetics and kindness**: hiding a tab nobody can use, disabling a button that would fail. They are never the security boundary. If you find yourself writing `if (role === 'bc')` around _data_, stop — that logic belongs in a policy, and probably already exists.
+Role checks in the UI exist for **cosmetics and kindness**: hiding a tab nobody can use, disabling a button that would fail. They are never the security boundary. If you find yourself writing `if (role === 'bc')` around *data*, stop — that logic belongs in a policy, and probably already exists.
 
 Practical consequence: a screen built against the demo seed shows different data for `voluntar@demo.osubb` and `bc@demo.osubb` **with no conditional code at all**. That's the intended feel.
 
@@ -57,18 +57,18 @@ Rules: a component used by one screen lives in that screen's folder. It moves to
 
 ## 3. Routes
 
-| Path             | Screen                                      | Who                  | Issue     |
-| ---------------- | ------------------------------------------- | -------------------- | --------- |
-| `/login`         | magic-link request + "check your email"     | signed out           | #83       |
-| `/auth/callback` | completes the session from the link         | —                    | #83       |
-| `/no-profile`    | "contul tău nu este activ — contactează BC" | signed in, no claims | #85       |
-| `/`              | Dashboard                                   | everyone             | #93–#95   |
-| `/tracker`       | Task Tracker                                | everyone             | #88–#92   |
-| `/calendar`      | Calendar                                    | everyone             | #96–#98   |
-| `/anunturi`      | Announcements + notifications               | everyone             | #99–#101  |
-| `/voluntari`     | Volunteers directory                        | level ≥ 5            | #102–#103 |
-| `/bc`            | BC Panel                                    | level ≥ 6            | #104–#107 |
-| `/profil`        | Profile                                     | everyone             | #108      |
+| Path | Screen | Who | Issue |
+|---|---|---|---|
+| `/login` | magic-link request + "check your email" | signed out | #83 |
+| `/auth/callback` | completes the session from the link | — | #83 |
+| `/no-profile` | "contul tău nu este activ — contactează BC" | signed in, no claims | #85 |
+| `/` | Dashboard | everyone | #93–#95 |
+| `/tracker` | Task Tracker | everyone | #88–#92 |
+| `/calendar` | Calendar | everyone | #96–#98 |
+| `/anunturi` | Announcements + notifications | everyone | #99–#101 |
+| `/voluntari` | Volunteers directory | level ≥ 5 | #102–#103 |
+| `/bc` | BC Panel | level ≥ 6 | #104–#107 |
+| `/profil` | Profile | everyone | #108 |
 
 Paths are Romanian because members read them; code identifiers stay English (`CONTEXT.md` rule).
 
@@ -103,18 +103,16 @@ const canManageTasks = (claims?.member_level ?? 0) >= 4;
 **Query keys** are arrays, most general first, and mirror the data — not the screen:
 
 ```ts
-["tasks", "mine"][("tasks", "open")][("tasks", { dept: "edu" })][
-  ("points", "me")
-][("points", "leaderboard")][("points", "deptCup")][("events", "upcoming")][
-  ("announcements", "feed")
-][("notifications", "unread")];
+['tasks', 'mine']            ['tasks', 'open']         ['tasks', { dept: 'edu' }]
+['points', 'me']             ['points', 'leaderboard'] ['points', 'deptCup']
+['events', 'upcoming']       ['announcements', 'feed'] ['notifications', 'unread']
 ```
 
 Two screens showing the same data share a key and therefore share a cache entry. After a mutation, invalidate the **prefix** (`['points']`), not each leaf.
 
 **Read from views where one exists** — `leaderboard`, `dept_cup`, `member_points`, `profiles_directory`, `profiles_contact`. They already carry the right joins and the right permissions.
 
-⚠️ **Never `select('*')` on `profiles`.** Members hold column grants, not a table grant: `email` and `phone` are revoked, so `*` fails with _permission denied for column email_. Use `profiles_directory` for lists and `profiles_contact` when you actually need contact details (it returns your own row, or everyone's at level ≥ 5).
+⚠️ **Never `select('*')` on `profiles`.** Members hold column grants, not a table grant: `email` and `phone` are revoked, so `*` fails with *permission denied for column email*. Use `profiles_directory` for lists and `profiles_contact` when you actually need contact details (it returns your own row, or everyone's at level ≥ 5).
 
 **Every query renders three states** — loading, error, empty — using `components/states/`. An empty list is not an error and must say something useful in Romanian ("Niciun task deschis acum"). Errors are human, never a raw Postgres string:
 
@@ -147,7 +145,7 @@ Dark mode is a client-side toggle on `data-theme`, persisted in `localStorage`, 
 
 **AG Grid Community** is for the two dense tables only: the tracker and the volunteers directory. Everything else is a list of cards. Wrap it once in `components/DataGrid.tsx` (theme, locale, empty message, sizing) so a change lands in one place.
 
-**Romanian, ordinary, and specific** in all user-facing copy. Buttons say what happens: _Revendică_, _Notează_, _Trimite invitația_. Numbers use `ro-RO` formatting; a negative points value shows as `−6`, not `-6`.
+**Romanian, ordinary, and specific** in all user-facing copy. Buttons say what happens: *Revendică*, *Notează*, *Trimite invitația*. Numbers use `ro-RO` formatting; a negative points value shows as `−6`, not `-6`.
 
 ## 8. Definition of done for a screen
 
