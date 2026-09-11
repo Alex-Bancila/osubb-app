@@ -9,9 +9,11 @@
 -- issue: two `source`s share this table, and the single-open-Evaluation
 -- rule is scoped to only one of them.
 --   - `command` (the default): every Evaluation the evaluation commands
---     (#336-#338) write for new work. A command row always names its
---     evaluator (`task_evaluations_evaluator_ck`), and at most one command
---     row per Task may be open at a time
+--     (#336-#338) write for new work, plus the Evaluation
+--     `approve_completed_work_request` (#344) creates under ADR-0007. A
+--     command row always names its evaluator
+--     (`task_evaluations_evaluator_ck`), and at most one command row per
+--     Task may be open at a time
 --     (`task_evaluations_one_open_per_task_uidx`) — ADR-0007's single
 --     Executor, one live Evaluation.
 --   - `legacy_migration`: reserved for #317's one-time backfill of pre-#316
@@ -65,13 +67,20 @@
 -- existing primary key, and `task_evaluations` references that pair —
 -- inserting an Evaluation whose `assignment_id` belongs to a different
 -- `task_id` fails the foreign key (23503), not a same-migration guess.
+-- `assignment_id` carries no separate single-column foreign key of its own:
+-- the composite `(assignment_id, task_id)` foreign key below already forces
+-- `assignment_id` to exist in `task_assignments.id` (already unique via the
+-- primary key), so a second, redundant relationship to the same table would
+-- only give PostgREST two paths to embed `task_assignments` from
+-- `task_evaluations` — ambiguous embedding (PGRST201) for the read APIs
+-- coming in #318/#319.
 alter table public.task_assignments
-  add constraint task_assignments_id_task_key unique (id, task_id);
+  add constraint task_assignments_id_task_id_key unique (id, task_id);
 
 create table public.task_evaluations (
   id              bigint generated always as identity primary key,
   task_id         bigint not null references public.tasks (id),
-  assignment_id   bigint not null references public.task_assignments (id),
+  assignment_id   bigint not null,
   source          text not null default 'command'
                   constraint task_evaluations_source_ck check (
                     source in ('command', 'legacy_migration')),
@@ -115,8 +124,9 @@ create table public.task_evaluations (
   constraint task_evaluations_evaluator_ck check (
     source = 'legacy_migration' or evaluated_by is not null
   ),
-  -- Ties this Evaluation's Task to the same Task its Assignment belongs to
-  -- (see the header comment).
+  -- Ties this Evaluation's Task to the same Task its Assignment belongs to,
+  -- and is the only foreign key to task_assignments this table declares
+  -- (see the header comment on why assignment_id has no single-column FK).
   foreign key (assignment_id, task_id)
     references public.task_assignments (id, task_id)
 );
@@ -170,7 +180,7 @@ comment on table public.task_evaluations is
   'Append-only record of every Task Evaluation (completed or unfulfilled) and its reversal. Difficulty and Rating are set together at Evaluation time and are preserved even after reversal (ADR-0007).';
 
 comment on column public.task_evaluations.source is
-  'command (default) or legacy_migration. New work always writes command, via the evaluation commands (#336-#338), which must never write legacy_migration themselves. legacy_migration is reserved for #317''s one-time backfill of pre-#316 demo/historical Tasks — see the migration header.';
+  'command (default) or legacy_migration. New work always writes command — via the evaluation commands (#336-#338) or approve_completed_work_request (#344) — none of which may ever write legacy_migration themselves. legacy_migration is reserved for #317''s one-time backfill of pre-#316 demo/historical Tasks — see the migration header.';
 
 comment on column public.task_evaluations.evaluated_by is
   'Evaluator profile. Required when source = command (task_evaluations_evaluator_ck). Null only on legacy_migration rows, where no historical evaluator can be identified — the Task creator is not evidence (dobrerares, #316) — so unknown is represented as null, never invented.';
@@ -213,19 +223,16 @@ begin
   -- tg_op = 'UPDATE': allowed only when the row is still open (old.reversed_at
   -- is null), the new row sets all three reversal columns together, and
   -- every other column — source included — is left exactly as it was.
+  -- Comparing to_jsonb(new)/to_jsonb(old) with the reversal trio subtracted
+  -- out, rather than naming every remaining column explicitly, means a
+  -- column added to this table later stays immutable automatically, with no
+  -- matching edit needed here.
   if old.reversed_at is null
      and new.reversed_at is not null
      and new.reversed_by is not null
      and new.reversal_reason is not null
-     and (
-       new.id, new.task_id, new.assignment_id, new.source, new.evaluated_by,
-       new.outcome, new.difficulty, new.rating, new.points, new.note,
-       new.evaluated_at, new.created_at
-     ) is not distinct from (
-       old.id, old.task_id, old.assignment_id, old.source, old.evaluated_by,
-       old.outcome, old.difficulty, old.rating, old.points, old.note,
-       old.evaluated_at, old.created_at
-     )
+     and (to_jsonb(new) - array['reversed_at', 'reversed_by', 'reversal_reason'])
+         = (to_jsonb(old) - array['reversed_at', 'reversed_by', 'reversal_reason'])
   then
     return new;
   end if;

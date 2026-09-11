@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(63);
+select plan(67);
 
 -- ==================== Structure ====================
 select has_table('public', 'task_evaluations', 'the evaluation history table exists');
@@ -30,7 +30,7 @@ select fk_ok('public', 'task_evaluations', array['assignment_id', 'task_id'],
   'public', 'task_assignments', array['id', 'task_id'],
   'an Evaluation''s Assignment must belong to the same Task');
 select col_not_null('public', 'task_evaluations', 'source', 'source is required (defaults to command)');
-select col_has_default('public', 'task_evaluations', 'source', 'source defaults to command for new work');
+select col_default_is('public', 'task_evaluations', 'source', 'command', 'source defaults to command for new work');
 select fk_ok('public', 'task_evaluations', 'evaluated_by', 'public', 'profiles', 'id',
   'the evaluator, when named, references a Profile');
 select col_not_null('public', 'task_evaluations', 'outcome', 'outcome is required');
@@ -213,6 +213,27 @@ select throws_ok(
   '23514', null,
   'a reversal with only reversed_at set is rejected');
 
+-- ==================== reversal_reason must be non-blank, even when the
+-- trio is set together at insert ====================
+insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
+values ('Evaluation fixture Task E 316 (blank reversal reason)', 3, 4, 'completed', now(), 'edu');
+insert into public.task_assignments (task_id, member_id)
+select id, '31600000-0000-0000-0000-000000000002'
+  from public.tasks where title = 'Evaluation fixture Task E 316 (blank reversal reason)';
+
+select throws_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note,
+        reversed_at, reversed_by, reversal_reason)
+     select task.id, assignment.id, '31600000-0000-0000-0000-000000000001',
+            'completed', 3, 4, 6, 'a note',
+            now(), '31600000-0000-0000-0000-000000000001', '   '
+       from public.tasks task
+       join public.task_assignments assignment on assignment.task_id = task.id
+      where task.title = 'Evaluation fixture Task E 316 (blank reversal reason)' $$,
+  '23514', null,
+  'a reversal_reason of all spaces is rejected even with the other two reversal columns set');
+
 -- ==================== reversal cannot precede evaluation ====================
 select throws_ok(
   $$ insert into public.task_evaluations
@@ -251,6 +272,47 @@ select throws_ok(
   '23505', null,
   'a second open command Evaluation for the same Task (and Assignment) is rejected');
 
+-- ==================== per-Task command cap holds across two different
+-- Assignments of the same Task, isolated from the per-Assignment cap
+-- (the test above reuses one Assignment, so it cannot tell which index
+-- actually rejected the second insert) ====================
+insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
+values ('Evaluation fixture Task D 316 (per-task cap)', 3, 4, 'completed', now(), 'edu');
+-- One ended Assignment (replaced) and one still-active Assignment, both on
+-- Task D — task_assignments_one_active_per_task_uidx only bars two
+-- simultaneously active rows, not this shape.
+insert into public.task_assignments (task_id, member_id, ended_at, end_reason)
+select id, '31600000-0000-0000-0000-000000000002', now(), 'replaced'
+  from public.tasks where title = 'Evaluation fixture Task D 316 (per-task cap)';
+insert into public.task_assignments (task_id, member_id)
+select id, '31600000-0000-0000-0000-000000000003'
+  from public.tasks where title = 'Evaluation fixture Task D 316 (per-task cap)';
+
+select lives_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, '31600000-0000-0000-0000-000000000001',
+            'completed', 3, 4, 6, 'command evaluation on the ended assignment'
+       from public.tasks task
+       join public.task_assignments assignment
+         on assignment.task_id = task.id
+        and assignment.member_id = '31600000-0000-0000-0000-000000000002'
+      where task.title = 'Evaluation fixture Task D 316 (per-task cap)' $$,
+  'a command Evaluation on Task D''s first (ended) Assignment is recorded');
+
+select throws_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, '31600000-0000-0000-0000-000000000001',
+            'completed', 2, 3, 4, 'a second command evaluation, different assignment, same task'
+       from public.tasks task
+       join public.task_assignments assignment
+         on assignment.task_id = task.id
+        and assignment.member_id = '31600000-0000-0000-0000-000000000003'
+      where task.title = 'Evaluation fixture Task D 316 (per-task cap)' $$,
+  '23505', null,
+  'a second open command Evaluation on Task D''s other Assignment is rejected by the per-Task cap alone (the two rows share no Assignment)');
+
 -- ==================== source: legacy_migration may omit an evaluator ====================
 -- Task B's Assignment still carries no Evaluation at this point (the
 -- earlier source-check and Assignment-mismatch tests on it never
@@ -271,17 +333,22 @@ select lives_ok(
 -- credits) ====================
 insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
 values ('Evaluation fixture Task C 316 (multi-assignee legacy)', 3, 4, 'completed', now(), 'edu');
--- Both Assignments are ended, per #290: a multi-assignee legacy Task
--- preserves every participant as ended Assignment history, never as two
--- simultaneously active Assignments — task_assignments permits only one
--- active (ended_at is null) row per Task
--- (task_assignments_one_active_per_task_uidx). end_reason
--- 'legacy_migration' exists on that table for exactly this case.
+-- Both Assignments are ended, per #290's backfill
+-- (20260911106000_backfill_task_assignments.sql) and the matching block in
+-- seed.sql: for a *completed* legacy Task, every participant's Assignment
+-- ends at the Task's completed_at with end_reason = 'completed' —
+-- end_reason 'legacy_migration' is reserved for participants displaced from
+-- an *unfinished* Task (todo/in_progress/in_review), not for this
+-- completed-Task case. task_assignments permits only one active
+-- (ended_at is null) row per Task at a time
+-- (task_assignments_one_active_per_task_uidx), which is why both
+-- participants must be ended history rather than two simultaneously active
+-- Assignments.
 insert into public.task_assignments (task_id, member_id, ended_at, end_reason)
-select id, '31600000-0000-0000-0000-000000000002', now(), 'legacy_migration'
+select id, '31600000-0000-0000-0000-000000000002', completed_at, 'completed'
   from public.tasks where title = 'Evaluation fixture Task C 316 (multi-assignee legacy)';
 insert into public.task_assignments (task_id, member_id, ended_at, end_reason)
-select id, '31600000-0000-0000-0000-000000000003', now(), 'legacy_migration'
+select id, '31600000-0000-0000-0000-000000000003', completed_at, 'completed'
   from public.tasks where title = 'Evaluation fixture Task C 316 (multi-assignee legacy)';
 
 select lives_ok(
@@ -383,6 +450,18 @@ select throws_ok(
     (select id from public.tasks where title = 'Evaluation fixture Task A 316')),
   '23514', 'task_evaluation_immutable',
   'a second reversal of an already-reversed Evaluation is rejected');
+
+-- ==================== a legacy Evaluation with a null evaluator can still
+-- be reversed correctly (proves the guard's unchanged-columns comparison is
+-- null-safe: evaluated_by stays null on both sides, which must read as
+-- "unchanged", not as "distinct") ====================
+select lives_ok(
+  format($$ update public.task_evaluations
+               set reversed_at = now(), reversed_by = '31600000-0000-0000-0000-000000000001',
+                   reversal_reason = 'legacy credit reopened for correction'
+             where task_id = %s $$,
+    (select id from public.tasks where title = 'Evaluation fixture Task B 316')),
+  'a legacy Evaluation with a null evaluated_by is reversed successfully');
 
 -- ==================== a reversed Evaluation plus a new one is accepted ====================
 select lives_ok(
