@@ -375,9 +375,9 @@ update tasks set rating = 5 where title = 'Migrare bază de date';           -- 
 update tasks set rating = 1 where title = 'Fotografii eveniment';           -- 2 × −1 = −2
 
 -- A BC sanction is separate from task points and is signed by its author.
-insert into points_ledger (member_id, delta, reason, awarded_by) values
+insert into points_ledger (member_id, delta, reason, awarded_by, note) values
   ('d0000000-0000-0000-0000-000000000003', -5, 'sanction',
-   'd0000000-0000-0000-0000-000000000007');
+   'd0000000-0000-0000-0000-000000000007', 'Întârziere repetată la ședințe.');
 
 -- ==================== Calendar ====================
 -- One event per branch of the visibility rule (spec §4.4), so switching

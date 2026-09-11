@@ -144,8 +144,8 @@ select is(
   0::bigint, 'removing an assignee removes their ledger row');
 
 -- ==================== Sanctions reduce totals ====================
-insert into points_ledger (member_id, delta, reason)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', -5, 'sanction');
+insert into points_ledger (member_id, delta, reason, note)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', -5, 'sanction', 'test sanction');
 
 select is(
   (select points from member_points where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),

@@ -71,10 +71,10 @@ select id, 'a5100000-0000-0000-0000-000000000001'::uuid
  where title = 'my-points-task';
 update public.tasks set rating = 4 where title = 'my-points-task';
 
-insert into public.points_ledger (member_id, delta, reason) values
-  ('a5100000-0000-0000-0000-000000000001', -2, 'sanction'),
-  ('a5100000-0000-0000-0000-000000000003', -11, 'sanction'),
-  ('a5100000-0000-0000-0000-000000000004', -7, 'sanction');
+insert into public.points_ledger (member_id, delta, reason, note) values
+  ('a5100000-0000-0000-0000-000000000001', -2, 'sanction', 'test sanction'),
+  ('a5100000-0000-0000-0000-000000000003', -11, 'sanction', 'test sanction'),
+  ('a5100000-0000-0000-0000-000000000004', -7, 'sanction', 'test sanction');
 
 select pg_temp.test_login('a5100000-0000-0000-0000-000000000001', jsonb_build_object(
     'member_role', 'voluntar', 'member_level', 1,

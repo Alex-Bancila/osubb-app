@@ -62,16 +62,16 @@ insert into public.member_departments (member_id, dept_id) values
   ('b5600000-0000-0000-0000-000000000004', 'edu'),
   ('b5600000-0000-0000-0000-000000000005', 'edu');
 
-insert into public.points_ledger (member_id, delta, reason) values
-  ('b5600000-0000-0000-0000-000000000000', -1, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000001', -2, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000002', -3, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000003', -4, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000004', -5, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000005', -6, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000006', -7, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000009', -9, 'sanction'),
-  ('b5600000-0000-0000-0000-000000000010', -10, 'sanction');
+insert into public.points_ledger (member_id, delta, reason, note) values
+  ('b5600000-0000-0000-0000-000000000000', -1, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000001', -2, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000002', -3, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000003', -4, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000004', -5, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000005', -6, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000006', -7, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000009', -9, 'sanction', 'test sanction'),
+  ('b5600000-0000-0000-0000-000000000010', -10, 'sanction', 'test sanction');
 
 select pg_temp.test_login('b5600000-0000-0000-0000-000000000000', jsonb_build_object(
     'member_role', 'recrut', 'member_level', 0,
@@ -217,8 +217,8 @@ select pg_temp.test_login('b5600000-0000-0000-0000-000000000000', jsonb_build_ob
     'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
   ));
 select throws_ok(
-  $$ insert into public.points_ledger (member_id, delta, reason)
-     values ('b5600000-0000-0000-0000-000000000000', -99, 'sanction') $$,
+  $$ insert into public.points_ledger (member_id, delta, reason, note)
+     values ('b5600000-0000-0000-0000-000000000000', -99, 'sanction', 'test sanction') $$,
   '42501',
   null,
   'an ordinary member cannot insert ledger rows'

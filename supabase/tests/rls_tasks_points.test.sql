@@ -94,7 +94,9 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', 99, 'manual_award',
              'a0000000-0000-0000-0000-000000000011') $$,
-  '23514', null, 'a voluntar cannot create retired manual awards');
+  -- #162: no INSERT policy admits reason <> 'sanction', so RLS denies this
+  -- before the row ever reaches the reason CHECK constraint.
+  '42501', null, 'a voluntar cannot create retired manual awards');
 
 select is((select count(*) from task_requests), 1::bigint,
   'voluntar sees only their own requests');
@@ -143,17 +145,17 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', 5, 'manual_award',
              'c0000000-0000-0000-0000-000000000013') $$,
-  '23514', null, 'a responsabil cannot create retired manual awards');
+  '42501', null, 'a responsabil cannot create retired manual awards');
 select throws_ok(
-  $$ insert into points_ledger (member_id, delta, reason, awarded_by)
-     values ('a0000000-0000-0000-0000-000000000011', -5, 'sanction',
+  $$ insert into points_ledger (member_id, delta, reason, note, awarded_by)
+     values ('a0000000-0000-0000-0000-000000000011', -5, 'sanction', 'test sanction',
              'c0000000-0000-0000-0000-000000000013') $$,
   '42501', null, 'sanctions below level 6 are denied');
 select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', 5, 'manual_award',
              'a0000000-0000-0000-0000-000000000011') $$,
-  '23514', null, 'retired manual awards remain unavailable even with a forged author');
+  '42501', null, 'retired manual awards remain unavailable even with a forged author');
 
 update task_requests
    set status = 'approved', decided_by = 'c0000000-0000-0000-0000-000000000013'
@@ -177,8 +179,8 @@ select pg_temp.test_login('d0000000-0000-0000-0000-000000000014', jsonb_build_ob
 select is((select count(*) from points_ledger), 3::bigint,
   'level >= 6 reads the whole ledger');
 select lives_ok(
-  $$ insert into points_ledger (member_id, delta, reason, awarded_by)
-     values ('b0000000-0000-0000-0000-000000000012', -3, 'sanction',
+  $$ insert into points_ledger (member_id, delta, reason, note, awarded_by)
+     values ('b0000000-0000-0000-0000-000000000012', -3, 'sanction', 'test sanction',
              'd0000000-0000-0000-0000-000000000014') $$,
   'BC may sanction');                                     -- Bianca −3
 select is((select count(*) from task_requests), 3::bigint,
