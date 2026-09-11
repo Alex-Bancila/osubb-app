@@ -172,8 +172,17 @@ begin
         message = 'task_hierarchy_too_deep';
     end if;
 
-    -- A newly linked Subtask must inherit the Umbrella's Origin exactly.
-    if tg_op = 'INSERT' and (
+    -- A newly linked Subtask must inherit the Umbrella's Origin exactly --
+    -- whether it is linked at INSERT time or first linked later via
+    -- `update ... set parent_task_id = <umbrella>` on a row that had no
+    -- parent before (`old.parent_task_id is null`). A row that was already a
+    -- Subtask changing its parent is already rejected by the immutability
+    -- guard above, so "old.parent_task_id is null" here means exactly "not
+    -- yet a Subtask". `tg_op = 'INSERT'` is checked first so the `or`
+    -- short-circuits before `old` is referenced -- OLD is unassigned on
+    -- INSERT and referencing it would raise "record ""old"" is not assigned
+    -- yet".
+    if (tg_op = 'INSERT' or old.parent_task_id is null) and (
          new.dept_id is distinct from v_parent_dept
       or new.team_id is distinct from v_parent_team
       or new.project_id is distinct from v_parent_project

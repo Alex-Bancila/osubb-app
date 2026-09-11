@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(25);
 
 insert into auth.users (id, email) values
   ('31500000-0000-0000-0000-000000000001', 'umbrella-actor-315@test.local');
@@ -146,6 +146,40 @@ select throws_ok(
     (select id from public.tasks where title = 'Other umbrella 315')),
   '23514', 'task_hierarchy_too_deep',
   'an Umbrella that already has Subtasks cannot itself become a Subtask');
+
+-- ==================== Fix round 1: first link by UPDATE must check origin too ====================
+-- An ordinary Task (parent_task_id null) can also become a Subtask through
+-- `update ... set parent_task_id = <umbrella>`, not just at INSERT time. The
+-- origin-equality check must fire on that first link regardless of which
+-- statement performs it.
+insert into public.tasks (title, dept_id, difficulty) values
+  ('Ordinary task wrong-origin link 315', 'pr', 1);
+
+select throws_ok(
+  format($$ update public.tasks set parent_task_id = %L
+            where title = 'Ordinary task wrong-origin link 315' $$,
+    (select id from public.tasks where title = 'Umbrella 315')),
+  '23514', 'subtask_origin_mismatch',
+  'first linking a Task to an Umbrella of a different Origin via UPDATE is rejected');
+
+insert into public.tasks (title, dept_id, difficulty) values
+  ('Ordinary task same-origin link 315', 'edu', 1);
+
+select lives_ok(
+  format($$ update public.tasks set parent_task_id = %L
+            where title = 'Ordinary task same-origin link 315' $$,
+    (select id from public.tasks where title = 'Umbrella 315')),
+  'first linking a Task to an Umbrella of the same Origin via UPDATE is allowed');
+
+-- ==================== Fix round 1: umbrella-origin-change invariant, now exercised ====================
+-- "An Umbrella with existing Subtasks cannot change its own Origin"
+-- (~lines 128-136) previously had no assertion. Isolated: 'Umbrella 315'
+-- carries no Campaign (#314's trigger returns immediately on a null
+-- campaign_id) and 'fin' is a valid, distinct Department.
+select throws_ok(
+  $$ update public.tasks set dept_id = 'fin' where title = 'Umbrella 315' $$,
+  '23514', 'subtask_origin_immutable',
+  'an Umbrella with existing Subtasks cannot change its own Origin');
 
 -- ==================== #314 interaction: a Campaign on an Umbrella ====================
 insert into public.campaigns (department_id, name, is_active, created_by) values
