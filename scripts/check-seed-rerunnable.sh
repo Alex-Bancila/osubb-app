@@ -36,10 +36,22 @@ db_port=$(awk '
 
 LOCAL_DB_URL="${LOCAL_DB_URL:-postgresql://postgres:postgres@127.0.0.1:${db_port}/postgres}"
 
+# libpq lets environment variables and URL query parameters redirect a
+# connection away from the host in the URL's authority (PGHOSTADDR wins over
+# the URL host; ?host=, ?hostaddr= and ?service= in the query do too). The
+# local stack needs none of them, so clear the environment ones and refuse
+# any query string outright — otherwise the host check below could pass on
+# 127.0.0.1 while psql actually connects somewhere else.
+unset PGHOST PGHOSTADDR PGPORT PGSERVICE PGSERVICEFILE PGDATABASE
+if [[ "$LOCAL_DB_URL" == *"?"* ]]; then
+  echo "::error::Refusing LOCAL_DB_URL with a query string: parameters such as ?host= can redirect the connection past the local-host check." >&2
+  exit 2
+fi
+
 # Extract the host from LOCAL_DB_URL and refuse anything non-local, before
 # any connection is attempted. Handles postgres:// and postgresql://, an
 # optional user[:password]@ prefix, an optional :port, an optional
-# /database and ?query suffix, and a bracketed IPv6 host such as [::1].
+# /database suffix, and a bracketed IPv6 host such as [::1].
 if [[ ! "$LOCAL_DB_URL" =~ ^postgres(ql)?://([^/?]*)(.*)$ ]]; then
   echo "::error::Could not parse LOCAL_DB_URL as a postgres:// or postgresql:// URL." >&2
   exit 2
@@ -64,6 +76,9 @@ CONTAINER="supabase_db_$(sed -n 's/^project_id = "\(.*\)"/\1/p' supabase/config.
 # Prefer a real psql against the local stack's LOCAL_DB_URL. Fall back to
 # `docker exec` into the db container supabase_start/reset already brought
 # up (its name is derived from config.toml's project_id, not hardcoded).
+# The docker path never reads LOCAL_DB_URL — it always reaches the local
+# container by name — so on a machine without psql, a LOCAL_DB_URL port or
+# host override has no effect (it cannot reach anything non-local either).
 # The container has no view of the repo on disk, so when the docker path is
 # used, translate a `-f FILE` argument into a stdin redirect from the host
 # instead of forwarding the flag — psql running inside the container could
@@ -105,6 +120,8 @@ fi
 # broken run does not poison the next one.
 cleanup() {
   run_sql -q <<'SQL' >/dev/null 2>&1 || true
+delete from tasks
+ where created_by = 'e2750000-0000-0000-0000-000000000001';
 delete from projects
  where created_by = 'e2750000-0000-0000-0000-000000000001';
 delete from auth.users
@@ -141,6 +158,9 @@ values ('e2750000-0000-0000-0000-000000000001', 'Seed Preservation',
 insert into projects (name, status, leader_id, created_by)
 values ('Cross-owned seed guard', 'active',
         'd0000000-0000-0000-0000-000000000005',
+        'e2750000-0000-0000-0000-000000000001');
+insert into tasks (title, difficulty, status, audience, created_by)
+values ('Non-demo local opportunity', 1, 'open', 'local',
         'e2750000-0000-0000-0000-000000000001');
 SQL
 
@@ -179,9 +199,9 @@ if [ "$before" != "$after" ]; then
   exit 1
 fi
 
-preserved=$(run_sql -c "select format('%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'))")
-if [ "$preserved" != "1:1:1" ]; then
-  echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project sentinel ($preserved)."
+preserved=$(run_sql -c "select format('%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'open' and audience = 'local'))")
+if [ "$preserved" != "1:1:1:1" ]; then
+  echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project/local-Task sentinels ($preserved)."
   exit 1
 fi
 

@@ -48,37 +48,54 @@ interactions rather than calling event handlers directly.
 
 ```
 app/
-├── index.html            # <html lang="ro">, Montserrat, no-flash theme script
-├── public/icon.png       # OSUBB mark (favicon)
+├── index.html              # <html lang="ro">, Montserrat, no-flash theme script
+├── public/icon.png         # OSUBB mark (favicon)
 └── src/
-    ├── main.tsx          # bootstrap: Ionic CSS, our theme, AuthProvider
-    ├── App.tsx           # routes + the session and capability guards
+    ├── main.tsx            # bootstrap: Ionic CSS, our theme, AuthProvider
+    ├── App.tsx             # routes + the session and capability guards
+    ├── vite-env.d.ts
+    ├── assets/brand/       # OSUBB mark + wordmark, light/dark (own README)
     ├── lib/
-    │   ├── supabase.ts     # the one shared client, env-driven
-    │   ├── auth.tsx        # session + decoded claims, useAuth()
-    │   └── capabilities.ts # level thresholds, named as the database names them
-    │   └── format.ts       # dates, points, initials — Romanian locale
+    │   ├── supabase.ts             # the one shared client, env-driven
+    │   ├── auth.tsx                # session + decoded claims, useAuth() (+ auth.test.tsx)
+    │   ├── auth-error-message.ts   # maps GoTrue errors to Romanian copy
+    │   ├── capabilities.ts         # level thresholds, named as the database names them
+    │   ├── calendar-time.ts        # Bucharest wall-clock time conversions (+ calendar-time.test.ts)
+    │   ├── database.types.ts       # generated — `npm run gen:types`, never hand-edited
+    │   └── format.ts               # dates, points, initials — Romanian locale
     ├── queries/
     │   ├── client.ts       # QueryClient defaults; a refusal is not retried
     │   ├── keys.ts         # the key conventions — read this before adding a hook
-    │   ├── points.ts       # useMyPoints, useLeaderboard, useDeptCup
-    │   └── tasks.ts        # useMyTasks, useOpenTasks
+    │   ├── points.ts       # useMyPoints, useLeaderboard, useDeptCup (+ points.test.tsx)
+    │   ├── tasks.ts        # useMyTasks, useOpenTasks
+    │   ├── events.ts       # calendar reads (+ events.test.ts)
+    │   ├── event-rsvp.ts   # the RSVP mutation (+ event-rsvp.test.tsx)
+    │   ├── profile.ts      # the signed-in member's own profile row
+    │   └── reference.ts    # departments/roles lookups for display
     ├── components/
     │   ├── ui/             # locally owned shadcn Base UI/Nova primitives
-    │   ├── shell/          # sidebar, topbar, tab bar — one list drives all three
-    │   └── states/         # Loading, Empty, ErrorState — every query renders all three
+    │   ├── shell/          # AppShell.tsx, navItems.ts — one list drives sidebar/topbar/tab bar
+    │   └── states/         # Loading, Empty, ErrorState — every query renders all three (+ test)
     ├── screens/
     │   ├── Placeholder.tsx # stands in for a screen; says which issue builds it
-    │   ├── dashboard/      # points + leaderboard (plain; #93–#95 design it)
-    │   ├── tracker/        # my tasks (plain; #88–#92 build the real one)
-    │   ├── login/          # magic-link request + the /auth/callback landing
+    │   ├── dashboard/      # DashboardScreen (+test), DeptCupCard, LeaderboardCard, MyPointsCard
+    │   ├── tracker/        # TrackerScreen.tsx — my tasks; the full Tracker rebuild is tracked
+    │   │                   # in CLAUDE.md's queue, not here
+    │   ├── calendar/       # CalendarScreen (+test), EventCard, EventRsvpControls (+test),
+    │   │                   # calendar-presentation (+test)
+    │   ├── login/          # LoginScreen.tsx, AuthCallback.tsx — magic-link request + landing
     │   └── no-profile/     # signed in, not a member (ADR-0003 gate 2)
-    └── theme/
-        ├── tokens.css       # Brand Book palette, copied from mockup/css/tokens.css
-        ├── global.css       # maps those tokens onto Ionic's --ion-* variables
-        ├── auth-screens.css # the card the three pre-app screens share
-        ├── shell.css        # the app frame, lifted from mockup/css/layout.css
-        └── screens.css      # cards, query states, the two lists
+    ├── theme/
+    │   ├── tokens.css       # Brand Book palette; originated as a copy of mockup/css/tokens.css,
+    │   │                    # forked since — check both before assuming they still match
+    │   ├── global.css       # maps those tokens onto Ionic's --ion-* variables
+    │   ├── auth-screens.css # the card the three pre-app screens share
+    │   ├── shell.css        # the app frame, lifted from mockup/css/layout.css
+    │   ├── screens.css      # cards, query states, the two lists
+    │   ├── dashboard.css    # the dashboard's cards and layout
+    │   ├── calendar.css     # the calendar screen and RSVP controls
+    │   └── font.test.ts     # asserts the bundled Montserrat actually loads
+    └── test/setup.ts       # shared Vitest/Testing Library setup
 ```
 
 Each screen gets its own folder under `screens/` when there is something real
@@ -137,9 +154,11 @@ can actually use, instead of an app that is silently empty.
 - **Use the tokens, never a raw hex.** `var(--red)`, `var(--s-4)`,
   `var(--fs-md)`. Department colours come from the `departments` table, so a new
   department needs no code change.
-- **`tokens.css` is a copy, not a fork.** If the palette changes, it changes in
-  `mockup/css/tokens.css` first and gets copied across, so the prototype and the
-  app never drift. Prettier is told to leave the file alone for the same reason.
+- **`tokens.css` originated as a copy of `mockup/css/tokens.css`, not a live
+  mirror of it.** The two have since forked (interaction states, feedback
+  aliases, and other app-only tokens live only here) — check both files rather
+  than assuming a palette change in one is reflected in the other. Prettier is
+  told to leave the file alone regardless, so a hand edit isn't silently reflowed.
 - **User-facing text is Romanian; identifiers stay English.** `CONTEXT.md` has
   the vocabulary.
 

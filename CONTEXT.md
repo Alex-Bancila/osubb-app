@@ -221,3 +221,25 @@ The signed membership facts attached to a session, including Role, Level, Depart
 
 **Capability**:
 A named product action available at or above an organizational Level, without replacing local Department, Team, or Project authority.
+
+## Term → identifier
+
+Where a term above is not spelled the same way in the schema. Use the Term in prose and Romanian copy; use the identifier in code, migrations, issues, and tests. Read from `supabase/migrations/0001_core_schema.sql` unless noted otherwise.
+
+**Department id → name**:
+`edu` → Educațional (the identifier never carries the diacritic; only the display name does — corrected in `supabase/migrations/20260911004317_educational_display_name.sql`) · `pr` → Imagine & PR · `youth` → Tineret · `fin` → Financiar · `hr` → Resurse Umane · `diverse` → Diverse · `secretariat` → Secretariat. `it` is retired (`supabase/migrations/20260910173341_departments_diverse_secretariat.sql` folds it into `diverse`) — don't reuse it for a new Department Team.
+
+**`activ` as a Role vs. `activ` as a Status**:
+Two different columns share this identifier. `profiles.role = 'activ'` is the Role Membru Activ (`member_role` enum, level 2); `profiles.status = 'activ'` is the Membership Status active (`member_status` enum). A row can be `role = 'activ', status = 'inactiv'` — a Membru Activ who is not currently active — so never assume one from the other.
+
+**`profiles` rows are Members**:
+`public.profiles` is the Member table; there is no separate `members` table. Every `member_id` column elsewhere is a foreign key to `profiles (id)`, not to an identity table of its own — see `points_ledger.member_id`, `notifications.member_id`, `project_members.member_id`, and the rest.
+
+**`event_scope` ↔ Event Origin**:
+The enum backing an Event's Origin: `org`, `dept`, `team`, or `project`.
+
+**`noti_kind` ↔ Notification kind**:
+The enum distinguishing what a Notification is about: `announce`, `deadline`, `event`, `task`, or `system`.
+
+**`roles.id` → Role display name**:
+`recrut` → Recrut · `voluntar` → Voluntar · `activ` → Membru Activ · `vot` → Voluntar cu Drept de Vot (the database's `roles.name` still reads "Membru cu Drept de Vot" — known drift; the glossary term wins) · `responsabil` → Responsabil (the database's `roles.name` still reads "Responsabil de proiect" — known drift; the glossary term wins) · `bce` → BCE · `bc` → BC · `moderator` → Moderator.

@@ -1,5 +1,9 @@
 # OSUBB — Prototip aplicație
 
+> **Historical** — superseded by [`app/`](../app/) (the real frontend, ADR-0002) and the [OSUBB Brand Book reference](../docs/brand/reference.md).
+>
+> Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
+
 Mockup interactiv (clickabil) pentru aplicația OSUBB. HTML/CSS/JS pur, fără build.
 
 ## Cum îl deschizi
