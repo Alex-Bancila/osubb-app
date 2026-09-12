@@ -1,5 +1,6 @@
 import { IonButton, IonContent, IonPage } from '@ionic/react';
 import { useAuth } from '../../lib/auth';
+import { useSignOutAction } from '../../lib/use-sign-out-action';
 
 /**
  * Signed in, but the token carries no org claims.
@@ -13,6 +14,7 @@ import { useAuth } from '../../lib/auth';
  */
 export default function NoProfileScreen() {
   const { session, signOut } = useAuth();
+  const signOutAction = useSignOutAction(signOut);
 
   return (
     <IonPage>
@@ -29,9 +31,21 @@ export default function NoProfileScreen() {
             de creare — încearcă din nou peste câteva minute. Altfel, scrie-i
             unui membru BC: doar ei pot crea sau reactiva un cont.
           </p>
-          <IonButton fill="outline" onClick={signOut}>
-            Deconectare
+          <IonButton
+            fill="outline"
+            disabled={signOutAction.pending}
+            aria-describedby={
+              signOutAction.error ? 'sign-out-error' : undefined
+            }
+            onClick={() => void signOutAction.run()}
+          >
+            {signOutAction.pending ? 'Se deconectează…' : 'Deconectare'}
           </IonButton>
+          {signOutAction.error && (
+            <p id="sign-out-error" className="auth-error" role="alert">
+              {signOutAction.error}
+            </p>
+          )}
         </div>
       </IonContent>
     </IonPage>
