@@ -10,6 +10,11 @@ begin;
 set local client_min_messages = warning;
 
 drop view public.tasks_with_overdue;
+alter table public.tasks
+  drop column started_at, drop column submitted_at, drop column completed_at,
+  drop column unfulfilled_at, drop column cancelled_at,
+  drop column queue_opened_at, drop column queue_closed_at,
+  drop column review_round, drop column returned_to_progress_at;
 drop policy task_read on public.tasks;
 drop function public.claim_open_task(bigint);
 drop function private.task_is_unassigned(bigint);

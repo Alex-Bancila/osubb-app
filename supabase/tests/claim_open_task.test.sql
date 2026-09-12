@@ -21,13 +21,14 @@ insert into profiles (id, full_name, email, role, status) values
   ('33000000-0000-0000-0000-000000000003', 'Membru Inactiv',  'claim.inactive@test.local', 'voluntar', 'inactiv');
 
 insert into tasks
-  (title, difficulty, status, dept_id, audience, assignment_mode)
+  (title, difficulty, status, dept_id, audience, assignment_mode,
+   started_at, queue_opened_at)
 values
-  ('claim-open',     2, 'todo',        'edu', 'org',   'public'),
-  ('claim-direct',   2, 'todo',        'edu', 'org',   'direct'),
-  ('claim-local',    2, 'todo',        'edu', 'local', 'public'),
-  ('claim-inactive', 2, 'todo',        'edu', 'org',   'public'),
-  ('claim-todo',     2, 'in_progress', 'edu', 'org',   'public');
+  ('claim-open',     2, 'todo',        'edu', 'org',   'public', null, now()),
+  ('claim-direct',   2, 'todo',        'edu', 'org',   'direct', null, null),
+  ('claim-local',    2, 'todo',        'edu', 'local', 'public', null, now()),
+  ('claim-inactive', 2, 'todo',        'edu', 'org',   'public', null, now()),
+  ('claim-todo',     2, 'in_progress', 'edu', 'org',   'public', now(), now());
 
 create temp table claim_fx as
 select

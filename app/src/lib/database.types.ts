@@ -1367,6 +1367,8 @@ export type Database = {
         Row: {
           assignment_mode: string
           audience: string
+          cancelled_at: string | null
+          completed_at: string | null
           created_at: string
           created_by: string | null
           deadline: string | null
@@ -1376,15 +1378,24 @@ export type Database = {
           id: number
           points: number | null
           project_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
           rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
           team_id: string | null
           title: string
           type: string | null
+          unfulfilled_at: string | null
         }
         Insert: {
           assignment_mode?: string
           audience?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           deadline?: string | null
@@ -1394,15 +1405,24 @@ export type Database = {
           id?: never
           points?: number | null
           project_id?: number | null
+          queue_closed_at?: string | null
+          queue_opened_at?: string | null
           rating?: number | null
+          returned_to_progress_at?: string | null
+          review_round?: number
+          started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          submitted_at?: string | null
           team_id?: string | null
           title: string
           type?: string | null
+          unfulfilled_at?: string | null
         }
         Update: {
           assignment_mode?: string
           audience?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           deadline?: string | null
@@ -1412,11 +1432,18 @@ export type Database = {
           id?: never
           points?: number | null
           project_id?: number | null
+          queue_closed_at?: string | null
+          queue_opened_at?: string | null
           rating?: number | null
+          returned_to_progress_at?: string | null
+          review_round?: number
+          started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          submitted_at?: string | null
           team_id?: string | null
           title?: string
           type?: string | null
+          unfulfilled_at?: string | null
         }
         Relationships: [
           {
@@ -1685,6 +1712,8 @@ export type Database = {
         Row: {
           assignment_mode: string | null
           audience: string | null
+          cancelled_at: string | null
+          completed_at: string | null
           created_at: string | null
           created_by: string | null
           deadline: string | null
@@ -1695,15 +1724,24 @@ export type Database = {
           is_overdue: boolean | null
           points: number | null
           project_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
           rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number | null
+          started_at: string | null
           status: Database["public"]["Enums"]["task_status"] | null
+          submitted_at: string | null
           team_id: string | null
           title: string | null
           type: string | null
+          unfulfilled_at: string | null
         }
         Insert: {
           assignment_mode?: string | null
           audience?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string | null
           created_by?: string | null
           deadline?: string | null
@@ -1714,15 +1752,24 @@ export type Database = {
           is_overdue?: never
           points?: number | null
           project_id?: number | null
+          queue_closed_at?: string | null
+          queue_opened_at?: string | null
           rating?: number | null
+          returned_to_progress_at?: string | null
+          review_round?: number | null
+          started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
+          submitted_at?: string | null
           team_id?: string | null
           title?: string | null
           type?: string | null
+          unfulfilled_at?: string | null
         }
         Update: {
           assignment_mode?: string | null
           audience?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
           created_at?: string | null
           created_by?: string | null
           deadline?: string | null
@@ -1733,11 +1780,18 @@ export type Database = {
           is_overdue?: never
           points?: number | null
           project_id?: number | null
+          queue_closed_at?: string | null
+          queue_opened_at?: string | null
           rating?: number | null
+          returned_to_progress_at?: string | null
+          review_round?: number | null
+          started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
+          submitted_at?: string | null
           team_id?: string | null
           title?: string | null
           type?: string | null
+          unfulfilled_at?: string | null
         }
         Relationships: [
           {
@@ -1886,6 +1940,8 @@ export type Database = {
         Returns: {
           assignment_mode: string
           audience: string
+          cancelled_at: string | null
+          completed_at: string | null
           created_at: string
           created_by: string | null
           deadline: string | null
@@ -1895,11 +1951,18 @@ export type Database = {
           id: number
           points: number | null
           project_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
           rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
           team_id: string | null
           title: string
           type: string | null
+          unfulfilled_at: string | null
         }
         SetofOptions: {
           from: "*"
