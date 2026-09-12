@@ -25,6 +25,15 @@
 -- `in_progress` shows as overdue even though it has no Executor to chase.
 -- Whether the Tracker UI should surface that differently is a presentation
 -- question left for #164, not a schema decision here.
+--
+-- Interaction with #312 (20260911210300_tasks_nullable_difficulty.sql):
+-- `tasks_evaluation_inputs_ck` predates `kind` and requires difficulty and
+-- rating whenever status is completed/unfulfilled, with no exemption --
+-- which, combined with `tasks_umbrella_shape_ck` below forcing both columns
+-- null for an Umbrella, made an Umbrella impossible to ever complete or mark
+-- unfulfilled. #315 introduces the conflict (by adding `kind` and the shape
+-- constraint) and resolves it here by replacing `tasks_evaluation_inputs_ck`
+-- with a version that exempts Umbrellas.
 
 drop view public.tasks_with_overdue;
 
@@ -66,6 +75,26 @@ alter table public.tasks
   add constraint tasks_task_shape_ck check (
     kind = 'umbrella' or (audience is not null and assignment_mode is not null)
   );
+
+-- Exempt an Umbrella from #312's tasks_evaluation_inputs_ck: an Umbrella's
+-- completion is a rollup of its Subtasks (the `umbrella_completed` activity
+-- kind, 20260911210200_task_activity.sql, exists for exactly that
+-- transition), not an Evaluation, so it carries no Difficulty, Rating, or
+-- points of its own. tasks_umbrella_shape_ck above already forces both
+-- columns null for an Umbrella; nothing is lost by exempting it here.
+alter table public.tasks
+  drop constraint tasks_evaluation_inputs_ck,
+  add constraint tasks_evaluation_inputs_ck check (
+    kind = 'umbrella'
+    or case
+         when status in ('completed', 'unfulfilled')
+           then difficulty is not null and rating is not null
+         else rating is null
+       end
+  );
+
+comment on constraint tasks_evaluation_inputs_ck on public.tasks is
+  'Difficulty and Rating arrive together at Evaluation (status completed/unfulfilled) for an ordinary Task; Difficulty may already be set earlier, Rating never is (ADR-0007). An Umbrella is exempt -- its completion is a rollup of its Subtasks, not an Evaluation, and tasks_umbrella_shape_ck already forces both columns null.';
 
 -- `security definer`: like `private.validate_task_campaign()`
 -- (20260911210600_task_campaign.sql), this trigger enforces a data-integrity
