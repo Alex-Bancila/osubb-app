@@ -120,6 +120,9 @@ fi
 # broken run does not poison the next one.
 cleanup() {
   run_sql -q <<'SQL' >/dev/null 2>&1 || true
+delete from task_assignments
+ where task_id in (select id from tasks
+                    where created_by = 'e2750000-0000-0000-0000-000000000001');
 delete from tasks
  where created_by = 'e2750000-0000-0000-0000-000000000001';
 delete from projects
@@ -164,7 +167,15 @@ insert into tasks (
 )
 values ('Non-demo local opportunity', 1, 'todo', 'local', 'direct',
         'e2750000-0000-0000-0000-000000000001', 'edu');
+insert into task_assignments (task_id, member_id, assigned_by)
+select id,
+       'e2750000-0000-0000-0000-000000000001',
+       'e2750000-0000-0000-0000-000000000001'
+  from tasks
+ where created_by = 'e2750000-0000-0000-0000-000000000001';
 SQL
+
+history_before=$(run_sql -c "select to_jsonb(assignment)::text from task_assignments assignment join tasks task on task.id = assignment.task_id where task.created_by = 'e2750000-0000-0000-0000-000000000001'")
 
 # Re-seeding must abort before changing anything when a real-owned
 # Project still points at a demo lead. Silently deleting that Project
@@ -201,9 +212,17 @@ if [ "$before" != "$after" ]; then
   exit 1
 fi
 
-preserved=$(run_sql -c "select format('%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'todo' and audience = 'local' and assignment_mode = 'direct'))")
-if [ "$preserved" != "1:1:1:1" ]; then
-  echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project/local-Task sentinels ($preserved)."
+history_after=$(run_sql -c "select to_jsonb(assignment)::text from task_assignments assignment join tasks task on task.id = assignment.task_id where task.created_by = 'e2750000-0000-0000-0000-000000000001'")
+if [ "$history_before" != "$history_after" ]; then
+  echo "::error::Re-seeding changed the non-demo Assignment sentinel."
+  echo "before: $history_before"
+  echo "after:  $history_after"
+  exit 1
+fi
+
+preserved=$(run_sql -c "select format('%s:%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'todo' and audience = 'local' and assignment_mode = 'direct'), (select count(*) from task_assignments assignment join tasks task on task.id = assignment.task_id where task.created_by = 'e2750000-0000-0000-0000-000000000001' and assignment.member_id = 'e2750000-0000-0000-0000-000000000001' and assignment.ended_at is null))")
+if [ "$preserved" != "1:1:1:1:1" ]; then
+  echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project/local-Task/Assignment sentinels ($preserved)."
   exit 1
 fi
 
