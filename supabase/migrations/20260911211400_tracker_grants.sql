@@ -4,7 +4,7 @@
 -- anon holds zero privileges on every Task table/sequence/view already (the
 -- schema-wide `revoke all ... from anon` in 20260819171628 and its default
 -- privileges cover every table created since). Every `private` function
--- (49, enumerated in supabase/tests/tracker_grants.test.sql) already follows
+-- (every one, enumerated in supabase/tests/tracker_grants.test.sql) already follows
 -- the wrapper/_impl/predicate/require_*/trigger idiom exactly -- including
 -- the one dobrerares flagged on #295 (`private.task_is_unassigned`, granted
 -- to authenticated only, because the Task read policy and claim_open_task

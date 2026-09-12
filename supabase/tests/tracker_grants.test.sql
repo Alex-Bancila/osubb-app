@@ -13,7 +13,9 @@
 --     coverage). What this suite *does* self-discover is drift on the
 --     objects already listed.
 --   - `private` functions: `pinned_private_functions` is a closed roster
---     (49 rows, one per current `pg_proc` row in `private`). Two assertions
+--     (one row per current `pg_proc` row in `private` -- no fixed count is
+--     quoted here, because every later branch that adds a function adds a
+--     row and bumps the count assertion below). Two assertions
 --     below diff the roster against live `pg_proc` in both directions, so
 --     adding, renaming, or dropping any function in `private` fails the
 --     suite until the roster is updated -- there is no naming-pattern
@@ -312,10 +314,6 @@ insert into pinned_private_functions (proname, args, category) values
   ('add_independent_team_member_impl',            'p_team_id text, p_member_id uuid',                                                                                   'impl'),
   ('add_project_member_impl',                     'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('archive_project_impl',                        'p_project_id bigint',                                                                                                'impl'),
-  -- fix round (E1, #295 review): #372's live-level helper, missed by this
-  -- roster because it lands in a later branch of the stack (Stack C is
-  -- reviewed and fixed bottom-up, this file's own branch first).
-  ('caller_level',                                '',                                                                                                                   'authenticated_only'),
   ('can_administer_team_structure',               'p_dept_id text',                                                                                                     'predicate'),
   ('can_manage_department_memberships',           '',                                                                                                                   'predicate'),
   ('can_manage_origin',                           'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'predicate'),
@@ -340,9 +338,6 @@ insert into pinned_private_functions (proname, args, category) values
   ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
   ('protect_project_leader_membership',           '',                                                                                                                   'trigger'),
   ('queue_position',                              'p_task_id bigint, p_member_id uuid',                                                                                 'authenticated_only'),
-  -- fix round (E1, #295 review): #317's legacy-source guard, same reason as
-  -- caller_level above — added by a later branch of the stack.
-  ('reject_legacy_evaluation_source',             '',                                                                                                                   'trigger'),
   ('reject_task_activity_change',                 '',                                                                                                                   'trigger'),
   ('remove_department_team_member_impl',          'p_team_id text, p_member_id uuid',                                                                                   'impl'),
   ('remove_independent_team_member_impl',         'p_team_id text, p_member_id uuid',                                                                                   'impl'),
@@ -364,8 +359,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 49,
-  'the pinned private-schema roster itself has exactly the 49 rows the audit found (a typo here would silently weaken every check below)');
+  (select count(*) from pinned_private_functions)::int, 47,
+  'the pinned private-schema roster itself has exactly the 47 rows the audit found (a typo here would silently weaken every check below)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
