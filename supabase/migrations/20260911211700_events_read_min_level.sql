@@ -16,12 +16,12 @@
 -- valid briefly after deactivation"). Events have no assignment/candidate
 -- row of their own to fall back on as a second guard the way Tasks do, so
 -- the live join is the *only* thing standing between a deactivated member
--- and the calendar once their token is stale. `private.actor_level()`
+-- and the calendar once their token is stale. `private.caller_level()`
 -- below is the live analogue of `auth_level()`: it returns -1 (never
 -- satisfies even `min_level = 0`) for anyone without a live, active
 -- Profile row, so a deactivated member is denied regardless of what their
--- token still claims. Cost: `private.actor_level()` takes no row-dependent
--- argument, so the policy calls it as `(select private.actor_level())`
+-- token still claims. Cost: `private.caller_level()` takes no row-dependent
+-- argument, so the policy calls it as `(select private.caller_level())`
 -- (same idiom as `(select public.auth_level()) >= 6` in
 -- 20260910135327/20260910144445) — Postgres evaluates it once per query as
 -- an InitPlan, not once per row, so the extra profiles/roles lookup (one
@@ -39,10 +39,22 @@
 -- `event_not_visible`/return nothing for an Event already under way. A
 -- past-Events restriction belongs to a later Calendar issue that can also
 -- decide how it interacts with RSVP history, not here.
+--
+-- Decision 3 — the helper is named `caller_level()`, not `actor_level()`.
+-- Open issue #364 (assigned to another engineer) specifies one shared
+-- `private.actor_level()` / `private.require_active_member()` pair for every
+-- command and policy, with a different contract: a nullable return rather
+-- than this -1 sentinel, and — per that issue's own review thread — no
+-- EXECUTE for `authenticated`, since it is meant for command bodies, not for
+-- inline use in a policy predicate. Two migrations creating one name with two
+-- contracts breaks whichever merges second. This helper therefore takes a
+-- distinct, task-local name; #364 can retire it in favor of the shared pair
+-- once that lands and the contracts are reconciled.
+
 
 -- ==================== Live level ====================
 
-create function private.actor_level() returns integer
+create function private.caller_level() returns integer
 language sql
 stable
 security definer
@@ -58,12 +70,12 @@ as $$
   );
 $$;
 
-comment on function private.actor_level() is
-  'Live analogue of auth_level(): the caller''s current role level from profiles/roles, or -1 with no active membership row. Unlike auth_level(), a deactivated member''s stale JWT cannot satisfy it (#372, ADR-0008 Visibility). No row-dependent argument — call as (select private.actor_level()) so Postgres caches one evaluation per query.';
+comment on function private.caller_level() is
+  'Live analogue of auth_level(): the caller''s current role level from profiles/roles, or -1 with no active membership row. Unlike auth_level(), a deactivated member''s stale JWT cannot satisfy it (#372, ADR-0008 Visibility). No row-dependent argument — call as (select private.caller_level()) so Postgres caches one evaluation per query. Deliberately not named actor_level(): #364 reserves that name for a shared helper with a different contract (nullable return, no authenticated grant) — see this migration''s header, decision 3.';
 
-revoke execute on function private.actor_level()
+revoke execute on function private.caller_level()
   from public, anon, authenticated, service_role;
-grant execute on function private.actor_level() to authenticated;
+grant execute on function private.caller_level() to authenticated;
 
 -- ==================== Policy ====================
 
@@ -73,7 +85,7 @@ create policy events_read on public.events
   for select to authenticated
   using (
     (select public.auth_is_member())
-    and (select private.actor_level()) >= min_level
+    and (select private.caller_level()) >= min_level
   );
 
 comment on policy events_read on public.events is
