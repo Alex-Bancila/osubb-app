@@ -8,6 +8,7 @@ import {
 } from '@ionic/react';
 import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { supabase } from '../../lib/supabase';
+import { Button } from '../../components/ui/button';
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
@@ -143,9 +144,9 @@ export default function LoginScreen() {
             </p>
           )}
 
-          <IonButton
+          <Button
             type="submit"
-            expand="block"
+            className="w-full"
             disabled={status === 'sending' || email.trim() === ''}
           >
             {status === 'sending' ? (
@@ -153,7 +154,7 @@ export default function LoginScreen() {
             ) : (
               'Trimite linkul'
             )}
-          </IonButton>
+          </Button>
         </form>
       </IonContent>
     </IonPage>

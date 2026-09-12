@@ -27,6 +27,7 @@ import '@fontsource-variable/montserrat';
 
 /* Ours, last, so the OSUBB palette wins over Ionic's defaults. */
 import './theme/tokens.css';
+import './theme/tailwind.css';
 import './theme/global.css';
 import './theme/auth-screens.css';
 import './theme/shell.css';
