@@ -20,11 +20,11 @@ insert into profiles (id, full_name, email, role, status) values
   ('22000000-0000-0000-0000-000000000002', 'Al Doilea',       'claim.two@test.local',      'voluntar', 'activ'),
   ('33000000-0000-0000-0000-000000000003', 'Membru Inactiv',  'claim.inactive@test.local', 'voluntar', 'inactiv');
 
-insert into tasks (title, difficulty, status) values
-  ('claim-open',     2, 'open'),
-  ('claim-direct',   2, 'open'),
-  ('claim-inactive', 2, 'open'),
-  ('claim-todo',     2, 'todo');
+insert into tasks (title, difficulty, status, dept_id) values
+  ('claim-open',     2, 'open', 'edu'),
+  ('claim-direct',   2, 'open', 'edu'),
+  ('claim-inactive', 2, 'open', 'edu'),
+  ('claim-todo',     2, 'todo', 'edu');
 
 create temp table claim_fx as
 select

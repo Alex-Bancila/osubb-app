@@ -44,7 +44,7 @@ insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-rls', 'ffffffff-0000-0000-0000-000000000006');
 
-insert into tasks (title, difficulty) values ('rls-t1', 3);
+insert into tasks (title, difficulty, dept_id) values ('rls-t1', 3, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from tasks where title = 'rls-t1';
 update tasks set rating = 4 where title = 'rls-t1';   -- writes points_ledger via trigger
@@ -55,7 +55,7 @@ insert into task_requests (kind, title, from_member)
 
 -- An OPEN, already-GRADED task: the shape that leaked, and the one an
 -- unprovisioned session could have joined to collect points.
-insert into tasks (title, difficulty, status) values ('rls-open', 2, 'open');
+insert into tasks (title, difficulty, status, dept_id) values ('rls-open', 2, 'open', 'edu');
 update tasks set rating = 3 where title = 'rls-open';
 
 insert into events (title, type, scope, starts_at)

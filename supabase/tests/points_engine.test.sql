@@ -32,7 +32,7 @@ select is(rating_mult(4),  2, 'rating 4 → multiplier 2');
 select is(rating_mult(5),  3, 'rating 5 → multiplier 3');
 
 -- ==================== Grading writes ledger rows ====================
-insert into tasks (title, difficulty) values ('pe-t1', 3);
+insert into tasks (title, difficulty, dept_id) values ('pe-t1', 3, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'aaaaaaaa-0000-0000-0000-000000000001'::uuid from tasks where title = 'pe-t1'
   union all
@@ -75,7 +75,7 @@ select is(
   12, 'difficulty change after grading re-syncs the delta (4 × 3)');
 
 -- ==================== Rating 1 subtracts ====================
-insert into tasks (title, difficulty) values ('pe-t2', 2);
+insert into tasks (title, difficulty, dept_id) values ('pe-t2', 2, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'aaaaaaaa-0000-0000-0000-000000000001'::uuid from tasks where title = 'pe-t2';
 
@@ -91,7 +91,7 @@ select is(
   10, 'penalty lowers the member total (12 - 2)');
 
 -- ==================== Rating 2 still records a zero-point row ====================
-insert into tasks (title, difficulty) values ('pe-t3', 5);
+insert into tasks (title, difficulty, dept_id) values ('pe-t3', 5, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'bbbbbbbb-0000-0000-0000-000000000002'::uuid from tasks where title = 'pe-t3';
 
@@ -119,7 +119,7 @@ select is(
   12, 'the member total is restored after un-grading');
 
 -- ==================== Assignees changing on a graded task ====================
-insert into tasks (title, difficulty) values ('pe-t4', 2);
+insert into tasks (title, difficulty, dept_id) values ('pe-t4', 2, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'aaaaaaaa-0000-0000-0000-000000000001'::uuid from tasks where title = 'pe-t4';
 

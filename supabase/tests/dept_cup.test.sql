@@ -29,8 +29,8 @@ insert into public.member_departments (member_id, dept_id) values
   ('c2000000-0000-0000-0000-000000000002', 'pr'),
   ('c3000000-0000-0000-0000-000000000003', 'hr');
 
-insert into public.tasks (title, difficulty) values
-  ('cup-active', 5), ('cup-inactive', 5), ('cup-alumni', 5);
+insert into public.tasks (title, difficulty, dept_id) values
+  ('cup-active', 5, 'hr'), ('cup-inactive', 5, 'hr'), ('cup-alumni', 5, 'hr');
 insert into public.task_assignees (task_id, member_id)
 select t.id, case t.title
   when 'cup-active' then 'c1000000-0000-0000-0000-000000000001'::uuid

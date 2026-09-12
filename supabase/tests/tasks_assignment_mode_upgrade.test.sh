@@ -11,10 +11,10 @@ set local client_min_messages = warning;
 alter table public.tasks drop column assignment_mode;
 truncate public.tasks cascade;
 
-insert into public.tasks (title, difficulty, status) values
-  ('Legacy open Task', 1, 'open'),
-  ('Legacy todo Task', 1, 'todo'),
-  ('Legacy assigned Task', 1, 'progress');
+insert into public.tasks (title, difficulty, status, dept_id) values
+  ('Legacy open Task', 1, 'open', 'edu'),
+  ('Legacy todo Task', 1, 'todo', 'edu'),
+  ('Legacy assigned Task', 1, 'progress', 'edu');
 SQL
 
   cat supabase/migrations/20260911092000_tasks_assignment_mode.sql
@@ -35,7 +35,7 @@ begin
     raise exception 'legacy non-open Task did not become direct';
   end if;
 
-  insert into public.tasks (title, difficulty) values ('New Task', 1);
+  insert into public.tasks (title, difficulty, dept_id) values ('New Task', 1, 'edu');
   if (select assignment_mode from public.tasks where title = 'New Task')
        is distinct from 'direct' then
     raise exception 'new Task did not default to direct';
