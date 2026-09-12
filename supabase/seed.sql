@@ -217,29 +217,37 @@ select project.id, fixture.member_id, fixture.project_role
 -- engine on every reset, which is the point — a seed that inserted ledger
 -- rows directly could drift from the formula it is supposed to illustrate.
 
+create or replace function pg_temp.task_deadline(p_date date)
+returns timestamptz
+language sql
+stable
+as $$
+  select (p_date::timestamp + time '23:59') at time zone 'Europe/Bucharest'
+$$;
+
 insert into tasks (title, type, dept_id, team_id, status, difficulty, deadline, description, created_by) values
   -- Educational
-  ('Workshop CV pentru boboci', 'proiect', 'edu', null, 'done',     4, current_date - 14, 'Sesiune practică de redactare CV.',        'd0000000-0000-0000-0000-000000000005'),
-  ('Materiale curs Excel',      'content', 'edu', null, 'done',     2, current_date - 10, 'Slide-uri pentru cursul de Excel.',        'd0000000-0000-0000-0000-000000000005'),
-  ('Contactare lectori',        'logistic','edu', null, 'progress', 3, current_date + 5,  'Confirmări pentru semestrul viitor.',      'd0000000-0000-0000-0000-000000000005'),
-  ('Minuta ședinței EDU',       'admin',   'edu', null, 'done',     1, current_date - 7,  'Redactare și distribuire minută.',         'd0000000-0000-0000-0000-000000000005'),
+  ('Workshop CV pentru boboci', 'proiect', 'edu', null, 'done',     4, pg_temp.task_deadline(current_date - 14), 'Sesiune practică de redactare CV.',        'd0000000-0000-0000-0000-000000000005'),
+  ('Materiale curs Excel',      'content', 'edu', null, 'done',     2, pg_temp.task_deadline(current_date - 10), 'Slide-uri pentru cursul de Excel.',        'd0000000-0000-0000-0000-000000000005'),
+  ('Contactare lectori',        'logistic','edu', null, 'progress', 3, pg_temp.task_deadline(current_date + 5),  'Confirmări pentru semestrul viitor.',      'd0000000-0000-0000-0000-000000000005'),
+  ('Minuta ședinței EDU',       'admin',   'edu', null, 'done',     1, pg_temp.task_deadline(current_date - 7),  'Redactare și distribuire minută.',         'd0000000-0000-0000-0000-000000000005'),
   -- Imagine & PR
-  ('Grafică eveniment toamnă',  'design',  'pr',  null, 'done',     4, current_date - 12, 'Set complet de materiale vizuale.',        'd0000000-0000-0000-0000-000000000006'),
-  ('Postare Instagram recrutare','content','pr',  null, 'done',     2, current_date - 6,  'Anunț oficial de recrutare.',              'd0000000-0000-0000-0000-000000000006'),
-  ('Plan media noiembrie',      'plan',    'pr',  null, 'todo',     3, current_date + 12, 'Calendar de postări pentru noiembrie.',    'd0000000-0000-0000-0000-000000000006'),
-  ('Fotografii eveniment',      'content', 'pr',  null, 'done',     2, current_date - 9,  'Poze de la evenimentul de deschidere.',    'd0000000-0000-0000-0000-000000000006'),
+  ('Grafică eveniment toamnă',  'design',  'pr',  null, 'done',     4, pg_temp.task_deadline(current_date - 12), 'Set complet de materiale vizuale.',        'd0000000-0000-0000-0000-000000000006'),
+  ('Postare Instagram recrutare','content','pr',  null, 'done',     2, pg_temp.task_deadline(current_date - 6),  'Anunț oficial de recrutare.',              'd0000000-0000-0000-0000-000000000006'),
+  ('Plan media noiembrie',      'plan',    'pr',  null, 'todo',     3, pg_temp.task_deadline(current_date + 12), 'Calendar de postări pentru noiembrie.',    'd0000000-0000-0000-0000-000000000006'),
+  ('Fotografii eveniment',      'content', 'pr',  null, 'done',     2, pg_temp.task_deadline(current_date - 9),  'Poze de la evenimentul de deschidere.',    'd0000000-0000-0000-0000-000000000006'),
   -- Tineret
-  ('Logistică Tabăra de Toamnă','logistic','youth',null,'done',     5, current_date - 20, 'Transport, cazare, program.',              'd0000000-0000-0000-0000-000000000007'),
-  ('Contactare parteneri',      'extern',  'youth',null,'overdue',  3, current_date - 3,  'Sponsorizări pentru tabără.',              'd0000000-0000-0000-0000-000000000007'),
+  ('Logistică Tabăra de Toamnă','logistic','youth',null,'done',     5, pg_temp.task_deadline(current_date - 20), 'Transport, cazare, program.',              'd0000000-0000-0000-0000-000000000007'),
+  ('Contactare parteneri',      'extern',  'youth',null,'overdue',  3, pg_temp.task_deadline(current_date - 3),  'Sponsorizări pentru tabără.',              'd0000000-0000-0000-0000-000000000007'),
   -- Financiar & HR
-  ('Buget trimestrial',         'admin',   'fin', null, 'done',     4, current_date - 5,  'Raport de buget pentru BC.',               'd0000000-0000-0000-0000-000000000007'),
-  ('Interviuri recrutare',      'hr',      'hr',  null, 'progress', 3, current_date + 8,  'Programare și susținere interviuri.',      'd0000000-0000-0000-0000-000000000007'),
+  ('Buget trimestrial',         'admin',   'fin', null, 'done',     4, pg_temp.task_deadline(current_date - 5),  'Raport de buget pentru BC.',               'd0000000-0000-0000-0000-000000000007'),
+  ('Interviuri recrutare',      'hr',      'hr',  null, 'progress', 3, pg_temp.task_deadline(current_date + 8),  'Programare și susținere interviuri.',      'd0000000-0000-0000-0000-000000000007'),
   -- Echipa Aplicație
-  ('Migrare bază de date',      'tehnic',  'diverse','t-app', 'done',   5, current_date - 2,  'Migrare completă cu teste automate.',      'd0000000-0000-0000-0000-000000000006'),
-  ('Testare aplicație',         'tehnic',  'diverse','t-app', 'progress',3, current_date + 6, 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
+  ('Migrare bază de date',      'tehnic',  'diverse','t-app', 'done',   5, pg_temp.task_deadline(current_date - 2),  'Migrare completă cu teste automate.',      'd0000000-0000-0000-0000-000000000006'),
+  ('Testare aplicație',         'tehnic',  'diverse','t-app', 'progress',3, pg_temp.task_deadline(current_date + 6), 'Testare pe telefon și desktop.',           'd0000000-0000-0000-0000-000000000006'),
   -- Open: anyone may claim these, which is what the tracker's "Deschise" tab is for
-  ('Share story recrutare',     'promo',   'pr',  null, 'open',     1, current_date + 3,  'Distribuie story-ul de recrutare.',        'd0000000-0000-0000-0000-000000000006'),
-  ('Ajutor la standul de recrutare','logistic','edu',null,'open',   2, current_date + 9,  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005');
+  ('Share story recrutare',     'promo',   'pr',  null, 'open',     1, pg_temp.task_deadline(current_date + 3),  'Distribuie story-ul de recrutare.',        'd0000000-0000-0000-0000-000000000006'),
+  ('Ajutor la standul de recrutare','logistic','edu',null,'open',   2, pg_temp.task_deadline(current_date + 9),  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005');
 
 insert into task_assignees (task_id, member_id)
 select t.id, a.member_id
