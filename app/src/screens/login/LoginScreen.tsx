@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   IonButton,
   IonContent,
@@ -18,6 +18,11 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
+  const sentHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (status === 'sent') sentHeadingRef.current?.focus();
+  }, [status]);
 
   async function requestLink(e: FormEvent) {
     e.preventDefault();
@@ -81,7 +86,9 @@ export default function LoginScreen() {
       <IonPage>
         <IonContent className="ion-padding">
           <div className="auth-card">
-            <h1>Verifică-ți emailul</h1>
+            <h1 ref={sentHeadingRef} tabIndex={-1}>
+              Verifică-ți emailul
+            </h1>
             <p>
               Dacă <strong>{email.trim().toLowerCase()}</strong> are cont în
               aplicație, ți-am trimis un link de conectare. Deschide-l de pe
