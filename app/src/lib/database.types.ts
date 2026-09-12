@@ -813,6 +813,13 @@ export type Database = {
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "points_ledger_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks_with_overdue"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -1207,6 +1214,13 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignees_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks_with_overdue"
             referencedColumns: ["id"]
           },
         ]
@@ -1666,6 +1680,137 @@ export type Database = {
           tier?: string | null
         }
         Relationships: []
+      }
+      tasks_with_overdue: {
+        Row: {
+          assignment_mode: string | null
+          audience: string | null
+          created_at: string | null
+          created_by: string | null
+          deadline: string | null
+          dept_id: string | null
+          description: string | null
+          difficulty: number | null
+          id: number | null
+          is_overdue: boolean | null
+          points: number | null
+          project_id: number | null
+          rating: number | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          team_id: string | null
+          title: string | null
+          type: string | null
+        }
+        Insert: {
+          assignment_mode?: string | null
+          audience?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deadline?: string | null
+          dept_id?: string | null
+          description?: string | null
+          difficulty?: number | null
+          id?: number | null
+          is_overdue?: never
+          points?: number | null
+          project_id?: number | null
+          rating?: number | null
+          status?: Database["public"]["Enums"]["task_status"] | null
+          team_id?: string | null
+          title?: string | null
+          type?: string | null
+        }
+        Update: {
+          assignment_mode?: string | null
+          audience?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deadline?: string | null
+          dept_id?: string | null
+          description?: string | null
+          difficulty?: number | null
+          id?: number | null
+          is_overdue?: never
+          points?: number | null
+          project_id?: number | null
+          rating?: number | null
+          status?: Database["public"]["Enums"]["task_status"] | null
+          team_id?: string | null
+          title?: string | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_dept_id_fkey"
+            columns: ["dept_id"]
+            isOneToOne: false
+            referencedRelation: "dept_cup"
+            referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

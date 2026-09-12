@@ -9,6 +9,7 @@ migration="supabase/migrations/20260911102000_tasks_six_state_lifecycle.sql"
 begin;
 set local client_min_messages = warning;
 
+drop view public.tasks_with_overdue;
 drop policy task_read on public.tasks;
 drop function public.claim_open_task(bigint);
 drop function private.task_is_unassigned(bigint);
