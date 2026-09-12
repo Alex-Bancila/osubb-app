@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(32);
+select plan(33);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -47,6 +47,10 @@ insert into team_members (team_id, member_id)
 insert into tasks (title, difficulty, dept_id) values ('rls-t1', 3, 'edu');
 insert into task_assignees (task_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from tasks where title = 'rls-t1';
+insert into task_assignments (task_id, member_id, assigned_by)
+  select id, 'ffffffff-0000-0000-0000-000000000006'::uuid,
+         'ffffffff-0000-0000-0000-000000000006'::uuid
+    from tasks where title = 'rls-t1';
 update tasks set rating = 4 where title = 'rls-t1';   -- writes points_ledger via trigger
 insert into task_requests (kind, title, from_member)
   values
@@ -117,11 +121,64 @@ begin
      where ns.nspname = 'public' and c.relkind = 'r'
      order by c.relname
   loop
-    execute format('select count(*) from public.%I', t.relname) into n;
+    begin
+      execute format('select count(*) from public.%I', t.relname) into n;
+    exception
+      when insufficient_privilege then
+        if has_table_privilege(
+             current_user,
+             format('public.%I', t.relname),
+             'SELECT'
+           )
+           or has_any_column_privilege(
+             current_user,
+             format('public.%I', t.relname),
+             'SELECT'
+           ) then
+          -- A readable table can still raise here because an RLS helper is
+          -- broken or lacks EXECUTE. Preserve that diagnostic.
+          raise;
+        end if;
+
+        -- With no readable columns, the permission denial itself proves that
+        -- this role cannot see rows; task_assignments intentionally uses this
+        -- stricter deny-by-default shape until command read paths exist.
+        n := 0;
+    end;
     if n > 0 then leaks := leaks || t.relname; end if;
   end loop;
   return leaks;
 end $$;
+
+-- Regression: do not disguise a permission failure inside an RLS helper as
+-- an empty result merely because both errors use insufficient_privilege.
+create function public.claimless_sweep_denied_helper_289()
+returns boolean
+language sql
+stable
+as $$ select true $$;
+revoke all on function public.claimless_sweep_denied_helper_289()
+  from public, anon, authenticated;
+
+create table public.claimless_sweep_regression_289 (id bigint primary key);
+alter table public.claimless_sweep_regression_289 enable row level security;
+insert into public.claimless_sweep_regression_289 values (1);
+grant select on public.claimless_sweep_regression_289 to authenticated;
+create policy claimless_sweep_regression_read_289
+  on public.claimless_sweep_regression_289
+  for select
+  to authenticated
+  using (public.claimless_sweep_denied_helper_289());
+
+set local role authenticated;
+select throws_ok(
+  $$ select pg_temp.tables_visible_to_claimless() $$,
+  '42501', null,
+  'the sweep surfaces a denied RLS helper on a readable table');
+reset role;
+
+drop table public.claimless_sweep_regression_289;
+drop function public.claimless_sweep_denied_helper_289();
 
 -- This is ADR-0003 gate 2's real deactivated-user shape: the id belongs to an
 -- actual auth user and retained inactive profile, while the JWT deliberately
