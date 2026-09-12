@@ -4,7 +4,7 @@
 -- anon holds zero privileges on every Task table/sequence/view already (the
 -- schema-wide `revoke all ... from anon` in 20260819171628 and its default
 -- privileges cover every table created since). Every `private` function
--- (47, enumerated in supabase/tests/tracker_grants.test.sql) already follows
+-- (every one, enumerated in supabase/tests/tracker_grants.test.sql) already follows
 -- the wrapper/_impl/predicate/require_*/trigger idiom exactly -- including
 -- the one dobrerares flagged on #295 (`private.task_is_unassigned`, granted
 -- to authenticated only, because the Task read policy and claim_open_task
@@ -31,7 +31,8 @@
 --      20260819171628, never revisited. Its own migration comment says only
 --      the grading trigger, running as table owner, may reconcile rows --
 --      no role should write it directly. authenticated keeps its existing
---      insert (`ledger_award`/`ledger_sanction`) and select privileges
+--      insert (`ledger_sanction` -- `ledger_award` was dropped by #261's
+--      20260910135327_remove_manual_awards.sql) and select privileges
 --      unchanged; only service_role narrows to `select`.
 --   3. Three sequences (`tasks_id_seq`, `task_requests_id_seq`,
 --      `points_ledger_id_seq`) carry an ambient UPDATE privilege for

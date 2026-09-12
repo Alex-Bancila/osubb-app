@@ -176,7 +176,7 @@ as $$
 $$;
 
 comment on function private.can_manage_task(bigint) is
-  'Whether the active caller may manage this Task: private.can_manage_origin over its Origin (a Subtask carries its Umbrella''s). False for a missing Task. Reused by the Task commands (#327-#345).';
+  'Whether the active caller may manage this Task: private.can_manage_origin over its Origin (a Subtask carries its Umbrella''s). False for a missing Task. Reused by the Task commands (#327-#345) -- but managing is not deciding: an Independent-Team member manages the Team''s Tasks yet must not evaluate them (ADR-0007). A command that decides/evaluates rather than manages needs its own narrower predicate, per 20260911210800_completed_work_requests.sql''s can_manage_origin header (#344''s decider is narrower than #318''s manager).';
 
 create function private.can_read_task(p_task_id bigint)
 returns boolean

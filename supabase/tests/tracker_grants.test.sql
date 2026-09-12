@@ -13,7 +13,9 @@
 --     coverage). What this suite *does* self-discover is drift on the
 --     objects already listed.
 --   - `private` functions: `pinned_private_functions` is a closed roster
---     (47 rows, one per current `pg_proc` row in `private`). Two assertions
+--     (one row per current `pg_proc` row in `private` -- no fixed count is
+--     quoted here, because every later branch that adds a function adds a
+--     row and bumps the count assertion below). Two assertions
 --     below diff the roster against live `pg_proc` in both directions, so
 --     adding, renaming, or dropping any function in `private` fails the
 --     suite until the roster is updated -- there is no naming-pattern
@@ -26,6 +28,16 @@
 --     raises or returns the actor for a command that calls it as owner, a
 --     trigger function never wants a direct caller, and `notify`/
 --     `task_managers` simply have no caller yet ahead of #330-#345).
+--
+-- Known follow-up (E2, #295 review): the closed roster is a dated break
+-- someone must own, not a one-time count to get right and forget. It goes
+-- red the instant `private` gains a function this file doesn't know about --
+-- dobrerares' #420 (`private.set_updated_at()`) will do exactly that once it
+-- merges, and any later addition to `private` does the same. The remedy is
+-- always the one line the assertions already point at: add the new
+-- function's `(proname, args, category)` row to `pinned_private_functions`
+-- above (and adjust the plan(N)/count(*) pins next to it) -- there is no
+-- broader redesign needed, just upkeep every time `private` grows.
 
 begin;
 \set osubb_test_suite true
