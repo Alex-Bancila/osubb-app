@@ -32,12 +32,12 @@ Work is cut into **≤1-hour issues** (label `max-1h`), each with goal, reasonin
 
 `docs/README.md` is the index of every document here, marked authoritative or historical, with one line on what still holds — start there if a doc conflicts with what you're reading below.
 
-| Question | File |
-|---|---|
-| What do the words mean? | `CONTEXT.md` (domain glossary) |
-| Why is X built this way? | `docs/adr/README.md` (index of ADRs 0001–0008) |
+| Question                   | File                                                       |
+| -------------------------- | ---------------------------------------------------------- |
+| What do the words mean?    | `CONTEXT.md` (domain glossary)                             |
+| Why is X built this way?   | `docs/adr/README.md` (index of ADRs 0001–0008)             |
 | What exists / what's next? | `CLAUDE.md`'s Status block and the live GitHub issue graph |
-| How do we work as a team? | `docs/team/team-plan.md` |
-| Requirements source (RO) | `docs/org/` |
+| How do we work as a team?  | `docs/team/team-plan.md`                                   |
+| Requirements source (RO)   | `docs/org/`                                                |
 
 Private repo · secrets live in Bitwarden + GitHub Actions secrets, never in git.

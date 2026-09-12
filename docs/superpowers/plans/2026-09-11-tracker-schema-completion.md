@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Finish the Task Tracker *schema* layer so the command wave (#327–#345) can start: every table, column, invariant, read policy, index and grant the commands need — built on top of the spine dobrerares' open PRs deliver — plus the five issues that are startable today regardless of his stack.
+**Goal:** Finish the Task Tracker _schema_ layer so the command wave (#327–#345) can start: every table, column, invariant, read policy, index and grant the commands need — built on top of the spine dobrerares' open PRs deliver — plus the five issues that are startable today regardless of his stack.
 
 **Architecture (revised 2026-09-11 on Alex's instruction: "stack them over dobre's, even if they are blocked"):** two stacks, one issue = one branch = one PR each.
 
@@ -19,12 +19,12 @@ Consequence to accept (Alex's call, house rule 14 overridden explicitly): nothin
 
 dobrerares has **24 open PRs, all drafts**, in four stacks. Bottom of each stack targets `main`; each PR above targets the one below. GitHub only computes "closes #n" for PRs whose base is `main`, so the stacked ones show no linked issue until they are retargeted — the body does carry `Closes #n` (checked on #405 and #428).
 
-| Stack | PRs bottom → top | Issues |
-|---|---|---|
-| Frontend / web foundation (8 deep) | #402 → #405 → #409 → #414 → #417 → #418 → #423 → #425 | #362, #198, #377, #322, #218, #324, #323, #325 |
-| Tasks spine (5, then forks) | #404 → #408 → #410 → #411 → #412, then #420 and #421 both on #412, then #424 → #426 → #427 → #428 → #429 on #421 | #283, #285, #286, #313, #371 · #368 · #284 → #287, #288, #293, #289, #290 |
-| Projects | #403 → #407 | #311, #281 |
-| Standalone | #413, #422 | #65, #375 |
+| Stack                              | PRs bottom → top                                                                                                 | Issues                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Frontend / web foundation (8 deep) | #402 → #405 → #409 → #414 → #417 → #418 → #423 → #425                                                            | #362, #198, #377, #322, #218, #324, #323, #325                            |
+| Tasks spine (5, then forks)        | #404 → #408 → #410 → #411 → #412, then #420 and #421 both on #412, then #424 → #426 → #427 → #428 → #429 on #421 | #283, #285, #286, #313, #371 · #368 · #284 → #287, #288, #293, #289, #290 |
+| Projects                           | #403 → #407                                                                                                      | #311, #281                                                                |
+| Standalone                         | #413, #422                                                                                                       | #65, #375                                                                 |
 
 Merge protocol for those (same trap as #391/#392 and #397–#400): merge only a PR whose base reads `main`; **delete the branch on merge** so GitHub retargets the next one (auto-delete is still off in Settings → General); CI does not re-run on retarget — close/reopen the PR or wait for his next push; never squash a stacked PR. The two forks off #412 (#420, #421) both retarget to `main` when `batch/371-…` is deleted.
 
@@ -34,30 +34,31 @@ What his stacks leave **unclaimed** and in the priorities' order (clean → inco
 
 - One issue = one branch = one PR, body `Closes #n`, CI green; **never merge, never push to `main`** (house rule 7). Commits end with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`; PR bodies end with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 - **Stacking.** Stack C's first branch is created from `origin/batch2/290-legacy-assignment-backfill`; each later Stack C branch from the previous one. Stack D's first branch from `origin/main`. Every stacked PR's body starts `Base: <branch> — merge after #<n>` and still carries `Closes #<issue>` (GitHub links it once the PR is retargeted to `main`). Branch names: `stackc/<issue>-<slug>`, `stackd/374-<part>`.
-- **Migration versions are assigned, not generated.** His spine's versions run up to `20260911106000` and his #420 uses `20260911200000`; a version from `npx supabase migration new` today would sort *before* his and break `db reset` (my FKs to `task_assignments` would run first). Create the file with `migration new`, then rename it to the version in the table below.
+- **Migration versions are assigned, not generated.** His spine's versions run up to `20260911106000` and his #420 uses `20260911200000`; a version from `npx supabase migration new` today would sort _before_ his and break `db reset` (my FKs to `task_assignments` would run first). Create the file with `migration new`, then rename it to the version in the table below.
 
-| # | Issue | Branch | Base | Migration version |
-|---|---|---|---|---|
-| 1 | #161 | `stackc/161-ledger-note` | `batch2/290-legacy-assignment-backfill` (his #429) | `20260911210000` |
-| 2 | #162 | `stackc/162-ledger-semantics` | `stackc/161-ledger-note` | `20260911210100` |
-| 3 | #292 | `stackc/292-task-activity` | `stackc/162-ledger-semantics` | `20260911210200` |
-| 4 | #312 | `stackc/312-nullable-difficulty` | `stackc/292-task-activity` | `20260911210300` |
-| 5 | #291 | `stackc/291-task-candidates` | `stackc/312-nullable-difficulty` | `20260911210400` |
-| 6 | #316 | `stackc/316-task-evaluations` | `stackc/291-task-candidates` | `20260911210500` |
-| 7 | #314 | `stackc/314-task-campaign` | `stackc/316-task-evaluations` | `20260911210600` |
-| 8 | #315 | `stackc/315-umbrella-tasks` | `stackc/314-task-campaign` | `20260911210700` |
-| 9 | #321 | `stackc/321-completed-work-requests` | `stackc/315-umbrella-tasks` | `20260911210800` |
-| 10 | #343 | `stackc/343-campaign-commands` | `stackc/321-completed-work-requests` | `20260911210900` |
-| 11 | #320 | `stackc/320-notify-helpers` | `stackc/343-campaign-commands` | `20260911211000` |
-| 12 | #318 | `stackc/318-task-read` | `stackc/320-notify-helpers` | `20260911211100` |
-| 13 | #319 | `stackc/319-history-read` | `stackc/318-task-read` | `20260911211200` |
-| 14 | #294 | `stackc/294-tracker-indexes` | `stackc/319-history-read` | `20260911211300` |
-| 15 | #295 | `stackc/295-tracker-grants` | `stackc/294-tracker-indexes` | `20260911211400` |
-| 16 | #317 | `stackc/317-ledger-evaluations` | `stackc/295-tracker-grants` | `20260911211500` |
-| 17 | #369 | `stackc/369-events-schema` | `stackc/317-ledger-evaluations` | `20260911211600` |
-| 18 | #372 | `stackc/372-events-min-level` | `stackc/369-events-schema` | `20260911211700` |
+| #   | Issue | Branch                               | Base                                               | Migration version |
+| --- | ----- | ------------------------------------ | -------------------------------------------------- | ----------------- |
+| 1   | #161  | `stackc/161-ledger-note`             | `batch2/290-legacy-assignment-backfill` (his #429) | `20260911210000`  |
+| 2   | #162  | `stackc/162-ledger-semantics`        | `stackc/161-ledger-note`                           | `20260911210100`  |
+| 3   | #292  | `stackc/292-task-activity`           | `stackc/162-ledger-semantics`                      | `20260911210200`  |
+| 4   | #312  | `stackc/312-nullable-difficulty`     | `stackc/292-task-activity`                         | `20260911210300`  |
+| 5   | #291  | `stackc/291-task-candidates`         | `stackc/312-nullable-difficulty`                   | `20260911210400`  |
+| 6   | #316  | `stackc/316-task-evaluations`        | `stackc/291-task-candidates`                       | `20260911210500`  |
+| 7   | #314  | `stackc/314-task-campaign`           | `stackc/316-task-evaluations`                      | `20260911210600`  |
+| 8   | #315  | `stackc/315-umbrella-tasks`          | `stackc/314-task-campaign`                         | `20260911210700`  |
+| 9   | #321  | `stackc/321-completed-work-requests` | `stackc/315-umbrella-tasks`                        | `20260911210800`  |
+| 10  | #343  | `stackc/343-campaign-commands`       | `stackc/321-completed-work-requests`               | `20260911210900`  |
+| 11  | #320  | `stackc/320-notify-helpers`          | `stackc/343-campaign-commands`                     | `20260911211000`  |
+| 12  | #318  | `stackc/318-task-read`               | `stackc/320-notify-helpers`                        | `20260911211100`  |
+| 13  | #319  | `stackc/319-history-read`            | `stackc/318-task-read`                             | `20260911211200`  |
+| 14  | #294  | `stackc/294-tracker-indexes`         | `stackc/319-history-read`                          | `20260911211300`  |
+| 15  | #295  | `stackc/295-tracker-grants`          | `stackc/294-tracker-indexes`                       | `20260911211400`  |
+| 16  | #317  | `stackc/317-ledger-evaluations`      | `stackc/295-tracker-grants`                        | `20260911211500`  |
+| 17  | #369  | `stackc/369-events-schema`           | `stackc/317-ledger-evaluations`                    | `20260911211600`  |
+| 18  | #372  | `stackc/372-events-min-level`        | `stackc/369-events-schema`                         | `20260911211700`  |
 
 This table overrides any branch or base named inside a task section below.
+
 - **What Stack C's base does not contain:** `main`'s last 14 commits (Stack A/B: `docs/backend/conventions.md`, `supabase/tests/conventions.test.sql`, the #215 rename, CLAUDE.md edits) and dobrerares' forks off the spine (#420 `private.set_updated_at()`, #413 notification policies). Follow the conventions doc anyway (read it from `main`: `git show origin/main:docs/backend/conventions.md`); do not edit files that exist only on `main`. The final review runs the whole stack merged with `main` once.
 - `docs/backend/conventions.md` is binding: migration header `-- #<issue>: <purpose>`; new vocabularies are `text … check (col in (…))` named `<table>_<what>_ck`; indexes `<table>_<cols>_idx` / `_uidx`; policies `<table>_<verb>[_qualifier]`; every function revokes EXECUTE from `public, anon, authenticated, service_role` and grants back only what must call it (wrappers, `_impl` and policy predicate helpers → `authenticated`; `require_*` and trigger functions → nothing); every `security definer` sets `search_path = ''`; error codes `42501` / `PT400` / `PT404` / `PT409` / `23514` with snake_case messages; every table has `created_at timestamptz not null default now()`; `updated_at` only where rows are edited in place, maintained by `private.set_updated_at()` (#368, arriving in his #420 — not in Stack C's base, so a command that edits `campaigns` sets `updated_at` itself and says so, as the doc allows).
 - New tables enable RLS in the creating migration, get a fixture row in `rls_deny_by_default.test.sql` (the sweep refuses hollow tables), `revoke all … from anon`, and — because commands will be their only writers — `revoke insert, update, delete … from authenticated`; `grant select` to `authenticated` only where a read policy exists or is the next task.
@@ -74,20 +75,20 @@ This table overrides any branch or base named inside a task section below.
 
 Before each Stack C dispatch, `git fetch` and check whether `origin/batch2/290-legacy-assignment-backfill` moved since the previous task; if it did, merge it into Stack C's bottom branch and cascade (merge commits only) before continuing, and ledger it. The spine tip contains these migrations (#420 and #413 are **not** in it):
 
-| His issue | PR | Migration |
-|---|---|---|
-| #283 deadline `timestamptz` | #404 | `20260911090000_tasks_precise_deadlines.sql` |
-| #285 `audience` | #408 | `20260911091000_tasks_audience.sql` |
-| #286 `assignment_mode` | #410 | `20260911092000_tasks_assignment_mode.sql` |
-| #313 `campaigns` | #411 | `20260911093000_campaigns_schema.sql` |
-| #368 `private.set_updated_at()` | #420 | `20260911200000_shared_timestamps.sql` — **not in the base** (fork off #412) |
-| #284 `project_id` + origin XOR | #421 | `20260911101000_tasks_exactly_one_origin.sql` |
-| #287 six-state `task_status` | #424 | `20260911102000_tasks_six_state_lifecycle.sql` |
-| #288 `tasks_with_overdue` | #426 | `20260911103000_tasks_derived_overdue.sql` |
-| #293 lifecycle timestamps | #427 | `20260911104000_tasks_lifecycle_timestamps.sql` |
-| #289 `task_assignments` | #428 | `20260911105000_task_assignments.sql` |
-| #290 legacy backfill | #429 | `20260911106000_backfill_task_assignments.sql` |
-| #65 notification policies | #413 | `20260911030000_notification_self_access.sql` — **not in the base** (standalone) |
+| His issue                       | PR   | Migration                                                                        |
+| ------------------------------- | ---- | -------------------------------------------------------------------------------- |
+| #283 deadline `timestamptz`     | #404 | `20260911090000_tasks_precise_deadlines.sql`                                     |
+| #285 `audience`                 | #408 | `20260911091000_tasks_audience.sql`                                              |
+| #286 `assignment_mode`          | #410 | `20260911092000_tasks_assignment_mode.sql`                                       |
+| #313 `campaigns`                | #411 | `20260911093000_campaigns_schema.sql`                                            |
+| #368 `private.set_updated_at()` | #420 | `20260911200000_shared_timestamps.sql` — **not in the base** (fork off #412)     |
+| #284 `project_id` + origin XOR  | #421 | `20260911101000_tasks_exactly_one_origin.sql`                                    |
+| #287 six-state `task_status`    | #424 | `20260911102000_tasks_six_state_lifecycle.sql`                                   |
+| #288 `tasks_with_overdue`       | #426 | `20260911103000_tasks_derived_overdue.sql`                                       |
+| #293 lifecycle timestamps       | #427 | `20260911104000_tasks_lifecycle_timestamps.sql`                                  |
+| #289 `task_assignments`         | #428 | `20260911105000_task_assignments.sql`                                            |
+| #290 legacy backfill            | #429 | `20260911106000_backfill_task_assignments.sql`                                   |
+| #65 notification policies       | #413 | `20260911030000_notification_self_access.sql` — **not in the base** (standalone) |
 
 ### Names his PRs introduce (verified from the diffs; re-verify on `main` before use)
 
@@ -196,7 +197,7 @@ His constraint names (`_check`) do not follow the conventions doc's `_ck`; that 
 
 **Files:** Create `supabase/migrations/<ts>_event_read_min_level.sql`; rewrite `supabase/tests/rls_events.test.sql`; modify `supabase/seed.sql` (teams insert loses `for_recruits`; the AG event gets `min_level = 3`), `supabase/tests/demo_seed.test.sql` (the two `for_recruits` assertions), `scripts/seed-fingerprint.sql` (its `team:` line prints `for_recruits` — replace the column with nothing, keep the line's shape otherwise), regenerate types. Branch, base and version: row 18 of the Stack C table. `docs/agents/onboarding.md:104` (names `team_admits_recruits` as a helper-pattern example) is rewritten by #374 part 2 on `main`; do not edit it here.
 
-- [ ] RED — rewrite `rls_events.test.sql` for the ADR-0008 rule *"every active member reads every event whose Minimum Level they satisfy, regardless of scope"*: fixtures with `min_level` 0/3/4/5/6 across org, dept and team scopes; Recrut (level 0) sees exactly the `min_level = 0` rows — including a foreign department's and a team's he is not in; Voluntar (level 1?) same set — check `roles.level` for each persona; Responsabil (4) sees ≤ 4; BCE (5) ≤ 5; BC (6) all; a stranger (real uid, no claims) and anon see nothing; a member of a former `for_recruits` team gets nothing extra. Keep the file's persona layout.
+- [ ] RED — rewrite `rls_events.test.sql` for the ADR-0008 rule _"every active member reads every event whose Minimum Level they satisfy, regardless of scope"_: fixtures with `min_level` 0/3/4/5/6 across org, dept and team scopes; Recrut (level 0) sees exactly the `min_level = 0` rows — including a foreign department's and a team's he is not in; Voluntar (level 1?) same set — check `roles.level` for each persona; Responsabil (4) sees ≤ 4; BCE (5) ≤ 5; BC (6) all; a stranger (real uid, no claims) and anon see nothing; a member of a former `for_recruits` team gets nothing extra. Keep the file's persona layout.
 - [ ] Migration:
   ```sql
   -- #372: ADR-0008 — visibility is Minimum Level, not scope membership or the
@@ -211,13 +212,14 @@ His constraint names (`_check`) do not follow the conventions doc's `_ck`; that 
   (`events_read` follows the doc's `<table>_<verb>` scheme; `event_read` was grandfathered only until rewritten — say so in the header. `docs/backend/conventions.md` §5 still lists `event_read`; that file exists only on `main`, so leave it and name it in the PR body as a follow-up.)
 - [ ] Seed: `t-recruti` keeps existing as a plain Department Team (drop the column from the insert; leave the team — demo accounts reference it); `Adunarea Generală de toamnă` gets `min_level = 3` so the demo shows a gated event; `Training pentru recruți` stays `0`. `demo_seed.test.sql:71,206-207` rewritten accordingly (assert one event with `min_level = 3` exists). `grep -n for_recruits scripts/seed-fingerprint.sql supabase/ app/src docs` → only historical specs remain.
 - [ ] GREEN: reset + full suite; `bash scripts/check-seed-rerunnable.sh`; regenerate types (column dropped) and commit; `app` typecheck still green (`for_recruits` appears only in the generated types).
-- [ ] Commit `feat(db): read events by Minimum Level; retire for_recruits (#372)`; PR `Closes #372` — body names the behaviour change (department events become visible org-wide at level 0, as ADR-0008 intends) and that "ordinary members do not receive past Events" is *not* implemented here (a later Calendar issue).
+- [ ] Commit `feat(db): read events by Minimum Level; retire for_recruits (#372)`; PR `Closes #372` — body names the behaviour change (department events become visible org-wide at level 0, as ADR-0008 intends) and that "ordinary members do not receive past Events" is _not_ implemented here (a later Calendar issue).
 
 ### Task 5: #374 — docs truth pass (Stack D, two PRs on `main`)
 
 Stack D is independent of Stack C and of his spine. dobrerares' draft #422 (repo-wide Prettier + link check) touches the same documents; whichever lands second re-runs the formatter — say so in both PR bodies. Branches: `stackd/374-indexes-and-banners` from `origin/main`, then `stackd/374-truth-pass` from it.
 
 **PR 5a — indexes, banners, headers** (`stackd/374-indexes-and-banners`, body "Part 1 of #374", no `Closes`; also commits this plan file):
+
 - `docs/README.md`: one table — authoritative (CLAUDE.md, CONTEXT.md, ADR 0001–0008, `docs/backend/*` incl. `conventions.md`, `docs/agents/*`, `docs/team/team-plan.md`) vs historical (`docs/osubb-app-tech-stack.md`, `docs/roadmap.md`, `docs/superpowers/specs/2026-06-2*`, `docs/backend/implementation-issues.md`, `docs/superpowers/specs/frontend-mini-spec.md`, `mockup/`) with one line each on what still holds.
 - `docs/adr/README.md`: index 0001–0008 (title, status, date, one-line decision). Apply one header template to all eight ADRs — `Status · Date · Deciders · Supersedes · Superseded by · Related` — without changing any decision text.
 - Historical banner (three lines: "Historical — superseded by …; kept for provenance") at the top of the four documents above plus `frontend-mini-spec.md` §7 and `mockup/README.md`.
@@ -225,6 +227,7 @@ Stack D is independent of Stack C and of his spine. dobrerares' draft #422 (repo
 - Verify: every link in the two new indexes resolves (`for p in $(grep -oE '\]\([^)]+\)' … )`), Prettier clean on the new files.
 
 **PR 5b — rewrites** (`stackd/374-truth-pass`, base `stackd/374-indexes-and-banners`, `Closes #374`):
+
 - `docs/agents/onboarding.md`: replace the tree's counts (`15 pgTAP suites, 266 tests`) with commands (`ls supabase/migrations | wc -l`, `npx supabase test db`), extend the migration tour to the September groups (Projects #268–#274, Teams #276–#280, departments #310, grants #363/#365, Stack A/B), fix the helper-pattern line (no `in_my_dept`, no `team_admits_recruits`), `mockup/` = historical provenance for tokens/logos, `app/` = shadcn target per ADR-0002.
 - `README.md`: stack line (browser-first PWA, shadcn — no "Ionic, Capacitor later"), ADR range 0001–0008 → link `docs/adr/README.md`, remove hard dates that have passed, point at `docs/README.md`.
 - `app/README.md`: regenerate the file tree; drop "tokens.css is a copy of the mockup".
@@ -263,6 +266,7 @@ create index task_activity_task_timeline_idx on public.task_activity (task_id, o
 create index task_activity_actor_idx on public.task_activity (actor_id);
 alter table public.task_activity enable row level security;
 ```
+
 Immutability: `revoke insert, update, delete … from authenticated` **and** a `before update or delete` trigger `private.reject_task_activity_change()` raising `23514 task_activity_immutable` (definer commands must not be able to rewrite history either). Tests `task_activity_schema.test.sql`: shape, kind check, immutability as `postgres` and as `authenticated`, timeline order, claimless sweep. No command writes yet.
 
 ### Task 7: #312 — `difficulty` nullable until Evaluation · gate: #287
@@ -296,6 +300,7 @@ create index task_candidates_queue_order_idx
   on public.task_candidates (task_id, joined_at, id) where status = 'pending';
 create index task_candidates_member_idx on public.task_candidates (member_id);
 ```
+
 Queue order is `(joined_at, id)`; a rejoin is a new row (the withdrawn one stays — the partial unique index permits it). "Queue only on public tasks" and "no candidature for the current Executor" are command invariants (#330), not schema — say so in the header. Tests `task_candidates_schema.test.sql`: one live candidature per member, rejoin after withdrawal, decision-shape cases, order determinism, denied client writes, sweep.
 
 ### Task 9: #316 — `task_evaluations` · gate: #287, #289

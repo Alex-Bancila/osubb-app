@@ -1,6 +1,6 @@
 # Agent Onboarding — continue from here
 
-You are picking up a project mid-flight. This file gets you from zero context to productive on one ≤1h issue without asking a human anything. It complements `CLAUDE.md` (auto-loaded rules) with the *why*, the *what exists*, and the *patterns to copy*.
+You are picking up a project mid-flight. This file gets you from zero context to productive on one ≤1h issue without asking a human anything. It complements `CLAUDE.md` (auto-loaded rules) with the _why_, the _what exists_, and the _patterns to copy_.
 
 ## Read order (≈15 min of context)
 
@@ -93,15 +93,15 @@ Also: `.github/workflows/ci.yml` (PR = fresh db + all tests + Deno checks + a se
 
 ## Patterns to copy (don't invent, imitate)
 
-| You're writing… | Copy from |
-|---|---|
-| a schema migration | `20260812184706_tasks_and_requests.sql` (tables + indexes + RLS enable + header comment) |
-| a trigger / definer function | `20260819160713_points_engine.sql` (search_path='', qualified names, upsert-on-partial-index) |
-| RLS policies | `20260819172728_tasks_points_policies.sql` (+ its recursion-breaking helpers) |
-| pgTAP schema tests | `points_engine.test.sql` (fixtures via auth.users+profiles, plan(N), rollback) |
-| per-role RLS tests | `rls_tasks_points.test.sql` (the `pg_temp.login()` JWT simulator — reuse it) |
-| an Edge Function | `functions/invite-member/` — logic in `handler.ts` behind a `Deps` port, `index.ts` only wires the real clients, so every path is testable without a server |
-| a frontend screen | `app/src/screens/calendar/` for the query + three-states pattern; build new screens with shadcn per ADR-0002, never Ionic or AG Grid |
+| You're writing…              | Copy from                                                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a schema migration           | `20260812184706_tasks_and_requests.sql` (tables + indexes + RLS enable + header comment)                                                                    |
+| a trigger / definer function | `20260819160713_points_engine.sql` (search_path='', qualified names, upsert-on-partial-index)                                                               |
+| RLS policies                 | `20260819172728_tasks_points_policies.sql` (+ its recursion-breaking helpers)                                                                               |
+| pgTAP schema tests           | `points_engine.test.sql` (fixtures via auth.users+profiles, plan(N), rollback)                                                                              |
+| per-role RLS tests           | `rls_tasks_points.test.sql` (the `pg_temp.login()` JWT simulator — reuse it)                                                                                |
+| an Edge Function             | `functions/invite-member/` — logic in `handler.ts` behind a `Deps` port, `index.ts` only wires the real clients, so every path is testable without a server |
+| a frontend screen            | `app/src/screens/calendar/` for the query + three-states pattern; build new screens with shadcn per ADR-0002, never Ionic or AG Grid                        |
 
 ## The work loop
 
@@ -132,21 +132,21 @@ Always confirm against live state: `gh issue list --label max-1h --state open`. 
 ## Known traps
 
 - **Suppression is bc + bce** (spec Revision 3 §9.2). Spec §3.4's `insert into notif_suppression values ('bc',…)` is superseded — seeding bc-only fails review.
-- **`to authenticated` is not "a member".** A session can be authenticated with **no org claims** (never invited, or deactivated since its token was issued — ADR-0003 gate 2). `auth_level()` cannot tell them apart from a recrut, who is also level 0, and **`auth.uid()` cannot either** — a deactivated member keeps their uid *and* their `profiles` row. Any "every member may do this" policy uses **`auth_is_member()`**; `using (true)` is a bug, and so is any disjunct that never mentions the caller (`or status = 'open'`, `or scope = 'org'`). An audit on 2026-08-23 found 12 policies written this way — one of which let a deactivated member join an open graded task and have the ledger trigger **award them points** (migration `20260823140923_require_membership_policies.sql`). The claimless sweep in `rls_deny_by_default.test.sql` now fails, naming the table, if it comes back.
+- **`to authenticated` is not "a member".** A session can be authenticated with **no org claims** (never invited, or deactivated since its token was issued — ADR-0003 gate 2). `auth_level()` cannot tell them apart from a recrut, who is also level 0, and **`auth.uid()` cannot either** — a deactivated member keeps their uid _and_ their `profiles` row. Any "every member may do this" policy uses **`auth_is_member()`**; `using (true)` is a bug, and so is any disjunct that never mentions the caller (`or status = 'open'`, `or scope = 'org'`). An audit on 2026-08-23 found 12 policies written this way — one of which let a deactivated member join an open graded task and have the ledger trigger **award them points** (migration `20260823140923_require_membership_policies.sql`). The claimless sweep in `rls_deny_by_default.test.sql` now fails, naming the table, if it comes back.
 - **A column-level `revoke select (col)` is a no-op** while the role still holds table-wide SELECT — a table grant implies every column. Revoke the table grant, then grant the safe columns back (see `20260822225003_profiles_read_policies.sql`).
 - **`reset role` does not clear the JWT.** In per-role tests, the previous `pg_temp.login()` claims survive, so a "stranger sees nothing" block silently runs as the last persona and passes for free. Clear it: `select set_config('request.jwt.claims', '', true);`
-- **A write denied by RLS is not always an error.** INSERT without a matching policy raises 42501; UPDATE/DELETE without one matches zero rows and returns *silently*. Assert the value is unchanged, not `throws_ok`.
+- **A write denied by RLS is not always an error.** INSERT without a matching policy raises 42501; UPDATE/DELETE without one matches zero rows and returns _silently_. Assert the value is unchanged, not `throws_ok`.
 - **Policies should not depend on other tables' policies.** Use a `security definer` helper (`is_assigned`, `private.can_read_team`, `private.can_manage_project_work`) so narrowing one table later cannot silently change another table's visibility.
 - **Conventions are written down:** `docs/backend/conventions.md` — read it before your first migration.
 - **`profiles_contact` is deliberately owner-rights** (one of the two exceptions to house rule 3, alongside `member_points`) because it re-exposes columns revoked from `authenticated`. Its WHERE clause is the security boundary — don't "fix" it to `security_invoker`, that breaks it for everyone it serves.
-- **Never open a stacked PR.** This cost two recoveries (#126, #137). A PR whose base is another feature branch is retargeted to `main` only when that base branch is **deleted** — merging the base is not enough, and neither is waiting. The stacked PR then merges *into the still-existing feature branch*: it reads "Merged", CI is green, the issue stays open, and `main` silently lacks the code. Nothing about the UI says anything is wrong. If work depends on unmerged work, **put both in one PR**, or wait for the base to land on `main` before opening the next one. It is never worth the recovery.
+- **Never open a stacked PR.** This cost two recoveries (#126, #137). A PR whose base is another feature branch is retargeted to `main` only when that base branch is **deleted** — merging the base is not enough, and neither is waiting. The stacked PR then merges _into the still-existing feature branch_: it reads "Merged", CI is green, the issue stays open, and `main` silently lacks the code. Nothing about the UI says anything is wrong. If work depends on unmerged work, **put both in one PR**, or wait for the base to land on `main` before opening the next one. It is never worth the recovery.
 - `rating_mult()` already exists (migration 3) — don't recreate it.
 - Enabling RLS on a table read by the auth hook without a `supabase_auth_admin` policy breaks logins — the four needed policies already exist (migration 4); keep the pattern for any new hook-read table.
 - Views without `security_invoker = on` silently bypass RLS. The deny-by-default test suite has a guard that fails any new RLS-less table — that's intentional; fix the table, not the test.
 - **`seed.sql` fills every table, and it runs in CI too** (`supabase start` seeds). Any suite that counts rows exactly must `truncate` the tables it owns at the top of its transaction — see `rls_events.test.sql`. An assertion like "a recrut sees four events" is a claim about that file's fixtures, not about the demo calendar; without the truncate it breaks the next time the seed grows, and someone eventually "fixes" the assertion instead of the policy.
-- **`db push` deploys migrations only — it has never carried `seed.sql`.** Merging the whole demo dataset therefore changed nothing on staging, whose deploy log cheerfully read *"Remote database is up to date"* while the project sat there with the full schema and zero rows (#139). Demo data reaches staging only through the manual **Seed staging demo data** workflow, which applies the file with `psql`. Consequence for anyone editing the seed: it must stay **re-runnable against a live database** — it clears the `@demo.osubb` cohort before re-inserting it, and a CI step applies it twice and compares a content fingerprint. A seed that only works on an empty database is one staging cannot use. See `docs/backend/seeding-staging.md`.
+- **`db push` deploys migrations only — it has never carried `seed.sql`.** Merging the whole demo dataset therefore changed nothing on staging, whose deploy log cheerfully read _"Remote database is up to date"_ while the project sat there with the full schema and zero rows (#139). Demo data reaches staging only through the manual **Seed staging demo data** workflow, which applies the file with `psql`. Consequence for anyone editing the seed: it must stay **re-runnable against a live database** — it clears the `@demo.osubb` cohort before re-inserting it, and a CI step applies it twice and compares a content fingerprint. A seed that only works on an empty database is one staging cannot use. See `docs/backend/seeding-staging.md`.
 - Windows: "port not available" on supabase start → admin PowerShell `net stop winnat && net start winnat`.
-- The CI job "Push migrations to staging" **skipping on PRs is correct** (deploys happen on merge). Skipping *on main* with "secrets not configured" would mean the repo secrets are broken — investigate, don't ignore.
+- The CI job "Push migrations to staging" **skipping on PRs is correct** (deploys happen on merge). Skipping _on main_ with "secrets not configured" would mean the repo secrets are broken — investigate, don't ignore.
 
 ## Humans-only (never attempt as an agent)
 
