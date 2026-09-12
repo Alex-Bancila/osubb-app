@@ -30,19 +30,21 @@ alter table public.events
   add constraint events_min_level_ck
     check (min_level in (0, 3, 4, 5, 6)),
   add constraint events_cancel_reason_ck
-    -- btrim() only strips ordinary spaces; a tab-only or newline-only
-    -- reason would slip through it, so the POSIX character class replaces
-    -- it, as settled for event titles in #162/#343. The explicit
-    -- `cancel_reason is not null` guard ahead of the regex matters just as
-    -- much: `null ~ pattern` evaluates to null, not false, and a CHECK
-    -- constraint only rejects a row when its expression is false — a bare
-    -- `cancel_reason ~ '[^[:space:]]'` would let a cancellation with no
-    -- reason at all through as "unknown" (see
-    -- completed_work_requests_rejected_shape_ck and
-    -- points_ledger_sanction_shape_ck for the same trap already fixed here).
+    -- Enforce all-or-nothing: either both null (not cancelled), or both set
+    -- (cancelled with reason). A reason without a cancellation timestamp, or
+    -- vice versa, is nonsensical. The reason itself must be nonblank: btrim()
+    -- only strips ordinary spaces, so a tab-only or newline-only reason would
+    -- slip through it. The POSIX character class `[^[:space:]]` catches all
+    -- whitespace, per #162/#343 precedent. The explicit `cancel_reason is not
+    -- null` guard ahead of the regex matters: `null ~ pattern` evaluates to
+    -- null, not false, and a CHECK constraint only rejects a row when its
+    -- expression is false — a bare `cancel_reason ~ '[^[:space:]]'` would let
+    -- a cancellation with no reason through as "unknown" (same trap already
+    -- fixed in completed_work_requests_rejected_shape_ck and
+    -- points_ledger_sanction_shape_ck).
     check (
-      cancelled_at is null
-      or (cancel_reason is not null and cancel_reason ~ '[^[:space:]]')
+         (cancelled_at is null and cancel_reason is null)
+      or (cancelled_at is not null and cancel_reason is not null and cancel_reason ~ '[^[:space:]]')
     );
 
 alter table public.events drop constraint events_scope_fields_ck;
@@ -71,4 +73,4 @@ comment on column public.events.min_level is
 comment on column public.events.cancelled_at is
   'Set together with cancel_reason when an Event is cancelled. Cancellation preserves the Event row and its RSVP history (ADR-0008).';
 comment on column public.events.cancel_reason is
-  'Required, nonblank when cancelled_at is set (events_cancel_reason_ck); null otherwise.';
+  'Set together with cancelled_at when an Event is cancelled. Both must be null (not cancelled) or both must be set (cancelled with nonblank reason), per events_cancel_reason_ck.';

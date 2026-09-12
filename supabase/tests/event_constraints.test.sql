@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(29);
+select plan(30);
 
 -- The demo seed fills the calendar. This suite owns its rows and rolls the
 -- truncation back after the assertions.
@@ -93,6 +93,12 @@ select throws_ok(
      values ('Anulare motiv tab', 'sedinta', 'org', now(), now(), E'\t\n') $$,
   '23514', 'new row for relation "events" violates check constraint "events_cancel_reason_ck"',
   'a tab-only cancellation reason is rejected');
+
+select throws_ok(
+  $$ insert into events (title, type, scope, starts_at, cancel_reason)
+     values ('Motiv fără anulare', 'sedinta', 'org', now(), 'Sală indisponibilă') $$,
+  '23514', 'new row for relation "events" violates check constraint "events_cancel_reason_ck"',
+  'a cancellation reason without cancelled_at is rejected');
 
 select lives_ok(
   $$ insert into events (title, type, scope, starts_at, cancelled_at, cancel_reason)
