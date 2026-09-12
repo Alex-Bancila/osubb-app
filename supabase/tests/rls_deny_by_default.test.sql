@@ -57,15 +57,29 @@ insert into task_activity (task_id, kind, actor_id, to_status)
 insert into task_candidates (task_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from tasks where title = 'rls-t1';
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
+-- #317 retired the sync triggers, so this update no longer writes a ledger
+-- row by itself: the Evaluation and its ledger entry are written below, in
+-- the order the evaluation commands will write them.
 update tasks set status = 'completed', completed_at = now(), rating = 4
- where title = 'rls-t1';   -- writes points_ledger via trigger
--- #316: a real Evaluation record, tied to the same Task as its Assignment.
+ where title = 'rls-t1';
+-- #316: a real Evaluation record, tied to the same Task as its Assignment,
+-- carrying the Task's own Difficulty and the scoring guide's points.
 insert into task_evaluations
   (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
   select task.id, assignment.id, 'ffffffff-0000-0000-0000-000000000006'::uuid,
-         'completed', 4, 4, 8, 'rls fixture evaluation'
+         'completed', task.difficulty, task.rating,
+         task.difficulty * rating_mult(task.rating), 'rls fixture evaluation'
     from tasks task
     join task_assignments assignment on assignment.task_id = task.id
+   where task.title = 'rls-t1';
+-- #317: the credit itself — a task ledger row names both its Task and the
+-- Evaluation that produced it (points_ledger_task_reference_ck).
+insert into points_ledger (member_id, delta, reason, task_id, evaluation_id)
+  select assignment.member_id, evaluation.points, 'task',
+         evaluation.task_id, evaluation.id
+    from task_evaluations evaluation
+    join task_assignments assignment on assignment.id = evaluation.assignment_id
+    join tasks task on task.id = evaluation.task_id
    where task.title = 'rls-t1';
 insert into task_requests (kind, title, from_member)
   values

@@ -45,6 +45,32 @@ select id, '28400000-0000-0000-0000-000000000002'::uuid
 update public.tasks
    set status = 'completed', completed_at = now(), rating = 4
  where title = 'Legacy Team With Redundant Department';
+
+-- #317 retired the grading triggers, so the Rating above credits nobody on
+-- its own: write the Assignment, the Evaluation and the ledger entry that
+-- names it, which is the points history the assertion below checks survives
+-- the Origin migration untouched.
+insert into public.task_assignments (task_id, member_id, ended_at, end_reason)
+select id, '28400000-0000-0000-0000-000000000002', completed_at, 'completed'
+  from public.tasks where title = 'Legacy Team With Redundant Department';
+
+insert into public.task_evaluations
+  (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
+select task.id, assignment.id, '28400000-0000-0000-0000-000000000002',
+       'completed', task.difficulty, task.rating,
+       task.difficulty * public.rating_mult(task.rating),
+       'origin upgrade fixture evaluation'
+  from public.tasks task
+  join public.task_assignments assignment on assignment.task_id = task.id
+ where task.title = 'Legacy Team With Redundant Department';
+
+insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id)
+select assignment.member_id, evaluation.points, 'task',
+       evaluation.task_id, evaluation.id
+  from public.task_evaluations evaluation
+  join public.task_assignments assignment on assignment.id = evaluation.assignment_id
+  join public.tasks task on task.id = evaluation.task_id
+ where task.title = 'Legacy Team With Redundant Department';
 SQL
 
   cat "$migration"

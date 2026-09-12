@@ -71,6 +71,41 @@ delete from points_ledger l
                  join profiles p on p.id = t.created_by
                 where t.id = l.task_id and p.email like '%@demo.osubb');
 
+-- #317/#292: `task_evaluations` and `task_activity` are append-only by
+-- trigger, not merely by grants — `private.guard_task_evaluation_change()`
+-- and `private.reject_task_activity_change()` reject every DELETE, including
+-- one run by the table owner. Both tables reference the demo Tasks and
+-- Assignments deleted just below, so re-seeding a live staging database
+-- would fail on the foreign keys unless this demo-cohort history goes first.
+-- The seed runs as the table owner (docs/backend/seeding-staging.md: "Connect
+-- as postgres"), so it may disable those two triggers around its own
+-- cleanup. It is done explicitly, for exactly these two statements, and
+-- re-enabled immediately: nothing else in this file runs while history is
+-- unguarded, and the scope is still only Tasks a demo account created.
+alter table task_evaluations disable trigger task_evaluations_guard_change;
+alter table task_activity disable trigger task_activity_reject_change;
+
+delete from task_evaluations evaluation
+ where exists (
+   select 1
+     from tasks task
+     join profiles creator on creator.id = task.created_by
+    where task.id = evaluation.task_id
+      and creator.email like '%@demo.osubb'
+ );
+
+delete from task_activity activity
+ where exists (
+   select 1
+     from tasks task
+     join profiles creator on creator.id = task.created_by
+    where task.id = activity.task_id
+      and creator.email like '%@demo.osubb'
+ );
+
+alter table task_activity enable trigger task_activity_reject_change;
+alter table task_evaluations enable trigger task_evaluations_guard_change;
+
 delete from task_assignments assignment
  where exists (
    select 1
@@ -222,10 +257,14 @@ select project.id, fixture.member_id, fixture.project_role
    and project.created_by = 'd0000000-0000-0000-0000-000000000007';
 
 -- ==================== Demo work: tasks, grades, points ====================
--- Graded tasks are NOT accompanied by hand-written ledger rows: the grading
--- trigger writes those. Setting `rating` here therefore exercises the points
--- engine on every reset, which is the point — a seed that inserted ledger
--- rows directly could drift from the formula it is supposed to illustrate.
+-- #317 retired the grading triggers, so this file now writes the Evaluation
+-- and its ledger entry itself, the way the evaluation commands (#336-#338)
+-- will. Nothing here hard-codes a number: every Evaluation's `points` and
+-- every ledger `delta` is computed as difficulty × rating_mult(rating) from
+-- the same scoring guide the commands use, so the demo data still
+-- illustrates the formula rather than a snapshot of it. The per-Task
+-- arithmetic in the comments beside each grading statement is a reader's
+-- aid, not the source of the number.
 
 create or replace function pg_temp.task_deadline(p_date date)
 returns timestamptz
@@ -324,13 +363,14 @@ select t.id, a.member_id
   ) as a (title, member_id)
   join tasks t on t.title = a.title;
 
--- Grading. Each update fires the trigger, which writes one ledger row per
--- assignee: points = difficulty × multiplier(rating). This also moves each
--- Task to `completed` in the same statement, together with `completed_at`
--- and the Rating it goes with (#312's tasks_evaluation_inputs_ck requires
--- Difficulty and Rating together the instant status reaches completed) —
--- and it runs before the task_assignments backfill just below, which reads
--- each Task's final status/completed_at to decide how that history ended.
+-- Grading. Each update moves a Task to `completed` together with
+-- `completed_at` and the Rating it goes with (#312's
+-- tasks_evaluation_inputs_ck requires Difficulty and Rating together the
+-- instant status reaches completed), and runs before the task_assignments
+-- backfill just below, which reads each Task's final status/completed_at to
+-- decide how that history ended. Since #317 these updates no longer move
+-- points by themselves — the Evaluations and ledger entries are written
+-- further down, after the Assignments they must reference exist.
 update tasks set status = 'completed', completed_at = now(), rating = 5 where title = 'Workshop CV pentru boboci';      -- 4 × 3 = 12
 update tasks set status = 'completed', completed_at = now(), rating = 3 where title = 'Materiale curs Excel';           -- 2 × 1 = 2
 update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 'Minuta ședinței EDU';            -- 1 × 2 = 2
@@ -388,6 +428,104 @@ select
       then 'Deterministic migration: another legacy participant was selected as Executor by member UUID order.'
   end
 from ranked_demo_assignees legacy;
+
+-- Evaluations, then the ledger entries that name them (#317). One Evaluation
+-- per graded demo Task × participant, exactly as the retired trigger wrote
+-- one ledger row per graded Task × assignee, so the demo totals are the same
+-- numbers they have always been.
+--
+-- Most graded demo Tasks have a single participant and are recorded the way
+-- the evaluation commands (#336-#338) will record real work: `source =
+-- 'command'`, evaluated by the Task's creator. One does not — "Migrare bază
+-- de date" has two participants and two legitimate credits, which ADR-0007's
+-- one-Executor model cannot express as two open command Evaluations
+-- (task_evaluations_one_open_per_task_uidx forbids it, deliberately). That
+-- Task is the legacy shape #316's Ruling 11 and #317's backfill exist for,
+-- and the demo keeps it: two `legacy_migration` Evaluations with no
+-- evaluator, one per Assignment. The rule is written as "more than one
+-- participant", not as that Task's title, so editing the fixture above
+-- cannot silently produce an invalid pair.
+create or replace view pg_temp.demo_graded_work as
+select
+  task.id                                  as task_id,
+  task.created_by                          as evaluator_id,
+  task.status,
+  task.difficulty,
+  task.rating,
+  task.completed_at,
+  assignment.id                            as assignment_id,
+  assignment.member_id,
+  count(*) over (partition by task.id)     as participant_count
+  from tasks task
+  join task_assignments assignment on assignment.task_id = task.id
+  join profiles creator on creator.id = task.created_by
+ where creator.email like '%@demo.osubb'
+   and task.status in ('completed', 'unfulfilled')
+   and task.difficulty is not null
+   and task.rating is not null;
+
+insert into task_evaluations
+  (task_id, assignment_id, source, evaluated_by, outcome,
+   difficulty, rating, points, note, evaluated_at)
+select
+  graded.task_id,
+  graded.assignment_id,
+  'command',
+  graded.evaluator_id,
+  case when graded.status = 'unfulfilled' then 'unfulfilled' else 'completed' end,
+  graded.difficulty,
+  graded.rating,
+  graded.difficulty * rating_mult(graded.rating),
+  'Evaluare finală conform ghidului de notare.',
+  coalesce(graded.completed_at, now())
+  from pg_temp.demo_graded_work graded
+ where graded.participant_count = 1
+ order by graded.task_id, graded.member_id;
+
+-- #317 closed `source = 'legacy_migration'` with
+-- `task_evaluations_reject_legacy_source` once its backfill had run. The
+-- owner disables it here, for one statement, to reproduce the one
+-- legacy-shaped demo Task described above — the same deliberate, documented
+-- exception that migration's comment anticipates, not a way around the rule.
+alter table task_evaluations disable trigger task_evaluations_reject_legacy_source;
+
+insert into task_evaluations
+  (task_id, assignment_id, source, evaluated_by, outcome,
+   difficulty, rating, points, note, evaluated_at)
+select
+  graded.task_id,
+  graded.assignment_id,
+  'legacy_migration',
+  null,
+  case when graded.status = 'unfulfilled' then 'unfulfilled' else 'completed' end,
+  graded.difficulty,
+  graded.rating,
+  graded.difficulty * rating_mult(graded.rating),
+  'Credit istoric: task cu mai mulți participanți, păstrat în forma de dinaintea modelului cu un singur Executor.',
+  coalesce(graded.completed_at, now())
+  from pg_temp.demo_graded_work graded
+ where graded.participant_count > 1
+ order by graded.task_id, graded.member_id;
+
+alter table task_evaluations enable trigger task_evaluations_reject_legacy_source;
+
+-- The credit itself. `awarded_by` stays null: the Evaluation names the
+-- evaluator now, and the retired trigger only ever stored auth.uid(), which
+-- was null for every row this file produced.
+insert into points_ledger (member_id, delta, reason, task_id, evaluation_id)
+select
+  assignment.member_id,
+  evaluation.points,
+  'task',
+  evaluation.task_id,
+  evaluation.id
+  from task_evaluations evaluation
+  join task_assignments assignment on assignment.id = evaluation.assignment_id
+  join tasks task on task.id = evaluation.task_id
+  join profiles creator on creator.id = task.created_by
+ where creator.email like '%@demo.osubb'
+   and evaluation.reversed_at is null
+ order by evaluation.id;
 
 -- A BC sanction is separate from task points and is signed by its author.
 insert into points_ledger (member_id, delta, reason, awarded_by, note) values

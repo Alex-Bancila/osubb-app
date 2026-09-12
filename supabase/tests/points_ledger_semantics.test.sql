@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(20);
+select plan(22);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -24,17 +24,34 @@ insert into profiles (id, full_name, email, role, status) values
   ('26200000-0000-0000-0000-000000000001', '262 BC', '262.bc@test.local', 'bc', 'activ'),
   ('26200000-0000-0000-0000-000000000002', '262 BC Inactive', '262.bc.inactive@test.local', 'bc', 'inactiv');
 
--- A task fixture so 'task'/'task_reversal' rows (which now require a
--- task_id) can be inserted below.
-insert into tasks (title, difficulty, dept_id)
-  values ('ledger-semantics-fixture-162', 3, 'edu');
+-- A graded Task with its Assignment and Evaluation, so 'task'/'task_reversal'
+-- rows (which need a task_id from #162 and an evaluation_id from #317) can be
+-- inserted below.
+insert into tasks (title, difficulty, rating, status, completed_at, dept_id)
+  values ('ledger-semantics-fixture-162', 3, 4, 'completed', now(), 'edu');
 
--- ==================== 'task' requires a task_id ====================
+insert into task_assignments (task_id, member_id, ended_at, end_reason)
+  select id, 'aaaaaaaa-0000-0000-0000-000000000162', completed_at, 'completed'
+    from tasks where title = 'ledger-semantics-fixture-162';
+
+insert into task_evaluations
+  (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
+  select task.id, assignment.id, 'aaaaaaaa-0000-0000-0000-000000000162',
+         'completed', task.difficulty, task.rating,
+         task.difficulty * rating_mult(task.rating), 'semantics fixture evaluation'
+    from tasks task
+    join task_assignments assignment on assignment.task_id = task.id
+   where task.title = 'ledger-semantics-fixture-162';
+
+-- ==================== 'task' requires a task_id and an Evaluation ====================
 select lives_ok(
-  $$ insert into points_ledger (member_id, delta, reason, task_id)
-     select 'aaaaaaaa-0000-0000-0000-000000000162', 5, 'task', id
-       from tasks where title = 'ledger-semantics-fixture-162' $$,
-  'a task row with a task_id is accepted');
+  $$ insert into points_ledger (member_id, delta, reason, task_id, evaluation_id)
+     select 'aaaaaaaa-0000-0000-0000-000000000162', 5, 'task',
+            evaluation.task_id, evaluation.id
+       from task_evaluations evaluation
+       join tasks task on task.id = evaluation.task_id
+      where task.title = 'ledger-semantics-fixture-162' $$,
+  'a task row with a task_id and an evaluation_id is accepted');
 
 select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason)
@@ -42,12 +59,24 @@ select throws_ok(
   '23514', null,
   'a task row without a task_id is rejected');
 
--- ==================== 'task_reversal' requires a task_id too ====================
-select lives_ok(
+-- #317: the Evaluation is as required as the Task. A task row that names
+-- only its Task is a credit nobody decided.
+select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, task_id)
-     select 'aaaaaaaa-0000-0000-0000-000000000162', -5, 'task_reversal', id
+     select 'aaaaaaaa-0000-0000-0000-000000000162', 5, 'task', id
        from tasks where title = 'ledger-semantics-fixture-162' $$,
-  'a task_reversal row with a task_id is accepted');
+  '23514', null,
+  'a task row without an evaluation_id is rejected (#317)');
+
+-- ==================== 'task_reversal' requires both too ====================
+select lives_ok(
+  $$ insert into points_ledger (member_id, delta, reason, task_id, evaluation_id)
+     select 'aaaaaaaa-0000-0000-0000-000000000162', -5, 'task_reversal',
+            evaluation.task_id, evaluation.id
+       from task_evaluations evaluation
+       join tasks task on task.id = evaluation.task_id
+      where task.title = 'ledger-semantics-fixture-162' $$,
+  'a task_reversal row with a task_id and an evaluation_id is accepted');
 
 select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason)
@@ -100,6 +129,18 @@ select throws_ok(
        from tasks where title = 'ledger-semantics-fixture-162' $$,
   '23514', null,
   'a sanction with a task_id is rejected');
+
+-- #317: and a sanction may not borrow an Evaluation either — sanctions are
+-- governance, not Task work.
+select throws_ok(
+  $$ insert into points_ledger (member_id, delta, reason, note, evaluation_id)
+     select 'aaaaaaaa-0000-0000-0000-000000000162', -3, 'sanction', 'test sanction',
+            evaluation.id
+       from task_evaluations evaluation
+       join tasks task on task.id = evaluation.task_id
+      where task.title = 'ledger-semantics-fixture-162' $$,
+  '23514', null,
+  'a sanction with an evaluation_id is rejected (#317)');
 
 -- ==================== Retired and unknown reasons ====================
 select throws_ok(

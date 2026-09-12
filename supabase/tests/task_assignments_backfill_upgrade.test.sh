@@ -12,6 +12,24 @@ migration="supabase/migrations/20260911106000_backfill_task_assignments.sql"
 begin;
 set local client_min_messages = warning;
 
+-- #317: the seed now writes an Evaluation and its ledger credit for every
+-- graded demo participant, and both reference the Assignment history this
+-- harness clears in order to replay #290. The credit goes first (its
+-- evaluation_id is a foreign key), then the Evaluation — which is
+-- append-only by trigger, so the owner disables that guard for exactly these
+-- two statements. The whole transaction rolls back, and the snapshot the
+-- assertions compare against is taken further down, after this cleanup, so
+-- the "migration changed Points Ledger history" check is unaffected.
+delete from public.points_ledger ledger
+ where exists (select 1 from public.task_assignees legacy
+                where legacy.task_id = ledger.task_id);
+
+alter table public.task_evaluations disable trigger task_evaluations_guard_change;
+delete from public.task_evaluations evaluation
+ where exists (select 1 from public.task_assignees legacy
+                where legacy.task_id = evaluation.task_id);
+alter table public.task_evaluations enable trigger task_evaluations_guard_change;
+
 delete from public.task_assignments history
  where exists (select 1 from public.task_assignees legacy
                 where legacy.task_id = history.task_id);

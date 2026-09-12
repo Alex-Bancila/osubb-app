@@ -901,6 +901,7 @@ export type Database = {
           awarded_by: string | null
           created_at: string
           delta: number
+          evaluation_id: number | null
           id: number
           member_id: string
           note: string | null
@@ -911,6 +912,7 @@ export type Database = {
           awarded_by?: string | null
           created_at?: string
           delta: number
+          evaluation_id?: number | null
           id?: never
           member_id: string
           note?: string | null
@@ -921,6 +923,7 @@ export type Database = {
           awarded_by?: string | null
           created_at?: string
           delta?: number
+          evaluation_id?: number | null
           id?: never
           member_id?: string
           note?: string | null
@@ -968,6 +971,13 @@ export type Database = {
             columns: ["awarded_by"]
             isOneToOne: false
             referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "task_evaluations"
             referencedColumns: ["id"]
           },
           {
@@ -2164,7 +2174,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          points: number | null
           project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2194,7 +2203,6 @@ export type Database = {
           id?: never
           kind?: string
           parent_task_id?: number | null
-          points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2224,7 +2232,6 @@ export type Database = {
           id?: never
           kind?: string
           parent_task_id?: number | null
-          points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2565,7 +2572,6 @@ export type Database = {
           is_overdue: boolean | null
           kind: string | null
           parent_task_id: number | null
-          points: number | null
           project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2596,7 +2602,6 @@ export type Database = {
           is_overdue?: never
           kind?: string | null
           parent_task_id?: number | null
-          points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2627,7 +2632,6 @@ export type Database = {
           is_overdue?: never
           kind?: string | null
           parent_task_id?: number | null
-          points?: number | null
           project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2828,7 +2832,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          points: number | null
           project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null

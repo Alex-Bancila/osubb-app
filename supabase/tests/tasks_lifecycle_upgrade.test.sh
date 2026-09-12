@@ -90,6 +90,33 @@ select id, '28700000-0000-0000-0000-000000000001'::uuid
 union all
 select id, '28700000-0000-0000-0000-000000000002'::uuid
   from public.tasks where title = 'Legacy done 287';
+
+-- #317 retired the grading triggers, so the completed fixture's Rating no
+-- longer credits anyone by itself. Write the Assignment, the Evaluation and
+-- the ledger entry explicitly — that credit is what the assertion below
+-- proves the lifecycle migration leaves untouched. This pre-#287 replay has
+-- no completed_at column (dropped above), so the Assignment is left active.
+insert into public.task_assignments (task_id, member_id)
+select id, '28700000-0000-0000-0000-000000000002'
+  from public.tasks where title = 'Legacy done 287';
+
+insert into public.task_evaluations
+  (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
+select task.id, assignment.id, '28700000-0000-0000-0000-000000000002',
+       'completed', task.difficulty, task.rating,
+       task.difficulty * public.rating_mult(task.rating),
+       'lifecycle upgrade fixture evaluation'
+  from public.tasks task
+  join public.task_assignments assignment on assignment.task_id = task.id
+ where task.title = 'Legacy done 287';
+
+insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id)
+select assignment.member_id, evaluation.points, 'task',
+       evaluation.task_id, evaluation.id
+  from public.task_evaluations evaluation
+  join public.task_assignments assignment on assignment.id = evaluation.assignment_id
+  join public.tasks task on task.id = evaluation.task_id
+ where task.title = 'Legacy done 287';
 SQL
 
   cat "$migration"
@@ -120,14 +147,21 @@ begin
     raise exception 'legacy open audience or Assignment Mode was lost';
   end if;
 
+  -- #317 dropped the generated tasks.points column; the Evaluation carries
+  -- the number now, and the ledger entry naming it carries the credit.
   select id into v_completed_task_id
     from public.tasks where title = 'Legacy done 287';
-  if (select points from public.tasks where id = v_completed_task_id) <> 6
-     or not exists (
-       select 1 from public.points_ledger
+  if not exists (
+       select 1 from public.task_evaluations
         where task_id = v_completed_task_id
-          and member_id = '28700000-0000-0000-0000-000000000002'
-          and delta = 6
+          and difficulty = 3 and rating = 4 and points = 6
+     )
+     or not exists (
+       select 1 from public.points_ledger ledger
+        where ledger.task_id = v_completed_task_id
+          and ledger.member_id = '28700000-0000-0000-0000-000000000002'
+          and ledger.delta = 6
+          and ledger.evaluation_id is not null
      ) then
     raise exception 'completed Task points behavior was not preserved';
   end if;

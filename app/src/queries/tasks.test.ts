@@ -55,6 +55,19 @@ describe('public Task opportunities', () => {
     expect(api.byAudience).toHaveBeenCalledWith('audience', 'org');
   });
 
+  /* #317 moved a Task's points onto its Evaluation and dropped tasks.points,
+     so asking for the column would make every tracker request fail with a
+     PostgREST 42703 rather than merely render a stale number. */
+  it('asks for difficulty and rating, never a points column tasks no longer has', async () => {
+    api.byAudience.mockResolvedValue({ data: [], error: null });
+    await fetchOpenTasks();
+
+    const selected = api.select.mock.calls[0]?.[0] as string;
+    expect(selected).toContain('difficulty');
+    expect(selected).toContain('rating');
+    expect(selected).not.toContain('points');
+  });
+
   it('surfaces read failures', async () => {
     const error = { code: '42501', message: 'permission denied' };
     api.byAudience.mockResolvedValue({ data: null, error });
