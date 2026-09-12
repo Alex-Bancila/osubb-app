@@ -1122,29 +1122,6 @@ export type Database = {
         }
         Relationships: []
       }
-      role_capabilities: {
-        Row: {
-          capability: string
-          role: Database["public"]["Enums"]["member_role"]
-        }
-        Insert: {
-          capability: string
-          role: Database["public"]["Enums"]["member_role"]
-        }
-        Update: {
-          capability?: string
-          role?: Database["public"]["Enums"]["member_role"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "role_capabilities_role_fkey"
-            columns: ["role"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       roles: {
         Row: {
           id: Database["public"]["Enums"]["member_role"]

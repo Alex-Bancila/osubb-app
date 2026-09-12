@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(20);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -40,8 +40,6 @@ select is((select count(*) from rating_guide), 5::bigint,
   'voluntar reads the rating guide (the scoring rules are public)');
 select is((select count(*) from difficulty_guide), 5::bigint,
   'voluntar reads the difficulty guide');
-select is((select count(*) from role_capabilities), 17::bigint,
-  'voluntar reads the capability lookup (the UI gates nav with it)');
 select is(
   (select count(*) from teams where id = 't-ref'),
   1::bigint,
@@ -114,8 +112,6 @@ select is((select count(*) from roles), 0::bigint,
   'claimless: the role ladder is hidden');
 select is((select count(*) from departments), 0::bigint,
   'claimless: departments are hidden');
-select is((select count(*) from role_capabilities), 0::bigint,
-  'claimless: the capability matrix is hidden');
 select is((select count(*) from member_departments), 0::bigint,
   'claimless: the member-to-department map is hidden');
 select is((select count(*) from team_members), 0::bigint,
