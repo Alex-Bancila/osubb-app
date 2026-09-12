@@ -162,7 +162,7 @@ values ('Cross-owned seed guard', 'active',
 insert into tasks (
   title, difficulty, status, audience, assignment_mode, created_by, dept_id
 )
-values ('Non-demo local opportunity', 1, 'open', 'local', 'direct',
+values ('Non-demo local opportunity', 1, 'todo', 'local', 'direct',
         'e2750000-0000-0000-0000-000000000001', 'edu');
 SQL
 
@@ -201,7 +201,7 @@ if [ "$before" != "$after" ]; then
   exit 1
 fi
 
-preserved=$(run_sql -c "select format('%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'open' and audience = 'local' and assignment_mode = 'direct'))")
+preserved=$(run_sql -c "select format('%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'todo' and audience = 'local' and assignment_mode = 'direct'))")
 if [ "$preserved" != "1:1:1:1" ]; then
   echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project/local-Task sentinels ($preserved)."
   exit 1

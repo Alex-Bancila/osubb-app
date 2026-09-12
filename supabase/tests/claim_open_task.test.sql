@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(16);
+select plan(18);
 
 
 truncate tasks, task_assignees, task_requests, points_ledger cascade;
@@ -20,16 +20,20 @@ insert into profiles (id, full_name, email, role, status) values
   ('22000000-0000-0000-0000-000000000002', 'Al Doilea',       'claim.two@test.local',      'voluntar', 'activ'),
   ('33000000-0000-0000-0000-000000000003', 'Membru Inactiv',  'claim.inactive@test.local', 'voluntar', 'inactiv');
 
-insert into tasks (title, difficulty, status, dept_id) values
-  ('claim-open',     2, 'open', 'edu'),
-  ('claim-direct',   2, 'open', 'edu'),
-  ('claim-inactive', 2, 'open', 'edu'),
-  ('claim-todo',     2, 'todo', 'edu');
+insert into tasks
+  (title, difficulty, status, dept_id, audience, assignment_mode)
+values
+  ('claim-open',     2, 'todo',        'edu', 'org',   'public'),
+  ('claim-direct',   2, 'todo',        'edu', 'org',   'direct'),
+  ('claim-local',    2, 'todo',        'edu', 'local', 'public'),
+  ('claim-inactive', 2, 'todo',        'edu', 'org',   'public'),
+  ('claim-todo',     2, 'in_progress', 'edu', 'org',   'public');
 
 create temp table claim_fx as
 select
   (select id from tasks where title = 'claim-open') as open_id,
   (select id from tasks where title = 'claim-direct') as direct_id,
+  (select id from tasks where title = 'claim-local') as local_id,
   (select id from tasks where title = 'claim-inactive') as inactive_id,
   (select id from tasks where title = 'claim-todo') as todo_id;
 grant select on claim_fx to authenticated;
@@ -74,8 +78,11 @@ select lives_ok(
   'an active member claims an open task');
 reset role;
 
-select is((select status from tasks where id = (select open_id from claim_fx)),
-  'todo'::task_status, 'claiming moves the task out of the open queue');
+select is(
+  (select format('%s:%s', status, assignment_mode)
+     from tasks where id = (select open_id from claim_fx)),
+  'todo:public',
+  'claiming preserves lifecycle state and public Assignment Mode');
 select is((select member_id from task_assignees where task_id = (select open_id from claim_fx)),
   '11000000-0000-0000-0000-000000000001'::uuid,
   'the caller is the only identity assigned by the command');
@@ -103,6 +110,12 @@ select throws_ok(
          (select direct_id from claim_fx)),
   '42501', null, 'a volunteer cannot bypass the atomic command with direct INSERT');
 select throws_ok(
+  format('select public.claim_open_task(%s)', (select direct_id from claim_fx)),
+  'PT409', 'task_not_open', 'a direct todo Task is not claimable');
+select throws_ok(
+  format('select public.claim_open_task(%s)', (select local_id from claim_fx)),
+  'PT409', 'task_not_open', 'a local public Task is reserved for the Candidate Queue');
+select throws_ok(
   format('select public.claim_open_task(%s)', (select todo_id from claim_fx)),
   'PT409', 'task_not_open', 'a non-open task cannot be claimed');
 select throws_ok(
@@ -128,9 +141,17 @@ reset role;
 
 select is(
   (select count(*) from tasks
-    where id in ((select direct_id from claim_fx), (select inactive_id from claim_fx))
-      and status = 'open'),
-  2::bigint, 'denied attempts leave candidate tasks open and unmodified');
+    where id in (
+      (select direct_id from claim_fx),
+      (select local_id from claim_fx),
+      (select inactive_id from claim_fx)
+    )
+      and status = 'todo'
+      and not exists (
+        select 1 from task_assignees
+         where task_id = tasks.id
+      )),
+  3::bigint, 'denied attempts leave candidate Tasks unassigned and unmodified');
 
 select * from finish();
 rollback;

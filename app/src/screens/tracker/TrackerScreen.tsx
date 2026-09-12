@@ -5,15 +5,16 @@ import { formatDate, formatPoints } from '../../lib/format';
 
 const STATUS_LABEL: Record<string, string> = {
   todo: 'De făcut',
-  progress: 'În lucru',
-  done: 'Gata',
-  overdue: 'Întârziat',
-  open: 'Deschis',
+  in_progress: 'În lucru',
+  in_review: 'În verificare',
+  completed: 'Finalizat',
+  unfulfilled: 'Neîndeplinit',
+  cancelled: 'Anulat',
 };
 
 /* Deliberately plain: it exists to show the query layer returning live data
    (#87). The shadcn + TanStack Table tracker (ADR-0002) with tabs, candidate
-   queue and evaluation is #88–#92; these legacy statuses go with #287. */
+   queue and evaluation is #88–#92. */
 export default function TrackerScreen() {
   const tasks = useMyTasks();
 

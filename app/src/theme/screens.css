@@ -221,19 +221,17 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
-.chip--done {
+.chip--completed {
   background: var(--success-050);
   color: var(--success);
 }
-.chip--progress {
+.chip--in_progress,
+.chip--in_review {
   background: var(--info-050);
   color: var(--info);
 }
-.chip--overdue {
+.chip--unfulfilled,
+.chip--cancelled {
   background: var(--danger-050);
   color: var(--danger);
-}
-.chip--open {
-  background: var(--warning-050);
-  color: var(--warning);
 }

@@ -23,7 +23,7 @@ select hasnt_table('public', 'role_capabilities',
 -- nothing, so every table in public gets at least one row and an assertion
 -- enforces that. This is not hypothetical: the open-task leak survived
 -- review because the only fixture task defaulted to status 'todo', so the
--- unconditional `or status = 'open'` branch of task_read was never exercised.
+-- public-opportunity branch of task_read was never exercised.
 insert into auth.users (id, email) values
   ('ffffffff-0000-0000-0000-000000000006', 'flavia.rls@test.local'),
   ('eeeeeeee-0000-0000-0000-000000000156', 'dana.claimless@test.local');
@@ -55,7 +55,8 @@ insert into task_requests (kind, title, from_member)
 
 -- An OPEN, already-GRADED task: the shape that leaked, and the one an
 -- unprovisioned session could have joined to collect points.
-insert into tasks (title, difficulty, status, dept_id) values ('rls-open', 2, 'open', 'edu');
+insert into tasks (title, difficulty, status, dept_id, audience, assignment_mode)
+  values ('rls-open', 2, 'todo', 'edu', 'org', 'public');
 update tasks set rating = 3 where title = 'rls-open';
 
 insert into events (title, type, scope, starts_at)
@@ -85,7 +86,7 @@ insert into push_tokens (member_id, token, platform)
 -- against a deactivated member, whose JWT retains a real auth uid.
 --
 -- Swept over every table rather than a fixed list, so a future policy with an
--- unconditional branch (`using (true)`, `or status = 'open'`, `or scope =
+-- unconditional branch (`using (true)`, a bare public-Task predicate, `or scope =
 -- 'org'`) fails here on the day it lands.
 create function pg_temp.unpopulated_tables() returns text[]
 language plpgsql as $$

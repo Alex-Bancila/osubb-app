@@ -1914,7 +1914,13 @@ export type Database = {
       noti_kind: "announce" | "deadline" | "event" | "task" | "system"
       request_kind: "award" | "new_task"
       request_status: "pending" | "approved" | "rejected"
-      task_status: "todo" | "progress" | "done" | "overdue" | "open"
+      task_status:
+        | "todo"
+        | "in_progress"
+        | "in_review"
+        | "completed"
+        | "unfulfilled"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2069,7 +2075,14 @@ export const Constants = {
       noti_kind: ["announce", "deadline", "event", "task", "system"],
       request_kind: ["award", "new_task"],
       request_status: ["pending", "approved", "rejected"],
-      task_status: ["todo", "progress", "done", "overdue", "open"],
+      task_status: [
+        "todo",
+        "in_progress",
+        "in_review",
+        "completed",
+        "unfulfilled",
+        "cancelled",
+      ],
     },
   },
 } as const
