@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(29);
 
 insert into auth.users (id, email) values
   ('31500000-0000-0000-0000-000000000001', 'umbrella-actor-315@test.local');
@@ -192,6 +192,45 @@ select lives_ok(
               ('Umbrella with campaign 315', 'umbrella', 'edu', null, null, null, null, %L) $$,
     (select id from public.campaigns where name = 'Campaign Edu 315')),
   'an Umbrella accepts a same-Department Campaign (#314 interaction unchanged)');
+
+-- ==================== #315/#312 interaction: an Umbrella can reach a terminal status ====================
+-- Verified live (rolled-back probe) before writing this fix: without an
+-- exemption in tasks_evaluation_inputs_ck (20260911210300), an Umbrella
+-- (difficulty/rating always null per tasks_umbrella_shape_ck above) could
+-- never satisfy "completed/unfulfilled requires both inputs" -- it could be
+-- cancelled but never completed or marked unfulfilled, contradicting
+-- ADR-0007's manager-marks-it-completed-once-every-Subtask-resolves rule.
+insert into public.tasks
+    (title, kind, dept_id, audience, assignment_mode, difficulty, rating)
+  values
+    ('Umbrella to complete 315', 'umbrella', 'edu', null, null, null, null),
+    ('Umbrella to unfulfill 315', 'umbrella', 'edu', null, null, null, null);
+
+select lives_ok(
+  $$ update public.tasks set status = 'completed', completed_at = now()
+      where title = 'Umbrella to complete 315' $$,
+  'an Umbrella can reach status completed with no Difficulty or Rating');
+
+select lives_ok(
+  $$ update public.tasks set status = 'unfulfilled', unfulfilled_at = now()
+      where title = 'Umbrella to unfulfill 315' $$,
+  'an Umbrella can reach status unfulfilled with no Difficulty or Rating');
+
+select throws_ok(
+  $$ update public.tasks set status = 'completed', completed_at = now(),
+            difficulty = 3, rating = 3
+      where title = 'Umbrella to complete 315' $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_umbrella_shape_ck"',
+  'an Umbrella completed with Difficulty and Rating still violates tasks_umbrella_shape_ck (an Umbrella never carries points)');
+
+insert into public.tasks (title, dept_id, difficulty) values
+  ('Ordinary task no rating 315', 'edu', 2);
+
+select throws_ok(
+  $$ update public.tasks set status = 'completed', completed_at = now()
+      where title = 'Ordinary task no rating 315' $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_evaluation_inputs_ck"',
+  'an ordinary Task completed without Difficulty/Rating still violates tasks_evaluation_inputs_ck (the original rule survives)');
 
 -- ==================== tasks_with_overdue exposure ====================
 select is(
