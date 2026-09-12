@@ -1,8 +1,11 @@
 # ADR-0004 — Promotion policy: automatic up to Membru Activ, manual above
 
-- **Status:** Accepted (2026-08-12)
+- **Status:** Accepted
+- **Date:** 2026-08-12
 - **Deciders:** Alex Băncilă (IT Coordinator)
-- **Context docs:** `docs/org/directii-prioritati-it.md` §2.2, `docs/org/plan-managerial.md` §IV.3, architecture spec §8.4, `docs/superpowers/specs/2026-06-28-osubb-app-mockup-design.md` (Revizia 2)
+- **Supersedes:** —
+- **Superseded by:** —
+- **Related:** `docs/org/directii-prioritati-it.md` §2.2, `docs/org/plan-managerial.md` §IV.3, architecture spec §8.4, `docs/superpowers/specs/2026-06-28-osubb-app-mockup-design.md` (Revizia 2)
 
 ## Context
 

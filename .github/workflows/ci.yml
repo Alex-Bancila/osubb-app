@@ -57,8 +57,27 @@ jobs:
       - name: Start local Supabase (applies migrations)
         run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector
 
+      # The CLI already lints every user schema by default (it prints
+      # "Linting schema: private / public" with no --schema flag) — pinning
+      # the list here would silently skip a future third schema. --fail-on
+      # defaults to none, so without it this step could never fail; the
+      # baseline is clean at warning level. `db lint` only understands
+      # plpgsql: trigger functions and SQL-language functions are not linted.
       - name: Lint database
-        run: supabase db lint
+        run: supabase db lint --level warning --fail-on warning
+
+      # The private schema holds security-definer helpers and command
+      # implementations that PostgREST must never expose. Hosted projects
+      # don't read supabase/config.toml for exposed schemas — that's a
+      # dashboard setting no workflow here pushes (see the staging-auth
+      # checklist, issue #54) — so this step only guards the local/CI stack,
+      # which does read config.toml on `supabase start`.
+      - name: private schema stays out of the Data API
+        run: |
+          if grep -nE '^\s*schemas\s*=.*\bprivate\b' supabase/config.toml; then
+            echo "::error::supabase/config.toml exposes the private schema through PostgREST"
+            exit 1
+          fi
 
       - name: Run pgTAP tests (if any)
         run: |

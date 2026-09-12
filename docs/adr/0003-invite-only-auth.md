@@ -1,7 +1,11 @@
 # ADR-0003 — Invite-only access with magic-link provisioning
 
-- **Status:** Accepted (2026-07-07)
+- **Status:** Accepted
+- **Date:** 2026-07-07
 - **Deciders:** Alex Băncilă + team
+- **Supersedes:** —
+- **Superseded by:** —
+- **Related:** —
 
 ## Context
 

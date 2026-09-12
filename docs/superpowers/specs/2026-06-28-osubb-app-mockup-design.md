@@ -1,5 +1,9 @@
 # OSUBB App — Mockup Design Spec
 
+> **Historical** — superseded by [ADR-0002](../../adr/0002-frontend-browser-pwa.md), which demotes this mockup to historical exploration, and the [OSUBB Brand Book reference](../../brand/reference.md).
+>
+> Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
+
 **Date:** 2026-06-28
 **Author:** Alex Băncilă (Coordonator IT, candidat 2026–2027), with Claude
 **Status:** Approved direction → prototype build

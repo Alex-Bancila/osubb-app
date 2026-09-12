@@ -1,5 +1,9 @@
 # OSUBB App — Architecture & Data Model Design
 
+> **Historical** — superseded by [ADR-0007](../../adr/0007-task-tracker-lifecycle.md) and [ADR-0008](../../adr/0008-calendar-visibility.md) for the Tracker/Calendar model, and by [`CONTEXT.md`](../../../CONTEXT.md) for vocabulary.
+>
+> Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
+
 **Date:** 2026-06-29
 **Status:** Design — pending team review
 **Companion:** see `docs/osubb-app-tech-stack.md` (Revision 2) for the technology choices, pricing, and head-to-head comparisons.

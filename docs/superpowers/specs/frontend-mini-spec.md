@@ -1,5 +1,9 @@
 # Frontend mini-spec
 
+> **Historical** — superseded by [ADR-0002](../../adr/0002-frontend-browser-pwa.md) for the stack (Tailwind + shadcn, not Ionic/AG Grid); folder layout, routing, and data-layer rules still apply.
+>
+> Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
+
 **Status:** proposed (issue #79) · **Stack fixed by:** ADR-0002 · **UX source:** `mockup/`
 
 > **Partly superseded (2026-09-07/10):** ADR-0002 now fixes Tailwind + shadcn/ui (Base UI, Nova) + TanStack Table in a browser-first PWA. The Ionic and AG Grid guidance in §2 (`DataGrid.tsx`) and §7, and the PWA timing in §9, are historical. Folder layout, routes, auth, data layer and theming rules still apply.

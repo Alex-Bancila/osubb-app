@@ -1,5 +1,9 @@
 # OSUBB App — Implementation Issues
 
+> **Historical** — superseded by the live GitHub issue graph; see [`docs/agents/issue-tracker.md`](../agents/issue-tracker.md) for how to query it.
+>
+> Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
+
 The build, divided into GitHub issues grouped by epic (milestone), in dependency order.
 
 > **2026-08-19 restructure:** every remaining issue was split into **≤1h student-sized tasks** (label `max-1h`), numbered `x.ya`, `x.yb`, … after their parent. The original one-shot filing script (`scripts/create-github-issues.sh`) is historical — **never re-run it**. The split itself was also a one-shot (issues #43–#112). GitHub is the live source of truth; this file is the map. Full how/why per task: each issue body + the **Road to October** guide (artifact).
