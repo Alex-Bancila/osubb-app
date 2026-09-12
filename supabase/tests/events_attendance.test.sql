@@ -6,11 +6,17 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(12);
+select plan(15);
 
 -- ==================== Shape ====================
 select has_table('public', 'events', 'events table exists');
 select has_table('public', 'event_attendance', 'event_attendance table exists');
+select col_type_is('public', 'events', 'created_at', 'timestamp with time zone',
+  'events record an exact creation instant');
+select col_not_null('public', 'events', 'created_at',
+  'event creation time is required');
+select col_has_default('public', 'events', 'created_at',
+  'event creation time is server-written');
 
 select ok(
   (select relrowsecurity from pg_class
