@@ -52,6 +52,23 @@
 -- graded their own work nor manages the Task — see Ruling 13 below for the
 -- separate branch that does.
 --
+-- Decision (d) — an archived Project's history stays narrower than its Task,
+-- and that is chosen, not overlooked. can_read_task's R5 (20260911211100)
+-- deliberately keeps an archived Project's lead and Responsibles reading the
+-- Task itself ("historical Tracker records keep their context"), but every
+-- non-own-row branch on these four history policies goes through
+-- private.can_manage_task, which routes to private.can_manage_project_work
+-- and requires an ACTIVE Project (R5's own comment already says "Reading is
+-- not managing" for exactly this reason). Net effect: on an archived
+-- Project, the lead and Responsibles read the Task but not its Assignments,
+-- Candidatures, Activity or Evaluations, unless some other branch admits
+-- them (their own row, or private.is_global_task_reader()). Widening this
+-- would need a Task-to-Project lookup helper mirroring can_manage_task's
+-- Origin routing, plus a rewrite of all four `_read` policies to call it —
+-- and no ADR-0007 line requires the history to stay visible after archive,
+-- only the Task record itself. Left as a follow-up if a future issue asks
+-- for it, not fixed here.
+--
 -- ==================== Ruling 13 (fix round 1, 2026-09-12) ====================
 -- As first shipped, a graded Executor could not read the Evaluation `note`
 -- or the Reviewer's `returned_to_progress` activity row about their own
@@ -185,13 +202,15 @@ as $$
      and exists (
        select 1
          from public.task_assignments as assignment
+         join public.profiles as caller on caller.id = assignment.member_id
         where assignment.id = p_assignment_id
           and assignment.member_id = (select auth.uid())
+          and caller.status = 'activ'
      );
 $$;
 
 comment on function private.is_own_assignment(bigint) is
-  'Ruling 13 (fix round 1): whether p_assignment_id names an Assignment the active caller themself holds or once held. Backs the assignment-scoped Executor-feedback branch on task_activity_read and task_evaluations_read only — deliberately not blanket Executor access, which would also surface candidate-queue rows (assignment_id null by construction) through the same branch. p_assignment_id is not null guards the common case where it is called with a nullable column directly, though `assignment.id = null` alone would already never match.';
+  'Ruling 13 (fix round 1): whether p_assignment_id names an Assignment the active caller themself holds or once held. Backs the assignment-scoped Executor-feedback branch on task_activity_read and task_evaluations_read only — deliberately not blanket Executor access, which would also surface candidate-queue rows (assignment_id null by construction) through the same branch. p_assignment_id is not null guards the common case where it is called with a nullable column directly, though `assignment.id = null` alone would already never match. Fix round 2 (#319 review): joins profiles for a live status = ''activ'' row, the one check every sibling predicate (is_task_executor, is_task_candidate, is_global_task_reader, is_task_team_member) already has and this one lacked — it was safe only because both call sites AND it with can_read_task, which enforces liveness itself; this makes the helper correct standalone.';
 
 revoke execute on function private.is_global_task_reader()
   from public, anon, authenticated, service_role;
@@ -245,7 +264,7 @@ create policy task_candidates_read
   );
 
 comment on policy task_candidates_read on public.task_candidates is
-  'ADR-0007 (#319): the caller''s own Candidature (any status), every Candidature of a Task they manage, or every Candidature when they are a global Task reader. Fellow candidates never see each other''s row here (candidate privacy, issue #319) — queue position and the pending count are exposed instead through public.task_queue_summary. No Team-member branch (decision (b)).';
+  'ADR-0007 (#319): the caller''s own Candidature (any status), every Candidature of a Task they manage, or every Candidature when they are a global Task reader. No Team-member branch of its own (decision (b)). The "fellow candidates never see each other''s row" guarantee is Origin-dependent, not universal: it holds on a Department- or Project-origin Task. On an Independent-Team Task, private.can_manage_origin''s Independent-Team branch makes every active Team member a manager, so this policy''s own manager branch hands every member every Candidature row there — no candidate privacy on Independent-Team Tasks. And on ANY Team-origin Task (Department or Independent), task_activity_read''s Team-member branch (decision (b)) gives every Team member the whole Task Activity timeline, whose interest_expressed/interest_withdrawn/candidate_selected rows'' actor_id IS the candidate — so a Team member learns who queued even where this policy hides the row directly. Queue position and the pending count are exposed to everyone else instead through public.task_queue_summary.';
 
 create policy task_activity_read
   on public.task_activity
@@ -311,7 +330,7 @@ as $$
 $$;
 
 comment on function private.queue_position(bigint, uuid) is
-  '1-based position of p_member_id in p_task_id''s pending Candidate Queue, ordered (joined_at, id); null when not pending. Self-gated: answers only for a live, active member (coalesce(auth_is_member(), false), fix round 1 minor 5 — unlike its siblings, this predicate had no membership/active gate of its own) asking about their own id, a manager of the Task, or a global Task reader — otherwise null, so granting EXECUTE to authenticated (required for the security_invoker task_queue_summary view) cannot be used to probe another candidate''s position (#319 candidate privacy).';
+  '1-based position of p_member_id in p_task_id''s pending Candidate Queue, ordered (joined_at, id); null when not pending. Self-gated: answers only when asking about their own id, a manager of the Task, or a global Task reader — otherwise null, so granting EXECUTE to authenticated (required for the security_invoker task_queue_summary view) cannot be used to probe another candidate''s position (#319 candidate privacy). coalesce(auth_is_member(), false) (fix round 1 minor 5 — unlike its siblings, this predicate had no membership gate of its own) is a pure JWT-claims check, not a liveness one: a deactivated member with an unexpired token calling this directly with their own id still gets their own position back. That is acceptable — it is still only their own data, nothing about anyone else — and the security_invoker task_queue_summary view path is additionally gated by tasks_read, which does check a live profiles.status = ''activ'' row.';
 
 create function private.pending_candidate_count(p_task_id bigint)
 returns integer
@@ -351,7 +370,7 @@ select
   from public.tasks as task;
 
 comment on view public.task_queue_summary is
-  'Per-Task Candidate Queue summary for the current caller: pending_count (visible to anyone who can read the Task) and my_position (the caller''s own 1-based pending position, null if not queued). security_invoker, so selecting from public.tasks here is already restricted by tasks_read to Tasks the caller can read — no separate predicate is needed. Both columns are computed by SECURITY DEFINER helpers that bypass task_candidates RLS on purpose (#319 candidate privacy): a fellow candidate reads their own position and the total count, never another candidate''s identity or row.';
+  'Per-Task Candidate Queue summary for the current caller: pending_count (visible to anyone who can read the Task) and my_position (the caller''s own 1-based pending position, null if not queued). security_invoker, so selecting from public.tasks here is already restricted by tasks_read to Tasks the caller can read — no separate predicate is needed. Both columns are computed by SECURITY DEFINER helpers that bypass task_candidates RLS on purpose (#319 candidate privacy): neither column here ever carries another candidate''s identity, on any Origin. That guarantee covers only this view''s own two columns — it holds for Department- and Project-origin Tasks; on a Team-origin Task the Team''s own members already see Candidatures some other way (task_candidates_read''s comment has the two mechanisms: every member manages an Independent-Team Task, and task_activity_read''s Team-member branch exposes interest_expressed actor_id on any Team-origin Task), so querying task_candidates directly there still surfaces identities this view''s two columns never do.';
 
 -- Important 1 (fix round 1): the view was created auto-updatable on
 -- task_id, and revoking only public/anon left `authenticated` holding

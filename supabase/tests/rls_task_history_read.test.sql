@@ -34,7 +34,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(60);
+select plan(61);
 
 -- ==================== Shape ====================
 select policies_are('public', 'task_assignments', array['task_assignments_read'],
@@ -400,6 +400,21 @@ language sql stable as $$
     from public.task_queue_summary as summary
    where summary.task_id = pg_temp.task_id_319(p_title)
 $$;
+-- security definer: an administrative fixture lookup, not an RLS probe —
+-- unlike visible_assignment_codes above, this must bypass task_assignments
+-- RLS so it still resolves the id after the caller has switched role to
+-- authenticated (fix round 2, D4 below needs the id while logged in as the
+-- deactivated persona).
+create function pg_temp.assignment_id_319(p_code text, p_title text)
+returns bigint
+language sql stable
+security definer as $$
+  select assignment.id
+    from public.task_assignments as assignment
+    join pg_temp.fx_persona_319 as persona on persona.id = assignment.member_id
+   where persona.code = p_code
+     and assignment.task_id = pg_temp.task_id_319(p_title)
+$$;
 
 -- ==================== Executor ====================
 -- Own assignment; the activity they caused PLUS the reviewer's
@@ -544,6 +559,8 @@ select is_empty('select * from pg_temp.visible_candidate_codes(''M'')',
   'Important 2: deactivated BCE owns a Candidature on Task M (fixture above) but still sees none');
 select is_empty('select * from pg_temp.queue_summary_row(''Q'')',
   'deactivated BCE with stale claims: no row in task_queue_summary for Task Q');
+select is(private.is_own_assignment(pg_temp.assignment_id_319('deactivated_bce', 'M')), false,
+  'fix round 2 (D4): private.is_own_assignment is false standalone for a deactivated member''s own Assignment, called directly with their own stale-claims session, not merely masked by the can_read_task conjunction at the policy level');
 
 -- ==================== Claimless session (real uid, no org claims) ====================
 reset role;
