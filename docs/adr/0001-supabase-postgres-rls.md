@@ -1,8 +1,11 @@
 # ADR-0001 — Supabase (PostgreSQL + Row-Level Security) as the backend
 
-- **Status:** Accepted (2026-07-07)
+- **Status:** Accepted
+- **Date:** 2026-07-07
 - **Deciders:** Alex Băncilă (IT Coordinator) + team
-- **Context docs:** `docs/osubb-app-tech-stack.md` §10.3, `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md`
+- **Supersedes:** —
+- **Superseded by:** —
+- **Related:** `docs/osubb-app-tech-stack.md` §10.3, `docs/superpowers/specs/2026-06-29-osubb-app-architecture-design.md`
 
 ## Context
 

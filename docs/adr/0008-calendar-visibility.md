@@ -1,7 +1,10 @@
 # ADR-0008 — Calendar visibility, relevance, and management
 
-- **Status:** Accepted (2026-09-07)
+- **Status:** Accepted
+- **Date:** 2026-09-07
 - **Deciders:** Alex Băncilă + team
+- **Supersedes:** —
+- **Superseded by:** —
 - **Related:** ADR-0001, ADR-0003, ADR-0007, `CONTEXT.md`
 
 ## Context
@@ -16,13 +19,13 @@ Every active OSUBB member, including a Recrut, may read every **future** Event w
 
 Minimum Level is selected from these organization concepts:
 
-| Choice | Required role level |
-|---|---:|
-| Everyone | 0 |
-| AG / Voting Member+ | 3 |
-| Responsible+ | 4 |
-| BCE+ | 5 |
-| BC+ | 6 |
+| Choice              | Required role level |
+| ------------------- | ------------------: |
+| Everyone            |                   0 |
+| AG / Voting Member+ |                   3 |
+| Responsible+        |                   4 |
+| BCE+                |                   5 |
+| BC+                 |                   6 |
 
 An Event creator cannot choose a Minimum Level above their own organizational level. Moderator retains global override.
 

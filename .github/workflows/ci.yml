@@ -16,6 +16,28 @@ env:
   SUPABASE_CLI_VERSION: 2.117.0
 
 jobs:
+  repo:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      - name: Install
+        run: npm ci
+
+      - name: Check repository
+        run: npm run check:root
+
   db:
     name: Migrations + db tests
     runs-on: ubuntu-latest
@@ -35,8 +57,27 @@ jobs:
       - name: Start local Supabase (applies migrations)
         run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector
 
+      # The CLI already lints every user schema by default (it prints
+      # "Linting schema: private / public" with no --schema flag) — pinning
+      # the list here would silently skip a future third schema. --fail-on
+      # defaults to none, so without it this step could never fail; the
+      # baseline is clean at warning level. `db lint` only understands
+      # plpgsql: trigger functions and SQL-language functions are not linted.
       - name: Lint database
-        run: supabase db lint
+        run: supabase db lint --level warning --fail-on warning
+
+      # The private schema holds security-definer helpers and command
+      # implementations that PostgREST must never expose. Hosted projects
+      # don't read supabase/config.toml for exposed schemas — that's a
+      # dashboard setting no workflow here pushes (see the staging-auth
+      # checklist, issue #54) — so this step only guards the local/CI stack,
+      # which does read config.toml on `supabase start`.
+      - name: private schema stays out of the Data API
+        run: |
+          if grep -nE '^\s*schemas\s*=.*\bprivate\b' supabase/config.toml; then
+            echo "::error::supabase/config.toml exposes the private schema through PostgREST"
+            exit 1
+          fi
 
       - name: Run pgTAP tests (if any)
         run: |
@@ -48,6 +89,9 @@ jobs:
 
       - name: Test Team lead data migration
         run: bash supabase/tests/remove_team_lead_upgrade.test.sh
+
+      - name: Test Task deadline data migration
+        run: bash supabase/tests/tasks_precise_deadlines_upgrade.test.sh
 
       # `supabase start` already applied seed.sql to an empty database. Staging
       # gets the same file applied to a LIVE one — see docs/backend/seeding-staging.md
@@ -104,6 +148,12 @@ jobs:
       # Runs on every PR rather than behind a path filter: the job takes well
       # under a minute and runs beside the database job, and a filter that
       # silently skips is worse than a fast job that always speaks.
+      - name: Format check
+        run: deno fmt --check supabase/functions
+
+      - name: Lint
+        run: deno lint --config supabase/functions/deno.json supabase/functions
+
       - name: Type-check
         run: deno check --config supabase/functions/deno.json supabase/functions/**/*.ts
 
