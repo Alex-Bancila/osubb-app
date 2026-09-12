@@ -44,6 +44,19 @@ select md5(string_agg(x, '|' order by x))
                 join tasks task on task.id = assignment.task_id
                 join profiles member on member.id = assignment.member_id
                 left join profiles actor on actor.id = assignment.assigned_by
+    union all select format('evaluation:%s:%s:%s:%s:%s:%s:%s:%s',
+                            task.title,
+                            member.full_name,
+                            evaluation.outcome,
+                            evaluation.difficulty,
+                            evaluation.rating,
+                            evaluation.points,
+                            evaluation.source,
+                            case when evaluation.reversed_at is null then 'active' else 'reversed' end)
+                from task_evaluations evaluation
+                join tasks task on task.id = evaluation.task_id
+                join task_assignments assignment on assignment.id = evaluation.assignment_id
+                join profiles member on member.id = assignment.member_id
     union all select format('ledger:%s:%s:%s', p.full_name, l.delta, l.reason)
                 from points_ledger l join profiles p on p.id = l.member_id
     union all select format('event:%s:%s', title, scope) from events

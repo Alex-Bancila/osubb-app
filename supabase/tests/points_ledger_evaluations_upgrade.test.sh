@@ -10,13 +10,15 @@
 # transaction and replays the real migration file over it, the same way
 # task_assignments_backfill_upgrade.test.sh replays #290.
 #
-# It proves four things:
+# It proves five things:
 #   1. the backfill converts every legacy credit into exactly one Evaluation
 #      and binds the ledger row to it, preserving the delta;
 #   2. it is deterministic — the same legacy data inserted in a different
 #      order produces byte-identical Evaluations, in the same id order;
-#   3. each guard refuses to guess and names the offending ledger rows; and
-#   4. a failed run leaves the ledger exactly as it found it.
+#   3. each guard refuses to guess and names the offending ledger rows;
+#   4. a failed run leaves the ledger exactly as it found it; and
+#   5. a pre-existing sanction row, which has no Task to bind to, passes
+#      through the backfill untouched.
 set -euo pipefail
 
 db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
@@ -126,12 +128,11 @@ create trigger task_assignees_sync_ledger
 
 -- A clean slate: the demo cohort's Tasks, Assignments, Evaluations and ledger
 -- rows all go, so the fixtures below are the entire population the replayed
--- backfill sees and the assertions can count exactly.
-alter table public.task_evaluations disable trigger task_evaluations_guard_change;
-alter table public.task_activity disable trigger task_activity_reject_change;
+-- backfill sees and the assertions can count exactly. Row-level triggers
+-- (task_evaluations_guard_change, task_activity_reject_change) never fire on
+-- TRUNCATE, so unlike seed.sql's DELETE-based cleanup this needs no
+-- disable/enable around it.
 truncate public.tasks cascade;
-alter table public.task_activity enable trigger task_activity_reject_change;
-alter table public.task_evaluations enable trigger task_evaluations_guard_change;
 
 insert into auth.users (id, email) values
   ('31700000-0000-0000-0000-000000000001', 'ledger-one-317@test.local'),
@@ -141,6 +142,13 @@ insert into public.profiles (id, full_name, email, role) values
   ('31700000-0000-0000-0000-000000000001', 'Ledger One 317', 'ledger-one-317@test.local', 'voluntar'),
   ('31700000-0000-0000-0000-000000000002', 'Ledger Two 317', 'ledger-two-317@test.local', 'voluntar'),
   ('31700000-0000-0000-0000-000000000003', 'Ledger Three 317', 'ledger-three-317@test.local', 'responsabil');
+
+-- #317 must leave sanctions alone: they carry no task_id, so the backfill
+-- (which only ever touches `reason = 'task'` rows) has nothing to bind them
+-- to. Asserted below, after the replay, against this exact row.
+insert into public.points_ledger (member_id, delta, reason, note) values
+  ('31700000-0000-0000-0000-000000000003', -3, 'sanction',
+   'Pre-#317 sanction, must survive the backfill untouched.');
 SQL
 
 # Mirrors #290's backfill (and seed.sql's copy of it): for a terminal Task
@@ -330,6 +338,17 @@ begin
               where table_schema = 'public' and table_name = 'tasks'
                 and column_name = 'points') then
     raise exception 'the generated tasks.points column survived';
+  end if;
+
+  if not exists (
+    select 1 from public.points_ledger ledger
+     where ledger.member_id = '31700000-0000-0000-0000-000000000003'
+       and ledger.reason = 'sanction'
+       and ledger.delta = -3
+       and ledger.note = 'Pre-#317 sanction, must survive the backfill untouched.'
+       and ledger.evaluation_id is null
+  ) then
+    raise exception 'the backfill altered or lost the pre-existing sanction, which names no Task';
   end if;
 end
 $assert$;

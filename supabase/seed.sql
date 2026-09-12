@@ -17,6 +17,15 @@
 -- Passwords exist only because clicking through a demo with eight magic links
 -- is miserable. Real onboarding is invite-only and passwordless (ADR-0003);
 -- these accounts are @demo.osubb, an address nobody can receive mail at.
+--
+-- ⚠️ Must be applied in a single transaction (`psql -1` / `--single-transaction`,
+-- or `supabase db reset`, which already wraps it). The demo-cohort cleanup
+-- below briefly disables the append-only guards on `task_evaluations` and
+-- `task_activity` for a few statements each; that is safe only because a
+-- mid-file failure rolls the whole file back with them, rather than leaving
+-- a live database with those guards off. Every documented apply path
+-- already runs this way — seed-staging.yml, scripts/check-seed-rerunnable.sh,
+-- and `supabase db reset` — see docs/backend/seeding-staging.md.
 
 -- ==================== Clear the previous demo data ====================
 -- `db reset` drops the database before running this file, so locally these
@@ -81,7 +90,10 @@ delete from points_ledger l
 -- as postgres"), so it may disable those two triggers around its own
 -- cleanup. It is done explicitly, for exactly these two statements, and
 -- re-enabled immediately: nothing else in this file runs while history is
--- unguarded, and the scope is still only Tasks a demo account created.
+-- unguarded, and the scope is still only Tasks a demo account created. This
+-- is safe only because the whole file runs in one transaction (see the
+-- header) — a mid-file failure here rolls back with the triggers still
+-- disabled, instead of leaving them off on a live database.
 alter table task_evaluations disable trigger task_evaluations_guard_change;
 alter table task_activity disable trigger task_activity_reject_change;
 
@@ -487,6 +499,9 @@ select
 -- owner disables it here, for one statement, to reproduce the one
 -- legacy-shaped demo Task described above — the same deliberate, documented
 -- exception that migration's comment anticipates, not a way around the rule.
+-- As above, this is safe only because the file runs in a single transaction
+-- (see the header): a mid-file failure rolls back with the trigger still
+-- disabled rather than leaving it off on a live database.
 alter table task_evaluations disable trigger task_evaluations_reject_legacy_source;
 
 insert into task_evaluations

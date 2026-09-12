@@ -21,7 +21,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(37);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -51,6 +51,8 @@ select is(rating_mult(5),  3, 'rating 5 → multiplier 3');
 -- ==================== The retired engine is gone ====================
 select hasnt_column('public', 'tasks', 'points',
   'tasks no longer carries a generated points column — points live on the Evaluation');
+select hasnt_column('public', 'tasks_with_overdue', 'points',
+  'tasks_with_overdue was recreated when tasks.points was dropped, so it carries no stale column either');
 
 select ok(
   (select count(*) from pg_trigger trigger
