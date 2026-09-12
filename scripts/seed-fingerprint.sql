@@ -10,7 +10,7 @@ select md5(string_agg(x, '|' order by x))
     select format('member:%s:%s:%s', full_name, role, status) from profiles
     union all select format('points:%s:%s:%s', full_name, points, rank) from leaderboard
     union all select format('dept:%s:%s', member_id, dept_id) from member_departments
-    union all select format('team:%s:%s:%s', id, name, for_recruits) from teams
+    union all select format('team:%s:%s', id, name) from teams
     union all select format('project:%s:%s:%s:%s', project.name, project.status, leader.full_name, creator.full_name)
                 from projects project
                 join profiles leader on leader.id = project.leader_id

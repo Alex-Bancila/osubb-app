@@ -298,6 +298,7 @@ create temporary table pinned_private_functions (
 ) on commit drop;
 
 insert into pinned_private_functions (proname, args, category) values
+  ('actor_level',                                  '',                                                                                                                   'predicate'),
   ('add_department_team_member_impl',             'p_team_id text, p_member_id uuid',                                                                                   'impl'),
   ('add_independent_team_member_impl',            'p_team_id text, p_member_id uuid',                                                                                   'impl'),
   ('add_project_member_impl',                     'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
@@ -348,8 +349,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 48,
-  'the pinned private-schema roster itself has exactly the 48 rows the audit found (a typo here would silently weaken every check below)');
+  (select count(*) from pinned_private_functions)::int, 49,
+  'the pinned private-schema roster itself has exactly the 49 rows the audit found (a typo here would silently weaken every check below) -- 48 plus #372''s actor_level()');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

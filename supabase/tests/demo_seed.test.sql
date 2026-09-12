@@ -71,8 +71,8 @@ select is((select count(*) from teams where id in ('t-app', 't-recruti', 't-logi
 select is((select count(*) from teams where id = 't-logistica' and dept_id is null), 1::bigint,
   'the demo cohort includes an Independent Team');
 
-select is((select count(*) from teams where id = 't-recruti' and for_recruits), 1::bigint,
-  'one team is open to recruits — the branch the calendar rule turns on');
+select is((select min_level from events where title = 'Training pentru recruți'), 0,
+  't-recruti''s own event stays min_level 0 — the branch the calendar rule turns on');
 
 select ok(
   exists (select 1 from member_departments
@@ -314,8 +314,11 @@ select ok(
   'at least one task was graded 1, so the leaderboard shows a real penalty');
 
 -- ==================== Calendar, feed, notifications ====================
--- The calendar only demos well if switching accounts changes what you see,
--- which needs one event per branch of the §4.4 visibility rule.
+-- The calendar only demos well if switching accounts changes what you see.
+-- ADR-0008 makes that a Minimum Level story now, not a scope-branch one:
+-- one gated Event (the AG, min_level 3) plus a spread of scopes so the
+-- frontend's relevance grouping (primary vs gray) still has something to
+-- show.
 select ok((select count(*) from events) >= 6,
   'the calendar has something in it');
 
@@ -325,9 +328,8 @@ select ok(
   and (select count(*) from events where scope = 'team') >= 1,
   'org, department and team events all exist — switching demo accounts changes the calendar');
 
-select ok(
-  exists (select 1 from events e join teams t on t.id = e.team_id where t.for_recruits),
-  'a for_recruits team event exists (what a recrut sees without belonging)');
+select is((select min_level from events where title = 'Adunarea Generală de toamnă'), 3,
+  'the AG is the one gated demo Event — min_level 3, AG / Voting Member+ (ADR-0008)');
 
 select ok(
   exists (select 1 from event_attendance where status = 'declined')

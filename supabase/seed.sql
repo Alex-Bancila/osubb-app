@@ -219,11 +219,14 @@ insert into member_departments (member_id, dept_id) values
   ('d0000000-0000-0000-0000-000000000005', 'hr');
 
 -- Representative Team kinds: two Department Teams and one Independent Team.
--- The recruits flag remains covered on its Department Team for Calendar.
-insert into teams (id, name, dept_id, for_recruits, is_interne) values
-  ('t-app',     'Echipa Aplicație', 'diverse', false, false),
-  ('t-recruti', 'Echipa Recruți',   'edu',     true,  false),
-  ('t-logistica','Echipa Logistică', null,      false, false);
+-- t-recruti keeps existing as a plain Department Team — demo accounts
+-- reference it — even though #372 retired the recruits flag it used to
+-- carry; Calendar visibility for recruits is Minimum Level now (ADR-0008),
+-- demonstrated below by the events that stay at min_level 0.
+insert into teams (id, name, dept_id, is_interne) values
+  ('t-app',     'Echipa Aplicație', 'diverse', false),
+  ('t-recruti', 'Echipa Recruți',   'edu',     false),
+  ('t-logistica','Echipa Logistică', null,     false);
 
 insert into team_members (team_id, member_id) values
   ('t-app',     'd0000000-0000-0000-0000-000000000006'),
@@ -548,30 +551,33 @@ insert into points_ledger (member_id, delta, reason, awarded_by, note) values
    'd0000000-0000-0000-0000-000000000007', 'Întârziere repetată la ședințe.');
 
 -- ==================== Calendar ====================
--- One event per branch of the visibility rule (spec §4.4), so switching
--- demo accounts visibly changes the calendar rather than showing everyone
--- the same list: org-wide, per-department, a closed team, a for_recruits
--- team, and a recruitment event that reaches everyone by type.
-insert into events (title, type, dept_id, team_id, scope, starts_at, ends_at, location, capacity, description, created_by) values
-  ('Adunarea Generală de toamnă', 'sedinta',   null,   null,       'org',
+-- One event per scope (org/dept/team/etc.), so switching demo accounts
+-- visibly changes the calendar (relevance grouping, ADR-0008) even though
+-- Minimum Level — not scope membership — now decides what is readable at
+-- all. The AG is the one gated Event: min_level 3 (AG / Voting Member+)
+-- demonstrates a Recrut being turned away from something org-wide. Every
+-- other Event, including the recruits' own Training, stays at the default
+-- min_level 0 so the demo still shows a calendar recruits can read in full.
+insert into events (title, type, dept_id, team_id, scope, min_level, starts_at, ends_at, location, capacity, description, created_by) values
+  ('Adunarea Generală de toamnă', 'sedinta',   null,   null,       'org',  3,
    now() + interval '9 days',  now() + interval '9 days 3 hours',  'Aula Magna',        200,
    'Raport de activitate și vot.',                    'd0000000-0000-0000-0000-000000000007'),
-  ('Ședință Educational',        'sedinta',   'edu',  null,       'dept',
+  ('Ședință Educational',        'sedinta',   'edu',  null,       'dept', 0,
    now() + interval '2 days',  now() + interval '2 days 2 hours',  'Sala 305',           25,
    'Planificarea activităților lunii.',               'd0000000-0000-0000-0000-000000000005'),
-  ('Brainstorming campanie PR',  'activitate','pr',   null,       'dept',
+  ('Brainstorming campanie PR',  'activitate','pr',   null,       'dept', 0,
    now() + interval '4 days',  now() + interval '4 days 2 hours',  'Sediu OSUBB',        15,
    'Idei pentru campania de iarnă.',                  'd0000000-0000-0000-0000-000000000006'),
-  ('Sprint review Echipa Aplicație', 'sedinta','diverse','t-app',   'team',
+  ('Sprint review Echipa Aplicație', 'sedinta','diverse','t-app', 'team', 0,
    now() + interval '1 day',   now() + interval '1 day 1 hour',    'Online',             10,
    'Demo intern al aplicației.',                      'd0000000-0000-0000-0000-000000000006'),
-  ('Training pentru recruți',    'activitate','edu',  't-recruti','team',
+  ('Training pentru recruți',    'activitate','edu',  't-recruti','team', 0,
    now() + interval '6 days',  now() + interval '6 days 3 hours',  'Sala 210',           40,
    'Prima întâlnire cu echipa.',                      'd0000000-0000-0000-0000-000000000005'),
-  ('Recrutare de toamnă — stand','recrutare', 'hr',   null,       'dept',
+  ('Recrutare de toamnă — stand','recrutare', 'hr',   null,       'dept', 0,
    now() + interval '3 days',  now() + interval '3 days 6 hours',  'Campus FSEGA',      null,
    'Stand de promovare, două ture.',                  'd0000000-0000-0000-0000-000000000005'),
-  ('Deadline: raport trimestrial','deadline', 'fin',  null,       'dept',
+  ('Deadline: raport trimestrial','deadline', 'fin',  null,       'dept', 0,
    now() + interval '7 days',  null,                                null,               null,
    'Trimiterea raportului către BC.',                 'd0000000-0000-0000-0000-000000000007');
 
