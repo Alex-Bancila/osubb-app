@@ -249,6 +249,18 @@ insert into tasks (title, type, dept_id, team_id, status, difficulty, deadline, 
   ('Share story recrutare',     'promo',   'pr',  null, 'open',     1, pg_temp.task_deadline(current_date + 3),  'Distribuie story-ul de recrutare.',        'd0000000-0000-0000-0000-000000000006'),
   ('Ajutor la standul de recrutare','logistic','edu',null,'open',   2, pg_temp.task_deadline(current_date + 9),  'Două ore la stand, în campus.',            'd0000000-0000-0000-0000-000000000005');
 
+-- These reproduce legacy organization-wide opportunities on a fresh reset;
+-- the #285 migration gives upgraded `open` rows the same audience.
+update tasks
+   set audience = 'org'
+ where status = 'open'
+   and exists (
+     select 1
+       from profiles creator
+      where creator.id = tasks.created_by
+        and creator.email like '%@demo.osubb'
+   );
+
 insert into task_assignees (task_id, member_id)
 select t.id, a.member_id
   from (values
