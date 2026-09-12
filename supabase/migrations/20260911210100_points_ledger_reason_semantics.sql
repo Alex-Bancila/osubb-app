@@ -1,9 +1,12 @@
 -- #162: the ledger vocabulary is task / task_reversal / sanction (manual awards
 -- left with #261). Task rows reference their task; sanctions are negative and
--- explained. No environment holds manual_award rows (local and staging are
--- seed-only; production does not exist yet) — the guard below makes a hosted
--- database that does hold one fail loudly instead of silently constraining
--- around it.
+-- explained. Staging may still hold the demo manual_award row the seed
+-- inserted before 2026-09-10: #261's remove_manual_awards migration only
+-- stopped new inserts, it deleted no historical rows, and staging's demo
+-- data changes only when a human re-runs the seed workflow, not on every
+-- migration deploy. The repair below removes exactly that shape (a
+-- demo-owned row); the guard after it makes anything else fail loudly
+-- instead of silently constraining around it.
 
 -- Staging's demo data only ever arrives via the manual seed workflow, so a
 -- push here would run against whatever the last seed left behind — including
@@ -17,6 +20,19 @@ update public.points_ledger
    set note = 'Sanction recorded before notes were required (#162).'
  where reason = 'sanction'
    and not (coalesce(note, '') ~ '[^[:space:]]');
+
+-- A demo-owned manual_award row is the one shape here that is mechanically
+-- repairable without deciding what the row means: it is exactly what
+-- re-seeding staging would delete (and recreate from the fixture) anyway.
+-- Mirror the seed's own cleanup predicate (supabase/seed.sql:75-81) rather
+-- than inventing a new one.
+delete from public.points_ledger l
+ where l.reason = 'manual_award'
+   and exists (
+     select 1 from public.profiles p
+      where p.email like '%@demo.osubb'
+        and p.id in (l.member_id, l.awarded_by)
+   );
 
 -- Anything else the constraints below would reject is not mechanically
 -- repairable without deciding what the row actually means — fail loudly
