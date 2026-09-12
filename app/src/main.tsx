@@ -38,6 +38,7 @@ import './theme/calendar.css';
 import { createQueryClient } from './queries/client';
 import { AuthProvider } from './lib/auth';
 import App from './App';
+import { PwaUpdatePrompt } from './pwa/PwaUpdatePrompt';
 
 setupIonicReact();
 
@@ -51,6 +52,7 @@ createRoot(root).render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <App />
+        <PwaUpdatePrompt />
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,
