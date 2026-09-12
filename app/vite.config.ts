@@ -17,7 +17,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.*', 'src/lib/database.types.ts'],
+      exclude: ['src/**/*.test.*', 'src/test/**', 'src/lib/database.types.ts'],
+      thresholds: {
+        'src/App.tsx': { lines: 100 },
+        'src/lib/auth-error-message.ts': { lines: 100 },
+        'src/lib/capabilities.ts': { lines: 100 },
+      },
     },
   },
   server: {

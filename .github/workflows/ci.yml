@@ -203,6 +203,16 @@ jobs:
       - name: Test
         run: npm run test:run
 
+      - name: Critical module coverage
+        run: npm run test:coverage
+
+      - name: Local Montserrat wiring
+        run: |
+          ! grep -Eq 'fonts\.(googleapis|gstatic)\.com' index.html
+          test "$(node -p "require('./package.json').dependencies['@fontsource-variable/montserrat']")" = "5.3.0"
+          grep -Fq "import '@fontsource-variable/montserrat'" src/main.tsx
+          grep -Fq -- '--font-family-base: "Montserrat Variable"' src/theme/tokens.css
+
       - name: Build
         run: npm run build
 

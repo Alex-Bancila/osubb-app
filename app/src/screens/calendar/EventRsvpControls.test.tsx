@@ -25,14 +25,22 @@ vi.mock('../../queries/event-rsvp', () => ({
   useEventRsvp: hooks.useEventRsvp,
   useSetEventRsvp: hooks.useSetEventRsvp,
 }));
+vi.mock('@ionic/react', () => ({
+  IonButton: ({
+    children,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props}>{children}</button>
+  ),
+  IonSpinner: () => null,
+  IonToast: () => null,
+}));
 
 import { EventRsvpMutationError } from '../../queries/event-rsvp';
 import EventRsvpControls from './EventRsvpControls';
 
 function rsvpButton(name: string): HTMLElement {
-  const button = screen.getByText(name).closest('ion-button');
-  if (!button) throw new Error(`Nu există butonul RSVP „${name}”.`);
-  return button;
+  return screen.getByRole('button', { name });
 }
 
 describe('EventRsvpControls', () => {
