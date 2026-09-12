@@ -261,6 +261,16 @@ update tasks
         and creator.email like '%@demo.osubb'
    );
 
+update tasks
+   set assignment_mode = 'public'
+ where status = 'open'
+   and exists (
+     select 1
+       from profiles creator
+      where creator.id = tasks.created_by
+        and creator.email like '%@demo.osubb'
+   );
+
 insert into task_assignees (task_id, member_id)
 select t.id, a.member_id
   from (values

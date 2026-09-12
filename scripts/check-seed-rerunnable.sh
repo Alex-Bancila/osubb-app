@@ -159,8 +159,10 @@ insert into projects (name, status, leader_id, created_by)
 values ('Cross-owned seed guard', 'active',
         'd0000000-0000-0000-0000-000000000005',
         'e2750000-0000-0000-0000-000000000001');
-insert into tasks (title, difficulty, status, audience, created_by)
-values ('Non-demo local opportunity', 1, 'open', 'local',
+insert into tasks (
+  title, difficulty, status, audience, assignment_mode, created_by
+)
+values ('Non-demo local opportunity', 1, 'open', 'local', 'direct',
         'e2750000-0000-0000-0000-000000000001');
 SQL
 
@@ -199,7 +201,7 @@ if [ "$before" != "$after" ]; then
   exit 1
 fi
 
-preserved=$(run_sql -c "select format('%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'open' and audience = 'local'))")
+preserved=$(run_sql -c "select format('%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'open' and audience = 'local' and assignment_mode = 'direct'))")
 if [ "$preserved" != "1:1:1:1" ]; then
   echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project/local-Task sentinels ($preserved)."
   exit 1

@@ -1281,6 +1281,7 @@ export type Database = {
       }
       tasks: {
         Row: {
+          assignment_mode: string
           audience: string
           created_at: string
           created_by: string | null
@@ -1297,6 +1298,7 @@ export type Database = {
           type: string | null
         }
         Insert: {
+          assignment_mode?: string
           audience?: string
           created_at?: string
           created_by?: string | null
@@ -1313,6 +1315,7 @@ export type Database = {
           type?: string | null
         }
         Update: {
+          assignment_mode?: string
           audience?: string
           created_at?: string
           created_by?: string | null
@@ -1655,6 +1658,7 @@ export type Database = {
       claim_open_task: {
         Args: { p_task_id: number }
         Returns: {
+          assignment_mode: string
           audience: string
           created_at: string
           created_by: string | null
