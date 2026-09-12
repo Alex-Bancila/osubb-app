@@ -37,6 +37,10 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     description: 'Planificarea semestrului',
     created_by: null,
     has_qr: false,
+    project_id: null,
+    min_level: 0,
+    cancelled_at: null,
+    cancel_reason: null,
     ...overrides,
   };
 }
