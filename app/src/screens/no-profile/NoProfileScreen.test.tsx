@@ -3,17 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
-vi.mock('@ionic/react', () => ({
-  IonButton: ({
-    children,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props}>{children}</button>
-  ),
-  IonContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  IonPage: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 import NoProfileScreen from './NoProfileScreen';
 
 describe('NoProfileScreen sign-out', () => {
