@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import {
-  IonButton,
-  IonContent,
-  IonInput,
-  IonPage,
-  IonSpinner,
-} from '@ionic/react';
+import { LoaderCircle } from 'lucide-react';
 import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
+import { Field, FieldDescription, FieldLabel } from '../../components/ui/field';
+import { SessionScreen } from '../../components/shell/SessionScreen';
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
@@ -84,79 +80,90 @@ export default function LoginScreen() {
 
   if (status === 'sent') {
     return (
-      <IonPage>
-        <IonContent className="ion-padding">
-          <div className="auth-card">
-            <h1 ref={sentHeadingRef} tabIndex={-1}>
-              Verifică-ți emailul
-            </h1>
-            <p>
-              Dacă <strong>{email.trim().toLowerCase()}</strong> are cont în
-              aplicație, ți-am trimis un link de conectare. Deschide-l de pe
-              acest dispozitiv, dacă poți.
-            </p>
-            <p className="muted">
-              Nu a ajuns nimic în câteva minute? Verifică folderul de spam și
-              adresa scrisă mai sus. Dacă e corectă și tot nu primești nimic,
-              contactează BC — poate contul nu a fost încă creat.
-            </p>
-            <IonButton
-              fill="clear"
-              onClick={() => {
-                setStatus('idle');
-                setError('');
-              }}
-            >
-              Încearcă altă adresă
-            </IonButton>
-          </div>
-        </IonContent>
-      </IonPage>
+      <SessionScreen>
+        <h1
+          ref={sentHeadingRef}
+          tabIndex={-1}
+          className="text-2xl leading-tight font-extrabold tracking-tight outline-none"
+        >
+          Verifică-ți emailul
+        </h1>
+        <p className="leading-relaxed">
+          Dacă <strong>{email.trim().toLowerCase()}</strong> are cont în
+          aplicație, ți-am trimis un link de conectare. Deschide-l de pe acest
+          dispozitiv, dacă poți.
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Nu a ajuns nimic în câteva minute? Verifică folderul de spam și adresa
+          scrisă mai sus. Dacă e corectă și tot nu primești nimic, contactează
+          BC — poate contul nu a fost încă creat.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setStatus('idle');
+            setError('');
+          }}
+        >
+          Încearcă altă adresă
+        </Button>
+      </SessionScreen>
     );
   }
 
   return (
-    <IonPage>
-      <IonContent className="ion-padding">
-        <form className="auth-card" onSubmit={requestLink}>
-          <h1>Aplicația OSUBB</h1>
-          <p className="muted">
-            Scrie adresa de email cu care ai fost invitat. Îți trimitem un link
-            de conectare — nu ai nevoie de parolă.
-          </p>
+    <SessionScreen>
+      <form className="flex flex-col gap-4" onSubmit={requestLink}>
+        <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
+          Aplicația OSUBB
+        </h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Scrie adresa de email cu care ai fost invitat. Îți trimitem un link de
+          conectare — nu ai nevoie de parolă.
+        </p>
 
-          <IonInput
-            label="Email"
-            labelPlacement="stacked"
+        <Field data-invalid={status === 'error'}>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <input
+            id="email"
+            className="min-h-11 rounded-lg border border-input bg-background px-3 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             type="email"
-            inputmode="email"
-            autocomplete="email"
+            inputMode="email"
+            autoComplete="email"
             required
-            fill="outline"
             placeholder="prenume.nume@exemplu.ro"
             value={email}
-            onIonInput={(e) => setEmail(e.detail.value ?? '')}
+            aria-invalid={status === 'error'}
+            aria-describedby={
+              status === 'error' ? 'email-help login-error' : 'email-help'
+            }
+            onChange={(event) => setEmail(event.currentTarget.value)}
           />
+          <FieldDescription id="email-help">
+            Folosește adresa la care ai primit invitația.
+          </FieldDescription>
+        </Field>
 
-          {status === 'error' && (
-            <p className="auth-error" role="alert">
-              {error}
-            </p>
+        {status === 'error' && (
+          <p id="login-error" className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={status === 'sending' || email.trim() === ''}
+        >
+          {status === 'sending' && (
+            <LoaderCircle
+              className="animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
           )}
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={status === 'sending' || email.trim() === ''}
-          >
-            {status === 'sending' ? (
-              <IonSpinner name="dots" aria-label="Se trimite" />
-            ) : (
-              'Trimite linkul'
-            )}
-          </Button>
-        </form>
-      </IonContent>
-    </IonPage>
+          {status === 'sending' ? 'Se trimite…' : 'Trimite linkul'}
+        </Button>
+      </form>
+    </SessionScreen>
   );
 }

@@ -29,8 +29,6 @@ import '@fontsource-variable/montserrat';
 import './theme/tokens.css';
 import './theme/tailwind.css';
 import './theme/global.css';
-import './theme/auth-screens.css';
-import './theme/shell.css';
 import './theme/screens.css';
 import './theme/dashboard.css';
 import './theme/calendar.css';
