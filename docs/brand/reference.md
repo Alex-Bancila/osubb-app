@@ -1,10 +1,10 @@
 # OSUBB brand reference
 
-**Version:** 1.0 (2026-08-27) · **Source:** *BRAND BOOK OSUBB 2025* · **Scope:** practical app guidance
+**Version:** 1.0 (2026-08-27) · **Source:** _BRAND BOOK OSUBB 2025_ · **Scope:** practical app guidance
 
 ## Authority
 
-The official *BRAND BOOK OSUBB 2025* and the repository's domain/capability model (`CONTEXT.md`, `departments`, and `role_capabilities`) are authoritative. Use this reference to apply them consistently in the app.
+The official _BRAND BOOK OSUBB 2025_ and the repository's domain/capability model (`CONTEXT.md`, `departments`, and `role_capabilities`) are authoritative. Use this reference to apply them consistently in the app.
 
 `mockup/` is historical visual inspiration only. It is not a source of brand authority, domain semantics, or capabilities; where it differs from the Brand Book or the domain/capability model, follow those authorities.
 
@@ -14,13 +14,13 @@ Primary OSUBB colours are red `#ED2025`, black `#000000`, and white `#FFFFFF`. U
 
 Department colour conveys department context, not role or permission:
 
-| Department | Colour |
-| --- | --- |
-| Educațional | `#284C93` |
+| Department    | Colour    |
+| ------------- | --------- |
+| Educațional   | `#284C93` |
 | Resurse Umane | `#F2A700` |
-| Financiar | `#007F33` |
-| Imagine & PR | `#7500A0` |
-| Tineret | `#FF3B3B` |
+| Financiar     | `#007F33` |
+| Imagine & PR  | `#7500A0` |
+| Tineret       | `#FF3B3B` |
 
 - Structuri de coordonare (Diverse, Secretariat): neutru `#5C5C61`; numele structurii apare întotdeauna lângă culoare.
 

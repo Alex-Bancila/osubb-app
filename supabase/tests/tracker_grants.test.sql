@@ -32,8 +32,9 @@
 -- Known follow-up (E2, #295 review): the closed roster is a dated break
 -- someone must own, not a one-time count to get right and forget. It goes
 -- red the instant `private` gains a function this file doesn't know about --
--- dobrerares' #420 (`private.set_updated_at()`) will do exactly that once it
--- merges, and any later addition to `private` does the same. The remedy is
+-- dobrerares' #368 (`private.set_updated_at()`) did exactly that when it
+-- merged to main -- it is pinned in the roster below now. Any later addition
+-- to `private` does the same. The remedy is
 -- always the one line the assertions already point at: add the new
 -- function's `(proname, args, category)` row to `pinned_private_functions`
 -- above (and adjust the plan(N)/count(*) pins next to it) -- there is no
@@ -350,6 +351,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_project_admin',                       '',                                                                                                                   'require'),
   ('revoke_project_responsible_impl',             'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
+  ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
   ('sync_project_leader_membership',              '',                                                                                                                   'trigger'),
   ('task_is_unassigned',                          'p_task_id bigint',                                                                                                   'authenticated_only'),
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
@@ -360,8 +362,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 48,
-  'the pinned private-schema roster itself has exactly the 48 rows the audit found (a typo here would silently weaken every check below)');
+  (select count(*) from pinned_private_functions)::int, 49,
+  'the pinned private-schema roster itself has exactly the 49 rows the audit found (a typo here would silently weaken every check below)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

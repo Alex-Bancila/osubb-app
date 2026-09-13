@@ -2,6 +2,24 @@
   "name": "osubb-app",
   "private": true,
   "license": "UNLICENSED",
-  "engines": { "node": ">=24" },
-  "devDependencies": { "supabase": "2.117.0" }
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "format": "prettier --write '**/*.{md,json,yaml,yml}' --ignore-path .gitignore && deno fmt supabase/functions",
+    "format:check": "prettier --check '**/*.{md,json,yaml,yml}' --ignore-path .gitignore && deno fmt --check supabase/functions",
+    "lint:links": "remark . --frail --quiet --use remark-validate-links --ignore-pattern '**/node_modules/**' --ignore-pattern 'app/coverage/**'",
+    "lint:shell": "bash scripts/check-shell-syntax.sh",
+    "lint:deno": "deno lint --config supabase/functions/deno.json supabase/functions",
+    "test:tooling": "bash scripts/check-markdown-links.test.sh && bash scripts/check-shell-syntax.test.sh",
+    "check:root": "npm run format:check && npm run lint:links && npm run lint:shell && npm run lint:deno && npm run test:tooling",
+    "check:app": "npm --prefix app run typecheck && npm --prefix app run lint && npm --prefix app run format:check && npm --prefix app run test:run && npm --prefix app run build",
+    "check": "npm run check:root && npm run check:app"
+  },
+  "devDependencies": {
+    "prettier": "3.9.6",
+    "remark-cli": "12.0.1",
+    "remark-validate-links": "13.1.0",
+    "supabase": "2.117.0"
+  }
 }
