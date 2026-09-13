@@ -788,36 +788,42 @@ export type Database = {
           body: string | null
           created_at: string
           critical: boolean
+          dedupe_key: string | null
           icon: string | null
           id: number
           kind: Database["public"]["Enums"]["noti_kind"]
           link: string | null
           member_id: string
           read: boolean
+          task_id: number | null
           title: string
         }
         Insert: {
           body?: string | null
           created_at?: string
           critical?: boolean
+          dedupe_key?: string | null
           icon?: string | null
           id?: never
           kind: Database["public"]["Enums"]["noti_kind"]
           link?: string | null
           member_id: string
           read?: boolean
+          task_id?: number | null
           title: string
         }
         Update: {
           body?: string | null
           created_at?: string
           critical?: boolean
+          dedupe_key?: string | null
           icon?: string | null
           id?: never
           kind?: Database["public"]["Enums"]["noti_kind"]
           link?: string | null
           member_id?: string
           read?: boolean
+          task_id?: number | null
           title?: string
         }
         Relationships: [
@@ -861,6 +867,20 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks_with_overdue"
             referencedColumns: ["id"]
           },
         ]
