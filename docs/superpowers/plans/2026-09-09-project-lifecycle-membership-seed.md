@@ -60,18 +60,18 @@ The membership role setter accepts only `member` and `responsible`. Granting a R
 
 ## Stable command outcomes
 
-| Condition | SQLSTATE | Message |
-|---|---:|---|
-| Caller is not an active BC/Moderator | `42501` | `project_admin_forbidden` |
-| Caller is not the active project lead | `42501` | `project_membership_manage_forbidden` |
-| Blank project name | `PT400` | `invalid_project_name` |
-| Proposed leader is missing/inactive | `PT400` | `project_leader_not_eligible` |
-| Project does not exist for an authorized lifecycle caller | `PT404` | `project_not_found` |
-| Project is archived during roster management | `PT409` | `project_archived` |
-| Proposed member for add/promotion is missing/inactive | `PT400` | `project_member_not_eligible` |
-| Membership role is unsupported | `PT400` | `invalid_project_role` |
-| Role change targets a missing membership | `PT404` | `project_membership_not_found` |
-| Attempt to remove the current leader | `PT409` | `project_leader_membership_required` |
+| Condition                                                 | SQLSTATE | Message                               |
+| --------------------------------------------------------- | -------: | ------------------------------------- |
+| Caller is not an active BC/Moderator                      |  `42501` | `project_admin_forbidden`             |
+| Caller is not the active project lead                     |  `42501` | `project_membership_manage_forbidden` |
+| Blank project name                                        |  `PT400` | `invalid_project_name`                |
+| Proposed leader is missing/inactive                       |  `PT400` | `project_leader_not_eligible`         |
+| Project does not exist for an authorized lifecycle caller |  `PT404` | `project_not_found`                   |
+| Project is archived during roster management              |  `PT409` | `project_archived`                    |
+| Proposed member for add/promotion is missing/inactive     |  `PT400` | `project_member_not_eligible`         |
+| Membership role is unsupported                            |  `PT400` | `invalid_project_role`                |
+| Role change targets a missing membership                  |  `PT404` | `project_membership_not_found`        |
+| Attempt to remove the current leader                      |  `PT409` | `project_leader_membership_required`  |
 
 Creating an already-existing membership is idempotent and returns the existing row without downgrading a Responsible. Removing a membership is idempotent: it returns `true` when one row was removed and `false` when it was already absent. Archiving is idempotent and returns the unchanged archived project on repeated calls.
 
@@ -415,10 +415,10 @@ Do not delete projects created by real staging testers. Keep the foreign-key ord
 
 After demo profiles exist, insert:
 
-| Project | State | Lead | Responsible | Ordinary member | Outsider |
-|---|---|---|---|---|---|
-| Proiect Campus Verde | active | Ioana Popescu (`voluntar`) | Raluca Ionescu (`responsabil`) | Vlad Constantin (`activ`) | Andrei Mureșan (`recrut`) |
-| Arhiva Orientare 2025 | archived | Maria Dobre (`vot`) | Alex Băncilă (`bce`) | Cristina Șerban (`bc`) | Andrei Mureșan (`recrut`) |
+| Project               | State    | Lead                       | Responsible                    | Ordinary member           | Outsider                  |
+| --------------------- | -------- | -------------------------- | ------------------------------ | ------------------------- | ------------------------- |
+| Proiect Campus Verde  | active   | Ioana Popescu (`voluntar`) | Raluca Ionescu (`responsabil`) | Vlad Constantin (`activ`) | Andrei Mureșan (`recrut`) |
+| Arhiva Orientare 2025 | archived | Maria Dobre (`vot`)        | Alex Băncilă (`bce`)           | Cristina Șerban (`bc`)    | Andrei Mureșan (`recrut`) |
 
 Set `created_by` to Cristina Șerban for both. Insert projects directly as seed data; do not fake an authenticated RPC call. The #270 trigger must create each leader membership. Insert only the additional Responsible and ordinary-member rows, using project-name subqueries so generated identity IDs never become fixture constants.
 
