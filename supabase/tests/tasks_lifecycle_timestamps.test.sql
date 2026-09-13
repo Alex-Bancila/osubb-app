@@ -33,19 +33,22 @@ select ok(
         'review_round', 'returned_to_progress_at')),
   'the overdue query surface exposes all lifecycle markers');
 
+-- #312: a completed row must carry a rating alongside its difficulty
+-- (tasks_evaluation_inputs_ck); reopening it away from completed must clear
+-- the rating just as atomically, since a non-terminal status may not hold one.
 select lives_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, created_at, completed_at)
+    (title, difficulty, dept_id, status, created_at, completed_at, rating)
   values
     ('Completed work then reopen 293', 2, 'edu', 'completed',
-     '2026-09-01 10:00+00', '2026-09-01 10:00+00')
+     '2026-09-01 10:00+00', '2026-09-01 10:00+00', 3)
 $$, 'completed work may have no invented start timestamp');
 select is(
   (select started_at from public.tasks where title = 'Completed work then reopen 293'),
   null::timestamptz, 'completed-work history keeps its unknown start null');
 select lives_ok($$
   update public.tasks
-     set status = 'in_progress', completed_at = null
+     set status = 'in_progress', completed_at = null, rating = null
    where title = 'Completed work then reopen 293'
 $$, 'reopening completed work changes its lifecycle markers atomically');
 select ok(
@@ -110,12 +113,12 @@ select is(
   'queue reopening preserves the first opening in this public-mode period');
 
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status)
-     values ('Missing completion 293', 1, 'edu', 'completed') $$,
+  $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
+     values ('Missing completion 293', 1, 'edu', 'completed', 3) $$,
   '23514', null, 'completed requires completed_at');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status)
-     values ('Missing unfulfilled 293', 1, 'edu', 'unfulfilled') $$,
+  $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
+     values ('Missing unfulfilled 293', 1, 'edu', 'unfulfilled', 2) $$,
   '23514', null, 'unfulfilled requires unfulfilled_at');
 select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, status)
@@ -164,9 +167,9 @@ select throws_ok(
 select throws_ok($$
   insert into public.tasks
     (title, difficulty, dept_id, status, assignment_mode, completed_at,
-     queue_opened_at)
+     queue_opened_at, rating)
   values
-    ('Terminal open queue 293', 1, 'edu', 'completed', 'public', now(), now())
+    ('Terminal open queue 293', 1, 'edu', 'completed', 'public', now(), now(), 3)
 $$, '23514', null, 'terminal public Tasks require a closed queue');
 select throws_ok($$
   insert into public.tasks
@@ -186,10 +189,10 @@ $$, '23514', null, 'a queue cannot close before it opens');
 select throws_ok($$
   insert into public.tasks
     (title, difficulty, dept_id, status, created_at,
-     submitted_at, completed_at)
+     submitted_at, completed_at, rating)
   values
     ('Completion before submission 293', 1, 'edu', 'completed',
-     '2026-09-01 10:00+00', '2026-09-01 12:00+00', '2026-09-01 11:00+00')
+     '2026-09-01 10:00+00', '2026-09-01 12:00+00', '2026-09-01 11:00+00', 3)
 $$, '23514', null, 'a terminal outcome cannot precede its submission');
 
 select * from finish();

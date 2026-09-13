@@ -33,8 +33,9 @@ select id, '28400000-0000-0000-0000-000000000002'::uuid
   from public.tasks
  where title = 'Legacy Team With Redundant Department';
 
+-- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks
-   set rating = 4
+   set status = 'completed', completed_at = now(), rating = 4
  where title = 'Legacy Team With Redundant Department';
 SQL
 

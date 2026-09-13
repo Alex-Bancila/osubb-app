@@ -1615,7 +1615,7 @@ export type Database = {
           deadline: string | null
           dept_id: string | null
           description: string | null
-          difficulty: number
+          difficulty: number | null
           id: number
           points: number | null
           project_id: number | null
@@ -1642,7 +1642,7 @@ export type Database = {
           deadline?: string | null
           dept_id?: string | null
           description?: string | null
-          difficulty: number
+          difficulty?: number | null
           id?: never
           points?: number | null
           project_id?: number | null
@@ -1669,7 +1669,7 @@ export type Database = {
           deadline?: string | null
           dept_id?: string | null
           description?: string | null
-          difficulty?: number
+          difficulty?: number | null
           id?: never
           points?: number | null
           project_id?: number | null
@@ -2188,7 +2188,7 @@ export type Database = {
           deadline: string | null
           dept_id: string | null
           description: string | null
-          difficulty: number
+          difficulty: number | null
           id: number
           points: number | null
           project_id: number | null

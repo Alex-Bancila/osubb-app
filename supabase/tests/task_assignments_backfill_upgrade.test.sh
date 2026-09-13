@@ -25,18 +25,23 @@ insert into public.profiles (id, full_name, email, role) values
   ('29000000-0000-0000-0000-000000000002', 'Legacy Two 290', 'legacy-two-290@test.local', 'voluntar'),
   ('29000000-0000-0000-0000-000000000003', 'Legacy Three 290', 'legacy-three-290@test.local', 'voluntar');
 
+-- #312: a completed/unfulfilled row must carry a rating alongside its
+-- difficulty (tasks_evaluation_inputs_ck) the instant it is inserted — set
+-- both terminal rows' Rating here rather than through a later UPDATE, which
+-- would otherwise leave the just-inserted row in the disallowed
+-- half-evaluated shape.
 insert into public.tasks
   (title, difficulty, dept_id, status, created_at, started_at, submitted_at,
-   completed_at, unfulfilled_at, cancelled_at)
+   completed_at, unfulfilled_at, cancelled_at, rating)
 values
-  ('Legacy multi todo 290', 1, 'edu', 'todo', '2026-01-01 10:00+00', null, null, null, null, null),
-  ('Legacy multi progress 290', 1, 'edu', 'in_progress', '2026-01-02 10:00+00', '2026-01-02 11:00+00', null, null, null, null),
-  ('Legacy review 290', 1, 'edu', 'in_review', '2026-01-03 10:00+00', '2026-01-03 11:00+00', '2026-01-03 12:00+00', null, null, null),
-  ('Legacy completed 290', 3, 'edu', 'completed', '2026-01-04 10:00+00', null, null, '2026-01-05 10:00+00', null, null),
-  ('Legacy unfulfilled 290', 1, 'edu', 'unfulfilled', '2026-01-06 10:00+00', null, null, null, '2026-01-07 10:00+00', null),
-  ('Legacy cancelled 290', 1, 'edu', 'cancelled', '2026-01-08 10:00+00', null, null, null, null, '2026-01-09 10:00+00'),
-  ('Legacy no participant 290', 1, 'edu', 'todo', '2026-01-10 10:00+00', null, null, null, null, null),
-  ('Unrelated new history 290', 1, 'edu', 'todo', '2026-01-11 10:00+00', null, null, null, null, null);
+  ('Legacy multi todo 290', 1, 'edu', 'todo', '2026-01-01 10:00+00', null, null, null, null, null, null),
+  ('Legacy multi progress 290', 1, 'edu', 'in_progress', '2026-01-02 10:00+00', '2026-01-02 11:00+00', null, null, null, null, null),
+  ('Legacy review 290', 1, 'edu', 'in_review', '2026-01-03 10:00+00', '2026-01-03 11:00+00', '2026-01-03 12:00+00', null, null, null, null),
+  ('Legacy completed 290', 3, 'edu', 'completed', '2026-01-04 10:00+00', null, null, '2026-01-05 10:00+00', null, null, 4),
+  ('Legacy unfulfilled 290', 1, 'edu', 'unfulfilled', '2026-01-06 10:00+00', null, null, null, '2026-01-07 10:00+00', null, 2),
+  ('Legacy cancelled 290', 1, 'edu', 'cancelled', '2026-01-08 10:00+00', null, null, null, null, '2026-01-09 10:00+00', null),
+  ('Legacy no participant 290', 1, 'edu', 'todo', '2026-01-10 10:00+00', null, null, null, null, null, null),
+  ('Unrelated new history 290', 1, 'edu', 'todo', '2026-01-11 10:00+00', null, null, null, null, null, null);
 
 -- Deliberately shuffled input proves selection does not depend on insert order.
 insert into public.task_assignees (task_id, member_id)
@@ -66,8 +71,6 @@ insert into public.task_assignments
 select id, '29000000-0000-0000-0000-000000000003', created_at + interval '2 hours',
        '29000000-0000-0000-0000-000000000003'
   from public.tasks where title = 'Unrelated new history 290';
-
-update public.tasks set rating = 4 where title = 'Legacy completed 290';
 
 create temp table before_290 as
 select

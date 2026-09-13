@@ -24,17 +24,19 @@ select ok(
   and not has_table_privilege('authenticated', 'public.tasks_with_overdue', 'delete'),
   'authenticated sessions cannot mutate Tasks through the overdue surface');
 
+-- #312: the completed/unfulfilled fixture rows need a rating alongside their
+-- difficulty (tasks_evaluation_inputs_ck); every other row must not carry one.
 insert into public.tasks
   (title, difficulty, dept_id, deadline, status, started_at, submitted_at,
-   completed_at, unfulfilled_at, cancelled_at) values
-  ('Past todo 288', 1, 'edu', now() - interval '1 second', 'todo', null, null, null, null, null),
-  ('Past progress 288', 1, 'edu', now() - interval '1 day', 'in_progress', now(), null, null, null, null),
-  ('Past review 288', 1, 'edu', now() - interval '1 hour', 'in_review', now(), now(), null, null, null),
-  ('Past completed 288', 1, 'edu', now() - interval '1 day', 'completed', null, null, now(), null, null),
-  ('Past unfulfilled 288', 1, 'edu', now() - interval '1 day', 'unfulfilled', null, null, null, now(), null),
-  ('Past cancelled 288', 1, 'edu', now() - interval '1 day', 'cancelled', null, null, null, null, now()),
-  ('Future todo 288', 1, 'edu', now() + interval '1 day', 'todo', null, null, null, null, null),
-  ('No deadline 288', 1, 'edu', null, 'in_progress', now(), null, null, null, null);
+   completed_at, unfulfilled_at, cancelled_at, rating) values
+  ('Past todo 288', 1, 'edu', now() - interval '1 second', 'todo', null, null, null, null, null, null),
+  ('Past progress 288', 1, 'edu', now() - interval '1 day', 'in_progress', now(), null, null, null, null, null),
+  ('Past review 288', 1, 'edu', now() - interval '1 hour', 'in_review', now(), now(), null, null, null, null),
+  ('Past completed 288', 1, 'edu', now() - interval '1 day', 'completed', null, null, now(), null, null, 3),
+  ('Past unfulfilled 288', 1, 'edu', now() - interval '1 day', 'unfulfilled', null, null, null, now(), null, 2),
+  ('Past cancelled 288', 1, 'edu', now() - interval '1 day', 'cancelled', null, null, null, null, now(), null),
+  ('Future todo 288', 1, 'edu', now() + interval '1 day', 'todo', null, null, null, null, null, null),
+  ('No deadline 288', 1, 'edu', null, 'in_progress', now(), null, null, null, null, null);
 
 select is((select is_overdue from public.tasks_with_overdue where title = 'Past todo 288'),
   true, 'a past-deadline todo Task is overdue');

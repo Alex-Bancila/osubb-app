@@ -19,6 +19,14 @@ drop policy task_read on public.tasks;
 drop function public.claim_open_task(bigint);
 drop function private.task_is_unassigned(bigint);
 truncate public.tasks cascade;
+-- #312: tasks_evaluation_inputs_ck's compiled expression embeds 'completed'/
+-- 'unfulfilled' literals bound to today's task_status OID. Converting the
+-- status column away from that enum (the very next statement) would
+-- otherwise try to recompile the constraint's expression against the new
+-- type and fail with "operator does not exist: text = task_status" — drop it
+-- first, same treatment as the task_activity columns below; the scratch
+-- transaction rolls back either way.
+alter table public.tasks drop constraint tasks_evaluation_inputs_ck;
 alter table public.tasks alter column status drop default;
 alter table public.tasks alter column status type text using status::text;
 -- #292: task_activity.from_status/to_status also depend on task_status; this

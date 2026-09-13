@@ -28,17 +28,20 @@ revoke all on public.tasks_with_overdue
   from public, anon, authenticated, service_role;
 grant select on public.tasks_with_overdue to authenticated, service_role;
 
+-- #312: tasks_evaluation_inputs_ck is already live here (this harness never
+-- touches task_status), so the completed/unfulfilled fixture rows need a
+-- rating alongside their difficulty from the moment they are inserted.
 insert into public.tasks
-  (title, difficulty, dept_id, status, assignment_mode, created_at)
+  (title, difficulty, dept_id, status, assignment_mode, created_at, rating)
 values
-  ('Legacy todo timestamps 293', 1, 'edu', 'todo', 'direct', '2026-01-01 10:00+00'),
-  ('Legacy progress timestamps 293', 1, 'edu', 'in_progress', 'direct', '2026-01-02 10:00+00'),
-  ('Legacy review timestamps 293', 1, 'edu', 'in_review', 'direct', '2026-01-03 10:00+00'),
-  ('Legacy completed timestamps 293', 1, 'edu', 'completed', 'direct', '2026-01-04 10:00+00'),
-  ('Legacy unfulfilled timestamps 293', 1, 'edu', 'unfulfilled', 'direct', '2026-01-05 10:00+00'),
-  ('Legacy cancelled timestamps 293', 1, 'edu', 'cancelled', 'direct', '2026-01-06 10:00+00'),
-  ('Legacy public todo timestamps 293', 1, 'edu', 'todo', 'public', '2026-01-07 10:00+00'),
-  ('Legacy public completed timestamps 293', 1, 'edu', 'completed', 'public', '2026-01-08 10:00+00');
+  ('Legacy todo timestamps 293', 1, 'edu', 'todo', 'direct', '2026-01-01 10:00+00', null),
+  ('Legacy progress timestamps 293', 1, 'edu', 'in_progress', 'direct', '2026-01-02 10:00+00', null),
+  ('Legacy review timestamps 293', 1, 'edu', 'in_review', 'direct', '2026-01-03 10:00+00', null),
+  ('Legacy completed timestamps 293', 1, 'edu', 'completed', 'direct', '2026-01-04 10:00+00', 3),
+  ('Legacy unfulfilled timestamps 293', 1, 'edu', 'unfulfilled', 'direct', '2026-01-05 10:00+00', 2),
+  ('Legacy cancelled timestamps 293', 1, 'edu', 'cancelled', 'direct', '2026-01-06 10:00+00', null),
+  ('Legacy public todo timestamps 293', 1, 'edu', 'todo', 'public', '2026-01-07 10:00+00', null),
+  ('Legacy public completed timestamps 293', 1, 'edu', 'completed', 'public', '2026-01-08 10:00+00', 4);
 
 create temp table before_tasks_293 as
 select count(*) as row_count,

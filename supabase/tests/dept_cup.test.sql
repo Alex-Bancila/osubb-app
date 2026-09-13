@@ -39,7 +39,9 @@ select t.id, case t.title
 end
 from public.tasks t
 where t.title like 'cup-%';
-update public.tasks set rating = 3 where title like 'cup-%';
+-- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
+update public.tasks set status = 'completed', completed_at = now(), rating = 3
+ where title like 'cup-%';
 
 select ok(
   exists (

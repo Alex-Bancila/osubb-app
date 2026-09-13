@@ -54,18 +54,24 @@ insert into task_assignments (task_id, member_id, assigned_by)
 insert into task_activity (task_id, kind, actor_id, to_status)
   select id, 'created', 'ffffffff-0000-0000-0000-000000000006'::uuid, 'todo'
     from tasks where title = 'rls-t1';
-update tasks set rating = 4 where title = 'rls-t1';   -- writes points_ledger via trigger
+-- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
+update tasks set status = 'completed', completed_at = now(), rating = 4
+ where title = 'rls-t1';   -- writes points_ledger via trigger
 insert into task_requests (kind, title, from_member)
   values
     ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006'),
     ('award', 'rls-req-claimless', 'eeeeeeee-0000-0000-0000-000000000156');
 
--- An OPEN, already-GRADED task: the shape that leaked, and the one an
--- unprovisioned session could have joined to collect points.
+-- An OPEN task: the shape that leaked, and the one an unprovisioned session
+-- could have joined. #312's tasks_evaluation_inputs_ck now makes the
+-- historical "already-graded and still open" combination impossible to
+-- construct at all (a todo Task can no longer carry a Rating) — the
+-- remaining exposure this fixture proves closed is visibility of the row
+-- itself, still todo/public/org/unassigned, to a claimless or deactivated
+-- session.
 insert into tasks
   (title, difficulty, status, dept_id, audience, assignment_mode, queue_opened_at)
   values ('rls-open', 2, 'todo', 'edu', 'org', 'public', now());
-update tasks set rating = 3 where title = 'rls-open';
 
 insert into events (title, type, scope, starts_at)
   values ('rls-event', 'sedinta', 'org', now());
