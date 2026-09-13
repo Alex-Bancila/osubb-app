@@ -1,9 +1,26 @@
+import path from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { loadEnv } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
+import { createPwaOptions } from './src/pwa/pwa-config.ts';
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA(
+      createPwaOptions(
+        loadEnv(mode, import.meta.dirname, 'VITE_').VITE_SUPABASE_URL ??
+          'http://127.0.0.1:54321',
+      ),
+    ),
+  ],
+  resolve: {
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
@@ -17,7 +34,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.*', 'src/lib/database.types.ts'],
+      exclude: ['src/**/*.test.*', 'src/test/**', 'src/lib/database.types.ts'],
+      thresholds: {
+        'src/App.tsx': { lines: 100 },
+        'src/lib/auth-error-message.ts': { lines: 100 },
+        'src/lib/capabilities.ts': { lines: 100 },
+      },
     },
   },
   server: {
@@ -41,4 +63,4 @@ export default defineConfig({
        real — not another bump of this number. */
     chunkSizeWarningLimit: 2000,
   },
-});
+}));

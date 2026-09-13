@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/react" />
 
 /* Typing the env we actually use, so a typo in `import.meta.env.VITE_SUPABSE_URL`
    is a build error instead of `undefined` at runtime. */
