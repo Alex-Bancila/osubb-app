@@ -59,6 +59,14 @@ insert into task_candidates (task_id, member_id)
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update tasks set status = 'completed', completed_at = now(), rating = 4
  where title = 'rls-t1';   -- writes points_ledger via trigger
+-- #316: a real Evaluation record, tied to the same Task as its Assignment.
+insert into task_evaluations
+  (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
+  select task.id, assignment.id, 'ffffffff-0000-0000-0000-000000000006'::uuid,
+         'completed', 4, 4, 8, 'rls fixture evaluation'
+    from tasks task
+    join task_assignments assignment on assignment.task_id = task.id
+   where task.title = 'rls-t1';
 insert into task_requests (kind, title, from_member)
   values
     ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006'),
