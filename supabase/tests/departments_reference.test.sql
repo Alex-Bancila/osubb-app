@@ -1,9 +1,10 @@
 -- #310: Diverse and Secretariat exist as coordination structures, the
 -- legacy 'it' department is gone, and its teams live under Diverse.
+-- #215: display name corrected to Educațional.
 begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap;
-select plan(8);
+select plan(11);
 
 select results_eq(
   $$ select id from departments where kind = 'coordination' order by id $$,
@@ -43,6 +44,15 @@ select is(
   0::bigint,
   'nothing references department it'
 );
+-- #215: the display name carries the comma-below ț (U+021B) that CONTEXT.md
+-- and 0001_core_schema.sql's own 'Organizație' use — not the cedilla form —
+-- and the stable identifier is untouched.
+select is((select name from departments where id = 'edu'), 'Educațional',
+  'edu displays as Educațional');
+select ok((select position(chr(539) in name) > 0 from departments where id = 'edu'),
+  'the ț in Educațional is U+021B (comma below), matching CONTEXT.md');
+select is((select count(*) from departments where id = 'edu'), 1::bigint,
+  'exactly one edu department, id unchanged');
 
 select * from finish();
 rollback;
