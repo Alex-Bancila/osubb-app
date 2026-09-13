@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { IonApp, IonContent, IonPage, IonSpinner } from '@ionic/react';
+import { IonApp } from '@ionic/react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { useAuth } from './lib/auth';
 import { can, type Capability } from './lib/capabilities';
@@ -11,6 +11,7 @@ import Placeholder from './screens/Placeholder';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
 import CalendarScreen from './screens/calendar/CalendarScreen';
+import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -18,13 +19,9 @@ import CalendarScreen from './screens/calendar/CalendarScreen';
    the login screen every single time they refresh. */
 function Splash() {
   return (
-    <IonPage>
-      <IonContent className="ion-padding">
-        <div className="auth-card auth-card--centered">
-          <IonSpinner aria-label="Se încarcă" />
-        </div>
-      </IonContent>
-    </IonPage>
+    <SessionScreen centered>
+      <SessionLoader label="Se încarcă" />
+    </SessionScreen>
   );
 }
 
@@ -37,6 +34,14 @@ function Splash() {
  * somebody else's data. What the guard buys is that they see an explanation
  * instead of that emptiness.
  */
+function RequireSession({ children }: { children: ReactElement }) {
+  const { session, loading } = useAuth();
+
+  if (loading) return <Splash />;
+  if (!session) return <Navigate to="/login" replace />;
+  return children;
+}
+
 function RequireMember({ children }: { children: ReactElement }) {
   const { session, claims, loading } = useAuth();
 
@@ -44,6 +49,17 @@ function RequireMember({ children }: { children: ReactElement }) {
   if (!session) return <Navigate to="/login" replace />;
   if (!claims) return <Navigate to="/no-profile" replace />;
   return children;
+}
+
+function RequireNamedCapability({
+  capability,
+  children,
+}: {
+  capability: Capability;
+  children: ReactElement;
+}) {
+  const { claims } = useAuth();
+  return can(claims, capability) ? children : <Navigate to="/" replace />;
 }
 
 /** Same idea one level in: a route the navigation never offers you. */
@@ -54,8 +70,13 @@ function RequireCapability({
   capability: Capability;
   children: ReactElement;
 }) {
-  const { claims } = useAuth();
-  return can(claims, capability) ? children : <Navigate to="/" replace />;
+  return (
+    <RequireMember>
+      <RequireNamedCapability capability={capability}>
+        {children}
+      </RequireNamedCapability>
+    </RequireMember>
+  );
 }
 
 /** Keeps a signed-in member off the front door. */
@@ -87,7 +108,14 @@ export default function App() {
               into a session, so it has to run before there is one. */}
           <Route path="/auth/callback" element={<AuthCallback />} />
 
-          <Route path="/no-profile" element={<NoProfileScreen />} />
+          <Route
+            path="/no-profile"
+            element={
+              <RequireSession>
+                <NoProfileScreen />
+              </RequireSession>
+            }
+          />
 
           {/* Everything a member sees renders inside the shell. */}
           <Route

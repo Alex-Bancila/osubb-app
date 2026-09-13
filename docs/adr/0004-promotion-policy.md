@@ -1,12 +1,15 @@
 # ADR-0004 — Promotion policy: automatic up to Membru Activ, manual above
 
-- **Status:** Accepted (2026-08-12)
+- **Status:** Accepted
+- **Date:** 2026-08-12
 - **Deciders:** Alex Băncilă (IT Coordinator)
-- **Context docs:** `docs/org/directii-prioritati-it.md` §2.2, `docs/org/plan-managerial.md` §IV.3, architecture spec §8.4, `docs/superpowers/specs/2026-06-28-osubb-app-mockup-design.md` (Revizia 2)
+- **Supersedes:** —
+- **Superseded by:** —
+- **Related:** `docs/org/directii-prioritati-it.md` §2.2, `docs/org/plan-managerial.md` §IV.3, architecture spec §8.4, `docs/superpowers/specs/2026-06-28-osubb-app-mockup-design.md` (Revizia 2)
 
 ## Context
 
-The documents disagreed on how role promotions happen. The architecture spec (§8.4) recommended *manual with suggestions*. The mandate documents promise the opposite for the lower tiers: the volunteer category "să se updateze automat… **GAMIFICAT**" (Direcții 2.2), and members reaching the threshold "vor primi **automat** în aplicație rolul de membru activ" plus a notification with their benefits and the adherence form (Plan IV.3). There was also a threshold discrepancy: "6 months" (mockup Revizia 2) vs "one semester" for Recrut→Voluntar.
+The documents disagreed on how role promotions happen. The architecture spec (§8.4) recommended _manual with suggestions_. The mandate documents promise the opposite for the lower tiers: the volunteer category "să se updateze automat… **GAMIFICAT**" (Direcții 2.2), and members reaching the threshold "vor primi **automat** în aplicație rolul de membru activ" plus a notification with their benefits and the adherence form (Plan IV.3). There was also a threshold discrepancy: "6 months" (mockup Revizia 2) vs "one semester" for Recrut→Voluntar.
 
 Roles carry permissions (level thresholds drive RLS), so automatic promotion is automatic privilege escalation — safe only where the target role has low privileges.
 
@@ -17,7 +20,7 @@ Roles carry permissions (level thresholds drive RLS), so automatic promotion is 
 1. **Automatic (threshold-driven), with gamified notification:**
    - **Recrut (0) → Voluntar (1):** time-based — default **one semester** since `profiles.joined_at`.
    - **Voluntar (1) → Membru Activ (2):** points-based — a configurable points threshold over the member's ledger total. **Default value: to be ratified by BC** (together with the scoring-guide content, Direcții 1.2); seeded as a placeholder until then.
-   - On crossing a threshold the app applies the new role, notifies the member (benefits + link to the *formular de aderare* with ROF/Statut, per Plan IV.3), and records the change. The adherence form does **not** gate the role change (revisit if BC wants it to).
+   - On crossing a threshold the app applies the new role, notifies the member (benefits + link to the _formular de aderare_ with ROF/Statut, per Plan IV.3), and records the change. The adherence form does **not** gate the role change (revisit if BC wants it to).
 2. **Manual only (suggestions surfaced, human decides):** Drept de vot (3) — an AGO/governance decision fed by the `ag_eligibility` / `ag_quorum_top25` views; Responsabil (4), BCE (5), BC (6) — named by BC/AG; Moderator (9) — fixed account.
 3. **Demotions are never automatic** (including the top-25% vote retention at AGO — the views suggest, BC applies).
 

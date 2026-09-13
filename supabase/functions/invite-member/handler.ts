@@ -26,7 +26,10 @@ interface InviteRequest {
   team_ids?: string[];
 }
 
-export async function handleInvite(req: Request, deps: InviteDeps): Promise<Response> {
+export async function handleInvite(
+  req: Request,
+  deps: InviteDeps,
+): Promise<Response> {
   // Server-to-server calls (curl, another function, CI) send no Origin header
   // at all — only browsers do. isAllowedOrigin(null) is false, so those calls
   // never get an Access-Control-Allow-Origin echoed back, but they also never
@@ -44,11 +47,17 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
   if (req.method !== "POST") return json({ error: "Use POST." }, 405, origin);
 
   if (!(req.headers.get("Authorization") ?? "").startsWith("Bearer ")) {
-    return json({ error: "Autentifică-te pentru a invita membri." }, 401, origin);
+    return json(
+      { error: "Autentifică-te pentru a invita membri." },
+      401,
+      origin,
+    );
   }
 
   const callerId = await deps.callerId();
-  if (!callerId) return json({ error: "Sesiune invalidă sau expirată." }, 401, origin);
+  if (!callerId) {
+    return json({ error: "Sesiune invalidă sau expirată." }, 401, origin);
+  }
 
   // Authorization reads the level from the DATABASE, not from the caller's
   // claims: a token issued before a demotion still carries the old level for
@@ -74,8 +83,12 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
 
   const email = body.email?.trim().toLowerCase();
   const fullName = body.full_name?.trim();
-  if (!email || !email.includes("@")) return json({ error: "Email invalid." }, 400, origin);
-  if (!fullName) return json({ error: "Numele este obligatoriu." }, 400, origin);
+  if (!email || !email.includes("@")) {
+    return json({ error: "Email invalid." }, 400, origin);
+  }
+  if (!fullName) {
+    return json({ error: "Numele este obligatoriu." }, 400, origin);
+  }
 
   const deptIds = body.dept_ids ?? [];
   const teamIds = body.team_ids ?? [];
@@ -86,10 +99,12 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
     // invitation email has gone out. Checking first means a typo never mails
     // a real person an account we then delete. Matters most for the CSV
     // import, where one bad cell shouldn't email anybody.
-    for (const [table, ids, label] of [
-      ["departments", deptIds, "Departament inexistent"],
-      ["teams", teamIds, "Echipă inexistentă"],
-    ] as const) {
+    for (
+      const [table, ids, label] of [
+        ["departments", deptIds, "Departament inexistent"],
+        ["teams", teamIds, "Echipă inexistentă"],
+      ] as const
+    ) {
       const missing = await deps.missingIds(table, ids);
       if (missing.length > 0) {
         return json({ error: `${label}: ${missing.join(", ")}.` }, 400, origin);
@@ -104,16 +119,26 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
     // points ledger with it. Re-inviting a colleague must never be
     // destructive.
     if (await deps.profileExists(email)) {
-      return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409, origin);
+      return json(
+        { error: `${email} are deja cont.`, code: "already_exists" },
+        409,
+        origin,
+      );
     }
 
     // 3 · the magic-link invite creates the auth user and emails them.
     const invited = await deps.inviteByEmail(email);
     if (invited.error || !invited.userId) {
       const known = invited.error?.status === 422 ||
-        /already been registered|already exists/i.test(invited.error?.message ?? "");
+        /already been registered|already exists/i.test(
+          invited.error?.message ?? "",
+        );
       if (known) {
-        return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409, origin);
+        return json(
+          { error: `${email} are deja cont.`, code: "already_exists" },
+          409,
+          origin,
+        );
       }
       console.error("invite failed", invited.error);
       return json({ error: "Trimiterea invitației a eșuat." }, 502, origin);
@@ -134,7 +159,11 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
       // step 2 and now. Their profile is the real one — leave the auth user
       // alone. Deleting here is what destroyed a member once.
       if (provisionError.code === "23505") {
-        return json({ error: `${email} are deja cont.`, code: "already_exists" }, 409, origin);
+        return json(
+          { error: `${email} are deja cont.`, code: "already_exists" },
+          409,
+          origin,
+        );
       }
 
       // Otherwise the data was bad and the user we just created has no
@@ -144,10 +173,15 @@ export async function handleInvite(req: Request, deps: InviteDeps): Promise<Resp
       // into.
       await deps.deleteUser(invited.userId);
       console.error("provisioning failed, invite rolled back", provisionError);
-      return json({
-        error: "Datele membrului nu sunt valide (departament sau echipă inexistentă).",
-        details: provisionError.message,
-      }, 400, origin);
+      return json(
+        {
+          error:
+            "Datele membrului nu sunt valide (departament sau echipă inexistentă).",
+          details: provisionError.message,
+        },
+        400,
+        origin,
+      );
     }
 
     return json({ user_id: invited.userId, email }, 201, origin);
