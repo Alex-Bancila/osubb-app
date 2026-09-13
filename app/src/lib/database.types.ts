@@ -582,6 +582,8 @@ export type Database = {
       }
       events: {
         Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
           capacity: number | null
           created_at: string
           created_by: string | null
@@ -591,6 +593,8 @@ export type Database = {
           has_qr: boolean | null
           id: number
           location: string | null
+          min_level: number
+          project_id: number | null
           scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
           team_id: string | null
@@ -598,6 +602,8 @@ export type Database = {
           type: Database["public"]["Enums"]["event_type"]
         }
         Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
           capacity?: number | null
           created_at?: string
           created_by?: string | null
@@ -607,6 +613,8 @@ export type Database = {
           has_qr?: boolean | null
           id?: never
           location?: string | null
+          min_level?: number
+          project_id?: number | null
           scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
           team_id?: string | null
@@ -614,6 +622,8 @@ export type Database = {
           type: Database["public"]["Enums"]["event_type"]
         }
         Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
           capacity?: number | null
           created_at?: string
           created_by?: string | null
@@ -623,6 +633,8 @@ export type Database = {
           has_qr?: boolean | null
           id?: never
           location?: string | null
+          min_level?: number
+          project_id?: number | null
           scope?: Database["public"]["Enums"]["event_scope"]
           starts_at?: string
           team_id?: string | null
@@ -685,6 +697,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dept_cup"
             referencedColumns: ["dept_id"]
+          },
+          {
+            foreignKeyName: "events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "events_team_department_fkey"
@@ -2892,6 +2911,8 @@ export type Database = {
           p_type: string
         }
         Returns: {
+          cancel_reason: string | null
+          cancelled_at: string | null
           capacity: number | null
           created_at: string
           created_by: string | null
@@ -2901,6 +2922,8 @@ export type Database = {
           has_qr: boolean | null
           id: number
           location: string | null
+          min_level: number
+          project_id: number | null
           scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
           team_id: string | null

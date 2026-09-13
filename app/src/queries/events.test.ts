@@ -34,6 +34,10 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     created_at: '2026-08-20T10:00:00.000Z',
     created_by: null,
     has_qr: false,
+    project_id: null,
+    min_level: 0,
+    cancelled_at: null,
+    cancel_reason: null,
     ...overrides,
   };
 }

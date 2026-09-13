@@ -27,7 +27,11 @@ select ok(
     where relname = 'event_attendance' and relnamespace = 'public'::regnamespace),
   'RLS is enabled on event_attendance');
 
-select has_index('public', 'events', 'events_starts_at_idx',
+-- #369: events_starts_at_idx (starts_at) became a redundant leading-column
+-- prefix of the new events_starts_min_level_idx (starts_at, min_level) and
+-- was dropped in its migration; the composite index still serves the
+-- upcoming-events query on starts_at alone via its leading column.
+select has_index('public', 'events', 'events_starts_min_level_idx',
   'events are indexed by start time (upcoming-events query)');
 select has_index('public', 'event_attendance', 'event_attendance_member_idx',
   'attendance is indexed by member ("my RSVPs")');
