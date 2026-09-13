@@ -1,18 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '../lib/database.types';
+import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 
-const query = vi.hoisted(() => ({
-  from: vi.fn(),
-  select: vi.fn(),
-  gte: vi.fn(),
-  neq: vi.fn(),
-  order: vi.fn(),
-}));
-
-vi.mock('../lib/supabase', () => ({
-  supabase: { from: query.from },
-}));
+vi.mock('../lib/supabase', async () => {
+  const { supabaseClientMock } = await vi.importActual<
+    typeof import('../test/supabase-mock')
+  >('../test/supabase-mock');
+  return { supabase: supabaseClientMock };
+});
 
 import {
   fetchUpcomingEvents,
@@ -35,6 +31,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     location: 'Sala 1',
     capacity: 30,
     description: 'Planificarea semestrului',
+    created_at: '2026-08-20T10:00:00.000Z',
     created_by: null,
     has_qr: false,
     project_id: null,
@@ -69,32 +66,34 @@ describe('event presentation', () => {
 
 describe('upcoming-events query', () => {
   beforeEach(() => {
-    query.from.mockReturnValue({ select: query.select });
-    query.select.mockReturnValue({ gte: query.gte });
-    query.gte.mockReturnValue({ neq: query.neq });
-    query.neq.mockReturnValue({ order: query.order });
+    resetSupabaseMock();
   });
 
   it('loads visible events from the current instant in chronological order', async () => {
-    query.order.mockResolvedValue({ data: [eventRow()], error: null });
+    supabaseMock.order.mockResolvedValue({ data: [eventRow()], error: null });
     const now = new Date('2026-08-29T18:00:00.000Z');
 
     const result = await fetchUpcomingEvents(now);
 
-    expect(query.from).toHaveBeenCalledWith('events');
-    expect(query.select).toHaveBeenCalledWith(
+    expect(supabaseMock.from).toHaveBeenCalledWith('events');
+    expect(supabaseMock.select).toHaveBeenCalledWith(
       'id, title, type, scope, dept_id, team_id, starts_at, ends_at, location, capacity, description',
     );
-    expect(query.gte).toHaveBeenCalledWith('starts_at', now.toISOString());
-    expect(query.neq).toHaveBeenCalledWith('scope', 'project');
-    expect(query.order).toHaveBeenCalledWith('starts_at', { ascending: true });
+    expect(supabaseMock.gte).toHaveBeenCalledWith(
+      'starts_at',
+      now.toISOString(),
+    );
+    expect(supabaseMock.neq).toHaveBeenCalledWith('scope', 'project');
+    expect(supabaseMock.order).toHaveBeenCalledWith('starts_at', {
+      ascending: true,
+    });
     expect(result).toHaveLength(1);
     expect(result[0]?.dayKey).toBe('2026-08-30');
   });
 
   it('surfaces the Supabase error to React Query', async () => {
     const error = { code: '42501', message: 'permission denied' };
-    query.order.mockResolvedValue({ data: null, error });
+    supabaseMock.order.mockResolvedValue({ data: null, error });
 
     await expect(
       fetchUpcomingEvents(new Date('2026-08-29T18:00:00.000Z')),
@@ -102,7 +101,7 @@ describe('upcoming-events query', () => {
   });
 
   it('treats a successful null payload as an empty event list', async () => {
-    query.order.mockResolvedValue({ data: null, error: null });
+    supabaseMock.order.mockResolvedValue({ data: null, error: null });
 
     await expect(
       fetchUpcomingEvents(new Date('2026-08-29T18:00:00.000Z')),
