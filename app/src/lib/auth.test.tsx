@@ -20,7 +20,9 @@ const auth = vi.hoisted(() => {
       listener = cb;
       return { data: { subscription: { unsubscribe: vi.fn() } } };
     }),
-    signOut: vi.fn(async () => ({ error: null })),
+    signOut: vi.fn(async (): Promise<{ error: Error | null }> => ({
+      error: null,
+    })),
   };
 });
 vi.mock('./supabase', () => ({
@@ -182,5 +184,40 @@ describe('AuthProvider cache hygiene', () => {
         client.getQueryData(['profile', 'me', { memberId: 'a' }]),
       ).toBeUndefined(),
     );
+  });
+
+  it('preserves member state when sign-out fails', async () => {
+    auth.signOut.mockResolvedValueOnce({
+      error: new Error('provider details that must stay private'),
+    });
+    const client = new QueryClient();
+    client.setQueryData(['profile', 'me', { memberId: 'a' }], {
+      full_name: 'A',
+    });
+
+    function FailedSignOut() {
+      const { signOut } = useAuth();
+      return (
+        <button onClick={() => void signOut().catch(() => undefined)}>
+          Sign out
+        </button>
+      );
+    }
+
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <FailedSignOut />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
+    expect(client.getQueryData(['profile', 'me', { memberId: 'a' }])).toEqual({
+      full_name: 'A',
+    });
   });
 });

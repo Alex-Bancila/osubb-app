@@ -12,7 +12,7 @@
 
 ## Context
 
-Alex asked for the next batch of unblocked issues in priority order *clean the code → clean inconsistencies → Tracker backend/frontend → Calendar*, and chose to take **only Stack A (repo/CI hygiene)** this round. Blocker graph on 2026-09-10 (169 open issues): all six are `None — can start immediately`; none is assigned to a teammate (dobrerares holds #280/#287/#322/#362/#364/#370, PaulSchiop #283/#285, SuperGod25 #258). Stacking is explicitly allowed (“i don't mind stack prs”), but the earlier mishap (PRs #391/#392 merged into their *base branches*, not `main`) means the merge protocol below is part of the deliverable.
+Alex asked for the next batch of unblocked issues in priority order _clean the code → clean inconsistencies → Tracker backend/frontend → Calendar_, and chose to take **only Stack A (repo/CI hygiene)** this round. Blocker graph on 2026-09-10 (169 open issues): all six are `None — can start immediately`; none is assigned to a teammate (dobrerares holds #280/#287/#322/#362/#364/#370, PaulSchiop #283/#285, SuperGod25 #258). Stacking is explicitly allowed (“i don't mind stack prs”), but the earlier mishap (PRs #391/#392 merged into their _base branches_, not `main`) means the merge protocol below is part of the deliverable.
 
 Alex's decisions for #356 (asked 2026-09-10): delete the 640 KB root transcript, gitignore `.codex-artifacts/` and `.claude/launch.json`, move `deliverables/` to a sibling folder outside the repo (`..\osubb-deliverables`), commit `docs/superpowers/plans/`.
 
@@ -33,24 +33,24 @@ Alex's decisions for #356 (asked 2026-09-10): delete the 640 KB root transcript,
 - `scripts/create-github-issues.sh` must never be executed (house rule 9) — Task 0 only edits it and proves it refuses to run.
 - No change to what CI tests: every existing job keeps its steps' semantics; only where they get their inputs changes.
 - Stacked PRs: create with `gh pr create --base <parent-branch>`; the PR body's first line names the base and says “merge after #<parent PR>”.
-- Delete nothing on disk beyond what Alex approved (the transcript). `deliverables/` is *moved*, not deleted.
+- Delete nothing on disk beyond what Alex approved (the transcript). `deliverables/` is _moved_, not deleted.
 
 ## Batch overview
 
-| Order | Issue | Branch | Base | PR target | Size |
-|---|---|---|---|---|---|
-| 0 | #359 script guard | `chore/359-guard-issue-script` | `main` | `main` | 10 min |
-| 1 | #356 root tooling / editorconfig / artefacts | `chore/356-root-hygiene` | `main` | `main` | 45 min |
-| 2 | #358 templates / CODEOWNERS / dependabot / license | `chore/358-github-metadata` | `chore/356-root-hygiene` | that branch | 30 min |
-| 3 | #357 CI hardening | `ci/357-hardening` | `chore/358-github-metadata` | that branch | 45 min |
-| 4 | #373 seed check → script | `ci/373-seed-check-script` | `ci/357-hardening` | that branch | 60 min |
-| 5 | #378 gitleaks / shared deno.json / CORS allow-list | `ci/378-secret-scan-deno-cors` | `ci/373-seed-check-script` | that branch | 60 min |
+| Order | Issue                                              | Branch                         | Base                        | PR target   | Size   |
+| ----- | -------------------------------------------------- | ------------------------------ | --------------------------- | ----------- | ------ |
+| 0     | #359 script guard                                  | `chore/359-guard-issue-script` | `main`                      | `main`      | 10 min |
+| 1     | #356 root tooling / editorconfig / artefacts       | `chore/356-root-hygiene`       | `main`                      | `main`      | 45 min |
+| 2     | #358 templates / CODEOWNERS / dependabot / license | `chore/358-github-metadata`    | `chore/356-root-hygiene`    | that branch | 30 min |
+| 3     | #357 CI hardening                                  | `ci/357-hardening`             | `chore/358-github-metadata` | that branch | 45 min |
+| 4     | #373 seed check → script                           | `ci/373-seed-check-script`     | `ci/357-hardening`          | that branch | 60 min |
+| 5     | #378 gitleaks / shared deno.json / CORS allow-list | `ci/378-secret-scan-deno-cors` | `ci/373-seed-check-script`  | that branch | 60 min |
 
 Why this stack shape: 2 needs 1's root `package.json` (license field); 3 needs 2's file (version pin check) and edits `ci.yml`; 4 and 5 edit `ci.yml` too (removing lines 42–152 and adding a job) — a linear stack avoids three-way rebases. Task 0 shares no file with anything and goes straight to `main`.
 
 ### Merge protocol for Alex (the part that prevents a repeat of #391/#392, and recurred anyway as the 2026-09-10 Stack A mishap)
 
-**What happened on 2026-09-10:** PR #396 merged into `main` correctly, but #397, #398, #399 and #400 each merged into their *stacked base branch* instead, because that base branch was never deleted — GitHub had nothing to retarget. `main` was left missing the work from #358, #357, #373 and #378 even though every PR read "Merged". Recovered by the `fix/stack-a-recovery` PR (built from `ci/378-secret-scan-deno-cors`, the superset branch, merged up to date with `main`).
+**What happened on 2026-09-10:** PR #396 merged into `main` correctly, but #397, #398, #399 and #400 each merged into their _stacked base branch_ instead, because that base branch was never deleted — GitHub had nothing to retarget. `main` was left missing the work from #358, #357, #373 and #378 even though every PR read "Merged". Recovered by the `fix/stack-a-recovery` PR (built from `ci/378-secret-scan-deno-cors`, the superset branch, merged up to date with `main`).
 
 The corrected facts, in place of the older assumptions above:
 
@@ -197,7 +197,7 @@ The corrected facts, in place of the older assumptions above:
   test "$pinned" = "$SUPABASE_CLI_VERSION" || { echo "::error::root package.json pins supabase $pinned but CI uses $SUPABASE_CLI_VERSION"; exit 1; }
   ```
 - [ ] `seed-staging.yml`: `permissions: contents: read` at top; `environment: staging` on the job; pin checkout. (GitHub creates the `staging` environment on first run; adding required reviewers to it is a human action.)
-- [ ] Verify locally: `npx --yes actionlint@latest` (or `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest`) passes; `grep -c "2.117.0" .github/workflows/ci.yml` → `1`. After the PR opens: the run's *Set up job* log shows `GITHUB_TOKEN Permissions: Contents: read`; push twice quickly → the first run is cancelled.
+- [ ] Verify locally: `npx --yes actionlint@latest` (or `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest`) passes; `grep -c "2.117.0" .github/workflows/ci.yml` → `1`. After the PR opens: the run's _Set up job_ log shows `GITHUB_TOKEN Permissions: Contents: read`; push twice quickly → the first run is cancelled.
 - [ ] Commit `ci: least-privilege permissions, concurrency, pinned actions, one CLI version source (#357)`; PR base `chore/358-github-metadata`, `Closes #357`.
 
 ### Task 4: #373 — seed re-runnability check as a script
@@ -230,7 +230,7 @@ The corrected facts, in place of the older assumptions above:
       - uses: gitleaks/gitleaks-action@<sha> # v2.x
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: "false"   # workflow token is contents: read only
+          GITLEAKS_ENABLE_COMMENTS: "false" # workflow token is contents: read only
   ```
   Before pushing, run the scanner locally over history: `docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest git /repo --redact -v`. Any hit must be either a real secret (stop, tell Alex — never rewrite history unasked) or a well-known local demo key (the default local Supabase anon/service JWTs in docs/`.env.example`); allow-list those by path/regex in `.gitleaks.toml` with a comment saying why. No `GITLEAKS_LICENSE` — user-owned repo.
 - [ ] Shared Deno config: move `deno.json` (drop the `"jsr:@std/assert@^1": "jsr:@std/assert@^1"` self-mapping) and `deno.lock` to `supabase/functions/`; ci.yml `deno check`/`deno test` → `--config supabase/functions/deno.json`; `deno check --config supabase/functions/deno.json supabase/functions/**/*.ts` and `deno test --allow-env --config supabase/functions/deno.json supabase/functions/` pass locally. Prove the CLI still resolves imports: `npx supabase functions serve invite-member --no-verify-jwt` starts without an import error (the CLI falls back to `supabase/functions/deno.json`); if it does not, add `import_map = "./functions/deno.json"` under `[functions.invite-member]` in `config.toml`.
@@ -287,7 +287,7 @@ The corrected facts, in place of the older assumptions above:
 
 ## Deferred (next batches, in priority order)
 
-- **#375** root format/lint entry point (blocked by #356) — deliberately *not* in this stack: Prettier over ~30 markdown files collides with #374's docs truth pass and with teammates' open docs edits; do it together with #374.
+- **#375** root format/lint entry point (blocked by #356) — deliberately _not_ in this stack: Prettier over ~30 markdown files collides with #374's docs truth pass and with teammates' open docs edits; do it together with #374.
 - **Stack B — backend conventions:** #366 `docs/backend/conventions.md` → #365 `db lint --schema public,private` + `conventions.test.sql` (note: exclude trigger-returning functions from the anon-execute check — `sync_task_ledger`/`sync_assignee_ledger` still carry the PUBLIC default; allow-list views `profiles_contact`, `member_points`); standalone #371 (drop `role_capabilities`, edit `rls_deny_by_default`/`rls_teams_reference`), #215 (`Educațional`).
 - **Stack C — Tracker schema:** #368 `private.set_updated_at()` + `created_at` on `events`/`project_members` → #313 `campaigns` (use `dept_id`, not `department_id`, to match every other table; fixture row in `rls_deny_by_default`) → #284 origin XOR (`num_nonnulls(dept_id, team_id, project_id) = 1`; seed `t-app` rows become team-origin; 10 test fixtures insert tasks with no origin) → #286 `mode text check ('direct','public')`, `status='open'` → `public` → #314 `campaign_id` + origin-consistency trigger → #320 `private.notify` / `private.task_managers` (true code dependency on #284's `project_id` — add #284 to #320's `## Blocked by`). Standalone #311 (BC/Moderator override in `private.require_active_project_lead`).
 - **Stack D — notifications RLS:** #65 (self read + column-grant `update (read)`), #66 (push_tokens self policies; its AG-views half is #47/#48 — issue body needs a trim).
