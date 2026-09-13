@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(30);
 
 select has_table(
   'public',
@@ -47,6 +47,18 @@ select col_type_is(
 select col_not_null(
   'public', 'project_members', 'project_role',
   'project role is required'
+);
+select col_type_is(
+  'public', 'project_members', 'created_at', 'timestamp with time zone',
+  'project membership records an exact creation instant'
+);
+select col_not_null(
+  'public', 'project_members', 'created_at',
+  'project membership creation time is required'
+);
+select col_has_default(
+  'public', 'project_members', 'created_at',
+  'project membership creation time is server-written'
 );
 
 select has_pk(

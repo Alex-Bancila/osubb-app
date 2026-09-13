@@ -4,7 +4,7 @@
 // damage, not for the code path, so a future edit that "simplifies" the
 // ordering fails with a message that says what it broke.
 
-import { assertEquals } from "jsr:@std/assert@^1";
+import { assertEquals } from "@std/assert";
 import { handleInvite } from "./handler.ts";
 import type { DbError, InviteDeps, ProvisionArgs } from "./deps.ts";
 
@@ -25,7 +25,9 @@ function fakeDeps(options: FakeOptions = {}) {
   const deps: InviteDeps = {
     callerId: () => {
       calls.push("callerId");
-      return Promise.resolve(options.callerId === undefined ? "caller-1" : options.callerId);
+      return Promise.resolve(
+        options.callerId === undefined ? "caller-1" : options.callerId,
+      );
     },
     memberLevel: () => {
       calls.push("memberLevel");
@@ -42,7 +44,9 @@ function fakeDeps(options: FakeOptions = {}) {
     inviteByEmail: () => {
       calls.push("inviteByEmail");
       return Promise.resolve(
-        options.inviteError ? { error: options.inviteError } : { userId: "new-user-1" },
+        options.inviteError
+          ? { error: options.inviteError }
+          : { userId: "new-user-1" },
       );
     },
     provision: (args) => {
@@ -75,7 +79,10 @@ function request(
 }
 
 /** Run `fn` with ALLOWED_ORIGINS set, restoring the previous value (or unset) after. */
-async function withAllowedOrigins(value: string | undefined, fn: () => Promise<void>) {
+async function withAllowedOrigins(
+  value: string | undefined,
+  fn: () => Promise<void>,
+) {
   const previous = Deno.env.get("ALLOWED_ORIGINS");
   try {
     if (value === undefined) Deno.env.delete("ALLOWED_ORIGINS");
@@ -108,7 +115,10 @@ Deno.test("re-inviting an existing member never reaches Auth (would have deleted
 
 Deno.test("a duplicate detected during provisioning must not delete the auth user", async () => {
   const { deps, calls } = fakeDeps({
-    provisionError: { code: "23505", message: "duplicate key value violates unique constraint" },
+    provisionError: {
+      code: "23505",
+      message: "duplicate key value violates unique constraint",
+    },
   });
 
   const res = await handleInvite(request(validBody), deps);
@@ -120,7 +130,9 @@ Deno.test("a duplicate detected during provisioning must not delete the auth use
 });
 
 Deno.test("unknown department fails before any invitation is emailed", async () => {
-  const { deps, calls } = fakeDeps({ missing: { departments: ["inexistent"] } });
+  const { deps, calls } = fakeDeps({
+    missing: { departments: ["inexistent"] },
+  });
 
   const res = await handleInvite(
     request({ ...validBody, dept_ids: ["edu", "inexistent"] }),
@@ -167,8 +179,14 @@ Deno.test("malformed JSON is refused", async () => {
 
 Deno.test("email and name are required", async () => {
   const { deps } = fakeDeps();
-  assertEquals((await handleInvite(request({ full_name: "X" }), deps)).status, 400);
-  assertEquals((await handleInvite(request({ email: "a@b.c" }), deps)).status, 400);
+  assertEquals(
+    (await handleInvite(request({ full_name: "X" }), deps)).status,
+    400,
+  );
+  assertEquals(
+    (await handleInvite(request({ email: "a@b.c" }), deps)).status,
+    400,
+  );
 });
 
 // ==================== the happy path ====================
@@ -207,7 +225,10 @@ Deno.test("role defaults to recrut", async () => {
 
 Deno.test("bad member data rolls the invitation back", async () => {
   const { deps, calls } = fakeDeps({
-    provisionError: { code: "23503", message: "violates foreign key constraint" },
+    provisionError: {
+      code: "23503",
+      message: "violates foreign key constraint",
+    },
   });
 
   const res = await handleInvite(request(validBody), deps);
@@ -222,8 +243,14 @@ Deno.test("bad member data rolls the invitation back", async () => {
 Deno.test("an allowed origin is echoed back with Vary: Origin", async () => {
   await withAllowedOrigins("http://localhost:5173", async () => {
     const { deps } = fakeDeps();
-    const res = await handleInvite(request(validBody, { origin: "http://localhost:5173" }), deps);
-    assertEquals(res.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173");
+    const res = await handleInvite(
+      request(validBody, { origin: "http://localhost:5173" }),
+      deps,
+    );
+    assertEquals(
+      res.headers.get("Access-Control-Allow-Origin"),
+      "http://localhost:5173",
+    );
     assertEquals(res.headers.get("Vary"), "Origin");
   });
 });
@@ -231,7 +258,10 @@ Deno.test("an allowed origin is echoed back with Vary: Origin", async () => {
 Deno.test("an unlisted origin gets no Access-Control-Allow-Origin header", async () => {
   await withAllowedOrigins("http://localhost:5173", async () => {
     const { deps } = fakeDeps();
-    const res = await handleInvite(request(validBody, { origin: "https://evil.example" }), deps);
+    const res = await handleInvite(
+      request(validBody, { origin: "https://evil.example" }),
+      deps,
+    );
     assertEquals(res.headers.has("Access-Control-Allow-Origin"), false);
     assertEquals(res.headers.get("Vary"), "Origin");
   });
@@ -264,7 +294,10 @@ Deno.test("preflight from an allowed origin succeeds with the origin echoed", as
       deps,
     );
     assertEquals(res.status, 200);
-    assertEquals(res.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173");
+    assertEquals(
+      res.headers.get("Access-Control-Allow-Origin"),
+      "http://localhost:5173",
+    );
     assertEquals(res.headers.get("Vary"), "Origin");
   });
 });
@@ -272,13 +305,25 @@ Deno.test("preflight from an allowed origin succeeds with the origin echoed", as
 Deno.test("ALLOWED_ORIGINS parses a comma-separated list and trims whitespace", async () => {
   await withAllowedOrigins("https://a.example, https://b.example", async () => {
     const { deps: depsA } = fakeDeps();
-    const resA = await handleInvite(request(validBody, { origin: "https://a.example" }), depsA);
-    assertEquals(resA.headers.get("Access-Control-Allow-Origin"), "https://a.example");
+    const resA = await handleInvite(
+      request(validBody, { origin: "https://a.example" }),
+      depsA,
+    );
+    assertEquals(
+      resA.headers.get("Access-Control-Allow-Origin"),
+      "https://a.example",
+    );
     assertEquals(resA.headers.get("Vary"), "Origin");
 
     const { deps: depsB } = fakeDeps();
-    const resB = await handleInvite(request(validBody, { origin: "https://b.example" }), depsB);
-    assertEquals(resB.headers.get("Access-Control-Allow-Origin"), "https://b.example");
+    const resB = await handleInvite(
+      request(validBody, { origin: "https://b.example" }),
+      depsB,
+    );
+    assertEquals(
+      resB.headers.get("Access-Control-Allow-Origin"),
+      "https://b.example",
+    );
     assertEquals(resB.headers.get("Vary"), "Origin");
   });
 });
@@ -286,14 +331,26 @@ Deno.test("ALLOWED_ORIGINS parses a comma-separated list and trims whitespace", 
 Deno.test("the default origin applies when ALLOWED_ORIGINS is unset", async () => {
   await withAllowedOrigins(undefined, async () => {
     const { deps } = fakeDeps();
-    const res = await handleInvite(request(validBody, { origin: "http://localhost:5173" }), deps);
-    assertEquals(res.headers.get("Access-Control-Allow-Origin"), "http://localhost:5173");
+    const res = await handleInvite(
+      request(validBody, { origin: "http://localhost:5173" }),
+      deps,
+    );
+    assertEquals(
+      res.headers.get("Access-Control-Allow-Origin"),
+      "http://localhost:5173",
+    );
     assertEquals(res.headers.get("Vary"), "Origin");
 
     // Vite's origin when opened via IP, not just via `localhost`.
     const { deps: depsIp } = fakeDeps();
-    const resIp = await handleInvite(request(validBody, { origin: "http://127.0.0.1:5173" }), depsIp);
-    assertEquals(resIp.headers.get("Access-Control-Allow-Origin"), "http://127.0.0.1:5173");
+    const resIp = await handleInvite(
+      request(validBody, { origin: "http://127.0.0.1:5173" }),
+      depsIp,
+    );
+    assertEquals(
+      resIp.headers.get("Access-Control-Allow-Origin"),
+      "http://127.0.0.1:5173",
+    );
     assertEquals(resIp.headers.get("Vary"), "Origin");
   });
 });
