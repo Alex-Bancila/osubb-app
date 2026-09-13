@@ -27,9 +27,8 @@ import '@fontsource-variable/montserrat';
 
 /* Ours, last, so the OSUBB palette wins over Ionic's defaults. */
 import './theme/tokens.css';
+import './theme/tailwind.css';
 import './theme/global.css';
-import './theme/auth-screens.css';
-import './theme/shell.css';
 import './theme/screens.css';
 import './theme/dashboard.css';
 import './theme/calendar.css';
@@ -37,6 +36,7 @@ import './theme/calendar.css';
 import { createQueryClient } from './queries/client';
 import { AuthProvider } from './lib/auth';
 import App from './App';
+import { PwaUpdatePrompt } from './pwa/PwaUpdatePrompt';
 
 setupIonicReact();
 
@@ -50,6 +50,7 @@ createRoot(root).render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <App />
+        <PwaUpdatePrompt />
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

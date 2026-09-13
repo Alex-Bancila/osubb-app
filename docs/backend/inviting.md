@@ -51,14 +51,14 @@ Tell them to check spam on first contact, and that the link signs them in on the
 
 ## When something goes wrong
 
-| Response | What it means | What to do |
-|---|---|---|
-| `401` | Your session expired | Sign in again and retry |
-| `403 Doar BC poate invita membri` | You are below level 6, or your profile is not `activ` | Ask BC to invite, or check your own status |
-| `409 … are deja cont` | That address already has an account | Nothing to do. **Re-inviting is refused on purpose** — it must never overwrite or delete an existing member |
-| `400 Departament inexistent: x` | A department or team id doesn't exist | Fix the id. Nothing was sent — no email went out |
-| `400 Email invalid` / `Numele este obligatoriu` | Missing or malformed input | Fix and retry |
-| `502` | Supabase couldn't send the email | Check the email provider is enabled (below), then retry |
+| Response                                        | What it means                                         | What to do                                                                                                  |
+| ----------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `401`                                           | Your session expired                                  | Sign in again and retry                                                                                     |
+| `403 Doar BC poate invita membri`               | You are below level 6, or your profile is not `activ` | Ask BC to invite, or check your own status                                                                  |
+| `409 … are deja cont`                           | That address already has an account                   | Nothing to do. **Re-inviting is refused on purpose** — it must never overwrite or delete an existing member |
+| `400 Departament inexistent: x`                 | A department or team id doesn't exist                 | Fix the id. Nothing was sent — no email went out                                                            |
+| `400 Email invalid` / `Numele este obligatoriu` | Missing or malformed input                            | Fix and retry                                                                                               |
+| `502`                                           | Supabase couldn't send the email                      | Check the email provider is enabled (below), then retry                                                     |
 
 **No email arrived?** Locally, mail never leaves your machine — open **Mailpit** at http://127.0.0.1:54324. On a hosted project, check Authentication → Logs, and confirm the **email provider is enabled** (see below).
 
@@ -74,7 +74,7 @@ enable_signup = false        # invite-only: nobody can self-register. KEEP FALSE
 enable_signup = true         # the email PROVIDER exists at all. KEEP TRUE.
 ```
 
-Setting the second one to `false` renders `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`, which disables email entirely — magic links, invitations and every login fail with *"Email logins are disabled"*. The invite-only guarantee comes from the **first** key, not the second. This was the actual state of the repo until 2026-08-23, and it would have surfaced only at the first real invite.
+Setting the second one to `false` renders `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`, which disables email entirely — magic links, invitations and every login fail with _"Email logins are disabled"_. The invite-only guarantee comes from the **first** key, not the second. This was the actual state of the repo until 2026-08-23, and it would have surfaced only at the first real invite.
 
 Hosted projects don't read `config.toml`: the same two settings live in the dashboard under Authentication → Sign In / Providers (issue #54).
 
