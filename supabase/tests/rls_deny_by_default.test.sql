@@ -72,6 +72,20 @@ insert into task_requests (kind, title, from_member)
     ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006'),
     ('award', 'rls-req-claimless', 'eeeeeeee-0000-0000-0000-000000000156');
 
+-- #321: a Completed-work Request row, one Origin only.
+insert into completed_work_requests (requester_id, dept_id, description)
+  values ('ffffffff-0000-0000-0000-000000000006', 'edu', 'rls fixture completed-work request');
+
+-- A second row owned by the claimless uid itself: the general sweep below
+-- only proves a stranger sees nothing, not that the requester branch of
+-- completed_work_requests_read still requires auth_is_member(). Without
+-- this row, a mutated policy reading `requester_id = auth.uid() or (...)`
+-- (the auth_is_member() guard moved to cover only the manage branch) would
+-- pass every assertion here, because no fixture row's requester_id matches
+-- the claimless session's own uid.
+insert into completed_work_requests (requester_id, dept_id, description)
+  values ('eeeeeeee-0000-0000-0000-000000000156', 'edu', 'rls fixture completed-work request (claimless owner)');
+
 -- An OPEN task: the shape that leaked, and the one an unprovisioned session
 -- could have joined. #312's tasks_evaluation_inputs_ck now makes the
 -- historical "already-graded and still open" combination impossible to
