@@ -23,26 +23,28 @@
 
 ## Recommended order and why
 
-| # | Issue | Area | Why here |
-|---|---|---|---|
-| 1 | #363 grants hardening | DB | Unblocked, no file overlap with anyone, smallest risk; the conventions sweep (#365, dobrerares later) builds on it. |
-| 2 | #257 ledger BCE reads | DB | One `alter policy` + one test edit; `points_ledger_read.test.sql` already has the placeholder case. |
-| 3 | #310 Diverse/Secretariat | DB + seed | Touches `departments`/`teams` reference rows and `seed.sql`; land before #276/#277 change `teams` columns to keep rebases trivial. |
-| 4 | #361 strict + lint | app config | Do before #360/#326 so their new code is written under the stricter flags. |
-| 5 | #360 cache clear + keys | app | Changes `queries/points.ts` key shape; #326 builds on it. |
-| 6 | #326 dashboard gating | app | Depends on #360's `useMyStanding` changes. |
-| 7 | #279 dept-team membership | DB | Wait for #276 and #277 to merge (dobrerares). |
-| 8 | #281 role matrix | DB tests | Wait for #280 to merge (dobrerares). |
+| #   | Issue                     | Area       | Why here                                                                                                                           |
+| --- | ------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | #363 grants hardening     | DB         | Unblocked, no file overlap with anyone, smallest risk; the conventions sweep (#365, dobrerares later) builds on it.                |
+| 2   | #257 ledger BCE reads     | DB         | One `alter policy` + one test edit; `points_ledger_read.test.sql` already has the placeholder case.                                |
+| 3   | #310 Diverse/Secretariat  | DB + seed  | Touches `departments`/`teams` reference rows and `seed.sql`; land before #276/#277 change `teams` columns to keep rebases trivial. |
+| 4   | #361 strict + lint        | app config | Do before #360/#326 so their new code is written under the stricter flags.                                                         |
+| 5   | #360 cache clear + keys   | app        | Changes `queries/points.ts` key shape; #326 builds on it.                                                                          |
+| 6   | #326 dashboard gating     | app        | Depends on #360's `useMyStanding` changes.                                                                                         |
+| 7   | #279 dept-team membership | DB         | Wait for #276 and #277 to merge (dobrerares).                                                                                      |
+| 8   | #281 role matrix          | DB tests   | Wait for #280 to merge (dobrerares).                                                                                               |
 
 ---
 
 ### Task 1: #363 — grants hardening migration
 
 **Files:**
+
 - Create: `supabase/migrations/<timestamp>_grants_hardening.sql` (via `npx supabase migration new grants_hardening`)
 - Create: `supabase/tests/grants_hardening.test.sql`
 
 **Interfaces:**
+
 - Consumes: existing functions `public.rating_mult(int)`, `public.auth_level()`, `public.auth_role()`, `public.auth_in_dept(text)`, `public.auth_in_team(text)`, `public.auth_is_member()`, `public.in_my_dept(uuid)`; views `member_points`, `leaderboard`, `dept_cup`, `profiles_directory`, `profiles_contact`.
 - Produces: same function signatures, now `set search_path = ''`, executable by `authenticated`/`service_role` only; views select-only; `in_my_dept` gone. Later tasks (#279) rely on `auth_in_dept(text)` still existing with the same name.
 
@@ -199,7 +201,7 @@ drop function public.in_my_dept(uuid);
 - [ ] **Step 5: Reset and run all suites**
 
 Run: `npx supabase db reset && npx supabase test db`
-Expected: all suites green including the new one. If any *existing* suite that runs `set local role anon` now errors with `permission denied for function auth_level` instead of returning zero rows, the offending policy lacks `to authenticated` — fix that policy in this migration (`alter policy … to authenticated`) rather than re-granting to anon.
+Expected: all suites green including the new one. If any _existing_ suite that runs `set local role anon` now errors with `permission denied for function auth_level` instead of returning zero rows, the offending policy lacks `to authenticated` — fix that policy in this migration (`alter policy … to authenticated`) rather than re-granting to anon.
 
 - [ ] **Step 6: Regenerate types and check drift**
 
@@ -220,10 +222,12 @@ gh pr create --title "Security: harden helper grants and view privileges" --body
 ### Task 2: #257 — BCE, BC, Moderator read the whole ledger
 
 **Files:**
+
 - Create: `supabase/migrations/<timestamp>_points_ledger_leadership_reads.sql`
 - Modify: `supabase/tests/points_ledger_read.test.sql:135-141`
 
 **Interfaces:**
+
 - Consumes: policy `ledger_read` as left by `20260910123134_points_ledger_own_rows.sql:9-23`.
 - Produces: `ledger_read` with threshold `auth_level() >= 5`; #258/#262 (SuperGod25) rely on this exact policy name.
 
@@ -295,6 +299,7 @@ gh pr create --title "Points ledger: leadership global reads" --body "Closes #25
 ### Task 3: #310 — Diverse and Secretariat departments, retire legacy `it`
 
 **Files:**
+
 - Create: `supabase/migrations/<timestamp>_departments_diverse_secretariat.sql`
 - Modify: `supabase/seed.sql:154,157,170,173-177,236-237,300`
 - Modify: `supabase/tests/rls_teams_reference.test.sql:40-41` (count 7 → 8)
@@ -303,6 +308,7 @@ gh pr create --title "Points ledger: leadership global reads" --body "Closes #25
 - Modify: `docs/brand/reference.md` (one line: neutral colour for coordination structures)
 
 **Interfaces:**
+
 - Consumes: `departments(id,name,short,color,kind)` (`0001_core_schema.sql:35-41`), `teams(id,name,dept_id,lead_id,for_recruits,is_interne)`, `member_departments` PK `(member_id, dept_id)`, `team_members` PK `(team_id, member_id)`; FK `events_team_department_fkey (team_id, dept_id) → teams(id, dept_id)` (`20260830210038:12-14`, **not deferrable**).
 - Produces: departments `diverse`, `secretariat` (`kind='coordination'`); teams `it`, `interne` (`dept_id='diverse'`, `interne.is_interne=true`); no `it` department. #296 (seed rebuild) and #66 (Interne gating) rely on these ids.
 
@@ -442,7 +448,9 @@ delete from public.departments where id = 'it';
   ('it',        'd0000000-0000-0000-0000-000000000006'),
   ('it',        'd0000000-0000-0000-0000-000000000008')
 ```
+
 (turn the previous line's `;` into `,`).
+
 - Lines 236–237 (two tasks) and 300 (event): `'it'` → `'diverse'`.
 - Check the seed's cleanup block (`seed.sql:45-102`) still removes these rows on re-run: `team_members` cascades from the demo `profiles` delete, so no change is needed; confirm by running the seed twice (Step 8).
 
@@ -453,11 +461,13 @@ In `docs/brand/reference.md`, after the department colour list, add: `- Structur
 - [ ] **Step 8: Reset, test, prove re-runnability**
 
 Run:
+
 ```bash
 npx supabase db reset && npx supabase test db
 psql "$(npx supabase status -o env | grep DB_URL | cut -d= -f2- | tr -d '"')" -f supabase/seed.sql
 npx supabase test db
 ```
+
 Expected: all green both times (the second seed run is what CI's fingerprint step checks).
 
 - [ ] **Step 9: Regenerate types, commit, PR**
@@ -477,10 +487,12 @@ Note for the PR body: JWT `dept_ids` for real `it` members update on their next 
 ### Task 4: #361 — TypeScript strict mode, deny lint warnings, Vitest hygiene
 
 **Files:**
+
 - Modify: `app/tsconfig.app.json`, `app/tsconfig.node.json`, `app/.oxlintrc.json`, `app/package.json`, `app/vite.config.ts`
 - Modify: `app/src/lib/format.ts:76`, `app/src/main.tsx:45`, `app/src/queries/points.ts:61,88`, `app/src/queries/profile.ts:30`, `app/src/queries/tasks.ts:34`
 
 **Interfaces:**
+
 - Produces: `npm run lint` fails on any warning; `strict` + `noUncheckedIndexedAccess` on; hooks use TanStack's `skipToken` instead of `id!`. Tasks 5 and 6 write code under these flags.
 
 Facts: `tsc --strict --noUncheckedIndexedAccess` fails only at `format.ts:76`; `oxlint --deny-warnings` is clean today; enabling the `suspicious` category reports 267 false positives of `react/react-in-jsx-scope` (React 19 automatic runtime) and one real `no-underscore-dangle` on `window.__supabase` (`lib/supabase.ts:34`, DEV-only); the five non-null assertions are `main.tsx:45`, `points.ts:61,88`, `profile.ts:30`, `tasks.ts:34`.
@@ -495,10 +507,12 @@ git checkout -b feat/361-strict-and-deny-warnings
 - [ ] **Step 2: Turn the flags on and watch them fail**
 
 `app/tsconfig.app.json` compilerOptions — add:
+
 ```json
 "strict": true,
 "noUncheckedIndexedAccess": true
 ```
+
 `app/tsconfig.node.json` compilerOptions — add `"strict": true`.
 
 Run: `cd app && npm run typecheck`
@@ -507,23 +521,26 @@ Expected: `src/lib/format.ts(76,13): error TS2532` (twice).
 - [ ] **Step 3: Fix `initials()`**
 
 `app/src/lib/format.ts:72-79`:
+
 ```ts
 export function initials(nameOrEmail: string | undefined | null): string {
-  if (!nameOrEmail) return '?';
+  if (!nameOrEmail) return "?";
   const parts = nameOrEmail.trim().split(/\s+/);
   const first = parts[0]?.[0];
   const second = parts[1]?.[0];
-  if (first && second && !nameOrEmail.includes('@')) {
+  if (first && second && !nameOrEmail.includes("@")) {
     return (first + second).toUpperCase();
   }
   return nameOrEmail.slice(0, 2).toUpperCase();
 }
 ```
+
 Run: `npm run typecheck` → clean.
 
 - [ ] **Step 4: Lint config**
 
 `app/.oxlintrc.json`:
+
 ```json
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
@@ -540,6 +557,7 @@ Run: `npm run typecheck` → clean.
   "ignorePatterns": ["dist"]
 }
 ```
+
 `app/package.json` scripts: `"lint": "oxlint --deny-warnings"`, add `"test:coverage": "vitest run --coverage"`.
 Install coverage: `npm i -D @vitest/coverage-v8@^4.1.0` (match the installed vitest 4.x).
 
@@ -549,15 +567,17 @@ Expected: exactly five errors, all `typescript/no-non-null-assertion`.
 - [ ] **Step 5: Remove the non-null assertions**
 
 `app/src/main.tsx:45`:
+
 ```ts
-const root = document.getElementById('root');
-if (!root) throw new Error('index.html has no #root element');
+const root = document.getElementById("root");
+if (!root) throw new Error("index.html has no #root element");
 createRoot(root).render(/* unchanged */);
 ```
 
 `app/src/queries/points.ts` — `useMyStanding` (lines 50–95): replace `enabled: Boolean(id)` + `id!` with `skipToken`:
+
 ```ts
-import { skipToken, useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from "@tanstack/react-query";
 
 export function useMyStanding() {
   const { session } = useAuth();
@@ -571,15 +591,15 @@ export function useMyStanding() {
 
 async function fetchStanding(memberId: string) {
   const mine = await supabase
-    .from('leaderboard')
-    .select('rank, points')
-    .eq('member_id', memberId)
+    .from("leaderboard")
+    .select("rank, points")
+    .eq("member_id", memberId)
     .maybeSingle();
   if (mine.error) throw mine.error;
 
   const total = await supabase
-    .from('leaderboard')
-    .select('member_id', { count: 'exact', head: true });
+    .from("leaderboard")
+    .select("member_id", { count: "exact", head: true });
   if (total.error) throw total.error;
 
   if (!mine.data?.rank) {
@@ -587,10 +607,10 @@ async function fetchStanding(memberId: string) {
   }
 
   const above = await supabase
-    .from('leaderboard')
-    .select('rank, points')
-    .gt('points', mine.data.points ?? 0)
-    .order('points', { ascending: true })
+    .from("leaderboard")
+    .select("rank, points")
+    .gt("points", mine.data.points ?? 0)
+    .order("points", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (above.error) throw above.error;
@@ -600,16 +620,21 @@ async function fetchStanding(memberId: string) {
     total: total.count ?? 0,
     next:
       above.data && above.data.rank !== null
-        ? { rank: above.data.rank, gap: (above.data.points ?? 0) - (mine.data.points ?? 0) }
+        ? {
+            rank: above.data.rank,
+            gap: (above.data.points ?? 0) - (mine.data.points ?? 0),
+          }
         : null,
   };
 }
 ```
+
 Apply the same `queryFn: id ? () => fetch(id) : skipToken` shape to `useMyProfile` (`profile.ts:17-32`) and `useMyTasks` (`tasks.ts:23-35`), extracting `fetchMyProfile(memberId: string)` / `fetchMyTasks(memberId: string)`.
 
 - [ ] **Step 6: Vitest config**
 
 `app/vite.config.ts` test block:
+
 ```ts
 test: {
   environment: 'jsdom',
@@ -618,6 +643,7 @@ test: {
   coverage: { provider: 'v8', include: ['src/**/*.{ts,tsx}'], exclude: ['src/**/*.test.*', 'src/lib/database.types.ts'] },
 },
 ```
+
 Then delete the now-redundant `vi.clearAllMocks()` calls in `beforeEach` blocks (`points.test.tsx`, `event-rsvp.test.tsx`, `CalendarScreen.test.tsx`) — `restoreMocks` covers them.
 
 - [ ] **Step 7: All gates**
@@ -639,6 +665,7 @@ gh pr create --title "Frontend: strict mode and deny-warnings lint" --body "Clos
 ### Task 5: #360 — clear the query cache on sign-out, member-scope self keys
 
 **Files:**
+
 - Modify: `app/src/lib/auth.tsx:75-122`
 - Modify: `app/src/queries/keys.ts:16-59`
 - Modify: `app/src/queries/points.ts` (`useMyStanding` key), `app/src/queries/profile.ts` (`useMyProfile` key), `app/src/queries/tasks.ts` (`useMyTasks` key)
@@ -646,6 +673,7 @@ gh pr create --title "Frontend: strict mode and deny-warnings lint" --body "Clos
 - Modify: `app/src/queries/points.test.tsx` (key assertion at ~59–64)
 
 **Interfaces:**
+
 - Consumes: `QueryClientProvider` is above `AuthProvider` in `main.tsx:47-51`, so `useQueryClient()` works inside `AuthProvider`.
 - Produces: `keys.points.standing(memberId)`, `keys.profile.me(memberId)`, `keys.tasks.mine(memberId)` all take `string | undefined`; Task 6 uses `keys.points.standing(id)`.
 
@@ -659,10 +687,11 @@ git checkout -b feat/360-cache-clear-on-signout
 - [ ] **Step 2: Write the failing provider test**
 
 Create `app/src/lib/auth.test.tsx`:
+
 ```tsx
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 type Listener = (event: string, session: unknown) => void;
 const auth = vi.hoisted(() => {
@@ -677,42 +706,69 @@ const auth = vi.hoisted(() => {
     signOut: vi.fn(async () => ({ error: null })),
   };
 });
-vi.mock('./supabase', () => ({
-  supabase: { auth: { getSession: auth.getSession, onAuthStateChange: auth.onAuthStateChange, signOut: auth.signOut } },
+vi.mock("./supabase", () => ({
+  supabase: {
+    auth: {
+      getSession: auth.getSession,
+      onAuthStateChange: auth.onAuthStateChange,
+      signOut: auth.signOut,
+    },
+  },
 }));
 
-import { AuthProvider } from './auth';
+import { AuthProvider } from "./auth";
 
 function sessionFor(id: string) {
-  return { user: { id }, access_token: 'x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y' };
+  return { user: { id }, access_token: "test-token" };
 }
 
-describe('AuthProvider cache hygiene', () => {
-  it('clears the query cache on SIGNED_OUT', async () => {
+describe("AuthProvider cache hygiene", () => {
+  it("clears the query cache on SIGNED_OUT", async () => {
     const client = new QueryClient();
-    client.setQueryData(['tasks', 'mine', { memberId: 'a' }], [{ id: 1 }]);
-    render(<QueryClientProvider client={client}><AuthProvider><div /></AuthProvider></QueryClientProvider>);
+    client.setQueryData(["tasks", "mine", { memberId: "a" }], [{ id: 1 }]);
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <div />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
     await waitFor(() => expect(auth.listener()).not.toBeNull());
 
-    auth.listener()!('SIGNED_IN', sessionFor('a'));
-    auth.listener()!('SIGNED_OUT', null);
+    auth.listener()!("SIGNED_IN", sessionFor("a"));
+    auth.listener()!("SIGNED_OUT", null);
 
-    await waitFor(() => expect(client.getQueryCache().getAll()).toHaveLength(0));
+    await waitFor(() =>
+      expect(client.getQueryCache().getAll()).toHaveLength(0),
+    );
   });
 
-  it('clears the query cache when a different member signs in', async () => {
+  it("clears the query cache when a different member signs in", async () => {
     const client = new QueryClient();
-    render(<QueryClientProvider client={client}><AuthProvider><div /></AuthProvider></QueryClientProvider>);
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <div />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
     await waitFor(() => expect(auth.listener()).not.toBeNull());
 
-    auth.listener()!('SIGNED_IN', sessionFor('a'));
-    client.setQueryData(['profile', 'me', { memberId: 'a' }], { full_name: 'A' });
-    auth.listener()!('SIGNED_IN', sessionFor('b'));
+    auth.listener()!("SIGNED_IN", sessionFor("a"));
+    client.setQueryData(["profile", "me", { memberId: "a" }], {
+      full_name: "A",
+    });
+    auth.listener()!("SIGNED_IN", sessionFor("b"));
 
-    await waitFor(() => expect(client.getQueryData(['profile', 'me', { memberId: 'a' }])).toBeUndefined());
+    await waitFor(() =>
+      expect(
+        client.getQueryData(["profile", "me", { memberId: "a" }]),
+      ).toBeUndefined(),
+    );
   });
 });
 ```
+
 (The `!` on `auth.listener()` is inside a test; if `no-non-null-assertion` from Task 4 flags it, replace with a local `const l = auth.listener(); if (!l) throw new Error('no listener');`.)
 
 Run: `cd app && npx vitest run src/lib/auth.test.tsx`
@@ -721,6 +777,7 @@ Expected: both fail (cache still populated).
 - [ ] **Step 3: Implement in `AuthProvider`**
 
 `app/src/lib/auth.tsx` — add imports `useRef`, `useQueryClient`; inside `AuthProvider`:
+
 ```tsx
 const queryClient = useQueryClient();
 const lastUserId = useRef<string | null>(null);
@@ -736,13 +793,16 @@ useEffect(() => {
   lastUserId.current = userId;
 }, [userId, queryClient]);
 ```
+
 and in the memoised value:
+
 ```tsx
 signOut: async () => {
   await supabase.auth.signOut();
   queryClient.clear();
 },
 ```
+
 with `queryClient` added to that `useMemo` dependency array.
 
 Run the test file → both pass.
@@ -750,11 +810,13 @@ Run the test file → both pass.
 - [ ] **Step 4: Member-scope the self keys**
 
 `app/src/queries/keys.ts` — replace the three factories and extend the doc comment:
+
 ```ts
  *  3. **Self data is keyed by member.** Anything that answers "mine" carries
  *     `{ memberId }` so two members on one device never share an entry; the
  *     provider also clears the cache when the member changes.
 ```
+
 ```ts
 standing: (memberId: string | undefined) => ['points', 'standing', { memberId }] as const,
 …
@@ -762,18 +824,25 @@ me: (memberId: string | undefined) => ['profile', 'me', { memberId }] as const,
 …
 mine: (memberId: string | undefined) => ['tasks', 'mine', { memberId }] as const,
 ```
+
 Update the three hooks to pass `id`: `keys.points.standing(id)`, `keys.profile.me(id)`, `keys.tasks.mine(id)`.
 
 - [ ] **Step 5: Extend the key test**
 
 In `app/src/queries/points.test.tsx` near the existing key-isolation assertion (~59–64) add:
+
 ```tsx
-it('scopes standing by member', () => {
-  expect(keys.points.standing('m1')).toEqual(['points', 'standing', { memberId: 'm1' }]);
-  expect(keys.profile.me('m1')).toEqual(['profile', 'me', { memberId: 'm1' }]);
-  expect(keys.tasks.mine('m1')).toEqual(['tasks', 'mine', { memberId: 'm1' }]);
+it("scopes standing by member", () => {
+  expect(keys.points.standing("m1")).toEqual([
+    "points",
+    "standing",
+    { memberId: "m1" },
+  ]);
+  expect(keys.profile.me("m1")).toEqual(["profile", "me", { memberId: "m1" }]);
+  expect(keys.tasks.mine("m1")).toEqual(["tasks", "mine", { memberId: "m1" }]);
 });
 ```
+
 (import `keys` from `./keys`.)
 
 - [ ] **Step 6: All gates + manual check**
@@ -795,6 +864,7 @@ gh pr create --title "Frontend: cache hygiene on sign-out" --body "Closes #360"
 ### Task 6: #326 — gate leadership cards behind level 5
 
 **Files:**
+
 - Modify: `app/src/lib/capabilities.ts:14-25`
 - Modify: `app/src/screens/dashboard/DashboardScreen.tsx`
 - Modify: `app/src/screens/dashboard/MyPointsCard.tsx:21-53,82-99`
@@ -802,6 +872,7 @@ gh pr create --title "Frontend: cache hygiene on sign-out" --body "Closes #360"
 - Create: `app/src/screens/dashboard/DashboardScreen.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `can(claims, capability)` from `lib/capabilities.ts`; `useAuth()`; `useMyStanding` after Task 5 (`keys.points.standing(id)`, `skipToken`).
 - Produces: `LEVEL.seeLeadership = 5`; `useMyStanding({ enabled })`; `<MyPointsCard showStanding />`.
 
@@ -817,51 +888,77 @@ git checkout -b feat/326-dashboard-leadership-gate
 - [ ] **Step 2: Failing screen test**
 
 Create `app/src/screens/dashboard/DashboardScreen.test.tsx`:
+
 ```tsx
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
-vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
-vi.mock('../../queries/profile', () => ({
-  useMyProfile: () => ({ data: { full_name: 'Ioana Popescu', role: 'voluntar', tier: null } }),
+vi.mock("../../lib/auth", () => ({ useAuth: auth.useAuth }));
+vi.mock("../../queries/profile", () => ({
+  useMyProfile: () => ({
+    data: { full_name: "Ioana Popescu", role: "voluntar", tier: null },
+  }),
 }));
-vi.mock('../../queries/reference', () => ({ useRoles: () => ({ data: new Map() }) }));
-vi.mock('../../queries/points', () => ({
+vi.mock("../../queries/reference", () => ({
+  useRoles: () => ({ data: new Map() }),
+}));
+vi.mock("../../queries/points", () => ({
   useMyPoints: () => ({ isPending: false, isError: false, data: 12 }),
-  useMyStanding: () => ({ isPending: false, isError: false, data: { rank: 4, total: 8, next: { rank: 3, gap: 3 } } }),
+  useMyStanding: () => ({
+    isPending: false,
+    isError: false,
+    data: { rank: 4, total: 8, next: { rank: 3, gap: 3 } },
+  }),
   useLeaderboard: () => ({ isPending: false, isError: false, data: [] }),
   useDeptCup: () => ({ isPending: false, isError: false, data: [] }),
 }));
-vi.mock('@ionic/react', () => ({
-  IonPage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  IonContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+vi.mock("@ionic/react", () => ({
+  IonPage: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  IonContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
-import DashboardScreen from './DashboardScreen';
+import DashboardScreen from "./DashboardScreen";
 
 function claims(level: number) {
-  return { claims: { member_role: 'x', member_level: level, dept_ids: [], team_ids: [] }, session: { user: { id: 'm' } }, loading: false, signOut: vi.fn() };
+  return {
+    claims: {
+      member_role: "x",
+      member_level: level,
+      dept_ids: [],
+      team_ids: [],
+    },
+    session: { user: { id: "m" } },
+    loading: false,
+    signOut: vi.fn(),
+  };
 }
 
-describe('DashboardScreen leadership gate', () => {
-  it('hides leaderboard, cup and rank for a level-1 member', () => {
+describe("DashboardScreen leadership gate", () => {
+  it("hides leaderboard, cup and rank for a level-1 member", () => {
     auth.useAuth.mockReturnValue(claims(1));
     render(<DashboardScreen />);
     expect(screen.getByText(/12/)).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /clasament/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /clasament/i })).toBeNull();
     expect(screen.queryByText(/din 8 membri/)).toBeNull();
     expect(screen.getByText(/vizibil pentru BCE/i)).toBeInTheDocument();
   });
 
-  it('shows everything for a level-5 member', () => {
+  it("shows everything for a level-5 member", () => {
     auth.useAuth.mockReturnValue(claims(5));
     render(<DashboardScreen />);
     expect(screen.getByText(/din 8 membri/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /clasament/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /clasament/i }),
+    ).toBeInTheDocument();
   });
 });
 ```
+
 The leaderboard heading is `<h2 className="card-title">… Clasament</h2>` (`LeaderboardCard.tsx:95-98`), so `{ name: /clasament/i }` matches as written. `LeaderboardCard` also imports `IonIcon` from `@ionic/react`; extend the `@ionic/react` mock with `IonIcon: () => null` so the render does not pull in Ionic.
 
 Run: `npx vitest run src/screens/dashboard` → fails (no gate yet).
@@ -869,6 +966,7 @@ Run: `npx vitest run src/screens/dashboard` → fails (no gate yet).
 - [ ] **Step 3: Capability**
 
 `app/src/lib/capabilities.ts` — add inside `LEVEL`:
+
 ```ts
 /* Mirrors 20260907204817_leadership_only_global_points.sql: leaderboard,
    dept_cup and member_points return rows only at level >= 5. */
@@ -878,6 +976,7 @@ seeLeadership: 5,
 - [ ] **Step 4: `useMyStanding` accepts `enabled`**
 
 `app/src/queries/points.ts`:
+
 ```ts
 export function useMyStanding({ enabled = true }: { enabled?: boolean } = {}) {
   const { session } = useAuth();
@@ -892,6 +991,7 @@ export function useMyStanding({ enabled = true }: { enabled?: boolean } = {}) {
 - [ ] **Step 5: Screen and card**
 
 `DashboardScreen.tsx`:
+
 ```tsx
 import { useAuth } from '../../lib/auth';
 import { can } from '../../lib/capabilities';
@@ -909,6 +1009,7 @@ const leader = can(claims, 'seeLeadership');
 ```
 
 `MyPointsCard.tsx`:
+
 ```tsx
 export default function MyPointsCard({ showStanding }: { showStanding: boolean }) {
   const points = useMyPoints();
@@ -928,6 +1029,7 @@ export default function MyPointsCard({ showStanding }: { showStanding: boolean }
     /* existing rank markup using standing.data */
   )}
 ```
+
 Replace `const { rank, total, next } = standing.data;` with reads off `standing.data` inside the branch (it is `undefined` when disabled).
 
 - [ ] **Step 6: Gates + manual check**
@@ -951,10 +1053,12 @@ gh pr create --title "Dashboard: leadership-only cards" --body "Closes #326"
 **Do not start until #276 and #277 are merged** (both dobrerares). Re-read the merged migrations first: #276 makes `teams.dept_id` nullable (independent teams), #277 removes `teams.lead_id`. If #364 (`private.actor_level()` / `require_active_member()`, dobrerares) has merged, use it inside the helper below instead of the inline `profiles ⋈ roles` lookup; if #278 (independent-team commands) has merged, mirror its command names and error codes exactly so the two team kinds read as one API.
 
 **Files:**
+
 - Create: `supabase/migrations/<timestamp>_department_team_membership_commands.sql`
 - Create: `supabase/tests/department_team_membership_commands.test.sql`
 
 **Interfaces:**
+
 - Produces: `public.add_department_team_member(p_team_id text, p_member_id uuid)`, `public.remove_department_team_member(p_team_id text, p_member_id uuid)`; helper `private.require_department_team_manager(p_team_id text)`; errors `42501 department_team_forbidden`, `PT404 team_not_found`, `PT409 team_is_independent`, `PT400 member_not_active`, `PT404 team_member_not_found`.
 
 Pattern to copy (line ranges in `20260909151741_project_membership_commands.sql`): helper 7–62 (row lock first, `42501` on failure), impls 64–136, public `security invoker` wrappers 210–253, revoke/grant block 264–310; race test in `project_membership_commands.test.sql:490-620`.
@@ -975,12 +1079,12 @@ Create `supabase/tests/department_team_membership_commands.test.sql` with `plan(
 2. `edu` BCE removes it → row gone.
 3. `fin` BCE on `t-edu-x` → `throws_ok(…, '42501')`.
 4. BC adds → ok. 5. Moderator removes → ok.
-6. Responsabil (4) → `42501`. 7. voluntar → `42501`.
-8. Inactive BCE with valid claims → `42501`.
-9. Claimless UID → `42501`. 10. anon → `42501`.
-11. Independent team `t-indep` → `PT409 team_is_independent`.
-12. Unknown team → `PT404`. 13. Inactive target member → `PT400`.
-14. Remove a non-member → `PT404`.
+5. Responsabil (4) → `42501`. 7. voluntar → `42501`.
+6. Inactive BCE with valid claims → `42501`.
+7. Claimless UID → `42501`. 10. anon → `42501`.
+8. Independent team `t-indep` → `PT409 team_is_independent`.
+9. Unknown team → `PT404`. 13. Inactive target member → `PT400`.
+10. Remove a non-member → `PT404`.
 
 - [ ] **Step 3: Migration**
 
@@ -1097,6 +1201,7 @@ Leave `team_members_manage` (`20260822222537:40-42`) in place — #280 replaces 
 - [ ] **Step 4: Run, commit, PR**
 
 Run: `npx supabase db reset && npx supabase test db` → green.
+
 ```bash
 git add supabase/migrations/*_department_team_membership_commands.sql supabase/tests/department_team_membership_commands.test.sql
 git commit -m "feat(db): manage department-team membership through local leadership commands (#279)"
@@ -1111,6 +1216,7 @@ gh pr create --title "Department teams: local-leadership membership commands" --
 **Do not start until #280 is merged.** Tests only; any failure becomes a new focused issue, not a fix inside this PR.
 
 **Files:**
+
 - Create: `supabase/tests/authorization_matrix.test.sql`
 
 - [ ] **Step 1: Branch**
@@ -1128,17 +1234,17 @@ Owned fixtures (never seed rows): departments `edu`/`fin` (reference), one depar
 
 For every persona × every surface below, one `results_eq`/`is`/`throws_ok`. Expected outcomes:
 
-| Surface | Allowed | Everyone else |
-|---|---|---|
-| read `projects` row (active) | L, R, M, BC, Moderator, BCE (read-only global) | zero rows |
-| read `projects` row (archived) | BC, Moderator | zero rows |
-| read `project_members` roster | active members of that project, BC, Moderator | zero rows |
-| `add_project_member` | L, BC, Moderator (after #311) | `42501` |
-| `grant_project_responsible` | L, BC, Moderator | `42501` |
-| read `teams`/`team_members` for `t-m-edu` | members, BCE-edu, BC, Moderator (per #280) | zero rows |
-| `add_department_team_member` on `t-m-edu` | BCE-edu, BC, Moderator | `42501` (BCE-fin included) |
-| independent-team membership command (#278 name) on `t-m-indep` | BC, Moderator | `42501` (BCE-edu included) |
-| any write as inactive-BCE / claimless / anon | — | `42501` or zero rows |
+| Surface                                                        | Allowed                                        | Everyone else              |
+| -------------------------------------------------------------- | ---------------------------------------------- | -------------------------- |
+| read `projects` row (active)                                   | L, R, M, BC, Moderator, BCE (read-only global) | zero rows                  |
+| read `projects` row (archived)                                 | BC, Moderator                                  | zero rows                  |
+| read `project_members` roster                                  | active members of that project, BC, Moderator  | zero rows                  |
+| `add_project_member`                                           | L, BC, Moderator (after #311)                  | `42501`                    |
+| `grant_project_responsible`                                    | L, BC, Moderator                               | `42501`                    |
+| read `teams`/`team_members` for `t-m-edu`                      | members, BCE-edu, BC, Moderator (per #280)     | zero rows                  |
+| `add_department_team_member` on `t-m-edu`                      | BCE-edu, BC, Moderator                         | `42501` (BCE-fin included) |
+| independent-team membership command (#278 name) on `t-m-indep` | BC, Moderator                                  | `42501` (BCE-edu included) |
+| any write as inactive-BCE / claimless / anon                   | —                                              | `42501` or zero rows       |
 
 At least one denied write per persona group keeps the suite from passing vacuously. `plan(N)` = number of assertions; count them.
 
@@ -1146,6 +1252,7 @@ At least one denied write per persona group keeps the suite from passing vacuous
 
 Run: `npx supabase db reset && npx supabase test db`.
 Expected: green — or specific failures, each of which you file as `Authorization: <surface> lets <persona> …` with the failing assertion quoted, then mark the assertion `todo` in this suite until that issue merges.
+
 ```bash
 git add supabase/tests/authorization_matrix.test.sql
 git commit -m "test(db): full project and team authorization matrix (#281)"

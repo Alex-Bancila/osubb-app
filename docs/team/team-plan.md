@@ -4,12 +4,12 @@ Operating model for the volunteer dev team, per the mandate commitments (`docs/o
 
 ## Roles
 
-| Who | Role |
-|---|---|
-| Alex | Tech lead · product owner · reviewer of every PR (initially) |
-| Volunteer 1 (backend-leaning) | SQL / migrations / RLS — pairs with Claude on `ready-for-agent` issues |
-| Volunteer 2 (frontend-leaning) | Ionic/React screens (Epic 8–9) |
-| Volunteer 3 (if present) | QA · demo data · docs · release notes |
+| Who                            | Role                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| Alex                           | Tech lead · product owner · reviewer of every PR (initially)           |
+| Volunteer 1 (backend-leaning)  | SQL / migrations / RLS — pairs with Claude on `ready-for-agent` issues |
+| Volunteer 2 (frontend-leaning) | shadcn/React screens (Epic 8–9, ADR-0002)                              |
+| Volunteer 3 (if present)       | QA · demo data · docs · release notes                                  |
 
 Names/availability to be slotted by Alex when the core is confirmed.
 
@@ -33,7 +33,7 @@ Environment checklist per member: Docker Desktop · Node · `npx supabase start`
 ## Work rules
 
 - **Everything is a GitHub issue.** Labels drive flow: `ready-for-agent` = fully specced, do it with Claude; `ready-for-human` = needs judgment/design; `needs-triage` cleared weekly by Alex (see `docs/agents/triage-labels.md`).
-- **One issue = one PR** into `main`; CI must be green (migrations apply + pgTAP per-role suite). *(Enforced branch protection isn't available on a free-plan private repo — the rule is discipline for now; apply for [GitHub for Nonprofits](https://github.com/nonprofit) or move to an org plan to enforce it.)*
+- **One issue = one PR** into `main`; CI must be green (migrations apply + pgTAP per-role suite). _(Enforced branch protection isn't available on a free-plan private repo — the rule is discipline for now; apply for [GitHub for Nonprofits](https://github.com/nonprofit) or move to an org plan to enforce it.)_
 - **Review:** Alex reviews every PR until two volunteers have each landed ~5; then peer review, with Alex retained on migrations/RLS (the security core).
 - **Spec-first for new features:** brainstorm → `docs/superpowers/specs/` → issues. Use `CONTEXT.md` terms everywhere.
 - **Definition of Done:** migration applies on `db reset` · pgTAP green (incl. per-role) · PR reviewed · deployed to staging · issue AC checked off.
