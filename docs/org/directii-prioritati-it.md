@@ -7,48 +7,60 @@
 ## 1. Task Tracker
 
 ### 1.1. Sistemul de punctare
+
 - Se păstrează formula actuală de calcul al punctajului (dificultate × rating).
 - Nu sunt necesare modificări majore asupra algoritmului de calcul.
 
 ### 1.2. Ghid de punctare (legendă)
+
 Implementarea unei legende standardizate pentru punctarea taskurilor recurente.
 
 Scop:
+
 - uniformizarea modului în care coordonatorii acordă punctaje;
 - reducerea diferențelor dintre departamente;
 - simplificarea procesului de creare a taskurilor.
 
 Funcționalitate propusă:
+
 - buton dedicat în Task Tracker („Legendă" / „Ghid de punctare");
 - acces rapid la exemple și punctajele recomandate.
 
 Conținutul exact al ghidului va fi stabilit ulterior în cadrul ședințelor de BC.
 
 ### 1.3. Taskuri standard (template-uri)
+
 Posibilitatea de a selecta taskuri recurente dintr-un dropdown.
 
 Exemple:
+
 - Ședință
 - Minute
 - Contactări
 - Promovare
 
 Opțional:
+
 - punctajul recomandat să fie completat automat.
 
 ### 1.4. Grupuri / echipe
+
 Posibilitatea de a crea grupuri de voluntari.
 
 Scop:
+
 - atribuirea unui task întregii echipe printr-un singur tag, fără selectarea manuală a fiecărui membru.
 
 ### 1.5. Cerere de task
+
 Implementarea unei funcționalități prin care un voluntar poate solicita adăugarea unui task către coordonator.
 
 ### 1.6. Fișa voluntarului
+
 Crearea unei fișe de TT dedicate fiecărui voluntar, disponibilă doar voluntarului respectiv și moderatorilor.
 
 ### 1.7. Pentru Interne
+
 - fișă automată privind îndeplinirea pragului pentru Adunarea Generală;
 - fișă separată cu membrii AG + punctajele lor;
 - actualizare automată în funcție de activitatea din Task Tracker.
@@ -56,10 +68,13 @@ Crearea unei fișe de TT dedicate fiecărui voluntar, disponibilă doar voluntar
 ## 2. Conturi
 
 ### 2.1. Acces diferențiat
+
 Sistem de roluri și permisiuni în funcție de tipul contului (recrut, voluntar, membru activ, responsabil proiect, etc.)
 
 ### 2.2. Dashboard personal
+
 După autentificare, fiecare utilizator ar trebui să poată vedea rapid:
+
 - departamentul/departamentele din care face parte;
 - echipele din care face parte;
 - Task Tracker-ul personal;
@@ -72,9 +87,11 @@ După autentificare, fiecare utilizator ar trebui să poată vedea rapid:
 Un calendar comun al organizației.
 
 ### 3.1. Acces diferențiat
+
 Evenimentele afișate vor depinde de rolul utilizatorului.
 
 ### 3.2. Organizare vizuală
+
 - culori diferite pentru:
   - departamente;
   - proiecte;
@@ -82,33 +99,42 @@ Evenimentele afișate vor depinde de rolul utilizatorului.
   - organizație.
 
 ### 3.3. Înscriere la activități
+
 Posibilitatea de a te înscrie direct (join) la:
+
 - call-uri;
 - formulare;
 - activități;
 - evenimente.
 
 ### 3.4. Tipuri de call-uri
+
 Diferențiere între:
+
 - call-uri de echipă;
 - call-uri de departament;
 - call-uri de proiect;
 - call-uri generale ale organizației.
 
 ### 3.5. Evenimente viitoare
+
 O zonă dedicată cu:
+
 - ce urmează în perioada apropiată;
 - deadline-uri personale;
 - întâlniri;
 - taskuri importante.
 
 ### 3.6. Detectarea suprapunerilor
+
 Implementarea unei funcționalități care semnalează suprapunerea evenimentelor din calendar (idee propusă de Băncilă).
 
 ### 3.7. Notificări
+
 Sistem integrat de notificări în aplicație.
 
 Exemple:
+
 - reminder pentru taskuri;
 - evenimente apropiate;
 - call-uri noi;
@@ -116,6 +142,7 @@ Exemple:
 - anunțuri importante.
 
 Pentru informațiile critice:
+
 - notificări de tip pop-up;
 - evidențiere vizuală (ex. culoare roșie).
 
@@ -124,6 +151,7 @@ Pentru informațiile critice:
 O secțiune dedicată comunicării interne.
 
 Conținut posibil:
+
 - anunțuri oficiale;
 - informații importante;
 - modificări de regulament;

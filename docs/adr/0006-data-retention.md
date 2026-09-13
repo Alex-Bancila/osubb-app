@@ -1,8 +1,11 @@
 # ADR-0006 — Data retention: alumni keep history; deletion only on GDPR request
 
-- **Status:** Accepted (2026-08-12)
+- **Status:** Accepted
+- **Date:** 2026-08-12
 - **Deciders:** Alex Băncilă (IT Coordinator)
-- **Context docs:** architecture spec §8.6, `docs/org/plan-managerial.md` §IV.4 (IMG&PR), ADR-0003
+- **Supersedes:** —
+- **Superseded by:** —
+- **Related:** architecture spec §8.6, `docs/org/plan-managerial.md` §IV.4 (IMG&PR), ADR-0003
 
 ## Context
 
