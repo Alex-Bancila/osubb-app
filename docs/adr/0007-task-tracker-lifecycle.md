@@ -1,8 +1,11 @@
 # ADR-0007 — Projects, teams, and the Task Tracker lifecycle
 
-- **Status:** Accepted (2026-09-07)
+- **Status:** Accepted
+- **Date:** 2026-09-07
 - **Amended:** 2026-09-10 — `unfulfilled` outcome, Feedback-pending sub-state, Campaigns, Umbrella Tasks, any-active-member direct assignment and self-selection, evaluation-time Difficulty, notification recipients, Leaderboard filters, coordination departments, BC/Moderator Project roster override
 - **Deciders:** Alex Băncilă + team
+- **Supersedes:** —
+- **Superseded by:** —
 - **Related:** ADR-0001, ADR-0003, ADR-0004, `CONTEXT.md`
 
 ## Context
