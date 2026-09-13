@@ -10,7 +10,7 @@ select md5(string_agg(x, '|' order by x))
     select format('member:%s:%s:%s', full_name, role, status) from profiles
     union all select format('points:%s:%s:%s', full_name, points, rank) from leaderboard
     union all select format('dept:%s:%s', member_id, dept_id) from member_departments
-    union all select format('team:%s:%s:%s', id, name, for_recruits) from teams
+    union all select format('team:%s:%s', id, name) from teams
     union all select format('project:%s:%s:%s:%s', project.name, project.status, leader.full_name, creator.full_name)
                 from projects project
                 join profiles leader on leader.id = project.leader_id
@@ -59,7 +59,7 @@ select md5(string_agg(x, '|' order by x))
                 join profiles member on member.id = assignment.member_id
     union all select format('ledger:%s:%s:%s', p.full_name, l.delta, l.reason)
                 from points_ledger l join profiles p on p.id = l.member_id
-    union all select format('event:%s:%s', title, scope) from events
+    union all select format('event:%s:%s:%s', title, scope, min_level) from events
     union all select format('rsvp:%s:%s:%s', e.title, p.full_name, a.status)
                 from event_attendance a
                 join events e on e.id = a.event_id

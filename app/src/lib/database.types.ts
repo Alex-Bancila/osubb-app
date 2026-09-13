@@ -2440,21 +2440,18 @@ export type Database = {
       teams: {
         Row: {
           dept_id: string | null
-          for_recruits: boolean
           id: string
           is_interne: boolean
           name: string
         }
         Insert: {
           dept_id?: string | null
-          for_recruits?: boolean
           id: string
           is_interne?: boolean
           name: string
         }
         Update: {
           dept_id?: string | null
-          for_recruits?: boolean
           id?: string
           is_interne?: boolean
           name?: string
@@ -3044,7 +3041,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      team_admits_recruits: { Args: { t: string }; Returns: boolean }
       update_campaign: {
         Args: { p_campaign_id: number; p_name: string }
         Returns: {
