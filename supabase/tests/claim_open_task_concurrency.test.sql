@@ -96,9 +96,12 @@ select pg_temp.test_login(
   '28700000-0000-0000-0000-000000000011',
   jsonb_build_object('member_role', 'voluntar', 'member_level', 1,
                      'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+-- #318: an Executor does not close the Candidate Queue — later members
+-- "enter an ordered Candidate Queue" (ADR-0007) — so the claimed Task is
+-- still an org-wide Opportunity. The legacy task_read hid it once claimed.
 select is((select count(*) from public.tasks
             where title = 'Concurrent public opportunity 287'),
-  0::bigint, 'an outsider no longer sees the claimed Task as an opportunity');
+  1::bigint, 'an outsider still sees the claimed Task: its queue stays open');
 reset role;
 
 select extensions.dblink_exec('claim_setup_287', $cleanup$
