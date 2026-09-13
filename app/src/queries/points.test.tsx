@@ -2,18 +2,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 
-const api = vi.hoisted(() => ({
-  from: vi.fn(),
-  select: vi.fn(),
-  eq: vi.fn(),
-  maybeSingle: vi.fn(),
-}));
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 
-vi.mock('../lib/supabase', () => ({
-  supabase: { from: api.from },
-}));
+vi.mock('../lib/supabase', async () => {
+  const { supabaseClientMock } = await vi.importActual<
+    typeof import('../test/supabase-mock')
+  >('../test/supabase-mock');
+  return { supabase: supabaseClientMock };
+});
 vi.mock('../lib/auth', () => ({ useAuth: auth.useAuth }));
 
 import { keys } from './keys';
@@ -31,13 +29,14 @@ function wrapper(queryClient: QueryClient) {
 
 describe('current-member points query', () => {
   beforeEach(() => {
-    api.from.mockReturnValue({ select: api.select });
-    api.select.mockReturnValue({ eq: api.eq, maybeSingle: api.maybeSingle });
-    api.eq.mockReturnValue({ maybeSingle: api.maybeSingle });
+    resetSupabaseMock();
   });
 
   it('reads the self-scoped endpoint without sending a member id', async () => {
-    api.maybeSingle.mockResolvedValue({ data: { points: 4 }, error: null });
+    supabaseMock.maybeSingle.mockResolvedValue({
+      data: { points: 4 },
+      error: null,
+    });
     auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -49,10 +48,10 @@ describe('current-member points query', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBe(4);
-    expect(api.from).toHaveBeenCalledWith('my_points');
-    expect(api.select).toHaveBeenCalledWith('points');
-    expect(api.eq).not.toHaveBeenCalled();
-    expect(api.maybeSingle).toHaveBeenCalledOnce();
+    expect(supabaseMock.from).toHaveBeenCalledWith('my_points');
+    expect(supabaseMock.select).toHaveBeenCalledWith('points');
+    expect(supabaseMock.eq).not.toHaveBeenCalled();
+    expect(supabaseMock.maybeSingle).toHaveBeenCalledOnce();
   });
 
   it('isolates cached totals by authenticated member', () => {
@@ -91,6 +90,6 @@ describe('current-member points query', () => {
     });
 
     expect(result.current.fetchStatus).toBe('idle');
-    expect(api.from).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 });
