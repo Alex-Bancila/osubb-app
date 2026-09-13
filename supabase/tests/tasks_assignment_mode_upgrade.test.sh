@@ -26,6 +26,10 @@ truncate public.tasks cascade;
 -- type and fail with "operator does not exist: text = task_status" — drop it
 -- first, same treatment as the task_activity columns below; the scratch
 -- transaction rolls back either way.
+-- #294: tasks_deadline_active_idx's partial predicate (status in a
+-- task_status array literal) has the identical problem -- same fix, same
+-- reasoning: it is never recreated because this whole transaction rolls back.
+drop index public.tasks_deadline_active_idx;
 alter table public.tasks drop constraint tasks_evaluation_inputs_ck;
 alter table public.tasks alter column status drop default;
 alter table public.tasks alter column status type text using status::text;
