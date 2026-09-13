@@ -69,6 +69,13 @@ select task.id, legacy.member_id, task.created_at, task.completed_at, 'completed
   from task_assignees as legacy
   join tasks as task on task.id = legacy.task_id
  where task.title in ('t-edu', 't-pr');
+-- #317: the credit is an Evaluation plus the ledger row that names it, not a
+-- side effect of the Rating update above.
+select pg_temp.test_credit_task(task.id, legacy.member_id,
+                                'd0000000-0000-0000-0000-000000000014')
+  from task_assignees as legacy
+  join tasks as task on task.id = legacy.task_id
+ where task.title in ('t-edu', 't-pr');
 -- Captured while postgres can still see every row: an `insert … select …
 -- from tasks` attempt would insert zero rows once the persona cannot read
 -- the Task — no rows, no policy check, no exception.
@@ -161,11 +168,13 @@ select is((select count(*) from tasks), 1::bigint,
 update tasks set description = 'touched by a responsabil' where title = 't-edu2';
 -- #312: rating may only be set once completed, and 't-open' is public-mode,
 -- so completing it also closes its queue (tasks_queue_timestamp_state_check).
+-- #317: recording the Rating is all this statement does now — no ledger row
+-- follows it, which is the point of the two assertions below.
 select lives_ok(
   $$ update tasks set status = 'completed', completed_at = now(),
             queue_closed_at = now(), rating = 5
      where title = 't-open' $$,
-  'level >= 4 grades tasks (trigger fires as owner)');    -- Vlad +3 (1 × 3)
+  'level >= 4 records a Rating on a Task they may write');
 
 select is((select count(*) from points_ledger
             where member_id = 'a0000000-0000-0000-0000-000000000011'), 0::bigint,
@@ -212,8 +221,11 @@ select pg_temp.test_login('d0000000-0000-0000-0000-000000000014', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-select is((select count(*) from points_ledger), 3::bigint,
-  'level >= 6 reads the whole ledger');
+-- Two credits, not three: Radu's Rating on 't-open' above paid nobody,
+-- because #317 retired the trigger that used to. Only the two Evaluations
+-- written explicitly with the fixtures exist.
+select is((select count(*) from points_ledger), 2::bigint,
+  'level >= 6 reads the whole ledger, and a Rating with no Evaluation added nothing to it');
 select lives_ok(
   $$ insert into points_ledger (member_id, delta, reason, note, awarded_by)
      values ('b0000000-0000-0000-0000-000000000012', -3, 'sanction', 'test sanction',
@@ -250,7 +262,10 @@ reset role;
 -- his profiles row still exists — which is exactly why the old policies let
 -- him through: `member_id = auth.uid()` was satisfied. Before the membership
 -- gate he could join the open, already-graded task 't-open' and the
--- SECURITY DEFINER ledger trigger would have paid him for it.
+-- SECURITY DEFINER ledger trigger would have paid him for it. #317 retired
+-- that trigger outright, so joining a graded Task now pays nobody whatever
+-- RLS does; this block still proves the membership gate itself, which is
+-- what stops the join in the first place.
 -- A fresh open task Vlad has never touched, worth points the instant it
 -- would be claimed and completed. It is created here rather than with the
 -- other fixtures so the persona counts above stay untouched — and unclaimed,

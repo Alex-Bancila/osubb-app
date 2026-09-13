@@ -339,6 +339,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
   ('protect_project_leader_membership',           '',                                                                                                                   'trigger'),
   ('queue_position',                              'p_task_id bigint, p_member_id uuid',                                                                                 'authenticated_only'),
+  ('reject_legacy_evaluation_source',             '',                                                                                                                   'trigger'),
   ('reject_task_activity_change',                 '',                                                                                                                   'trigger'),
   ('remove_department_team_member_impl',          'p_team_id text, p_member_id uuid',                                                                                   'impl'),
   ('remove_independent_team_member_impl',         'p_team_id text, p_member_id uuid',                                                                                   'impl'),
@@ -361,8 +362,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 48,
-  'the pinned private-schema roster itself has exactly the 48 rows the audit found (a typo here would silently weaken every check below)');
+  (select count(*) from pinned_private_functions)::int, 49,
+  'the pinned private-schema roster itself has exactly the 49 rows the audit found (a typo here would silently weaken every check below)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

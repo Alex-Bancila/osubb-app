@@ -86,6 +86,8 @@ docker exec -i supabase_db_osubb-app psql -U postgres -d postgres \
   -v ON_ERROR_STOP=1 --single-transaction < supabase/seed.sql
 ```
 
+⚠️ `--single-transaction` (or `psql -1`) is required, not optional: the seed briefly disables `task_evaluations`' and `task_activity`'s append-only guards around its own demo-cohort cleanup, and that is only safe because a mid-file failure rolls the whole thing back with them. Never pipe `seed.sql` into `psql` without it.
+
 Run it twice; the data will be the same both times. If you change `seed.sql`, check that this still holds — a seed that only works on an empty database is a seed staging cannot use.
 
 **Verify locally:** `bash scripts/check-seed-rerunnable.sh` does the above for you — same content-fingerprint check CI runs on every PR. Prerequisites: Docker running and `npx supabase start` (or `npx supabase db reset`) already applied to the local stack.

@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(67);
+select plan(68);
 
 -- ==================== Structure ====================
 select has_table('public', 'task_evaluations', 'the evaluation history table exists');
@@ -313,6 +313,29 @@ select throws_ok(
   '23505', null,
   'a second open command Evaluation on Task D''s other Assignment is rejected by the per-Task cap alone (the two rows share no Assignment)');
 
+-- ==================== source: legacy_migration is closed to new writers ====================
+-- #317 ran the one-time backfill Ruling 11 reserved `legacy_migration` for,
+-- and then closed the source with `task_evaluations_reject_legacy_source`.
+-- Prove the door is shut before opening it deliberately below.
+select throws_ok(
+  $$ insert into public.task_evaluations
+       (task_id, assignment_id, source, outcome, difficulty, rating, points, note)
+     select task.id, assignment.id, 'legacy_migration',
+            'completed', 2, 3, 4, 'a new legacy-sourced Evaluation'
+       from public.tasks task
+       join public.task_assignments assignment on assignment.task_id = task.id
+      where task.title = 'Evaluation fixture Task B 316' $$,
+  '23514', 'task_evaluation_legacy_source_closed',
+  'a new legacy_migration Evaluation is rejected outright (#317 closed the source)');
+
+-- The rules below are about the *shape* legacy rows are allowed to have —
+-- nullable evaluator, two open Evaluations on one Task across two
+-- Assignments, one per Assignment. Those rules still govern every row #317's
+-- backfill already wrote, so they must stay proven. The suite runs as the
+-- table owner inside a transaction that rolls back, so it disables #317's
+-- source guard for exactly this section and re-arms it immediately after.
+alter table public.task_evaluations disable trigger task_evaluations_reject_legacy_source;
+
 -- ==================== source: legacy_migration may omit an evaluator ====================
 -- Task B's Assignment still carries no Evaluation at this point (the
 -- earlier source-check and Assignment-mismatch tests on it never
@@ -402,6 +425,8 @@ select throws_ok(
       where task.title = 'Evaluation fixture Task C 316 (multi-assignee legacy)' $$,
   '23505', null,
   'an open command Evaluation is rejected when its Assignment already carries an open legacy Evaluation (the per-Assignment cap applies regardless of source)');
+
+alter table public.task_evaluations enable trigger task_evaluations_reject_legacy_source;
 
 -- ==================== append-only: DELETE is always rejected ====================
 select throws_ok(

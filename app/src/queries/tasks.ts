@@ -4,9 +4,17 @@ import { useAuth } from '../lib/auth';
 import { keys } from './keys';
 
 /* The columns a task list needs. Named once so the row type stays identical
-   everywhere and adding a column is one edit, not a hunt. */
+   everywhere and adding a column is one edit, not a hunt.
+
+   No `points`: #317 moved a Task's points onto the Evaluation that awarded
+   them (`task_evaluations`), so `tasks` no longer carries the column at all.
+   A member's own Evaluation becomes readable in the rebuilt Tracker (#164,
+   #346-#354); until then this list shows the Difficulty and Rating the Task
+   itself still records, rather than recomputing the scoring guide in
+   TypeScript — a second copy of that formula would disagree with the ledger
+   the moment the guide changes or an Evaluation is reversed. */
 const TASK_FIELDS =
-  'id, title, status, type, difficulty, rating, points, deadline, dept_id, team_id';
+  'id, title, status, type, difficulty, rating, deadline, dept_id, team_id';
 
 /**
  * The tasks I am assigned to.

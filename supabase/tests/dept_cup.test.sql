@@ -42,6 +42,13 @@ where t.title like 'cup-%';
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 3
  where title like 'cup-%';
+-- #317: the Rating no longer credits anyone by itself — each participant's
+-- Evaluation and ledger entry are written explicitly (5 x 1 = 5 each).
+select pg_temp.test_credit_task(task.id, assignee.member_id,
+                                'c1000000-0000-0000-0000-000000000001')
+  from public.tasks task
+  join public.task_assignees assignee on assignee.task_id = task.id
+ where task.title like 'cup-%';
 
 select ok(
   exists (

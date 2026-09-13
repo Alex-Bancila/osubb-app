@@ -70,6 +70,13 @@ where t.title like 'pv-%';
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 3
  where title like 'pv-%';
+-- #317: one Evaluation and one ledger entry per participant — the Rating
+-- alone no longer credits anybody.
+select pg_temp.test_credit_task(task.id, assignee.member_id,
+                                'f5000000-0000-0000-0000-0000000000f5')
+  from public.tasks task
+  join public.task_assignees assignee on assignee.task_id = task.id
+ where task.title like 'pv-%';
 
 -- Ordinary members, including Responsabil, receive no global metrics.
 select pg_temp.test_login('f1000000-0000-0000-0000-0000000000f1', jsonb_build_object(

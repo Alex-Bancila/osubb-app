@@ -1,7 +1,7 @@
 import { IonContent, IonPage } from '@ionic/react';
 import { useMyTasks } from '../../queries/tasks';
 import { Empty, ErrorState, Loading } from '../../components/states';
-import { formatDate, formatPoints } from '../../lib/format';
+import { formatDate } from '../../lib/format';
 
 const STATUS_LABEL: Record<string, string> = {
   todo: 'De făcut',
@@ -39,12 +39,18 @@ export default function TrackerScreen() {
                     {STATUS_LABEL[task.status] ?? task.status}
                   </span>
                   <span className="task-meta">{formatDate(task.deadline)}</span>
+                  {/* Difficulty, and the Rating once there is one. Points
+                      moved onto the Evaluation with #317 and are not
+                      readable from here yet (#164 rebuilds this screen
+                      around them); showing a number this screen would have
+                      to recompute from the scoring guide would be a second
+                      copy of a rule the ledger already owns. */}
                   <span className="task-meta">
-                    {task.rating === null
-                      ? task.difficulty === null
-                        ? 'dificultate —'
-                        : `dificultate ${task.difficulty}`
-                      : `${formatPoints(task.points ?? 0)} p`}
+                    {task.difficulty === null
+                      ? 'dificultate —'
+                      : task.rating === null
+                        ? `dificultate ${task.difficulty}`
+                        : `dificultate ${task.difficulty} · nota ${task.rating}`}
                   </span>
                 </li>
               ))}

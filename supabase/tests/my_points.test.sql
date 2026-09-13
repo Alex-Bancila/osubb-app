@@ -54,9 +54,9 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('a5100000-0000-0000-0000-000000000003', 'Leader Points', 'leader.points@test.local', 'bce', 'activ'),
   ('a5100000-0000-0000-0000-000000000004', 'Inactive Points', 'inactive.points@test.local', 'voluntar', 'inactiv');
 
--- Produce a real +6 task entry through the points trigger, then apply a -2
--- sanction. The endpoint must return the complete personal total, not only
--- positive task points.
+-- Produce a real +6 task entry through an Evaluation (#317 retired the
+-- grading triggers), then apply a -2 sanction. The endpoint must return the
+-- complete personal total, not only positive task points.
 insert into public.tasks (title, difficulty, status, created_by, dept_id)
 values (
   'my-points-task',
@@ -72,6 +72,10 @@ select id, 'a5100000-0000-0000-0000-000000000001'::uuid
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 4
  where title = 'my-points-task';
+select pg_temp.test_credit_task(
+  (select id from public.tasks where title = 'my-points-task'),
+  'a5100000-0000-0000-0000-000000000001',
+  'a5100000-0000-0000-0000-000000000003');   -- 3 × 2 = +6
 
 insert into public.points_ledger (member_id, delta, reason, note) values
   ('a5100000-0000-0000-0000-000000000001', -2, 'sanction', 'test sanction'),
