@@ -51,6 +51,9 @@ insert into task_assignments (task_id, member_id, assigned_by)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid,
          'ffffffff-0000-0000-0000-000000000006'::uuid
     from tasks where title = 'rls-t1';
+insert into task_activity (task_id, kind, actor_id, to_status)
+  select id, 'created', 'ffffffff-0000-0000-0000-000000000006'::uuid, 'todo'
+    from tasks where title = 'rls-t1';
 update tasks set rating = 4 where title = 'rls-t1';   -- writes points_ledger via trigger
 insert into task_requests (kind, title, from_member)
   values

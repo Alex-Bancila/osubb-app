@@ -21,6 +21,9 @@ drop function private.task_is_unassigned(bigint);
 truncate public.tasks cascade;
 alter table public.tasks alter column status drop default;
 alter table public.tasks alter column status type text using status::text;
+-- #292: task_activity.from_status/to_status also depend on task_status; this
+-- scratch transaction rolls back, so dropping them here is safe.
+alter table public.task_activity drop column from_status, drop column to_status;
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks

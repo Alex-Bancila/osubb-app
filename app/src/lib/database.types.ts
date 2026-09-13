@@ -1156,6 +1156,112 @@ export type Database = {
         }
         Relationships: []
       }
+      task_activity: {
+        Row: {
+          actor_id: string | null
+          assignment_id: number | null
+          created_at: string
+          details: Json
+          from_status: Database["public"]["Enums"]["task_status"] | null
+          id: number
+          kind: string
+          note: string | null
+          occurred_at: string
+          task_id: number
+          to_status: Database["public"]["Enums"]["task_status"] | null
+        }
+        Insert: {
+          actor_id?: string | null
+          assignment_id?: number | null
+          created_at?: string
+          details?: Json
+          from_status?: Database["public"]["Enums"]["task_status"] | null
+          id?: never
+          kind: string
+          note?: string | null
+          occurred_at?: string
+          task_id: number
+          to_status?: Database["public"]["Enums"]["task_status"] | null
+        }
+        Update: {
+          actor_id?: string | null
+          assignment_id?: number | null
+          created_at?: string
+          details?: Json
+          from_status?: Database["public"]["Enums"]["task_status"] | null
+          id?: never
+          kind?: string
+          note?: string | null
+          occurred_at?: string
+          task_id?: number
+          to_status?: Database["public"]["Enums"]["task_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "task_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "task_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks_with_overdue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_assignees: {
         Row: {
           member_id: string
