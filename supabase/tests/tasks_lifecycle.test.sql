@@ -2,7 +2,7 @@ begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 
-select plan(10);
+select plan(11);
 
 select is(
   (select array_agg(enumlabel::text order by enumsortorder)
@@ -15,6 +15,12 @@ select col_has_default('public', 'tasks', 'status',
 
 -- #312: completed/unfulfilled rows must also carry a rating
 -- (tasks_evaluation_inputs_ck) — every other state must not.
+select is(
+  has_function_privilege(
+    'service_role', 'private.task_is_unassigned(bigint)', 'execute'),
+  false,
+  'service role cannot execute the private Task policy helper');
+
 select lives_ok(
   $$ insert into public.tasks
       (title, difficulty, dept_id, status, started_at, submitted_at,

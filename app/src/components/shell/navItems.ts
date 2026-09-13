@@ -1,19 +1,20 @@
 import {
-  calendarOutline,
-  gridOutline,
-  listOutline,
-  megaphoneOutline,
-  peopleOutline,
-  personOutline,
-  shieldCheckmarkOutline,
-} from 'ionicons/icons';
+  CalendarDays,
+  LayoutDashboard,
+  ListTodo,
+  Megaphone,
+  ShieldCheck,
+  UserRound,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import type { Capability } from '../../lib/capabilities';
 
 export type NavItem = {
   path: string;
   /** Sidebar label and, when the item is on the tab bar, the tab caption. */
   label: string;
-  icon: string;
+  icon: LucideIcon;
   /** Shown to everyone when absent; otherwise gated on this level threshold. */
   capability?: Capability;
   /** Mobile shows five of these; the rest live in the drawer. */
@@ -28,31 +29,31 @@ export type NavItem = {
  * stay English (CONTEXT.md).
  */
 export const NAV_ITEMS: NavItem[] = [
-  { path: '/', label: 'Acasă', icon: gridOutline, onTabBar: true },
-  { path: '/tracker', label: 'Taskuri', icon: listOutline, onTabBar: true },
+  { path: '/', label: 'Acasă', icon: LayoutDashboard, onTabBar: true },
+  { path: '/tracker', label: 'Taskuri', icon: ListTodo, onTabBar: true },
   {
     path: '/calendar',
     label: 'Calendar',
-    icon: calendarOutline,
+    icon: CalendarDays,
     onTabBar: true,
   },
   {
     path: '/anunturi',
     label: 'Anunțuri',
-    icon: megaphoneOutline,
+    icon: Megaphone,
     onTabBar: true,
   },
   {
     path: '/voluntari',
     label: 'Voluntari',
-    icon: peopleOutline,
+    icon: Users,
     capability: 'seeDirectory',
   },
-  { path: '/profil', label: 'Profil', icon: personOutline, onTabBar: true },
+  { path: '/profil', label: 'Profil', icon: UserRound, onTabBar: true },
   {
     path: '/bc',
     label: 'Panou BC',
-    icon: shieldCheckmarkOutline,
+    icon: ShieldCheck,
     capability: 'manageRoles',
   },
 ];

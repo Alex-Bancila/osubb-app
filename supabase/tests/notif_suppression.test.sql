@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(18);
 
 -- ==================== Shape ====================
 select has_table('public', 'notif_suppression', 'notif_suppression table exists');
@@ -63,6 +63,45 @@ select throws_ok(
   $$ insert into push_tokens (member_id, token, platform)
      values ('a3000000-0000-0000-0000-0000000000a3', 'token-new', 'blackberry') $$,
   '23514', null, 'platform is limited to ios/android/web');
+
+-- ==================== Member-readable reference data (#65) ====================
+insert into auth.users (id, email) values
+  ('a0650000-0000-0000-0000-000000000011', 'suppression.member@test.local'),
+  ('a0650000-0000-0000-0000-000000000012', 'suppression.inactive@test.local'),
+  ('a0650000-0000-0000-0000-000000000013', 'suppression.claimless@test.local');
+insert into profiles (id, full_name, email, role, status) values
+  ('a0650000-0000-0000-0000-000000000011', 'Suppression Member', 'suppression.member@test.local', 'voluntar', 'activ'),
+  ('a0650000-0000-0000-0000-000000000012', 'Suppression Inactive', 'suppression.inactive@test.local', 'bc', 'inactiv'),
+  ('a0650000-0000-0000-0000-000000000013', 'Suppression Claimless', 'suppression.claimless@test.local', 'voluntar', 'activ');
+
+select policies_are('public', 'notif_suppression', array['notif_suppression_read'],
+  'suppression reference data exposes only its member read policy');
+select ok(has_table_privilege('authenticated', 'notif_suppression', 'select'),
+  'authenticated receives suppression SELECT');
+
+select pg_temp.test_login_leadership('a0650000-0000-0000-0000-000000000011');
+select is((select count(*) from notif_suppression), 6::bigint,
+  'an active Member reads all suppression reference rows');
+select throws_ok($$insert into notif_suppression (role, kind) values ('bc', 'announce')$$,
+  '42501', null, 'a Member cannot mutate suppression reference data');
+reset role;
+
+select pg_temp.test_login('a0650000-0000-0000-0000-000000000012',
+  '{"member_role":"bc","member_level":6,"dept_ids":[],"team_ids":[]}'::jsonb);
+select is((select count(*) from notif_suppression), 0::bigint,
+  'inactive caller reads no suppression rows despite stale claims');
+reset role;
+
+select pg_temp.test_login('a0650000-0000-0000-0000-000000000013',
+  jsonb_build_object('provider', 'email'));
+select is((select count(*) from notif_suppression), 0::bigint,
+  'claimless caller reads no suppression rows');
+reset role;
+
+set local role anon;
+select throws_ok($$select count(*) from notif_suppression$$, '42501', null,
+  'anonymous callers cannot read suppression reference data');
+reset role;
 
 select * from finish();
 rollback;

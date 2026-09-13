@@ -146,7 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       claims,
       loading,
       signOut: async () => {
-        await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
         queryClient.clear();
       },
     }),

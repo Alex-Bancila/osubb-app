@@ -72,21 +72,26 @@ Viziunea mea pentru acest mandat constă în simplificarea și eficientizarea pr
 #### Departamente
 
 **i. Resurse Umane:**
+
 1. Asigurarea recrutărilor prin intermediul aplicației. În urma completării formularului de pe Google Forms, răspunsurile vor fi centralizate și adăugate în baza de date. Prin intermediul aplicației voluntarii au acces la toate datele participantului și pot asigura întregul proces de interviu: programarea pe baza unui calendar comun, grila de interviu care calculează automat nota finală, notificare către BC în urma feedbackului negativ și selectarea departamentului principal, la care va avea acces în urma quiz-ului;
 2. Campania de contactări se va asigura prin baza de date a aplicației, iar în momentul în care cineva alege să nu mai facă parte din OSUBB i se va trimite automat un mic formular de feedback, pentru a avea un raport în baza răspunsurilor.
 
 **ii. Educațional:**
+
 1. Prin intermediul aplicației, fiecare update educațional (fie el protest, o revendicare sau o informație importantă de la Echipa de Monitorizare) va apărea în header-ul paginii și se va trimite o notificare cu aceasta către toți voluntarii organizației;
 2. Mentenanța paginilor de Resurse Educaționale, a asistentului virtual TUDI și publicarea tuturor pozițiilor și demersurilor pe site-ul OSUBB.
 
 **iii. IMG&PR:**
+
 1. Planurile media vor fi adăugate în aplicație pentru a putea ține evidența voluntarilor și pentru a li se trimite notificări când se postează și când se apropie deadline-ul dacă au preluat un task;
 2. Salvarea alumnilor și onorificilor în baza de date, pentru a putea ține evidența zilelor lor de naștere pentru postările de pe Facebook.
 
 **iv. Tineret:**
+
 1. Prin intermediul aplicației, fiecare update de pe departamentul Tineret va apărea în header-ul paginii și se va trimite o notificare cu aceasta către toți voluntarii organizației.
 
 **v. Financiar:**
+
 1. Integrarea formularului de 3.5% în perioada campaniei, pentru a putea fi completat de către voluntarii angajați.
 
 #### Proiecte
