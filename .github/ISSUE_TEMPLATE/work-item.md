@@ -22,7 +22,7 @@ labels: needs-triage
 
 ## Acceptance criteria
 
-- [ ] 
+- [ ]
 
 ## Required tests
 

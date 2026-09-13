@@ -576,6 +576,7 @@ export type Database = {
       events: {
         Row: {
           capacity: number | null
+          created_at: string
           created_by: string | null
           dept_id: string | null
           description: string | null
@@ -591,6 +592,7 @@ export type Database = {
         }
         Insert: {
           capacity?: number | null
+          created_at?: string
           created_by?: string | null
           dept_id?: string | null
           description?: string | null
@@ -606,6 +608,7 @@ export type Database = {
         }
         Update: {
           capacity?: number | null
+          created_at?: string
           created_by?: string | null
           dept_id?: string | null
           description?: string | null
@@ -1055,16 +1058,19 @@ export type Database = {
       }
       project_members: {
         Row: {
+          created_at: string
           member_id: string
           project_id: number
           project_role: string
         }
         Insert: {
+          created_at?: string
           member_id: string
           project_id: number
           project_role: string
         }
         Update: {
+          created_at?: string
           member_id?: string
           project_id?: number
           project_role?: string
@@ -2686,6 +2692,7 @@ export type Database = {
       add_project_member: {
         Args: { p_member_id: string; p_project_id: number }
         Returns: {
+          created_at: string
           member_id: string
           project_id: number
           project_role: string
@@ -2795,6 +2802,7 @@ export type Database = {
         }
         Returns: {
           capacity: number | null
+          created_at: string
           created_by: string | null
           dept_id: string | null
           description: string | null
@@ -2837,6 +2845,7 @@ export type Database = {
       grant_project_responsible: {
         Args: { p_member_id: string; p_project_id: number }
         Returns: {
+          created_at: string
           member_id: string
           project_id: number
           project_role: string
@@ -2876,6 +2885,7 @@ export type Database = {
       revoke_project_responsible: {
         Args: { p_member_id: string; p_project_id: number }
         Returns: {
+          created_at: string
           member_id: string
           project_id: number
           project_role: string
