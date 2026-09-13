@@ -33,7 +33,9 @@ export interface InviteDeps {
   /** True when a profile already uses this email. */
   profileExists(email: string): Promise<boolean>;
   /** Sends the magic-link invite; returns the new (or existing) user id. */
-  inviteByEmail(email: string): Promise<{ userId?: string; error?: DbError & { status?: number } }>;
+  inviteByEmail(
+    email: string,
+  ): Promise<{ userId?: string; error?: DbError & { status?: number } }>;
   provision(args: ProvisionArgs): Promise<{ error?: DbError }>;
   deleteUser(userId: string): Promise<void>;
 }
@@ -64,14 +66,19 @@ export function realDeps(req: Request): InviteDeps {
     },
 
     async memberLevel(userId) {
-      const { data, error } = await admin.rpc("member_level", { p_member: userId });
+      const { data, error } = await admin.rpc("member_level", {
+        p_member: userId,
+      });
       if (error) throw error;
       return data ?? 0;
     },
 
     async missingIds(table, ids) {
       if (ids.length === 0) return [];
-      const { data, error } = await admin.from(table).select("id").in("id", ids);
+      const { data, error } = await admin.from(table).select("id").in(
+        "id",
+        ids,
+      );
       if (error) throw error;
       return ids.filter((id) => !data?.some((row) => row.id === id));
     },
@@ -86,7 +93,12 @@ export function realDeps(req: Request): InviteDeps {
     async inviteByEmail(email) {
       const { data, error } = await admin.auth.admin.inviteUserByEmail(email);
       if (error || !data?.user) {
-        return { error: { message: error?.message ?? "invite failed", status: error?.status } };
+        return {
+          error: {
+            message: error?.message ?? "invite failed",
+            status: error?.status,
+          },
+        };
       }
       return { userId: data.user.id };
     },

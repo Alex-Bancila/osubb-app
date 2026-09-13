@@ -12,10 +12,10 @@ Every step ends with a **checkpoint** — one thing that proves it worked. If a 
 
 Two emails are waiting for you. They do different things:
 
-| Invitation | What it gives you | Needed for local work? |
-|---|---|---|
-| **GitHub** — `Alex-Bancila/osubb-app` | the code, the issue list, the ability to open pull requests | **yes, essential** |
-| **Supabase** — the OSUBB project | a look at the *staging* server's database | no |
+| Invitation                            | What it gives you                                           | Needed for local work? |
+| ------------------------------------- | ----------------------------------------------------------- | ---------------------- |
+| **GitHub** — `Alex-Bancila/osubb-app` | the code, the issue list, the ability to open pull requests | **yes, essential**     |
+| **Supabase** — the OSUBB project      | a look at the _staging_ server's database                   | no                     |
 
 That second one surprises people, so to be explicit: **you do not need Supabase access to develop.** Everything you build runs against a complete copy of the backend on your own machine. The dashboard invite is so you can look at staging when we deploy — reading, mostly, not working.
 
@@ -29,13 +29,13 @@ Accept both anyway.
 
 All free. On Windows, take the default options in every installer.
 
-| Tool | Where | What it's for |
-|---|---|---|
-| **Git** | [git-scm.com](https://git-scm.com) | tracks every change to the code |
-| **Node.js** (LTS) | [nodejs.org](https://nodejs.org) | runs the frontend and our command-line tools |
-| **Docker Desktop** | [docker.com](https://www.docker.com/products/docker-desktop/) | runs the whole backend on your machine |
-| **GitHub CLI** | [cli.github.com](https://cli.github.com) | `gh` — sign in, open pull requests from the terminal |
-| **VS Code** | [code.visualstudio.com](https://code.visualstudio.com) | the editor |
+| Tool               | Where                                                         | What it's for                                        |
+| ------------------ | ------------------------------------------------------------- | ---------------------------------------------------- |
+| **Git**            | [git-scm.com](https://git-scm.com)                            | tracks every change to the code                      |
+| **Node.js** (LTS)  | [nodejs.org](https://nodejs.org)                              | runs the frontend and our command-line tools         |
+| **Docker Desktop** | [docker.com](https://www.docker.com/products/docker-desktop/) | runs the whole backend on your machine               |
+| **GitHub CLI**     | [cli.github.com](https://cli.github.com)                      | `gh` — sign in, open pull requests from the terminal |
+| **VS Code**        | [code.visualstudio.com](https://code.visualstudio.com)        | the editor                                           |
 
 ### About Docker, because it's the one that gives trouble
 
@@ -120,10 +120,10 @@ npx supabase start
 
 When it finishes it prints a block of URLs and keys. The ones you'll use:
 
-| | |
-|---|---|
-| API | `http://127.0.0.1:54321` |
-| **Studio** — browse the database | `http://127.0.0.1:54323` |
+|                                                         |                          |
+| ------------------------------------------------------- | ------------------------ |
+| API                                                     | `http://127.0.0.1:54321` |
+| **Studio** — browse the database                        | `http://127.0.0.1:54323` |
 | **Mailpit** — catches every email the app sends locally | `http://127.0.0.1:54324` |
 
 **Checkpoint:** `npx supabase status` prints those URLs instead of an error.
@@ -182,16 +182,16 @@ Three things worth five minutes each.
 
 **The demo accounts.** The seed creates eight, one per role, all with the password `parola123`:
 
-| Email | Role | What they show |
-|---|---|---|
-| `recrut@demo.osubb` | Recrut | the smallest view: 4 events, 6 tasks |
-| `voluntar@demo.osubb` | Voluntar | a normal member with points and a team |
-| `activ@demo.osubb` | Membru Activ | a sanction on the ledger |
-| `vot@demo.osubb` | Drept de Vot | top of the leaderboard |
-| `responsabil@demo.osubb` | Responsabil | task management, two departments |
-| `bce@demo.osubb` | BCE | the volunteers directory |
-| `bc@demo.osubb` | BC | everything: 7 events, 16 tasks |
-| `moderator@demo.osubb` | Moderator | the moderation view |
+| Email                    | Role         | What they show                         |
+| ------------------------ | ------------ | -------------------------------------- |
+| `recrut@demo.osubb`      | Recrut       | the smallest view: 4 events, 6 tasks   |
+| `voluntar@demo.osubb`    | Voluntar     | a normal member with points and a team |
+| `activ@demo.osubb`       | Membru Activ | a sanction on the ledger               |
+| `vot@demo.osubb`         | Drept de Vot | top of the leaderboard                 |
+| `responsabil@demo.osubb` | Responsabil  | task management, two departments       |
+| `bce@demo.osubb`         | BCE          | the volunteers directory               |
+| `bc@demo.osubb`          | BC           | everything: 7 events, 16 tasks         |
+| `moderator@demo.osubb`   | Moderator    | the moderation view                    |
 
 Signing in as two of them and seeing different data — with no conditional code anywhere — is the clearest demonstration of how this app works. The database decides what you can see.
 
@@ -224,18 +224,18 @@ Read [`docs/agents/onboarding.md`](../agents/onboarding.md) before your first re
 
 ## When something breaks
 
-| What you see | What it means |
-|---|---|
-| `Cannot connect to the Docker daemon` | Docker Desktop isn't running. Start it, wait for the whale, retry. |
+| What you see                                                 | What it means                                                                                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `Cannot connect to the Docker daemon`                        | Docker Desktop isn't running. Start it, wait for the whale, retry.                                                    |
 | `port is not available` / `access permissions` **(Windows)** | Windows grabbed our ports after a reboot. Administrator PowerShell: `net stop winnat` then `net start winnat`, retry. |
-| `wsl` errors while installing Docker | Administrator PowerShell: `wsl --install`, restart. If it mentions virtualization, enable it in the BIOS. |
-| `npx: command not found` | Node isn't installed, or the terminal predates the install. Open a new terminal. |
-| `supabase start` hangs for ages on the first run | Normal. It's downloading several GB. Leave it. |
-| Tests fail on a fresh clone | Run `npx supabase db reset` first — the tests need the migrations applied. |
-| Blank page, console says `Missing VITE_SUPABASE_URL` | You skipped the `.env.local` copy in Step 7. Copy it and restart `npm run dev`. |
-| App says *"Contul tău nu este activ"* | You signed in with an account that has no profile. Use one of the demo addresses. |
-| Everything worked yesterday, nothing starts today | Docker restarted or updated. `npx supabase stop` then `npx supabase start`. |
-| Anything else | Screenshot it in the group chat with what you were doing. Setup problems are normal and are never "your fault". |
+| `wsl` errors while installing Docker                         | Administrator PowerShell: `wsl --install`, restart. If it mentions virtualization, enable it in the BIOS.             |
+| `npx: command not found`                                     | Node isn't installed, or the terminal predates the install. Open a new terminal.                                      |
+| `supabase start` hangs for ages on the first run             | Normal. It's downloading several GB. Leave it.                                                                        |
+| Tests fail on a fresh clone                                  | Run `npx supabase db reset` first — the tests need the migrations applied.                                            |
+| Blank page, console says `Missing VITE_SUPABASE_URL`         | You skipped the `.env.local` copy in Step 7. Copy it and restart `npm run dev`.                                       |
+| App says _"Contul tău nu este activ"_                        | You signed in with an account that has no profile. Use one of the demo addresses.                                     |
+| Everything worked yesterday, nothing starts today            | Docker restarted or updated. `npx supabase stop` then `npx supabase start`.                                           |
+| Anything else                                                | Screenshot it in the group chat with what you were doing. Setup problems are normal and are never "your fault".       |
 
 ---
 

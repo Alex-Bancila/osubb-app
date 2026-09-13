@@ -1,5 +1,5 @@
--- project_membership_commands.test.sql — #274: only the active project lead
--- manages memberships and the project-local Responsible role.
+-- project_membership_commands.test.sql — #274/#311: the active project lead,
+-- BC, and Moderator manage memberships and the project-local Responsible role.
 begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
@@ -8,7 +8,7 @@ create extension if not exists pgrowlocks with schema extensions;
 \set osubb_test_suite true
 \ir _helpers.sql
 
-select plan(58);
+select plan(66);
 
 -- Dynamic dispatch keeps RED reporting behavioral failures instead of
 -- aborting the file while the four public commands do not exist yet.
@@ -410,20 +410,60 @@ select throws_ok($$
 $$, '42501', 'project_lead_forbidden', 'BCE without the lead role cannot manage a project roster');
 reset role;
 
+-- Current database roles authorize the global override. The deliberately
+-- stale low-level BC claim proves the command does not trust JWT level alone.
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000008',
+  jsonb_build_object('member_role','voluntar','member_level',1,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
+select is(pg_temp.membership_role(
+  'add_project_member', (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  'member', 'BC can add a member to a project they do not lead');
+select is(pg_temp.membership_role(
+  'grant_project_responsible', (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  'responsible', 'BC can grant Responsible in a project they do not lead');
+select is(pg_temp.membership_role(
+  'revoke_project_responsible', (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  'member', 'BC can revoke Responsible in a project they do not lead');
+select is(pg_temp.remove_result(
+  (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  true, 'BC can remove a member from a project they do not lead');
+select throws_ok($$
+  select public.add_project_member((select archived_project_id from fx),
+    'a7400000-0000-0000-0000-000000000005')
+$$, 'PT409', 'project_archived', 'BC override cannot mutate an archived project roster');
+reset role;
+
+select pg_temp.test_login('a7400000-0000-0000-0000-000000000009',
+  jsonb_build_object('member_role','moderator','member_level',9,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
+select is(pg_temp.membership_role(
+  'add_project_member', (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  'member', 'Moderator can add a member to a project they do not lead');
+select is(pg_temp.membership_role(
+  'grant_project_responsible', (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  'responsible', 'Moderator can grant Responsible in a project they do not lead');
+select is(pg_temp.membership_role(
+  'revoke_project_responsible', (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  'member', 'Moderator can revoke Responsible in a project they do not lead');
+select is(pg_temp.remove_result(
+  (select active_project_id from fx),
+  'a7400000-0000-0000-0000-000000000005'),
+  true, 'Moderator can remove a member from a project they do not lead');
+reset role;
+
+update public.profiles set status = 'inactiv'
+ where id = 'a7400000-0000-0000-0000-000000000008';
 select pg_temp.test_login('a7400000-0000-0000-0000-000000000008',
   jsonb_build_object('member_role','bc','member_level',6,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select throws_ok($$
   select public.add_project_member((select active_project_id from fx),
     'a7400000-0000-0000-0000-000000000005')
-$$, '42501', 'project_lead_forbidden', 'global BC authority does not replace the project lead');
-reset role;
-
-select pg_temp.test_login('a7400000-0000-0000-0000-000000000009',
-  jsonb_build_object('member_role','moderator','member_level',9,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
-select throws_ok($$
-  select public.add_project_member((select active_project_id from fx),
-    'a7400000-0000-0000-0000-000000000005')
-$$, '42501', 'project_lead_forbidden', 'Moderator authority does not replace the project lead');
+$$, '42501', 'project_lead_forbidden', 'an inactive BC is denied even with stale leadership claims');
 reset role;
 
 select pg_temp.test_login(
