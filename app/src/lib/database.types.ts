@@ -2749,6 +2749,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_campaign: {
+        Args: { p_department_id: string; p_name: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          department_id: string
+          id: number
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_event: {
         Args: {
           p_capacity?: number
@@ -2860,6 +2878,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_campaign_active: {
+        Args: { p_active: boolean; p_campaign_id: number }
+        Returns: {
+          created_at: string
+          created_by: string
+          department_id: string
+          id: number
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_event_rsvp: {
         Args: { p_event_id: number; p_status: string }
         Returns: {
@@ -2876,6 +2912,24 @@ export type Database = {
         }
       }
       team_admits_recruits: { Args: { t: string }; Returns: boolean }
+      update_campaign: {
+        Args: { p_campaign_id: number; p_name: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          department_id: string
+          id: number
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       announce_priority: "critical" | "important" | "normal"
