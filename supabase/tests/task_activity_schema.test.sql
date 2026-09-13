@@ -98,8 +98,10 @@ select throws_ok(
   'postgres cannot delete an activity row (the trigger, not a grant, blocks it)');
 
 -- ==================== grants: commands, not clients, write this table ====================
-select is(has_table_privilege('authenticated', 'public.task_activity', 'SELECT'), false,
-  'authenticated cannot read activity history directly (no read policy yet, #319)');
+-- #319 added task_activity_read and a SELECT grant; write grants stay absent
+-- (no command writes this table yet, #327-#345).
+select is(has_table_privilege('authenticated', 'public.task_activity', 'SELECT'), true,
+  'authenticated holds SELECT on activity history now that task_activity_read exists (#319)');
 select is(has_table_privilege('authenticated', 'public.task_activity', 'INSERT'), false,
   'authenticated cannot insert activity history directly');
 select is(has_table_privilege('authenticated', 'public.task_activity', 'UPDATE'), false,

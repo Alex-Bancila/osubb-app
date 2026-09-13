@@ -285,11 +285,13 @@ select is(
   'deleting a Member cascades their candidatures');
 
 -- ==================== Grants: commands, not clients, write this table ====================
+-- #319 added task_candidates_read and a SELECT grant; write grants stay
+-- absent below (commands land in #330/#333).
 select is((select count(*) from pg_policies
-  where schemaname = 'public' and tablename = 'task_candidates'), 0::bigint,
-  'the candidate queue starts with no client policies (#319)');
-select is(has_table_privilege('authenticated', 'public.task_candidates', 'SELECT'), false,
-  'authenticated cannot read the candidate queue directly (no read policy yet, #319)');
+  where schemaname = 'public' and tablename = 'task_candidates'), 1::bigint,
+  'the candidate queue carries exactly the #319 read policy');
+select is(has_table_privilege('authenticated', 'public.task_candidates', 'SELECT'), true,
+  'authenticated holds SELECT on the candidate queue now that task_candidates_read exists (#319)');
 select is(has_table_privilege('authenticated', 'public.task_candidates', 'INSERT'), false,
   'authenticated cannot join the queue directly (commands land in #330/#333)');
 select is(has_table_privilege('authenticated', 'public.task_candidates', 'UPDATE'), false,
