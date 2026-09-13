@@ -7,7 +7,10 @@
 // the function's environment; unset it locally and Vite's default origin
 // applies. See docs/backend/inviting.md for the hosted deployment story.
 
-const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
 
 export function allowedOrigins(): string[] {
   const raw = Deno.env.get("ALLOWED_ORIGINS");
@@ -27,12 +30,17 @@ export function corsHeaders(origin: string | null): Record<string, string> {
     // replay a rejected origin's response to an allowed one.
     "Vary": "Origin",
     ...(allowed ? { "Access-Control-Allow-Origin": origin as string } : {}),
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 }
 
-export function json(body: unknown, status: number, origin: string | null): Response {
+export function json(
+  body: unknown,
+  status: number,
+  origin: string | null,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders(origin), "Content-Type": "application/json" },

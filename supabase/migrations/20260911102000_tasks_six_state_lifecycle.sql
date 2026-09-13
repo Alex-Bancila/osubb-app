@@ -53,7 +53,8 @@ as $$
   )
 $$;
 
-revoke all on function private.task_is_unassigned(bigint) from public, anon;
+revoke all on function private.task_is_unassigned(bigint)
+  from public, anon, authenticated, service_role;
 grant execute on function private.task_is_unassigned(bigint) to authenticated;
 
 -- During the compatibility window, organization-wide public todo Tasks are
