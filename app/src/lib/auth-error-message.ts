@@ -35,19 +35,11 @@ const RATE_LIMIT_CODES = new Set([
 const NETWORK_CODES = new Set(['fetch_error', 'network_error', 'offline']);
 
 function readString(value: unknown): string {
-  try {
-    return typeof value === 'string' ? value : '';
-  } catch {
-    return '';
-  }
+  return typeof value === 'string' ? value : '';
 }
 
 function readNumber(value: unknown): number | null {
-  try {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
-  } catch {
-    return null;
-  }
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function detailsFrom(error: unknown): AuthFailureDetails {

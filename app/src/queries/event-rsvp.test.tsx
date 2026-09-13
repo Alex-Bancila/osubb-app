@@ -2,20 +2,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 
-const api = vi.hoisted(() => ({
-  from: vi.fn(),
-  select: vi.fn(),
-  byEvent: vi.fn(),
-  byMember: vi.fn(),
-  maybeSingle: vi.fn(),
-  rpc: vi.fn(),
-}));
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 
-vi.mock('../lib/supabase', () => ({
-  supabase: { from: api.from, rpc: api.rpc },
-}));
+vi.mock('../lib/supabase', async () => {
+  const { supabaseClientMock } = await vi.importActual<
+    typeof import('../test/supabase-mock')
+  >('../test/supabase-mock');
+  return { supabase: supabaseClientMock };
+});
 vi.mock('../lib/auth', () => ({ useAuth: auth.useAuth }));
 
 import {
@@ -46,14 +42,11 @@ function wrapper(queryClient: QueryClient) {
 
 describe('current-member RSVP query', () => {
   beforeEach(() => {
-    api.from.mockReturnValue({ select: api.select });
-    api.select.mockReturnValue({ eq: api.byEvent });
-    api.byEvent.mockReturnValue({ eq: api.byMember });
-    api.byMember.mockReturnValue({ maybeSingle: api.maybeSingle });
+    resetSupabaseMock();
   });
 
   it('filters one event response by the signed-in member id', async () => {
-    api.maybeSingle.mockResolvedValue({ data: rsvpRow, error: null });
+    supabaseMock.maybeSingle.mockResolvedValue({ data: rsvpRow, error: null });
 
     await expect(fetchEventRsvp(42, memberId)).resolves.toEqual({
       eventId: 42,
@@ -62,24 +55,24 @@ describe('current-member RSVP query', () => {
       checkedIn: false,
     });
 
-    expect(api.from).toHaveBeenCalledWith('event_attendance');
-    expect(api.select).toHaveBeenCalledWith(
+    expect(supabaseMock.from).toHaveBeenCalledWith('event_attendance');
+    expect(supabaseMock.select).toHaveBeenCalledWith(
       'event_id, member_id, status, checked_in',
     );
-    expect(api.byEvent).toHaveBeenCalledWith('event_id', 42);
-    expect(api.byMember).toHaveBeenCalledWith('member_id', memberId);
-    expect(api.maybeSingle).toHaveBeenCalledOnce();
+    expect(supabaseMock.eq).toHaveBeenNthCalledWith(1, 'event_id', 42);
+    expect(supabaseMock.eq).toHaveBeenNthCalledWith(2, 'member_id', memberId);
+    expect(supabaseMock.maybeSingle).toHaveBeenCalledOnce();
   });
 
   it('returns null when the member has not answered', async () => {
-    api.maybeSingle.mockResolvedValue({ data: null, error: null });
+    supabaseMock.maybeSingle.mockResolvedValue({ data: null, error: null });
 
     await expect(fetchEventRsvp(42, memberId)).resolves.toBeNull();
   });
 
   it('surfaces read failures to React Query', async () => {
     const error = { code: '42501', message: 'permission denied' };
-    api.maybeSingle.mockResolvedValue({ data: null, error });
+    supabaseMock.maybeSingle.mockResolvedValue({ data: null, error });
 
     await expect(fetchEventRsvp(42, memberId)).rejects.toBe(error);
   });
@@ -102,7 +95,7 @@ describe('current-member RSVP query', () => {
   });
 
   it('derives the member filter from the active session', async () => {
-    api.maybeSingle.mockResolvedValue({ data: rsvpRow, error: null });
+    supabaseMock.maybeSingle.mockResolvedValue({ data: rsvpRow, error: null });
     auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -114,7 +107,7 @@ describe('current-member RSVP query', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.memberId).toBe(memberId);
-    expect(api.byMember).toHaveBeenCalledWith('member_id', memberId);
+    expect(supabaseMock.eq).toHaveBeenCalledWith('member_id', memberId);
   });
 
   it('does not issue a member query without a session', () => {
@@ -128,13 +121,13 @@ describe('current-member RSVP query', () => {
     });
 
     expect(result.current.fetchStatus).toBe('idle');
-    expect(api.from).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 });
 
 describe('RSVP mutation', () => {
   it('sends only event id and status to the self-owned RPC', async () => {
-    api.rpc.mockResolvedValue({ data: rsvpRow, error: null });
+    supabaseMock.rpc.mockResolvedValue({ data: rsvpRow, error: null });
 
     await expect(
       setEventRsvp({ eventId: 42, status: 'going' }),
@@ -145,7 +138,7 @@ describe('RSVP mutation', () => {
       checkedIn: false,
     });
 
-    expect(api.rpc).toHaveBeenCalledWith('set_event_rsvp', {
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('set_event_rsvp', {
       p_event_id: 42,
       p_status: 'going',
     });
@@ -168,7 +161,7 @@ describe('RSVP mutation', () => {
     'maps backend error %s to a safe %s failure',
     async (code, kind, message) => {
       const backendError = { code, message: 'internal detail' };
-      api.rpc.mockResolvedValue({ data: null, error: backendError });
+      supabaseMock.rpc.mockResolvedValue({ data: null, error: backendError });
 
       const failure = await setEventRsvp({
         eventId: 42,
@@ -202,7 +195,7 @@ describe('RSVP mutation', () => {
   });
 
   it('wires the RPC and invalidation through the mutation hook', async () => {
-    api.rpc.mockResolvedValue({ data: rsvpRow, error: null });
+    supabaseMock.rpc.mockResolvedValue({ data: rsvpRow, error: null });
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, 'invalidateQueries')
@@ -215,7 +208,7 @@ describe('RSVP mutation', () => {
       await result.current.mutateAsync({ eventId: 42, status: 'going' });
     });
 
-    expect(api.rpc).toHaveBeenCalledWith('set_event_rsvp', {
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('set_event_rsvp', {
       p_event_id: 42,
       p_status: 'going',
     });

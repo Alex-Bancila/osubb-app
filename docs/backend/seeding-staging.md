@@ -30,20 +30,20 @@ Use the **session pooler** (port 5432), not the direct `db.<ref>.supabase.co` co
 
 The job refuses to do anything unless both are true:
 
-| Check | Fails when |
-|---|---|
-| the ref you typed equals the `SUPABASE_PROJECT_REF` secret | you meant a different project, or mistyped |
-| `STAGING_DB_URL` contains that same ref | the URL secret points somewhere else — production, another project, an old one |
+| Check                                                      | Fails when                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| the ref you typed equals the `SUPABASE_PROJECT_REF` secret | you meant a different project, or mistyped                                     |
+| `STAGING_DB_URL` contains that same ref                    | the URL secret points somewhere else — production, another project, an old one |
 
 Then it preflights (are the migrations applied? can this role write `auth.users`?) before writing anything, applies the seed **in a single transaction**, and prints the leaderboard it produced.
 
-Production is not reachable from here. It is a different project with different secrets and its own manually-approved deploy workflow (#77, #78) — and the only thing that could aim this job at it is putting a production URL in `STAGING_DB_URL` *and* a production ref in `SUPABASE_PROJECT_REF`. Don't.
+Production is not reachable from here. It is a different project with different secrets and its own manually-approved deploy workflow (#77, #78) — and the only thing that could aim this job at it is putting a production URL in `STAGING_DB_URL` _and_ a production ref in `SUPABASE_PROJECT_REF`. Don't.
 
 ## What it actually does
 
 `seed.sql` begins by deleting the **demo cohort** — the eight `@demo.osubb` accounts and the rows they own — and then re-inserts everything. That makes it re-runnable, which matters twice: a demo database that has been clicked through gets restored to a known state, and a rerun after a failure is safe.
 
-The scope is deliberately narrow. A real person invited to staging for testing keeps their profile, the tasks they created and the points they earned; only demo rows are replaced. (Their claim on a *demo* task disappears with that task — the task itself is re-created.)
+The scope is deliberately narrow. A real person invited to staging for testing keeps their profile, the tasks they created and the points they earned; only demo rows are replaced. (Their claim on a _demo_ task disappears with that task — the task itself is re-created.)
 
 "Identical" means the data is identical, not the row ids: `tasks.id` and friends come from identity sequences, which keep counting. Nothing in the app depends on a specific id.
 
@@ -53,27 +53,27 @@ Reference data — roles, departments, the rating and difficulty guides, `role_c
 
 The job log ends with the leaderboard and a row count per table. It should match what you get locally after `npx supabase db reset`:
 
-| what | count |
-|---|---|
-| demo members | 8 |
-| tasks | 16 (9 graded) |
-| ledger rows | 12 |
-| events | 7 |
-| announcements | 5 |
-| notifications | 7 |
+| what          | count         |
+| ------------- | ------------- |
+| demo members  | 8             |
+| tasks         | 16 (9 graded) |
+| ledger rows   | 12            |
+| events        | 7             |
+| announcements | 5             |
+| notifications | 7             |
 
 Then sign in to the app as two different demo accounts and confirm the screens differ. All eight use the password `parola123`:
 
-| Email | Role | Level | Good for showing |
-|---|---|---|---|
-| `recrut@demo.osubb` | Recrut | 0 | the smallest view: 4 events, 6 tasks |
-| `voluntar@demo.osubb` | Voluntar | 1 | a normal member with points and a team |
-| `activ@demo.osubb` | Membru Activ | 2 | a sanction on the ledger |
-| `vot@demo.osubb` | Membru cu Drept de Vot | 3 | top of the leaderboard |
-| `responsabil@demo.osubb` | Responsabil de proiect | 4 | task management, two departments |
-| `bce@demo.osubb` | BCE | 5 | the volunteers directory |
-| `bc@demo.osubb` | BC | 6 | everything: 7 events, 16 tasks, the BC panel |
-| `moderator@demo.osubb` | Moderator | 9 | the moderation view |
+| Email                    | Role                   | Level | Good for showing                             |
+| ------------------------ | ---------------------- | ----- | -------------------------------------------- |
+| `recrut@demo.osubb`      | Recrut                 | 0     | the smallest view: 4 events, 6 tasks         |
+| `voluntar@demo.osubb`    | Voluntar               | 1     | a normal member with points and a team       |
+| `activ@demo.osubb`       | Membru Activ           | 2     | a sanction on the ledger                     |
+| `vot@demo.osubb`         | Membru cu Drept de Vot | 3     | top of the leaderboard                       |
+| `responsabil@demo.osubb` | Responsabil de proiect | 4     | task management, two departments             |
+| `bce@demo.osubb`         | BCE                    | 5     | the volunteers directory                     |
+| `bc@demo.osubb`          | BC                     | 6     | everything: 7 events, 16 tasks, the BC panel |
+| `moderator@demo.osubb`   | Moderator              | 9     | the moderation view                          |
 
 These accounts exist only because clicking through a demo with eight magic links is miserable. `@demo.osubb` is a domain nobody can receive mail at, and real onboarding stays invite-only and passwordless (ADR-0003).
 
@@ -92,16 +92,16 @@ Run it twice; the data will be the same both times. If you change `seed.sql`, ch
 
 ## When it goes wrong
 
-| Message | What it means |
-|---|---|
-| `The ref you typed is not the staging project ref` | typo, or `SUPABASE_PROJECT_REF` is not set to staging. Nothing was written. |
-| `STAGING_DB_URL does not point at the staging project` | the URL secret is for a different project. Nothing was written. |
-| `Migrations are not applied on this project` | staging never got a `db push`. Merge to `main`, let CI finish, then re-run. |
-| `This database role cannot write auth.users` | you are connected as something other than `postgres` — check the URI's username. |
+| Message                                                                           | What it means                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `The ref you typed is not the staging project ref`                                | typo, or `SUPABASE_PROJECT_REF` is not set to staging. Nothing was written.                                                                                                                                                          |
+| `STAGING_DB_URL does not point at the staging project`                            | the URL secret is for a different project. Nothing was written.                                                                                                                                                                      |
+| `Migrations are not applied on this project`                                      | staging never got a `db push`. Merge to `main`, let CI finish, then re-run.                                                                                                                                                          |
+| `This database role cannot write auth.users`                                      | you are connected as something other than `postgres` — check the URI's username.                                                                                                                                                     |
 | `violates foreign key constraint "tasks_team_id_fkey"` (or `events_team_id_fkey`) | somebody's non-demo task or event is attached to a demo team (`t-app`, `t-recruti`), so the team cannot be replaced. The transaction rolled back and nothing was written: move that task to another team, or delete it, then re-run. |
-| `password authentication failed` | the password in `STAGING_DB_URL` is wrong or the secret is empty (see the ⚠️ above). |
-| Logins fail with a 500 and *"converting NULL to string is unsupported"* | GoTrue read a null token column. `seed.sql` sets all eight to `''`; if you add a user by hand, do the same. |
-| Sign-in works but every screen is empty | the **claims hook** is off on staging — the JWT carries no `member_role`, so RLS denies everything. See `docs/backend/auth-config.md` and issue #54. |
+| `password authentication failed`                                                  | the password in `STAGING_DB_URL` is wrong or the secret is empty (see the ⚠️ above).                                                                                                                                                 |
+| Logins fail with a 500 and _"converting NULL to string is unsupported"_           | GoTrue read a null token column. `seed.sql` sets all eight to `''`; if you add a user by hand, do the same.                                                                                                                          |
+| Sign-in works but every screen is empty                                           | the **claims hook** is off on staging — the JWT carries no `member_role`, so RLS denies everything. See `docs/backend/auth-config.md` and issue #54.                                                                                 |
 
 ## Related
 

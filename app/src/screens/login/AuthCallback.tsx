@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router';
-import { IonContent, IonPage, IonSpinner } from '@ionic/react';
 import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
+import {
+  SessionLoader,
+  SessionScreen,
+} from '../../components/shell/SessionScreen';
+import { buttonVariants } from '../../components/ui/button';
+import { cn } from '../../lib/utils';
 
 /** Reads the failure GoTrue reports, whichever half of the URL it used. */
 function errorFromUrl(): { code?: string; message?: string } | null {
@@ -72,19 +77,24 @@ export default function AuthCallback() {
 
   if (error) {
     return (
-      <IonPage>
-        <IonContent className="ion-padding">
-          <div className="auth-card">
-            <h1>Linkul nu a funcționat</h1>
-            <p className="muted">
-              Linkurile de conectare expiră și pot fi folosite o singură dată.
-              Cere unul nou și deschide-l imediat.
-            </p>
-            <p className="auth-error">{error}</p>
-            <Link to="/login">Înapoi la conectare</Link>
-          </div>
-        </IonContent>
-      </IonPage>
+      <SessionScreen>
+        <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
+          Linkul nu a funcționat
+        </h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Linkurile de conectare expiră și pot fi folosite o singură dată. Cere
+          unul nou și deschide-l imediat.
+        </p>
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+        <Link
+          className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}
+          to="/login"
+        >
+          Înapoi la conectare
+        </Link>
+      </SessionScreen>
     );
   }
 
@@ -94,13 +104,8 @@ export default function AuthCallback() {
   if (!loading && session) return <Navigate to="/" replace />;
 
   return (
-    <IonPage>
-      <IonContent className="ion-padding">
-        <div className="auth-card auth-card--centered">
-          <IonSpinner aria-label="Se conectează" />
-          <p className="muted">Te conectăm…</p>
-        </div>
-      </IonContent>
-    </IonPage>
+    <SessionScreen centered>
+      <SessionLoader label="Te conectăm…" />
+    </SessionScreen>
   );
 }
