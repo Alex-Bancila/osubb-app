@@ -362,8 +362,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 48,
-  'the pinned private-schema roster itself has exactly the 48 rows the audit found (a typo here would silently weaken every check below)');
+  (select count(*) from pinned_private_functions)::int, 49,
+  'the pinned private-schema roster itself has exactly the 49 rows the audit found (a typo here would silently weaken every check below)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
