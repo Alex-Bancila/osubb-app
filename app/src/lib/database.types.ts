@@ -700,6 +700,7 @@ export type Database = {
           delta: number
           id: number
           member_id: string
+          note: string | null
           reason: string
           task_id: number | null
         }
@@ -709,6 +710,7 @@ export type Database = {
           delta: number
           id?: never
           member_id: string
+          note?: string | null
           reason: string
           task_id?: number | null
         }
@@ -718,6 +720,7 @@ export type Database = {
           delta?: number
           id?: never
           member_id?: string
+          note?: string | null
           reason?: string
           task_id?: number | null
         }
