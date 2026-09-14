@@ -4,11 +4,17 @@
 -- require_task_executor, can_evaluate_task, log_task_activity,
 -- open_task_assignment, end_task_assignment, close_task_queue).
 --
--- Only create_task and can_evaluate_task have a caller in this branch, so
--- those two are exercised behaviourally here; the remaining require_*/writer
--- helpers are pinned by signature, security posture and grant
--- (tracker_grants.test.sql, conventions.test.sql) and get their behavioural
--- coverage from the commands that call them (#328-#345).
+-- create_task and can_evaluate_task are exercised through their real callers
+-- (create_task itself). Section 13 additionally calls require_task_visible,
+-- require_task_manager, require_task_evaluator, require_task_executor,
+-- end_task_assignment and close_task_queue DIRECTLY as the owner (reset role;
+-- request.jwt.claims survives a role reset within one transaction, so
+-- auth.uid() still resolves to the logged-in persona even though none of
+-- these six has a grant to authenticated) -- a wrong body in any of them
+-- would otherwise ship unnoticed until a later command happened to exercise
+-- it (review finding I2). log_task_activity and open_task_assignment keep
+-- their indirect coverage from create_task's own path, plus section 13's
+-- direct assertions on open_task_assignment's p_via allow-list (I1).
 --
 -- can_evaluate_task is covered in full because it is the one genuinely new
 -- authority rule in this migration: can_manage_task minus the
@@ -23,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(101);
+select plan(127);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -337,8 +343,8 @@ reset role;
 
 set local role anon;
 select throws_ok($$ select public.create_task('Anon #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, '42501', null,
-  'anon cannot execute create_task at all');
+  'edu', null, null, 'local', 'direct') $$, '42501', 'permission denied for function create_task',
+  'anon cannot execute create_task at all — the literal grant-denial text, not a gate that happens to raise 42501');
 reset role;
 
 -- ==================== 3. Malformed input runs before the gate ====================
@@ -458,11 +464,18 @@ select is((select format('%s|%s|%s|%s', notification.title, notification.kind,
   format('Task nou: Direct #327|task|/tracker/%s|true', (select plain.id from public.tasks as plain
     where plain.title = 'Direct #327')),
   'the Executor notification uses the pinned Romanian title, task kind and Task link');
-select ok((select notification.body like 'Ți-a fost atribuit acest task. Deadline: %'
+-- The exact string, not a `like` prefix probe: a wrong to_char mask or time
+-- zone would still satisfy a prefix match, so the expected body is composed
+-- here from the Task's own persisted deadline with the pinned format and
+-- zone, independent of whichever expression the migration used to write it.
+select is((select notification.body
              from public.notifications as notification
              join public.tasks as task on task.id = notification.task_id
             where task.title = 'Direct #327'),
-  'the Executor notification body carries the formatted deadline');
+  (select 'Ți-a fost atribuit acest task. Deadline: '
+       || to_char(task.deadline at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI') || '.'
+     from public.tasks as task where task.title = 'Direct #327'),
+  'the Executor notification body is the exact pinned-format deadline message');
 
 -- A denied create writes nothing at all.
 select pg_temp.test_login('32700000-0000-0000-0000-000000000008', jsonb_build_object(
@@ -761,6 +774,220 @@ select extensions.dblink_exec('task_lock_setup', $$
   delete from auth.users where id = '32700000-0000-0000-0000-000000000021';
 $$);
 select extensions.dblink_disconnect('task_lock_setup');
+
+-- ==================== 13. Kit functions exercised directly ====================
+-- require_task_visible, require_task_manager, require_task_evaluator,
+-- require_task_executor, end_task_assignment and close_task_queue have no
+-- caller elsewhere in this suite, so a wrong body would ship unnoticed
+-- (review finding I2). None of the six carries a grant to authenticated
+-- (conventions Sec4), so every call below runs as the owner: test_login sets
+-- request.jwt.claims (session-scoped, survives a role reset within one
+-- transaction) and switches the local role to authenticated, then `reset
+-- role` returns to the pgTAP-owning superuser role, which bypasses the
+-- missing EXECUTE grant while auth.uid() still resolves to the logged-in
+-- persona. open_task_assignment and log_task_activity keep their indirect
+-- coverage from create_task's own path above; the p_via allow-list (I1)
+-- below is their one direct addition.
+
+-- ---- open_task_assignment: the p_via closed allow-list (I1) ----
+insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
+values ('Kit via task #327', 'edu', 'local', 'direct', 'todo',
+        '32700000-0000-0000-0000-000000000005');
+select throws_ok(format($$ select private.open_task_assignment(%s,
+  '32700000-0000-0000-0000-000000000008'::uuid,
+  '32700000-0000-0000-0000-000000000006'::uuid, null) $$,
+  (select id from public.tasks where title = 'Kit via task #327')),
+  'PT400', 'invalid_assignment_via', 'a null p_via is rejected by the closed allow-list');
+select throws_ok(format($$ select private.open_task_assignment(%s,
+  '32700000-0000-0000-0000-000000000008'::uuid,
+  '32700000-0000-0000-0000-000000000006'::uuid, 'promoted') $$,
+  (select id from public.tasks where title = 'Kit via task #327')),
+  'PT400', 'invalid_assignment_via', 'an unknown p_via is rejected by the closed allow-list');
+
+-- ---- open_task_assignment: 'reopen' writes activity but skips the "Task nou" notification (I1) ----
+insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
+values ('Kit reopen task #327', 'edu', 'local', 'direct', 'todo',
+        '32700000-0000-0000-0000-000000000005');
+select lives_ok(format($$ select private.open_task_assignment(%s,
+  '32700000-0000-0000-0000-000000000008'::uuid,
+  '32700000-0000-0000-0000-000000000006'::uuid, 'reopen') $$,
+  (select id from public.tasks where title = 'Kit reopen task #327')),
+  'open_task_assignment accepts the pinned reopen value');
+select is((select format('%s|%s', activity.kind, activity.details ->> 'via')
+             from public.task_activity as activity
+             join public.tasks as task on task.id = activity.task_id
+            where task.title = 'Kit reopen task #327'),
+  'executor_assigned|reopen',
+  'reopen still writes the executor_assigned activity row');
+select is((select count(*) from public.notifications as notification
+             join public.tasks as task on task.id = notification.task_id
+            where task.title = 'Kit reopen task #327'), 0::bigint,
+  'reopen suppresses the "Task nou" notification (#338 depends on this skip)');
+
+-- ---- require_task_visible ----
+select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+reset role;
+select is((select private.require_task_visible((select plain_task_id from f327))),
+  '32700000-0000-0000-0000-000000000006'::uuid,
+  'require_task_visible returns the actor for a Task they may read');
+
+select pg_temp.test_login('32700000-0000-0000-0000-000000000011',
+  jsonb_build_object('provider', 'email'));
+reset role;
+select throws_ok($$ select private.require_task_visible(
+  (select plain_task_id from f327)) $$, '42501', 'task_command_forbidden',
+  'require_task_visible denies a claimless real uid');
+
+select pg_temp.test_login('32700000-0000-0000-0000-000000000008', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+reset role;
+select throws_ok($$ select private.require_task_visible(
+  (select plain_task_id from f327)) $$, 'PT404', 'task_not_found',
+  'require_task_visible reports a Task an ordinary Department member cannot read as not found');
+
+-- ---- require_task_manager ----
+select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+reset role;
+select is((select private.require_task_manager((select plain_task_id from f327))),
+  '32700000-0000-0000-0000-000000000006'::uuid,
+  'require_task_manager returns the actor for their own Department''s Task');
+select throws_ok($$ select private.require_task_manager(
+  (select missing_id from f327)) $$, 'PT404', 'task_not_found',
+  'require_task_manager reports an unknown Task as not found');
+
+select pg_temp.test_login('32700000-0000-0000-0000-000000000008', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+reset role;
+select throws_ok($$ select private.require_task_manager(
+  (select plain_task_id from f327)) $$, '42501', 'task_manage_forbidden',
+  'require_task_manager denies an ordinary Department member');
+
+-- ---- require_task_evaluator ----
+select pg_temp.test_login('32700000-0000-0000-0000-000000000005', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+reset role;
+select is((select private.require_task_evaluator((select plain_task_id from f327))),
+  '32700000-0000-0000-0000-000000000005'::uuid,
+  'require_task_evaluator returns the actor for BC anywhere');
+select throws_ok($$ select private.require_task_evaluator(
+  (select missing_id from f327)) $$, 'PT404', 'task_not_found',
+  'require_task_evaluator reports an unknown Task as not found');
+
+select pg_temp.test_login('32700000-0000-0000-0000-000000000004', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb,
+  'team_ids', '["t-327-ind"]'::jsonb));
+reset role;
+select throws_ok($$ select private.require_task_evaluator(
+  (select ind_task_id from f327)) $$, '42501', 'task_evaluate_forbidden',
+  'require_task_evaluator denies an Independent-Team member even though they manage the same Task');
+
+-- ---- require_task_executor ----
+select pg_temp.test_login('32700000-0000-0000-0000-000000000009', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
+reset role;
+select is((select private.require_task_executor(
+    (select id from public.tasks where title = 'Direct #327'))),
+  (select assignment.id from public.task_assignments as assignment
+     join public.tasks as task on task.id = assignment.task_id
+    where task.title = 'Direct #327' and assignment.ended_at is null),
+  'require_task_executor returns the active Assignment id for its Executor');
+
+select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+reset role;
+select throws_ok($$ select private.require_task_executor(
+  (select id from public.tasks where title = 'Direct #327')) $$,
+  '42501', 'task_executor_forbidden',
+  'require_task_executor denies the creator, who is not the Executor');
+
+-- M1: organisation claims are required even for the correct Executor —
+-- without this gate, a claimless real uid holding the one active Assignment
+-- would pass on the live-activ-profile check alone.
+insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
+values ('Kit executor claimless task #327', 'edu', 'local', 'direct', 'todo',
+        '32700000-0000-0000-0000-000000000005');
+insert into public.task_assignments (task_id, member_id, assigned_by)
+select task.id, '32700000-0000-0000-0000-000000000011',
+       '32700000-0000-0000-0000-000000000005'
+  from public.tasks as task where task.title = 'Kit executor claimless task #327';
+select pg_temp.test_login('32700000-0000-0000-0000-000000000011',
+  jsonb_build_object('provider', 'email'));
+reset role;
+select throws_ok($$ select private.require_task_executor(
+  (select id from public.tasks where title = 'Kit executor claimless task #327')) $$,
+  '42501', 'task_executor_forbidden',
+  'require_task_executor requires organisation claims even for the Assignment''s own member_id (M1)');
+
+-- ---- end_task_assignment ----
+insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
+values ('Kit end assignment task #327', 'edu', 'local', 'direct', 'todo',
+        '32700000-0000-0000-0000-000000000005');
+select private.open_task_assignment(
+  (select id from public.tasks where title = 'Kit end assignment task #327'),
+  '32700000-0000-0000-0000-000000000008'::uuid,
+  '32700000-0000-0000-0000-000000000006'::uuid, 'create');
+
+select lives_ok(format($$ select private.end_task_assignment(%s, 'completed', E'  bine facut  ') $$,
+  (select assignment.id from public.task_assignments as assignment
+     join public.tasks as task on task.id = assignment.task_id
+    where task.title = 'Kit end assignment task #327')),
+  'end_task_assignment ends the one active Assignment');
+select is((select format('%s|%s|%s', (assignment.ended_at is not null)::text,
+                         assignment.end_reason, assignment.end_note)
+             from public.task_assignments as assignment
+             join public.tasks as task on task.id = assignment.task_id
+            where task.title = 'Kit end assignment task #327'),
+  'true|completed|bine facut',
+  'end_task_assignment sets ended_at/end_reason and trims a whitespace-padded note with regexp_replace');
+select throws_ok(format($$ select private.end_task_assignment(%s, 'completed', null) $$,
+  (select assignment.id from public.task_assignments as assignment
+     join public.tasks as task on task.id = assignment.task_id
+    where task.title = 'Kit end assignment task #327')),
+  'PT409', 'assignment_not_active',
+  'end_task_assignment refuses to end an already-ended Assignment');
+
+-- ---- close_task_queue ----
+insert into public.tasks (title, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+values ('Kit queue task #327', 'edu', 'org', 'public', 'todo', now(),
+        '32700000-0000-0000-0000-000000000005');
+insert into public.task_candidates (task_id, member_id, status, joined_at)
+select task.id, candidate_id, 'pending', now()
+  from public.tasks as task,
+       unnest(array['32700000-0000-0000-0000-000000000008'::uuid,
+                     '32700000-0000-0000-0000-000000000009'::uuid]) as candidate_id
+ where task.title = 'Kit queue task #327';
+
+select set_eq(
+  $$ select member_id from unnest(private.close_task_queue(
+       (select id from public.tasks where title = 'Kit queue task #327'),
+       '32700000-0000-0000-0000-000000000006')) as member_id $$,
+  $$ values ('32700000-0000-0000-0000-000000000008'::uuid),
+            ('32700000-0000-0000-0000-000000000009'::uuid) $$,
+  'close_task_queue returns exactly the pending Candidates it closed');
+select ok((select task.queue_closed_at is not null from public.tasks as task
+           where task.title = 'Kit queue task #327'),
+  'close_task_queue sets queue_closed_at on the public Task');
+select is((select count(*) from public.task_candidates as candidate
+             join public.tasks as task on task.id = candidate.task_id
+            where task.title = 'Kit queue task #327'
+              and candidate.status = 'closed'
+              and candidate.decided_at is not null
+              and candidate.assignment_id is null
+              and candidate.decided_by = '32700000-0000-0000-0000-000000000006'),
+  2::bigint, 'both closed Candidates carry decided_at, no assignment_id, and the closing manager as decided_by');
+select is((select private.close_task_queue(
+    (select id from public.tasks where title = 'Kit queue task #327'),
+    '32700000-0000-0000-0000-000000000006')),
+  '{}'::uuid[], 'a second close_task_queue call on an already-closed queue is a no-op and returns no members');
+select is((select private.close_task_queue(
+    (select id from public.tasks where title = 'Direct #327'),
+    '32700000-0000-0000-0000-000000000006')),
+  '{}'::uuid[], 'close_task_queue is a no-op on a direct Task and returns no members');
+select is((select task.queue_closed_at from public.tasks as task where task.title = 'Direct #327'),
+  null::timestamptz,
+  'a direct Task keeps queue_closed_at null after a no-op close_task_queue');
 
 select * from finish();
 rollback;

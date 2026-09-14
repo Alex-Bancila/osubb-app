@@ -19,12 +19,23 @@
 --     comment below for the two other narrowings.
 --
 -- Step order inside create_task_impl follows docs/backend/conventions.md Sec2
--- and the #343 campaign-command template exactly: malformed-for-everyone
--- input, then the membership gate, then the target lock, then authority under
--- that lock, then input validation, then state preconditions, then the
--- mutation followed by activity and notifications. Nothing may be reordered
--- -- the gate before the lock is what keeps an identity that can never manage
--- anything from taking a row lock or learning that a Task id exists.
+-- and the #343 campaign-command template: malformed-for-everyone input, then
+-- the membership gate, then the target lock, then authority under that lock,
+-- then input validation, then state preconditions, then the mutation
+-- followed by activity and notifications -- the gate before the lock is what
+-- keeps an identity that can never manage anything from taking a row lock or
+-- learning that a Task id exists.
+--
+-- One named exception: the Subtask path evaluates two PT409 state
+-- preconditions (parent_not_umbrella, parent_terminal) and one PT400 input
+-- check (subtask_origin_mismatch) on the Umbrella BEFORE the authority check,
+-- because the Origin the authority check needs is unknowable until the
+-- Umbrella row is read -- there is nothing to authorize against yet. This is
+-- not a disclosure: the caller already passed private.can_read_task on the
+-- parent to get this far, so nothing about the Umbrella's existence, kind or
+-- status is learned that read did not already establish. #338's reopen_task
+-- faces the same "origin lives on a row read before authority" shape and
+-- should copy this reasoning, not the letter of "nothing may be reordered".
 
 -- ==================== Predicate: who may evaluate ====================
 -- can_manage_task minus three things (ADR-0007 Sec Authorization):
@@ -213,15 +224,24 @@ begin
   if v_actor is null or not coalesce(private.can_evaluate_task(p_task_id), false) then
     raise exception using errcode = '42501', message = 'task_evaluate_forbidden';
   end if;
-  -- same locked re-validation as the manager path (profile + the membership the
-  -- authority rests on); Independent Teams reach here only at level >= 6
-  perform private.require_origin_manager(v_task.dept_id, v_task.team_id, v_task.project_id);
+  -- Same locked re-validation as the manager path (profile + the membership
+  -- the authority rests on); Independent Teams reach here only at level >= 6.
+  -- require_origin_manager raises task_manage_forbidden, which this helper
+  -- must never surface -- only reachable when a membership is revoked inside
+  -- this lock window, but a caller pinned to task_evaluate_forbidden (#337,
+  -- #338) must see exactly that reason regardless of which check inside this
+  -- function actually failed.
+  begin
+    perform private.require_origin_manager(v_task.dept_id, v_task.team_id, v_task.project_id);
+  exception when insufficient_privilege then
+    raise exception using errcode = '42501', message = 'task_evaluate_forbidden';
+  end;
   return v_actor;
 end;
 $$;
 
 comment on function private.require_task_evaluator(bigint) is
-  'Returns auth.uid() only when private.can_evaluate_task admits the caller for this Task, then takes the same FOR SHARE re-validation locks as private.require_origin_manager. The caller must already hold the tasks row FOR UPDATE. PT404 task_not_found for a missing Task; 42501 task_evaluate_forbidden otherwise.';
+  'Returns auth.uid() only when private.can_evaluate_task admits the caller for this Task, then takes the same FOR SHARE re-validation locks as private.require_origin_manager -- any 42501 from that re-validation is remapped to task_evaluate_forbidden so this helper never leaks task_manage_forbidden. The caller must already hold the tasks row FOR UPDATE. PT404 task_not_found for a missing Task; 42501 task_evaluate_forbidden otherwise.';
 
 create function private.require_task_executor(p_task_id bigint)
 returns bigint
@@ -235,7 +255,7 @@ declare
   v_member uuid;
 begin
   perform 1 from public.profiles as p where p.id = v_actor and p.status = 'activ' for share;
-  if v_actor is null or not found then
+  if v_actor is null or not found or not coalesce(public.auth_is_member(), false) then
     raise exception using errcode = '42501', message = 'task_executor_forbidden';
   end if;
   select a.id, a.member_id into v_assignment_id, v_member
@@ -250,7 +270,7 @@ end;
 $$;
 
 comment on function private.require_task_executor(bigint) is
-  'Returns the id of the Task''s one active Assignment, locked FOR UPDATE, only when the live activ caller is its Executor (their profile row is held FOR SHARE too). The caller must already hold the tasks row FOR UPDATE. Raises 42501 task_executor_forbidden when there is no active Assignment or it belongs to someone else -- the two cases are deliberately indistinguishable.';
+  'Returns the id of the Task''s one active Assignment, locked FOR UPDATE, only when the caller has organisation claims and is the live activ Executor (their profile row is held FOR SHARE too). The caller must already hold the tasks row FOR UPDATE. Raises 42501 task_executor_forbidden when there is no active Assignment or it belongs to someone else -- the two cases are deliberately indistinguishable -- and is self-sufficient on the org-claims check so every future executor-side command can call it directly without its own gate running first.';
 
 -- ==================== Internal writers ====================
 create function private.log_task_activity(
@@ -287,6 +307,14 @@ declare
   v_title text;
   v_deadline timestamptz;
 begin
+  -- Closed allow-list: details.via is a pinned structured fact, not free
+  -- text, and every later command in the wave passes exactly one of these
+  -- seven strings (stack-context.md Carry-forwards). A null or unknown via
+  -- is a caller bug, not a silent no-notification.
+  if p_via is null or p_via not in
+     ('create', 'first_come', 'assign', 'queue_promotion', 'select', 'reopen', 'request_approval') then
+    raise sqlstate 'PT400' using message = 'invalid_assignment_via';
+  end if;
   if not exists (select 1 from public.profiles as p where p.id = p_member_id and p.status = 'activ') then
     raise sqlstate 'PT400' using message = 'invalid_executor';
   end if;
@@ -298,8 +326,10 @@ begin
   -- 'reopen' (Task 13) reactivates a past Executor and sends its own
   -- "Task redeschis" notification; every other path announces the new Task.
   -- 'first_come' is the member assigning themselves: notify() drops the
-  -- actor, so no special case is needed for it.
-  if p_via <> 'reopen' then
+  -- actor, so no special case is needed for it. `is distinct from` (not
+  -- `<>`) so a null p_via -- already rejected above, but kept explicit here
+  -- for defense in depth -- cannot silently skip the notification.
+  if p_via is distinct from 'reopen' then
     select title, deadline into v_title, v_deadline from public.tasks where id = p_task_id;
     perform private.notify(array[p_member_id], 'task'::public.noti_kind,
       'Task nou: ' || v_title,
@@ -311,7 +341,7 @@ end;
 $$;
 
 comment on function private.open_task_assignment(bigint, uuid, uuid, text) is
-  'Opens the one active Assignment for a Task, writes its executor_assigned activity row (details.via records how: create, assign, select, queue, request, reopen) and, except for a reopen, sends the new Executor the pinned "Task nou" notification. Raises PT400 invalid_executor for a member who is not a live activ profile. Relies on task_assignments_one_active_per_task_uidx as the last-resort race guard -- callers serialize on the tasks row lock first.';
+  'Opens the one active Assignment for a Task, writes its executor_assigned activity row (details.via records how: create, first_come, assign, queue_promotion, select, reopen, request_approval -- a closed allow-list, PT400 invalid_assignment_via otherwise) and, except for a reopen, sends the new Executor the pinned "Task nou" notification. Raises PT400 invalid_executor for a member who is not a live activ profile. Relies on task_assignments_one_active_per_task_uidx as the last-resort race guard -- callers serialize on the tasks row lock first.';
 
 create function private.end_task_assignment(p_assignment_id bigint, p_reason text, p_note text)
 returns void
