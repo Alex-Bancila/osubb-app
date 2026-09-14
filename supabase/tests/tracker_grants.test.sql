@@ -267,7 +267,11 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('auth_is_member',     '',                                         false, true,  true,  false),
   ('create_campaign',    'p_department_id text, p_name text',        false, true,  false, false),
   ('update_campaign',    'p_campaign_id bigint, p_name text',        false, true,  false, false),
-  ('set_campaign_active','p_campaign_id bigint, p_active boolean',   false, true,  false, false);
+  ('set_campaign_active','p_campaign_id bigint, p_active boolean',   false, true,  false, false),
+  -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
+  -- adds its own row here the same way.
+  ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text',
+                                                                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -299,7 +303,7 @@ end
 $$;
 
 select is(pg_temp.public_function_mismatches(), '{}'::text[],
-  'every public Task-related command/helper (claim_open_task, rating_mult, the auth_* JWT helpers, the three Campaign wrappers) has exactly its audited execute grants -- claim_open_task no longer executable by service_role');
+  'every public Task-related command/helper (claim_open_task, rating_mult, the auth_* JWT helpers, the three Campaign wrappers, #327''s create_task) has exactly its audited execute grants -- claim_open_task no longer executable by service_role');
 
 -- ==================== 7. private schema: pinned function roster ====================
 
@@ -317,14 +321,18 @@ insert into pinned_private_functions (proname, args, category) values
   ('archive_project_impl',                        'p_project_id bigint',                                                                                                'impl'),
   ('caller_level',                                 '',                                                                                                                   'predicate'),
   ('can_administer_team_structure',               'p_dept_id text',                                                                                                     'predicate'),
+  ('can_evaluate_task',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('can_manage_department_memberships',           '',                                                                                                                   'predicate'),
   ('can_manage_origin',                           'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'predicate'),
   ('can_manage_project_work',                     'p_project_id bigint',                                                                                                'predicate'),
   ('can_manage_task',                             'p_task_id bigint',                                                                                                   'predicate'),
   ('can_read_task',                               'p_task_id bigint',                                                                                                   'predicate'),
   ('can_read_team',                               'p_team_id text',                                                                                                     'predicate'),
+  ('close_task_queue',                            'p_task_id bigint, p_decided_by uuid',                                                                                'none'),
   ('create_campaign_impl',                        'p_department_id text, p_name text',                                                                                  'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
+  ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
+  ('end_task_assignment',                         'p_assignment_id bigint, p_reason text, p_note text',                                                                 'none'),
   ('grant_project_responsible_impl',              'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('guard_task_evaluation_change',                '',                                                                                                                   'trigger'),
   ('is_active_project_member',                    'p_project_id bigint',                                                                                                'predicate'),
@@ -335,7 +343,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_candidate',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
+  ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
+  ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
   ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
   ('protect_project_leader_membership',           '',                                                                                                                   'trigger'),
@@ -349,7 +359,12 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_campaign_manager',                    'p_department_id text',                                                                                               'require'),
   ('require_department_team_membership_manager',  'p_team_id text',                                                                                                     'require'),
   ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
+  ('require_origin_manager',                      'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'require'),
   ('require_project_admin',                       '',                                                                                                                   'require'),
+  ('require_task_evaluator',                      'p_task_id bigint',                                                                                                   'require'),
+  ('require_task_executor',                       'p_task_id bigint',                                                                                                   'require'),
+  ('require_task_manager',                        'p_task_id bigint',                                                                                                   'require'),
+  ('require_task_visible',                        'p_task_id bigint',                                                                                                   'require'),
   ('revoke_project_responsible_impl',             'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
   ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
@@ -363,8 +378,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 50,
-  'the pinned private-schema roster itself has exactly the 50 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at and #372''s caller_level');
+  (select count(*) from pinned_private_functions)::int, 61,
+  'the pinned private-schema roster itself has exactly the 61 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level and #327''s eleven-function Task command kit');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
