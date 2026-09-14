@@ -8,39 +8,20 @@
 // The CSV import (#72) will reuse the same port.
 
 import { createClient } from "@supabase/supabase-js";
+import type { InviteDeps } from "../_shared/member-invite.ts";
 
-export interface ProvisionArgs {
-  userId: string;
-  fullName: string;
-  email: string;
-  role: string;
-  deptIds: string[];
-  teamIds: string[];
+export type {
+  DbError,
+  InviteDeps,
+  ProvisionArgs,
+} from "../_shared/member-invite.ts";
+
+export interface InviteAdminDeps extends InviteDeps {
+  /** All currently valid ids, loaded once for CSV validation. */
+  referenceIds(table: "departments" | "teams"): Promise<string[]>;
 }
 
-export interface DbError {
-  code?: string;
-  message: string;
-}
-
-export interface InviteDeps {
-  /** Validated id of the caller, or null when the token is missing/invalid. */
-  callerId(): Promise<string | null>;
-  /** Authoritative level from the database; 0 for missing/inactive members. */
-  memberLevel(userId: string): Promise<number>;
-  /** Which of these ids do NOT exist in the table. */
-  missingIds(table: "departments" | "teams", ids: string[]): Promise<string[]>;
-  /** True when a profile already uses this email. */
-  profileExists(email: string): Promise<boolean>;
-  /** Sends the magic-link invite; returns the new (or existing) user id. */
-  inviteByEmail(
-    email: string,
-  ): Promise<{ userId?: string; error?: DbError & { status?: number } }>;
-  provision(args: ProvisionArgs): Promise<{ error?: DbError }>;
-  deleteUser(userId: string): Promise<void>;
-}
-
-export function realDeps(req: Request): InviteDeps {
+export function realDeps(req: Request): InviteAdminDeps {
   // Read env here rather than at module load, so importing this file in a
   // test (or from another function) never throws on a missing variable.
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -81,6 +62,12 @@ export function realDeps(req: Request): InviteDeps {
       );
       if (error) throw error;
       return ids.filter((id) => !data?.some((row) => row.id === id));
+    },
+
+    async referenceIds(table) {
+      const { data, error } = await admin.from(table).select("id");
+      if (error) throw error;
+      return data?.map((row) => row.id) ?? [];
     },
 
     async profileExists(email) {

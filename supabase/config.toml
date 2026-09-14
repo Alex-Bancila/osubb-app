@@ -89,3 +89,10 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/invite-member/index.ts"
+
+# Epic 2.4 — BC imports up to 100 recruits from validated CSV text.
+[functions.csv-import]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/csv-import/index.ts"
