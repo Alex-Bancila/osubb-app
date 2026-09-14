@@ -10,12 +10,12 @@
 -- withdraw_task_interest and #332's give_up_task take, which is why a
 -- concurrent withdrawal by the very Member being selected cannot tear.
 --
--- Deliberate divergence from #332, pinned by section 6: #332's AUTOMATIC
+-- Deliberate divergence from #332, pinned by section 5: #332's AUTOMATIC
 -- promotion skips a deactivated Candidate and promotes the next live one,
 -- because nobody chose them. Here the manager named one specific person, so a
 -- deactivated choice must fail LOUDLY -- private.open_task_assignment raises
 -- PT400 invalid_executor and the whole command rolls back, even though a live
--- Candidate is sitting right behind them in the queue. Section 6 asserts that
+-- Candidate is sitting right behind them in the queue. Section 5 asserts that
 -- the live Candidate is NOT silently promoted instead.
 --
 -- Non-disclosure: a p_candidate_id that is unknown, already withdrawn, or a
@@ -23,7 +23,7 @@
 -- candidate_not_pending. A manager of Task A must not be able to probe the
 -- Candidature ids of Task B by watching the error change.
 --
--- Concurrency, and an honest limitation of the harness (section 10/11):
+-- Concurrency, and an honest limitation of the harness (sections 10-12):
 -- pg_temp.test_race runs session A's statement to completion, sends session B
 -- while A is still uncommitted, waits until B either blocks or finishes, then
 -- commits A and fetches B's result. A REMOTE ERROR FROM SESSION B PROPAGATES
@@ -31,8 +31,7 @@
 -- it inside the harness, so a single test_race call can pin EITHER b_waited
 -- (when B succeeds) OR B's error code (when the whole call is wrapped in
 -- throws_ok, the campaign_commands.test.sql:651 precedent) -- never both. The
--- two proofs are therefore split across two races on the same lock and the
--- same command pair:
+-- races are therefore split across three sections on the same tasks-row lock:
 --   - section 10 races the manager selecting Candidate X against X's OWN
 --     withdrawal and pins that the loser gets a clean PT409
 --     not_a_candidate, never a raw constraint error, plus the committed end
@@ -43,10 +42,27 @@
 --   - section 11 races the manager selecting Candidate X against a DIFFERENT
 --     pending Candidate Y withdrawing, where both callers legitimately
 --     succeed, and pins b_waited = true on exactly the same tasks-row lock.
+--   - section 12 races TWO managers each selecting a different pending
+--     Candidate into the SAME empty Executor slot -- the scenario the tasks
+--     row lock actually exists for (fix round, #333 review). Verified by
+--     mutation (removing the lock produces a raw 23505 off
+--     task_assignments_one_active_per_task_uidx, observed directly): with the
+--     lock intact, NEITHER call errors -- the command has no "only one caller
+--     may succeed" rule, so the serialization that the lock forces just makes
+--     the second call's replace-an-Executor path see the first call's freshly
+--     committed Assignment and legitimately replace it, exactly as section 3
+--     replaces a sitting Executor. The first manager's chosen Candidature
+--     stays 'selected' (per task_candidates_decision_shape_ck it must, once
+--     decided) pointing at an Assignment that is now ended with reason
+--     'replaced' -- it is not reverted to 'pending'. This is the actually
+--     observed pristine behaviour, not the initially assumed "loser gets a
+--     clean PT409"; the safety property the lock buys here is "no raw
+--     constraint-error leak", not "one caller is rejected".
 -- Because test_race always completes A first, only the SELECT-FIRST order was
--- ever actually executed in either section; the section 10 assertions are
--- written as a disjunction that would also accept the withdraw-first outcome,
--- as a statement of correctness, not because that order was run.
+-- ever actually executed in any of the three sections; the section 10
+-- assertions are written as a disjunction that would also accept the
+-- withdraw-first outcome, as a statement of correctness, not because that
+-- order was run.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -55,7 +71,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(79);
+select plan(84);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -684,15 +700,17 @@ select throws_ok(format($$ insert into public.task_activity (task_id, kind, acto
 reset role;
 
 -- ==================== 9. Locks held while the command runs ====================
--- Sections 10 and 11 prove that a concurrent withdrawal SERIALIZES; this probe
--- proves WHERE. Honest limitation, to be reported by mutation rather than
--- assumed: only the tasks-row assertion is expected to discriminate. The
--- Candidature and the outgoing Assignment are both UPDATEd a moment later
--- inside the same held transaction, so deleting their `for update` keywords
--- leaves an equivalent row lock in place and these assertions stay green --
--- they document the locks, they do not prove the keywords.
+-- Sections 10-12 prove that a concurrent withdrawal or a second selection
+-- SERIALIZES; this probe proves WHERE. Honest limitation, to be reported by
+-- mutation rather than assumed: only the tasks-row assertion is expected to
+-- discriminate for sections 10-11. The Candidature and the outgoing
+-- Assignment are both UPDATEd a moment later inside the same held
+-- transaction, so deleting their `for update` keywords leaves an equivalent
+-- row lock in place and these assertions stay green -- they document the
+-- locks, they do not prove the keywords. Section 12's mutation is different:
+-- the tasks-row lock IS what section 12 detects (see its own header).
 --
--- Sections 9-11 work on COMMITTED fixtures, created and removed through their
+-- Sections 9-12 work on COMMITTED fixtures, created and removed through their
 -- own dblink connection: pg_temp.test_race commits both of its sessions for
 -- real, so nothing this suite's own rolled-back transaction created would be
 -- visible to them.
@@ -714,7 +732,9 @@ select extensions.dblink_exec('stc_setup', $$
                        '33300000-0000-0000-0000-000000000025',
                        '33300000-0000-0000-0000-000000000026',
                        '33300000-0000-0000-0000-000000000027',
-                       '33300000-0000-0000-0000-000000000028')
+                       '33300000-0000-0000-0000-000000000028',
+                       '33300000-0000-0000-0000-000000000029',
+                       '33300000-0000-0000-0000-000000000030')
       or link in (select '/tracker/' || id::text from public.tasks
                    where title like '%#333 committed%');
   delete from public.task_candidates
@@ -726,12 +746,14 @@ select extensions.dblink_exec('stc_setup', $$
     '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
     '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',
     '33300000-0000-0000-0000-000000000025', '33300000-0000-0000-0000-000000000026',
-    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028');
+    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028',
+    '33300000-0000-0000-0000-000000000029', '33300000-0000-0000-0000-000000000030');
   delete from auth.users where id in (
     '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
     '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',
     '33300000-0000-0000-0000-000000000025', '33300000-0000-0000-0000-000000000026',
-    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028');
+    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028',
+    '33300000-0000-0000-0000-000000000029', '33300000-0000-0000-0000-000000000030');
 
   insert into auth.users (id, email) values
     ('33300000-0000-0000-0000-000000000021', 'probe.manager.333@test.local'),
@@ -741,7 +763,9 @@ select extensions.dblink_exec('stc_setup', $$
     ('33300000-0000-0000-0000-000000000025', 'race.chosen.333@test.local'),
     ('33300000-0000-0000-0000-000000000026', 'race.bystander.333@test.local'),
     ('33300000-0000-0000-0000-000000000027', 'race2.chosen.333@test.local'),
-    ('33300000-0000-0000-0000-000000000028', 'race2.withdrawer.333@test.local');
+    ('33300000-0000-0000-0000-000000000028', 'race2.withdrawer.333@test.local'),
+    ('33300000-0000-0000-0000-000000000029', 'race3.first.333@test.local'),
+    ('33300000-0000-0000-0000-000000000030', 'race3.second.333@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('33300000-0000-0000-0000-000000000021', 'Probe Manager 333', 'probe.manager.333@test.local', 'bce', 'activ'),
     ('33300000-0000-0000-0000-000000000022', 'Probe Executor 333', 'probe.executor.333@test.local', 'voluntar', 'activ'),
@@ -750,7 +774,9 @@ select extensions.dblink_exec('stc_setup', $$
     ('33300000-0000-0000-0000-000000000025', 'Cursa Ales 333', 'race.chosen.333@test.local', 'voluntar', 'activ'),
     ('33300000-0000-0000-0000-000000000026', 'Cursa Martor 333', 'race.bystander.333@test.local', 'voluntar', 'activ'),
     ('33300000-0000-0000-0000-000000000027', 'Cursa2 Ales 333', 'race2.chosen.333@test.local', 'voluntar', 'activ'),
-    ('33300000-0000-0000-0000-000000000028', 'Cursa2 Retras 333', 'race2.withdrawer.333@test.local', 'voluntar', 'activ');
+    ('33300000-0000-0000-0000-000000000028', 'Cursa2 Retras 333', 'race2.withdrawer.333@test.local', 'voluntar', 'activ'),
+    ('33300000-0000-0000-0000-000000000029', 'Cursa3 Primul 333', 'race3.first.333@test.local', 'voluntar', 'activ'),
+    ('33300000-0000-0000-0000-000000000030', 'Cursa3 Doilea 333', 'race3.second.333@test.local', 'voluntar', 'activ');
   insert into public.member_departments (member_id, dept_id) values
     ('33300000-0000-0000-0000-000000000021', 'edu'),
     ('33300000-0000-0000-0000-000000000022', 'edu'),
@@ -759,7 +785,9 @@ select extensions.dblink_exec('stc_setup', $$
     ('33300000-0000-0000-0000-000000000025', 'edu'),
     ('33300000-0000-0000-0000-000000000026', 'edu'),
     ('33300000-0000-0000-0000-000000000027', 'edu'),
-    ('33300000-0000-0000-0000-000000000028', 'edu');
+    ('33300000-0000-0000-0000-000000000028', 'edu'),
+    ('33300000-0000-0000-0000-000000000029', 'edu'),
+    ('33300000-0000-0000-0000-000000000030', 'edu');
 
   insert into public.tasks
     (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
@@ -769,6 +797,8 @@ select extensions.dblink_exec('stc_setup', $$
     ('Race conflict #333 committed', 'Cursa cu conflict', '2027-10-02 09:00:00+00', 'edu', 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
     ('Race bystander #333 committed', 'Cursa fara conflict', '2027-10-03 09:00:00+00', 'edu', 'org', 'public', 'todo',
+     '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
+    ('Race twoselect #333 committed', 'Doi manageri, un loc gol', '2027-10-04 09:00:00+00', 'edu', 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -792,7 +822,13 @@ select extensions.dblink_exec('stc_setup', $$
     from public.tasks where title = 'Race bystander #333 committed'
   union all
   select id, '33300000-0000-0000-0000-000000000028'::uuid, 'pending', now() - interval '1 hour'
-    from public.tasks where title = 'Race bystander #333 committed';
+    from public.tasks where title = 'Race bystander #333 committed'
+  union all
+  select id, '33300000-0000-0000-0000-000000000029'::uuid, 'pending', now() - interval '2 hours'
+    from public.tasks where title = 'Race twoselect #333 committed'
+  union all
+  select id, '33300000-0000-0000-0000-000000000030'::uuid, 'pending', now() - interval '1 hour'
+    from public.tasks where title = 'Race twoselect #333 committed';
 $$);
 
 -- Resolved as the owner, before any persona logs in (the #328 trap again).
@@ -800,6 +836,7 @@ create temp table r333 as
 select (select id from public.tasks where title = 'Lock probe #333 committed') as probe_task_id,
        (select id from public.tasks where title = 'Race conflict #333 committed') as conflict_task_id,
        (select id from public.tasks where title = 'Race bystander #333 committed') as bystander_task_id,
+       (select id from public.tasks where title = 'Race twoselect #333 committed') as twoselect_task_id,
        (select candidate.id from public.task_candidates as candidate
           join public.tasks as task on task.id = candidate.task_id
          where task.title = 'Lock probe #333 committed'
@@ -811,7 +848,15 @@ select (select id from public.tasks where title = 'Lock probe #333 committed') a
        (select candidate.id from public.task_candidates as candidate
           join public.tasks as task on task.id = candidate.task_id
          where task.title = 'Race bystander #333 committed'
-           and candidate.member_id = '33300000-0000-0000-0000-000000000027') as bystander_candidature_id;
+           and candidate.member_id = '33300000-0000-0000-0000-000000000027') as bystander_candidature_id,
+       (select candidate.id from public.task_candidates as candidate
+          join public.tasks as task on task.id = candidate.task_id
+         where task.title = 'Race twoselect #333 committed'
+           and candidate.member_id = '33300000-0000-0000-0000-000000000029') as twoselect_first_candidature_id,
+       (select candidate.id from public.task_candidates as candidate
+          join public.tasks as task on task.id = candidate.task_id
+         where task.title = 'Race twoselect #333 committed'
+           and candidate.member_id = '33300000-0000-0000-0000-000000000030') as twoselect_second_candidature_id;
 grant select on r333 to authenticated;
 
 select extensions.dblink_connect('stc_lock', format(
@@ -971,6 +1016,65 @@ select is((select format('%s|%s|%s', candidate.status, candidate.decided_by::tex
   'withdrawn|33300000-0000-0000-0000-000000000028|true',
   'the withdrawing Candidate''s own row is withdrawn by themselves and carries no Assignment -- the two decisions did not overwrite each other');
 
+-- ==================== 12. Race: two managers, one empty slot ====================
+-- The scenario the tasks-row FOR UPDATE actually exists for (fix round, #333
+-- review): two managers each select a DIFFERENT pending Candidate into the
+-- SAME Task with an empty Executor slot. Both callers are the SAME manager
+-- identity here (021) -- authority only depends on managing the Origin, never
+-- on which BCE is logged in, so a second manager account would prove nothing
+-- extra.
+--
+-- Observed pristine behaviour (mutation-proved in the fix report, not
+-- assumed): NEITHER call errors. The command has no "first selection wins"
+-- rule -- session B, waking after A commits, sees A's freshly committed
+-- Assignment as the sitting Executor and legitimately replaces it, exactly as
+-- section 3 replaces a sitting Executor. So the end state is one active
+-- Assignment (B's chosen Candidate) and the FIRST manager's chosen Candidature
+-- left 'selected' (never reverted to 'pending' -- the decision-shape
+-- constraint forbids that once decided_at/by are set) pointing at an
+-- Assignment that is now ended with reason 'replaced'. Removing the tasks-row
+-- lock turns this into a raw 23505 off task_assignments_one_active_per_task_uidx
+-- instead (see the fix report's mutation transcript) -- that is the property
+-- this race actually proves: no constraint-error leak, not "one caller loses
+-- cleanly".
+select pg_temp.test_login('33300000-0000-0000-0000-000000000021', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+create temp table race333_twoselect as
+select * from pg_temp.test_race(
+  format($$ select (public.select_task_candidate(%s, %s, false)).id::text $$,
+    (select twoselect_task_id from r333), (select twoselect_first_candidature_id from r333)),
+  format($$ select (public.select_task_candidate(%s, %s, false)).id::text $$,
+    (select twoselect_task_id from r333), (select twoselect_second_candidature_id from r333)));
+reset role;
+
+select ok((select b_waited from race333_twoselect),
+  'the second manager''s selection BLOCKS until the first commits -- two selections onto the same empty slot serialize on the tasks row too, not just select-vs-withdraw');
+select is((select format('%s|%s', result_a, result_b) from race333_twoselect),
+  (select format('%s|%s', twoselect_task_id::text, twoselect_task_id::text) from r333),
+  'both calls succeed and return the Task row -- select_task_candidate has no "first caller wins" rule to enforce');
+select is((select format('%s|%s', count(*), min(assignment.member_id::text))
+             from public.task_assignments as assignment
+            where assignment.task_id = (select twoselect_task_id from r333)
+              and assignment.ended_at is null),
+  '1|33300000-0000-0000-0000-000000000030',
+  'exactly one active Assignment survives, held by the SECOND manager''s choice -- the second call replaced the first''s freshly committed pick');
+select is((select format('%s|%s|%s', candidate.status, candidate.decided_by,
+                         (candidate.assignment_id = (select assignment.id from public.task_assignments as assignment
+                                                      where assignment.task_id = candidate.task_id
+                                                        and assignment.ended_at is null))::text)
+             from public.task_candidates as candidate
+            where candidate.id = (select twoselect_second_candidature_id from r333)),
+  'selected|33300000-0000-0000-0000-000000000021|true',
+  'the second manager''s chosen Candidature is selected and points at the surviving Assignment');
+select is((select format('%s|%s|%s', candidate.status, candidate.decided_by,
+                         (select format('%s|%s', (assignment.ended_at is not null)::text, assignment.end_reason)
+                            from public.task_assignments as assignment
+                           where assignment.id = candidate.assignment_id))
+             from public.task_candidates as candidate
+            where candidate.id = (select twoselect_first_candidature_id from r333)),
+  'selected|33300000-0000-0000-0000-000000000021|true|replaced',
+  'the first manager''s chosen Candidature stays selected (never reverted to pending -- the decision-shape constraint forbids that once decided) but its own Assignment is now ended with reason replaced, not active: no raw constraint error ever surfaced, but the FIRST decision was silently superseded by the SECOND, exactly as an immediate replace call would do');
+
 -- ---- clean up everything the committed sessions left behind ----
 -- task_activity is append-only by trigger, including for its owner, so the
 -- cleanup runs its deletes under session_replication_role = 'replica', which
@@ -989,7 +1093,9 @@ select extensions.dblink_exec('stc_setup', $$
                        '33300000-0000-0000-0000-000000000025',
                        '33300000-0000-0000-0000-000000000026',
                        '33300000-0000-0000-0000-000000000027',
-                       '33300000-0000-0000-0000-000000000028')
+                       '33300000-0000-0000-0000-000000000028',
+                       '33300000-0000-0000-0000-000000000029',
+                       '33300000-0000-0000-0000-000000000030')
       or link in (select '/tracker/' || id::text from public.tasks
                    where title like '%#333 committed%');
   delete from public.task_candidates
@@ -1001,12 +1107,14 @@ select extensions.dblink_exec('stc_setup', $$
     '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
     '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',
     '33300000-0000-0000-0000-000000000025', '33300000-0000-0000-0000-000000000026',
-    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028');
+    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028',
+    '33300000-0000-0000-0000-000000000029', '33300000-0000-0000-0000-000000000030');
   delete from auth.users where id in (
     '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
     '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',
     '33300000-0000-0000-0000-000000000025', '33300000-0000-0000-0000-000000000026',
-    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028');
+    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028',
+    '33300000-0000-0000-0000-000000000029', '33300000-0000-0000-0000-000000000030');
 $$);
 select extensions.dblink_disconnect('stc_setup');
 
@@ -1020,8 +1128,10 @@ select is((select count(*) from auth.users
                          '33300000-0000-0000-0000-000000000025',
                          '33300000-0000-0000-0000-000000000026',
                          '33300000-0000-0000-0000-000000000027',
-                         '33300000-0000-0000-0000-000000000028')), 0::bigint,
-  'the eight committed race/lock-probe fixture accounts are removed too, not just their Tasks');
+                         '33300000-0000-0000-0000-000000000028',
+                         '33300000-0000-0000-0000-000000000029',
+                         '33300000-0000-0000-0000-000000000030')), 0::bigint,
+  'the ten committed race/lock-probe fixture accounts are removed too, not just their Tasks');
 -- notifications.task_id is ON DELETE SET NULL, so a leftover row would survive
 -- with a nulled task_id and be invisible to a task_id-keyed check; link
 -- ('/tracker/<id>') still names the deleted Task and cannot be erased by the
@@ -1032,6 +1142,7 @@ select is((select count(*) from public.notifications
                 select probe_task_id as task_id from r333
                 union all select conflict_task_id from r333
                 union all select bystander_task_id from r333
+                union all select twoselect_task_id from r333
               ) as committed_task_ids
             )), 0::bigint,
   'no notification survives with a nulled task_id after the committed Tasks are deleted -- checked by link, which ON DELETE SET NULL cannot erase');

@@ -63,6 +63,15 @@
 --      deliberately no separate task_not_public reason either: a direct Task
 --      has no Candidatures, so it answers candidate_not_pending naturally.
 --
+-- Fix round (review): the UPDATE that marks the Candidature 'selected' repeats
+-- `and candidate.status = 'pending'` and re-raises PT409 candidate_not_pending
+-- if it updates nothing. Today the tasks row lock plus the SELECT ... FOR
+-- UPDATE above make a concurrent withdrawal of THIS SAME Candidature between
+-- the SELECT and this UPDATE impossible, so the predicate is a no-op on every
+-- path this suite can reach -- but it is defense in depth against either lock
+-- ever moving, and it is what makes the SELECT's own FOR UPDATE keyword
+-- mutation-detectable (see the migration's mutation notes and the fix report).
+--
 -- Step 7 runs in the order the facts become available, which is why the
 -- activity row is written LAST rather than immediately after the mutation:
 -- details.closed_candidates is not knowable until private.close_task_queue has
@@ -167,7 +176,11 @@ begin
   update public.task_candidates as candidate
      set status = 'selected', decided_at = now(), decided_by = v_actor,
          assignment_id = v_new_assignment_id
-   where candidate.id = v_candidate.id;
+   where candidate.id = v_candidate.id
+     and candidate.status = 'pending';
+  if not found then
+    raise sqlstate 'PT409' using message = 'candidate_not_pending';
+  end if;
   if p_close_remaining then
     -- Runs AFTER the update above, so the person just selected is no longer
     -- 'pending' and is neither closed nor notified a second time.
@@ -191,7 +204,7 @@ end;
 $$;
 
 comment on function private.select_task_candidate_impl(bigint, bigint, boolean) is
-  'A manager fills or replaces a Task''s Executor from its own Candidate Queue and decides the fate of the remaining Candidates; the actor is auth.uid(), never a parameter. p_close_remaining null is PT400 invalid_close_flag, raised before the membership gate because the input is malformed for every caller. The tasks row is locked FOR UPDATE before any Assignment or Candidature state is read, so a concurrent withdraw_task_interest serializes behind the whole decision. Requires private.require_task_manager under that lock (42501 task_manage_forbidden). Refuses an Umbrella (PT409 task_is_umbrella, first because an Umbrella''s assignment_mode is null), a terminal Task (task_terminal) and an in_review Task (task_in_review -- ADR-0007 blocks replacing an Executor mid-review), all before p_candidate_id is even looked up. p_candidate_id must be a live pending Candidature OF THIS TASK, locked FOR UPDATE after the tasks row; unknown, null, withdrawn, already decided and "valid but on another Task" all answer the same PT409 candidate_not_pending, so a manager can never probe another Task''s Candidature ids. An existing active Assignment is ended with end_reason ''replaced'' and its holder gets the pinned ''Înlocuit'' notification; private.open_task_assignment (via = ''select'') opens the new one, writes its executor_assigned row and notifies the chosen Member -- and raises PT400 invalid_executor if that Member is no longer activ, deliberately failing loudly instead of skipping to the next Candidate the way #332''s automatic promotion does. The Candidature becomes ''selected'' with decided_by = the MANAGER and assignment_id = the new Assignment; with p_close_remaining true private.close_task_queue then closes the queue and every remaining Candidature and notifies exactly those Members (''Coadă închisă''), with false they are left untouched and the queue stays open. One candidate_selected activity row is written last, carrying the new Assignment id and details.candidate_id / replaced_assignment_id / closed_remaining / closed_candidates. The Task''s status never changes.';
+  'A manager fills or replaces a Task''s Executor from its own Candidate Queue and decides the fate of the remaining Candidates; the actor is auth.uid(), never a parameter. p_close_remaining null is PT400 invalid_close_flag, raised before the membership gate because the input is malformed for every caller. The tasks row is locked FOR UPDATE before any Assignment or Candidature state is read, so a concurrent withdraw_task_interest serializes behind the whole decision. Requires private.require_task_manager under that lock (42501 task_manage_forbidden). Refuses an Umbrella (PT409 task_is_umbrella, first because an Umbrella''s assignment_mode is null), a terminal Task (task_terminal) and an in_review Task (task_in_review -- ADR-0007 blocks replacing an Executor mid-review), all before p_candidate_id is even looked up. p_candidate_id must be a live pending Candidature OF THIS TASK, locked FOR UPDATE after the tasks row; unknown, null, withdrawn, already decided and "valid but on another Task" all answer the same PT409 candidate_not_pending, so a manager can never probe another Task''s Candidature ids. An existing active Assignment is ended with end_reason ''replaced'' and its holder gets the pinned ''Înlocuit'' notification; private.open_task_assignment (via = ''select'') opens the new one, writes its executor_assigned row and notifies the chosen Member -- and raises PT400 invalid_executor if that Member is no longer activ, deliberately failing loudly instead of skipping to the next Candidate the way #332''s automatic promotion does. The Candidature becomes ''selected'' with decided_by = the MANAGER and assignment_id = the new Assignment via an UPDATE that repeats the pending-status predicate and re-raises PT409 candidate_not_pending if it matches nothing (defense in depth: unreachable while the tasks row lock and the Candidature''s own SELECT ... FOR UPDATE both hold, but never a silent overwrite of a row that stopped being pending); with p_close_remaining true private.close_task_queue then closes the queue and every remaining Candidature and notifies exactly those Members (''Coadă închisă''), with false they are left untouched and the queue stays open. One candidate_selected activity row is written last, carrying the new Assignment id and details.candidate_id / replaced_assignment_id / closed_remaining / closed_candidates. The Task''s status never changes.';
 
 create function public.select_task_candidate(
   p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean)
