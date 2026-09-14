@@ -290,7 +290,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('give_up_task',           'p_task_id bigint, p_reason text',      false, true,  false, false),
   -- #333: the seventh Task command wrapper, added the same way.
   ('select_task_candidate',  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',
-                                                                     false, true,  false, false);
+                                                                     false, true,  false, false),
+  -- #334: the eighth and ninth Task command wrappers, added the same way.
+  ('start_task',              'p_task_id bigint',                    false, true,  false, false),
+  ('submit_task_for_review',  'p_task_id bigint',                    false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -393,6 +396,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
   ('set_task_queue_impl',                         'p_task_id bigint, p_open boolean',                                                                                   'impl'),
   ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
+  ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
+  ('submit_task_for_review_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   ('sync_project_leader_membership',              '',                                                                                                                   'trigger'),
   ('task_is_unassigned',                          'p_task_id bigint',                                                                                                   'authenticated_only'),
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
@@ -405,8 +410,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 69,
-  'the pinned private-schema roster itself has exactly the 69 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl and #333''s select_task_candidate_impl');
+  (select count(*) from pinned_private_functions)::int, 71,
+  'the pinned private-schema roster itself has exactly the 71 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl and #334''s start_task_impl/submit_task_for_review_impl pair');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
