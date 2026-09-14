@@ -3172,6 +3172,44 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_task_queue: {
+        Args: { p_open: boolean; p_task_id: number }
+        Returns: {
+          assignment_mode: string | null
+          audience: string | null
+          campaign_id: number | null
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          dept_id: string | null
+          description: string | null
+          difficulty: number | null
+          id: number
+          kind: string
+          parent_task_id: number | null
+          project_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
+          rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
+          team_id: string | null
+          title: string
+          type: string | null
+          unfulfilled_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_campaign: {
         Args: { p_campaign_id: number; p_name: string }
         Returns: {
