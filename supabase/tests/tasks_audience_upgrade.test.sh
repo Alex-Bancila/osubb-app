@@ -36,6 +36,12 @@ alter table public.tasks alter column status type text using status::text;
 -- #292: task_activity.from_status/to_status also depend on task_status; this
 -- scratch transaction rolls back, so dropping them here is safe.
 alter table public.task_activity drop column from_status, drop column to_status;
+-- #327: private.log_task_activity takes two task_status parameters, so it
+-- depends on the enum the same way those columns did. Same treatment, same
+-- reasoning as 20260911210200_task_activity.sql's header warning: this scratch
+-- transaction rolls back, so dropping and never recreating it is safe. Any
+-- later task_status-typed object must be dropped here too.
+drop function private.log_task_activity(bigint, text, uuid, bigint, public.task_status, public.task_status, text, jsonb);
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks
