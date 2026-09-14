@@ -26,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(49);
+select plan(51);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -298,6 +298,10 @@ select throws_ok(format($$ select public.set_task_queue(%s, false) $$,
 select throws_ok(format($$ select public.set_task_queue(%s, true) $$,
   (select terminal_task_id from f331)), 'PT409', 'task_terminal',
   'a terminal Task''s queue cannot be reopened, even though it is currently closed');
+select throws_ok(
+  format($$ select public.set_task_queue(%s, false) $$, (select terminal_task_id from f331)),
+  'PT409', 'task_terminal',
+  'closing an already-terminal Task answers task_terminal, not nothing_to_update -- the check order is load-bearing');
 select throws_ok(format($$ select public.set_task_queue(%s, true) $$,
   (select already_open_task_id from f331)), 'PT409', 'nothing_to_update',
   'opening a queue that is already open is rejected -- a manager cannot re-notify by no-op');
@@ -315,6 +319,12 @@ select is((select count(*) from public.task_activity
                or task_id in (select already_open_task_id from f331)
                or task_id in (select already_closed_task_id from f331)), 0::bigint,
   'none of the four rejected state-precondition calls wrote an activity row');
+select is((select count(*) from public.notifications
+            where task_id in (select direct_task_id from f331)
+               or task_id in (select terminal_task_id from f331)
+               or task_id in (select already_open_task_id from f331)
+               or task_id in (select already_closed_task_id from f331)), 0::bigint,
+  'no rejected state-precondition call wrote a notification');
 
 -- ==================== 5. Persona denials ====================
 
