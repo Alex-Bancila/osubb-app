@@ -8,15 +8,28 @@
 -- step serialized on the tasks row FOR UPDATE, taken before any Assignment or
 -- Candidature state is read -- the same serialization point #330's
 -- express_task_interest uses, which is exactly why the two commands can race
--- and still agree. Sections 9 and 10 run that race in both interesting
--- shapes: an EMPTY queue (the outsider ends up Executor either way -- by
--- first-come if the give-up commits first, by promotion if the candidature
--- does) and a NON-EMPTY one (the promoted Candidate wins the slot and the
--- outsider queues behind them). Section 10 is the mutation-sensitive one: with
--- the tasks-row FOR UPDATE removed from give_up_task_impl, session B stops
--- serializing behind the promotion, re-reads an Assignment row that the
--- promotion has already replaced, and surfaces a raw 23505 from
--- task_assignments_one_active_per_task_uidx instead of queueing.
+-- and still agree. Sections 9 and 10 run that race in the two interesting
+-- queue shapes: an EMPTY queue (section 9) and a NON-EMPTY one (section 10,
+-- where the promoted Candidate wins the slot and the outsider queues behind
+-- them). pg_temp.test_race always runs the give-up (session A) to completion
+-- before express_task_interest (session B) is even sent, so only the
+-- give-up-first order is ever actually exercised in either section -- the
+-- assertions admit either legitimate mechanism (first_come or
+-- queue_promotion) as a matter of correctness, not because both commit orders
+-- were run.
+--
+-- Honest limitation, found by mutation rather than assumed (see
+-- task-7-report.md Sec5 M2): with the tasks-row FOR UPDATE removed from
+-- give_up_task_impl, both races STILL report b_waited = true and land on the
+-- same end state -- session B still blocks on the Task row, because every
+-- write the promotion makes (the new Assignment, its executor_assigned row,
+-- the candidate_selected row) carries a task_id foreign key and so takes a
+-- FOR KEY SHARE lock on it regardless, and session B's own FOR UPDATE
+-- conflicts with that KEY SHARE just the same. Only section 8's pgrowlocks
+-- probe actually fails under that mutation. The point still stands that the
+-- explicit lock is what should serialize this: KEY SHARE does not conflict
+-- with KEY SHARE, so two commands BOTH missing the explicit FOR UPDATE would
+-- not serialize against each other at all.
 --
 -- The Task's status never changes: an in_progress Task stays in_progress for
 -- the promoted Executor (started_at is already set and is not rewound), a todo
@@ -24,12 +37,16 @@
 -- with no Executor -- which is the exact state #342's assign_task_executor
 -- exists to remedy; section 3 composes the two commands to prove it.
 --
--- Known gap, deliberately left visible rather than hidden (see the PR): the
--- promotion picks the oldest pending Candidature without regard to whether
--- that Member is still activ, so a deactivated Candidate at the head of the
--- queue makes private.open_task_assignment raise PT400 invalid_executor and
--- blocks the give-up entirely. Section 6 pins that behavior so a future
--- decision to skip or close dead Candidatures has a test to change.
+-- Fixed in the review round (stack-context.md carry-forward, #332): the
+-- promotion originally picked the oldest pending Candidature with no
+-- liveness filter, so a deactivated Candidate at the head of the queue made
+-- private.open_task_assignment raise PT400 invalid_executor and rolled the
+-- whole give-up back with it -- an Executor unable to leave a Task because a
+-- DIFFERENT person was deactivated. Section 6 now pins the fix: a deactivated
+-- head-of-queue Candidate is skipped and left pending (never closed) while
+-- the active Candidate behind them is promoted, and a queue holding only
+-- deactivated Candidates lets the give-up succeed with nobody promoted, same
+-- as an empty queue.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -38,7 +55,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(75);
+select plan(82);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -52,7 +69,8 @@ insert into auth.users (id, email) values
   ('33200000-0000-0000-0000-000000000008', 'claimless.332@test.local'),
   ('33200000-0000-0000-0000-000000000009', 'direct.executor.332@test.local'),
   ('33200000-0000-0000-0000-000000000010', 'review.executor.332@test.local'),
-  ('33200000-0000-0000-0000-000000000011', 'dead.queue.executor.332@test.local');
+  ('33200000-0000-0000-0000-000000000011', 'dead.queue.executor.332@test.local'),
+  ('33200000-0000-0000-0000-000000000012', 'dead.head.executor.332@test.local');
 
 insert into public.profiles (id, full_name, email, role, status) values
   ('33200000-0000-0000-0000-000000000001', 'Manager 332', 'manager.332@test.local', 'bce', 'activ'),
@@ -65,7 +83,8 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33200000-0000-0000-0000-000000000008', 'Fara Claimuri 332', 'claimless.332@test.local', 'voluntar', 'activ'),
   ('33200000-0000-0000-0000-000000000009', 'Executor Direct 332', 'direct.executor.332@test.local', 'voluntar', 'activ'),
   ('33200000-0000-0000-0000-000000000010', 'Executor In Verificare 332', 'review.executor.332@test.local', 'voluntar', 'activ'),
-  ('33200000-0000-0000-0000-000000000011', 'Executor Coada Moarta 332', 'dead.queue.executor.332@test.local', 'voluntar', 'activ');
+  ('33200000-0000-0000-0000-000000000011', 'Executor Coada Moarta 332', 'dead.queue.executor.332@test.local', 'voluntar', 'activ'),
+  ('33200000-0000-0000-0000-000000000012', 'Executor Cap Dezactivat 332', 'dead.head.executor.332@test.local', 'voluntar', 'activ');
 
 insert into public.member_departments (member_id, dept_id) values
   ('33200000-0000-0000-0000-000000000001', 'edu'),
@@ -75,7 +94,8 @@ insert into public.member_departments (member_id, dept_id) values
   ('33200000-0000-0000-0000-000000000005', 'edu'),
   ('33200000-0000-0000-0000-000000000009', 'edu'),
   ('33200000-0000-0000-0000-000000000010', 'edu'),
-  ('33200000-0000-0000-0000-000000000011', 'edu');
+  ('33200000-0000-0000-0000-000000000011', 'edu'),
+  ('33200000-0000-0000-0000-000000000012', 'edu');
 
 -- ---- T1: the promotion happy path -- a public Task in progress, one
 -- Executor, two pending Candidates in a known order.
@@ -151,7 +171,8 @@ insert into public.task_assignments (task_id, member_id, assigned_by, assigned_a
 select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-000000000001', now()
   from public.tasks where title = 'Anulat #332';
 
--- ---- T7: the deactivated-Candidate gap (section 6).
+-- ---- T7: a queue with ONLY a deactivated Candidate (section 6) -- the
+-- give-up now succeeds with nobody promoted, same as an empty queue.
 insert into public.tasks
   (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
@@ -163,6 +184,25 @@ select id, '33200000-0000-0000-0000-000000000011', '33200000-0000-0000-0000-0000
 insert into public.task_candidates (task_id, member_id, status, joined_at)
 select id, '33200000-0000-0000-0000-000000000007', 'pending', now() - interval '3 hours'
   from public.tasks where title = 'Candidat dezactivat #332';
+
+-- ---- T8: a deactivated Candidate at the HEAD of the queue (007, joined
+-- first) with an active Candidate behind them (006, joined second) --
+-- section 6's discriminating case: the dead head is skipped in place, the
+-- live Candidate behind them is promoted.
+insert into public.tasks
+  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+values
+  ('Cap de coada dezactivat #332', 'Coada cu cap mort', '2027-07-08 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+   now(), now(), '33200000-0000-0000-0000-000000000001');
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33200000-0000-0000-0000-000000000012', '33200000-0000-0000-0000-000000000001', now()
+  from public.tasks where title = 'Cap de coada dezactivat #332';
+insert into public.task_candidates (task_id, member_id, status, joined_at)
+select id, '33200000-0000-0000-0000-000000000007'::uuid, 'pending', now() - interval '2 hours'
+  from public.tasks where title = 'Cap de coada dezactivat #332'
+union all
+select id, '33200000-0000-0000-0000-000000000006'::uuid, 'pending', now() - interval '1 hour'
+  from public.tasks where title = 'Cap de coada dezactivat #332';
 
 -- Every fixture id resolved ONCE, as the owner. Never resolve an id inside a
 -- format() while a denied persona is logged in: the lookup would run under
@@ -177,7 +217,8 @@ select
   (select id from public.tasks where title = 'Motiv gol #332') as blank_task_id,
   (select id from public.tasks where title = 'Persoane #332') as persona_task_id,
   (select id from public.tasks where title = 'Anulat #332') as cancelled_task_id,
-  (select id from public.tasks where title = 'Candidat dezactivat #332') as dead_queue_task_id;
+  (select id from public.tasks where title = 'Candidat dezactivat #332') as dead_queue_task_id,
+  (select id from public.tasks where title = 'Cap de coada dezactivat #332') as dead_head_task_id;
 grant select on f332 to authenticated, anon;
 
 -- ==================== 1. API shape and privileges ====================
@@ -489,26 +530,76 @@ select is((select format('%s|%s', count(*) filter (where ended_at is null),
   '1|33200000-0000-0000-0000-000000000002',
   'the persona Task still has its one active Assignment, still held by the same Executor');
 
--- ==================== 6. Known gap: a deactivated Candidate at the head ====================
--- private.open_task_assignment is the only liveness gate on an incoming
--- Executor (PT400 invalid_executor), and the promotion picks strictly the
--- oldest pending Candidature -- so a Member deactivated while queued blocks
--- the Executor's give-up entirely. Pinned here, and flagged in the PR, so a
--- decision to skip or auto-close dead Candidatures has a test to change rather
--- than an undocumented behavior to discover.
+-- ==================== 6. Liveness filter: deactivated Candidates are skipped ====================
+-- The promotion joins the pending Candidature to profiles filtered to
+-- status = 'activ' (stack-context.md carry-forward, #332): a deactivated
+-- Candidate is stale and unpromotable, but SKIPPED rather than closed --
+-- closing a Candidature is a manager act (#331/#333) with its own
+-- notification, not a side effect of someone else's give-up.
 
+-- ---- T7: a queue with ONLY a deactivated Candidate -- the give-up succeeds
+-- with nobody promoted, exactly like an empty queue.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000011', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok(format($$ select public.give_up_task(%s, 'Renunt.') $$,
-  (select dead_queue_task_id from f332)), 'PT400', 'invalid_executor',
-  'KNOWN GAP: a deactivated Member at the head of the queue makes the promotion -- and therefore the whole give-up -- fail');
+select lives_ok(format($$ select public.give_up_task(%s, 'Renunt.') $$,
+  (select dead_queue_task_id from f332)),
+  'a queue holding only a deactivated Candidate does not block the give-up -- it succeeds with nobody promoted');
 reset role;
 
-select is((select format('%s|%s', count(*) filter (where ended_at is null),
-                         min(member_id::text) filter (where ended_at is null))
+select is((select format('%s|%s', count(*), count(*) filter (where ended_at is null))
              from public.task_assignments where task_id = (select dead_queue_task_id from f332)),
-  '1|33200000-0000-0000-0000-000000000011',
-  'the failed promotion rolls the give-up back with it -- the Executor still holds the Task, which is why this is a gap and not a feature');
+  '1|0', 'the Task is left with no active Assignment -- exactly the empty-queue end state');
+select is((select format('%s|%s|%s|%s', candidate.status,
+                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
+                         (candidate.assignment_id is null)::text)
+             from public.task_candidates as candidate
+            where candidate.task_id = (select dead_queue_task_id from f332)
+              and candidate.member_id = '33200000-0000-0000-0000-000000000007'),
+  'pending|true|true|true',
+  'the deactivated Candidate''s row is untouched -- still pending, still undecided, no Assignment -- closing it is a manager act, not a side effect');
+select is((select count(*) from public.task_activity
+            where task_id = (select dead_queue_task_id from f332) and kind = 'candidate_selected'), 0::bigint,
+  'no candidate_selected row is written -- nobody was promoted');
+
+-- ---- T8: a deactivated Candidate at the HEAD of the queue, an active
+-- Candidate behind them -- the head is skipped in place, the active one is
+-- promoted. The reviewer's specific demand: "skip" must not be
+-- implementable as "close", so the skipped row's decision columns are
+-- asserted still null, not just its status.
+select pg_temp.test_login('33200000-0000-0000-0000-000000000012', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.give_up_task(%s, 'Renunt si eu.') $$,
+  (select dead_head_task_id from f332)),
+  'the Executor gives up a Task whose queue head is deactivated -- the promotion skips them and reaches the active Candidate behind');
+reset role;
+
+select is((select format('%s|%s|%s|%s', candidate.status,
+                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
+                         (candidate.assignment_id is null)::text)
+             from public.task_candidates as candidate
+            where candidate.task_id = (select dead_head_task_id from f332)
+              and candidate.member_id = '33200000-0000-0000-0000-000000000007'),
+  'pending|true|true|true',
+  'the deactivated head-of-queue Candidate is SKIPPED, not closed -- still pending, and decided_at/decided_by/assignment_id are all still null');
+select is((select format('%s|%s|%s|%s', candidate.status, candidate.decided_by,
+                         (candidate.decided_at is not null)::text,
+                         (candidate.assignment_id = (select assignment.id from public.task_assignments as assignment
+                                                      where assignment.task_id = candidate.task_id
+                                                        and assignment.ended_at is null))::text)
+             from public.task_candidates as candidate
+            where candidate.task_id = (select dead_head_task_id from f332)
+              and candidate.member_id = '33200000-0000-0000-0000-000000000006'),
+  'selected|33200000-0000-0000-0000-000000000012|true|true',
+  'the active Candidate behind the deactivated head is the one actually promoted, decided by the giver-upper, pointing at the new Assignment');
+select is((select format('%s|%s', count(*), min(assignment.member_id::text))
+             from public.task_assignments as assignment
+            where assignment.task_id = (select dead_head_task_id from f332)
+              and assignment.ended_at is null),
+  '1|33200000-0000-0000-0000-000000000006',
+  'exactly one active Assignment survives, held by the active Candidate promoted from behind the deactivated head');
+select is((select count(*) from public.task_activity
+            where task_id = (select dead_head_task_id from f332) and kind = 'candidate_selected'), 1::bigint,
+  'exactly one candidate_selected row is written -- for the promoted Candidate, not the skipped one');
 
 -- ==================== 7. The command is the only write path ====================
 
@@ -699,13 +790,14 @@ select extensions.dblink_exec('gut_lock', 'rollback');
 select extensions.dblink_disconnect('gut_lock');
 
 -- ==================== 9. Race: give up vs express interest, EMPTY queue ====================
--- The Executor leaves while an outsider claims the Task. Whichever order the
--- two transactions commit in, the outsider ends up the single Executor: if the
--- give-up lands first they take the free slot by first-come; if their
--- candidature lands first the give-up promotes them out of the queue. The
--- invariant is what is asserted -- exactly one active Assignment, both callers
--- succeeding -- plus the union of the two legitimate mechanisms, never one
--- fixed interleaving.
+-- The Executor leaves while an outsider claims the Task. pg_temp.test_race
+-- always runs the give-up (session A) to completion before
+-- express_task_interest (session B) is even sent, so only the give-up-first
+-- order is ever actually exercised here -- not both commit orders. The
+-- invariant is what is asserted -- exactly one active Assignment, both
+-- callers succeeding -- and the via check admits either legitimate mechanism
+-- (first_come or queue_promotion) as a matter of correctness, not because
+-- both interleavings were run.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000022', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table race332empty as
