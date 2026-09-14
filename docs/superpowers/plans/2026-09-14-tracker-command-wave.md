@@ -115,6 +115,73 @@ Every task's requirements implicitly include this section.
 
 ---
 
+## Execution rulings (2026-09-14, binding — added during implementation)
+
+Tasks 1–7 shipped and merged to `main` (#451–#457). These decisions were made while executing them
+and **bind every remaining task**; where one contradicts a task's own text below, the ruling wins.
+
+**Delivery model changed after Task 7.** Every remaining task branches from `main`, opens a normal
+(non-draft) PR against `main`, and is **merged to `main` as soon as its review is clean and CI is
+green** — no long stack, no draft chain, no retargeting. The Base column in the table below records
+the original stacked design; from Task 8 on, read it as `main`.
+
+- **The roster count is read, never assumed.** Before editing
+  `supabase/tests/tracker_grants.test.sql`, grep its current `count(*) from pinned_private_functions`
+  assertion on your branch, add only the `private` functions your own migration creates, and set the
+  count to `read + added`. The baseline after Task 7 is **68**. Also add a row to that file's
+  `expected_function_privs` for each new public wrapper — the file's own comment asks for it, and it
+  changes no assertion count.
+- **Guard every locked read.** After `select … into v_task from public.tasks where id = p_task_id for
+update`, write `if not found then raise sqlstate 'PT404' using message = 'task_not_found'; end if;`.
+  Without it a concurrently deleted Task answers with whatever state check fires first.
+- **A null target id is `PT404 task_not_found`, not `PT400`.** It falls out of `can_read_task(null)`,
+  gives the same non-disclosing answer as hidden-or-missing, and no legitimate client sends null. No
+  command adds a step-1 null-id check.
+- **Queue promotion skips Candidates who are no longer active members** (ADR-0007: "Active OSUBB
+  membership is mandatory for every operation"). Promotion takes the oldest `pending` Candidature
+  whose `profiles.status = 'activ'`, ordered `joined_at, id`; skipped rows stay `pending`; with no
+  active Candidate the command still succeeds leaving no Executor. **Task 8 (#333) is deliberately the
+  opposite:** there the manager names one specific Candidate, so a deactivated choice must fail loudly
+  with `PT400 invalid_executor`. Pin that difference in a test.
+- **`task_candidates.decided_by` on a `selected` row is the actor whose command produced the
+  decision** — the manager for #333, the giver-upper for #332's automatic promotion. The constraint
+  forbids null for `selected`; `details.promoted = true` on the activity row marks an automatic
+  promotion.
+- **Only #330's two commands write the coalesced `task:{id}:queue` manager notification.**
+  Manager-side commands that also change the pending count do not refresh it — each sends its own
+  specific notification, and where the manager is the actor `private.notify` drops them anyway. The
+  row is a nudge; the live count comes from `private.pending_candidate_count`.
+- **Romanian plural agreement** in that queue-count body (corrects the notification table below):
+  `case when n = 1 then '1 candidat în așteptare.' when n < 20 then n || ' candidați în așteptare.'
+else n || ' de candidați în așteptare.' end`.
+- **Anything typed `public.task_status` breaks three upgrade harnesses.**
+  `tasks_lifecycle_upgrade.test.sh`, `tasks_audience_upgrade.test.sh` and
+  `tasks_assignment_mode_upgrade.test.sh` drop and recreate the enum in a rolled-back scratch
+  transaction. Task 1 had to add `drop function private.log_task_activity(...)` to each. If your
+  migration creates any object with a `task_status` parameter, column or return type, patch those
+  three the same way — explicit drop, never `drop type … cascade`.
+- **`private.open_task_assignment`'s `p_via` is a closed allow-list** validated inside the helper:
+  `create`, `first_come`, `assign`, `queue_promotion`, `select`, `reopen` (the one value that
+  suppresses the "Task nou" notification), `request_approval`. Anything else raises
+  `PT400 invalid_assignment_via`.
+- **Task 14 (#339) owns a fixture sweep its task text understates.** Its `tasks_cancel_reason_ck`
+  breaks **22 cancelled-Task fixtures across eight files** — `rls_tasks_read_matrix`,
+  `tasks_derived_overdue`, `tasks_evaluation_inputs`, `tasks_lifecycle`,
+  `tasks_lifecycle_timestamps`, `task_assignments_backfill`, and the two `*_upgrade.test.sh`
+  harnesses — not just `tasks_lifecycle_timestamps.test.sql`. Give each a reason; the harnesses may
+  need the constraint dropped inside their own scratch transactions, as #312 did.
+- **Tasks 14 and 16 recreate `public.tasks_with_overdue` from the live `pg_get_viewdef` on their own
+  branch**, plus their new column — never from a column list copied out of this plan — keeping
+  `security_invoker = on`, the existing comment, and the `select` grants to
+  `authenticated, service_role`.
+- **Two test-writing traps found the hard way.** Build a `text[]` of changed field names with
+  `array_append(arr, 'name')`, not `arr || 'name'` (the untyped literal raises
+  `malformed array literal`). And never resolve a fixture id inside a `format()` while the persona
+  being denied is logged in — it returns NULL through that persona's RLS and the assertion passes for
+  the wrong reason. Resolve ids as the owner, before `test_login`.
+
+---
+
 ## Stack overview
 
 | #   | Issue                                          | Branch                             | Base   | Migration (`migration new` name)    | Suite                                           | Model  |
@@ -803,7 +870,9 @@ where `v_changed text[]` is built by comparing each new value `is distinct from`
 
 **Consumes:** `require_task_visible`, `require_task_manager`, `end_task_assignment`, `open_task_assignment`, `close_task_queue`, `log_task_activity`, `notify`. **Produces:** `public.select_task_candidate(p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean) returns public.tasks`.
 
-**Rulings:** `p_close_remaining` null → `PT400 invalid_close_flag` first; `p_candidate_id` must be a `task_candidates.id` **on this Task** with `status = 'pending'`, locked `for update` after the Task lock — else `PT409 candidate_not_pending` (never disclose whether the id exists on another Task: same reason for "not on this task"). Terminal → `PT409 task_terminal`; `in_review` → `PT409 task_in_review` (the ADR blocks replacement mid-review). If an active assignment exists → `end_task_assignment(it, 'replaced', null)` and notify the replaced Executor (`Înlocuit: …`); then `open_task_assignment(task, candidate.member_id, actor, 'select')`; candidate → `selected` (`decided_at`, `decided_by = actor`, `assignment_id`); if `p_close_remaining` → `close_task_queue(task, actor)` and notify the closed ones; log `candidate_selected` (`assignment_id` new, `details = {candidate_id, replaced_assignment_id, closed_remaining, closed_candidates}`). Status unchanged.
+**Rulings:** (See also the Execution rulings above — in particular, a **deactivated Candidate must
+fail loudly here** with `PT400 invalid_executor`, unlike #332's automatic promotion, which skips
+them.) `p_close_remaining` null → `PT400 invalid_close_flag` first; `p_candidate_id` must be a `task_candidates.id` **on this Task** with `status = 'pending'`, locked `for update` after the Task lock — else `PT409 candidate_not_pending` (never disclose whether the id exists on another Task: same reason for "not on this task"). Terminal → `PT409 task_terminal`; `in_review` → `PT409 task_in_review` (the ADR blocks replacement mid-review). If an active assignment exists → `end_task_assignment(it, 'replaced', null)` and notify the replaced Executor (`Înlocuit: …`); then `open_task_assignment(task, candidate.member_id, actor, 'select')`; candidate → `selected` (`decided_at`, `decided_by = actor`, `assignment_id`); if `p_close_remaining` → `close_task_queue(task, actor)` and notify the closed ones; log `candidate_selected` (`assignment_id` new, `details = {candidate_id, replaced_assignment_id, closed_remaining, closed_candidates}`). Status unchanged.
 
 - [ ] Branch from Task 7's. Suite (prefix `33300000-…`): select into an empty Executor slot; replace an Executor (old row `replaced`, notified); `p_close_remaining = true` closes the rest and notifies them, `false` leaves them pending; non-candidate id / a `withdrawn` one / a candidate of another Task → `PT409 candidate_not_pending`; `in_review` → `PT409 task_in_review`; **race:** manager selects candidate X (A) while X withdraws (B) → `b_waited = true`, exactly one of {selected+assignment, withdrawn+`PT409 candidate_not_pending`} and the suite asserts whichever happened is internally consistent (a `selected` row has an assignment; a `withdrawn` row has none and no assignment was created); persona denials; direct-write denial.
 - [ ] Roster `+select_task_candidate_impl`; gate; commit `feat(db): select_task_candidate and decide the remaining queue (#333)`; draft PR.
@@ -899,7 +968,9 @@ public.complete_task_review(p_task_id bigint, p_difficulty integer, p_rating int
 
 ### Task 14: #339 — `cancel_task` (+ `tasks.cancel_reason`, view recreation)
 
-**Files:** Create migration `cancel_task`, `supabase/tests/cancel_task.test.sql`; extend `supabase/tests/tasks_lifecycle_timestamps.test.sql` with the new `tasks_cancel_reason_ck` (one `throws_ok` for a cancelled row without a reason, one for a reason on a non-cancelled row); roster +1; types (new column, view).
+**Files:** (See the Execution rulings above: this task's constraint breaks **22 cancelled fixtures
+across eight files**, not just the one named here.) Create migration `cancel_task`,
+`supabase/tests/cancel_task.test.sql`; extend `supabase/tests/tasks_lifecycle_timestamps.test.sql` with the new `tasks_cancel_reason_ck` (one `throws_ok` for a cancelled row without a reason, one for a reason on a non-cancelled row); roster +1; types (new column, view).
 
 **Consumes:** `require_task_visible`, `require_task_manager`, `end_task_assignment`, `close_task_queue`, `log_task_activity`, `notify`. **Produces:** `tasks.cancel_reason text`; `public.cancel_task(p_task_id bigint, p_reason text) returns public.tasks`.
 
