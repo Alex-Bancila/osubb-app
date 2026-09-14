@@ -275,6 +275,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #328: the second Task command wrapper, added the same way #327's own
   -- comment above instructs every later wrapper (#329-#345) to.
   ('update_task_content','p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',
+                                                                     false, true,  false, false),
+  -- #329: the third Task command wrapper, added the same way.
+  ('convert_task_mode',  'p_task_id bigint, p_assignment_mode text, p_audience text',
                                                                      false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
@@ -333,6 +336,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('can_read_task',                               'p_task_id bigint',                                                                                                   'predicate'),
   ('can_read_team',                               'p_team_id text',                                                                                                     'predicate'),
   ('close_task_queue',                            'p_task_id bigint, p_decided_by uuid',                                                                                'none'),
+  ('convert_task_mode_impl',                      'p_task_id bigint, p_assignment_mode text, p_audience text',                                                         'impl'),
   ('create_campaign_impl',                        'p_department_id text, p_name text',                                                                                  'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
@@ -383,8 +387,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 62,
-  'the pinned private-schema roster itself has exactly the 62 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit and #328''s update_task_content_impl');
+  (select count(*) from pinned_private_functions)::int, 63,
+  'the pinned private-schema roster itself has exactly the 63 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl and #329''s convert_task_mode_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
