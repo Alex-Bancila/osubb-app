@@ -278,7 +278,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
                                                                      false, true,  false, false),
   -- #329: the third Task command wrapper, added the same way.
   ('convert_task_mode',  'p_task_id bigint, p_assignment_mode text, p_audience text',
-                                                                     false, true,  false, false);
+                                                                     false, true,  false, false),
+  -- #330: the Candidate Queue pair, added the same way.
+  ('express_task_interest',  'p_task_id bigint',                     false, true,  false, false),
+  ('withdraw_task_interest', 'p_task_id bigint',                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -341,6 +344,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
   ('end_task_assignment',                         'p_assignment_id bigint, p_reason text, p_note text',                                                                 'none'),
+  ('express_task_interest_impl',                  'p_task_id bigint',                                                                                                   'impl'),
   ('grant_project_responsible_impl',              'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('guard_task_evaluation_change',                '',                                                                                                                   'trigger'),
   ('is_active_project_member',                    'p_project_id bigint',                                                                                                'predicate'),
@@ -384,11 +388,12 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_project_manager_state',              '',                                                                                                                   'trigger'),
   ('validate_project_membership_change',          '',                                                                                                                   'trigger'),
   ('validate_task_campaign',                      '',                                                                                                                   'trigger'),
-  ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
+  ('validate_task_hierarchy',                     '',                                                                                                                   'trigger'),
+  ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 63,
-  'the pinned private-schema roster itself has exactly the 63 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl and #329''s convert_task_mode_impl');
+  (select count(*) from pinned_private_functions)::int, 65,
+  'the pinned private-schema roster itself has exactly the 65 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl and #330''s express_/withdraw_task_interest_impl pair');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
