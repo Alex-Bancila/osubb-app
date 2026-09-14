@@ -271,6 +271,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
   -- adds its own row here the same way.
   ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text',
+                                                                     false, true,  false, false),
+  -- #328: the second Task command wrapper, added the same way #327's own
+  -- comment above instructs every later wrapper (#329-#345) to.
+  ('update_task_content','p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',
                                                                      false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
@@ -372,14 +376,15 @@ insert into pinned_private_functions (proname, args, category) values
   ('task_is_unassigned',                          'p_task_id bigint',                                                                                                   'authenticated_only'),
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
   ('update_campaign_impl',                        'p_campaign_id bigint, p_name text',                                                                                  'impl'),
+  ('update_task_content_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',        'impl'),
   ('validate_project_manager_state',              '',                                                                                                                   'trigger'),
   ('validate_project_membership_change',          '',                                                                                                                   'trigger'),
   ('validate_task_campaign',                      '',                                                                                                                   'trigger'),
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 61,
-  'the pinned private-schema roster itself has exactly the 61 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level and #327''s eleven-function Task command kit');
+  (select count(*) from pinned_private_functions)::int, 62,
+  'the pinned private-schema roster itself has exactly the 62 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit and #328''s update_task_content_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
