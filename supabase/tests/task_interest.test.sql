@@ -26,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(82);
+select plan(91);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -269,9 +269,15 @@ select is((select format('%s|%s|%s', notification.title, notification.body, noti
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f330)
               and notification.dedupe_key is not null),
-  format('Coadă: Queue order #330|1 candidați în așteptare.|task:%s:queue',
+  format('Coadă: Queue order #330|1 candidat în așteptare.|task:%s:queue',
          (select queue_task_id from f330)),
-  'the first join writes the coalesced queue notification under task:<id>:queue');
+  'the first join writes the coalesced queue notification under task:<id>:queue, singular at n = 1');
+select set_eq(
+  format($$ select notification.member_id from public.notifications as notification
+             where notification.task_id = %s and notification.dedupe_key is not null $$,
+    (select queue_task_id from f330)),
+  $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
+  'the coalesced queue notification recipient set is exactly the Task manager, not merely one row');
 
 select pg_temp.test_login('33000000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -289,6 +295,13 @@ select is((select format('%s|%s', count(*), min(notification.body))
               and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))),
   '1|2 candidați în așteptare.',
   'the second join coalesces into the SAME manager row, whose body now reads the live pending count');
+select set_eq(
+  format($$ select notification.member_id from public.notifications as notification
+             where notification.task_id = %1$s
+               and notification.dedupe_key = 'task:%1$s:queue' $$,
+    (select queue_task_id from f330)),
+  $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
+  'coalescing a second join does not add a second recipient -- still exactly the Task manager');
 
 -- ---- withdrawing position 1 promotes position 2 ----
 select pg_temp.test_login('33000000-0000-0000-0000-000000000003', jsonb_build_object(
@@ -329,8 +342,15 @@ select is((select format('%s|%s', count(*), min(notification.body))
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f330)
               and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))),
-  '1|1 candidați în așteptare.',
-  'the withdrawal rewrites the same coalesced manager row down to the new pending count');
+  '1|1 candidat în așteptare.',
+  'the withdrawal rewrites the same coalesced manager row down to the new pending count, singular at n = 1');
+select set_eq(
+  format($$ select notification.member_id from public.notifications as notification
+             where notification.task_id = %1$s
+               and notification.dedupe_key = 'task:%1$s:queue' $$,
+    (select queue_task_id from f330)),
+  $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
+  'the withdrawal still coalesces into the manager''s one row -- no second recipient appears');
 
 -- ---- rejoining is a new row at the END of the order ----
 select pg_temp.test_login('33000000-0000-0000-0000-000000000003', jsonb_build_object(
@@ -353,6 +373,13 @@ select is((select format('%s|%s', count(*), min(notification.body))
               and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))),
   '1|2 candidați în așteptare.',
   'the rejoin coalesces into the same row again, back up to two pending Candidates');
+select set_eq(
+  format($$ select notification.member_id from public.notifications as notification
+             where notification.task_id = %1$s
+               and notification.dedupe_key = 'task:%1$s:queue' $$,
+    (select queue_task_id from f330)),
+  $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
+  'through every join, withdrawal and rejoin the coalesced row''s recipient never drifts from the Task manager');
 select is((select count(*) from public.task_assignments
             where task_id = (select queue_task_id from f330)), 1::bigint,
   'through three joins, a withdrawal and a rejoin the Task still has exactly one Assignment');
@@ -465,6 +492,7 @@ select throws_ok(format($$ select public.withdraw_task_interest(%s) $$,
   'a deactivated BC holding a still-valid level-6 token cannot withdraw interest');
 reset role;
 
+select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(format($$ select public.express_task_interest(%s) $$,
   (select gate_task_id from f330)),
@@ -503,12 +531,17 @@ select throws_ok(format($$ insert into public.task_assignments (task_id, member_
   '42501', null, 'an ordinary Member cannot make themselves the Executor by inserting into task_assignments');
 reset role;
 
--- ==================== 8. Locks held while express_task_interest runs ====================
--- The race in section 9 proves the SECOND caller blocks; this probe proves
--- WHERE it blocks -- the tasks row FOR UPDATE, taken before any queue state
--- is read -- and that the actor's own live profile row is held FOR SHARE so a
--- concurrent deactivation serializes behind the command (#343 / #390
--- discipline). Without it nothing would fail if the command dropped either.
+-- ==================== 8. Locks held while the two commands run ====================
+-- The race in section 9 proves the SECOND caller blocks on express_task_
+-- interest; this probe proves WHERE it blocks -- the tasks row FOR UPDATE,
+-- taken before any queue state is read -- and that the actor's own live
+-- profile row is held FOR SHARE so a concurrent deactivation serializes
+-- behind the command (#343 / #390 discipline). Without it nothing would fail
+-- if the command dropped either. Two further held calls on the same
+-- connection extend the same proof: a local-Audience Task (the only branch
+-- that locks a member_departments/team_members/project_members row) and
+-- withdraw_task_interest itself, which section 9's race never exercises and
+-- whose own tasks-row FOR UPDATE would otherwise be asserted by nothing.
 --
 -- Sections 8 and 9 work on COMMITTED fixtures, created and removed through
 -- their own dblink connection: pg_temp.test_race commits both of its
@@ -527,7 +560,9 @@ select extensions.dblink_exec('ti_setup', $$
    where task_id in (select id from public.tasks where title like '%#330 committed%')
       or member_id in ('33000000-0000-0000-0000-000000000021',
                        '33000000-0000-0000-0000-000000000022',
-                       '33000000-0000-0000-0000-000000000023');
+                       '33000000-0000-0000-0000-000000000023')
+      or link in (select '/tracker/' || id::text from public.tasks
+                   where title like '%#330 committed%');
   delete from public.task_candidates
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.task_assignments
@@ -560,13 +595,26 @@ select extensions.dblink_exec('ti_setup', $$
     ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', 'edu', 'org', 'public', 'todo',
-     '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
+     '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
+    ('Local audience lock probe #330 committed', 'Sonda audienta locala', '2027-04-03 09:00:00+00',
+     'edu', 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
+    ('Withdraw lock probe #330 committed', 'Sonda retragere', '2027-04-04 09:00:00+00',
+     'edu', 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
+
+  -- Directly fixtured (never through the command) so the held withdraw call
+  -- below has a real live pending Candidature to resolve: withdraw's only
+  -- precondition is the caller's own pending row, no Assignment required.
+  insert into public.task_candidates (task_id, member_id, status, joined_at)
+  select id, '33000000-0000-0000-0000-000000000023', 'pending', now()
+    from public.tasks where title = 'Withdraw lock probe #330 committed';
 $$);
 
 -- Resolved as the owner, before any persona logs in (the #328 trap again).
 create temp table r330 as
 select (select id from public.tasks where title = 'Lock probe #330 committed') as probe_task_id,
-       (select id from public.tasks where title = 'Race target #330 committed') as race_task_id;
+       (select id from public.tasks where title = 'Race target #330 committed') as race_task_id,
+       (select id from public.tasks where title = 'Local audience lock probe #330 committed') as local_probe_task_id,
+       (select id from public.tasks where title = 'Withdraw lock probe #330 committed') as withdraw_probe_task_id;
 grant select on r330 to authenticated;
 
 select extensions.dblink_connect('ti_lock', format(
@@ -602,6 +650,76 @@ select ok(coalesce((
 ), false), 'express_task_interest holds the actor''s live profile row FOR SHARE');
 
 select extensions.dblink_exec('ti_lock', 'rollback');
+
+-- ---- item 7: the local-Audience membership check is held FOR SHARE too ----
+-- Same connection, a second held call -- this time against a local-Audience
+-- Task, the only branch that reads member_departments (or team_members /
+-- project_members) under the lock. Member 22's own 'edu' membership row is
+-- exactly what express_task_interest re-validates at step 4.
+select extensions.dblink_exec('ti_lock', $$
+  begin;
+  set local statement_timeout = '5s';
+  set local lock_timeout = '2s';
+$$);
+select * from extensions.dblink('ti_lock', $$
+  select set_config('request.jwt.claims', jsonb_build_object(
+    'sub', '33000000-0000-0000-0000-000000000022', 'role', 'authenticated',
+    'app_metadata', jsonb_build_object('member_role', 'voluntar', 'member_level', 1,
+      'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb))::text, true)
+$$) as remote_claims(setting text);
+select extensions.dblink_exec('ti_lock', 'set local role authenticated');
+select * from extensions.dblink('ti_lock', format($$
+  select (public.express_task_interest(%s)).status::text
+$$, (select local_probe_task_id from r330))) as locked_express_local(status text);
+
+select ok(coalesce((
+  select 'For Share' = any(row_lock.modes)
+    from extensions.pgrowlocks('public.member_departments') as row_lock
+    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+   where membership.member_id = '33000000-0000-0000-0000-000000000022'
+     and membership.dept_id = 'edu'
+), false), 'a local-Audience express_task_interest holds the actor''s Origin membership row FOR SHARE too');
+
+select extensions.dblink_exec('ti_lock', 'rollback');
+
+-- ---- item 1: withdraw_task_interest has the identical lock discipline ----
+-- Section 9's race only exercises express_task_interest; nothing until now
+-- proved withdraw_task_interest takes the same tasks-row FOR UPDATE lock
+-- before its read-modify-write of the coalesced queue notification (both call
+-- private.pending_candidate_count then upsert the same manager row).
+-- Member 23 already holds a directly-fixtured pending Candidature on this
+-- Task (no Assignment needed -- withdraw's only precondition is the caller's
+-- own live pending row), so the held call is a real withdrawal, not a no-op.
+select extensions.dblink_exec('ti_lock', $$
+  begin;
+  set local statement_timeout = '5s';
+  set local lock_timeout = '2s';
+$$);
+select * from extensions.dblink('ti_lock', $$
+  select set_config('request.jwt.claims', jsonb_build_object(
+    'sub', '33000000-0000-0000-0000-000000000023', 'role', 'authenticated',
+    'app_metadata', jsonb_build_object('member_role', 'voluntar', 'member_level', 1,
+      'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb))::text, true)
+$$) as remote_claims(setting text);
+select extensions.dblink_exec('ti_lock', 'set local role authenticated');
+select * from extensions.dblink('ti_lock', format($$
+  select (public.withdraw_task_interest(%s)).status::text
+$$, (select withdraw_probe_task_id from r330))) as locked_withdraw(status text);
+
+select ok(coalesce((
+  select row_lock.modes && array['For Update', 'Update', 'No Key Update']
+    from extensions.pgrowlocks('public.tasks') as row_lock
+    join public.tasks as task on task.ctid = row_lock.locked_row
+   where task.id = (select withdraw_probe_task_id from r330)
+), false), 'withdraw_task_interest holds the target Task row exclusively locked while it runs');
+select ok(coalesce((
+  select 'For Share' = any(row_lock.modes)
+    from extensions.pgrowlocks('public.profiles') as row_lock
+    join public.profiles as profile on profile.ctid = row_lock.locked_row
+   where profile.id = '33000000-0000-0000-0000-000000000023'
+), false), 'withdraw_task_interest holds the actor''s live profile row FOR SHARE');
+
+select extensions.dblink_exec('ti_lock', 'rollback');
 select extensions.dblink_disconnect('ti_lock');
 
 -- ==================== 9. The two-session race ====================
@@ -633,7 +751,9 @@ select * from pg_temp.test_race(
 reset role;
 
 select ok((select b_waited from race330),
-  'the second session BLOCKS on the Task row lock -- serialization, not a constraint collision');
+  'the second session BLOCKS before the first commits -- serialization happened; pairs with the '
+  || 'pgrowlocks probe in section 8 and the assignment/candidate counts below to show it is the '
+  || 'Task row FOR UPDATE lock, not the assignment unique index, that catches the second caller');
 select is((select result_a from race330), (select race_task_id::text from r330),
   'the first session succeeds and returns the Task row');
 select is((select result_b from race330), (select race_task_id::text from r330),
@@ -683,7 +803,9 @@ select extensions.dblink_exec('ti_setup', $$
    where task_id in (select id from public.tasks where title like '%#330 committed%')
       or member_id in ('33000000-0000-0000-0000-000000000021',
                        '33000000-0000-0000-0000-000000000022',
-                       '33000000-0000-0000-0000-000000000023');
+                       '33000000-0000-0000-0000-000000000023')
+      or link in (select '/tracker/' || id::text from public.tasks
+                   where title like '%#330 committed%');
   delete from public.task_candidates
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.task_assignments
@@ -702,6 +824,27 @@ select extensions.dblink_disconnect('ti_setup');
 
 select is((select count(*) from public.tasks where title like '%#330 committed%'), 0::bigint,
   'the committed race and lock-probe fixtures are removed again -- this suite leaves no trace');
+select is((select count(*) from auth.users
+            where id in ('33000000-0000-0000-0000-000000000021',
+                         '33000000-0000-0000-0000-000000000022',
+                         '33000000-0000-0000-0000-000000000023')), 0::bigint,
+  'the three committed race/lock-probe fixture accounts are removed too, not just their Tasks');
+-- notifications.task_id is ON DELETE SET NULL, so a leftover row for a
+-- recipient outside the hard-coded trio would survive with a nulled task_id
+-- and be invisible to a task_id-keyed check; link ('/tracker/<id>') still
+-- names the deleted Task and cannot be erased by the cascade, so this is the
+-- assertion that would actually catch it. r330's ids are read from the temp
+-- table now, before the transaction rolls back and takes it with them.
+select is((select count(*) from public.notifications
+            where link in (
+              select '/tracker/' || task_id::text from (
+                select probe_task_id as task_id from r330
+                union all select race_task_id from r330
+                union all select local_probe_task_id from r330
+                union all select withdraw_probe_task_id from r330
+              ) as committed_task_ids
+            )), 0::bigint,
+  'no notification survives with a nulled task_id after the committed Tasks are deleted -- checked by link, which ON DELETE SET NULL cannot erase');
 
 select * from finish();
 rollback;

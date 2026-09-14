@@ -60,10 +60,23 @@
 --     drops the actor -- so a Member assigning themselves is told nothing,
 --     which is correct and is asserted, not incidental.
 --   - every join and every withdrawal: task_managers get 'Coadă: {title}' /
---     '{n} candidați în așteptare.' under dedupe_key 'task:{id}:queue', so
---     one unread manager row tracks the live pending count instead of one
---     row per event. n is private.pending_candidate_count computed AFTER the
---     write, inside the same lock.
+--     a Romanian-plural-aware count under dedupe_key 'task:{id}:queue' -- '1
+--     candidat în așteptare.' at n = 1, '{n} candidați în așteptare.' for
+--     2-19, '{n} de candidați în așteptare.' from 20 up (corrected from the
+--     stack-context copy table, which was ungrammatical at n = 1) -- so one
+--     unread manager row tracks the live pending count instead of one row per
+--     event. n is private.pending_candidate_count computed AFTER the write,
+--     inside the same lock.
+--
+-- Both `for update` reads of the target Task row (steps 3) are followed by an
+-- `if not found` guard: until #345 retires tasks_delete_legacy, a concurrent
+-- hard delete between require_task_visible and the lock would otherwise leave
+-- v_task all-NULL and let a later state check answer with the wrong PT409
+-- instead of PT404 task_not_found (e.g. assignment_mode is distinct from
+-- 'public' is true for a NULL assignment_mode). Verified by a scratch mutation
+-- that removes the guard and races a concurrent DELETE into that window (see
+-- the PR / task-4-report.md) -- it raises PT409 task_not_public instead of
+-- PT404 without the guard, and PT404 with it restored.
 
 -- ==================== express_task_interest ====================
 create function private.express_task_interest_impl(p_task_id bigint)
@@ -87,6 +100,9 @@ begin
   -- 3. Lock the target (always the first row locked -- the serialization
   --    point for the whole first-come race)
   select * into v_task from public.tasks where id = p_task_id for update;
+  if not found then
+    raise sqlstate 'PT404' using message = 'task_not_found';
+  end if;
   -- 4. Authority under lock: the Audience rule, re-validated against live
   --    rows and holding them FOR SHARE (require_origin_manager's discipline).
   perform 1 from public.profiles as profile
@@ -173,7 +189,9 @@ begin
       array(select private.task_managers(p_task_id, v_actor)),
       'task'::public.noti_kind,
       'Coadă: ' || v_task.title,
-      v_pending::text || ' candidați în așteptare.',
+      case when v_pending = 1 then '1 candidat în așteptare.'
+           when v_pending < 20 then v_pending::text || ' candidați în așteptare.'
+           else v_pending::text || ' de candidați în așteptare.' end,
       p_task_id, 'task:' || p_task_id::text || ':queue', v_actor);
   end if;
   select * into v_task from public.tasks where id = p_task_id;
@@ -220,6 +238,9 @@ begin
   v_actor := private.require_task_visible(p_task_id);
   -- 3. Lock the target (always the first row locked)
   select * into v_task from public.tasks where id = p_task_id for update;
+  if not found then
+    raise sqlstate 'PT404' using message = 'task_not_found';
+  end if;
   -- 4. Authority under lock: a live activ profile, held FOR SHARE.
   perform 1 from public.profiles as profile
    where profile.id = v_actor and profile.status = 'activ' for share;
@@ -247,7 +268,9 @@ begin
     array(select private.task_managers(p_task_id, v_actor)),
     'task'::public.noti_kind,
     'Coadă: ' || v_task.title,
-    v_pending::text || ' candidați în așteptare.',
+    case when v_pending = 1 then '1 candidat în așteptare.'
+         when v_pending < 20 then v_pending::text || ' candidați în așteptare.'
+         else v_pending::text || ' de candidați în așteptare.' end,
     p_task_id, 'task:' || p_task_id::text || ':queue', v_actor);
   select * into v_task from public.tasks where id = p_task_id;
   return v_task;
