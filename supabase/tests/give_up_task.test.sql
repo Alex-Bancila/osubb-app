@@ -55,7 +55,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(82);
+select plan(91);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -70,7 +70,9 @@ insert into auth.users (id, email) values
   ('33200000-0000-0000-0000-000000000009', 'direct.executor.332@test.local'),
   ('33200000-0000-0000-0000-000000000010', 'review.executor.332@test.local'),
   ('33200000-0000-0000-0000-000000000011', 'dead.queue.executor.332@test.local'),
-  ('33200000-0000-0000-0000-000000000012', 'dead.head.executor.332@test.local');
+  ('33200000-0000-0000-0000-000000000012', 'dead.head.executor.332@test.local'),
+  ('33200000-0000-0000-0000-000000000013', 'self.candidate.332@test.local'),
+  ('33200000-0000-0000-0000-000000000014', 'self.only.332@test.local');
 
 insert into public.profiles (id, full_name, email, role, status) values
   ('33200000-0000-0000-0000-000000000001', 'Manager 332', 'manager.332@test.local', 'bce', 'activ'),
@@ -84,7 +86,9 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33200000-0000-0000-0000-000000000009', 'Executor Direct 332', 'direct.executor.332@test.local', 'voluntar', 'activ'),
   ('33200000-0000-0000-0000-000000000010', 'Executor In Verificare 332', 'review.executor.332@test.local', 'voluntar', 'activ'),
   ('33200000-0000-0000-0000-000000000011', 'Executor Coada Moarta 332', 'dead.queue.executor.332@test.local', 'voluntar', 'activ'),
-  ('33200000-0000-0000-0000-000000000012', 'Executor Cap Dezactivat 332', 'dead.head.executor.332@test.local', 'voluntar', 'activ');
+  ('33200000-0000-0000-0000-000000000012', 'Executor Cap Dezactivat 332', 'dead.head.executor.332@test.local', 'voluntar', 'activ'),
+  ('33200000-0000-0000-0000-000000000013', 'Executor Auto-Candidat 332', 'self.candidate.332@test.local', 'voluntar', 'activ'),
+  ('33200000-0000-0000-0000-000000000014', 'Executor Auto-Candidat Singur 332', 'self.only.332@test.local', 'voluntar', 'activ');
 
 insert into public.member_departments (member_id, dept_id) values
   ('33200000-0000-0000-0000-000000000001', 'edu'),
@@ -95,7 +99,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('33200000-0000-0000-0000-000000000009', 'edu'),
   ('33200000-0000-0000-0000-000000000010', 'edu'),
   ('33200000-0000-0000-0000-000000000011', 'edu'),
-  ('33200000-0000-0000-0000-000000000012', 'edu');
+  ('33200000-0000-0000-0000-000000000012', 'edu'),
+  ('33200000-0000-0000-0000-000000000013', 'edu'),
+  ('33200000-0000-0000-0000-000000000014', 'edu');
 
 -- ---- T1: the promotion happy path -- a public Task in progress, one
 -- Executor, two pending Candidates in a known order.
@@ -204,6 +210,44 @@ union all
 select id, '33200000-0000-0000-0000-000000000006'::uuid, 'pending', now() - interval '1 hour'
   from public.tasks where title = 'Cap de coada dezactivat #332';
 
+-- ---- T9: the giver-upper (013) also holds a pending Candidature on their
+-- OWN Task, joined before a genuinely different active Member (003, reused
+-- from T1) joins later -- the actor-exclusion guard's discriminating case.
+-- Hand-fixtured, same as T6: task_candidates has no check constraint,
+-- trigger or FK stopping an Executor from being inserted as a Candidate on
+-- their own Task, so this shape is reachable only by a hand-built row, not
+-- by any command on main -- exactly the precedent T6 sets for the state
+-- check.
+insert into public.tasks
+  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+values
+  ('Auto-candidatura cu altul #332', 'Executorul e si candidat', '2027-07-09 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+   now(), now(), '33200000-0000-0000-0000-000000000001');
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33200000-0000-0000-0000-000000000013', '33200000-0000-0000-0000-000000000001', now()
+  from public.tasks where title = 'Auto-candidatura cu altul #332';
+insert into public.task_candidates (task_id, member_id, status, joined_at)
+select id, '33200000-0000-0000-0000-000000000013'::uuid, 'pending', now() - interval '2 hours'
+  from public.tasks where title = 'Auto-candidatura cu altul #332'
+union all
+select id, '33200000-0000-0000-0000-000000000003'::uuid, 'pending', now() - interval '1 hour'
+  from public.tasks where title = 'Auto-candidatura cu altul #332';
+
+-- ---- T10: the giver-upper (014) is the ONLY pending Candidate on their own
+-- Task -- the cheap second case: excluded from their own promotion, nobody
+-- is promoted, and the Task ends Executor-less exactly like an empty queue.
+insert into public.tasks
+  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+values
+  ('Auto-candidatura singura #332', 'Executorul e singurul candidat', '2027-07-10 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+   now(), now(), '33200000-0000-0000-0000-000000000001');
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33200000-0000-0000-0000-000000000014', '33200000-0000-0000-0000-000000000001', now()
+  from public.tasks where title = 'Auto-candidatura singura #332';
+insert into public.task_candidates (task_id, member_id, status, joined_at)
+select id, '33200000-0000-0000-0000-000000000014'::uuid, 'pending', now() - interval '1 hour'
+  from public.tasks where title = 'Auto-candidatura singura #332';
+
 -- Every fixture id resolved ONCE, as the owner. Never resolve an id inside a
 -- format() while a denied persona is logged in: the lookup would run under
 -- that persona's RLS, return NULL, and the assertion would pass for the wrong
@@ -218,7 +262,9 @@ select
   (select id from public.tasks where title = 'Persoane #332') as persona_task_id,
   (select id from public.tasks where title = 'Anulat #332') as cancelled_task_id,
   (select id from public.tasks where title = 'Candidat dezactivat #332') as dead_queue_task_id,
-  (select id from public.tasks where title = 'Cap de coada dezactivat #332') as dead_head_task_id;
+  (select id from public.tasks where title = 'Cap de coada dezactivat #332') as dead_head_task_id,
+  (select id from public.tasks where title = 'Auto-candidatura cu altul #332') as self_and_other_task_id,
+  (select id from public.tasks where title = 'Auto-candidatura singura #332') as self_only_task_id;
 grant select on f332 to authenticated, anon;
 
 -- ==================== 1. API shape and privileges ====================
@@ -601,6 +647,71 @@ select is((select count(*) from public.task_activity
             where task_id = (select dead_head_task_id from f332) and kind = 'candidate_selected'), 1::bigint,
   'exactly one candidate_selected row is written -- for the promoted Candidate, not the skipped one');
 
+-- ---- T9: the actor-exclusion guard (candidate.member_id <> v_actor). The
+-- giver-upper is themselves a pending Candidate on their own Task, having
+-- joined the queue before a genuinely different, still-active Member -- the
+-- guard must skip the giver-upper and reach the Candidate behind them,
+-- exactly as the liveness filter above skips a dead head-of-queue Candidate.
+select pg_temp.test_login('33200000-0000-0000-0000-000000000013', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.give_up_task(%s, 'Renunt, dar sunt si eu in coada.') $$,
+  (select self_and_other_task_id from f332)),
+  'the giver-upper is also a pending Candidate on their own Task -- the give-up still succeeds');
+reset role;
+
+select is((select format('%s|%s', count(*), min(assignment.member_id::text))
+             from public.task_assignments as assignment
+            where assignment.task_id = (select self_and_other_task_id from f332)
+              and assignment.ended_at is null),
+  '1|33200000-0000-0000-0000-000000000003',
+  'the genuinely different, later-joined Candidate is promoted -- not the giver-upper who was queued ahead of them');
+select is((select format('%s|%s|%s|%s', candidate.status,
+                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
+                         (candidate.assignment_id is null)::text)
+             from public.task_candidates as candidate
+            where candidate.task_id = (select self_and_other_task_id from f332)
+              and candidate.member_id = '33200000-0000-0000-0000-000000000013'),
+  'pending|true|true|true',
+  'the giver-upper''s own self-candidature is left exactly as it was -- still pending, still undecided, no Assignment -- the guard excludes them, it does not close them');
+select is((select format('%s|%s|%s|%s', candidate.status, candidate.decided_by,
+                         (candidate.decided_at is not null)::text,
+                         (candidate.assignment_id = (select assignment.id from public.task_assignments as assignment
+                                                      where assignment.task_id = candidate.task_id
+                                                        and assignment.ended_at is null))::text)
+             from public.task_candidates as candidate
+            where candidate.task_id = (select self_and_other_task_id from f332)
+              and candidate.member_id = '33200000-0000-0000-0000-000000000003'),
+  'selected|33200000-0000-0000-0000-000000000013|true|true',
+  'the other Candidate is selected, decided by the giver-upper, and points at the new Assignment');
+select is((select count(*) from public.task_activity
+            where task_id = (select self_and_other_task_id from f332) and kind = 'candidate_selected'), 1::bigint,
+  'exactly one candidate_selected row is written -- for the other Candidate, not the giver-upper');
+
+-- ---- T10: the giver-upper is the ONLY pending Candidate on their own Task
+-- -- the cheap second case. Excluded from their own promotion, so nobody is
+-- promoted and the Task ends Executor-less, exactly like an empty queue.
+select pg_temp.test_login('33200000-0000-0000-0000-000000000014', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.give_up_task(%s, 'Sunt singurul candidat.') $$,
+  (select self_only_task_id from f332)),
+  'the giver-upper is the only pending Candidate on their own Task -- the give-up still succeeds with nobody promoted');
+reset role;
+
+select is((select format('%s|%s', count(*), count(*) filter (where ended_at is null))
+             from public.task_assignments where task_id = (select self_only_task_id from f332)),
+  '1|0', 'the Task is left with no active Assignment -- exactly the empty-queue end state');
+select is((select format('%s|%s|%s|%s', candidate.status,
+                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
+                         (candidate.assignment_id is null)::text)
+             from public.task_candidates as candidate
+            where candidate.task_id = (select self_only_task_id from f332)
+              and candidate.member_id = '33200000-0000-0000-0000-000000000014'),
+  'pending|true|true|true',
+  'the giver-upper''s self-candidature is untouched -- still pending, still undecided, no Assignment');
+select is((select count(*) from public.task_activity
+            where task_id = (select self_only_task_id from f332) and kind = 'candidate_selected'), 0::bigint,
+  'no candidate_selected row is written -- nobody was promoted');
+
 -- ==================== 7. The command is the only write path ====================
 
 select pg_temp.test_login('33200000-0000-0000-0000-000000000002', jsonb_build_object(
@@ -844,10 +955,23 @@ select is((select count(*) from public.task_activity
 -- The mutation-sensitive one. The give-up promotes its Candidate while an
 -- outsider expresses interest. Because the promotion happens under the tasks
 -- row FOR UPDATE, the outsider blocks, wakes into a Task that already has its
--- new Executor, and queues. Remove that lock from give_up_task_impl and the
--- outsider instead re-reads the Assignment the promotion has just replaced,
--- finds it ended, and inserts a second active Assignment -- a raw 23505 from
--- task_assignments_one_active_per_task_uidx, which fails this section loudly.
+-- new Executor, and queues.
+--
+-- Honest limitation, found by mutation rather than assumed (see
+-- task-7-report.md Sec5 M2): removing that FOR UPDATE from
+-- give_up_task_impl does NOT break this section loudly. Every write the
+-- promotion makes under open_task_assignment -- the new task_assignments
+-- row, its executor_assigned task_activity row, and the candidate_selected
+-- row -- carries a task_id foreign key, so the giving-up session still takes
+-- a FOR KEY SHARE lock on the Task row regardless of the explicit keyword,
+-- and the outsider's own FOR UPDATE conflicts with that KEY SHARE just the
+-- same. The outsider still blocks, still wakes into the post-promotion
+-- state, and this section stays green under that mutation; only section 8's
+-- pgrowlocks probe on the tasks row actually fails. KEY SHARE does not
+-- conflict with KEY SHARE, so two commands BOTH missing the explicit FOR
+-- UPDATE would not serialize against each other at all -- the explicit lock
+-- is what makes this serialization intentional rather than an incidental
+-- side effect of the FK.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000024', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table race332promo as
