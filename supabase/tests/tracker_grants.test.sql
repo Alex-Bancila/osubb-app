@@ -287,7 +287,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #342: the fifth Task command wrapper, added the same way.
   ('assign_task_executor',   'p_task_id bigint, p_member_id uuid',   false, true,  false, false),
   -- #332: the sixth Task command wrapper, added the same way.
-  ('give_up_task',           'p_task_id bigint, p_reason text',      false, true,  false, false);
+  ('give_up_task',           'p_task_id bigint, p_reason text',      false, true,  false, false),
+  -- #333: the seventh Task command wrapper, added the same way.
+  ('select_task_candidate',  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',
+                                                                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -386,6 +389,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_task_manager',                        'p_task_id bigint',                                                                                                   'require'),
   ('require_task_visible',                        'p_task_id bigint',                                                                                                   'require'),
   ('revoke_project_responsible_impl',             'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
+  ('select_task_candidate_impl',                  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',                                                 'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
   ('set_task_queue_impl',                         'p_task_id bigint, p_open boolean',                                                                                   'impl'),
   ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
@@ -401,8 +405,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 68,
-  'the pinned private-schema roster itself has exactly the 68 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl and #332''s give_up_task_impl');
+  (select count(*) from pinned_private_functions)::int, 69,
+  'the pinned private-schema roster itself has exactly the 69 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl and #333''s select_task_candidate_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
