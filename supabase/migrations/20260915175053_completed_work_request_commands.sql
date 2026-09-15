@@ -16,7 +16,7 @@
 --   Department                -> every live local BCE of that Department
 --   Department-Team           -> every live local BCE of its PARENT Department
 --   Independent Team          -> nobody local at all
---   Project                   -> the lead, and only the lead
+--   Project                   -> the lead of an ACTIVE Project, and only them
 --   ...plus, in all four cases, every live BC/Moderator.
 --
 -- Two deliberate narrowings versus private.can_manage_origin: a Project
@@ -26,20 +26,28 @@
 -- in all four shapes, not private.task_managers' last-resort fallback -- it is
 -- the only decider an Independent-Team Request has at all.
 --
--- The Project branch names the lead WITHOUT a projects.status = 'active'
--- filter, exactly as #344's ruling spells it (private.is_project_lead answers
--- relationship identity, not current authority -- #271). That absence is not
--- observable, and the reason is worth writing down rather than rediscovering:
--- the visibility gate ahead of this predicate is
--- completed_work_requests_read's own clause, whose Project branch runs through
--- private.can_manage_project_work and IS active-only. So on an archived
--- Project the lead is answered PT404 before the decider predicate is ever
--- consulted, and only BC/Moderator (who pass visibility on level alone) can
--- still decide. Creation already requires an ACTIVE Project, so this can only
--- arise when a Project is archived after a Request was filed -- the same shape
--- Stack C Ruling 17 and private.can_evaluate_task already settle the other way
--- for Tasks. The suite pins both halves of that behaviour so nobody has to
--- infer it from this comment.
+-- The Project branch requires an ACTIVE Project, the same way
+-- private.can_evaluate_task's Project branch does (Stack C Ruling 17). It is
+-- tempting to leave that filter out -- #344's ruling names
+-- private.is_project_lead, which answers relationship identity rather than
+-- current authority (#271) -- and to lean on the visibility gate ahead of this
+-- predicate, whose Project branch runs through private.can_manage_project_work
+-- and IS active-only. That reasoning does not hold, and the counterexample is
+-- worth writing down rather than rediscovering: the visibility test is a
+-- DISJUNCTION -- `requester_id = auth.uid() or private.can_manage_origin(...)`.
+-- When the lead IS the requester the first disjunct is already true,
+-- can_manage_project_work is never evaluated, and control reaches this
+-- predicate. And private.sync_project_leader_membership (#272) auto-adds every
+-- leader to project_members, so the path is reachable, not theoretical: a lead
+-- files a Request on their live Project, the Project is archived under them,
+-- and they self-approve -- minting a completed Task, an Evaluation and a
+-- points_ledger credit on an ARCHIVED Project, which private.can_evaluate_task
+-- refuses on the Task path. The `project.status = 'active'` test closes that
+-- and keeps the two surfaces agreeing. A Request stranded by an archive is
+-- still decidable by BC/Moderator, who clear both gates on role level alone.
+-- The suite pins all three shapes: the archived Project's lead as a stranger
+-- (PT404), the archived Project's lead as the Request's own requester (42501),
+-- and the BC (lives_ok).
 --
 -- ==================== The decider predicate is written twice, on purpose ====================
 -- create_completed_work_request_impl needs the decider SET (to notify it);
@@ -72,10 +80,18 @@
 -- ==================== Step order ====================
 -- conventions Sec2, with the #336 precedent for the note:
 --   1. Malformed-for-everyone input first, BEFORE the gate: Difficulty and
---      Rating outside 1..5 (approve), and the required note. A blank approval
---      note can never be written -- task_evaluations_note_ck rejects it and
---      private.evaluate_task raises evaluation_note_required -- so it is
---      hoisted here rather than discovered after the locks. That makes a
+--      Rating outside 1..5 (approve), the required note (approve and reject),
+--      and BOTH the description and the exactly-one-Origin shape (create).
+--      Every one of those answers is independent of any row and of who is
+--      asking -- completed_work_requests_description_ck,
+--      completed_work_requests_origin_ck and task_evaluations_note_ck make
+--      them impossible for every caller -- so they are raised here rather than
+--      discovered after the gate and the locks, and none of them leaks
+--      anything. Both commands name the blank note PT400 note_required: at
+--      this point it is the COMMAND's own input being validated, not the
+--      Evaluation core's, so the two adjacent buttons answer with one string.
+--      (private.evaluate_task keeps its own evaluation_note_required, which is
+--      still the right reason for its other callers.) That also makes a
 --      non-blank note effectively REQUIRED on approval even though
 --      completed_work_requests_approved_shape_ck would allow decision_note to
 --      be null; the note the decider must write for the Evaluation is the one
@@ -150,6 +166,7 @@ begin
          or (v_request.project_id is not null and exists (
                select 1 from public.projects as project
                 where project.id = v_request.project_id
+                  and project.status = 'active'
                   and project.leader_id = decider.id))
          -- Project Responsible: deliberately no branch either.
        )
@@ -201,7 +218,7 @@ end;
 $$;
 
 comment on function private.require_request_decider(bigint) is
-  'Returns auth.uid() only when the live caller may DECIDE this Completed-work Request, and holds FOR SHARE their profile row plus the membership row that authority rests on. Deliberately narrower than private.can_manage_origin (ADR-0007, and the request this file inherits from 20260911210800): BC/Moderator anywhere; the live local BCE of a Department or of a Department-Team''s parent Department; a Project''s LEAD only -- never a Responsible, and never an Independent Team''s own members. Unlike creation, the Project branch does not require an active Project: a Request filed while the Project was live stays decidable by its lead. The caller must already hold the completed_work_requests row FOR UPDATE. PT404 request_not_found for a missing Request; 42501 request_decide_forbidden otherwise.';
+  'Returns auth.uid() only when the live caller may DECIDE this Completed-work Request, and holds FOR SHARE their profile row plus the membership row that authority rests on. Deliberately narrower than private.can_manage_origin (ADR-0007, and the request this file inherits from 20260911210800): BC/Moderator anywhere; the live local BCE of a Department or of a Department-Team''s parent Department; the LEAD of an ACTIVE Project only -- never a Responsible, and never an Independent Team''s own members. The Project branch tests projects.status exactly as private.can_evaluate_task does: once a Project is archived only BC/Moderator can decide its leftover Requests, including when the lead is the requester and therefore clears the command''s visibility test on that ground alone. The caller must already hold the completed_work_requests row FOR UPDATE. PT404 request_not_found for a missing Request; 42501 request_decide_forbidden otherwise.';
 
 -- ==================== create_completed_work_request ====================
 create function private.create_completed_work_request_impl(
@@ -220,12 +237,20 @@ declare
   v_actor_name  text;
   v_request     public.completed_work_requests%rowtype;
 begin
-  -- 1. Malformed for everyone: completed_work_requests_description_ck refuses
-  --    a blank description, so no caller could ever succeed with one.
+  -- 1. Malformed for everyone, ahead of the gate: a blank description
+  --    (completed_work_requests_description_ck refuses it) and anything other
+  --    than exactly one Origin (completed_work_requests_origin_ck's own
+  --    shape). Both answers are equally data-independent -- neither reads a
+  --    row, neither depends on who is asking, and neither could ever succeed
+  --    for any caller -- so both belong in step 1 rather than one of them
+  --    being discovered after the gate.
   if p_description is null or p_description !~ '[^[:space:]]' then
     raise sqlstate 'PT400' using message = 'description_required';
   end if;
   v_description := regexp_replace(p_description, '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  if num_nonnulls(p_dept_id, p_team_id, p_project_id) <> 1 then
+    raise sqlstate 'PT400' using message = 'invalid_origin';
+  end if;
 
   -- 2. Gate. There is no target row yet, so this is the whole of it.
   if v_actor is null
@@ -236,12 +261,7 @@ begin
   select profile.full_name into v_actor_name
     from public.profiles as profile where profile.id = v_actor;
 
-  -- 3. Exactly one Origin (completed_work_requests_origin_ck's own shape).
-  if num_nonnulls(p_dept_id, p_team_id, p_project_id) <> 1 then
-    raise sqlstate 'PT400' using message = 'invalid_origin';
-  end if;
-
-  -- 4. Filing is MEMBERSHIP, not management: a requester belongs to the
+  -- 3. Filing is MEMBERSHIP, not management: a requester belongs to the
   --    Origin, they do not manage it (so no private.require_origin_manager
   --    here). A Project must be active -- there is no work to claim against a
   --    Project that has been wound up. A Team is tested the same way whether
@@ -268,12 +288,12 @@ begin
     raise exception using errcode = '42501', message = 'request_origin_forbidden';
   end if;
 
-  -- 5. Mutate.
+  -- 4. Mutate.
   insert into public.completed_work_requests (requester_id, dept_id, team_id, project_id, description, status)
   values (v_actor, p_dept_id, p_team_id, p_project_id, v_description, 'pending')
   returning * into v_request;
 
-  -- 6. Notify the deciders. THE decider query -- the one private.
+  -- 5. Notify the deciders. THE decider query -- the one private.
   --    require_request_decider mirrors as an `exists`. private.notify drops the
   --    actor, so a requester who happens to be a decider of their own Origin
   --    (a BCE filing in their own Department, say) is never told about their
@@ -301,6 +321,7 @@ begin
            or (v_request.project_id is not null and exists (
                  select 1 from public.projects as project
                   where project.id = v_request.project_id
+                    and project.status = 'active'
                     and project.leader_id = decider.id))
            -- Project Responsible: deliberately no branch either.
          )
@@ -317,7 +338,7 @@ end;
 $$;
 
 comment on function private.create_completed_work_request_impl(text, text, text, bigint) is
-  'Files one pending Completed-work Request against exactly one Origin; the requester is auth.uid(), never a parameter. Filing is MEMBERSHIP, not management (so no private.require_origin_manager): a live activ Member of the Department, of the Team (either kind), or of an ACTIVE Project may claim work there -- 42501 request_origin_forbidden otherwise, which is also the answer for an Origin that does not exist. PT400 description_required for a blank or null description (raised before the gate -- completed_work_requests_description_ck could never accept it), PT400 invalid_origin for zero, two or three Origins, 42501 request_command_forbidden for a caller without organisation claims or a live activ profile. Notifies the Request''s DECIDERS -- and this is the one place that set is written out: every live BC/Moderator, plus the live local BCE of a Department or of a Department-Team''s parent Department, plus a Project''s lead; never a Project Responsible and never an Independent Team''s own members. private.require_request_decider mirrors this predicate as an `exists`. Dedupe key request:{id}.';
+  'Files one pending Completed-work Request against exactly one Origin; the requester is auth.uid(), never a parameter. Filing is MEMBERSHIP, not management (so no private.require_origin_manager): a live activ Member of the Department, of the Team (either kind), or of an ACTIVE Project may claim work there -- 42501 request_origin_forbidden otherwise, which is also the answer for an Origin that does not exist. PT400 description_required for a blank or null description and PT400 invalid_origin for zero, two or three Origins -- both raised before the gate, because completed_work_requests_description_ck and completed_work_requests_origin_ck could never accept either from any caller -- then 42501 request_command_forbidden for a caller without organisation claims or a live activ profile. Notifies the Request''s DECIDERS -- and this is the one place that set is written out: every live BC/Moderator, plus the live local BCE of a Department or of a Department-Team''s parent Department, plus an ACTIVE Project''s lead; never a Project Responsible and never an Independent Team''s own members. private.require_request_decider mirrors this predicate as an `exists`. Dedupe key request:{id}.';
 
 create function public.create_completed_work_request(
   p_description text,
@@ -360,8 +381,14 @@ begin
   if p_rating is null or p_rating < 1 or p_rating > 5 then
     raise sqlstate 'PT400' using message = 'invalid_rating';
   end if;
+  -- note_required, not evaluation_note_required: this is the COMMAND's own
+  -- input validation, the same condition and the same string reject_completed_
+  -- work_request raises, so a client normalizing on the message sees one
+  -- vocabulary across the two adjacent buttons. private.evaluate_task keeps
+  -- its own evaluation_note_required for the callers that reach the Evaluation
+  -- core directly.
   if p_note is null or p_note !~ '[^[:space:]]' then
-    raise sqlstate 'PT400' using message = 'evaluation_note_required';
+    raise sqlstate 'PT400' using message = 'note_required';
   end if;
   v_note := regexp_replace(p_note, '^[[:space:]]+|[[:space:]]+$', '', 'g');
 
@@ -450,7 +477,7 @@ end;
 $$;
 
 comment on function private.approve_completed_work_request_impl(bigint, integer, integer, text) is
-  'Approves one pending Completed-work Request and, in the same transaction, creates the completed Task it recognizes: a local, direct ordinary Task on the Request''s Origin titled with the description''s first 120 characters and deadlined at the approval instant, its created activity row naming details.from_request_id, the requester opened as its Executor via private.open_task_assignment(..., ''request_approval''), and private.evaluate_task (#336) writing the Evaluation, the points_ledger credit, the terminal Task state and the ended Assignment. The Request is then stamped approved/decided_by/decided_at/decision_note/task_id and the requester is notified. Difficulty and Rating outside 1..5 and a blank note are PT400 invalid_difficulty / invalid_rating / evaluation_note_required, raised BEFORE the gate (they could never succeed for anyone; task_evaluations_note_ck makes the note mandatory even though the Request''s own shape check would allow a null decision_note). Then 42501 request_command_forbidden for a caller without claims or a live activ profile; the Request row locked FOR UPDATE; PT404 request_not_found when it is missing OR the caller cannot read it (completed_work_requests_read''s own predicate -- hidden and missing are indistinguishable); 42501 request_decide_forbidden when they can read it but may not decide it (private.require_request_decider, which also takes the FOR SHARE re-validation locks); PT409 request_not_pending when it has already been decided -- which is exactly what a second concurrent approval receives after waiting on the row lock. PT400 invalid_executor if the requester is no longer an active Member.';
+  'Approves one pending Completed-work Request and, in the same transaction, creates the completed Task it recognizes: a local, direct ordinary Task on the Request''s Origin titled with the description''s first 120 characters and deadlined at the approval instant, its created activity row naming details.from_request_id, the requester opened as its Executor via private.open_task_assignment(..., ''request_approval''), and private.evaluate_task (#336) writing the Evaluation, the points_ledger credit, the terminal Task state and the ended Assignment. The Request is then stamped approved/decided_by/decided_at/decision_note/task_id and the requester is notified. Difficulty and Rating outside 1..5 and a blank note are PT400 invalid_difficulty / invalid_rating / note_required, raised BEFORE the gate (they could never succeed for anyone; task_evaluations_note_ck makes the note mandatory even though the Request''s own shape check would allow a null decision_note). The blank note is note_required rather than private.evaluate_task''s evaluation_note_required because it is this command''s input being validated, and it is the same string reject raises for the same mistake. Then 42501 request_command_forbidden for a caller without claims or a live activ profile; the Request row locked FOR UPDATE; PT404 request_not_found when it is missing OR the caller cannot read it (completed_work_requests_read''s own predicate -- hidden and missing are indistinguishable); 42501 request_decide_forbidden when they can read it but may not decide it (private.require_request_decider, which also takes the FOR SHARE re-validation locks); PT409 request_not_pending when it has already been decided -- which is exactly what a second concurrent approval receives after waiting on the row lock. PT400 invalid_executor if the requester is no longer an active Member.';
 
 create function public.approve_completed_work_request(
   p_request_id bigint,
@@ -466,7 +493,7 @@ as $$
 $$;
 
 comment on function public.approve_completed_work_request(bigint, integer, integer, text) is
-  'Approve a Completed-work Request: creates the completed Task it describes, credits the requester Difficulty x the Rating multiplier, and records the decision -- atomically. Callable only by the Request''s decider: BC/Moderator anywhere, the live local BCE of a Department or of a Department-Team''s parent Department, or a Project''s lead. A Project Responsible and an Independent Team''s own members may read the Request but must not approve it. Difficulty and Rating are 1..5 and a non-blank note is required. Two concurrent approvals leave exactly one Task: the second waits on the Request row and then receives PT409 request_not_pending.';
+  'Approve a Completed-work Request: creates the completed Task it describes, credits the requester Difficulty x the Rating multiplier, and records the decision -- atomically. Callable only by the Request''s decider: BC/Moderator anywhere, the live local BCE of a Department or of a Department-Team''s parent Department, or the lead of an ACTIVE Project. A Project Responsible and an Independent Team''s own members may read the Request but must not approve it, and once a Project is archived only BC/Moderator can decide its leftover Requests -- including when the lead is the requester. Difficulty and Rating are 1..5 and a non-blank note is required. Two concurrent approvals leave exactly one Task: the second waits on the Request row and then receives PT409 request_not_pending.';
 
 -- ==================== reject_completed_work_request ====================
 create function private.reject_completed_work_request_impl(
@@ -550,7 +577,7 @@ as $$
 $$;
 
 comment on function public.reject_completed_work_request(bigint, text) is
-  'Reject a Completed-work Request with a reason the requester will read. Callable only by the Request''s decider -- BC/Moderator anywhere, the live local BCE of a Department or of a Department-Team''s parent Department, or a Project''s lead; never a Project Responsible or an Independent Team''s own members. The note is required and non-blank. No Task is created, and the decision happens exactly once: a second decision of either kind receives PT409 request_not_pending.';
+  'Reject a Completed-work Request with a reason the requester will read. Callable only by the Request''s decider -- BC/Moderator anywhere, the live local BCE of a Department or of a Department-Team''s parent Department, or the lead of an ACTIVE Project; never a Project Responsible or an Independent Team''s own members. The note is required and non-blank. No Task is created, and the decision happens exactly once: a second decision of either kind receives PT409 request_not_pending.';
 
 -- ==================== Table ownership (conventions Sec2) ====================
 -- These three commands are now the only write path to

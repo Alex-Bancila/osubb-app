@@ -43,7 +43,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(107);
+select plan(112);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -168,6 +168,19 @@ select '34400000-0000-0000-0000-000000000008', project.id, 'A doua cerere de pro
 insert into public.completed_work_requests (requester_id, project_id, description)
 select '34400000-0000-0000-0000-000000000008', project.id, 'Cerere pe un proiect arhivat intre timp #344'
   from public.projects as project where project.name = 'Proiect arhivat #344';
+-- Same shape, but filed by the LEAD themselves. This is the one caller who
+-- clears the command's visibility test on an archived Project without
+-- private.can_manage_project_work ever being consulted (requester_id =
+-- auth.uid() short-circuits the disjunction), so it is the only caller who can
+-- reach the decider predicate's Project branch there -- see section 7b-bis.
+insert into public.completed_work_requests (requester_id, project_id, description)
+select '34400000-0000-0000-0000-000000000006', project.id, 'Cerere proprie a leadului pe proiect arhivat #344'
+  from public.projects as project where project.name = 'Proiect arhivat #344';
+-- And on the ACTIVE Project: the lead files their own Request and later
+-- decides it themselves (section 8b).
+insert into public.completed_work_requests (requester_id, project_id, description)
+select '34400000-0000-0000-0000-000000000006', project.id, 'Cerere proprie a leadului pe proiectul activ #344'
+  from public.projects as project where project.name = 'Proiect #344';
 
 -- ==================== 1. Create: a Department Member's own Request ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000004', jsonb_build_object(
@@ -197,6 +210,10 @@ select (select id from public.completed_work_requests
          where description = 'A doua cerere de proiect #344') as project2_request_id,
        (select id from public.completed_work_requests
          where description = 'Cerere pe un proiect arhivat intre timp #344') as archived_request_id,
+       (select id from public.completed_work_requests
+         where description = 'Cerere proprie a leadului pe proiect arhivat #344') as archived_lead_request_id,
+       (select id from public.completed_work_requests
+         where description = 'Cerere proprie a leadului pe proiectul activ #344') as self_decider_request_id,
        (select id from public.projects where name = 'Proiect #344') as project_id,
        (select id from public.projects where name = 'Proiect arhivat #344') as archived_project_id;
 grant select on f344 to authenticated;
@@ -554,18 +571,29 @@ select throws_ok(format($$ select public.approve_completed_work_request(%s, 3, 4
   'and neither can the Independent-Team member who filed it');
 reset role;
 
--- 7b-bis. A Project archived AFTER the Request was filed. The decider
--- predicate names the lead with no status filter, but the visibility gate
--- ahead of it (completed_work_requests_read -> private.can_manage_project_work)
--- is active-only, so the lead never reaches it: PT404. Only BC/Moderator, who
--- clear visibility on role level alone, can still decide such a Request. Both
--- halves are pinned here so the migration header's claim is a tested fact.
+-- 7b-bis. A Project archived AFTER the Request was filed. Three shapes, and
+-- the middle one is the whole point: the visibility test is a DISJUNCTION
+-- (requester_id = auth.uid() OR private.can_manage_origin(...)), so a lead who
+-- is merely the Origin's manager is stopped at PT404 by
+-- private.can_manage_project_work's active-only branch -- but a lead who is
+-- the Request's OWN REQUESTER short-circuits on the first disjunct, never
+-- touches can_manage_project_work, and reaches the decider predicate. That is
+-- the only caller who does, and it is why require_request_decider's Project
+-- branch carries its own projects.status = 'active' test rather than leaning
+-- on the gate ahead of it. Without that filter this middle assertion goes red:
+-- the self-approval succeeds and mints a completed Task, an Evaluation and a
+-- points_ledger credit on an ARCHIVED Project -- exactly what
+-- private.can_evaluate_task refuses on the Task path.
 select pg_temp.test_login('34400000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.approve_completed_work_request(%s, 3, 4, 'Lead pe proiect arhivat') $$,
   (select archived_request_id from f344)),
   'PT404', 'request_not_found',
-  'once the Project is archived its lead can no longer even see its pending Requests -- private.can_manage_project_work is active-only, and the command never discloses more than the read policy does');
+  'once the Project is archived its lead can no longer even see a colleague''s pending Requests on it -- private.can_manage_project_work is active-only, and the command never discloses more than the read policy does');
+select throws_ok(format($$ select public.approve_completed_work_request(%s, 5, 5, 'Ma aprob singur pe proiectul arhivat') $$,
+  (select archived_lead_request_id from f344)),
+  '42501', 'request_decide_forbidden',
+  'and the lead of an archived Project cannot approve even their OWN Request on it -- they see it as its requester, so the visibility disjunction short-circuits and the decider predicate is what must refuse them, the same way private.can_evaluate_task refuses this lead on this Project');
 reset role;
 
 select pg_temp.test_login('34400000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -619,12 +647,12 @@ select throws_ok(format($$ select public.approve_completed_work_request(%s, null
   'a null Difficulty takes the same reason');
 select throws_ok(format($$ select public.approve_completed_work_request(%s, 3, 4, '   ') $$,
   (select deny_request_id from f344)),
-  'PT400', 'evaluation_note_required',
-  'an approval without a note can never be written (task_evaluations_note_ck), so it is refused before the gate too');
+  'PT400', 'note_required',
+  'an approval without a note can never be written (task_evaluations_note_ck), so it is refused before the gate too -- and the reason is note_required, the command''s own input vocabulary, not private.evaluate_task''s internal evaluation_note_required');
 select throws_ok(format($$ select public.reject_completed_work_request(%s, '  ') $$,
   (select deny_request_id from f344)),
   'PT400', 'note_required',
-  'a rejection without a reason is refused before the gate as well');
+  'a rejection without a reason is refused before the gate as well, with the same reason string as approve -- one condition, one word, on two adjacent buttons');
 reset role;
 
 -- 7e. Missing and null targets.
@@ -699,6 +727,47 @@ select is((select count(*) from public.task_evaluations as evaluation
             where evaluation.task_id in (select task_id from public.completed_work_requests
                                           where task_id is not null)), 9::bigint,
   'and each approved Request carries exactly one Evaluation -- nine approvals so far in this suite, nine Evaluations');
+
+-- ==================== 8b. A decider may decide their OWN Request ====================
+-- Deliberate, and consistent with private.can_evaluate_task, which already
+-- lets a Project lead evaluate their own active Assignment: ADR-0007 names no
+-- `requester_id <> decider` exclusion, so the decider predicate does not
+-- invent one. The consequence worth pinning is that such an approval is
+-- SILENT -- private.notify drops the actor, and all three notifications an
+-- approval sends (Task nou, Task evaluat, Cerere aprobată) address the
+-- requester, who here IS the actor. The audit trail is therefore not an inbox
+-- but the Request's own decided_by/decided_at and the Task's activity rows,
+-- and those are what this section asserts. Run on the ACTIVE Project, so it
+-- says nothing about section 7b-bis's archived one and cannot collide with it.
+select pg_temp.test_login('34400000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.approve_completed_work_request(%s, 2, 4, 'Imi aprob propria cerere pe proiectul activ.') $$,
+  (select self_decider_request_id from f344)),
+  'the lead of an ACTIVE Project may decide a Request they filed themselves -- self-decision is allowed, exactly as private.can_evaluate_task lets a lead evaluate their own Assignment');
+reset role;
+
+select is((select count(*) from public.notifications as notification
+            where notification.task_id = (select request.task_id
+                                            from public.completed_work_requests as request
+                                           where request.id = (select self_decider_request_id from f344))),
+  0::bigint,
+  'and that approval sends ZERO notifications -- a deliberate consequence of private.notify dropping the actor, since every notification an approval sends is addressed to the requester and the requester is the actor here');
+
+select is((select format('%s|%s|%s|%s', request.status,
+                         (request.decided_by = request.requester_id)::text,
+                         (request.decided_at is not null)::text,
+                         (request.task_id is not null)::text)
+             from public.completed_work_requests as request
+            where request.id = (select self_decider_request_id from f344)),
+  'approved|true|true|true',
+  'the audit trail lives on the Request instead: decided_by is the requester themselves, stamped with the moment and naming the Task the approval created');
+
+select set_eq(format($$
+  select kind from public.task_activity where task_id =
+    (select task_id from public.completed_work_requests where id = %s)
+$$, (select self_decider_request_id from f344)),
+  array['created', 'executor_assigned', 'evaluated'],
+  'and on the Task''s activity rows, which record the whole self-approved chain even though nobody was notified about it');
 
 -- ==================== 9. Reject ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000014', jsonb_build_object(
@@ -1024,6 +1093,31 @@ begin
   exception when others then null;
   end;
   return next;
+-- pg_temp.test_race's own outer handler, kept verbatim. Without it a failure
+-- anywhere above -- A raising, B neither blocking nor finishing, a lost
+-- connection -- leaves cwr_race_a_<pid> / cwr_race_b_<pid> connected with an
+-- open remote transaction for the rest of the file, turning one red test into
+-- a blocked suite. It weakens no assertion: it rolls back, disconnects and
+-- re-raises.
+exception
+  when others then
+    begin
+      perform extensions.dblink_exec(v_connection_a, 'rollback');
+    exception when others then null;
+    end;
+    begin
+      perform extensions.dblink_exec(v_connection_b, 'rollback');
+    exception when others then null;
+    end;
+    begin
+      perform extensions.dblink_disconnect(v_connection_a);
+    exception when others then null;
+    end;
+    begin
+      perform extensions.dblink_disconnect(v_connection_b);
+    exception when others then null;
+    end;
+    raise;
 end;
 $function$;
 
