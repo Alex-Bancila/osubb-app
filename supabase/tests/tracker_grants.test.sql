@@ -309,7 +309,14 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #340: the fifteenth Task command wrapper, added the same way.
   ('complete_umbrella_task', 'p_task_id bigint',                     false, true,  false, false),
   -- #341: the sixteenth Task command wrapper, added the same way.
-  ('duplicate_task',         'p_task_id bigint, p_deadline timestamp with time zone', false, true, false, false);
+  ('duplicate_task',         'p_task_id bigint, p_deadline timestamp with time zone', false, true, false, false),
+  -- #344: the three Completed-work Request wrappers, added the same way.
+  ('create_completed_work_request',  'p_description text, p_dept_id text, p_team_id text, p_project_id bigint',
+                                                                     false, true,  false, false),
+  ('approve_completed_work_request', 'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text',
+                                                                     false, true,  false, false),
+  ('reject_completed_work_request',  'p_request_id bigint, p_note text',
+                                                                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -356,6 +363,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('add_department_team_member_impl',             'p_team_id text, p_member_id uuid',                                                                                   'impl'),
   ('add_independent_team_member_impl',            'p_team_id text, p_member_id uuid',                                                                                   'impl'),
   ('add_project_member_impl',                     'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
+  -- #344: approving a Completed-work Request mints the completed Task, its
+  -- Evaluation and its ledger credit in one transaction.
+  ('approve_completed_work_request_impl',         'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text',                                           'impl'),
   ('archive_project_impl',                        'p_project_id bigint',                                                                                                'impl'),
   ('assign_task_executor_impl',                   'p_task_id bigint, p_member_id uuid',                                                                                 'impl'),
   -- #339: cancelling a Task with a recorded reason, plus its Umbrella cascade.
@@ -375,6 +385,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('complete_umbrella_task_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   ('convert_task_mode_impl',                      'p_task_id bigint, p_assignment_mode text, p_audience text',                                                         'impl'),
   ('create_campaign_impl',                        'p_department_id text, p_name text',                                                                                  'impl'),
+  -- #344: filing a Completed-work Request -- membership, not management.
+  ('create_completed_work_request_impl',          'p_description text, p_dept_id text, p_team_id text, p_project_id bigint',                                            'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
   -- #341: clone a Task into a brand-new todo Task with a fresh deadline.
@@ -407,6 +419,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
   ('protect_project_leader_membership',           '',                                                                                                                   'trigger'),
   ('queue_position',                              'p_task_id bigint, p_member_id uuid',                                                                                 'authenticated_only'),
+  -- #344: rejecting a Completed-work Request -- a reason, and no Task.
+  ('reject_completed_work_request_impl',          'p_request_id bigint, p_note text',                                                                                   'impl'),
   ('reject_legacy_evaluation_source',             '',                                                                                                                   'trigger'),
   ('reject_task_activity_change',                 '',                                                                                                                   'trigger'),
   ('remove_department_team_member_impl',          'p_team_id text, p_member_id uuid',                                                                                   'impl'),
@@ -420,6 +434,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
   ('require_origin_manager',                      'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'require'),
   ('require_project_admin',                       '',                                                                                                                   'require'),
+  -- #344: who may DECIDE a Completed-work Request -- narrower than
+  -- private.can_manage_origin (no Project Responsible, no Independent-Team
+  -- member) and, like every require_*, granted to nobody.
+  ('require_request_decider',                     'p_request_id bigint',                                                                                                'require'),
   ('require_task_evaluator',                      'p_task_id bigint',                                                                                                   'require'),
   ('require_task_executor',                       'p_task_id bigint',                                                                                                   'require'),
   ('require_task_manager',                        'p_task_id bigint',                                                                                                   'require'),
@@ -444,8 +462,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 80,
-  'the pinned private-schema roster itself has exactly the 80 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, and #341''s duplicate_task_impl plus its provenance trigger guard');
+  (select count(*) from pinned_private_functions)::int, 84,
+  'the pinned private-schema roster itself has exactly the 84 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, #341''s duplicate_task_impl plus its provenance trigger guard, and #344''s four -- require_request_decider plus the create/approve/reject Completed-work Request _impl trio');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

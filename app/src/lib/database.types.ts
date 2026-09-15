@@ -2866,6 +2866,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      approve_completed_work_request: {
+        Args: {
+          p_difficulty: number
+          p_note: string
+          p_rating: number
+          p_request_id: number
+        }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          dept_id: string | null
+          description: string
+          id: number
+          project_id: number | null
+          requester_id: string
+          status: string
+          task_id: number | null
+          team_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "completed_work_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       archive_project: {
         Args: { p_project_id: number }
         Returns: {
@@ -3155,6 +3183,34 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_completed_work_request: {
+        Args: {
+          p_dept_id: string
+          p_description: string
+          p_project_id: number
+          p_team_id: string
+        }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          dept_id: string | null
+          description: string
+          id: number
+          project_id: number | null
+          requester_id: string
+          status: string
+          task_id: number | null
+          team_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "completed_work_requests"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3464,6 +3520,29 @@ export type Database = {
         Returns: string
       }
       rating_mult: { Args: { r: number }; Returns: number }
+      reject_completed_work_request: {
+        Args: { p_note: string; p_request_id: number }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          dept_id: string | null
+          description: string
+          id: number
+          project_id: number | null
+          requester_id: string
+          status: string
+          task_id: number | null
+          team_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "completed_work_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       remove_department_team_member: {
         Args: { p_member_id: string; p_team_id: string }
         Returns: boolean
