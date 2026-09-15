@@ -45,6 +45,10 @@ export const keys = {
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
+    available: (memberId: string | undefined) =>
+      ['tasks', 'available', { memberId }] as const,
+    scopes: (memberId: string | undefined) =>
+      ['tasks', 'scopes', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
   events: {

@@ -18,7 +18,7 @@ const TASK_FIELDS =
   'id, title, status, type, difficulty, rating, deadline, dept_id, team_id';
 
 /** Tasks from this Member's current and historical Assignments, through RLS. */
-const MY_TASK_FIELDS = `
+export const TASK_PRESENTATION_FIELDS = `
   id, title, description, status, deadline, completed_at, review_round,
   dept_id, team_id, project_id, assignment_mode, audience, kind,
   parent_task_id, campaign_id, duplicated_from_task_id,
@@ -45,7 +45,9 @@ export async function fetchMyTasks(
 ): Promise<TaskPresentationRow[]> {
   const { data, error } = await supabase
     .from('task_assignments')
-    .select(`task:tasks!task_assignments_task_id_fkey(${MY_TASK_FIELDS})`)
+    .select(
+      `task:tasks!task_assignments_task_id_fkey(${TASK_PRESENTATION_FIELDS})`,
+    )
     .eq('member_id', memberId);
   if (error) throw error;
 
