@@ -177,7 +177,7 @@ export function ManagerTaskTable({
         columns={columns}
         data={filtered}
         filters={[{ columnId: 'title', label: 'Caută după titlu' }]}
-        emptyTitle="Niciun task corespunde filtrelor."
+        emptyTitle="Niciun task nu corespunde filtrelor."
         initialSorting={[{ id: 'deadline', desc: false }]}
         prioritySort={{ id: 'overdue', desc: true }}
         rowClassName={(task) => (task.overdue ? 'bg-destructive/5' : '')}
