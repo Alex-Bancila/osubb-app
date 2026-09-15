@@ -26,7 +26,7 @@ function taskColumns(
         onOpenTask ? (
           <Button
             variant="link"
-            className="min-h-11 min-w-11 whitespace-normal text-left"
+            className="min-h-11 min-w-11 whitespace-normal text-left text-foreground"
             onClick={() => onOpenTask(row.original.id)}
           >
             {row.original.title}
