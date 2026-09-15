@@ -948,9 +948,9 @@ select is(
 -- ==================== 10. The command is the only write path ====================
 -- Every expected message is pinned, not left null: all three denials are
 -- 42501, and only the message says WHICH guarantee stopped the write. The
--- Evaluation is stopped by table privileges -- public.task_evaluations has
--- every privilege revoked from public/anon/authenticated/service_role (#316),
--- so the statement never reaches RLS at all; that is a STRONGER guarantee
+-- Evaluation is stopped by table privileges -- public.task_evaluations grants
+-- `authenticated` (and service_role) `select` and nothing else (#316), so an
+-- UPDATE never reaches RLS at all; that is a STRONGER guarantee
 -- than a policy denial, and pinning its message is what stops a future
 -- migration that grants `update` back from passing this test by swapping one
 -- 42501 for another. The two points_ledger inserts do exercise RLS: the table
