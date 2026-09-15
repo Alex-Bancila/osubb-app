@@ -19,8 +19,10 @@ const messages: Record<TaskInterestErrorKind, string> = {
     'Nu am putut confirma starea înscrierii. Reîncarcă lista și încearcă din nou.',
 };
 export class TaskInterestError extends Error {
-  constructor(readonly kind: TaskInterestErrorKind) {
+  readonly kind: TaskInterestErrorKind;
+  constructor(kind: TaskInterestErrorKind) {
     super(messages[kind]);
+    this.kind = kind;
   }
 }
 export function taskInterestError(code?: string): TaskInterestError {
