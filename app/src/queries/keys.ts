@@ -49,6 +49,8 @@ export const keys = {
       ['tasks', 'available', { memberId }] as const,
     scopes: (memberId: string | undefined) =>
       ['tasks', 'scopes', { memberId }] as const,
+    queue: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'queue', { taskId, memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
   events: {

@@ -10,6 +10,7 @@ import {
 import { formatPoints } from '../../lib/format';
 import type { TaskPresentation } from './task-presentation';
 import type { TaskProgressAction } from '../../queries/task-progress';
+import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
 
 type TaskCardProps = {
@@ -119,6 +120,9 @@ export function TaskCard({
             </p>
           )}
           <TaskStageSummary task={task} />
+          {task.assignmentMode === 'public' && (
+            <TaskQueueStatus taskId={task.id} />
+          )}
           {task.points !== null && (
             <p className="text-sm">
               {formatPoints(task.points)} puncte · Dificultate {task.difficulty}{' '}
