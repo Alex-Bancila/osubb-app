@@ -152,6 +152,22 @@ begin
     raise sqlstate 'PT404' using message = 'task_not_found';
   end if;
 
+  -- Defensive state precondition, keyed on exactly what
+  -- task_evaluations_one_open_per_task_uidx keys on (task_id, where
+  -- reversed_at is null and source = 'command'). Every caller is expected to
+  -- have established its own legal source status first -- complete_task_review
+  -- requires in_review -- but #337/#338/#344 each reach this core by a
+  -- different route, and one that forgot would otherwise trip that unique
+  -- index and surface a raw 23505 unique_violation to the client instead of a
+  -- pinned reason string. A reversed Evaluation does not block a new one:
+  -- that is exactly how #338's reopen -> re-evaluate path works.
+  if exists (select 1 from public.task_evaluations as evaluation
+              where evaluation.task_id = p_task_id
+                and evaluation.source = 'command'
+                and evaluation.reversed_at is null) then
+    raise sqlstate 'PT409' using message = 'task_already_evaluated';
+  end if;
+
   -- The Assignment the points are credited to. FOR UPDATE because this is
   -- the row the Evaluation, the ledger entry and end_task_assignment all
   -- hang off; a caller that has not already serialized on the tasks row
@@ -213,10 +229,19 @@ begin
     'Nu mai poți fi selectat pentru acest task.',
     p_task_id, null, p_actor);
 
+  -- Romanian numeral agreement on the award itself. public.rating_mult maps
+  -- Rating 1..5 to -1, 0, 1, 2, 3, so with Difficulty 1..5 the award is
+  -- bounded to -5..15: `abs(v_points) = 1` is the only singular case (and it
+  -- is reachable both ways -- Difficulty 1 x Rating 3 is +1, Difficulty 1 x
+  -- Rating 1 is -1), 0 correctly takes the plural, and the third Romanian
+  -- form -- `de puncte`, used from 20 upward -- is UNREACHABLE here and is
+  -- therefore deliberately not written. If a future change to rating_mult or
+  -- to the Difficulty range lifts the ceiling to 20, this branch has to grow.
   perform private.notify(array[v_executor_id], 'task'::public.noti_kind,
     case p_outcome when 'completed' then 'Task evaluat: ' else 'Task nerealizat: ' end
       || v_task.title,
-    v_points || ' puncte (dificultate ' || p_difficulty || ', calificativ ' || p_rating || ').',
+    case when abs(v_points) = 1 then v_points || ' punct' else v_points || ' puncte' end
+      || ' (dificultate ' || p_difficulty || ', calificativ ' || p_rating || ').',
     p_task_id, null, p_actor);
 
   -- Umbrella rollup. The counts are taken AFTER the status update, so this
@@ -261,7 +286,7 @@ end;
 $$;
 
 comment on function private.evaluate_task(bigint, text, integer, integer, text, uuid) is
-  'The shared Evaluation core and the ONLY place points are computed and written (ADR-0007: Difficulty x public.rating_mult(Rating), zero or negative written as computed). Assumes the caller already holds the public.tasks row FOR UPDATE and has already authorized -- it re-checks neither and never locks the Task row, nor (deliberately) the Umbrella row of a Subtask. Validates outcome/difficulty/rating/note itself (PT400 invalid_outcome / invalid_difficulty / invalid_rating / evaluation_note_required) so every caller inherits the same rules, locks the one active Assignment FOR UPDATE (PT409 task_has_no_executor when there is none), then writes: one source = command task_evaluations row, one reason = task points_ledger row crediting the Executor, the Candidate Queue closed automatically (decided_by null) BEFORE the terminal status write that tasks_queue_timestamp_state_check demands it precede, the Task set to the outcome with its Difficulty, Rating and completed_at/unfulfilled_at, and the Assignment ended completed/failed at the same now(). Then the evaluated/unfulfilled activity row (assignment id, from -> to, the trimmed note, details.evaluation_id/difficulty/rating/points), the closed Candidates'' notification, the Executor''s "Task evaluat"/"Task nerealizat" notification, and -- for a Subtask -- a subtask_completed activity row on the Umbrella plus one coalesced manager notification keyed task:{umbrella}:subtasks. Returns the new task_evaluations.id.';
+  'The shared Evaluation core and the ONLY place points are computed and written (ADR-0007: Difficulty x public.rating_mult(Rating), zero or negative written as computed). Assumes the caller already holds the public.tasks row FOR UPDATE and has already authorized -- it re-checks neither and never locks the Task row, nor (deliberately) the Umbrella row of a Subtask. Validates outcome/difficulty/rating/note itself (PT400 invalid_outcome / invalid_difficulty / invalid_rating / evaluation_note_required) so every caller inherits the same rules, refuses a Task that already carries an open (un-reversed) command Evaluation (PT409 task_already_evaluated -- the defensive guard that keeps a caller which forgot its own state precondition from surfacing a raw 23505 off task_evaluations_one_open_per_task_uidx), locks the one active Assignment FOR UPDATE (PT409 task_has_no_executor when there is none), then writes: one source = command task_evaluations row, one reason = task points_ledger row crediting the Executor, the Candidate Queue closed automatically (decided_by null) BEFORE the terminal status write that tasks_queue_timestamp_state_check demands it precede, the Task set to the outcome with its Difficulty, Rating and completed_at/unfulfilled_at, and the Assignment ended completed/failed at the same now(). Then the evaluated/unfulfilled activity row (assignment id, from -> to, the trimmed note, details.evaluation_id/difficulty/rating/points), the closed Candidates'' notification, the Executor''s "Task evaluat"/"Task nerealizat" notification, and -- for a Subtask -- a subtask_completed activity row on the Umbrella plus one coalesced manager notification keyed task:{umbrella}:subtasks. Returns the new task_evaluations.id.';
 
 -- ==================== complete_task_review ====================
 create function private.complete_task_review_impl(

@@ -18,7 +18,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(110);
+select plan(115);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -42,7 +42,8 @@ insert into auth.users (id, email) values
   ('33600000-0000-0000-0000-000000000018', 'exec.gate.336@test.local'),
   ('33600000-0000-0000-0000-000000000019', 'exec.directwrite.336@test.local'),
   ('33600000-0000-0000-0000-000000000020', 'exec.inputs.336@test.local'),
-  ('33600000-0000-0000-0000-000000000021', 'exec.negative.336@test.local');
+  ('33600000-0000-0000-0000-000000000021', 'exec.negative.336@test.local'),
+  ('33600000-0000-0000-0000-000000000022', 'exec.singular.336@test.local');
 
 insert into public.profiles (id, full_name, email, role, status) values
   ('33600000-0000-0000-0000-000000000001', 'BC 336', 'bc.336@test.local', 'bc', 'activ'),
@@ -65,7 +66,8 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33600000-0000-0000-0000-000000000018', 'Executor Poarta 336', 'exec.gate.336@test.local', 'voluntar', 'activ'),
   ('33600000-0000-0000-0000-000000000019', 'Executor Scriere 336', 'exec.directwrite.336@test.local', 'voluntar', 'activ'),
   ('33600000-0000-0000-0000-000000000020', 'Executor Intrari 336', 'exec.inputs.336@test.local', 'voluntar', 'activ'),
-  ('33600000-0000-0000-0000-000000000021', 'Executor Negativ 336', 'exec.negative.336@test.local', 'voluntar', 'activ');
+  ('33600000-0000-0000-0000-000000000021', 'Executor Negativ 336', 'exec.negative.336@test.local', 'voluntar', 'activ'),
+  ('33600000-0000-0000-0000-000000000022', 'Executor Un Punct 336', 'exec.singular.336@test.local', 'voluntar', 'activ');
 
 insert into public.member_departments (member_id, dept_id) values
   ('33600000-0000-0000-0000-000000000002', 'edu'),
@@ -82,7 +84,8 @@ insert into public.member_departments (member_id, dept_id) values
   ('33600000-0000-0000-0000-000000000018', 'edu'),
   ('33600000-0000-0000-0000-000000000019', 'edu'),
   ('33600000-0000-0000-0000-000000000020', 'edu'),
-  ('33600000-0000-0000-0000-000000000021', 'edu');
+  ('33600000-0000-0000-0000-000000000021', 'edu'),
+  ('33600000-0000-0000-0000-000000000022', 'edu');
 
 insert into public.teams (id, name, dept_id) values
   ('t-336-ind', 'Echipa Independenta 336', null),
@@ -301,6 +304,21 @@ insert into public.task_assignments (task_id, member_id, assigned_by, assigned_a
 select id, '33600000-0000-0000-0000-000000000021', '33600000-0000-0000-0000-000000000002', now() - interval '4 days'
   from public.tasks where title = 'Puncte negative #336';
 
+-- ---- T18: a ONE-POINT award. rating 3 -> multiplier 1, so Difficulty 1
+-- credits exactly 1 point -- the only magnitude at which Romanian takes the
+-- singular ("1 punct", never "1 puncte"). The same Task is reused in section
+-- 5 as the already-evaluated target of private.evaluate_task's own guard.
+insert into public.tasks
+  (title, description, deadline, dept_id, audience, assignment_mode, status,
+   created_at, started_at, submitted_at, created_by)
+values
+  ('Un singur punct #336', 'Dificultate minima, calificativ suficient', '2027-12-16 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+   now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
+   '33600000-0000-0000-0000-000000000002');
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33600000-0000-0000-0000-000000000022', '33600000-0000-0000-0000-000000000002', now() - interval '4 days'
+  from public.tasks where title = 'Un singur punct #336';
+
 -- Every fixture id resolved ONCE, as the owner.
 create temp table f336 as
 select
@@ -322,6 +340,7 @@ select
   (select id from public.tasks where title = 'Proiect lead executant #336') as proj_lead_task_id,
   (select id from public.tasks where title = 'Proiect responsabil executant #336') as proj_resp_task_id,
   (select id from public.tasks where title = 'Puncte negative #336') as negative_task_id,
+  (select id from public.tasks where title = 'Un singur punct #336') as singular_task_id,
   (select assignment.id from public.task_assignments as assignment
      join public.tasks as task on task.id = assignment.task_id
     where task.title = 'Evaluare fericita #336' and assignment.ended_at is null) as happy_assignment_id,
@@ -529,6 +548,32 @@ select is((select task.status::text from public.tasks as task
   'completed',
   'a negative award still COMPLETES the Task -- outcome and points are independent (ADR-0007)');
 
+-- ==================== 3b. A ONE-point award reads as Romanian, not as a template ====================
+-- public.rating_mult maps Rating 1..5 to -1, 0, 1, 2, 3, so with Difficulty
+-- 1..5 the award is bounded to -5..15. Magnitude 1 is reachable both ways
+-- (Difficulty 1 x Rating 3 = +1, Difficulty 1 x Rating 1 = -1) and is the only
+-- case Romanian writes in the singular. The `de puncte` form (20 upward) is
+-- unreachable at this range and is deliberately not implemented.
+
+select pg_temp.test_login('33600000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.complete_task_review(%s, 1, 3, 'Suficient, dar minim') $$,
+  (select singular_task_id from f336)),
+  'the smallest positive award the guide can produce -- Difficulty 1 x rating_mult(3) = 1 -- is an ordinary completion');
+reset role;
+select is((select evaluation.points from public.task_evaluations as evaluation
+            where evaluation.task_id = (select singular_task_id from f336)),
+  1, 'Difficulty 1 x rating_mult(3) really is exactly one point');
+select is((select notification.body from public.notifications as notification
+            where notification.task_id = (select singular_task_id from f336)
+              and notification.member_id = '33600000-0000-0000-0000-000000000022'),
+  '1 punct (dificultate 1, calificativ 3).',
+  'the Executor is told "1 punct" -- Romanian takes the singular at magnitude 1, so the points fragment agrees with the number instead of always reading "puncte"');
+select ok((select notification.body not like '%puncte%' from public.notifications as notification
+            where notification.task_id = (select singular_task_id from f336)
+              and notification.member_id = '33600000-0000-0000-0000-000000000022'),
+  'and never "1 puncte" -- the plural form does not appear in a one-point body at all');
+
 -- ==================== 4. Input validation ====================
 
 select pg_temp.test_login('33600000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -586,8 +631,10 @@ select is((select count(*) from public.task_evaluations
         + (select count(*) from public.points_ledger
             where task_id = (select inputs_task_id from f336))
         + (select count(*) from public.task_activity
+            where task_id = (select inputs_task_id from f336))
+        + (select count(*) from public.notifications
             where task_id = (select inputs_task_id from f336)), 0::bigint,
-  'and wrote no Evaluation, no ledger entry and no activity row');
+  'and wrote no Evaluation, no ledger entry, no activity row and no notification -- a rejected input is silent on every surface, the same rule section 6 applies to a denied persona');
 
 -- ==================== 5. State preconditions ====================
 
@@ -621,6 +668,25 @@ select is((select count(*) from public.task_evaluations
 select is((select count(*) from public.task_evaluations
             where task_id = (select happy_task_id from f336)), 1::bigint,
   'and the second attempt on the already-completed Task did not add a second Evaluation to it');
+
+-- The shared core's OWN guard against a second Evaluation, asserted by calling
+-- private.evaluate_task directly as the owner -- the only way to reach it,
+-- since complete_task_review answers task_not_in_review first. #337/#338/#344
+-- each reach the core by a different route, and one that forgot its own state
+-- precondition must get a pinned reason, never a raw 23505 off
+-- task_evaluations_one_open_per_task_uidx. The section-3b Task already carries
+-- an open command Evaluation; giving it a fresh ACTIVE Assignment removes the
+-- task_has_no_executor answer, so the new guard is the only thing left that
+-- can stop the second Evaluation -- without it this call reaches the insert
+-- and raises 23505.
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select (select singular_task_id from f336), '33600000-0000-0000-0000-000000000022',
+       '33600000-0000-0000-0000-000000000002', now();
+select throws_ok(format($$ select private.evaluate_task(
+    %s, 'completed', 5, 5, 'A doua evaluare', '33600000-0000-0000-0000-000000000001') $$,
+  (select singular_task_id from f336)),
+  'PT409', 'task_already_evaluated',
+  'private.evaluate_task refuses a Task that already carries an open command Evaluation -- the wave''s error vocabulary, not a unique_violation leaked to the client');
 
 -- ==================== 6. The persona matrix -- denied ====================
 
@@ -1032,6 +1098,11 @@ select * from extensions.dblink('ctr_lock', $$
       'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb))::text, true)
 $$) as remote_claims(setting text);
 select extensions.dblink_exec('ctr_lock', 'set local role authenticated');
+-- WARNING to whoever copies this block (#337/#338/#344 will): `(f(...)).field`
+-- is safe ONLY while exactly ONE field is projected. PostgreSQL expands
+-- `(f(x)).a, (f(x)).b` into TWO calls, which here would run the command twice
+-- and make the second one raise. Need a second field? Put the call in a
+-- subquery or a CTE first and project from that.
 select * from extensions.dblink('ctr_lock', format($$
   select (public.complete_task_review(%s, 3, 4, 'Sonda de blocaj')).status::text
 $$, (select probe_task_id from r336))) as locked_review(status text);
@@ -1087,6 +1158,9 @@ select extensions.dblink_disconnect('ctr_lock');
 -- check and blocks instead on the Assignment, waking to find it already
 -- ended, and answers PT409 task_has_no_executor. This assertion is what
 -- distinguishes the two.
+--
+-- The `(f(...)).status` projections below are single-field on purpose -- see
+-- the warning above the section-11 probe call.
 select pg_temp.test_login('33600000-0000-0000-0000-000000000051', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($outer$
@@ -1119,7 +1193,8 @@ select is((select format('%s|%s', count(*), coalesce(sum(delta), 0))
 -- unique violation.
 --
 -- Both callers legitimately succeed here, which is the only shape in which
--- pg_temp.test_race can report b_waited at all.
+-- pg_temp.test_race can report b_waited at all. Single-field
+-- `(f(...)).status` projections again -- see the section-11 warning.
 select pg_temp.test_login('33600000-0000-0000-0000-000000000051', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table race336_siblings as
