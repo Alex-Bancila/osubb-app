@@ -39,7 +39,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(47);
+select plan(48);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -735,6 +735,11 @@ select throws_ok(format($$ insert into public.points_ledger (member_id, delta, r
   (select u1_id from f340)),
   '42501', 'new row violates row-level security policy for table "points_ledger"',
   'nor credit points directly -- ledger_sanction is the only insert policy authenticated holds, and it requires reason = sanction');
+select throws_ok(format($$ insert into public.task_activity (task_id, kind, actor_id, details)
+  values (%s, 'umbrella_completed', '34000000-0000-0000-0000-000000000002', '{}'::jsonb) $$,
+  (select u1_id from f340)),
+  '42501', 'permission denied for table task_activity',
+  'nor append a task_activity row by hand -- authenticated holds only select on that table, table grants stop it before RLS is consulted');
 reset role;
 
 -- ==================== 10. The committed fixtures leave no trace ====================

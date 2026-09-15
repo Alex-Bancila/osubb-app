@@ -368,9 +368,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('can_read_task',                               'p_task_id bigint',                                                                                                   'predicate'),
   ('can_read_team',                               'p_team_id text',                                                                                                     'predicate'),
   ('close_task_queue',                            'p_task_id bigint, p_decided_by uuid',                                                                                'none'),
+  ('complete_task_review_impl',                   'p_task_id bigint, p_difficulty integer, p_rating integer, p_note text',                                             'impl'),
   -- #340: the Umbrella rollup -- completes it once every Subtask is terminal.
   ('complete_umbrella_task_impl',                 'p_task_id bigint',                                                                                                   'impl'),
-  ('complete_task_review_impl',                   'p_task_id bigint, p_difficulty integer, p_rating integer, p_note text',                                             'impl'),
   ('convert_task_mode_impl',                      'p_task_id bigint, p_assignment_mode text, p_audience text',                                                         'impl'),
   ('create_campaign_impl',                        'p_department_id text, p_name text',                                                                                  'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),

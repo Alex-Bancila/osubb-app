@@ -131,12 +131,20 @@
 -- Subtask is written: the Subtask read above is FOR SHARE precisely because
 -- it is read-only.
 --
--- private.task_managers(p_task_id, v_actor) is usually empty here: the
--- caller completing an Umbrella is, in the ordinary case, its own manager --
--- the local BCE who created it, or the sole BC -- and private.notify already
--- drops the actor from every recipient list it is given. The suite asserts
--- both shapes: the empty set (the usual case) and a non-empty one (a
--- different manager, or BC/Moderator completing a BCE-managed Umbrella).
+-- private.task_managers(p_task_id, v_actor) is normally NON-EMPTY here:
+-- when the creator branch and the Origin branch both come up empty (the
+-- ordinary case -- the caller completing the Umbrella is its own creator,
+-- and its own manager), the helper falls through to its last-resort branch
+-- and returns every live bc/moderator profile, minus the actor, which
+-- private.notify drops from every recipient list it is given anyway. So an
+-- ordinary local BCE completing an Umbrella they created, in a Department
+-- with no second BCE, still notifies every BC and every Moderator. The
+-- recipient set is empty only when no live BC/Moderator remains other than
+-- the actor -- the suite constructs that state explicitly, deactivating the
+-- relevant accounts, to assert the empty shape at all. Whether BC/Moderator
+-- *should* receive every Umbrella rollup is a private.task_managers
+-- question for the notification fan-out surface (#320 / #65), not something
+-- this command decides.
 --
 -- No table-DML revoke accompanies this migration (conventions Sec2): this
 -- command owns no table `authenticated` could otherwise reach directly --
