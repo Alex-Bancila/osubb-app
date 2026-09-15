@@ -55,7 +55,7 @@ describe('Manager Task filters', () => {
     await user.type(screen.getByRole('searchbox'), 'urgent');
     expect(titles()).toEqual(['Z urgent']);
     await user.selectOptions(screen.getByLabelText('Origine'), 'project:1');
-    expect(screen.getByText('Niciun task corespunde filtrelor.')).toBeVisible();
+    expect(screen.getByText('Niciun task nu corespunde filtrelor.')).toBeVisible();
     expect(screen.queryByText('A viitor')).not.toBeInTheDocument();
   });
 });
