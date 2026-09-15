@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import {
   columnFilteringFeature,
   createFilteredRowModel,
@@ -51,6 +51,7 @@ type DataTableProps<TData extends RowData> = {
   emptyDescription?: string;
   filters?: { columnId: string; label: string }[];
   initialSorting?: SortingState;
+  prioritySort?: SortingState[number];
   rowClassName?: (row: TData) => string;
 };
 
@@ -96,14 +97,34 @@ function DataTable<TData extends RowData>({
   emptyDescription,
   filters = [],
   initialSorting = [],
+  prioritySort,
   rowClassName,
 }: DataTableProps<TData>) {
   const filterId = useId();
+  const [sorting, setSorting] = useState<SortingState>(() =>
+    prioritySort
+      ? [
+          prioritySort,
+          ...initialSorting.filter((sort) => sort.id !== prioritySort.id),
+        ]
+      : initialSorting,
+  );
   const table = useTable({
     features: dataTableFeatures,
     data,
     columns,
-    initialState: { sorting: initialSorting },
+    state: { sorting },
+    onSortingChange: (updater) =>
+      setSorting((previous) => {
+        const next =
+          typeof updater === 'function' ? updater(previous) : updater;
+        return prioritySort
+          ? [
+              prioritySort,
+              ...next.filter((sort) => sort.id !== prioritySort.id),
+            ]
+          : next;
+      }),
     enableSortingRemoval: false,
     sortDescFirst: false,
   });
@@ -150,7 +171,8 @@ function DataTable<TData extends RowData>({
                       column.getCanSort() ? sortDirection(column) : undefined
                     }
                   >
-                    {header.isPlaceholder ? null : column.getCanSort() ? (
+                    {header.isPlaceholder ? null : column.getCanSort() &&
+                      column.id !== prioritySort?.id ? (
                       <Button
                         variant="ghost"
                         size="sm"
