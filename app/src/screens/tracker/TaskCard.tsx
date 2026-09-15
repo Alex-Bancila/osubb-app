@@ -119,9 +119,9 @@ export function TaskCard({
               {task.description}
             </p>
           )}
-          <TaskStageSummary task={task} />
+          {task.assignmentMode !== 'public' && <TaskStageSummary task={task} />}
           {task.assignmentMode === 'public' && (
-            <TaskQueueStatus taskId={task.id} />
+            <TaskQueueStatus taskId={task.id} task={task} />
           )}
           {task.points !== null && (
             <p className="text-sm">

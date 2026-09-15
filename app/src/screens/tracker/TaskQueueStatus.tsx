@@ -1,3 +1,5 @@
+import type { TaskPresentation } from './task-presentation';
+import { TaskStageSummary } from './TaskStageSummary';
 import { Button } from '../../components/ui/button';
 import { useTaskQueue, type OwnTaskQueue } from '../../queries/task-queue';
 
@@ -20,7 +22,13 @@ export function QueuePosition({ queue }: { queue: OwnTaskQueue }) {
     </p>
   );
 }
-export function TaskQueueStatus({ taskId }: { taskId: number }) {
+export function TaskQueueStatus({
+  taskId,
+  task,
+}: {
+  taskId: number;
+  task?: TaskPresentation;
+}) {
   const query = useTaskQueue(taskId);
   if (query.isPending)
     return (
@@ -41,5 +49,19 @@ export function TaskQueueStatus({ taskId }: { taskId: number }) {
         </Button>
       </div>
     );
-  return <QueuePosition queue={query.data} />;
+  return (
+    <>
+      {task && (
+        <TaskStageSummary
+          task={{
+            ...task,
+            candidature: query.data.status
+              ? { status: query.data.status, position: query.data.position }
+              : null,
+          }}
+        />
+      )}
+      <QueuePosition queue={query.data} />
+    </>
+  );
 }
