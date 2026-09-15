@@ -41,11 +41,124 @@ Success is `201` with the new member's id:
 
 ## Inviting many at once
 
-The CSV import (issues #71–#73) walks the same path one row at a time, so everything here applies to it. Until then, loop the call above.
+Use [`recruits-import-template.csv`](recruits-import-template.csv) as the starting point. The import walks the same real invitation and provisioning path described above, one row at a time. It does not create mocked accounts or temporary passwords.
+
+### CSV format
+
+The file must be UTF-8 and its first row must be exactly:
+
+```csv
+name,email,dept,team
+```
+
+| Column  | Required | Meaning                                                          |
+| ------- | -------- | ---------------------------------------------------------------- |
+| `name`  | yes      | The member's full name                                           |
+| `email` | yes      | The invitation address; it is trimmed and converted to lowercase |
+| `dept`  | no       | One department id                                                |
+| `team`  | no       | One team id                                                      |
+
+Blank department and team cells are valid. A row can currently contain at most one department and one team; additional memberships can be added later through member management. Quoted values follow normal CSV rules, so a name containing a comma can be written as `"Popescu, Ana"`.
+
+Valid local/demo department ids are:
+
+| Id            | Display name  |
+| ------------- | ------------- |
+| `edu`         | Educațional   |
+| `hr`          | Resurse Umane |
+| `fin`         | Financiar     |
+| `pr`          | Imagine & PR  |
+| `youth`       | Tineret       |
+| `diverse`     | Diverse       |
+| `secretariat` | Secretariat   |
+| `org`         | Organizație   |
+
+Valid local/demo team ids are `interne`, `it`, `t-app`, `t-logistica`, and `t-recruti`. These ids are reference data, not labels invented by the CSV. For a hosted project, verify the current lists in the `departments` and `teams` tables before preparing a large import.
+
+One request accepts at most 100 data rows and 256 KB. Every valid row is invited as `recrut`; the CSV cannot grant a higher role.
+
+### Run a local import from PowerShell
+
+Start from the repository root. Keep the function server open in its own terminal and wait until it prints `Serving functions` before sending a request:
+
+```powershell
+npx supabase start
+npx supabase db reset
+npx supabase functions serve
+```
+
+In another terminal, copy the local `ANON_KEY` shown by `npx supabase status`, then sign in as the seeded BC account. This password is for the local demo database only:
+
+```powershell
+$supabaseUrl = "http://127.0.0.1:54321"
+$anonKey = "<ANON_KEY from npx supabase status>"
+
+$session = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$supabaseUrl/auth/v1/token?grant_type=password" `
+  -Headers @{ apikey = $anonKey; "Content-Type" = "application/json" } `
+  -Body (@{
+    email = "bc@demo.osubb"
+    password = "parola123"
+  } | ConvertTo-Json)
+```
+
+Send the template (or your completed copy) as JSON. Use the anonymous key only in the `apikey` header and the BC access token for authorization. **Never use or paste the service-role key here.**
+
+```powershell
+$csv = Get-Content -Raw .\docs\backend\recruits-import-template.csv
+
+$result = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$supabaseUrl/functions/v1/csv-import" `
+  -Headers @{
+    apikey = $anonKey
+    Authorization = "Bearer $($session.access_token)"
+    "Content-Type" = "application/json"
+  } `
+  -Body (@{ csv = $csv } | ConvertTo-Json)
+
+$result | ConvertTo-Json -Depth 8
+```
+
+### Read the result
+
+The function deliberately allows partial success. `summary` gives the totals and the three arrays explain every row:
+
+- `created`: the invitation was sent and the complete recruit profile was created;
+- `skipped`: the address already has a profile, or the same address appeared earlier in this file;
+- `errors`: the row was invalid or its invitation/provisioning step failed.
+
+Example:
+
+```json
+{
+  "summary": { "created": 2, "skipped": 1, "errors": 1 },
+  "created": [
+    { "row": 2, "email": "ana.pop@example.com", "user_id": "…" },
+    { "row": 3, "email": "mihai.ionescu@example.com", "user_id": "…" }
+  ],
+  "skipped": [
+    { "row": 4, "email": "existent@example.com", "code": "already_exists" }
+  ],
+  "errors": [
+    {
+      "row": 5,
+      "field": "dept",
+      "code": "unknown_department",
+      "message": "Departament inexistent: necunoscut."
+    }
+  ]
+}
+```
+
+Rows are numbered like a spreadsheet: the header is row 1 and the first member is row 2. Fix only the rows listed in `errors`, then import those corrected rows in a new file. Re-importing successful rows is safe: existing addresses are skipped and are never overwritten or deleted.
+
+Locally, open Mailpit at http://127.0.0.1:54324 and confirm one **"You've been invited"** message for every `created` row. Hosted imports require the SMTP provider from issue #146; without working hosted email delivery, the function cannot send real invitations.
 
 ## What the member sees
 
-An email titled **"You've been invited"** with a single link. Clicking it signs them in — no password, nothing to remember. If they later use "Sign in with Google" with the same address, Supabase links the identities automatically.
+An email titled **"You've been invited"** with a single link. Clicking it signs them in — no password, nothing to remember. Future sign-ins also use a magic link sent to the same address; Google sign-in is not part of the accepted authentication design.
 
 Tell them to check spam on first contact, and that the link signs them in on the device they open it on.
 
@@ -117,6 +230,8 @@ curl "$SUPABASE_URL/rest/v1/departments?select=id" -H "apikey: $ANON_KEY"
 ```
 
 Last verified end to end on 2026-08-23: BC invited a member, the magic link produced a session carrying `member_role: voluntar`, `member_level: 1`, `dept_ids: ["edu"]`, and the four checks above answered exactly as written.
+
+CSV import last verified end to end on 2026-09-15 from a fresh local database: three valid rows created three Auth users, three complete recruit profiles, the expected department/team memberships, and exactly three Mailpit invitations. A fourth row with an unknown department was reported without blocking the valid rows. Re-importing the same file skipped all three existing members and sent no additional email.
 
 ## Related
 
