@@ -45,35 +45,69 @@ describe('Available work ordering', () => {
     ).toEqual([]);
   });
   it('retains existing participation and overdue opportunities', () => {
-    const assigned = taskRow({ deadline: '2020-01-01T00:00:00Z' });
-    expect(orderOpportunities([assigned], scopes)).toEqual([assigned]);
+    const closedLocal = taskRow({
+      id: 19,
+      dept_id: 'former-department',
+      audience: 'local',
+      deadline: '2020-01-01T00:00:00Z',
+    });
+    expect(orderOpportunities([closedLocal], scopes, new Set([19]))).toEqual([
+      closedLocal,
+    ]);
   });
 });
 
-it('asks the server for unfinished public Tasks with an open queue', async () => {
-  const query = { select: vi.fn(), eq: vi.fn(), is: vi.fn(), in: vi.fn() };
-  query.select.mockReturnValue(query);
-  query.eq.mockReturnValue(query);
-  query.is.mockReturnValue(query);
-  query.in.mockResolvedValue({
-    data: [taskRow({ audience: 'org' })],
-    error: null,
+it('keeps an own candidature after its queue closes without broadening other rows', async () => {
+  const openTask = taskRow({ id: 1, audience: 'org' });
+  const participatedTask = taskRow({
+    id: 2,
+    status: 'completed',
+    audience: 'local',
+    dept_id: 'former-department',
   });
-  from.mockImplementation((table) =>
-    table === 'tasks'
-      ? query
-      : {
-          select: () => ({
-            eq: () => Promise.resolve({ data: [], error: null }),
-          }),
-        },
-  );
-  await expect(fetchTaskOpportunities('member')).resolves.toHaveLength(1);
-  expect(query.eq).toHaveBeenCalledWith('assignment_mode', 'public');
-  expect(query.is).toHaveBeenCalledWith('queue_closed_at', null);
-  expect(query.in).toHaveBeenCalledWith('status', [
+  const openQuery = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    is: vi.fn(),
+    in: vi.fn(),
+  };
+  openQuery.select.mockReturnValue(openQuery);
+  openQuery.eq.mockReturnValue(openQuery);
+  openQuery.is.mockReturnValue(openQuery);
+  openQuery.in.mockResolvedValue({ data: [openTask], error: null });
+  const participatedQuery = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    in: vi.fn().mockResolvedValue({ data: [participatedTask], error: null }),
+  };
+  participatedQuery.select.mockReturnValue(participatedQuery);
+  participatedQuery.eq.mockReturnValue(participatedQuery);
+  let taskQueryCount = 0;
+  from.mockImplementation((table) => {
+    if (table === 'tasks')
+      return taskQueryCount++ === 0 ? openQuery : participatedQuery;
+    if (table === 'task_candidates')
+      return {
+        select: () => ({
+          eq: () => Promise.resolve({ data: [{ task_id: 2 }], error: null }),
+        }),
+      };
+    return {
+      select: () => ({
+        eq: () => Promise.resolve({ data: [], error: null }),
+      }),
+    };
+  });
+
+  await expect(fetchTaskOpportunities('member')).resolves.toEqual([
+    openTask,
+    participatedTask,
+  ]);
+  expect(openQuery.is).toHaveBeenCalledWith('queue_closed_at', null);
+  expect(openQuery.in).toHaveBeenCalledWith('status', [
     'todo',
     'in_progress',
     'in_review',
   ]);
+  expect(participatedQuery.in).toHaveBeenCalledWith('id', [2]);
 });

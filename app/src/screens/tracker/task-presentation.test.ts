@@ -26,12 +26,22 @@ function taskRow(
     parent_task_id: null,
     campaign_id: null,
     duplicated_from_task_id: null,
+    queue_closed_at: null,
     department: { name: 'Educațional', color: 'var(--dept-edu)' },
     ...overrides,
   };
 }
 
 describe('TaskPresentation', () => {
+  it('carries whether a public queue is closed for participation controls', () => {
+    expect(
+      toTaskPresentation(
+        taskRow({ queue_closed_at: '2026-09-15T11:00:00Z' }),
+        now,
+      ).queueClosed,
+    ).toBe(true);
+  });
+
   it.each<[TaskStatus, string, boolean]>([
     ['todo', 'De făcut', true],
     ['in_progress', 'În lucru', true],

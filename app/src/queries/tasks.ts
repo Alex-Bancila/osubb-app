@@ -21,7 +21,7 @@ const TASK_FIELDS =
 export const TASK_PRESENTATION_FIELDS = `
   id, title, description, status, deadline, completed_at, review_round,
   dept_id, team_id, project_id, assignment_mode, audience, kind,
-  parent_task_id, campaign_id, duplicated_from_task_id,
+  parent_task_id, campaign_id, duplicated_from_task_id, queue_closed_at,
   department:departments!tasks_dept_id_fkey(name, color),
   team:teams!tasks_team_id_fkey(name, dept_id),
   project:projects!tasks_project_id_fkey(name),
