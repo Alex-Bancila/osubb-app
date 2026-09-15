@@ -55,6 +55,12 @@ export const keys = {
       ['tasks', 'history', { taskId, memberId }] as const,
     detail: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'detail', { taskId, memberId }] as const,
+    managed: (memberId: string | undefined) =>
+      ['tasks', 'managed', { memberId }] as const,
+    management: (memberId: string | undefined) =>
+      ['tasks', 'management', { memberId }] as const,
+    leadership: (memberId: string | undefined) =>
+      ['tasks', 'all', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
   events: {
