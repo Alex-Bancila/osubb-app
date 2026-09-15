@@ -33,7 +33,8 @@ describe('Authorized Task timeline', () => {
       />,
     );
     const rows = screen.getAllByRole('listitem');
-    expect(within(rows[0]!).getByText('Mai devreme')).toBeVisible();
+    if (!rows[0]) throw new Error('Expected a history item');
+    expect(within(rows[0]).getByText('Mai devreme')).toBeVisible();
     expect(screen.queryByText('member')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Membru indisponibil/)).toHaveLength(2);
   });
