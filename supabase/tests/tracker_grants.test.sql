@@ -388,6 +388,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('give_up_task_impl',                           'p_task_id bigint, p_reason text',                                                                                    'impl'),
   ('grant_project_responsible_impl',              'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('guard_task_evaluation_change',                '',                                                                                                                   'trigger'),
+  ('guard_task_duplicate_provenance',             '',                                                                                                                   'trigger'),
   ('is_active_project_member',                    'p_project_id bigint',                                                                                                'predicate'),
   ('is_global_task_reader',                       '',                                                                                                                   'predicate'),
   ('is_own_assignment',                           'p_assignment_id bigint',                                                                                             'predicate'),
@@ -443,8 +444,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 79,
-  'the pinned private-schema roster itself has exactly the 79 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, and #341''s duplicate_task_impl');
+  (select count(*) from pinned_private_functions)::int, 80,
+  'the pinned private-schema roster itself has exactly the 80 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, and #341''s duplicate_task_impl plus its provenance trigger guard');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

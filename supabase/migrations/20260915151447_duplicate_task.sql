@@ -77,11 +77,13 @@
 -- already correct for a Subtask source without any extra step.
 --
 -- The source is locked plain FOR UPDATE, never FOR NO KEY UPDATE. #339's
--- FOR NO KEY UPDATE rule exists for a command that locks a PARENT and then
--- reaches for a CHILD row too -- the ABBA risk is between that second lock
+-- FOR NO KEY UPDATE rule exists for a command that locks a PARENT Task and
+-- then reaches for a CHILD Task row too -- the ABBA risk is between that second Task lock
 -- and private.evaluate_task's implicit FK FOR KEY SHARE on the parent. This
--- command takes exactly one lock, on the source, and reaches for nothing
--- else: even in the narrow window before the kind check fires (an Umbrella
+-- command takes exactly one Task-row lock, on the source. It also takes the
+-- standard actor/membership SHARE locks through require_task_manager, plus a
+-- SHARE lock on an active Campaign while carrying it over; none of those
+-- paths reaches a second Task row. Even in the narrow window before the kind check fires (an Umbrella
 -- source is locked before it is refused), there is no second lock for a
 -- concurrent evaluate_task to be waited ON by, so no cycle can form -- at
 -- worst a concurrent evaluate_task's parent-naming insert blocks for the
@@ -135,6 +137,45 @@ create index tasks_duplicated_from_task_id_idx
 
 comment on column public.tasks.duplicated_from_task_id is
   'The Task this one was cloned from, forever -- set once at INSERT by private.duplicate_task_impl and never written again. Null for every Task that was not created by public.duplicate_task.';
+
+-- The legacy Task INSERT/UPDATE policies remain until #345. Without this
+-- guard, a level-4+ browser could forge or erase provenance during that
+-- compatibility window even though duplicate_task is meant to be its only
+-- public writer. Calls through duplicate_task_impl run as the function owner;
+-- direct Data API writes run as authenticated and are refused here.
+create function private.guard_task_duplicate_provenance()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  if current_user in ('anon', 'authenticated') then
+    if tg_op = 'INSERT' and new.duplicated_from_task_id is not null then
+      raise exception using
+        errcode = '42501',
+        message = 'duplicate_provenance_write_forbidden';
+    elsif tg_op = 'UPDATE'
+       and new.duplicated_from_task_id is distinct from old.duplicated_from_task_id then
+      raise exception using
+        errcode = '42501',
+        message = 'duplicate_provenance_write_forbidden';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function private.guard_task_duplicate_provenance() is
+  'Rejects direct anon/authenticated inserts or updates that set, change, or clear tasks.duplicated_from_task_id. The duplicate_task_impl security-definer command remains the only public write path; owner-side migrations and maintenance remain possible.';
+
+create trigger tasks_duplicate_provenance_guard
+before insert or update on public.tasks
+for each row execute function private.guard_task_duplicate_provenance();
+
+revoke execute on function private.guard_task_duplicate_provenance()
+  from public, anon, authenticated, service_role;
 
 -- ==================== 2. The view ====================
 -- Recreated so `task.*` expands to include duplicated_from_task_id.
@@ -220,7 +261,8 @@ begin
   if v_source.campaign_id is not null then
     select campaign.is_active into v_campaign_active
       from public.campaigns as campaign
-     where campaign.id = v_source.campaign_id;
+     where campaign.id = v_source.campaign_id
+     for share;
     if coalesce(v_campaign_active, false) then
       v_campaign_id := v_source.campaign_id;
     end if;

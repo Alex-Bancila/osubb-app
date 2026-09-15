@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(65);
+select plan(69);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -573,6 +573,26 @@ select throws_ok(format($$ insert into public.task_activity (task_id, kind, acto
   values (%s, 'duplicated', '34100000-0000-0000-0000-000000000002', jsonb_build_object('clone_task_id', 1)) $$,
   (select direct_write_task_id from f341)),
   '42501', null, 'even the Task''s manager cannot fake a duplicated activity row by inserting directly');
+
+select throws_ok(format($$ insert into public.tasks
+  (title, deadline, dept_id, audience, assignment_mode, duplicated_from_task_id)
+  values ('Proveniență falsă #341', '2027-06-11 09:00:00+00', 'edu', 'local', 'direct', %s) $$,
+  (select authority_task_id from f341)),
+  '42501', 'duplicate_provenance_write_forbidden',
+  'a manager cannot forge duplicate provenance on a direct Task insert');
+
+select throws_ok(format($$ update public.tasks
+  set duplicated_from_task_id = %s where id = %s $$,
+  (select authority_task_id from f341), (select direct_write_task_id from f341)),
+  '42501', 'duplicate_provenance_write_forbidden',
+  'a manager cannot mark an existing Task as a clone through the legacy direct-update path');
+
+select throws_ok(format($$ update public.tasks
+  set duplicated_from_task_id = null
+  where duplicated_from_task_id = %s $$,
+  (select happy_source_id from f341)),
+  '42501', 'duplicate_provenance_write_forbidden',
+  'a manager cannot erase provenance from a genuine clone through the legacy direct-update path');
 reset role;
 
 -- ==================== 11. The lock held while the command runs ====================
@@ -596,6 +616,7 @@ select extensions.dblink_connect('dt_setup', format(
   current_database()));
 select extensions.dblink_exec('dt_setup', $$
   delete from public.tasks where title like '%#341 committed%';
+  delete from public.campaigns where name = 'Campanie blocaj #341 committed';
   delete from public.member_departments where member_id = '34100000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34100000-0000-0000-0000-000000000051';
   insert into auth.users (id, email) values
@@ -604,14 +625,19 @@ select extensions.dblink_exec('dt_setup', $$
     ('34100000-0000-0000-0000-000000000051', 'Probe Manager 341', 'probe.manager.341@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id) values
     ('34100000-0000-0000-0000-000000000051', 'edu');
+  insert into public.campaigns (department_id, name, is_active, created_by) values
+    ('edu', 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, created_by)
-  values ('Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
-          now() - interval '3 days', '34100000-0000-0000-0000-000000000051');
+    (title, description, deadline, dept_id, audience, assignment_mode, status, campaign_id, created_at, created_by)
+  select 'Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
+         campaign.id, now() - interval '3 days', '34100000-0000-0000-0000-000000000051'
+    from public.campaigns as campaign
+   where campaign.name = 'Campanie blocaj #341 committed';
 $$);
 
 create temp table r341 as
-select (select id from public.tasks where title = 'Sonda blocaj #341 committed') as probe_task_id;
+select (select id from public.tasks where title = 'Sonda blocaj #341 committed') as probe_task_id,
+       (select id from public.campaigns where name = 'Campanie blocaj #341 committed') as probe_campaign_id;
 grant select on r341 to authenticated;
 
 select extensions.dblink_connect('dt_lock', format(
@@ -642,6 +668,12 @@ select is((
   'the SOURCE row is held in exactly FOR UPDATE, and only that -- the command inserts a new clone and two activity rows, but never writes the source itself');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
+    from extensions.pgrowlocks('public.campaigns') as row_lock
+    join public.campaigns as campaign on campaign.ctid = row_lock.locked_row
+   where campaign.id = (select probe_campaign_id from r341)
+), false), 'an active inherited Campaign is held FOR SHARE until the clone commits, so concurrent deactivation cannot make carry-over fail nondeterministically');
+select ok(coalesce((
+  select 'For Share' = any(row_lock.modes)
     from extensions.pgrowlocks('public.profiles') as row_lock
     join public.profiles as profile on profile.ctid = row_lock.locked_row
    where profile.id = '34100000-0000-0000-0000-000000000051'
@@ -665,6 +697,7 @@ select extensions.dblink_exec('dt_setup', $$
   delete from public.tasks
    where duplicated_from_task_id in (select id from public.tasks where title like '%#341 committed%');
   delete from public.tasks where title like '%#341 committed%';
+  delete from public.campaigns where name = 'Campanie blocaj #341 committed';
   delete from public.member_departments where member_id = '34100000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34100000-0000-0000-0000-000000000051';
 $$);
