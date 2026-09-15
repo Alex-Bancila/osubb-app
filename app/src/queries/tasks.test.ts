@@ -104,12 +104,10 @@ describe('normalized My tasks reads', () => {
   it('batches parent titles and retains a fallback for RLS-hidden parents', async () => {
     const child = taskRow({ parent_task_id: 10 });
     const hiddenChild = taskRow({ id: 2, parent_task_id: 11 });
-    const parents = vi
-      .fn()
-      .mockResolvedValue({
-        data: [{ id: 10, title: 'Recrutare' }],
-        error: null,
-      });
+    const parents = vi.fn().mockResolvedValue({
+      data: [{ id: 10, title: 'Recrutare' }],
+      error: null,
+    });
     api.from.mockReturnValue({ select: api.select });
     api.select
       .mockReturnValueOnce({ eq: api.byStatus })
