@@ -80,7 +80,7 @@ export function TaskCard({
             {onOpenTask ? (
               <Button
                 variant="link"
-                className="min-h-11 min-w-11 h-auto p-0 text-left text-lg font-semibold whitespace-normal wrap-anywhere"
+                className="min-h-11 min-w-11 h-auto p-0 text-left text-lg font-semibold whitespace-normal wrap-anywhere text-foreground"
                 onClick={() => onOpenTask(task.id)}
               >
                 {task.title}

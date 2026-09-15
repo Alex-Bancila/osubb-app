@@ -84,7 +84,7 @@ function TaskDetails({
       {parentId !== undefined && (
         <Button
           variant="outline"
-          className="min-h-11 min-w-11 whitespace-normal"
+          className="min-h-11 min-w-11 whitespace-normal text-foreground"
           onClick={() => onNavigate(parentId)}
         >
           Deschide taskul-umbrelă
@@ -94,7 +94,7 @@ function TaskDetails({
         <p>
           <Button
             variant="link"
-            className="min-h-11 min-w-11 whitespace-normal"
+            className="min-h-11 min-w-11 whitespace-normal text-foreground"
             onClick={() => onNavigate(sourceId)}
           >
             Duplicat din #{task.duplicatedFromTaskId}
@@ -110,7 +110,7 @@ function TaskDetails({
                 <li key={child.id}>
                   <Button
                     variant="link"
-                    className="min-h-11 min-w-11 whitespace-normal"
+                    className="min-h-11 min-w-11 whitespace-normal text-foreground"
                     onClick={() => onNavigate(child.id)}
                   >
                     {child.title}
