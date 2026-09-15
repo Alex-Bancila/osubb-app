@@ -5,6 +5,7 @@ import { useMyTasks } from '../../queries/tasks';
 import { useTaskOpportunities } from '../../queries/task-opportunities';
 import {
   useTaskManagement,
+  useTaskLeadership,
   useManagedTasks,
   useAllTasks,
 } from '../../queries/task-tabs';
@@ -92,8 +93,8 @@ export default function TrackerScreen() {
   const available = useTaskOpportunities();
   const management = useTaskManagement();
   const managed = useManagedTasks(management.data === true);
-  const all = useAllTasks();
-  const { claims } = useAuth();
+  const leadership = useTaskLeadership();
+  const all = useAllTasks(leadership.data === true);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [tab, setTab] = useState('mine');
   const [now, setNow] = useState(() => new Date());
@@ -101,7 +102,7 @@ export default function TrackerScreen() {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
-  const showAll = (claims?.member_level ?? 0) >= 5;
+  const showAll = leadership.data === true;
   const selected =
     (tab === 'managed' && !management.data) || (tab === 'all' && !showAll)
       ? 'mine'
@@ -130,6 +131,23 @@ export default function TrackerScreen() {
             onClick={() => management.refetch()}
           >
             Reîncarcă accesul
+          </Button>
+        </div>
+      )}
+      {leadership.isPending && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Se verifică accesul la toate taskurile…
+        </p>
+      )}
+      {leadership.isError && (
+        <div role="alert" className="space-y-3 text-sm">
+          <p>Nu am putut verifica accesul la toate taskurile.</p>
+          <Button
+            variant="outline"
+            className="min-h-11 min-w-11"
+            onClick={() => leadership.refetch()}
+          >
+            Reîncarcă accesul complet
           </Button>
         </div>
       )}

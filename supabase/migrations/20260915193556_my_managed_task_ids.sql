@@ -11,6 +11,14 @@ $$;
 revoke execute on function public.can_manage_tasks() from public, anon, authenticated, service_role;
 grant execute on function public.can_manage_tasks() to authenticated;
 
+create function public.can_read_all_tasks()
+returns boolean language sql stable security invoker set search_path = '' as $$
+  select coalesce(public.auth_is_member(), false)
+     and coalesce(private.caller_level() >= 5, false);
+$$;
+revoke execute on function public.can_read_all_tasks() from public, anon, authenticated, service_role;
+grant execute on function public.can_read_all_tasks() to authenticated;
+
 create function public.my_managed_task_ids()
 returns table(task_id bigint) language sql stable security invoker set search_path = '' as $$
   select t.id from public.tasks t

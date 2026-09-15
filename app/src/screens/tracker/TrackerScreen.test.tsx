@@ -9,6 +9,7 @@ const hooks = vi.hoisted(() => ({
   useTaskProgress: vi.fn(),
   useTaskOpportunities: vi.fn(),
   useTaskManagement: vi.fn(),
+  useTaskLeadership: vi.fn(),
   useManagedTasks: vi.fn(),
   useAllTasks: vi.fn(),
   level: 1,
@@ -18,6 +19,7 @@ vi.mock('../../queries/task-opportunities', () => ({
 }));
 vi.mock('../../queries/task-tabs', () => ({
   useTaskManagement: hooks.useTaskManagement,
+  useTaskLeadership: hooks.useTaskLeadership,
   useManagedTasks: hooks.useManagedTasks,
   useAllTasks: hooks.useAllTasks,
 }));
@@ -62,6 +64,12 @@ describe('My tasks screen', () => {
       data: [],
       isPending: false,
       isError: false,
+    });
+    hooks.useTaskLeadership.mockReturnValue({
+      data: false,
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
     });
     hooks.useAllTasks.mockReturnValue({
       data: [],
@@ -146,19 +154,56 @@ describe('My tasks screen', () => {
     expect(hooks.useManagedTasks).toHaveBeenCalledWith(true);
   });
 
-  it('shows the leadership query and its retry state to BCE+', async () => {
+  it('uses live server capability to show All despite stale advisory claims', async () => {
     const user = userEvent.setup();
     query();
+    hooks.level = 1;
+    hooks.useTaskLeadership.mockReturnValue({
+      data: true,
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<TrackerScreen />);
+    await user.click(screen.getByRole('tab', { name: 'Toate' }));
+    expect(screen.getByText('Nu există taskuri vizibile.')).toBeVisible();
+    expect(hooks.useAllTasks).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps All hidden when stale JWT claims say BCE but the live server denies it', () => {
+    query();
     hooks.level = 5;
+    render(<TrackerScreen />);
+    expect(
+      screen.queryByRole('tab', { name: 'Toate' }),
+    ).not.toBeInTheDocument();
+    expect(hooks.useAllTasks).toHaveBeenCalledWith(false);
+  });
+
+  it('shows leadership capability loading and retry states', async () => {
+    const user = userEvent.setup();
+    query();
     const refetch = vi.fn();
-    hooks.useAllTasks.mockReturnValue({
+    hooks.useTaskLeadership.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      refetch,
+    });
+    const { rerender } = render(<TrackerScreen />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se verifică accesul la toate taskurile',
+    );
+    hooks.useTaskLeadership.mockReturnValue({
+      data: undefined,
       isPending: false,
       isError: true,
       refetch,
     });
-    render(<TrackerScreen />);
-    await user.click(screen.getByRole('tab', { name: 'Toate' }));
-    await user.click(screen.getByRole('button', { name: 'Încearcă din nou' }));
+    rerender(<TrackerScreen />);
+    await user.click(
+      screen.getByRole('button', { name: 'Reîncarcă accesul complet' }),
+    );
     expect(refetch).toHaveBeenCalledOnce();
   });
 

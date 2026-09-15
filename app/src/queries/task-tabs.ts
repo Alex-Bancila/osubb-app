@@ -43,6 +43,18 @@ export function useTaskManagement() {
       : skipToken,
   });
 }
+export async function fetchTaskLeadership() {
+  const { data, error } = await supabase.rpc('can_read_all_tasks');
+  if (error) throw error;
+  return data;
+}
+export function useTaskLeadership() {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.tasks.leadershipCapability(memberId),
+    queryFn: memberId ? fetchTaskLeadership : skipToken,
+  });
+}
 export function useManagedTasks(enabled: boolean) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
@@ -50,12 +62,12 @@ export function useManagedTasks(enabled: boolean) {
     queryFn: memberId && enabled ? fetchManagedTasks : skipToken,
   });
 }
-export function useAllTasks() {
-  const { session, claims } = useAuth();
+export function useAllTasks(enabled: boolean) {
+  const session = useAuth().session;
   return useQuery({
     queryKey: keys.tasks.leadership(session?.user.id),
     queryFn:
-      session && (claims?.member_level ?? 0) >= 5
+      session && enabled
         ? async (): Promise<TaskPresentationRow[]> => {
             const rows: TaskPresentationRow[] = [];
             for (let offset = 0; ; offset += 500) {
