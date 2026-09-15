@@ -293,7 +293,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
                                                                      false, true,  false, false),
   -- #334: the eighth and ninth Task command wrappers, added the same way.
   ('start_task',              'p_task_id bigint',                    false, true,  false, false),
-  ('submit_task_for_review',  'p_task_id bigint',                    false, true,  false, false);
+  ('submit_task_for_review',  'p_task_id bigint',                    false, true,  false, false),
+  -- #335: the tenth Task command wrapper, added the same way.
+  ('return_task_to_progress', 'p_task_id bigint, p_note text',       false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -391,6 +393,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_task_executor',                       'p_task_id bigint',                                                                                                   'require'),
   ('require_task_manager',                        'p_task_id bigint',                                                                                                   'require'),
   ('require_task_visible',                        'p_task_id bigint',                                                                                                   'require'),
+  ('return_task_to_progress_impl',                'p_task_id bigint, p_note text',                                                                                      'impl'),
   ('revoke_project_responsible_impl',             'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('select_task_candidate_impl',                  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',                                                 'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
@@ -410,8 +413,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 71,
-  'the pinned private-schema roster itself has exactly the 71 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl and #334''s start_task_impl/submit_task_for_review_impl pair');
+  (select count(*) from pinned_private_functions)::int, 72,
+  'the pinned private-schema roster itself has exactly the 72 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, and #335''s return_task_to_progress_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
