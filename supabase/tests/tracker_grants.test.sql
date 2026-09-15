@@ -298,6 +298,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('return_task_to_progress', 'p_task_id bigint, p_note text',       false, true,  false, false),
   -- #336: the eleventh Task command wrapper, added the same way.
   ('complete_task_review',   'p_task_id bigint, p_difficulty integer, p_rating integer, p_note text',
+                                                                     false, true,  false, false),
+  -- #337: the twelfth Task command wrapper, added the same way.
+  ('mark_task_unfulfilled',  'p_task_id bigint, p_difficulty integer, p_rating integer, p_note text',
                                                                      false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
@@ -380,6 +383,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
   ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
+  -- #337: the second command over the shared evaluate_task core (#336) --
+  -- the `unfulfilled` outcome for overdue, undelivered work.
+  ('mark_task_unfulfilled_impl',                  'p_task_id bigint, p_difficulty integer, p_rating integer, p_note text',                                             'impl'),
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
@@ -421,8 +427,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 74,
-  'the pinned private-schema roster itself has exactly the 74 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, and #336''s complete_task_review_impl plus the shared evaluate_task core');
+  (select count(*) from pinned_private_functions)::int, 75,
+  'the pinned private-schema roster itself has exactly the 75 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, and #337''s mark_task_unfulfilled_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
