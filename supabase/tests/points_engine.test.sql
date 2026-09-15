@@ -275,12 +275,12 @@ select ok(
   'higher total ranks higher (Bogdan 0 over Ana -7)');
 
 select is(
-  (select points from dept_cup where dept_id = 'tst'),
-  -7, 'dept_cup sums its members'' totals');
+  (select count(*) from dept_cup where dept_id = 'tst'),
+  0::bigint, 'Department Cup returns only the five canonical competing Departments');
 
 select is(
-  (select members from dept_cup where dept_id = 'tst'),
-  1::bigint, 'dept_cup counts distinct members');
+  (select count(*) from dept_cup),
+  0::bigint, 'the database owner does not bypass the authenticated BCE+ Department Cup gate');
 
 -- ==================== Security posture ====================
 select ok(

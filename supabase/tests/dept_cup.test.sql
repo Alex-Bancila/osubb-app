@@ -62,16 +62,16 @@ select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
 
 select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE sees all five canonical departments');
-select is((select points from public.dept_cup where dept_id = 'edu'), 5,
-  'the cup keeps the active member points total');
+select is((select points from public.dept_cup where dept_id = 'edu'), 0,
+  'current Department membership does not redirect another Origin''s Task Points');
 select is((select members from public.dept_cup where dept_id = 'edu'), 1::bigint,
   'the cup counts the active member');
 select is((select points from public.dept_cup where dept_id = 'pr'), 0,
   'an inactive member contributes no points');
 select is((select members from public.dept_cup where dept_id = 'pr'), 0::bigint,
   'an inactive member is not counted');
-select is((select points from public.dept_cup where dept_id = 'hr'), 0,
-  'an alumni member contributes no points');
+select is((select points from public.dept_cup where dept_id = 'hr'), 15,
+  'Task Points follow the Department Task Origin regardless of Executor membership status');
 select is((select members from public.dept_cup where dept_id = 'hr'), 0::bigint,
   'an alumni member is not counted');
 select is((select points from public.dept_cup where dept_id = 'fin'), 0,
@@ -79,7 +79,7 @@ select is((select points from public.dept_cup where dept_id = 'fin'), 0,
 
 select results_eq(
   $$ select dept_id from public.dept_cup $$,
-  $$ values ('edu'::text), ('fin'::text), ('pr'::text), ('hr'::text), ('youth'::text) $$,
+  $$ values ('hr'::text), ('edu'::text), ('fin'::text), ('pr'::text), ('youth'::text) $$,
   'standings sort by points descending and then by department name');
 
 reset role;

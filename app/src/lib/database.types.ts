@@ -195,13 +195,6 @@ export type Database = {
             referencedRelation: "departments"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "announcements_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
-          },
         ]
       }
       campaigns: {
@@ -281,13 +274,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "campaigns_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
         ]
       }
@@ -383,13 +369,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
           {
             foreignKeyName: "completed_work_requests_project_id_fkey"
@@ -692,13 +671,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "events_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
-          },
-          {
             foreignKeyName: "events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -734,13 +706,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_departments_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
           {
             foreignKeyName: "member_departments_member_id_fkey"
@@ -2133,13 +2098,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "task_requests_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
-          },
-          {
             foreignKeyName: "task_requests_from_member_fkey"
             columns: ["from_member"]
             isOneToOne: false
@@ -2335,13 +2293,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
-          },
-          {
             foreignKeyName: "tasks_duplicated_from_task_id_fkey"
             columns: ["duplicated_from_task_id"]
             isOneToOne: false
@@ -2490,13 +2441,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "teams_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
         ]
       }
@@ -2757,13 +2701,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
           {
             foreignKeyName: "tasks_duplicated_from_task_id_fkey"
@@ -4147,4 +4084,3 @@ export const Constants = {
     },
   },
 } as const
-
