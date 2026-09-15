@@ -37,14 +37,16 @@ function TaskDetails({
     );
   if (!query.data) return <p>Taskul nu este disponibil.</p>;
   const task = toTaskPresentation(query.data.task, new Date());
+  const parentId = task.parent?.id;
+  const sourceId = task.duplicatedFromTaskId;
   return (
     <div className="space-y-5">
       <TaskCard
         task={task}
         memberId={memberId}
         pending={progress.isPending}
-        onProgress={(taskId, action) =>
-          progress.mutateAsync({ taskId, action })
+        onProgress={(selectedId, action) =>
+          progress.mutateAsync({ taskId: selectedId, action })
         }
       />
       <dl className="grid gap-3 text-sm">
@@ -79,21 +81,21 @@ function TaskDetails({
           <dd>{task.reviewRound}</dd>
         </div>
       </dl>
-      {task.parent && (
+      {parentId !== undefined && (
         <Button
           variant="outline"
           className="min-h-11 min-w-11 whitespace-normal"
-          onClick={() => onNavigate(task.parent!.id)}
+          onClick={() => onNavigate(parentId)}
         >
           Deschide taskul-umbrelă
         </Button>
       )}
-      {task.duplicatedFromTaskId !== null && (
+      {sourceId !== null && (
         <p>
           <Button
             variant="link"
             className="min-h-11 min-w-11 whitespace-normal"
-            onClick={() => onNavigate(task.duplicatedFromTaskId!)}
+            onClick={() => onNavigate(sourceId)}
           >
             Duplicat din #{task.duplicatedFromTaskId}
           </Button>
