@@ -307,7 +307,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #339: the fourteenth Task command wrapper, added the same way.
   ('cancel_task',            'p_task_id bigint, p_reason text',      false, true,  false, false),
   -- #340: the fifteenth Task command wrapper, added the same way.
-  ('complete_umbrella_task', 'p_task_id bigint',                     false, true,  false, false);
+  ('complete_umbrella_task', 'p_task_id bigint',                     false, true,  false, false),
+  -- #341: the sixteenth Task command wrapper, added the same way.
+  ('duplicate_task',         'p_task_id bigint, p_deadline timestamp with time zone', false, true, false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -375,6 +377,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_campaign_impl',                        'p_department_id text, p_name text',                                                                                  'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
+  -- #341: clone a Task into a brand-new todo Task with a fresh deadline.
+  ('duplicate_task_impl',                         'p_task_id bigint, p_deadline timestamp with time zone',                                                             'impl'),
   ('end_task_assignment',                         'p_assignment_id bigint, p_reason text, p_note text',                                                                 'none'),
   -- #336: the shared Evaluation core -- the one place points are computed
   -- and written. `none`: it trusts its caller to hold the tasks row lock and
@@ -439,8 +443,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 78,
-  'the pinned private-schema roster itself has exactly the 78 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), and #340''s complete_umbrella_task_impl');
+  (select count(*) from pinned_private_functions)::int, 79,
+  'the pinned private-schema roster itself has exactly the 79 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, and #341''s duplicate_task_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
