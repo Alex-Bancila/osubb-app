@@ -10,11 +10,13 @@ import {
 import { formatPoints } from '../../lib/format';
 import type { TaskPresentation } from './task-presentation';
 import type { TaskProgressAction } from '../../queries/task-progress';
+import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
 
 type TaskCardProps = {
   task: TaskPresentation;
+  allowInterest?: boolean;
   memberId: string | undefined;
   pending: boolean;
   onProgress: (taskId: number, action: TaskProgressAction) => Promise<unknown>;
@@ -22,6 +24,7 @@ type TaskCardProps = {
 
 export function TaskCard({
   task,
+  allowInterest = false,
   memberId,
   pending,
   onProgress,
@@ -120,9 +123,14 @@ export function TaskCard({
             </p>
           )}
           {task.assignmentMode !== 'public' && <TaskStageSummary task={task} />}
-          {task.assignmentMode === 'public' && (
-            <TaskQueueStatus taskId={task.id} task={task} />
-          )}
+          {task.assignmentMode === 'public' &&
+            (allowInterest &&
+            !task.queueClosed &&
+            ['todo', 'in_progress', 'in_review'].includes(task.status) ? (
+              <TaskInterestControls taskId={task.id} task={task} />
+            ) : (
+              <TaskQueueStatus taskId={task.id} task={task} />
+            ))}
           {task.points !== null && (
             <p className="text-sm">
               {formatPoints(task.points)} puncte · Dificultate {task.difficulty}{' '}
