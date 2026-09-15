@@ -9,7 +9,9 @@ import type { TaskPresentation } from './task-presentation';
 const originKey = (task: TaskPresentation) =>
   `${task.origin.kind}:${task.origin.id}`;
 
-function taskColumns(onOpenTask?: (id: number) => void): DataTableColumn<TaskPresentation>[] {
+function taskColumns(
+  onOpenTask?: (id: number) => void,
+): DataTableColumn<TaskPresentation>[] {
   return [
     {
       id: 'overdue',
