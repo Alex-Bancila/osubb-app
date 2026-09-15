@@ -20,12 +20,12 @@
 -- The column, the backfill and the constraint
 -- -------------------------------------------
 -- The column is added unconstrained, then backfilled, then constrained, in
--- that order, because staging already holds seeded `cancelled` Tasks
--- (supabase/seed.sql rebuilds legacy-shaped demo data) and an immediately
--- constrained column would fail the ALTER on a live database. The backfill
--- string is Romanian and explicitly names this issue, so a row carrying it is
--- recognisable as "cancelled before anyone was asked for a reason" rather
--- than as a real reason somebody typed.
+-- that order, because any `cancelled` row a hosted database already holds
+-- would otherwise fail the ALTER (the local seed creates none, so this is a
+-- no-op on a fresh `db reset`). The backfill string is Romanian and
+-- explicitly names this issue, so a row carrying it is recognisable as
+-- "cancelled before anyone was asked for a reason" rather than as a real
+-- reason somebody typed.
 --
 -- tasks_cancel_reason_ck is a biconditional, not two independent tests:
 --
@@ -210,9 +210,9 @@
 -- ==================== 1. The column ====================
 alter table public.tasks add column cancel_reason text;
 
--- Backfill BEFORE the constraint: staging (and any hosted database seeded
--- from supabase/seed.sql) already holds `cancelled` Tasks from before anyone
--- was asked for a reason.
+-- Backfill BEFORE the constraint: a hosted database may already hold
+-- `cancelled` Tasks from before anyone was asked for a reason (the local
+-- seed creates none, so this is a no-op on a fresh `db reset`).
 update public.tasks
    set cancel_reason = 'Anulat înainte de înregistrarea motivelor (#339).'
  where status = 'cancelled' and cancel_reason is null;

@@ -39,7 +39,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(97);
+select plan(98);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -442,9 +442,14 @@ select lives_ok($$ insert into public.tasks
   values ('Anulare veche backfill #339', 'edu', 'local', 'direct', 'cancelled', now(),
           'Anulat înainte de înregistrarea motivelor (#339).') $$,
   'the #339 backfill string itself satisfies the constraint -- a blank marker would have failed the ALTER on staging');
+-- #339: this restates tasks_cancel_reason_ck's own guarantee over every row
+-- currently in the database (fixtures included) -- it does not and cannot
+-- prove the backfill ran, since a local reset has no pre-constraint state to
+-- prove it against. The backfill is genuinely untestable here; it is exercised
+-- defensively for a hosted database that may already hold cancelled rows.
 select is((select count(*) from public.tasks
             where status = 'cancelled' and cancel_reason is null), 0::bigint,
-  'no cancelled Task anywhere in the database is left without a reason (the backfill ran before the constraint was added)');
+  'the constraint holds for every row in the database, fixtures included');
 select is((select view_row.cancel_reason from public.tasks_with_overdue as view_row
             where view_row.id = (select cancelled_task_id from f339)),
   'Motiv vechi #339', 'and the value reads back through tasks_with_overdue, not only through the table');
@@ -839,12 +844,15 @@ select is((select format('%s|%s',
 -- assertions DISCRIMINATES -- each was verified by running the mutation and
 -- reverting it (captured output is in the task report):
 --
---   * the UMBRELLA assertion pins the EXACT mode string `For No Key Update`.
---     Strengthen step 3 to `for update` and it reports `For Update`: RED.
---     Drop step 3's lock entirely and the row carries no lock at all: RED.
---     Remove the cascade's batch lock and the command will have UPDATEd the
---     Umbrella before it blocks, so the row reports the UPDATER mode
---     `No Key Update`: RED again. One assertion, three real mutations.
+--   * the UMBRELLA is checked in two assertions (fix-round #339: the single
+--     original assertion went RED under all three mutations below, so it did
+--     not isolate any one of them). (a) pins that the row is locked AT ALL:
+--     drop step 3's lock entirely and the row carries no lock, RED. (b) pins
+--     the EXACT mode string `For No Key Update`, given (a) holds: strengthen
+--     step 3 to `for update` and it reports `For Update`, RED; remove the
+--     cascade's batch lock and the command will have UPDATEd the Umbrella
+--     before it blocks, so the row reports the UPDATER mode `No Key Update`,
+--     RED again.
 --   * the FIRST SUBTASK assertions pin `For No Key Update` and the ABSENCE of
 --     any updater mode -- the signature of a row that is LOCKED BUT NOT YET
 --     WRITTEN. The command is held blocked on the SECOND Subtask, which a
@@ -1002,12 +1010,29 @@ $$, (select probe_umbrella_id from r339)));
 select ok(pg_temp.wait_until_blocked('ct_cancel_339'),
   'the cascade has taken the Umbrella lock and the first Subtask lock and is now waiting for the second Subtask that session HOLD owns');
 
-select ok(coalesce((
-  select 'For No Key Update' = any(row_lock.modes)
+-- #339: split into two assertions, each isolating one fact -- the original
+-- single assertion went RED under all three of this section's lock
+-- mutations, because "the Umbrella is held in lock-only For No Key Update"
+-- states three things at once (a lock exists, it has not yet been upgraded
+-- by a write, and its mode is exactly For No Key Update). (a) below is the
+-- weakest of the three and fails only when step 3's lock is missing
+-- entirely; (b) isolates the mode itself. Note pgrowlocks reports the exact
+-- string `For No Key Update` for the lock mode -- `No Key Update` (no
+-- leading `For`) is the UPDATER string, reported once a write has actually
+-- landed on the row.
+select ok(exists (
+  select 1
     from extensions.pgrowlocks('public.tasks') as row_lock
     join public.tasks as task on task.ctid = row_lock.locked_row
    where task.id = (select probe_umbrella_id from r339)
-), false), 'the UMBRELLA is held FOR NO KEY UPDATE -- exactly that mode, never For Update, which would deadlock against private.evaluate_task''s implicit FK For Key Share on the same row');
+), '(a) the UMBRELLA row is locked at all while the cascade is blocked');
+select is((
+  select row_lock.modes
+    from extensions.pgrowlocks('public.tasks') as row_lock
+    join public.tasks as task on task.ctid = row_lock.locked_row
+   where task.id = (select probe_umbrella_id from r339)
+), array['For No Key Update'],
+  '(b) and, given it is locked, its mode is exactly FOR NO KEY UPDATE -- never For Update, which would deadlock against private.evaluate_task''s implicit FK For Key Share on the same row');
 select ok(coalesce((
   select 'For No Key Update' = any(row_lock.modes)
     from extensions.pgrowlocks('public.tasks') as row_lock
