@@ -11,12 +11,19 @@
 --     from before, so "back to zero" could not pass by accident);
 --   * the reopen -> re-evaluate path, which #336's task_already_evaluated
 --     guard is keyed on `reversed_at is null` specifically to keep legal;
+--   * the arithmetic at the edges (section 6): a Rating-1 Evaluation awarded
+--     NEGATIVE points and its reversal must give them back, a Rating-2 one
+--     awarded exactly zero and its reversal must still be written;
 --   * the Umbrella cascade and its LOCK, which is the one place in the wave
---     where a command locks a parent row (private.evaluate_task deliberately
---     never does -- see the migration header for why the asymmetry is what
---     prevents a deadlock rather than causing one);
---   * a finding about private.require_task_evaluator on a TERMINAL Task,
---     pinned in section 8.3 -- read it.
+--     where a command locks a parent row -- and section 13 reproduces the
+--     interleaving that makes the STRENGTH of that lock load-bearing: a
+--     reopen holding the Umbrella FOR UPDATE would deadlock against
+--     private.evaluate_task's implicit FK FOR KEY SHARE on the same row;
+--   * section 9.3: a Project Responsible may reverse neither the lead's
+--     award nor their own, a rule private.can_evaluate_task cannot express
+--     on a terminal Task (its carve-out keys on the ACTIVE Assignment, and
+--     a terminal Task has none) and private.reopen_task_impl re-applies
+--     locally against the Assignment being reversed.
 -- The full can_evaluate_task persona matrix itself is #336's
 -- (complete_task_review.test.sql section 6/7) and is not re-derived here;
 -- section 7 pins only the boundaries this command must not move.
@@ -34,7 +41,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(92);
+select plan(108);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -57,7 +64,9 @@ insert into auth.users (id, email) values
   ('33800000-0000-0000-0000-000000000017', 'exec.authority.338@test.local'),
   ('33800000-0000-0000-0000-000000000018', 'exec.deactivated.338@test.local'),
   ('33800000-0000-0000-0000-000000000019', 'candidate.a.338@test.local'),
-  ('33800000-0000-0000-0000-000000000020', 'candidate.b.338@test.local');
+  ('33800000-0000-0000-0000-000000000020', 'candidate.b.338@test.local'),
+  ('33800000-0000-0000-0000-000000000021', 'exec.negative.338@test.local'),
+  ('33800000-0000-0000-0000-000000000022', 'exec.zero.338@test.local');
 
 insert into public.profiles (id, full_name, email, role, status) values
   ('33800000-0000-0000-0000-000000000001', 'BC 338', 'bc.338@test.local', 'bc', 'activ'),
@@ -79,7 +88,9 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33800000-0000-0000-0000-000000000017', 'Executor Autoritate 338', 'exec.authority.338@test.local', 'voluntar', 'activ'),
   ('33800000-0000-0000-0000-000000000018', 'Executor Dezactivat 338', 'exec.deactivated.338@test.local', 'voluntar', 'activ'),
   ('33800000-0000-0000-0000-000000000019', 'Candidat A 338', 'candidate.a.338@test.local', 'voluntar', 'activ'),
-  ('33800000-0000-0000-0000-000000000020', 'Candidat B 338', 'candidate.b.338@test.local', 'voluntar', 'activ');
+  ('33800000-0000-0000-0000-000000000020', 'Candidat B 338', 'candidate.b.338@test.local', 'voluntar', 'activ'),
+  ('33800000-0000-0000-0000-000000000021', 'Executor Negativ 338', 'exec.negative.338@test.local', 'voluntar', 'activ'),
+  ('33800000-0000-0000-0000-000000000022', 'Executor Neutru 338', 'exec.zero.338@test.local', 'voluntar', 'activ');
 
 insert into public.member_departments (member_id, dept_id) values
   ('33800000-0000-0000-0000-000000000002', 'edu'),
@@ -95,7 +106,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('33800000-0000-0000-0000-000000000017', 'edu'),
   ('33800000-0000-0000-0000-000000000018', 'edu'),
   ('33800000-0000-0000-0000-000000000019', 'edu'),
-  ('33800000-0000-0000-0000-000000000020', 'edu');
+  ('33800000-0000-0000-0000-000000000020', 'edu'),
+  ('33800000-0000-0000-0000-000000000021', 'edu'),
+  ('33800000-0000-0000-0000-000000000022', 'edu');
 
 insert into public.teams (id, name, dept_id) values
   ('t-338-ind', 'Echipa Independenta 338', null);
@@ -118,6 +131,16 @@ insert into public.project_members (project_id, member_id, project_role) values
 -- reversal could also produce.
 insert into public.points_ledger (member_id, delta, reason, note, awarded_by)
 values ('33800000-0000-0000-0000-000000000004', -2, 'sanction', 'Sanctiune anterioara #338',
+        '33800000-0000-0000-0000-000000000001');
+
+-- Section 6's two Executors carry prior sanctions for the same reason: with a
+-- Rating-1 award the reversal must ADD points back, and with a Rating-2 award
+-- it must move the total by exactly nothing -- neither is distinguishable
+-- from "no reversal at all" if the member starts and ends at zero.
+insert into public.points_ledger (member_id, delta, reason, note, awarded_by)
+values ('33800000-0000-0000-0000-000000000021', -3, 'sanction', 'Sanctiune anterioara negativ #338',
+        '33800000-0000-0000-0000-000000000001'),
+       ('33800000-0000-0000-0000-000000000022', -5, 'sanction', 'Sanctiune anterioara neutru #338',
         '33800000-0000-0000-0000-000000000001');
 
 -- ---- T1: the happy path. A PUBLIC edu Task in_review with a live Executor
@@ -315,6 +338,45 @@ select id, '33800000-0000-0000-0000-000000000008'::uuid, '33800000-0000-0000-000
        now() - interval '9 days'
   from public.tasks where title = 'Proiect membru simplu #338';
 
+-- ---- P4: the RESPONSIBLE's own overdue work, marked unfulfilled below with
+-- a Rating of 1 -- a real -4 penalty on their own record. Reopening it would
+-- erase that penalty, which is the self-benefit section 9.3 refuses.
+insert into public.tasks
+  (title, description, deadline, project_id, audience, assignment_mode, status,
+   created_at, created_by)
+select 'Proiect responsabil propriu #338', 'Munca responsabilului, nelivrata', now() - interval '2 days',
+       project.id, 'local', 'direct', 'todo'::public.task_status,
+       now() - interval '10 days', '33800000-0000-0000-0000-000000000001'::uuid
+  from public.projects as project where project.name = 'Proiect #338';
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33800000-0000-0000-0000-000000000007', '33800000-0000-0000-0000-000000000001',
+       now() - interval '9 days'
+  from public.tasks where title = 'Proiect responsabil propriu #338';
+
+-- ---- T10/T11: a NEGATIVE award (Rating 1 -> public.rating_mult = -1) and a
+-- ZERO one (Rating 2 -> 0). public.rating_mult maps 1..5 to -1, 0, 1, 2, 3,
+-- so a Rating-1 Evaluation awarded -difficulty and its reversal must ADD
+-- that back; a Rating-2 Evaluation moved nothing and its reversal must move
+-- nothing either. Section 6 reverses both.
+insert into public.tasks
+  (title, description, deadline, dept_id, audience, assignment_mode, status,
+   created_at, started_at, submitted_at, created_by)
+values
+  ('Redeschidere negativa #338', 'Punctaj negativ', now() + interval '10 days', 'edu', 'local', 'direct', 'in_review',
+   now() - interval '10 days', now() - interval '9 days', now() - interval '1 day',
+   '33800000-0000-0000-0000-000000000002'),
+  ('Redeschidere neutra #338', 'Punctaj zero', now() + interval '10 days', 'edu', 'local', 'direct', 'in_review',
+   now() - interval '10 days', now() - interval '9 days', now() - interval '1 day',
+   '33800000-0000-0000-0000-000000000002');
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33800000-0000-0000-0000-000000000021'::uuid, '33800000-0000-0000-0000-000000000002'::uuid,
+       now() - interval '9 days'
+  from public.tasks where title = 'Redeschidere negativa #338'
+union all
+select id, '33800000-0000-0000-0000-000000000022'::uuid, '33800000-0000-0000-0000-000000000002'::uuid,
+       now() - interval '9 days'
+  from public.tasks where title = 'Redeschidere neutra #338';
+
 -- ==================== Ids, resolved as the owner ====================
 create temp table f338 as
 select
@@ -337,7 +399,10 @@ select
   (select id from public.tasks where title = 'Echipa independenta #338') as ind_team_task_id,
   (select id from public.tasks where title = 'Proiect lead propriu #338') as proj_lead_task_id,
   (select id from public.tasks where title = 'Proiect responsabil peste lead #338') as proj_resp_task_id,
-  (select id from public.tasks where title = 'Proiect membru simplu #338') as proj_member_task_id;
+  (select id from public.tasks where title = 'Proiect membru simplu #338') as proj_member_task_id,
+  (select id from public.tasks where title = 'Proiect responsabil propriu #338') as proj_resp_own_task_id,
+  (select id from public.tasks where title = 'Redeschidere negativa #338') as negative_task_id,
+  (select id from public.tasks where title = 'Redeschidere neutra #338') as zero_task_id;
 -- anon too: the anon denial in section 8 resolves an id through this table
 -- in its own format() before the command is ever reached (the #337 pattern).
 grant select on f338 to authenticated, anon;
@@ -408,6 +473,13 @@ select lives_ok(format($$ select public.complete_task_review(%s, 2, 3, 'Ok') $$,
   (select proj_resp_task_id from f338)), 'P2 is completed through the command');
 select lives_ok(format($$ select public.complete_task_review(%s, 2, 3, 'Ok') $$,
   (select proj_member_task_id from f338)), 'P3 is completed through the command');
+select lives_ok(format($$ select public.mark_task_unfulfilled(%s, 4, 1, 'Nelivrat de responsabil') $$,
+  (select proj_resp_own_task_id from f338)),
+  'P4 -- the Responsible''s OWN overdue work -- is marked unfulfilled by BC (4 x -1 = -4, a real penalty)');
+select lives_ok(format($$ select public.complete_task_review(%s, 4, 1, 'Slab') $$,
+  (select negative_task_id from f338)), 'T10 is completed with Rating 1 -- a NEGATIVE award (4 x -1 = -4)');
+select lives_ok(format($$ select public.complete_task_review(%s, 3, 2, 'Neutru') $$,
+  (select zero_task_id from f338)), 'T11 is completed with Rating 2 -- a ZERO award (3 x 0 = 0)');
 reset role;
 
 -- The Umbrella is rolled up by hand -- #340 has not shipped yet -- into
@@ -619,7 +691,57 @@ select is((select format('%s|%s', activity.from_status, activity.to_status)
   'unfulfilled|in_progress',
   'the activity row records the unfulfilled -> in_progress transition');
 
--- ==================== 6. A Subtask under a completed Umbrella ====================
+-- ==================== 6. Zero and negative awards reverse arithmetically ====================
+-- public.rating_mult maps Rating 1..5 to -1, 0, 1, 2, 3, so an Evaluation can
+-- award a NEGATIVE number of points or exactly none. `delta = -points` has to
+-- be right in both directions: reversing a Rating-1 award must give the
+-- member points BACK (the ledger row is positive), and reversing a Rating-2
+-- award must move nothing at all while still writing its row. Both Executors
+-- carry a prior sanction, so "the total returns to its pre-evaluation value"
+-- is a non-zero number that no missing reversal could also produce.
+
+select pg_temp.test_login('33800000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.reopen_task(%s, 'Reevaluam nota mica') $$,
+  (select negative_task_id from f338)),
+  'a Task whose Evaluation awarded NEGATIVE points is reopened');
+select lives_ok(format($$ select public.reopen_task(%s, 'Reevaluam nota neutra') $$,
+  (select zero_task_id from f338)),
+  'and so is one whose Evaluation awarded exactly zero');
+reset role;
+
+select set_eq(
+  format($$ select format('%%s|%%s', ledger.reason, ledger.delta)
+              from public.points_ledger as ledger where ledger.task_id = %s $$,
+    (select negative_task_id from f338)),
+  $$ values ('task|-4'), ('task_reversal|4') $$,
+  'the reversal of a -4 award is a POSITIVE +4 row -- the member gets the penalty back, not a second one');
+select pg_temp.test_login('33800000-0000-0000-0000-000000000021', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is((select points from public.my_points), -3,
+  'and that Executor''s total returns to its exact pre-evaluation value (-3, an old sanction), up from -7');
+reset role;
+
+select set_eq(
+  format($$ select format('%%s|%%s', ledger.reason, ledger.delta)
+              from public.points_ledger as ledger where ledger.task_id = %s $$,
+    (select zero_task_id from f338)),
+  $$ values ('task|0'), ('task_reversal|0') $$,
+  'a zero award is still reversed by a real, explicit zero row -- the Evaluation''s undo is recorded, not inferred');
+select pg_temp.test_login('33800000-0000-0000-0000-000000000022', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is((select points from public.my_points), -5,
+  'and that Executor''s total is unchanged at -5 -- a zero award and its reversal both move nothing');
+reset role;
+
+select is((select string_agg(task.status::text, '|' order by task.title)
+             from public.tasks as task
+            where task.id in ((select negative_task_id from f338),
+                              (select zero_task_id from f338))),
+  'in_progress|in_progress',
+  'both Tasks are back in_progress -- the reversal arithmetic changes nothing about the transition');
+
+-- ==================== 7. A Subtask under a completed Umbrella ====================
 -- ADR-0007's rollup rule: a completed Umbrella with a live Subtask is an
 -- impossible state, so the Umbrella comes back to todo with the Subtask.
 
@@ -656,7 +778,7 @@ select is((select count(*) from public.notifications
               and title like 'Task redeschis%'), 0::bigint,
   'the cascade sends no notification of its own -- the Subtask''s Executor is the only person this command messages');
 
--- ==================== 7. Input validation and state preconditions ====================
+-- ==================== 8. Input validation and state preconditions ====================
 
 select pg_temp.test_login('33800000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -700,11 +822,11 @@ select is((select count(*) from public.task_evaluations
             where task_id = (select legacy_task_id from f338) and reversed_at is not null), 0::bigint,
   'the legacy Evaluation is left untouched by the refusal');
 
--- ==================== 8. Authority ====================
+-- ==================== 9. Authority ====================
 -- The can_evaluate_task matrix itself belongs to #336; these pin only the
 -- boundaries reopen_task must not move.
 
--- 8.1 denied
+-- 9.1 denied
 select pg_temp.test_login('33800000-0000-0000-0000-000000000003', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.reopen_task(%s, 'Redeschide') $$,
@@ -765,8 +887,12 @@ select is((select format('%s|%s|%s', task.status,
              from public.tasks as task where task.id = (select authority_task_id from f338)),
   'completed|0|0',
   'after every denial the authority target is untouched: still completed, no reopened row, no reversal');
+select is((select count(*) from public.notifications
+            where task_id = (select authority_task_id from f338)
+              and title like 'Task redeschis%'), 0::bigint,
+  'and a refused reopen is SILENT -- no notification reaches the Task''s Executor about a reopening that never happened');
 
--- 8.2 allowed
+-- 9.2 allowed
 select pg_temp.test_login('33800000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.reopen_task(%s, 'Reiau eu') $$,
@@ -785,22 +911,52 @@ select is((select count(*) from public.notifications
               and title like 'Task redeschis%'), 0::bigint,
   'the lead who reopened their OWN Task gets no notification -- private.notify always drops the actor');
 
--- 8.3 FINDING, pinned deliberately: private.can_evaluate_task's
--- "a Responsible may not act on the lead's work" carve-out is keyed on the
--- Task's ACTIVE Assignment (`ended_at is null`). A completed Task has none,
--- so on a TERMINAL Task the carve-out is vacuous and a Project Responsible
--- may reopen -- and thereby reverse -- the lead's evaluated work. #338 does
--- not change the shared predicate (that is #327's, and #336/#337 depend on
--- its current shape); this assertion records the real behaviour so the gap
--- is visible rather than assumed away. See the PR body.
+-- 9.3 the Project Responsible's two self-benefiting reversals, both refused.
+-- private.can_evaluate_task's carve-out ("a Responsible may act on neither
+-- the lead's work nor their own") is keyed on the Task's ACTIVE Assignment
+-- (`ended_at is null`), and a terminal Task has none -- so on exactly the
+-- Tasks this command operates on that carve-out is vacuously true and the
+-- shared predicate admits the Responsible. private.reopen_task_impl closes
+-- the hole locally, re-applying the same rule against the Assignment being
+-- REVERSED (the shared predicate is #327's and #336/#337 depend on its
+-- current shape, so it is deliberately left alone). Same 42501
+-- task_evaluate_forbidden require_task_evaluator raises: this IS the
+-- evaluate-authority rule, and a second reason string would only tell the
+-- caller which branch fired.
 select pg_temp.test_login('33800000-0000-0000-0000-000000000007', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok(format($$ select public.reopen_task(%s, 'Responsabilul redeschide') $$,
+select throws_ok(format($$ select public.reopen_task(%s, 'Responsabilul redeschide') $$,
   (select proj_resp_task_id from f338)),
-  'a Project Responsible CAN reopen the lead''s completed work -- can_evaluate_task''s carve-out only looks at an ACTIVE Assignment, and a terminal Task has none (documented finding, not an intended new permission)');
+  '42501', 'task_evaluate_forbidden',
+  'a Project Responsible cannot reopen the LEAD''s completed work -- reversing an award is evaluating it');
+select throws_ok(format($$ select public.reopen_task(%s, 'Imi sterg pedeapsa') $$,
+  (select proj_resp_own_task_id from f338)),
+  '42501', 'task_evaluate_forbidden',
+  'nor their OWN unfulfilled Task -- that would erase their own -4 penalty, the self-benefit the rule exists to stop');
 reset role;
 
--- ==================== 9. The command is the only write path ====================
+select is(
+  format('%s|%s',
+    (select count(*) from public.task_evaluations as evaluation
+      where evaluation.task_id = (select proj_resp_task_id from f338)
+        and evaluation.reversed_at is not null),
+    (select coalesce(sum(ledger.delta), 0) from public.points_ledger as ledger
+      where ledger.member_id = '33800000-0000-0000-0000-000000000007')),
+  '0|-4',
+  'both refusals held: the lead''s Evaluation is still open and the Responsible still carries their own -4');
+
+-- ==================== 10. The command is the only write path ====================
+-- Every expected message is pinned, not left null: all three denials are
+-- 42501, and only the message says WHICH guarantee stopped the write. The
+-- Evaluation is stopped by table privileges -- public.task_evaluations has
+-- every privilege revoked from public/anon/authenticated/service_role (#316),
+-- so the statement never reaches RLS at all; that is a STRONGER guarantee
+-- than a policy denial, and pinning its message is what stops a future
+-- migration that grants `update` back from passing this test by swapping one
+-- 42501 for another. The two points_ledger inserts do exercise RLS: the table
+-- is insertable by `authenticated` and ledger_sanction, its only insert
+-- policy, demands reason = 'sanction' -- so they fail the policy, with the
+-- policy's own message.
 
 select pg_temp.test_login('33800000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -808,21 +964,21 @@ select throws_ok(format($$ update public.task_evaluations
      set reversed_at = now(), reversed_by = '33800000-0000-0000-0000-000000000002',
          reversal_reason = 'Fals'
    where id = %s $$, (select direct_write_evaluation_id from e338)),
-  '42501', null,
-  'even the Task''s own evaluator cannot reverse an Evaluation directly -- private.reopen_task_impl is the only path');
+  '42501', 'permission denied for table task_evaluations',
+  'even the Task''s own evaluator cannot reverse an Evaluation directly -- the table grants stop it before RLS is even consulted, and private.reopen_task_impl is the only path');
 select throws_ok(format($$ insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id)
   values ('33800000-0000-0000-0000-000000000016', 99, 'task_reversal', %s, %s) $$,
   (select direct_write_task_id from f338), (select direct_write_evaluation_id from e338)),
-  '42501', null,
-  'and cannot hand-write a reversal ledger row either -- ledger_sanction is the only insert policy and it demands reason = sanction');
+  '42501', 'new row violates row-level security policy for table "points_ledger"',
+  'and cannot hand-write a reversal ledger row either -- the RLS POLICY rejects it: ledger_sanction is the only insert policy and it demands reason = sanction');
 reset role;
 select pg_temp.test_login('33800000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id)
   values ('33800000-0000-0000-0000-000000000016', 99, 'task_reversal', %s, %s) $$,
   (select direct_write_task_id from f338), (select direct_write_evaluation_id from e338)),
-  '42501', null,
-  'not even a BC can hand-write a reversal -- level 6 buys sanctions, never awards or their undo');
+  '42501', 'new row violates row-level security policy for table "points_ledger"',
+  'not even a BC can hand-write a reversal -- the same policy denial: level 6 buys sanctions, never awards or their undo');
 reset role;
 
 select is((select format('%s|%s', (evaluation.reversed_at is null)::text,
@@ -833,8 +989,8 @@ select is((select format('%s|%s', (evaluation.reversed_at is null)::text,
   'true|1',
   'the direct-write target is still open and still carries exactly its one credit row');
 
--- ==================== 10. Locks held while the command runs ====================
--- Sections 10-11 work on COMMITTED fixtures through their own dblink
+-- ==================== 11. Locks held while the command runs ====================
+-- Sections 11-13 work on COMMITTED fixtures through their own dblink
 -- connections: pg_temp.test_race commits both of its sessions for real, so
 -- nothing this suite's own rolled-back transaction created is visible there.
 --
@@ -1003,12 +1159,16 @@ select * from extensions.dblink('rt_lock', format($$
   select (public.reopen_task(%s, 'Sonda de blocaj')).status::text
 $$, (select probe_task_id from r338))) as locked_reopen(status text);
 
+-- Pinned to the EXACT mode, not to a family of writer modes: `For Update`
+-- here would deadlock against private.evaluate_task's implicit FK
+-- `For Key Share` on the same row (section 13 reproduces it), so this
+-- assertion is a second guard against anyone strengthening step 3's lock.
 select ok(coalesce((
-  select row_lock.modes && array['For Update', 'Update', 'No Key Update']
+  select 'For No Key Update' = any(row_lock.modes)
     from extensions.pgrowlocks('public.tasks') as row_lock
     join public.tasks as task on task.ctid = row_lock.locked_row
    where task.id = (select probe_umbrella_id from r338)
-), false), 'reopen_task holds the UMBRELLA row exclusively locked while it runs -- and this Umbrella is todo, so nothing but step 3''s explicit for update can be holding it');
+), false), 'reopen_task holds the UMBRELLA row FOR NO KEY UPDATE while it runs -- exactly that mode, never For Update (section 13) -- and this Umbrella is todo, so nothing but step 3''s explicit lock can be holding it; an FK lock would show as For Key Share');
 select ok(coalesce((
   select row_lock.modes && array['For Update', 'Update', 'No Key Update']
     from extensions.pgrowlocks('public.tasks') as row_lock
@@ -1038,7 +1198,7 @@ select ok(coalesce((
 select extensions.dblink_exec('rt_lock', 'rollback');
 select extensions.dblink_disconnect('rt_lock');
 
--- ==================== 11. Race: two reopens, one evaluated Task ====================
+-- ==================== 12. Race: two reopens, one evaluated Task ====================
 -- pg_temp.test_race runs call A to completion, sends call B while A is
 -- uncommitted, waits until B blocks, then commits A and fetches B's result.
 -- This is what discriminates step 3's tasks-row `for update`: with it, B
@@ -1079,7 +1239,132 @@ select is((select coalesce(sum(delta), 0) from public.points_ledger
             where member_id = '33800000-0000-0000-0000-000000000054'),
   0::bigint, 'the raced Executor''s total nets back to zero: +6 credited, -6 reversed, once each');
 
--- ==================== 12. The committed fixtures leave no trace ====================
+-- ==================== 13. The deadlock this command must NOT have ====================
+-- The one interleaving the migration header is built around, reproduced
+-- directly. private.evaluate_task takes NO explicit lock on the Umbrella,
+-- but on a Subtask it inserts a task_activity row (and a notification) that
+-- NAMES the parent -- and every insert of a referencing row runs its
+-- referential-integrity check as
+--   select 1 from public.tasks where id = $1 for key share
+-- So it holds {Subtask FOR UPDATE} and then asks for
+-- {Umbrella FOR KEY SHARE}, while this command holds the Umbrella and then
+-- asks for the Subtask. FOR KEY SHARE conflicts with FOR UPDATE but NOT with
+-- FOR NO KEY UPDATE, which is why the parent lock is the weaker mode.
+--
+-- Session A below is the evaluate_task side, reduced to exactly its two lock
+-- acquisitions (the row lock, then a real parent-naming task_activity
+-- insert) so the interleaving can be paused between them -- the function
+-- itself is one atomic statement and cannot be. Session B is the REAL
+-- public.reopen_task, so the mode this section discriminates is the one in
+-- the migration.
+--
+-- With the lock strengthened to `for update` the cycle is real and Postgres
+-- aborts one of the two sessions with 40P01 -- WHICH one depends on whose
+-- deadlock_timeout expires first, and this database does not let us pin that
+-- (deadlock_timeout is superuser-only and the local `postgres` role is not
+-- one). So BOTH ends are asserted: A's insert must not raise, and B's reopen
+-- must come back with a status rather than a SQLSTATE. Exactly one of the
+-- two goes RED whichever backend is chosen as the victim.
+-- MUTATION-VERIFIED; see the task report for the captured output.
+create function pg_temp.wait_until_blocked(p_application_name text)
+returns boolean
+language plpgsql
+as $fn$
+declare
+  v_attempt integer;
+begin
+  for v_attempt in 1..300 loop
+    perform pg_catalog.pg_stat_clear_snapshot();
+    if exists (
+      select 1
+        from pg_catalog.pg_stat_activity
+       where application_name = p_application_name
+         and wait_event_type = 'Lock'
+    ) then
+      return true;
+    end if;
+    perform pg_catalog.pg_sleep(0.01);
+  end loop;
+  return false;
+end;
+$fn$;
+
+-- B's result, or the SQLSTATE that replaced it. A deadlock propagates out of
+-- extensions.dblink_get_result and cannot be caught in plain SQL, and with
+-- the mutation in place B is one of the two backends that may be aborted --
+-- so it is caught here and turned into a value the assertion can diff.
+create function pg_temp.dl_reopen_result()
+returns text
+language plpgsql
+as $fn$
+declare
+  v_status text;
+begin
+  select remote.status into v_status
+    from extensions.dblink_get_result('rt_dl_b') as remote(status text);
+  return coalesce(v_status, '(no row)');
+exception when others then
+  return sqlstate;
+end;
+$fn$;
+
+select extensions.dblink_connect('rt_dl_a', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres application_name=rt_dl_a_338',
+  current_database()));
+select extensions.dblink_connect('rt_dl_b', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres application_name=rt_dl_b_338',
+  current_database()));
+-- Both timeouts comfortably exceed the 1s default deadlock_timeout, so a
+-- real cycle is answered with 40P01 and never masked as a lock timeout.
+select extensions.dblink_exec('rt_dl_a', $$
+  begin;
+  set local statement_timeout = '20s';
+  set local lock_timeout = '15s';
+$$);
+select extensions.dblink_exec('rt_dl_b', $$
+  begin;
+  set local statement_timeout = '20s';
+  set local lock_timeout = '15s';
+$$);
+
+-- A: exactly the row lock private.evaluate_task holds on the Subtask.
+select * from extensions.dblink('rt_dl_a', format($$
+  select task.status::text from public.tasks as task where task.id = %s for update
+$$, (select probe_task_id from r338))) as a_holds_subtask(status text);
+
+-- B: the real command, fired asynchronously so A can act while it waits.
+select * from extensions.dblink('rt_dl_b', format($$
+  select set_config('request.jwt.claims', %L, true)
+$$, jsonb_build_object(
+      'sub', '33800000-0000-0000-0000-000000000051', 'role', 'authenticated',
+      'app_metadata', jsonb_build_object('member_role', 'bce', 'member_level', 5,
+        'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb))::text))
+  as remote_claims(setting text);
+select extensions.dblink_exec('rt_dl_b', 'set local role authenticated');
+select extensions.dblink_send_query('rt_dl_b', format($$
+  select (public.reopen_task(%s, 'Redeschidere concurenta')).status::text
+$$, (select probe_task_id from r338)));
+
+select ok(pg_temp.wait_until_blocked('rt_dl_b_338'),
+  'the reopen has taken the Umbrella lock and is now waiting for the Subtask row session A holds -- the first half of the cycle');
+
+-- The assertion this whole section exists for.
+select lives_ok(format($outer$ select extensions.dblink_exec('rt_dl_a', %L) $outer$,
+  format($$
+    insert into public.task_activity (task_id, kind, actor_id, from_status, to_status, details)
+    values (%s, 'subtask_completed', '33800000-0000-0000-0000-000000000051', null, null,
+            jsonb_build_object('probe', '338 deadlock'))
+  $$, (select probe_umbrella_id from r338))),
+  'evaluate_task''s parent-naming insert -- an implicit FK FOR KEY SHARE on the Umbrella -- goes straight through while a reopen holds that Umbrella: FOR NO KEY UPDATE does not conflict with FOR KEY SHARE, and FOR UPDATE would deadlock (40P01) here');
+
+select extensions.dblink_exec('rt_dl_a', 'rollback');
+select is(pg_temp.dl_reopen_result(), 'in_progress',
+  'and the reopen itself comes back with a status, never a 40P01 -- once A lets the Subtask go it finishes normally, so the weaker parent lock costs this command nothing');
+select extensions.dblink_exec('rt_dl_b', 'rollback');
+select extensions.dblink_disconnect('rt_dl_a');
+select extensions.dblink_disconnect('rt_dl_b');
+
+-- ==================== 14. The committed fixtures leave no trace ====================
 select extensions.dblink_exec('rt_setup', $$
   set session_replication_role = 'replica';
   delete from public.points_ledger

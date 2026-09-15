@@ -6,28 +6,56 @@
 -- This is the only command in the wave that gives points back. Everything
 -- below exists to make that reversal exact and atomic.
 --
--- The lock order, and why it is deliberately ASYMMETRIC with evaluate_task
--- ----------------------------------------------------------------------
+-- The lock order, and the lock STRENGTH on the Umbrella
+-- -----------------------------------------------------
 -- Global Constraints pin one rule: a command that touches a Subtask AND its
 -- Umbrella locks the UMBRELLA FIRST, then the Subtask. This command does
--- exactly that. private.evaluate_task (#336) does the opposite -- it writes
--- the Umbrella's subtask_completed activity row and its coalesced manager
--- notification while holding ONLY the Subtask lock, and never waits on the
--- parent at all.
+-- exactly that. private.evaluate_task (#336) takes no EXPLICIT lock on the
+-- parent at all -- it writes the Umbrella's subtask_completed activity row
+-- and its coalesced manager notification while holding only the Subtask
+-- lock.
 --
--- That asymmetry is not an oversight and must not be "fixed". It is the
--- reason the two commands cannot deadlock against each other:
+-- That is NOT the same as "evaluate_task never waits on the parent", and an
+-- earlier draft of this header claimed exactly that and was WRONG. Both of
+-- those inserts carry a foreign key to public.tasks
+-- (task_activity.task_id NOT NULL, notifications.task_id), and every insert
+-- of a referencing row runs its referential-integrity check as
 --
---   * a session inside evaluate_task holds {Subtask} and never asks for
---     {Umbrella}, so it can always finish;
---   * a session inside reopen_task acquires {Umbrella} then {Subtask}, in
---     that fixed order, so two reopens can only ever queue behind each
---     other.
+--     select 1 from public.tasks where id = $1 for key share
 --
--- There is therefore no cycle: the classic ABBA deadlock needs BOTH sides to
--- wait, and evaluate_task never waits. Giving evaluate_task a parent lock --
--- or reversing the order here -- would introduce one immediately. Do not add
--- a parent lock anywhere else in the wave without redoing this analysis.
+-- So private.evaluate_task DOES acquire an implicit FOR KEY SHARE on the
+-- Umbrella, one statement after it has taken the Subtask FOR UPDATE.
+--
+-- FOR KEY SHARE conflicts with FOR UPDATE. Had this command locked the
+-- parent FOR UPDATE, the two would form a genuine ABBA cycle on one Subtask:
+--
+--   * session A (evaluate_task on the Subtask) holds {Subtask FOR UPDATE}
+--     and then asks for {Umbrella FOR KEY SHARE};
+--   * session B (reopen_task on the same Subtask) holds
+--     {Umbrella FOR UPDATE} and then asks for {Subtask FOR UPDATE}.
+--
+-- Postgres resolves that with 40P01 deadlock detected, and the victim can be
+-- A -- a legitimate evaluation aborted because a manager acted on a stale
+-- page.
+--
+-- The parent is therefore locked FOR NO KEY UPDATE, deliberately:
+--
+--   * FOR NO KEY UPDATE does NOT conflict with FOR KEY SHARE, so
+--     evaluate_task's FK checks never block behind it and the cycle cannot
+--     form at all;
+--   * it still conflicts with ITSELF, so two reopens of Subtasks under one
+--     Umbrella still serialize in a fixed order -- the property the lock is
+--     there for;
+--   * it is exactly the strength the cascade's own UPDATE takes anyway: that
+--     UPDATE sets status and completed_at, neither of them a key column.
+--
+-- DO NOT "strengthen" this back to FOR UPDATE. It is not a weaker version of
+-- the rule, it is the version that does not deadlock; the suite's deadlock
+-- section reproduces the cycle directly and fails with 40P01 if the keyword
+-- is changed. (private.validate_task_hierarchy's parent FOR SHARE would
+-- conflict even with FOR NO KEY UPDATE, but its trigger fires only on insert
+-- or update OF parent_task_id/dept_id/team_id/project_id/kind, and no
+-- lifecycle UPDATE in the wave names any of those columns.)
 --
 -- The cascade. A completed Umbrella with a live Subtask violates ADR-0007's
 -- rollup rule, so reopening a Subtask whose Umbrella is `completed` flips the
@@ -131,6 +159,41 @@
 -- The state is unreachable, so this command adds no guard against it -- it
 -- pins the absence in its suite instead.
 --
+-- One authority rule is refined HERE rather than in can_evaluate_task
+-- -------------------------------------------------------------------
+-- private.can_evaluate_task's Project carve-out -- "a Responsible may not
+-- evaluate the lead's work, nor their own" -- is keyed on the Task's ACTIVE
+-- Assignment (ended_at is null). A completed or unfulfilled Task has none,
+-- so on exactly the Tasks this command operates on the carve-out is
+-- vacuously true and a Project Responsible would pass: free to reverse the
+-- award on the LEAD's evaluated work, or on their OWN -- including erasing
+-- their own `unfulfilled` penalty. That is a direct self-benefit and
+-- ADR-0007 forbids it ("A Responsible's own work requires the lead or
+-- BC/Moderator. A Responsible cannot evaluate the lead.").
+--
+-- The shared predicate is deliberately NOT changed: "the active Assignment"
+-- is the correct key for #336/#337, which act on live work, and moving it
+-- would change their behaviour too. This command instead re-applies the same
+-- rule against the Assignment it is REVERSING, which is the one that matters
+-- here. Three details that must not drift:
+--   * the actor's level comes from private.caller_level() (live
+--     profiles/roles), never from JWT claims -- a stale level-6 token must
+--     not buy the exemption;
+--   * the lead is identified by projects.leader_id, the same key
+--     private.is_project_lead and can_evaluate_task's carve-out both use, so
+--     the actor side and the member side can never disagree;
+--   * the "actor is not the Project lead" clause is what keeps the LEAD able
+--     to reopen their own work, which can_evaluate_task explicitly permits.
+--
+-- The check necessarily sits in step 7 rather than step 4: it needs the
+-- Evaluation row to know which Assignment is being reversed, and that row is
+-- not read until the mutation begins. Nothing is disclosed by the ordering
+-- (the caller already passed require_task_visible), and it is placed before
+-- the first write. The code is 42501 task_evaluate_forbidden -- the same
+-- reason private.require_task_evaluator raises for this command, because
+-- this IS the evaluate-authority rule; a second string would only tell the
+-- caller which branch fired.
+--
 -- Step order inside private.reopen_task_impl (binding):
 --   1. A blank or null p_reason is PT400 reason_required, raised BEFORE the
 --      gate -- task_evaluations_reversal_shape_ck requires a non-blank
@@ -138,17 +201,23 @@
 --      caller, authorized or not (the #335/#336/#337 precedent).
 --   2. private.require_task_visible.
 --   3. The locks, in the wave's order: the Umbrella FIRST when
---      parent_task_id is set, then the Task -- each with its own
---      `if not found` PT404 guard (a concurrent hard delete is still
---      reachable until #345 retires tasks_delete_legacy).
+--      parent_task_id is set (FOR NO KEY UPDATE -- see above), then the Task
+--      FOR UPDATE -- each with its own `if not found` PT404 guard (a
+--      concurrent hard delete is still reachable until #345 retires
+--      tasks_delete_legacy).
 --   4. private.require_task_evaluator under those locks.
 --   5. Input validation: none beyond the reason, already checked.
---   6. State preconditions: PT409 task_is_umbrella first (an Umbrella
---      carries no Evaluation at all -- #340 owns its rollup -- so checking
---      status first would answer task_not_evaluated and hide the real
---      reason), then PT409 task_not_evaluated for any status but
---      completed/unfulfilled.
---   7. Mutate -> log_task_activity -> notify -> re-read.
+--   6. State preconditions: PT409 task_parent_changed first (the Task's
+--      parent moved between the unlocked pre-read and the locks, so the
+--      command holds no lock on the parent it would cascade into -- a state
+--      conflict, and it answers only a caller step 4 has already
+--      authorized), then PT409 task_is_umbrella (an Umbrella carries no
+--      Evaluation at all -- #340 owns its rollup -- so checking status first
+--      would answer task_not_evaluated and hide the real reason), then
+--      PT409 task_not_evaluated for any status but completed/unfulfilled.
+--   7. Mutate -> log_task_activity -> notify -> re-read. The Project
+--      authority refinement above is the first thing inside it, before any
+--      write.
 --
 -- No table-DML revoke accompanies this migration (conventions Sec2). Neither
 -- table this command writes is writable by `authenticated`:
@@ -193,8 +262,12 @@ begin
     raise sqlstate 'PT404' using message = 'task_not_found';
   end if;
 
+  -- FOR NO KEY UPDATE, not FOR UPDATE: private.evaluate_task takes an
+  -- implicit FOR KEY SHARE on this same row through its parent-naming
+  -- task_activity/notifications inserts, and FOR UPDATE would conflict with
+  -- it and deadlock. See the header -- do not strengthen this.
   if v_parent_id is not null then
-    select * into v_parent from public.tasks where id = v_parent_id for update;
+    select * into v_parent from public.tasks where id = v_parent_id for no key update;
     if not found then
       raise sqlstate 'PT404' using message = 'task_not_found';
     end if;
@@ -205,24 +278,27 @@ begin
     raise sqlstate 'PT404' using message = 'task_not_found';
   end if;
 
-  -- Defensive: the Task's parent is re-read under its own lock, and a
-  -- mismatch would mean the unlocked read above sent us to lock the wrong
-  -- row -- i.e. the command would be holding no lock on the parent it is
-  -- about to cascade into, silently breaking the lock order this whole file
-  -- rests on. No command writes parent_task_id after creation, so the only
-  -- writer that can produce this today is the legacy `tasks_update_legacy`
-  -- policy, which #345 retires. Refuse rather than proceed unlocked; the
-  -- caller retries and finds a consistent Task.
-  if v_task.parent_task_id is distinct from v_parent_id then
-    raise sqlstate 'PT409' using message = 'task_parent_changed';
-  end if;
-
   -- 4. Authority under lock: the Task's evaluator, never merely its manager.
   perform private.require_task_evaluator(p_task_id);
 
   -- 5. Input validation: none beyond the reason, already checked at step 1.
 
-  -- 6. State preconditions. Kind first -- see the header.
+  -- 6. State preconditions.
+  -- Defensive, and first: the Task's parent is re-read under its own lock,
+  -- and a mismatch would mean the unlocked read above sent us to lock the
+  -- wrong row -- i.e. the command would be holding no lock on the parent it
+  -- is about to cascade into, silently breaking the lock order this whole
+  -- file rests on. No command writes parent_task_id after creation, so the
+  -- only writer that can produce this today is the legacy
+  -- `tasks_update_legacy` policy, which #345 retires. Refuse rather than
+  -- proceed unlocked; the caller retries and finds a consistent Task. It
+  -- lives here, below the gate, so it answers only a caller step 4 has
+  -- already authorized.
+  if v_task.parent_task_id is distinct from v_parent_id then
+    raise sqlstate 'PT409' using message = 'task_parent_changed';
+  end if;
+
+  -- Kind next -- see the header.
   if v_task.kind <> 'task' then
     raise sqlstate 'PT409' using message = 'task_is_umbrella';
   end if;
@@ -244,6 +320,29 @@ begin
     raise sqlstate 'PT409' using message = 'evaluation_not_found';
   end if;
 
+  -- The member the points were credited to: the EVALUATED Assignment's
+  -- member. Read from that Assignment, never from the Task's current state.
+  select assignment.member_id into v_member_id
+    from public.task_assignments as assignment
+   where assignment.id = v_evaluation.assignment_id;
+
+  -- The Project authority refinement (see the header). can_evaluate_task's
+  -- carve-out is keyed on the ACTIVE Assignment and is vacuous on a terminal
+  -- Task, so the same rule is re-applied here against the Assignment being
+  -- REVERSED: a Project Responsible may not undo the lead's award, nor their
+  -- own -- including their own `unfulfilled` penalty. Level from the live
+  -- profile, never from the token. Before any write.
+  if v_task.project_id is not null
+     and (select private.caller_level()) < 6
+     and not coalesce(private.is_project_lead(v_task.project_id), false)
+     and (v_member_id = v_actor
+          or v_member_id = (select project.leader_id
+                              from public.projects as project
+                             where project.id = v_task.project_id))
+  then
+    raise exception using errcode = '42501', message = 'task_evaluate_forbidden';
+  end if;
+
   -- Exactly the trio, exactly once -- the only UPDATE
   -- private.guard_task_evaluation_change permits.
   update public.task_evaluations
@@ -251,12 +350,6 @@ begin
          reversed_by     = v_actor,
          reversal_reason = v_reason
    where id = v_evaluation.id;
-
-  -- The member the points were credited to: the EVALUATED Assignment's
-  -- member. Read from that Assignment, never from the Task's current state.
-  select assignment.member_id into v_member_id
-    from public.task_assignments as assignment
-   where assignment.id = v_evaluation.assignment_id;
 
   insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id)
   values (v_member_id, -v_evaluation.points, 'task_reversal', p_task_id, v_evaluation.id)
@@ -307,7 +400,7 @@ end;
 $$;
 
 comment on function private.reopen_task_impl(bigint, text) is
-  'The Task''s evaluator (private.require_task_evaluator, 42501 task_evaluate_forbidden) reopens a completed or unfulfilled ordinary Task, reversing its Evaluation atomically; the actor is auth.uid(), never a parameter. A blank or null reason is PT400 reason_required, raised before the membership gate (task_evaluations_reversal_shape_ck demands a non-blank reversal_reason). Locks the Umbrella FIRST and then the Task when parent_task_id is set -- the mirror image of private.evaluate_task, which never locks a parent at all, and the reason the two cannot deadlock (see the migration header). PT409 task_is_umbrella for an Umbrella (it carries no Evaluation; #340 owns its rollup), PT409 task_not_evaluated for any status but completed/unfulfilled, PT409 evaluation_not_found when no open source = command Evaluation exists (a Task carrying only #317''s legacy_migration credit has nothing of its own to reverse). Then: the Evaluation gets its reversal trio (the single UPDATE the append-only guard permits), one reason = task_reversal points_ledger row credits the EVALUATED Assignment''s member with -points -- correct for a zero or negative award too -- so both rows stand and the member''s total returns to its pre-evaluation value, the Task returns to in_progress with Difficulty/Rating/completed_at/unfulfilled_at/submitted_at cleared and started_at set if it never was, the Candidate Queue deliberately STAYS closed (#331''s set_task_queue reopens it), and the same member gets a NEW Assignment via private.open_task_assignment(..., ''reopen'') -- PT400 invalid_executor, rolling the whole reversal back, if they have since been deactivated. A completed Umbrella is cascaded back to todo with its own reopened row (details.cascade_from). Logs reopened (new assignment id, completed|unfulfilled -> in_progress, the trimmed reason, details.evaluation_id/reversal_ledger_id/new_assignment_id) and notifies the reactivated Executor ("Task redeschis").';
+  'The Task''s evaluator (private.require_task_evaluator, 42501 task_evaluate_forbidden) reopens a completed or unfulfilled ordinary Task, reversing its Evaluation atomically; the actor is auth.uid(), never a parameter. A blank or null reason is PT400 reason_required, raised before the membership gate (task_evaluations_reversal_shape_ck demands a non-blank reversal_reason). Locks the Umbrella FIRST and then the Task when parent_task_id is set -- the Umbrella FOR NO KEY UPDATE specifically, because private.evaluate_task takes an implicit FK FOR KEY SHARE on the parent through its parent-naming inserts and FOR UPDATE here would deadlock against it (see the migration header; do not strengthen it). On a Project Task the evaluate-authority rule is re-applied against the Assignment being reversed -- a Responsible below level 6 who is not the lead may undo neither the lead''s award nor their own (42501 task_evaluate_forbidden), because private.can_evaluate_task''s carve-out is keyed on the ACTIVE Assignment and a terminal Task has none. PT409 task_parent_changed when the Task''s parent moved between the unlocked pre-read and the locks, PT409 task_is_umbrella for an Umbrella (it carries no Evaluation; #340 owns its rollup), PT409 task_not_evaluated for any status but completed/unfulfilled, PT409 evaluation_not_found when no open source = command Evaluation exists (a Task carrying only #317''s legacy_migration credit has nothing of its own to reverse). Then: the Evaluation gets its reversal trio (the single UPDATE the append-only guard permits), one reason = task_reversal points_ledger row credits the EVALUATED Assignment''s member with -points -- correct for a zero or negative award too -- so both rows stand and the member''s total returns to its pre-evaluation value, the Task returns to in_progress with Difficulty/Rating/completed_at/unfulfilled_at/submitted_at cleared and started_at set if it never was, the Candidate Queue deliberately STAYS closed (#331''s set_task_queue reopens it), and the same member gets a NEW Assignment via private.open_task_assignment(..., ''reopen'') -- PT400 invalid_executor, rolling the whole reversal back, if they have since been deactivated. A completed Umbrella is cascaded back to todo with its own reopened row (details.cascade_from). Logs reopened (new assignment id, completed|unfulfilled -> in_progress, the trimmed reason, details.evaluation_id/reversal_ledger_id/new_assignment_id) and notifies the reactivated Executor ("Task redeschis").';
 
 create function public.reopen_task(p_task_id bigint, p_reason text)
 returns public.tasks
@@ -319,7 +412,7 @@ as $$
 $$;
 
 comment on function public.reopen_task(bigint, text) is
-  'Reopen a completed or unfulfilled Task you evaluate, giving back the points it awarded and putting the same member back to work in one transaction. Callable only by the Task''s live evaluator -- BC/Moderator anywhere, the local BCE of a Department or of a Department-Team''s parent Department, or an active Project''s lead or Responsible; an Independent Team has no evaluator branch at all. A non-blank reason is required and is recorded on the Evaluation, the activity row and the Executor''s notification. The original Evaluation and its credit are preserved and marked reversed, never deleted. Refuses an Umbrella, a Task that is not completed or unfulfilled, a Task with no Evaluation of its own to reverse, and a Task whose evaluated Executor is no longer an active member. The Candidate Queue stays closed -- reopen it with set_task_queue if you want candidates again.';
+  'Reopen a completed or unfulfilled Task you evaluate, giving back the points it awarded and putting the same member back to work in one transaction. Callable only by the Task''s live evaluator -- BC/Moderator anywhere, the local BCE of a Department or of a Department-Team''s parent Department, or an active Project''s lead or Responsible; an Independent Team has no evaluator branch at all. A Project Responsible may not reopen the lead''s evaluated work, nor their own -- reversing an award is evaluating it, and undoing one''s own penalty is not a Responsible''s to do. A non-blank reason is required and is recorded on the Evaluation, the activity row and the Executor''s notification. The original Evaluation and its credit are preserved and marked reversed, never deleted. Refuses an Umbrella, a Task that is not completed or unfulfilled, a Task with no Evaluation of its own to reverse, and a Task whose evaluated Executor is no longer an active member. The Candidate Queue stays closed -- reopen it with set_task_queue if you want candidates again.';
 
 -- ==================== Grants (conventions Sec4, four-role form) ====================
 revoke execute on function private.reopen_task_impl(bigint, text)
