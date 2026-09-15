@@ -410,6 +410,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_candidate',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
+  ('leadership_member_tasks_impl',                'p_member_id uuid',                                                                                                  'impl'),
   ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
   -- #337: the second command over the shared evaluate_task core (#336) --
   -- the `unfulfilled` outcome for overdue, undelivered work.
@@ -463,8 +464,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 85,
-  'the pinned private-schema roster has 85 audited rows, including #344 request commands and #259 Department Cup');
+  (select count(*) from pinned_private_functions)::int, 86,
+  'the pinned private-schema roster has 86 audited rows, including #344 request commands and #259/#260 leadership reads');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

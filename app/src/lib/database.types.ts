@@ -3399,6 +3399,52 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      leadership_member_tasks: {
+        Args: { p_member_id: string }
+        Returns: {
+          assigned_at: string
+          assigned_by: string
+          assignment_end_note: string
+          assignment_end_reason: string
+          assignment_ended_at: string
+          assignment_id: number
+          assignment_mode: string
+          audience: string
+          campaign_id: number
+          campaign_name: string
+          cancel_reason: string
+          cancelled_at: string
+          completed_at: string
+          completed_late: boolean
+          deadline: string
+          description: string
+          difficulty: number
+          duplicated_from_task_id: number
+          evaluation_history: Json
+          is_overdue: boolean
+          member_id: string
+          origin_id: string
+          origin_name: string
+          origin_type: string
+          parent_task_id: number
+          parent_task_title: string
+          queue_closed_at: string
+          queue_opened_at: string
+          rating: number
+          returned_to_progress_at: string
+          review_round: number
+          started_at: string
+          status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string
+          subtasks: Json
+          task_created_at: string
+          task_created_by: string
+          task_id: number
+          task_kind: string
+          title: string
+          unfulfilled_at: string
+        }[]
+      }
       mark_task_unfulfilled: {
         Args: {
           p_difficulty: number
