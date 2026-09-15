@@ -56,6 +56,32 @@ describe('Authorized Task timeline', () => {
     expect(screen.getByText('Titlu: Nou')).toBeVisible();
     expect(screen.queryByText(/internal-id/)).not.toBeInTheDocument();
   });
+  it('renders actual conversion from/to payloads and campaign changes', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            details: {
+              from: { audience: 'local', assignment_mode: 'direct' },
+              to: { audience: 'org', assignment_mode: 'public' },
+            },
+          }),
+          activity({
+            id: 2,
+            details: {
+              before: { campaign_id: null },
+              after: { campaign_id: 7 },
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('Audiență: Locală')).toBeVisible();
+    expect(screen.getByText('Audiență: OSUBB')).toBeVisible();
+    expect(screen.getByText('Atribuire: Directă')).toBeVisible();
+    expect(screen.getByText('Atribuire: Publică')).toBeVisible();
+    expect(screen.getByText('Campanie: #7')).toBeVisible();
+  });
   it('explains empty or partial legacy history', () => {
     render(<TaskTimeline activity={[]} />);
     expect(

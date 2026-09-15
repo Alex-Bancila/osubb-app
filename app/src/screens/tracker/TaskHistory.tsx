@@ -45,11 +45,14 @@ const fields: Record<string, string> = {
   deadline: 'Termen',
   difficulty: 'Dificultate',
   rating: 'Notă',
+  audience: 'Audiență',
+  assignment_mode: 'Atribuire',
+  campaign_id: 'Campanie',
 };
 function changes(details: Json, side: 'before' | 'after') {
   if (!details || typeof details !== 'object' || Array.isArray(details))
     return [];
-  const values = details[side];
+  const values = details[side] ?? details[side === 'before' ? 'from' : 'to'];
   if (!values || typeof values !== 'object' || Array.isArray(values)) return [];
   return Object.entries(values).flatMap(([field, value]) => {
     if (
@@ -60,7 +63,21 @@ function changes(details: Json, side: 'before' | 'after') {
     const text =
       field === 'deadline' && typeof value === 'string'
         ? `${formatBucharestDay(value)}, ${formatBucharestTime(value)}`
-        : String(value ?? '—');
+        : field === 'audience'
+          ? value === 'org'
+            ? 'OSUBB'
+            : value === 'local'
+              ? 'Locală'
+              : '—'
+          : field === 'assignment_mode'
+            ? value === 'public'
+              ? 'Publică'
+              : value === 'direct'
+                ? 'Directă'
+                : '—'
+            : field === 'campaign_id' && value !== null
+              ? `#${value}`
+              : String(value ?? '—');
     return [`${fields[field]}: ${text}`];
   });
 }
