@@ -118,10 +118,9 @@ select lives_ok(
   $$ select public.create_event(
        p_title := 'Workshop CV',
        p_type := 'activitate',
-       p_scope := 'dept',
-       p_starts_at := now(),
-       p_dept_id := 'edu') $$,
-  'level >= 4 creates events through the validated command');
+       p_scope := 'org',
+       p_starts_at := now()) $$,
+  'a Responsible creates an organization Event through the validated command');
 select throws_ok(
   $$ update events set location = 'Sala 5' where title = 'Dept gated 4' $$,
   '42501', null, 'direct event updates are disabled until the update command lands');

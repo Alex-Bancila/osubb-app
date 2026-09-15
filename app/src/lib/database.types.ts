@@ -3222,6 +3222,8 @@ export type Database = {
           p_description?: string
           p_ends_at?: string
           p_location?: string
+          p_min_level?: number
+          p_project_id?: number
           p_scope: string
           p_starts_at: string
           p_team_id?: string

@@ -14,7 +14,9 @@ select plan(30);
 truncate events, event_attendance cascade;
 
 insert into teams (id, name, dept_id)
-values ('t-event-integrity', 'Event integrity team', 'edu');
+values
+  ('t-event-integrity', 'Event integrity team', 'edu'),
+  ('t-event-independent', 'Independent event team', null);
 
 -- #369 fixtures: a Profile and Project to exercise the new project scope and
 -- the events_scope_fields_ck branches that involve project_id.
@@ -179,11 +181,11 @@ select throws_ok(
   '23514', 'new row for relation "events" violates check constraint "events_scope_fields_ck"',
   'a department event cannot name a project');
 
-select throws_ok(
+select lives_ok(
   $$ insert into events (title, type, scope, team_id, starts_at)
      values ('Echipă fără departament', 'sedinta', 'team',
-             't-event-integrity', now()) $$,
-  '23514', null, 'a team event requires its department');
+             't-event-independent', now()) $$,
+  'a Team Event may omit Department for an Independent Team');
 
 select throws_ok(
   $$ insert into events (title, type, scope, dept_id, starts_at)

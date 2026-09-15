@@ -388,6 +388,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_campaign_impl',                        'p_department_id text, p_name text',                                                                                  'impl'),
   -- #344: filing a Completed-work Request -- membership, not management.
   ('create_completed_work_request_impl',          'p_description text, p_dept_id text, p_team_id text, p_project_id bigint',                                            'impl'),
+  ('create_event_impl',                           'p_title text, p_type text, p_scope text, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_dept_id text, p_team_id text, p_project_id bigint, p_min_level integer', 'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
   -- #341: clone a Task into a brand-new todo Task with a fresh deadline.
@@ -464,8 +465,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 86,
-  'the pinned private-schema roster contains main''s 84 audited functions plus #364''s actor_level and require_active_member helpers');
+  (select count(*) from pinned_private_functions)::int, 87,
+  'the pinned private-schema roster contains main''s 84 audited functions plus #364''s two actor helpers and #370''s create_event_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
