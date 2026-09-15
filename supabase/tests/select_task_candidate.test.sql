@@ -185,11 +185,14 @@ select id, '33300000-0000-0000-0000-000000000003'::uuid, 'pending', now() - inte
 -- queue_closed_at on a terminal public Task, but nothing stops a Candidature
 -- row from still reading 'pending' -- hand-fixtured, so the terminal check is
 -- proven to fire BEFORE the Candidature is even looked at.
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, queue_opened_at, queue_closed_at, created_by)
+  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, queue_opened_at, queue_closed_at, created_by)
 values
   ('Anulat #333', 'Anulat', '2027-09-05 09:00:00+00', 'edu', 'org', 'public', 'cancelled', now(),
-   now(), now(), '33300000-0000-0000-0000-000000000001');
+   'Anulat cu coada inca deschisa #333', now(), now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_candidates (task_id, member_id, status, joined_at)
 select id, '33300000-0000-0000-0000-000000000003'::uuid, 'pending', now() - interval '1 hour'
   from public.tasks where title = 'Anulat #333';

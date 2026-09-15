@@ -168,11 +168,14 @@ select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-0000
 -- ---- T6: a cancelled Task that still carries an active Assignment. Fixtured
 -- by hand (no command produces this shape) purely to prove the state check
 -- rejects every non-todo/in_progress status, not just in_review.
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, created_by)
+  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
   ('Anulat #332', 'Anulat', '2027-07-06 09:00:00+00', 'edu', 'local', 'direct', 'cancelled', now(),
-   '33200000-0000-0000-0000-000000000001');
+   'Anulat cu executant activ #332', '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-000000000001', now()
   from public.tasks where title = 'Anulat #332';

@@ -98,11 +98,14 @@ values
   ('Umbrela #327', 'edu', 'umbrella', null, null, null, null, 'todo',
    '32700000-0000-0000-0000-000000000005');
 
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, status, cancelled_at, created_by)
+  (title, dept_id, kind, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
   ('Umbrela anulata #327', 'edu', 'umbrella', null, null, 'cancelled', now(),
-   '32700000-0000-0000-0000-000000000005');
+   'Umbrela anulata inainte de #327', '32700000-0000-0000-0000-000000000005');
 
 insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
 values ('Nu e umbrela #327', 'edu', 'local', 'direct', 'todo',

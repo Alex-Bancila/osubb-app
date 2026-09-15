@@ -2,7 +2,7 @@ begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 
-select plan(39);
+select plan(41);
 
 select has_column('public', 'tasks', 'started_at', 'Tasks record when work starts');
 select has_column('public', 'tasks', 'submitted_at', 'Tasks record the current submission');
@@ -89,8 +89,11 @@ select lives_ok($$
     ('Review then cancel 293', 2, 'edu', 'in_review',
      '2026-09-01 10:00+00', '2026-09-01 11:00+00',
      '2026-09-01 12:00+00');
+  -- #339: cancelled now also demands a non-blank cancel_reason
+  -- (tasks_cancel_reason_ck), so the transition writes one.
   update public.tasks
-     set status = 'cancelled', cancelled_at = '2026-09-01 13:00+00'
+     set status = 'cancelled', cancelled_at = '2026-09-01 13:00+00',
+         cancel_reason = 'Anulat din verificare #293'
    where title = 'Review then cancel 293'
 $$, 'cancellation from review may preserve the submission');
 select is(
@@ -120,10 +123,26 @@ select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
      values ('Missing unfulfilled 293', 1, 'edu', 'unfulfilled', 2) $$,
   '23514', null, 'unfulfilled requires unfulfilled_at');
+-- #339: the reason is supplied so that tasks_cancelled_at_state_check is the
+-- constraint that fires -- without it tasks_cancel_reason_ck would raise the
+-- same 23514 first and this assertion would pass for the wrong reason.
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status)
-     values ('Missing cancellation 293', 1, 'edu', 'cancelled') $$,
-  '23514', null, 'cancelled requires cancelled_at');
+  $$ insert into public.tasks (title, difficulty, dept_id, status, cancel_reason)
+     values ('Missing cancellation 293', 1, 'edu', 'cancelled', 'Anulat #293') $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_cancelled_at_state_check"',
+  'cancelled requires cancelled_at');
+
+-- #339: tasks_cancel_reason_ck itself, both halves of the biconditional.
+select throws_ok(
+  $$ insert into public.tasks (title, difficulty, dept_id, status, cancelled_at)
+     values ('Missing cancel reason 293', 1, 'edu', 'cancelled', now()) $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
+  'cancelled requires a cancel_reason too');
+select throws_ok(
+  $$ insert into public.tasks (title, difficulty, dept_id, status, cancel_reason)
+     values ('Reason without cancellation 293', 1, 'edu', 'todo', 'Motiv orfan') $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
+  'and a cancel_reason is rejected outside cancelled');
 select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, completed_at)
      values ('Completion on todo 293', 1, 'edu', now()) $$,

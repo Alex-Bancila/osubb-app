@@ -100,9 +100,12 @@ values ('Inca netrimis #335', 'Inca todo', '2027-11-02 09:00:00+00', 'edu', 'loc
 insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, created_by)
 values ('In lucru #335', 'In desfasurare', '2027-11-03 09:00:00+00', 'edu', 'local', 'direct', 'in_progress',
         now(), '33500000-0000-0000-0000-000000000001');
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, created_by)
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
+insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values ('Anulat #335', 'Anulat deja', '2027-11-04 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
-        now(), '33500000-0000-0000-0000-000000000001');
+        now(), 'Anulat inainte de revenirea in lucru #335', '33500000-0000-0000-0000-000000000001');
 
 -- ---- T5: note validation target -- in_review, with an Executor so the shape
 -- is realistic, though every note-validation call fails before step 7 ever
