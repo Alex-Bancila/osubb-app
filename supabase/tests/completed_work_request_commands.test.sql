@@ -647,12 +647,12 @@ select throws_ok(format($$ select public.approve_completed_work_request(%s, null
   'a null Difficulty takes the same reason');
 select throws_ok(format($$ select public.approve_completed_work_request(%s, 3, 4, '   ') $$,
   (select deny_request_id from f344)),
-  'PT400', 'note_required',
-  'an approval without a note can never be written (task_evaluations_note_ck), so it is refused before the gate too -- and the reason is note_required, the command''s own input vocabulary, not private.evaluate_task''s internal evaluation_note_required');
+  'PT400', 'evaluation_note_required',
+  'an approval without a note can never be written (task_evaluations_note_ck), so it is refused before the gate too -- under evaluation_note_required, the same string complete_task_review (#336) and mark_task_unfulfilled (#337) hoist for this condition, because this note becomes an Evaluation''s note');
 select throws_ok(format($$ select public.reject_completed_work_request(%s, '  ') $$,
   (select deny_request_id from f344)),
   'PT400', 'note_required',
-  'a rejection without a reason is refused before the gate as well, with the same reason string as approve -- one condition, one word, on two adjacent buttons');
+  'a rejection without a reason is refused before the gate as well, but under note_required, not evaluation_note_required: rejection writes no Evaluation and its note is only a decision_note -- the reason names what the note IS, not which command took it');
 reset role;
 
 -- 7e. Missing and null targets.

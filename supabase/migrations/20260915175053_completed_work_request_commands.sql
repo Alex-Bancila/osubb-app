@@ -87,11 +87,13 @@
 --      completed_work_requests_origin_ck and task_evaluations_note_ck make
 --      them impossible for every caller -- so they are raised here rather than
 --      discovered after the gate and the locks, and none of them leaks
---      anything. Both commands name the blank note PT400 note_required: at
---      this point it is the COMMAND's own input being validated, not the
---      Evaluation core's, so the two adjacent buttons answer with one string.
---      (private.evaluate_task keeps its own evaluation_note_required, which is
---      still the right reason for its other callers.) That also makes a
+--      anything. The two commands name the blank note differently, and the
+--      difference is the point: approval's note becomes an EVALUATION's note,
+--      so it is PT400 evaluation_note_required, the same string
+--      complete_task_review (#336) and mark_task_unfulfilled (#337) hoist for
+--      the same condition; rejection writes no Evaluation and its note is only
+--      a decision_note, so it is PT400 note_required. The reason names what
+--      the note IS, not which command took it. That also makes a
 --      non-blank note effectively REQUIRED on approval even though
 --      completed_work_requests_approved_shape_ck would allow decision_note to
 --      be null; the note the decider must write for the Evaluation is the one
@@ -381,14 +383,15 @@ begin
   if p_rating is null or p_rating < 1 or p_rating > 5 then
     raise sqlstate 'PT400' using message = 'invalid_rating';
   end if;
-  -- note_required, not evaluation_note_required: this is the COMMAND's own
-  -- input validation, the same condition and the same string reject_completed_
-  -- work_request raises, so a client normalizing on the message sees one
-  -- vocabulary across the two adjacent buttons. private.evaluate_task keeps
-  -- its own evaluation_note_required for the callers that reach the Evaluation
-  -- core directly.
+  -- evaluation_note_required, matching complete_task_review (#336) and
+  -- mark_task_unfulfilled (#337), which hoist this identical condition under
+  -- the identical string: in all three the note becomes an EVALUATION's note,
+  -- and task_evaluations_note_ck is the constraint that makes it mandatory.
+  -- reject_completed_work_request says note_required instead because its note
+  -- is only a decision_note and no Evaluation is ever written. The reason
+  -- names what the note IS, not which command took it.
   if p_note is null or p_note !~ '[^[:space:]]' then
-    raise sqlstate 'PT400' using message = 'note_required';
+    raise sqlstate 'PT400' using message = 'evaluation_note_required';
   end if;
   v_note := regexp_replace(p_note, '^[[:space:]]+|[[:space:]]+$', '', 'g');
 
@@ -477,7 +480,7 @@ end;
 $$;
 
 comment on function private.approve_completed_work_request_impl(bigint, integer, integer, text) is
-  'Approves one pending Completed-work Request and, in the same transaction, creates the completed Task it recognizes: a local, direct ordinary Task on the Request''s Origin titled with the description''s first 120 characters and deadlined at the approval instant, its created activity row naming details.from_request_id, the requester opened as its Executor via private.open_task_assignment(..., ''request_approval''), and private.evaluate_task (#336) writing the Evaluation, the points_ledger credit, the terminal Task state and the ended Assignment. The Request is then stamped approved/decided_by/decided_at/decision_note/task_id and the requester is notified. Difficulty and Rating outside 1..5 and a blank note are PT400 invalid_difficulty / invalid_rating / note_required, raised BEFORE the gate (they could never succeed for anyone; task_evaluations_note_ck makes the note mandatory even though the Request''s own shape check would allow a null decision_note). The blank note is note_required rather than private.evaluate_task''s evaluation_note_required because it is this command''s input being validated, and it is the same string reject raises for the same mistake. Then 42501 request_command_forbidden for a caller without claims or a live activ profile; the Request row locked FOR UPDATE; PT404 request_not_found when it is missing OR the caller cannot read it (completed_work_requests_read''s own predicate -- hidden and missing are indistinguishable); 42501 request_decide_forbidden when they can read it but may not decide it (private.require_request_decider, which also takes the FOR SHARE re-validation locks); PT409 request_not_pending when it has already been decided -- which is exactly what a second concurrent approval receives after waiting on the row lock. PT400 invalid_executor if the requester is no longer an active Member.';
+  'Approves one pending Completed-work Request and, in the same transaction, creates the completed Task it recognizes: a local, direct ordinary Task on the Request''s Origin titled with the description''s first 120 characters and deadlined at the approval instant, its created activity row naming details.from_request_id, the requester opened as its Executor via private.open_task_assignment(..., ''request_approval''), and private.evaluate_task (#336) writing the Evaluation, the points_ledger credit, the terminal Task state and the ended Assignment. The Request is then stamped approved/decided_by/decided_at/decision_note/task_id and the requester is notified. Difficulty and Rating outside 1..5 and a blank note are PT400 invalid_difficulty / invalid_rating / evaluation_note_required, raised BEFORE the gate (they could never succeed for anyone; task_evaluations_note_ck makes the note mandatory even though the Request''s own shape check would allow a null decision_note). The blank note is evaluation_note_required, the same string complete_task_review (#336) and mark_task_unfulfilled (#337) hoist for the same condition, because this note becomes an Evaluation''s note; reject_completed_work_request says note_required instead, its note being only a decision_note with no Evaluation behind it. Then 42501 request_command_forbidden for a caller without claims or a live activ profile; the Request row locked FOR UPDATE; PT404 request_not_found when it is missing OR the caller cannot read it (completed_work_requests_read''s own predicate -- hidden and missing are indistinguishable); 42501 request_decide_forbidden when they can read it but may not decide it (private.require_request_decider, which also takes the FOR SHARE re-validation locks); PT409 request_not_pending when it has already been decided -- which is exactly what a second concurrent approval receives after waiting on the row lock. PT400 invalid_executor if the requester is no longer an active Member.';
 
 create function public.approve_completed_work_request(
   p_request_id bigint,
