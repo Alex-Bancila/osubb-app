@@ -9,11 +9,20 @@
 -- first:
 --
 --   1. public.tasks.duplicated_from_task_id, so a clone always names the Task
---      it came from -- forever, even if the source is later cancelled or
---      deleted through the still-live legacy delete policy (on delete leaves
---      the column pointing at nothing enforced only by the FK's default
---      NO ACTION, which is fine: a clone's own fields already carry everything
---      it needs, the pointer is provenance, not a dependency);
+--      it came from -- forever, and even if the source is later cancelled
+--      that pointer never dangles: the FK carries no ON DELETE clause, so it
+--      defaults to NO ACTION, which does NOT null the column out on a source
+--      delete -- it BLOCKS the delete outright with a foreign_key_violation
+--      for as long as any clone still references the source (this FK is not
+--      declared deferrable either). Concretely: a source Task that has been
+--      duplicated cannot be deleted through the still-live legacy
+--      tasks_delete_legacy policy until every clone pointing at it is itself
+--      deleted or has its own duplicated_from_task_id cleared first. Whoever
+--      retires tasks_delete_legacy in #345 should read this as a warning, not
+--      a reassurance: that work needs to either accept this blocking
+--      behaviour as-is, or deliberately add an ON DELETE clause / an
+--      explicit clear-then-delete step -- do not assume a source-with-clones
+--      delete already degrades gracefully, because today it simply fails;
 --   2. public.duplicate_task / private.duplicate_task_impl, the only writer
 --      of the column.
 --

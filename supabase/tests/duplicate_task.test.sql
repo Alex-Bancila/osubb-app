@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(63);
+select plan(65);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -317,6 +317,14 @@ select is((select format('%s|%s', (clone.difficulty is null)::text, (clone.ratin
              from public.tasks as clone
             where clone.duplicated_from_task_id = (select happy_source_id from f341)),
   'true|true', 'the clone has no Difficulty and no Rating -- it has done none of the source''s work');
+select is((select format('%s|%s|%s',
+                         (clone.cancel_reason is null)::text,
+                         (clone.cancelled_at is null)::text,
+                         (clone.queue_closed_at is null)::text)
+             from public.tasks as clone
+            where clone.duplicated_from_task_id = (select happy_source_id from f341)),
+  'true|true|true',
+  'the clone inherits none of the source''s terminal markers -- no cancel_reason, no cancelled_at, and its freshly-opened queue is not already closed, even though the CANCELLED, queue-closed source genuinely carries all three');
 select is((select count(*) from public.task_assignments as assignment
              join public.tasks as clone on clone.id = assignment.task_id
             where clone.duplicated_from_task_id = (select happy_source_id from f341)), 0::bigint,
@@ -397,6 +405,11 @@ select is((select format('%s|%s|%s',
 select is((select count(*) from public.tasks
             where parent_task_id = (select umbrella_source_id from f341)), 1::bigint,
   'and the Umbrella''s own Subtask count is untouched -- the clone was never attached to it');
+select is((select (clone.started_at is null)
+             from public.tasks as clone
+            where clone.duplicated_from_task_id = (select sub_source_id from f341)),
+  true,
+  'the clone has no started_at either, even though the in_progress Subtask source genuinely has one');
 
 -- ==================== 5. An inactive Campaign clones with campaign_id null ====================
 select is((select is_active from public.campaigns
@@ -423,12 +436,13 @@ select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-04 09:00:00+
   'a COMPLETED Task is just as legitimate a template as a cancelled one -- duplicate_task inspects only kind, never status');
 reset role;
 
-select is((select format('%s|%s|%s',
-                         clone.status::text, (clone.difficulty is null)::text, (clone.rating is null)::text)
+select is((select format('%s|%s|%s|%s|%s',
+                         clone.status::text, (clone.difficulty is null)::text, (clone.rating is null)::text,
+                         (clone.started_at is null)::text, (clone.completed_at is null)::text)
              from public.tasks as clone
             where clone.duplicated_from_task_id = (select completed_source_id from f341)),
-  'todo|true|true',
-  'the clone starts at todo with no Difficulty and no Rating, even though the COMPLETED source genuinely had difficulty=3, rating=4');
+  'todo|true|true|true|true',
+  'the clone starts at todo with no Difficulty, Rating, started_at or completed_at, even though the COMPLETED source genuinely had difficulty=3, rating=4, started_at and completed_at all set');
 
 -- ==================== 7. State precondition: an Umbrella cannot be a source ====================
 select pg_temp.test_login('34100000-0000-0000-0000-000000000002', jsonb_build_object(
