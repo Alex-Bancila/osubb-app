@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { keys } from './keys';
+import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
 /* The columns a task list needs. Named once so the row type stays identical
    everywhere and adding a column is one edit, not a hunt.
@@ -16,18 +17,19 @@ import { keys } from './keys';
 const TASK_FIELDS =
   'id, title, status, type, difficulty, rating, deadline, dept_id, team_id';
 
-/**
- * The tasks I am assigned to.
- *
- * Asked from `task_assignees` inwards rather than from `tasks` outwards,
- * because "assigned to me" is a fact about the join row. PostgREST embeds the
- * task through the foreign key, so this is one request, not one plus N.
- *
- * Note what is *not* here: no filter on department, team or role. RLS already
- * returned exactly the tasks this member may see — filtering again in
- * TypeScript would be a second, weaker copy of a rule that already exists
- * (mini-spec §1).
- */
+/** Tasks from this Member's current and historical Assignments, through RLS. */
+const MY_TASK_FIELDS = `
+  id, title, description, status, deadline, completed_at, review_round,
+  dept_id, team_id, project_id, assignment_mode, audience, kind,
+  parent_task_id, campaign_id, duplicated_from_task_id,
+  department:departments!tasks_dept_id_fkey(name, color),
+  team:teams!tasks_team_id_fkey(name, dept_id),
+  project:projects!tasks_project_id_fkey(name),
+  campaign:campaigns!tasks_campaign_id_fkey(name),
+  assignments:task_assignments!task_assignments_task_id_fkey(id, member_id, ended_at),
+  evaluations:task_evaluations!task_evaluations_task_id_fkey(id, difficulty, rating, points, reversed_at)
+`;
+
 export function useMyTasks() {
   const { session } = useAuth();
   const id = session?.user.id;
@@ -38,17 +40,43 @@ export function useMyTasks() {
   });
 }
 
-async function fetchMyTasks(memberId: string) {
+export async function fetchMyTasks(
+  memberId: string,
+): Promise<TaskPresentationRow[]> {
   const { data, error } = await supabase
-    .from('task_assignees')
-    .select(`task:tasks(${TASK_FIELDS})`)
+    .from('task_assignments')
+    .select(`task:tasks!task_assignments_task_id_fkey(${MY_TASK_FIELDS})`)
     .eq('member_id', memberId);
   if (error) throw error;
 
-  return data
-    .map((row) => row.task)
-    .filter((task) => task !== null)
-    .sort(byDeadlineThenTitle);
+  // A Member can have several Assignments on the same Task after rejoining.
+  // Do not filter ended Assignments: evaluated work belongs in My tasks too.
+  const tasks = new Map<number, TaskPresentationRow>();
+  for (const row of data) {
+    if (row.task) tasks.set(row.task.id, row.task);
+  }
+  // Fetch parent titles in one batch. Keep them behind their own Task RLS;
+  // the self-referencing embed is ambiguous to the generated client types.
+  const parentIds = [
+    ...new Set(
+      [...tasks.values()].flatMap((task) =>
+        task.parent_task_id === null ? [] : [task.parent_task_id],
+      ),
+    ),
+  ];
+  if (parentIds.length) {
+    const { data: parents, error: parentError } = await supabase
+      .from('tasks')
+      .select('id, title')
+      .in('id', parentIds);
+    if (parentError) throw parentError;
+    const titles = new Map(parents.map((parent) => [parent.id, parent]));
+    for (const task of tasks.values()) {
+      if (task.parent_task_id !== null)
+        task.parent = titles.get(task.parent_task_id) ?? null;
+    }
+  }
+  return [...tasks.values()].sort(byDeadlineThenTitle);
 }
 
 /** Tasks anyone may claim — the tracker's "Deschise" tab (#89). */
@@ -82,7 +110,8 @@ function byDeadlineThenTitle(
   if (a.deadline !== b.deadline) {
     if (!a.deadline) return 1;
     if (!b.deadline) return -1;
-    return a.deadline < b.deadline ? -1 : 1;
+    const difference = Date.parse(a.deadline) - Date.parse(b.deadline);
+    if (difference) return difference;
   }
   return a.title.localeCompare(b.title, 'ro');
 }

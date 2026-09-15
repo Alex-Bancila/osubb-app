@@ -10,7 +10,8 @@ const api = vi.hoisted(() => ({
 
 vi.mock('../lib/supabase', () => ({ supabase: { from: api.from } }));
 
-import { fetchOpenTasks } from './tasks';
+import { fetchMyTasks, fetchOpenTasks } from './tasks';
+import { taskRow } from '../test/task-fixtures';
 
 describe('public Task opportunities', () => {
   beforeEach(() => {
@@ -72,5 +73,65 @@ describe('public Task opportunities', () => {
     const error = { code: '42501', message: 'permission denied' };
     api.byAudience.mockResolvedValue({ data: null, error });
     await expect(fetchOpenTasks()).rejects.toBe(error);
+  });
+});
+
+describe('normalized My tasks reads', () => {
+  it('reads current and past own Assignments, deduplicates Tasks, and sorts exact instants', async () => {
+    const later = taskRow({ id: 2, deadline: '2026-09-16T08:00:00Z' });
+    const earlier = taskRow({ id: 1, deadline: '2026-09-16T10:00:00+03:00' });
+    api.from.mockReturnValue({ select: api.select });
+    api.select.mockReturnValue({ eq: api.byStatus });
+    api.byStatus.mockResolvedValue({
+      data: [
+        { task: later },
+        { task: earlier },
+        { task: later },
+        { task: null },
+      ],
+      error: null,
+    });
+
+    await expect(fetchMyTasks('member')).resolves.toEqual([earlier, later]);
+    expect(api.from).toHaveBeenCalledWith('task_assignments');
+    expect(api.byStatus).toHaveBeenCalledWith('member_id', 'member');
+    expect(api.select.mock.lastCall?.[0]).toContain(
+      'evaluations:task_evaluations',
+    );
+    expect(api.select.mock.lastCall?.[0]).not.toContain('task_assignees');
+  });
+
+  it('batches parent titles and retains a fallback for RLS-hidden parents', async () => {
+    const child = taskRow({ parent_task_id: 10 });
+    const hiddenChild = taskRow({ id: 2, parent_task_id: 11 });
+    const parents = vi
+      .fn()
+      .mockResolvedValue({
+        data: [{ id: 10, title: 'Recrutare' }],
+        error: null,
+      });
+    api.from.mockReturnValue({ select: api.select });
+    api.select
+      .mockReturnValueOnce({ eq: api.byStatus })
+      .mockReturnValueOnce({ in: parents });
+    api.byStatus.mockResolvedValue({
+      data: [{ task: child }, { task: hiddenChild }],
+      error: null,
+    });
+    const tasks = await fetchMyTasks('member');
+    expect(parents).toHaveBeenCalledWith('id', [10, 11]);
+    expect(tasks.find((task) => task.id === 1)?.parent).toEqual({
+      id: 10,
+      title: 'Recrutare',
+    });
+    expect(tasks.find((task) => task.id === 2)?.parent).toBeNull();
+  });
+
+  it('surfaces failures without returning a misleading empty list', async () => {
+    const error = { code: '42501', message: 'denied' };
+    api.from.mockReturnValue({ select: api.select });
+    api.select.mockReturnValue({ eq: api.byStatus });
+    api.byStatus.mockResolvedValue({ data: null, error });
+    await expect(fetchMyTasks('member')).rejects.toBe(error);
   });
 });
