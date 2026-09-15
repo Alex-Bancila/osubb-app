@@ -224,8 +224,8 @@ select is(
      join tasks task on task.id = evaluation.task_id
      join profiles creator on creator.id = task.created_by
     where creator.email like '%@demo.osubb'),
-  (select count(*) from task_assignees assignee
-     join tasks task on task.id = assignee.task_id
+  (select count(*) from task_assignments assignment
+     join tasks task on task.id = assignment.task_id
      join profiles creator on creator.id = task.created_by
     where creator.email like '%@demo.osubb'
       and task.rating is not null),

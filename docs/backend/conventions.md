@@ -18,7 +18,7 @@ Once a command owns a table's writes, the same migration also revokes `insert, u
 
 Example: `supabase/migrations/20260909151741_project_membership_commands.sql` — `private.require_active_project_lead` locks the Project, then the actor's Profile, before `private.add_project_member_impl` / `remove_project_member_impl` / `grant_project_responsible_impl` / `revoke_project_responsible_impl` mutate, each behind a one-line `public.*` SQL wrapper; the same file's line 270 revokes `insert, update, delete on table public.project_members from authenticated`. Same table-DML revoke in `supabase/migrations/20260909140036_project_lifecycle_commands.sql:148` (`public.projects`) and `supabase/migrations/20260910154759_independent_team_membership_commands.sql:170-171` (`public.team_members`, `public.teams`).
 
-**Grandfathered direct-definer commands** (public, `security definer`, no `private.*_impl` split): `claim_open_task` (retires with #345) and `create_event` (rewritten by #370). Do not copy their shape for new work.
+**Grandfathered direct-definer commands** (public, `security definer`, no `private.*_impl` split): `create_event` (rewritten by #370). Do not copy its shape for new work. (#345 retired the other one.)
 
 ## 3. Errors
 
@@ -52,7 +52,7 @@ Policy predicate helpers (`private.is_*`, `private.can_*`) follow the wrapper/`_
 
 **Grandfathered — older revoke shapes that predate the four-role form, verified against their migrations, not extended to new work:**
 
-- Two-role revoke (`public, anon`), grant back to `authenticated` only: `is_assigned`/`in_my_dept` (`supabase/migrations/20260819172728_tasks_points_policies.sql:30-31`), `team_admits_recruits` (`supabase/migrations/20260822230203_event_policies.sql:31-32`), `claim_open_task` (`supabase/migrations/20260826231354_atomic_claim_open_task.sql:59-60`), `create_event` (`supabase/migrations/20260830212344_create_event_command.sql`), `set_event_rsvp` (`supabase/migrations/20260830122310_set_event_rsvp.sql:83-86`).
+- Two-role revoke (`public, anon`), grant back to `authenticated` only: `in_my_dept` (`supabase/migrations/20260819172728_tasks_points_policies.sql:30-31`), `team_admits_recruits` (`supabase/migrations/20260822230203_event_policies.sql:31-32`), `create_event` (`supabase/migrations/20260830212344_create_event_command.sql`), `set_event_rsvp` (`supabase/migrations/20260830122310_set_event_rsvp.sql:83-86`). (#318 dropped `is_assigned` and #345 the legacy claim command, so two entries left this list.)
 - Two-role revoke (`public, anon`), grant back to `authenticated, service_role`: `rating_mult()` and the `public.auth_*` JWT-claim helpers, revoked and granted together in one statement (`supabase/migrations/20260910140508_grants_hardening.sql:44-57`).
 - Three-role revoke (`public, anon, authenticated`, no `service_role`), grant back to `service_role` only: `member_level()` (`supabase/migrations/20260823132458_member_level_helper.sql:35-36`), `provision_profile()` (`supabase/migrations/20260822222258_provision_profile.sql:45-48`).
 - Three-role revoke (`public, anon, authenticated`, no `service_role`), no grant back at all: `reject_manual_award()` (`supabase/migrations/20260910135327_remove_manual_awards.sql:23`).
@@ -74,12 +74,12 @@ Example: `supabase/migrations/20260909151741_project_membership_commands.sql` (`
 
 **Grandfathered until #379 or the issue that rewrites them:**
 
-- Policies: `task_read`, `task_write`, `event_read`, `ledger_read`, `ledger_sanction`, `announcements_write`, `announcement_reads_self`, `profiles_self_update`, `request_*` (`request_create`, `request_decide`, `request_read`), `assignee_*` (`assignee_read`, `assignee_manage`), `attendance_*` (`attendance_read`, `attendance_insert_self`, `attendance_update_self`), `auth_admin_read_*` (`auth_admin_read_profiles`, `auth_admin_read_roles`, `auth_admin_read_member_departments`, `auth_admin_read_team_members`) — verb-first, domain-specific, wrong-verb, or oddly-ordered names instead of `<table>_<verb>[_qualifier]`.
+- Policies: `ledger_read`, `ledger_sanction`, `announcements_write`, `announcement_reads_self`, `profiles_self_update`, `attendance_*` (`attendance_read`, `attendance_insert_self`, `attendance_update_self`), `auth_admin_read_*` (`auth_admin_read_profiles`, `auth_admin_read_roles`, `auth_admin_read_member_departments`, `auth_admin_read_team_members`) — verb-first, domain-specific, wrong-verb, or oddly-ordered names instead of `<table>_<verb>[_qualifier]`. The list shrinks as the offenders are retired rather than renamed: Stack C replaced `task_read` and `event_read`, and #345 dropped `task_write`'s three legacy successors along with the `request_*` and `assignee_*` families and their tables.
 - Constraints: `projects_name_not_blank`, `projects_status_valid`, `projects_timestamps_ordered`, `project_members_role_valid` (no `_ck` suffix); `teams_id_dept_unique` (a unique constraint named `_unique`, not `_key`).
 
 ## 6. Enum vs. `text check`
 
-Use a Postgres `enum` only for the fixed vocabularies already declared in `0001_core_schema.sql` (`member_role`, `member_status`, `task_status`, `event_type`, `event_scope`, `noti_kind`, `request_kind`, `request_status`, …). Adding a value to an existing enum cannot run in the same transaction that then uses the new value, which makes enums a poor fit for anything still evolving. Any new or still-changing vocabulary — lifecycle states, modes, kinds — is `text not null check (col in (…))`, named `<table>_<col>_ck` per §5.
+Use a Postgres `enum` only for the fixed vocabularies already declared in `0001_core_schema.sql` (`member_role`, `member_status`, `task_status`, `event_type`, `event_scope`, `noti_kind`, …; #345 dropped two more of them with the table they typed). Adding a value to an existing enum cannot run in the same transaction that then uses the new value, which makes enums a poor fit for anything still evolving. Any new or still-changing vocabulary — lifecycle states, modes, kinds — is `text not null check (col in (…))`, named `<table>_<col>_ck` per §5.
 
 Example: `projects.status` and `project_members.project_role` in `supabase/migrations/20260908083829_projects_schema.sql` and `supabase/migrations/20260908174343_project_members_schema.sql`.
 

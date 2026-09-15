@@ -20,10 +20,9 @@ select md5(string_agg(x, '|' order by x))
                 join projects project on project.id = membership.project_id
                 join profiles member on member.id = membership.member_id
     union all select format('task:%s:%s:%s', title, status, coalesce(rating::text, '-')) from tasks
-    union all select format('assignee:%s:%s', t.title, p.full_name)
-                from task_assignees a
-                join tasks t on t.id = a.task_id
-                join profiles p on p.id = a.member_id
+    -- #345 retired `task_assignees`; the `assignee:` line that read it is
+    -- gone with it. The `assignment:` lines below already covered the same
+    -- people on the same Tasks through `task_assignments`.
     union all select format('assignment:%s:%s:%s:%s:%s:%s:%s',
                             task.title,
                             member.full_name,

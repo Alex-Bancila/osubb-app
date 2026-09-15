@@ -127,11 +127,6 @@ delete from task_assignments assignment
       and creator.email like '%@demo.osubb'
  );
 
-delete from task_requests r
- where exists (select 1 from profiles p
-                where p.email like '%@demo.osubb'
-                  and p.id in (r.from_member, r.decided_by));
-
 delete from tasks t
  using profiles p where t.created_by = p.id and p.email like '%@demo.osubb';
 
@@ -357,8 +352,14 @@ update tasks
         and creator.email like '%@demo.osubb'
    );
 
-insert into task_assignees (task_id, member_id)
-select t.id, a.member_id
+-- Who worked on what. #345 retired `task_assignees`, so this fixture is no
+-- longer a table of its own: it is the participant list the Assignment
+-- history below is built from, and nothing else reads it. #296 rebuilds the
+-- demo dataset directly on the normalized model; until then this keeps the
+-- same demo people on the same demo Tasks, so the fingerprint's
+-- `assignment:` lines are unchanged.
+create or replace view pg_temp.demo_task_participants as
+select t.id as task_id, a.member_id
   from (values
     ('Workshop CV pentru boboci',      'd0000000-0000-0000-0000-000000000002'::uuid),
     ('Materiale curs Excel',           'd0000000-0000-0000-0000-000000000001'::uuid),
@@ -376,7 +377,9 @@ select t.id, a.member_id
     ('Migrare bază de date',           'd0000000-0000-0000-0000-000000000008'::uuid),
     ('Testare aplicație',              'd0000000-0000-0000-0000-000000000008'::uuid)
   ) as a (title, member_id)
-  join tasks t on t.title = a.title;
+  join tasks t on t.title = a.title
+  join profiles creator on creator.id = t.created_by
+ where creator.email like '%@demo.osubb';
 
 -- Grading. Each update moves a Task to `completed` together with
 -- `completed_at` and the Rating it goes with (#312's
@@ -398,25 +401,25 @@ update tasks set status = 'completed', completed_at = now(), rating = 5 where ti
 -- honestly, and this is the row that proves the formula subtracts.
 update tasks set status = 'completed', completed_at = now(), rating = 1 where title = 'Fotografii eveniment';           -- 2 × −1 = −2
 
--- Keep the transitional join table and the new history model aligned until
--- every legacy consumer has moved. UUID order is deterministic for the one
--- unfinished demo Executor; terminal participants all remain ended history.
+-- Assignment history for the demo participants above. Before #345 this read
+-- the legacy `task_assignees` join table; it now reads the same participant
+-- list directly, which is why the rows it writes are byte-for-byte the ones
+-- it wrote before. UUID order is deterministic for the one unfinished demo
+-- Executor; terminal participants all remain ended history.
 with ranked_demo_assignees as (
   select
     task.id as task_id,
-    legacy.member_id,
+    participant.member_id,
     task.created_at,
     task.status,
     task.completed_at,
     task.unfulfilled_at,
     task.cancelled_at,
     row_number() over (
-      partition by task.id order by legacy.member_id
+      partition by task.id order by participant.member_id
     ) as member_order
-  from task_assignees legacy
-  join tasks task on task.id = legacy.task_id
-  join profiles creator on creator.id = task.created_by
-  where creator.email like '%@demo.osubb'
+  from pg_temp.demo_task_participants participant
+  join tasks task on task.id = participant.task_id
 )
 insert into task_assignments
   (task_id, member_id, assigned_at, assigned_by, ended_at, end_reason, end_note)

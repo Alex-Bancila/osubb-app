@@ -69,6 +69,19 @@ select
   ) as is_overdue
 from public.tasks as task;
 
+-- #345 dropped public.task_assignees outright. The pre-#317 world this
+-- harness reconstructs had it -- both sync triggers below are defined on or
+-- against it, and the replayed migration drops one of them from it -- so it
+-- is recreated here in its 20260812184706 shape, exactly as every other
+-- pre-#317 object is. The transaction rolls back, so it never outlives the
+-- run.
+create table public.task_assignees (
+  task_id   bigint references public.tasks (id) on delete cascade,
+  member_id uuid references public.profiles (id) on delete cascade,
+  primary key (task_id, member_id)
+);
+alter table public.task_assignees enable row level security;
+
 create function public.sync_task_ledger() returns trigger
   language plpgsql security definer set search_path = ''
 as $sync_task$

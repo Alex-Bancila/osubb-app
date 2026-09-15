@@ -17,11 +17,17 @@ const TASK_FIELDS =
   'id, title, status, type, difficulty, rating, deadline, dept_id, team_id';
 
 /**
- * The tasks I am assigned to.
+ * The tasks I am currently the Executor of.
  *
- * Asked from `task_assignees` inwards rather than from `tasks` outwards,
- * because "assigned to me" is a fact about the join row. PostgREST embeds the
- * task through the foreign key, so this is one request, not one plus N.
+ * Asked from `task_assignments` inwards rather than from `tasks` outwards,
+ * because "assigned to me" is a fact about the Assignment row. PostgREST
+ * embeds the task through the foreign key, so this is one request, not one
+ * plus N. `ended_at is null` is what makes it *current*: Assignment History
+ * keeps every past Assignment too, and a Task someone gave up or finished is
+ * no longer theirs to do (ADR-0007, one Executor at a time).
+ *
+ * #345 retired the multi-assignee join table this used to read; the read
+ * policy on `task_assignments` already admits a member their own rows.
  *
  * Note what is *not* here: no filter on department, team or role. RLS already
  * returned exactly the tasks this member may see — filtering again in
@@ -40,9 +46,10 @@ export function useMyTasks() {
 
 async function fetchMyTasks(memberId: string) {
   const { data, error } = await supabase
-    .from('task_assignees')
+    .from('task_assignments')
     .select(`task:tasks(${TASK_FIELDS})`)
-    .eq('member_id', memberId);
+    .eq('member_id', memberId)
+    .is('ended_at', null);
   if (error) throw error;
 
   return data
@@ -51,7 +58,18 @@ async function fetchMyTasks(memberId: string) {
     .sort(byDeadlineThenTitle);
 }
 
-/** Tasks anyone may claim — the tracker's "Deschise" tab (#89). */
+/** Tasks anyone may put themselves forward for — the tracker's "Deschise" tab (#89).
+ *
+ * "Open" used to mean "a public todo Task with no row in the legacy
+ * multi-assignee join table". #345 retired that table, and the normalized
+ * model states the same thing directly on the Task: an opportunity is one
+ * whose Candidate Queue is still open (`queue_opened_at` set,
+ * `queue_closed_at` null) — exactly the R6 branch of the `tasks_read` policy.
+ * That is deliberately not "has no Executor" measured through
+ * `task_assignments`: its read policy shows a member only their OWN
+ * Assignment rows, so an embed there would report every Task somebody else
+ * had already taken as still free. The Queue is the honest signal, and it is
+ * the one the Tracker rebuild (#164, #346-#354) will keep using. */
 export function useOpenTasks() {
   return useQuery({
     queryKey: keys.tasks.open(),
@@ -62,15 +80,14 @@ export function useOpenTasks() {
 export async function fetchOpenTasks() {
   const { data, error } = await supabase
     .from('tasks')
-    .select(`${TASK_FIELDS}, task_assignees(member_id)`)
+    .select(TASK_FIELDS)
     .eq('status', 'todo')
     .eq('assignment_mode', 'public')
-    .eq('audience', 'org');
+    .eq('audience', 'org')
+    .not('queue_opened_at', 'is', null)
+    .is('queue_closed_at', null);
   if (error) throw error;
-  return data
-    .filter((task) => task.task_assignees.length === 0)
-    .map(({ task_assignees: _assignments, ...task }) => task)
-    .sort(byDeadlineThenTitle);
+  return data.sort(byDeadlineThenTitle);
 }
 
 /* Soonest deadline first, undated last — a list of work should open on what is
