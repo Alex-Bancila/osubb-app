@@ -19,7 +19,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(73);
+select plan(78);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -40,7 +40,8 @@ insert into auth.users (id, email) values
   ('33700000-0000-0000-0000-000000000015', 'exec.notoverdue.337@test.local'),
   ('33700000-0000-0000-0000-000000000016', 'exec.gate.337@test.local'),
   ('33700000-0000-0000-0000-000000000017', 'exec.directwrite.337@test.local'),
-  ('33700000-0000-0000-0000-000000000018', 'exec.inputs.337@test.local');
+  ('33700000-0000-0000-0000-000000000018', 'exec.inputs.337@test.local'),
+  ('33700000-0000-0000-0000-000000000019', 'exec.nulldeadline.337@test.local');
 
 insert into public.profiles (id, full_name, email, role, status) values
   ('33700000-0000-0000-0000-000000000001', 'BC 337', 'bc.337@test.local', 'bc', 'activ'),
@@ -60,7 +61,8 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33700000-0000-0000-0000-000000000015', 'Executor Neintarziat 337', 'exec.notoverdue.337@test.local', 'voluntar', 'activ'),
   ('33700000-0000-0000-0000-000000000016', 'Executor Poarta 337', 'exec.gate.337@test.local', 'voluntar', 'activ'),
   ('33700000-0000-0000-0000-000000000017', 'Executor Scriere 337', 'exec.directwrite.337@test.local', 'voluntar', 'activ'),
-  ('33700000-0000-0000-0000-000000000018', 'Executor Intrari 337', 'exec.inputs.337@test.local', 'voluntar', 'activ');
+  ('33700000-0000-0000-0000-000000000018', 'Executor Intrari 337', 'exec.inputs.337@test.local', 'voluntar', 'activ'),
+  ('33700000-0000-0000-0000-000000000019', 'Executor Fara Termen 337', 'exec.nulldeadline.337@test.local', 'voluntar', 'activ');
 
 insert into public.member_departments (member_id, dept_id) values
   ('33700000-0000-0000-0000-000000000002', 'edu'),
@@ -74,7 +76,8 @@ insert into public.member_departments (member_id, dept_id) values
   ('33700000-0000-0000-0000-000000000015', 'edu'),
   ('33700000-0000-0000-0000-000000000016', 'edu'),
   ('33700000-0000-0000-0000-000000000017', 'edu'),
-  ('33700000-0000-0000-0000-000000000018', 'edu');
+  ('33700000-0000-0000-0000-000000000018', 'edu'),
+  ('33700000-0000-0000-0000-000000000019', 'edu');
 
 insert into public.teams (id, name, dept_id) values
   ('t-337-ind', 'Echipa Independenta 337', null),
@@ -147,6 +150,23 @@ insert into public.tasks
 values
   ('Fara executant #337', 'Nimeni nu l-a preluat', now() - interval '3 days', 'edu', 'org', 'public',
    'todo', now() - interval '10 days', now() - interval '10 days', '33700000-0000-0000-0000-000000000002');
+
+-- ---- T4b: an ORDINARY Task (kind = 'task', the default) with a NULL
+-- deadline -- the null-deadline branch of task_not_overdue
+-- (`deadline is null or deadline >= now()`) is only reachable through an
+-- ordinary Task, since T5's Umbrella below is intercepted by task_is_umbrella
+-- first. Non-terminal, with a live Executor, so the deadline check is the
+-- only thing standing between this Task and evaluate_task.
+insert into public.tasks
+  (title, description, deadline, dept_id, audience, assignment_mode, status,
+   created_at, started_at, created_by)
+values
+  ('Fara termen #337', 'Task obisnuit fara termen limita', null, 'edu', 'local', 'direct', 'in_progress',
+   now() - interval '5 days', now() - interval '4 days',
+   '33700000-0000-0000-0000-000000000002');
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33700000-0000-0000-0000-000000000019', '33700000-0000-0000-0000-000000000002', now() - interval '4 days'
+  from public.tasks where title = 'Fara termen #337';
 
 -- ---- T5: an Umbrella (kind check fires before anything else).
 insert into public.tasks
@@ -257,6 +277,7 @@ select
   (select id from public.tasks where title = 'Nerealizat zero #337') as zero_task_id,
   (select id from public.tasks where title = 'Neintarziat inca #337') as not_overdue_task_id,
   (select id from public.tasks where title = 'Fara executant #337') as no_executor_task_id,
+  (select id from public.tasks where title = 'Fara termen #337') as null_deadline_task_id,
   (select id from public.tasks where title = 'Umbrela #337') as umbrella_id,
   (select id from public.tasks where title = 'Deja anulat #337') as cancelled_task_id,
   (select id from public.tasks where title = 'Validare intrari #337') as inputs_task_id,
@@ -425,6 +446,11 @@ select is((select task.status::text from public.tasks as task
 select is((select count(*) from public.notifications
             where task_id = (select zero_task_id from f337)), 1::bigint,
   'a direct Task closes no queue, so only the Executor is notified');
+select is((select format('%s|%s', notification.title, notification.body)
+             from public.notifications as notification
+            where notification.task_id = (select zero_task_id from f337)),
+  'Task nerealizat: Nerealizat zero #337|0 puncte (dificultate 3, calificativ 2).',
+  'the zero-points case is pinned by content, not just count: "puncte" (plural) for a zero award, never "punct"');
 
 -- ==================== 4. State preconditions ====================
 
@@ -446,13 +472,18 @@ select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 3, 3, 'Nota')
   (select no_executor_task_id from f337)),
   'PT409', 'task_has_no_executor',
   'a queued public Task nobody ever took cannot be "unfulfilled" by a person -- the manager cancels it instead');
+select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 3, 3, 'Nota') $$,
+  (select null_deadline_task_id from f337)),
+  'PT409', 'task_not_overdue',
+  'an ordinary Task with a NULL deadline is refused by the same task_not_overdue guard, not silently let through -- the null-deadline branch task_is_umbrella''s Task-5 fixture cannot reach');
 reset role;
 
 select is((select count(*) from public.task_evaluations
             where task_id in (select umbrella_id from f337)
                or task_id in (select cancelled_task_id from f337)
                or task_id in (select not_overdue_task_id from f337)
-               or task_id in (select no_executor_task_id from f337)), 0::bigint,
+               or task_id in (select no_executor_task_id from f337)
+               or task_id in (select null_deadline_task_id from f337)), 0::bigint,
   'none of the state-rejected calls wrote an Evaluation');
 
 -- ==================== 5. Input validation ====================
@@ -672,17 +703,16 @@ select is((select count(*) from public.task_evaluations
 -- Honest limitation, established by mutation rather than assumed (the same
 -- one complete_task_review.test.sql documents for its own probe): the
 -- tasks-row assertion below does NOT discriminate step 3's own `for update`
--- keyword. Removing it from mark_task_unfulfilled_impl leaves this
--- assertion green, because private.evaluate_task's own terminal UPDATE on
--- public.tasks (setting status/difficulty/rating/unfulfilled_at) runs later
--- in the SAME held transaction and takes an equivalent exclusive lock by
--- the time this probe reads pgrowlocks -- a single-session snapshot taken
+-- keyword on its own. Removing it from mark_task_unfulfilled_impl leaves
+-- this assertion green, because private.evaluate_task's own terminal UPDATE
+-- on public.tasks (setting status/difficulty/rating/unfulfilled_at) runs
+-- later in the SAME held transaction and takes an equivalent exclusive lock
+-- by the time this probe reads pgrowlocks -- a single-session snapshot taken
 -- after the call returns cannot tell "locked since step 3" from "locked
--- since the terminal UPDATE". Proving the step-3 lock actually closes the
--- window between require_task_evaluator and evaluate_task (a concurrent
--- second evaluator racing into that window) needs a two-session race like
--- complete_task_review.test.sql's section 12, which the brief for this task
--- does not ask for. The assignment-row assertion has the identical
+-- since the terminal UPDATE". What actually proves the step-3 lock closes
+-- the window between require_task_evaluator and evaluate_task is section
+-- 10's two-session race below, mirroring complete_task_review.test.sql's
+-- section 12. The assignment-row assertion here has the identical
 -- limitation for a different reason: it verifies a lock private.evaluate_task
 -- itself already takes and already proved elsewhere (#336), not anything
 -- this migration adds.
@@ -694,15 +724,18 @@ select extensions.dblink_exec('ctr_setup', $$
   insert into auth.users (id, email) values
     ('33700000-0000-0000-0000-000000000051', 'probe.evaluator.337@test.local'),
     ('33700000-0000-0000-0000-000000000052', 'probe.manager.337@test.local'),
-    ('33700000-0000-0000-0000-000000000053', 'probe.executor.337@test.local');
+    ('33700000-0000-0000-0000-000000000053', 'probe.executor.337@test.local'),
+    ('33700000-0000-0000-0000-000000000054', 'race.exec.337@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('33700000-0000-0000-0000-000000000051', 'Probe Evaluator 337', 'probe.evaluator.337@test.local', 'bce', 'activ'),
     ('33700000-0000-0000-0000-000000000052', 'Probe Manager 337', 'probe.manager.337@test.local', 'voluntar', 'activ'),
-    ('33700000-0000-0000-0000-000000000053', 'Probe Executor 337', 'probe.executor.337@test.local', 'voluntar', 'activ');
+    ('33700000-0000-0000-0000-000000000053', 'Probe Executor 337', 'probe.executor.337@test.local', 'voluntar', 'activ'),
+    ('33700000-0000-0000-0000-000000000054', 'Race Executor 337', 'race.exec.337@test.local', 'voluntar', 'activ');
   insert into public.member_departments (member_id, dept_id) values
     ('33700000-0000-0000-0000-000000000051', 'edu'),
     ('33700000-0000-0000-0000-000000000052', 'edu'),
-    ('33700000-0000-0000-0000-000000000053', 'edu');
+    ('33700000-0000-0000-0000-000000000053', 'edu'),
+    ('33700000-0000-0000-0000-000000000054', 'edu');
 
   insert into public.tasks
     (title, description, deadline, dept_id, audience, assignment_mode, status,
@@ -710,12 +743,19 @@ select extensions.dblink_exec('ctr_setup', $$
   values
     ('Sonda blocaj nerealizat #337 committed', 'Sonda', now() - interval '2 days', 'edu', 'local', 'direct', 'in_progress',
      now() - interval '5 days', now() - interval '4 days',
+     '33700000-0000-0000-0000-000000000052'),
+    ('Cursa dubla nerealizat #337 committed', 'Doi apeluri, un task nerealizat', now() - interval '2 days', 'edu', 'local', 'direct', 'in_progress',
+     now() - interval '5 days', now() - interval '4 days',
      '33700000-0000-0000-0000-000000000052');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
   select id, '33700000-0000-0000-0000-000000000053'::uuid, '33700000-0000-0000-0000-000000000052'::uuid,
          now() - interval '4 days'
-    from public.tasks where title = 'Sonda blocaj nerealizat #337 committed';
+    from public.tasks where title = 'Sonda blocaj nerealizat #337 committed'
+  union all
+  select id, '33700000-0000-0000-0000-000000000054'::uuid, '33700000-0000-0000-0000-000000000052'::uuid,
+         now() - interval '4 days'
+    from public.tasks where title = 'Cursa dubla nerealizat #337 committed';
 $$);
 
 create temp table r337 as
@@ -723,7 +763,8 @@ select (select id from public.tasks where title = 'Sonda blocaj nerealizat #337 
        (select assignment.id from public.task_assignments as assignment
           join public.tasks as task on task.id = assignment.task_id
          where task.title = 'Sonda blocaj nerealizat #337 committed'
-           and assignment.ended_at is null) as probe_assignment_id;
+           and assignment.ended_at is null) as probe_assignment_id,
+       (select id from public.tasks where title = 'Cursa dubla nerealizat #337 committed') as race_task_id;
 grant select on r337 to authenticated;
 
 select extensions.dblink_connect('ctr_lock', format(
@@ -776,6 +817,51 @@ select ok(coalesce((
 select extensions.dblink_exec('ctr_lock', 'rollback');
 select extensions.dblink_disconnect('ctr_lock');
 
+-- ==================== 10. Race: two calls, one overdue Task ====================
+-- Mirrors complete_task_review.test.sql's section 12: pg_temp.test_race runs
+-- call A to completion, sends call B while A is still uncommitted, waits
+-- until B blocks, then commits A and fetches B's result. This is what
+-- actually discriminates step 3's tasks-row `for update` lock, which the
+-- section-9 single-session probe above cannot (see the comment there) --
+-- with the lock held, B blocks on the tasks row behind A, then re-reads A's
+-- committed 'unfulfilled' status under EvalPlanQual and answers PT409
+-- task_terminal.
+--
+-- Mutation-verified: with `for update` removed from step 3's
+-- `select * into v_task from public.tasks where id = p_task_id`, B no
+-- longer blocks on the tasks row at all -- it proceeds straight past the
+-- (now stale) state checks and into private.evaluate_task, finds the
+-- Assignment A already ended, and answers PT409 task_has_no_executor
+-- instead. That mutation was run and reverted; see the task report for the
+-- captured RED/GREEN output. The keyword is restored in the migration.
+--
+-- B's error propagates out of extensions.dblink_get_result and cannot be
+-- caught in SQL, so the whole call is wrapped in throws_ok (the
+-- complete_task_review.test.sql:1150 / campaign_commands.test.sql precedent).
+-- Single-field `(f(...)).status` projections -- see the WARNING above the
+-- section-9 probe call: two fields would run the command twice.
+select pg_temp.test_login('33700000-0000-0000-0000-000000000051', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok(format($outer$
+  select * from pg_temp.test_race(%L, %L)
+$outer$,
+  format($$ select (public.mark_task_unfulfilled(%s, 3, 1, 'Apelul A')).status::text $$,
+    (select race_task_id from r337)),
+  format($$ select (public.mark_task_unfulfilled(%s, 3, 2, 'Apelul B')).status::text $$,
+    (select race_task_id from r337))),
+  'PT409', 'task_terminal',
+  'the second call blocks on the tasks-row lock and then answers task_terminal against the first''s committed unfulfilled status -- never a duplicate Evaluation or a double credit');
+reset role;
+
+select is((select count(*) from public.task_evaluations
+            where task_id = (select race_task_id from r337)), 1::bigint,
+  'exactly one Evaluation survives the double-unfulfilled race');
+select is((select format('%s|%s', count(*), coalesce(sum(delta), 0))
+             from public.points_ledger
+            where task_id = (select race_task_id from r337)),
+  '1|-3',
+  'and the Executor is credited exactly once, with the FIRST call''s award (Difficulty 3 x rating_mult(1) = -3), never the second''s 3 x 0 = 0 on top of it');
+
 select extensions.dblink_exec('ctr_setup', $$
   set session_replication_role = 'replica';
   delete from public.points_ledger
@@ -789,24 +875,26 @@ select extensions.dblink_exec('ctr_setup', $$
    where task_id in (select id from public.tasks where title like '%#337 committed%')
       or member_id in ('33700000-0000-0000-0000-000000000051',
                        '33700000-0000-0000-0000-000000000052',
-                       '33700000-0000-0000-0000-000000000053');
+                       '33700000-0000-0000-0000-000000000053',
+                       '33700000-0000-0000-0000-000000000054');
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#337 committed%');
   delete from public.tasks where title like '%#337 committed%';
   delete from public.member_departments where member_id in (
     '33700000-0000-0000-0000-000000000051', '33700000-0000-0000-0000-000000000052',
-    '33700000-0000-0000-0000-000000000053');
+    '33700000-0000-0000-0000-000000000053', '33700000-0000-0000-0000-000000000054');
   delete from auth.users where id in (
     '33700000-0000-0000-0000-000000000051', '33700000-0000-0000-0000-000000000052',
-    '33700000-0000-0000-0000-000000000053');
+    '33700000-0000-0000-0000-000000000053', '33700000-0000-0000-0000-000000000054');
 $$);
 select extensions.dblink_disconnect('ctr_setup');
 
 select is((select count(*) from public.tasks where title like '%#337 committed%'), 0::bigint,
-  'the committed lock-probe fixtures are removed again -- this suite leaves no trace');
+  'the committed lock-probe and race fixtures are removed again -- this suite leaves no trace');
 select is((select count(*) from public.points_ledger
-            where member_id = '33700000-0000-0000-0000-000000000053'), 0::bigint,
-  'including the point the probe itself credited');
+            where member_id in ('33700000-0000-0000-0000-000000000053',
+                                 '33700000-0000-0000-0000-000000000054')), 0::bigint,
+  'including every point the probe and the race actually credited');
 
 select * from finish();
 rollback;
