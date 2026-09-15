@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 import { keys } from './keys';
 import {
   fetchOwnCandidature,
+  hasOwnActiveAssignment,
   fetchOwnQueuePosition,
   TaskInterestError,
 } from './task-interest';
@@ -15,6 +16,8 @@ export async function fetchTaskQueue(
   taskId: number,
   memberId: string,
 ): Promise<OwnTaskQueue> {
+  if (await hasOwnActiveAssignment(taskId, memberId))
+    return { status: 'selected', position: null };
   const candidate = await fetchOwnCandidature(taskId, memberId);
   if (!candidate) return { status: null, position: null };
   const status = candidate.status;
