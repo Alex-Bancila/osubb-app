@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   DataTable,
   type DataTableColumn,
@@ -9,41 +9,8 @@ import type { TaskPresentation } from './task-presentation';
 const originKey = (task: TaskPresentation) =>
   `${task.origin.kind}:${task.origin.id}`;
 
-export function ManagerTaskTable({
-  tasks,
-  onOpenTask,
-}: {
-  tasks: TaskPresentation[];
-  onOpenTask?: (id: number) => void;
-}) {
-  const id = useId();
-  const [origin, setOrigin] = useState('');
-  const [status, setStatus] = useState('');
-  const [campaign, setCampaign] = useState('');
-  const origins = new Map(
-    tasks.map((task) => [originKey(task), task.origin.label]),
-  );
-  const campaigns = new Map(
-    tasks.flatMap((task) =>
-      task.campaign
-        ? [[String(task.campaign.id), task.campaign.name] as const]
-        : [],
-    ),
-  );
-  const filtered = tasks.filter(
-    (task) =>
-      (!origin || originKey(task) === origin) &&
-      (!campaign || String(task.campaign?.id) === campaign) &&
-      (!status ||
-        (status === 'overdue'
-          ? task.overdue
-          : status === 'feedback'
-            ? task.feedbackPending
-            : status === 'late'
-              ? task.completedLate
-              : task.status === status)),
-  );
-  const columns: DataTableColumn<TaskPresentation>[] = [
+function taskColumns(onOpenTask?: (id: number) => void): DataTableColumn<TaskPresentation>[] {
+  return [
     {
       id: 'overdue',
       accessorFn: (task) => Number(task.overdue),
@@ -101,6 +68,43 @@ export function ManagerTaskTable({
       cell: ({ row }) => row.original.points ?? '—',
     },
   ];
+}
+
+export function ManagerTaskTable({
+  tasks,
+  onOpenTask,
+}: {
+  tasks: TaskPresentation[];
+  onOpenTask?: (id: number) => void;
+}) {
+  const id = useId();
+  const [origin, setOrigin] = useState('');
+  const [status, setStatus] = useState('');
+  const [campaign, setCampaign] = useState('');
+  const origins = new Map(
+    tasks.map((task) => [originKey(task), task.origin.label]),
+  );
+  const campaigns = new Map(
+    tasks.flatMap((task) =>
+      task.campaign
+        ? [[String(task.campaign.id), task.campaign.name] as const]
+        : [],
+    ),
+  );
+  const filtered = tasks.filter(
+    (task) =>
+      (!origin || originKey(task) === origin) &&
+      (!campaign || String(task.campaign?.id) === campaign) &&
+      (!status ||
+        (status === 'overdue'
+          ? task.overdue
+          : status === 'feedback'
+            ? task.feedbackPending
+            : status === 'late'
+              ? task.completedLate
+              : task.status === status)),
+  );
+  const columns = useMemo(() => taskColumns(onOpenTask), [onOpenTask]);
   const selectClass =
     'min-h-11 max-w-full rounded-md border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring';
   return (
