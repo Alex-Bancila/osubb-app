@@ -17,6 +17,7 @@ import { TaskStageSummary } from './TaskStageSummary';
 type TaskCardProps = {
   task: TaskPresentation;
   allowInterest?: boolean;
+  onOpenTask?: (id: number) => void;
   memberId: string | undefined;
   pending: boolean;
   onProgress: (taskId: number, action: TaskProgressAction) => Promise<unknown>;
@@ -25,6 +26,7 @@ type TaskCardProps = {
 export function TaskCard({
   task,
   allowInterest = false,
+  onOpenTask,
   memberId,
   pending,
   onProgress,
@@ -75,7 +77,17 @@ export function TaskCard({
             <span className="min-w-0 wrap-anywhere">{task.origin.label}</span>
           </p>
           <h2 id={titleId} className="text-lg font-semibold wrap-anywhere">
-            {task.title}
+            {onOpenTask ? (
+              <Button
+                variant="link"
+                className="min-h-11 min-w-11 h-auto p-0 text-left text-lg font-semibold whitespace-normal wrap-anywhere"
+                onClick={() => onOpenTask(task.id)}
+              >
+                {task.title}
+              </Button>
+            ) : (
+              task.title
+            )}
           </h2>
           {task.parent && (
             <p className="text-sm wrap-anywhere">
