@@ -88,7 +88,7 @@ begin
         v_orphans,
         case when v_orphans > 20 then 'First 20' else 'They are' end,
         v_sample),
-      hint = 'Re-run the #290 backfill (supabase/migrations/20260911106000_backfill_task_assignments.sql) against this database, or insert the missing public.task_assignments rows by hand, before applying this migration. Dropping public.task_assignees now would destroy assignment history that exists nowhere else.';
+      hint = 'Stop the deployment. Add a reviewed forward repair migration, ordered before 20260915193604, that reconstructs the missing public.task_assignments rows; then redeploy from migrations. Do not edit hosted rows by hand. Dropping public.task_assignees now would destroy assignment history that exists nowhere else.';
   end if;
 end
 $$;

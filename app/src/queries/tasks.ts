@@ -62,9 +62,12 @@ async function fetchMyTasks(memberId: string) {
  *
  * "Open" used to mean "a public todo Task with no row in the legacy
  * multi-assignee join table". #345 retired that table, and the normalized
- * model states the same thing directly on the Task: an opportunity is one
- * whose Candidate Queue is still open (`queue_opened_at` set,
+ * model states the same thing directly on the Task: an opportunity is a
+ * public Task whose Candidate Queue is still open (`queue_opened_at` set,
  * `queue_closed_at` null) — exactly the R6 branch of the `tasks_read` policy.
+ * RLS decides whether an org or local opportunity is eligible for this
+ * caller, and an Executor does not end the opportunity: members may still
+ * join its Queue while work is in progress.
  * That is deliberately not "has no Executor" measured through
  * `task_assignments`: its read policy shows a member only their OWN
  * Assignment rows, so an embed there would report every Task somebody else
@@ -81,9 +84,7 @@ export async function fetchOpenTasks() {
   const { data, error } = await supabase
     .from('tasks')
     .select(TASK_FIELDS)
-    .eq('status', 'todo')
     .eq('assignment_mode', 'public')
-    .eq('audience', 'org')
     .not('queue_opened_at', 'is', null)
     .is('queue_closed_at', null);
   if (error) throw error;

@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({
   from: vi.fn(),
   select: vi.fn(),
-  byStatus: vi.fn(),
   byMode: vi.fn(),
-  byAudience: vi.fn(),
   queueOpened: vi.fn(),
   queueOpen: vi.fn(),
 }));
@@ -17,10 +15,8 @@ import { fetchOpenTasks } from './tasks';
 describe('public Task opportunities', () => {
   beforeEach(() => {
     api.from.mockReturnValue({ select: api.select });
-    api.select.mockReturnValue({ eq: api.byStatus });
-    api.byStatus.mockReturnValue({ eq: api.byMode });
-    api.byMode.mockReturnValue({ eq: api.byAudience });
-    api.byAudience.mockReturnValue({ not: api.queueOpened });
+    api.select.mockReturnValue({ eq: api.byMode });
+    api.byMode.mockReturnValue({ not: api.queueOpened });
     api.queueOpened.mockReturnValue({ is: api.queueOpen });
   });
 
@@ -29,13 +25,13 @@ describe('public Task opportunities', () => {
      the caller's own rows. An open Candidate Queue is the Task's own record
      of being available, and it is what the tasks_read policy's R6 branch
      already uses. */
-  it('asks the database for organization-wide public todo Tasks whose Queue is open', async () => {
+  it('asks for every RLS-visible public Task whose Queue is open', async () => {
     api.queueOpen.mockResolvedValue({
       data: [
         {
           id: 2,
-          title: 'Later opportunity',
-          status: 'todo',
+          title: 'Local work already in progress',
+          status: 'in_progress',
           deadline: null,
         },
         {
@@ -57,15 +53,13 @@ describe('public Task opportunities', () => {
       },
       {
         id: 2,
-        title: 'Later opportunity',
-        status: 'todo',
+        title: 'Local work already in progress',
+        status: 'in_progress',
         deadline: null,
       },
     ]);
     expect(api.from).toHaveBeenCalledWith('tasks');
-    expect(api.byStatus).toHaveBeenCalledWith('status', 'todo');
     expect(api.byMode).toHaveBeenCalledWith('assignment_mode', 'public');
-    expect(api.byAudience).toHaveBeenCalledWith('audience', 'org');
     expect(api.queueOpened).toHaveBeenCalledWith('queue_opened_at', 'is', null);
     expect(api.queueOpen).toHaveBeenCalledWith('queue_closed_at', null);
   });
