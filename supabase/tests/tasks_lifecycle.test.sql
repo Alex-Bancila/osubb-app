@@ -21,17 +21,20 @@ select is(
   false,
   'service role cannot execute the private Task policy helper');
 
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so the cancelled fixture states why it
+-- was called off and every other one leaves the column null.
 select lives_ok(
   $$ insert into public.tasks
       (title, difficulty, dept_id, status, started_at, submitted_at,
-       completed_at, unfulfilled_at, cancelled_at, rating)
+       completed_at, unfulfilled_at, cancelled_at, cancel_reason, rating)
      values
-      ('Lifecycle todo 287', 1, 'edu', 'todo', null, null, null, null, null, null),
-      ('Lifecycle progress 287', 1, 'edu', 'in_progress', now(), null, null, null, null, null),
-      ('Lifecycle review 287', 1, 'edu', 'in_review', now(), now(), null, null, null, null),
-      ('Lifecycle completed 287', 1, 'edu', 'completed', null, null, now(), null, null, 3),
-      ('Lifecycle unfulfilled 287', 1, 'edu', 'unfulfilled', null, null, null, now(), null, 2),
-      ('Lifecycle cancelled 287', 1, 'edu', 'cancelled', null, null, null, null, now(), null) $$,
+      ('Lifecycle todo 287', 1, 'edu', 'todo', null, null, null, null, null, null, null),
+      ('Lifecycle progress 287', 1, 'edu', 'in_progress', now(), null, null, null, null, null, null),
+      ('Lifecycle review 287', 1, 'edu', 'in_review', now(), now(), null, null, null, null, null),
+      ('Lifecycle completed 287', 1, 'edu', 'completed', null, null, now(), null, null, null, 3),
+      ('Lifecycle unfulfilled 287', 1, 'edu', 'unfulfilled', null, null, null, now(), null, null, 2),
+      ('Lifecycle cancelled 287', 1, 'edu', 'cancelled', null, null, null, null, now(), 'Anulat #287', null) $$,
   'all six lifecycle states are writable');
 
 select throws_ok(

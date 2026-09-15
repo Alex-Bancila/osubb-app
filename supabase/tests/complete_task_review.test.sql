@@ -224,9 +224,12 @@ values
 insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
 values ('Inca todo #336', 'Nu a inceput', '2027-12-08 09:00:00+00', 'edu', 'local', 'direct', 'todo',
         '33600000-0000-0000-0000-000000000002');
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, created_by)
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
+insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values ('Anulat #336', 'Anulat deja', '2027-12-09 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
-        now(), '33600000-0000-0000-0000-000000000002');
+        now(), 'Anulat inainte de verificare #336', '33600000-0000-0000-0000-000000000002');
 
 -- ---- T12: input-validation target. Every PT400 below fires against it and
 -- must leave it exactly as it is.

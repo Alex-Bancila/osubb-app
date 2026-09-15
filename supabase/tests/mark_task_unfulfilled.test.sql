@@ -178,9 +178,13 @@ values
    '33700000-0000-0000-0000-000000000002');
 
 -- ---- T6: already TERMINAL (cancelled) -- checked before the deadline.
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, cancelled_at, created_by)
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
+insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, cancelled_at, cancel_reason, created_by)
 values ('Deja anulat #337', 'Anulat deja', now() - interval '3 days', 'edu', 'local', 'direct', 'cancelled',
-        now() - interval '5 days', now() - interval '1 day', '33700000-0000-0000-0000-000000000002');
+        now() - interval '5 days', now() - interval '1 day', 'Anulat inainte de termen #337',
+        '33700000-0000-0000-0000-000000000002');
 
 -- ---- T7: input-validation target. Every PT400 below fires against it and
 -- must leave it exactly as it is.

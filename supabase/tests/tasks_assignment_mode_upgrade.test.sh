@@ -30,7 +30,13 @@ truncate public.tasks cascade;
 -- task_status array literal) has the identical problem -- same fix, same
 -- reasoning: it is never recreated because this whole transaction rolls back.
 drop index public.tasks_deadline_active_idx;
+-- #339: tasks_cancel_reason_ck has exactly the same problem -- its compiled
+-- expression embeds a 'cancelled' literal bound to today's task_status OID, so
+-- the status conversion below would try to recompile it against text and fail.
+-- Same fix, same reasoning: this scratch transaction rolls back, so dropping
+-- and never recreating it is safe.
 alter table public.tasks drop constraint tasks_evaluation_inputs_ck;
+alter table public.tasks drop constraint tasks_cancel_reason_ck;
 alter table public.tasks alter column status drop default;
 alter table public.tasks alter column status type text using status::text;
 -- #292: task_activity.from_status/to_status also depend on task_status; this

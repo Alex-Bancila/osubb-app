@@ -53,10 +53,13 @@ select lives_ok(
   'an in_review Task may carry a difficulty without a rating');
 
 -- ==================== cancelled with a rating is rejected ====================
+-- #339: the reason is supplied so that tasks_evaluation_inputs_ck is the
+-- constraint that fires -- without it tasks_cancel_reason_ck would raise the
+-- same 23514 first and this assertion would pass for the wrong reason.
 select throws_ok(
-  $$ insert into tasks (title, dept_id, status, difficulty, rating, cancelled_at)
-     values ('tei-312-cancelled-with-rating', 'edu', 'cancelled', 2, 3, now()) $$,
-  '23514', null,
+  $$ insert into tasks (title, dept_id, status, difficulty, rating, cancelled_at, cancel_reason)
+     values ('tei-312-cancelled-with-rating', 'edu', 'cancelled', 2, 3, now(), 'Anulat #312') $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_evaluation_inputs_ck"',
   'a cancelled Task with a rating is rejected');
 
 select * from finish();

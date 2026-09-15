@@ -230,8 +230,11 @@ select 'm318:X-umb-sub', umbrella.id, 'pr'
   from public.tasks as umbrella where umbrella.title = 'm318:X-umb';
 
 -- History of the archived Project.
-insert into public.tasks (title, project_id, status, cancelled_at)
-select 'm318:PA-dir', project.id, 'cancelled', now()
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
+insert into public.tasks (title, project_id, status, cancelled_at, cancel_reason)
+select 'm318:PA-dir', project.id, 'cancelled', now(), 'Proiect arhivat #318'
   from public.projects as project where project.name = 'M318 Archived Project';
 
 -- Participation Tasks in `pr`, where no persona except R1 is a member.

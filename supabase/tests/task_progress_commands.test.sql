@@ -101,11 +101,14 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 -- command on main produces this shape -- give_up_task.test.sql T6 sets the
 -- same precedent) -- proves the state check rejects every non-todo status,
 -- not only in_progress.
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, created_by)
+  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
   ('Anulat pentru start #334', 'Anulat cu executant', '2027-11-04 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
-   now(), '33400000-0000-0000-0000-000000000001');
+   now(), 'Anulat inainte de start #334', '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
   from public.tasks where title = 'Anulat pentru start #334';
@@ -122,11 +125,14 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 
 -- ---- T6: cancelled but hand-fixtured with a still-active Assignment --
 -- wrong state for submit_task_for_review, second variant.
+-- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
+-- exclusive to -- a cancelled Task, so this fixture states why it was called
+-- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, created_by)
+  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
   ('Anulat pentru verificare #334', 'Anulat cu executant', '2027-11-06 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
-   now(), '33400000-0000-0000-0000-000000000001');
+   now(), 'Anulat inainte de verificare #334', '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
   from public.tasks where title = 'Anulat pentru verificare #334';
