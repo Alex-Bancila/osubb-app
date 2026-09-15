@@ -64,6 +64,22 @@ export async function fetchOwnQueuePosition(
   return data?.my_position ?? null;
 }
 
+/** The first participant is assigned directly without a Candidate row. */
+export async function hasOwnActiveAssignment(
+  taskId: number,
+  memberId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('task_assignments')
+    .select('id')
+    .eq('task_id', taskId)
+    .eq('member_id', memberId)
+    .is('ended_at', null)
+    .maybeSingle();
+  if (error) throw taskInterestError(error.code);
+  return data !== null;
+}
+
 export async function expressTaskInterest(
   taskId: number,
   memberId: string,
@@ -72,6 +88,8 @@ export async function expressTaskInterest(
     p_task_id: taskId,
   });
   if (error) throw taskInterestError(error.code);
+  if (await hasOwnActiveAssignment(taskId, memberId))
+    return { kind: 'assigned' };
   const candidate = await fetchOwnCandidature(taskId, memberId);
   if (candidate?.status === 'selected') return { kind: 'assigned' };
   if (candidate?.status === 'pending') {

@@ -12,18 +12,28 @@ function reads(status: string, position: number | null = null) {
   const query = {
     select: vi.fn(),
     eq: vi.fn(),
+    is: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),
     maybeSingle: vi.fn(),
   };
   query.select.mockReturnValue(query);
   query.eq.mockReturnValue(query);
+  query.is.mockReturnValue(query);
   query.order.mockReturnValue(query);
   query.limit.mockReturnValue(query);
   api.from.mockImplementation((table) => {
     query.maybeSingle.mockResolvedValue({
       data:
-        table === 'task_candidates' ? { status } : { my_position: position },
+        table === 'task_assignments'
+          ? status === 'direct'
+            ? { id: 1 }
+            : null
+          : table === 'task_candidates'
+            ? status === 'direct'
+              ? null
+              : { status }
+            : { my_position: position },
       error: null,
     });
     return query;
@@ -33,7 +43,7 @@ function reads(status: string, position: number | null = null) {
 describe('Express Task interest', () => {
   it('sends only the Task id and returns an assigned outcome', async () => {
     api.rpc.mockResolvedValue({ error: null });
-    const query = reads('selected');
+    const query = reads('direct');
     await expect(expressTaskInterest(4, 'member')).resolves.toEqual({
       kind: 'assigned',
     });
