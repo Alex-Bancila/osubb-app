@@ -4,10 +4,33 @@ begin;
 
 select plan(11);
 
+-- #290 reconstructed Assignment history from the legacy `task_assignees`
+-- join table. #345 dropped that table, so the "legacy" side of every
+-- comparison below is now the demo participant list itself, pinned here.
+-- Duplicating it is deliberate: before, this suite compared the seed against
+-- its own other half and could only catch an inconsistent seed; now it also
+-- fails if the demo participant list drifts from the shape #290 documented.
+-- Keep it in step with supabase/seed.sql's `pg_temp.demo_task_participants`.
 create temp table demo_legacy_assignments_290 as
-select legacy.*
-  from public.task_assignees legacy
-  join public.tasks task on task.id = legacy.task_id
+select task.id as task_id, participant.member_id
+  from (values
+    ('Workshop CV pentru boboci',      'd0000000-0000-0000-0000-000000000002'::uuid),
+    ('Materiale curs Excel',           'd0000000-0000-0000-0000-000000000001'::uuid),
+    ('Contactare lectori',             'd0000000-0000-0000-0000-000000000002'::uuid),
+    ('Minuta ședinței EDU',            'd0000000-0000-0000-0000-000000000001'::uuid),
+    ('Grafică eveniment toamnă',       'd0000000-0000-0000-0000-000000000003'::uuid),
+    ('Postare Instagram recrutare',    'd0000000-0000-0000-0000-000000000003'::uuid),
+    ('Plan media noiembrie',           'd0000000-0000-0000-0000-000000000006'::uuid),
+    ('Fotografii eveniment',           'd0000000-0000-0000-0000-000000000003'::uuid),
+    ('Logistică Tabăra de Toamnă',     'd0000000-0000-0000-0000-000000000004'::uuid),
+    ('Contactare parteneri',           'd0000000-0000-0000-0000-000000000004'::uuid),
+    ('Buget trimestrial',              'd0000000-0000-0000-0000-000000000007'::uuid),
+    ('Interviuri recrutare',           'd0000000-0000-0000-0000-000000000005'::uuid),
+    ('Migrare bază de date',           'd0000000-0000-0000-0000-000000000006'::uuid),
+    ('Migrare bază de date',           'd0000000-0000-0000-0000-000000000008'::uuid),
+    ('Testare aplicație',              'd0000000-0000-0000-0000-000000000008'::uuid)
+  ) as participant (title, member_id)
+  join public.tasks task on task.title = participant.title
   join public.profiles creator on creator.id = task.created_by
  where creator.email like '%@demo.osubb';
 

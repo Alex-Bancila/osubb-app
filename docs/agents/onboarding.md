@@ -23,7 +23,7 @@ supabase/
 │   │                                    # rating/difficulty guides · profiles · member_departments ·
 │   │                                    # teams · team_members (+ reference data seeded here)
 │   ├── 20260812184706_tasks_and_requests.sql   # tasks (points = generated column via rating_mult) ·
-│   │                                           # task_assignees · task_requests · RLS enabled
+│   │                                           # the legacy assignee/request tables (retired by #345) · RLS enabled
 │   ├── 20260819160713_points_engine.sql        # points_ledger · grading triggers (sync_task_ledger,
 │   │                                           # sync_assignee_ledger) · views member_points/
 │   │                                           # leaderboard/dept_cup (security_invoker)
@@ -33,8 +33,8 @@ supabase/
 │   ├── 20260819171628_capabilities_and_rls.sql # role_capabilities (17 rows from level thresholds) ·
 │   │                                           # RLS enabled on ALL tables · grant normalization
 │   │                                           # (anon = nothing; no TRUNCATE for clients)
-│   ├── 20260819172728_tasks_points_policies.sql # policies: tasks/task_assignees/points_ledger/
-│   │                                            # task_requests · helpers is_assigned()/in_my_dept()
+│   ├── 20260819172728_tasks_points_policies.sql # policies: tasks/points_ledger + the two legacy
+│   │                                            # tables (all retired by #345) · helpers in_my_dept()
 │   ├── 202608222*                       # the v1 tables and their policies: events+event_attendance ·
 │   │                                    # announcements+announcement_reads · notifications ·
 │   │                                    # notif_suppression (bc+bce)+push_tokens · provision_profile()
