@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(127);
+select plan(129);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -703,29 +703,93 @@ reset role;
 
 -- ==================== 12. Locks held while the command runs ====================
 -- House rule 5: without this probe no test would fail if
--- require_origin_manager's FOR SHARE re-validation, or the Umbrella's FOR
--- UPDATE lock, were deleted. Pattern copied from
--- campaign_commands.test.sql:539-575. Fixtures are committed through a second
--- connection because dblink sessions cannot see rows inside this pgTAP
--- transaction (supabase/tests/README.md).
+-- require_origin_manager's FOR SHARE re-validation, or the Umbrella's lock,
+-- were deleted. Pattern copied from campaign_commands.test.sql:539-575.
+-- Fixtures are committed through a second connection because dblink sessions
+-- cannot see rows inside this pgTAP transaction (supabase/tests/README.md).
+--
+-- RULING 20 (whole-wave review, finding 1). The Umbrella parent is locked
+-- FOR NO KEY UPDATE, never FOR UPDATE. private.evaluate_task reaches the same
+-- row implicitly -- its parent-naming task_activity and notifications inserts
+-- take a foreign-key FOR KEY SHARE on it -- and FOR KEY SHARE conflicts with
+-- FOR UPDATE while passing straight through FOR NO KEY UPDATE. Two assertions
+-- pin the mode (the #339 split: "locked at all" and "the exact mode string"),
+-- and the section then reproduces the behaviour the mode exists for: a real
+-- complete_task_review on an existing Subtask of this very Umbrella, run in a
+-- third session while the create holds the parent, must finish rather than
+-- block.
+--
+-- MUTATION RESULT, reported as run: with `for no key update` changed back to
+-- `for update` in private.create_task_impl, assertion (b) reports
+-- {"For Update"} and goes RED, and the concurrent evaluation below blocks on
+-- the parent until its lock_timeout and comes back 55P03 instead of
+-- 'completed' -- also RED. It does NOT deadlock (40P01), and no probe here
+-- claims it does: create_task takes no second public.tasks row lock after the
+-- parent, so the ABBA cycle #338/#339/#340 each reproduced cannot close on
+-- this command. The damage the stronger mode does here is a stall of every
+-- concurrent evaluation under the Umbrella, which is what the third session
+-- pins.
 select extensions.dblink_connect('task_lock_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- Clean first: these fixtures are COMMITTED, so an aborted earlier run would
+-- otherwise leave them behind and the next run would fail on a duplicate key
+-- instead of on the feature (the #336/#339 precedent). task_activity is
+-- append-only by trigger, so the cleanup runs in replica mode.
 select extensions.dblink_exec('task_lock_setup', $$
+  set session_replication_role = 'replica';
+  delete from public.task_activity
+   where task_id in (select id from public.tasks where title like '%Lock Probe%#327');
+  delete from public.notifications
+   where task_id in (select id from public.tasks where title like '%Lock Probe%#327');
+  delete from public.task_assignments
+   where task_id in (select id from public.tasks where title like '%Lock Probe%#327');
+  set session_replication_role = 'origin';
+  delete from public.tasks
+   where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
-  delete from public.member_departments where member_id = '32700000-0000-0000-0000-000000000021';
-  delete from auth.users where id = '32700000-0000-0000-0000-000000000021';
+  delete from public.member_departments where member_id in (
+    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
+    '32700000-0000-0000-0000-000000000023');
+  delete from auth.users where id in (
+    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
+    '32700000-0000-0000-0000-000000000023');
+$$);
+select extensions.dblink_exec('task_lock_setup', $$
   insert into auth.users (id, email) values
-    ('32700000-0000-0000-0000-000000000021', 'lock.probe.bce.327@test.local');
+    ('32700000-0000-0000-0000-000000000021', 'lock.probe.bce.327@test.local'),
+    ('32700000-0000-0000-0000-000000000022', 'lock.probe.evaluator.327@test.local'),
+    ('32700000-0000-0000-0000-000000000023', 'lock.probe.executor.327@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('32700000-0000-0000-0000-000000000021', 'Lock Probe BCE 327',
-     'lock.probe.bce.327@test.local', 'bce', 'activ');
-  insert into public.member_departments (member_id, dept_id)
-  values ('32700000-0000-0000-0000-000000000021', 'edu');
+     'lock.probe.bce.327@test.local', 'bce', 'activ'),
+    ('32700000-0000-0000-0000-000000000022', 'Lock Probe Evaluator 327',
+     'lock.probe.evaluator.327@test.local', 'bce', 'activ'),
+    ('32700000-0000-0000-0000-000000000023', 'Lock Probe Executor 327',
+     'lock.probe.executor.327@test.local', 'voluntar', 'activ');
+  insert into public.member_departments (member_id, dept_id) values
+    ('32700000-0000-0000-0000-000000000021', 'edu'),
+    ('32700000-0000-0000-0000-000000000022', 'edu'),
+    ('32700000-0000-0000-0000-000000000023', 'edu');
   insert into public.tasks
     (title, dept_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
   values ('Lock Probe Umbrella #327', 'edu', 'umbrella', null, null, null, null, 'todo',
           '32700000-0000-0000-0000-000000000021');
+  -- An EXISTING Subtask of that Umbrella, already submitted, with a live
+  -- Executor: everything private.complete_task_review needs, so that the
+  -- third session below runs the real evaluating command and not a stand-in.
+  insert into public.tasks
+    (title, description, deadline, dept_id, audience, assignment_mode, status,
+     created_at, started_at, submitted_at, parent_task_id, created_by)
+  select 'Lock Probe Subtask Existent #327', 'De evaluat in paralel',
+         now() + interval '7 days', 'edu', 'local', 'direct', 'in_review',
+         now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
+         parent.id, '32700000-0000-0000-0000-000000000021'
+    from public.tasks as parent where parent.title = 'Lock Probe Umbrella #327';
+  insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+  select id, '32700000-0000-0000-0000-000000000023'::uuid,
+         '32700000-0000-0000-0000-000000000021'::uuid, now() - interval '4 days'
+    from public.tasks where title = 'Lock Probe Subtask Existent #327';
 $$);
 
 select extensions.dblink_connect('task_lock', format(
@@ -749,12 +813,26 @@ select * from extensions.dblink('task_lock', $$
     (select id from public.tasks where title = 'Lock Probe Umbrella #327'), 'task')).title
 $$) as locked_create(title text);
 
-select ok(coalesce((
-  select 'For Update' = any(row_lock.modes)
+-- (a) and (b) are split for the same reason cancel_task.test.sql:1015 splits
+-- its pair: one assertion covering "a lock exists" and "its mode is exactly X"
+-- goes RED under every lock mutation and isolates none of them. Note the
+-- string pgrowlocks reports is `For No Key Update`; `No Key Update` without
+-- the leading `For` is the UPDATER mode, reported once a write has landed on
+-- the row -- which never happens here, because creating a Subtask does not
+-- touch one column of its parent.
+select ok(exists (
+  select 1
     from extensions.pgrowlocks('public.tasks') as row_lock
     join public.tasks as task on task.ctid = row_lock.locked_row
    where task.title = 'Lock Probe Umbrella #327'
-), false), 'creating a Subtask holds its Umbrella''s tasks row FOR UPDATE');
+), '(a) creating a Subtask holds its Umbrella''s tasks row locked at all');
+select is((
+  select row_lock.modes
+    from extensions.pgrowlocks('public.tasks') as row_lock
+    join public.tasks as task on task.ctid = row_lock.locked_row
+   where task.title = 'Lock Probe Umbrella #327'
+), array['For No Key Update'],
+  '(b) and, given it is locked, its mode is exactly FOR NO KEY UPDATE -- never For Update, which conflicts with the implicit FK For Key Share private.evaluate_task takes on the very same row (Ruling 20)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
     from extensions.pgrowlocks('public.profiles') as row_lock
@@ -769,12 +847,79 @@ select ok(coalesce((
      and membership.dept_id = 'edu'
 ), false), 'a BCE create holds the Department membership row its authority rests on FOR SHARE');
 
+-- Ruling 20's payoff, reproduced rather than argued. Session task_lock still
+-- holds the Umbrella. A THIRD session now evaluates an existing Subtask of
+-- that Umbrella through the real public wrapper: private.evaluate_task's
+-- parent-naming `subtask_completed` activity row and its coalesced manager
+-- notification both take an implicit FK FOR KEY SHARE on the held Umbrella.
+-- Under FOR NO KEY UPDATE that passes and the evaluation finishes; under the
+-- FOR UPDATE mutation it waits out lock_timeout and this assertion reports
+-- 55P03 instead. lock_timeout is deliberately short so the RED case is fast.
+select extensions.dblink_connect('task_eval', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
+  current_database()));
+select extensions.dblink_exec('task_eval', $$
+  begin;
+  set local statement_timeout = '20s';
+  set local lock_timeout = '3s';
+$$);
+select * from extensions.dblink('task_eval', $$
+  select set_config('request.jwt.claims', jsonb_build_object(
+    'sub', '32700000-0000-0000-0000-000000000022', 'role', 'authenticated',
+    'app_metadata', jsonb_build_object('member_role', 'bce', 'member_level', 5,
+      'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb))::text, true)
+$$) as eval_claims(setting text);
+select extensions.dblink_exec('task_eval', 'set local role authenticated');
+
+-- A lock_timeout propagates out of extensions.dblink as an ordinary error and
+-- would abort this pgTAP transaction, so it is caught and turned into a value
+-- the assertion can diff. Single-field `(f(...)).status` projection on
+-- purpose: two fields would run the command twice (the wave's standing
+-- warning).
+create function pg_temp.ct327_parallel_evaluation()
+returns text
+language plpgsql
+as $fn$
+declare
+  v_status text;
+begin
+  select remote.status into v_status
+    from extensions.dblink('task_eval', format($q$
+      select (public.complete_task_review(%s, 3, 4, 'Evaluare in paralel cu o creare')).status::text
+    $q$, (select task.id from public.tasks as task
+           where task.title = 'Lock Probe Subtask Existent #327')))
+      as remote(status text);
+  return coalesce(v_status, '(no row)');
+exception when others then
+  return sqlstate;
+end;
+$fn$;
+
+select is(pg_temp.ct327_parallel_evaluation(), 'completed',
+  'a concurrent evaluation of another Subtask of the SAME Umbrella runs straight through while create_task holds that Umbrella -- FOR KEY SHARE does not conflict with FOR NO KEY UPDATE, where FOR UPDATE would have stalled it until lock_timeout (55P03)');
+
+select extensions.dblink_exec('task_eval', 'rollback');
+select extensions.dblink_disconnect('task_eval');
 select extensions.dblink_exec('task_lock', 'rollback');
 select extensions.dblink_disconnect('task_lock');
 select extensions.dblink_exec('task_lock_setup', $$
+  set session_replication_role = 'replica';
+  delete from public.task_activity
+   where task_id in (select id from public.tasks where title like '%Lock Probe%#327');
+  delete from public.notifications
+   where task_id in (select id from public.tasks where title like '%Lock Probe%#327');
+  delete from public.task_assignments
+   where task_id in (select id from public.tasks where title like '%Lock Probe%#327');
+  set session_replication_role = 'origin';
+  delete from public.tasks
+   where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
-  delete from public.member_departments where member_id = '32700000-0000-0000-0000-000000000021';
-  delete from auth.users where id = '32700000-0000-0000-0000-000000000021';
+  delete from public.member_departments where member_id in (
+    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
+    '32700000-0000-0000-0000-000000000023');
+  delete from auth.users where id in (
+    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
+    '32700000-0000-0000-0000-000000000023');
 $$);
 select extensions.dblink_disconnect('task_lock_setup');
 

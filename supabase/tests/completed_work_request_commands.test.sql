@@ -723,9 +723,13 @@ select is((select count(*) from public.completed_work_requests
                          (select project2_request_id from f344), (select project_request_id from p344),
                          (select ind_request_id from p344), (select dt_request_id from p344))), 6::bigint,
   'each of those six approvals created and named its own Task');
+-- Scoped to this suite's own requesters: #296 gave the demo seed an approved
+-- completed-work request of its own, so "every approved Request in the
+-- database" is no longer "every approved Request this suite made".
 select is((select count(*) from public.task_evaluations as evaluation
             where evaluation.task_id in (select task_id from public.completed_work_requests
-                                          where task_id is not null)), 9::bigint,
+                                          where task_id is not null
+                                            and requester_id::text like '34400000-%')), 9::bigint,
   'and each approved Request carries exactly one Evaluation -- nine approvals so far in this suite, nine Evaluations');
 
 -- ==================== 8b. A decider may decide their OWN Request ====================
