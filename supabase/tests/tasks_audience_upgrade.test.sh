@@ -48,6 +48,13 @@ alter table public.task_activity drop column from_status, drop column to_status;
 -- transaction rolls back, so dropping and never recreating it is safe. Any
 -- later task_status-typed object must be dropped here too.
 drop function private.log_task_activity(bigint, text, uuid, bigint, public.task_status, public.task_status, text, jsonb);
+-- #260: the leadership drill-down returns a `status public.task_status` column,
+-- so its wrapper and its body both depend on the enum exactly the way
+-- log_task_activity's parameters do. This is the "any later task_status-typed
+-- object" the note above warned about; same treatment, same reasoning -- the
+-- scratch transaction rolls back, so they are never recreated here.
+drop function public.leadership_member_tasks(uuid);
+drop function private.leadership_member_tasks_impl(uuid);
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks
