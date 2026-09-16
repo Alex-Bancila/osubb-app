@@ -46,7 +46,12 @@ insert into public.campaigns (department_id, name, is_active, created_by) values
   ('edu', 'Admitere', true, 'a3130000-0000-0000-0000-000000000001'),
   ('pr', 'Admitere', false, 'a3130000-0000-0000-0000-000000000001');
 
-select is((select count(*) from public.campaigns), 2::bigint,
+-- Scoped to this suite's own fixtures: #296 gave the demo seed one active
+-- Campaign per real Department, so a bare count(*) over public.campaigns is no
+-- longer this suite's own two rows.
+select is(
+  (select count(*) from public.campaigns
+    where created_by = 'a3130000-0000-0000-0000-000000000001'), 2::bigint,
   'same Campaign name is accepted in different Departments');
 select throws_ok(
   $$ insert into public.campaigns (department_id, name, created_by)
@@ -81,7 +86,11 @@ select pg_temp.test_login(
   'a3130000-0000-0000-0000-000000000001',
   '{"member_role":"recrut","member_level":0,"dept_ids":[],"team_ids":[]}'::jsonb
 );
-select is((select count(*) from public.campaigns), 2::bigint,
+-- Same scoping, same reason: what matters is that BOTH of this suite's
+-- Campaigns — one active, one not — are visible to a level-zero Member.
+select is(
+  (select count(*) from public.campaigns
+    where created_by = 'a3130000-0000-0000-0000-000000000001'), 2::bigint,
   'an active level-zero Member reads active and inactive Campaigns');
 select throws_ok(
   $$ insert into public.campaigns (department_id, name, created_by)
