@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(27);
 
 select has_function('public', 'leadership_member_tasks', array['uuid'], 'leadership drill-down is a public RPC');
 select function_returns('public', 'leadership_member_tasks', array['uuid'], 'setof record', 'drill-down returns records');
@@ -46,12 +46,20 @@ insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000001', 'bce260@example.test'),
   ('26000000-0000-0000-0000-000000000002', 'target260@example.test'),
   ('26000000-0000-0000-0000-000000000003', 'ordinary260@example.test'),
-  ('26000000-0000-0000-0000-000000000004', 'inactive260@example.test');
+  ('26000000-0000-0000-0000-000000000004', 'inactive260@example.test'),
+  ('26000000-0000-0000-0000-000000000005', 'responsabil260@example.test'),
+  ('26000000-0000-0000-0000-000000000006', 'bc260@example.test');
+-- The two personas at the end pin the THRESHOLD rather than merely "some level
+-- is denied": a responsabil sits at level 4, one rank below the gate, so a gate
+-- accidentally loosened to `>= 4` must turn an assertion red; and a BC keeps the
+-- allow side from resting on BCE alone.
 insert into public.profiles (id, full_name, email, role, status) values
   ('26000000-0000-0000-0000-000000000001', 'BCE 260', 'bce260@example.test', 'bce', 'activ'),
   ('26000000-0000-0000-0000-000000000002', 'Target 260', 'target260@example.test', 'activ', 'activ'),
   ('26000000-0000-0000-0000-000000000003', 'Ordinary 260', 'ordinary260@example.test', 'activ', 'activ'),
-  ('26000000-0000-0000-0000-000000000004', 'Inactive BCE 260', 'inactive260@example.test', 'bce', 'inactiv');
+  ('26000000-0000-0000-0000-000000000004', 'Inactive BCE 260', 'inactive260@example.test', 'bce', 'inactiv'),
+  ('26000000-0000-0000-0000-000000000005', 'Responsabil 260', 'responsabil260@example.test', 'responsabil', 'activ'),
+  ('26000000-0000-0000-0000-000000000006', 'BC 260', 'bc260@example.test', 'bc', 'activ');
 
 insert into public.campaigns (department_id, name, created_by) values
   ('edu', 'Campaign 260', '26000000-0000-0000-0000-000000000001');
@@ -149,6 +157,16 @@ select is((select count(*) from public.leadership_member_tasks('26000000-0000-00
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000004');
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
   'inactive BCE sees no protected rows despite stale claims');
+-- The gate is `>= 5`, not `>= 4`. Without this pair every denied persona here
+-- is level 2, inactive, demoted or claimless, so loosening the threshold by one
+-- rank would leave the whole suite green -- and level 4 is exactly where the UI
+-- already draws a different line (capabilities.ts: manageTasks: 4).
+select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000005');
+select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
+  'a responsabil (level 4, one rank below the gate) cannot open another Member''s Tracker');
+select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000006');
+select isnt((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
+  'a BC does see the drill-down -- the allow side is not carried by BCE alone');
 select pg_temp.test_login('26000000-0000-0000-0000-000000000001', '{}'::jsonb);
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
   'claimless caller sees no protected rows');
