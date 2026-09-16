@@ -7,13 +7,31 @@ import { taskRow } from '../../test/task-fixtures';
 const hooks = vi.hoisted(() => ({
   useMyTasks: vi.fn(),
   useTaskProgress: vi.fn(),
+  useTaskOpportunities: vi.fn(),
+  useTaskManagement: vi.fn(),
+  useTaskLeadership: vi.fn(),
+  useManagedTasks: vi.fn(),
+  useAllTasks: vi.fn(),
+  level: 1,
+}));
+vi.mock('../../queries/task-opportunities', () => ({
+  useTaskOpportunities: hooks.useTaskOpportunities,
+}));
+vi.mock('../../queries/task-tabs', () => ({
+  useTaskManagement: hooks.useTaskManagement,
+  useTaskLeadership: hooks.useTaskLeadership,
+  useManagedTasks: hooks.useManagedTasks,
+  useAllTasks: hooks.useAllTasks,
 }));
 vi.mock('../../queries/tasks', () => ({ useMyTasks: hooks.useMyTasks }));
 vi.mock('../../queries/task-progress', () => ({
   useTaskProgress: hooks.useTaskProgress,
 }));
 vi.mock('../../lib/auth', () => ({
-  useAuth: () => ({ session: { user: { id: 'member' } } }),
+  useAuth: () => ({
+    session: { user: { id: 'member' } },
+    claims: { member_level: hooks.level },
+  }),
 }));
 import TrackerScreen from './TrackerScreen';
 
@@ -31,6 +49,33 @@ function query(overrides: Record<string, unknown> = {}) {
 
 describe('My tasks screen', () => {
   beforeEach(() => {
+    hooks.level = 1;
+    hooks.useTaskOpportunities.mockReturnValue({
+      data: [],
+      isPending: false,
+      isError: false,
+    });
+    hooks.useTaskManagement.mockReturnValue({
+      data: false,
+      isPending: false,
+      isError: false,
+    });
+    hooks.useManagedTasks.mockReturnValue({
+      data: [],
+      isPending: false,
+      isError: false,
+    });
+    hooks.useTaskLeadership.mockReturnValue({
+      data: false,
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    hooks.useAllTasks.mockReturnValue({
+      data: [],
+      isPending: false,
+      isError: false,
+    });
     hooks.useTaskProgress.mockReturnValue({
       mutateAsync: vi.fn().mockResolvedValue(undefined),
       isPending: false,
@@ -77,6 +122,89 @@ describe('My tasks screen', () => {
     await user.click(screen.getByRole('button', { name: 'Începe taskul' }));
     expect(mutateAsync).toHaveBeenCalledWith({ taskId: 1, action: 'start' });
     expect(screen.getAllByRole('article')).toHaveLength(1);
+  });
+
+  it('shows only authorized tabs and keyboard navigation opens Available', async () => {
+    const user = userEvent.setup();
+    query();
+    render(<TrackerScreen />);
+    expect(
+      screen.queryByRole('tab', { name: 'De gestionat' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'Toate' }),
+    ).not.toBeInTheDocument();
+    screen.getByRole('tab', { name: 'Taskurile mele' }).focus();
+    await user.keyboard('{ArrowRight}{Enter}');
+    expect(
+      screen.getByText('Nu sunt oportunități disponibile acum.'),
+    ).toBeVisible();
+  });
+
+  it('lets a local manager open the authorized management query without global access', async () => {
+    const user = userEvent.setup();
+    query();
+    hooks.useTaskManagement.mockReturnValue({ data: true, isError: false });
+    render(<TrackerScreen />);
+    await user.click(screen.getByRole('tab', { name: 'De gestionat' }));
+    expect(screen.getByText('Nu ai taskuri de gestionat acum.')).toBeVisible();
+    expect(
+      screen.queryByRole('tab', { name: 'Toate' }),
+    ).not.toBeInTheDocument();
+    expect(hooks.useManagedTasks).toHaveBeenCalledWith(true);
+  });
+
+  it('uses live server capability to show All despite stale advisory claims', async () => {
+    const user = userEvent.setup();
+    query();
+    hooks.level = 1;
+    hooks.useTaskLeadership.mockReturnValue({
+      data: true,
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<TrackerScreen />);
+    await user.click(screen.getByRole('tab', { name: 'Toate' }));
+    expect(screen.getByText('Nu există taskuri vizibile.')).toBeVisible();
+    expect(hooks.useAllTasks).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps All hidden when stale JWT claims say BCE but the live server denies it', () => {
+    query();
+    hooks.level = 5;
+    render(<TrackerScreen />);
+    expect(
+      screen.queryByRole('tab', { name: 'Toate' }),
+    ).not.toBeInTheDocument();
+    expect(hooks.useAllTasks).toHaveBeenCalledWith(false);
+  });
+
+  it('shows leadership capability loading and retry states', async () => {
+    const user = userEvent.setup();
+    query();
+    const refetch = vi.fn();
+    hooks.useTaskLeadership.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      refetch,
+    });
+    const { rerender } = render(<TrackerScreen />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se verifică accesul la toate taskurile',
+    );
+    hooks.useTaskLeadership.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch,
+    });
+    rerender(<TrackerScreen />);
+    await user.click(
+      screen.getByRole('button', { name: 'Reîncarcă accesul complet' }),
+    );
+    expect(refetch).toHaveBeenCalledOnce();
   });
 
   it('updates overdue while the screen stays open', () => {

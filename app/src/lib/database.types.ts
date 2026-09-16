@@ -2743,6 +2743,8 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
       }
+      can_manage_tasks: { Args: never; Returns: boolean }
+      can_read_all_tasks: { Args: never; Returns: boolean }
       cancel_task: {
         Args: { p_reason: string; p_task_id: number }
         Returns: {
@@ -3251,6 +3253,12 @@ export type Database = {
         }
       }
       member_level: { Args: { p_member: string }; Returns: number }
+      my_managed_task_ids: {
+        Args: never
+        Returns: {
+          task_id: number
+        }[]
+      }
       provision_profile: {
         Args: {
           p_dept_ids?: string[]
