@@ -1,0 +1,232 @@
+import type { Database } from '../../lib/database.types';
+import {
+  formatBucharestDay,
+  formatBucharestTime,
+} from '../../lib/calendar-time';
+
+type Tables = Database['public']['Tables'];
+type Task = Tables['tasks']['Row'];
+export type TaskStatus = Task['status'];
+
+/** Only authorized relations belong here. Missing embeds can mean RLS hid them. */
+export type TaskPresentationRow = Pick<
+  Task,
+  | 'id'
+  | 'title'
+  | 'description'
+  | 'status'
+  | 'deadline'
+  | 'completed_at'
+  | 'review_round'
+  | 'dept_id'
+  | 'team_id'
+  | 'project_id'
+  | 'assignment_mode'
+  | 'audience'
+  | 'kind'
+  | 'parent_task_id'
+  | 'campaign_id'
+  | 'duplicated_from_task_id'
+  | 'queue_closed_at'
+> & {
+  department?: Pick<Tables['departments']['Row'], 'name' | 'color'> | null;
+  team?: Pick<Tables['teams']['Row'], 'name' | 'dept_id'> | null;
+  project?: Pick<Tables['projects']['Row'], 'name'> | null;
+  campaign?: Pick<Tables['campaigns']['Row'], 'name'> | null;
+  parent?: Pick<Task, 'title'> | null;
+  assignments?: Pick<
+    Tables['task_assignments']['Row'],
+    'id' | 'member_id' | 'ended_at'
+  >[];
+  evaluations?: Pick<
+    Tables['task_evaluations']['Row'],
+    'id' | 'difficulty' | 'rating' | 'points' | 'reversed_at'
+  >[];
+  subtasks?: Pick<Task, 'id' | 'status'>[];
+};
+
+export type TaskPresentation = {
+  id: number;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  statusLabel: string;
+  origin: {
+    kind: 'department' | 'team' | 'project' | 'unknown';
+    id: string | number | null;
+    label: string;
+    color: string | null;
+  };
+  audience: 'local' | 'org' | null;
+  audienceLabel: string;
+  assignmentMode: 'direct' | 'public' | null;
+  executor: { memberId: string; assignmentId: number } | null;
+  candidature: {
+    status: 'pending' | 'selected' | 'withdrawn' | 'closed';
+    position: number | null;
+  } | null;
+  deadline: string | null;
+  deadlineLabel: string;
+  overdue: boolean;
+  feedbackPending: boolean;
+  completedLate: boolean;
+  queueClosed: boolean;
+  reviewRound: number;
+  difficulty: number | null;
+  rating: number | null;
+  points: number | null;
+  kind: 'task' | 'umbrella';
+  /** Counts only the supplied, authorized Subtasks; null means not loaded. */
+  subtaskProgress: { terminal: number; total: number } | null;
+  parent: { id: number; title: string } | null;
+  campaign: { id: number; name: string } | null;
+  duplicatedFromTaskId: number | null;
+};
+
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: 'De făcut',
+  in_progress: 'În lucru',
+  in_review: 'În verificare',
+  completed: 'Finalizat',
+  unfulfilled: 'Nerealizat',
+  cancelled: 'Anulat',
+};
+
+export function isTerminalTask(status: TaskStatus): boolean {
+  return ['completed', 'unfulfilled', 'cancelled'].includes(status);
+}
+
+function validInstant(value: string | null): string | null {
+  return value && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
+function taskOrigin(row: TaskPresentationRow): TaskPresentation['origin'] {
+  if (row.team_id !== null) {
+    return {
+      kind: 'team',
+      id: row.team_id,
+      label: `Echipă · ${row.team?.name?.trim() || 'Nume indisponibil'}`,
+      color: null,
+    };
+  }
+  if (row.project_id !== null) {
+    return {
+      kind: 'project',
+      id: row.project_id,
+      label: `Proiect · ${row.project?.name?.trim() || 'Nume indisponibil'}`,
+      color: null,
+    };
+  }
+  if (row.dept_id !== null) {
+    return {
+      kind: 'department',
+      id: row.dept_id,
+      label: `Departament · ${row.department?.name?.trim() || 'Nume indisponibil'}`,
+      color: row.department?.color ?? null,
+    };
+  }
+  return {
+    kind: 'unknown',
+    id: null,
+    label: 'Origine indisponibilă',
+    color: null,
+  };
+}
+
+/** Pure mapping: the caller supplies the clock and their own queue state. */
+export function toTaskPresentation(
+  row: TaskPresentationRow,
+  now: Date,
+  candidature: TaskPresentation['candidature'] = null,
+): TaskPresentation {
+  const deadline = validInstant(row.deadline);
+  const completedAt = validInstant(row.completed_at);
+  const kind = row.kind === 'umbrella' ? 'umbrella' : 'task';
+  const activeAssignment = row.assignments?.find(
+    (item) => item.ended_at === null,
+  );
+  // RLS may withhold Evaluations. Absence is unknown, never zero points.
+  const evaluation =
+    kind === 'task' && ['completed', 'unfulfilled'].includes(row.status)
+      ? row.evaluations
+          ?.filter((item) => item.reversed_at === null)
+          .reduce<
+            NonNullable<TaskPresentationRow['evaluations']>[number] | null
+          >(
+            (latest, item) => (!latest || item.id > latest.id ? item : latest),
+            null,
+          )
+      : null;
+
+  return {
+    id: row.id,
+    title: row.title.trim() || 'Task fără titlu',
+    description: row.description?.trim() || null,
+    status: row.status,
+    statusLabel: STATUS_LABELS[row.status],
+    origin: taskOrigin(row),
+    audience:
+      row.audience === 'local' || row.audience === 'org' ? row.audience : null,
+    audienceLabel:
+      row.audience === 'local'
+        ? 'În cadrul originii'
+        : row.audience === 'org'
+          ? 'În tot OSUBB'
+          : 'Audiență indisponibilă',
+    assignmentMode:
+      row.assignment_mode === 'direct' || row.assignment_mode === 'public'
+        ? row.assignment_mode
+        : null,
+    executor:
+      kind === 'task' && activeAssignment
+        ? {
+            memberId: activeAssignment.member_id,
+            assignmentId: activeAssignment.id,
+          }
+        : null,
+    candidature: kind === 'task' ? candidature : null,
+    deadline,
+    deadlineLabel: deadline
+      ? `${formatBucharestDay(deadline)}, ${formatBucharestTime(deadline)}`
+      : 'Fără termen',
+    overdue:
+      !isTerminalTask(row.status) &&
+      deadline !== null &&
+      Date.parse(deadline) < now.getTime(),
+    feedbackPending: row.status === 'in_progress' && row.review_round > 0,
+    completedLate:
+      row.status === 'completed' &&
+      deadline !== null &&
+      completedAt !== null &&
+      Date.parse(completedAt) > Date.parse(deadline),
+    queueClosed: validInstant(row.queue_closed_at) !== null,
+    reviewRound: row.review_round,
+    difficulty: evaluation?.difficulty ?? null,
+    rating: evaluation?.rating ?? null,
+    points: evaluation?.points ?? null,
+    kind,
+    subtaskProgress:
+      kind === 'umbrella' && row.subtasks
+        ? {
+            total: row.subtasks.length,
+            terminal: row.subtasks.filter((task) => isTerminalTask(task.status))
+              .length,
+          }
+        : null,
+    parent:
+      row.parent_task_id === null
+        ? null
+        : {
+            id: row.parent_task_id,
+            title: row.parent?.title?.trim() || 'Task-umbrelă',
+          },
+    campaign:
+      row.campaign_id === null
+        ? null
+        : {
+            id: row.campaign_id,
+            name: row.campaign?.name?.trim() || 'Campanie',
+          },
+    duplicatedFromTaskId: row.duplicated_from_task_id,
+  };
+}

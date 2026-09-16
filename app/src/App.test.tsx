@@ -33,6 +33,9 @@ vi.mock('./screens/dashboard/DashboardScreen', () => ({
 }));
 vi.mock('./screens/tracker/TrackerScreen', () => ({ default: () => null }));
 vi.mock('./screens/calendar/CalendarScreen', () => ({ default: () => null }));
+vi.mock('./screens/requests/CompletedWorkRequestScreen', () => ({
+  default: () => <h1>Cereri screen</h1>,
+}));
 
 import App from './App';
 

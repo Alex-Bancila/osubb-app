@@ -45,7 +45,32 @@ export const keys = {
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
+    available: (memberId: string | undefined) =>
+      ['tasks', 'available', { memberId }] as const,
+    scopes: (memberId: string | undefined) =>
+      ['tasks', 'scopes', { memberId }] as const,
+    queue: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'queue', { taskId, memberId }] as const,
+    history: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'history', { taskId, memberId }] as const,
+    detail: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'detail', { taskId, memberId }] as const,
+    managed: (memberId: string | undefined) =>
+      ['tasks', 'managed', { memberId }] as const,
+    management: (memberId: string | undefined) =>
+      ['tasks', 'management', { memberId }] as const,
+    leadershipCapability: (memberId: string | undefined) =>
+      ['tasks', 'leadership-capability', { memberId }] as const,
+    leadership: (memberId: string | undefined) =>
+      ['tasks', 'all', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
+  },
+  requests: {
+    all: ['requests'] as const,
+    origins: (memberId: string | undefined) =>
+      ['requests', 'origins', { memberId }] as const,
+    mine: (memberId: string | undefined) =>
+      ['requests', 'mine', { memberId }] as const,
   },
   events: {
     all: ['events'] as const,

@@ -19,7 +19,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(78);
+select plan(80);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -536,6 +536,18 @@ select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 3, 3, '  ') $
   (select gate_task_id from f337)),
   'PT400', 'evaluation_note_required',
   'the note check runs before the gate too -- a claimless caller with a blank note gets PT400, not 42501');
+-- Whole-wave review, finding 5: the two numeric inputs were hoisted to step 1
+-- beside the note, so that all three callers of private.evaluate_task answer a
+-- malformed Difficulty or Rating identically. Both are asserted: with only one
+-- of them pinned the other could be pushed back below the gate unnoticed.
+select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 9, 3, 'Nota valida') $$,
+  (select gate_task_id from f337)),
+  'PT400', 'invalid_difficulty',
+  'and so does the Difficulty range check -- a claimless caller with Difficulty 9 gets PT400, not 42501 (finding 5: this is what approve_completed_work_request already did)');
+select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 3, 9, 'Nota valida') $$,
+  (select gate_task_id from f337)),
+  'PT400', 'invalid_rating',
+  'and the Rating range check with it -- a claimless caller with Rating 9 gets PT400, not 42501');
 reset role;
 
 select is((select format('%s|%s|%s', task.status, task.difficulty, task.rating)
