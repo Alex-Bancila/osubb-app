@@ -19,11 +19,45 @@ select md5(string_agg(x, '|' order by x))
                 from project_members membership
                 join projects project on project.id = membership.project_id
                 join profiles member on member.id = membership.member_id
-    union all select format('task:%s:%s:%s', title, status, coalesce(rating::text, '-')) from tasks
-    union all select format('assignee:%s:%s', t.title, p.full_name)
-                from task_assignees a
-                join tasks t on t.id = a.task_id
-                join profiles p on p.id = a.member_id
+    -- #296: `kind`, `assignment_mode` and `audience` joined this line when the
+    -- demo was rebuilt on the normalized model — an Umbrella, a public
+    -- Opportunity and a direct Task are three different demo scenarios that
+    -- title/status/rating alone could not tell apart.
+    union all select format('task:%s:%s:%s:%s:%s:%s', title, status,
+                            coalesce(rating::text, '-'), kind,
+                            coalesce(assignment_mode, '-'), coalesce(audience, '-'))
+                from tasks
+    union all select format('campaign:%s:%s:%s:%s',
+                            campaign.department_id, campaign.name,
+                            campaign.is_active, creator.full_name)
+                from campaigns campaign
+                join profiles creator on creator.id = campaign.created_by
+    union all select format('candidate:%s:%s:%s:%s:%s',
+                            task.title, task.status, member.full_name,
+                            candidate.status,
+                            coalesce(decider.full_name, '-'))
+                from task_candidates candidate
+                join tasks task on task.id = candidate.task_id
+                join profiles member on member.id = candidate.member_id
+                left join profiles decider on decider.id = candidate.decided_by
+    union all select format('request:%s:%s:%s:%s:%s',
+                            requester.full_name, request.description,
+                            request.status, coalesce(decider.full_name, '-'),
+                            case when request.task_id is null then 'no-task' else 'linked' end)
+                from completed_work_requests request
+                join profiles requester on requester.id = request.requester_id
+                left join profiles decider on decider.id = request.decided_by
+    -- Activity rows are numerous and their ids and occurred_at move on every
+    -- reset, so the fingerprint carries their shape: how many rows of each
+    -- kind each Task's timeline holds.
+    union all select format('activity-count:%s:%s:%s:%s',
+                            task.title, task.status, activity.kind, count(*))
+                from task_activity activity
+                join tasks task on task.id = activity.task_id
+               group by task.title, task.status, activity.kind
+    -- #345 retired `task_assignees`; the `assignee:` line that read it is
+    -- gone with it. The `assignment:` lines below already covered the same
+    -- people on the same Tasks through `task_assignments`.
     union all select format('assignment:%s:%s:%s:%s:%s:%s:%s',
                             task.title,
                             member.full_name,
