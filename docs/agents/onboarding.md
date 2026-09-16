@@ -118,6 +118,8 @@ gh pr checks <pr> --watch                    # CI green, then a HUMAN merges
 
 Definition of done = migration applies on reset · tests pass and would fail without the feature · CI green · the issue's AC boxes checked · PR closes the issue. After merge: staging updates itself; delete the branch.
 
+Two scripts make the pre-push check cheaper. `bash scripts/check-local-ci.sh` runs every gate CI runs, in CI's order, across all four jobs, and prints one PASS/FAIL line each — everything except the gitleaks secret scan and the merge-only staging push, both of which it names on every run; pass `repo`, `db`, `functions` or `frontend` to run one job. `bash scripts/smoke-tracker-commands.sh` drives the whole Task Tracker command set end to end against the seeded local database — queue, assignment, review round trip, evaluation and its reversal, Umbrella rollup, Completed-work Request — through the `public` wrappers only, and ends by proving `authenticated` cannot write any Task table directly; run `npx supabase db reset` first, it rolls back and leaves the seed byte-identical. Neither replaces CI on the pull request (house rule 7). Both are described in `docs/backend/conventions.md`.
+
 ## Queue snapshot (historical, 2026-08-23 — `CLAUDE.md` holds the current queue)
 
 Done since the last update and merged: the v1 tables (#43–#46) · the provisioning RPC (#56) · the invite Edge Function and its end-to-end proof (#57, #58) · every policy that has landed so far (#59 profiles, #61 reference/teams, #62 calendar, #64 announcements, #129 the claimless audit) · the demo seed (#74–#76) · the frontend mini-spec (#79).
