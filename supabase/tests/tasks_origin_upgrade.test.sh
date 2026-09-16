@@ -36,11 +36,9 @@ insert into public.tasks (title, difficulty, dept_id, team_id) values
   ('Legacy Team With Redundant Department', 1, 'diverse', 't-app'),
   ('Legacy Team Only', 1, null, 't-app');
 
-insert into public.task_assignees (task_id, member_id)
-select id, '28400000-0000-0000-0000-000000000002'::uuid
-  from public.tasks
- where title = 'Legacy Team With Redundant Department';
-
+-- #345 dropped public.task_assignees; the participation evidence this
+-- harness checks survives the Origin migration is the Assignment written
+-- just below, which is the record that outlived the join table.
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks
    set status = 'completed', completed_at = now(), rating = 4
@@ -97,12 +95,12 @@ begin
 
   if not exists (
     select 1
-      from public.task_assignees as assignment
+      from public.task_assignments as assignment
       join public.tasks as task on task.id = assignment.task_id
      where task.title = 'Legacy Team With Redundant Department'
        and assignment.member_id = '28400000-0000-0000-0000-000000000002'
   ) then
-    raise exception 'legacy Task assignee evidence was lost';
+    raise exception 'legacy Task participation evidence was lost';
   end if;
 
   if not exists (
