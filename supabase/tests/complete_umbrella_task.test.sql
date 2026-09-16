@@ -133,7 +133,7 @@ select 'Subtask deschis #340', 'Inca in lucru', now() + interval '10 days', 'edu
 -- ---- U2 + S2: the EMPTY-notify case. Creator and actor are the SAME BCE,
 -- and the Subtask is already terminal, so a single call finishes the
 -- Umbrella outright. Department 'edu' has no other local BCE in this
--- database (the seed BCE sits in 'diverse'/'pr'), so private.task_managers'
+-- database (the seed BCE sits in 'diverse'), so private.task_managers'
 -- Department branch already returns nobody once the actor is excluded; the
 -- ONLY thing standing between that and a literal empty recipient set is
 -- task_managers' global BC/Moderator fallback, which the seed's two demo
@@ -717,11 +717,11 @@ select is(pg_temp.cu_complete_result(), 'completed',
 select extensions.dblink_exec('cu_complete', 'rollback');
 select extensions.dblink_disconnect('cu_complete');
 
--- ==================== 9. The command is not the only write path (yet) ====================
--- public.tasks itself is still directly writable by level >= 4 through the
--- legacy tasks_update_legacy policy (#345 retires it) -- no assertion here
--- would discriminate anything, so none is made (the #339 precedent). The two
--- history tables ARE already stopped by table privileges.
+-- ==================== 9. The command is the only write path ====================
+-- Since #345 `public.tasks` is stopped by table privileges exactly as the two
+-- history tables always were; rls_deny_by_default.test.sql pins that denial
+-- for a live BC beside a working create_task. What this section adds is the
+-- history tables, whose direct-write denial is specific to this command.
 select pg_temp.test_login('34000000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ insert into public.task_evaluations

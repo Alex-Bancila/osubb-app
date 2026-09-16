@@ -1,38 +1,63 @@
 #!/usr/bin/env bash
+# #290: the legacy multi-assignee join table's one-time backfill into
+# Assignment History, replayed over reconstructed pre-#290 legacy data.
+#
+# A `db reset` runs migrations against an empty database and only then
+# applies seed.sql, so on a fresh local stack
+# 20260911106000_backfill_task_assignments.sql has nothing to convert.
+# Staging is the environment where it mattered: a live database whose Tasks
+# still carried rows in the legacy `task_assignees` join table. This harness
+# reconstructs that shape inside a rollback-only transaction and replays the
+# real migration file over it, the same way
+# points_ledger_evaluations_upgrade.test.sh replays #317's backfill.
+#
+# #345 retired `public.task_assignees` for good -- dropped, not coming back
+# -- so this harness can no longer read legacy rows off a live seed the way
+# it once did. It creates the table itself, in its exact 20260812184706
+# shape, inside its own rolled-back scratch transaction -- the same pattern
+# tasks_lifecycle_upgrade.test.sh and points_ledger_evaluations_upgrade.test.sh
+# already use for this same table. The table must not survive the run: the
+# check after the transaction closes asserts it is gone.
+#
+# The original version of this harness (deleted whole by #345, restored here)
+# had a second phase that replayed the same migration against the *live*
+# seeded database and asserted the guard's `legacy_assignment_history_overlap`
+# refusal. That phase is gone for good, not merely trimmed: it depended on the
+# live seed holding `task_assignees` rows, a premise #345 permanently
+# falsified by retiring both the table and seed.sql's insert into it.
+# Replaying the migration against today's live database now fails with
+# `relation "public.task_assignees" does not exist` -- a different, meaningless
+# failure -- so there is nothing honest left for that phase to assert.
+# (#345 follow-up, review finding 2.)
 set -euo pipefail
 
 db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
 migration="supabase/migrations/20260911106000_backfill_task_assignments.sql"
 
-# Successful upgrade: remove only history for legacy-bearing Tasks inside a
-# rollback-only transaction, retain unrelated ended and active history, and replay the real
-# migration over production-shaped legacy data plus focused fixtures.
+# Successful upgrade: reconstruct the legacy join table empty, populate it
+# with production-shaped legacy data plus focused fixtures inside a
+# rollback-only transaction, retain unrelated ended and active history, and
+# replay the real migration over all of it.
 {
   cat <<'SQL'
 begin;
 set local client_min_messages = warning;
 
--- #317: the seed now writes an Evaluation and its ledger credit for every
--- graded demo participant, and both reference the Assignment history this
--- harness clears in order to replay #290. The credit goes first (its
--- evaluation_id is a foreign key), then the Evaluation — which is
--- append-only by trigger, so the owner disables that guard for exactly these
--- two statements. The whole transaction rolls back, and the snapshot the
--- assertions compare against is taken further down, after this cleanup, so
--- the "migration changed Points Ledger history" check is unaffected.
-delete from public.points_ledger ledger
- where exists (select 1 from public.task_assignees legacy
-                where legacy.task_id = ledger.task_id);
-
-alter table public.task_evaluations disable trigger task_evaluations_guard_change;
-delete from public.task_evaluations evaluation
- where exists (select 1 from public.task_assignees legacy
-                where legacy.task_id = evaluation.task_id);
-alter table public.task_evaluations enable trigger task_evaluations_guard_change;
-
-delete from public.task_assignments history
- where exists (select 1 from public.task_assignees legacy
-                where legacy.task_id = history.task_id);
+-- #345 dropped public.task_assignees outright, so nothing in the live
+-- database can hold rows referencing it any more. Recreate it here, empty,
+-- in its exact 20260812184706 shape -- the transaction rolls back, so it
+-- never outlives this run. (The pre-#345 version of this harness ran three
+-- `delete ... where exists (select 1 from public.task_assignees legacy ...)`
+-- cleanup statements here, to remove Points Ledger/Evaluation/Assignment
+-- rows tied to whatever legacy rows the live seed happened to hold. Against
+-- a table this harness itself just created empty, those deletes could never
+-- match anything, so they are gone rather than kept as dead code.)
+create table public.task_assignees (
+  task_id   bigint references public.tasks (id) on delete cascade,
+  member_id uuid references public.profiles (id) on delete cascade,
+  primary key (task_id, member_id)
+);
+alter table public.task_assignees enable row level security;
 
 insert into auth.users (id, email) values
   ('29000000-0000-0000-0000-000000000001', 'legacy-one-290@test.local'),
@@ -221,43 +246,12 @@ rollback;
 SQL
 } | docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -q
 
-# Failure upgrade: the freshly seeded database intentionally has both legacy
-# and new rows for demo compatibility. Replaying the migration must fail before
-# any mutation, report every overlapping Task in stable order, and leave all
-# relevant evidence byte-for-byte equivalent.
-fingerprint_sql="select jsonb_build_object(
-  'tasks', (select coalesce(jsonb_agg(to_jsonb(t) order by t.id), '[]'::jsonb) from public.tasks t),
-  'legacy', (select coalesce(jsonb_agg(to_jsonb(a) order by a.task_id, a.member_id), '[]'::jsonb) from public.task_assignees a),
-  'history', (select coalesce(jsonb_agg(to_jsonb(h) order by h.id), '[]'::jsonb) from public.task_assignments h),
-  'ledger', (select coalesce(jsonb_agg(to_jsonb(l) order by l.id), '[]'::jsonb) from public.points_ledger l)
-)::text"
-
-before=$(docker exec "$db_container" psql -X -At -U postgres -d postgres -c "$fingerprint_sql")
-expected_ids=$(docker exec "$db_container" psql -X -At -U postgres -d postgres -c "
-  select string_agg(task_id::text, ', ' order by task_id)
-    from (select distinct legacy.task_id from public.task_assignees legacy
-          join public.task_assignments history on history.task_id = legacy.task_id) overlap")
-
-set +e
-failure_output=$(docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres 2>&1 < "$migration")
-failure_status=$?
-set -e
-
-if [ "$failure_status" -eq 0 ]; then
-  echo "Task Assignment migration unexpectedly accepted overlapping history." >&2
-  exit 1
-fi
-if [[ "$failure_output" != *"legacy_assignment_history_overlap"* ]] \
-   || [[ "$failure_output" != *"Tasks with both legacy assignees and Assignment history: $expected_ids"* ]]; then
-  echo "Task Assignment migration did not report ordered overlapping Task IDs." >&2
-  echo "$failure_output" >&2
+# The scratch table must not survive its own transaction. If this fails, the
+# `rollback;` above did not do its job and the next command to run this
+# harness would find a `public.task_assignees` already lying around.
+if [ -n "$(docker exec "$db_container" psql -X -At -U postgres -d postgres -c "select to_regclass('public.task_assignees')")" ]; then
+  echo "public.task_assignees survived the harness; the scratch transaction did not roll back." >&2
   exit 1
 fi
 
-after=$(docker exec "$db_container" psql -X -At -U postgres -d postgres -c "$fingerprint_sql")
-if [ "$before" != "$after" ]; then
-  echo "Failed Task Assignment migration changed existing evidence." >&2
-  exit 1
-fi
-
-echo "Task Assignment backfill success and atomic-failure checks passed."
+echo "Task Assignment backfill upgrade checks passed (scratch task_assignees did not survive)."

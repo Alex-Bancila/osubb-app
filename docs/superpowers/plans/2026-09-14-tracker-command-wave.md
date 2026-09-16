@@ -79,26 +79,26 @@ Every task's requirements implicitly include this section.
 
 **Notifications (binding recipients and copy):** always `'task'::public.noti_kind`, `p_task_id` = the Task the row is about, `p_actor` = the actor. `{title}` is the Task title, `{name}` the actor's `full_name`, `{deadline}` the formatted deadline, `{reason}`/`{note}` the trimmed text.
 
-| Event                                                                                | Recipients                                                                              | Dedupe key                    | Title                                            | Body                                                                      |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
-| Executor assigned (create direct, assign, select, queue promotion, request approval) | the new Executor                                                                        | null                          | `Task nou: {title}`                              | `Ți-a fost atribuit acest task. Deadline: {deadline}.`                    |
-| First-come Executor (self via `express_task_interest`)                               | `task_managers`                                                                         | null                          | `Executor nou: {title}`                          | `{name} a preluat taskul.`                                                |
-| Candidate joined / withdrew                                                          | `task_managers`                                                                         | `task:{id}:queue`             | `Coadă: {title}`                                 | `{n} candidați în așteptare.` (`n` = live pending count after the change) |
-| Queue closed (manager close, completion, unfulfilled, cancel)                        | the pending Candidates being closed                                                     | null                          | `Coadă închisă: {title}`                         | `Nu mai poți fi selectat pentru acest task.`                              |
-| Content updated                                                                      | the active Executor                                                                     | null                          | `Task actualizat: {title}`                       | `Modificat: {changed fields joined by ', '}.`                             |
-| Gave up                                                                              | `task_managers`                                                                         | null                          | `Renunțare: {title}`                             | `{name} a renunțat: {reason}`                                             |
-| Executor replaced by selection                                                       | the replaced Executor                                                                   | null                          | `Înlocuit: {title}`                              | `Managerul a ales alt executant.`                                         |
-| Submitted for review                                                                 | `task_managers`                                                                         | null                          | `De verificat: {title}`                          | `{name} a trimis taskul spre verificare.`                                 |
-| Returned to progress                                                                 | the active Executor                                                                     | null                          | `Feedback de implementat: {title}`               | `{note}`                                                                  |
-| Evaluated completed                                                                  | the evaluated Executor                                                                  | null                          | `Task evaluat: {title}`                          | `{points} puncte (dificultate {difficulty}, calificativ {rating}).`       |
-| Evaluated unfulfilled                                                                | the evaluated Executor                                                                  | null                          | `Task nerealizat: {title}`                       | `{points} puncte (dificultate {difficulty}, calificativ {rating}).`       |
-| Reopened                                                                             | the reactivated Executor                                                                | null                          | `Task redeschis: {title}`                        | `{reason}`                                                                |
-| Cancelled                                                                            | the active Executor and the pending Candidates                                          | null                          | `Task anulat: {title}`                           | `{reason}`                                                                |
-| Subtask became terminal                                                              | `task_managers(umbrella_id, actor)`                                                     | `task:{umbrella_id}:subtasks` | `Subtask încheiat: {umbrella title}`             | `{terminal} din {total} subtaskuri încheiate.`                            |
-| Umbrella completed                                                                   | `task_managers(umbrella_id, actor)` (usually empty — the actor is normally the manager) | null                          | `Umbrelă finalizată: {title}`                    | `Toate subtaskurile sunt încheiate.`                                      |
-| Completed-work request created                                                       | the request's deciders (Task 17 pins the set)                                           | `request:{id}`                | `Cerere nouă: {description, first 60 chars}`     | `{name} a trimis o cerere de muncă realizată.`                            |
-| Request approved                                                                     | the requester                                                                           | null                          | `Cerere aprobată: {description, first 60 chars}` | `{points} puncte (dificultate {difficulty}, calificativ {rating}).`       |
-| Request rejected                                                                     | the requester                                                                           | null                          | `Cerere respinsă: {description, first 60 chars}` | `{note}`                                                                  |
+| Event                                                                                | Recipients                                                                                                                 | Dedupe key                    | Title                                            | Body                                                                      |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| Executor assigned (create direct, assign, select, queue promotion, request approval) | the new Executor                                                                                                           | null                          | `Task nou: {title}`                              | `Ți-a fost atribuit acest task. Deadline: {deadline}.`                    |
+| First-come Executor (self via `express_task_interest`)                               | `task_managers`                                                                                                            | null                          | `Executor nou: {title}`                          | `{name} a preluat taskul.`                                                |
+| Candidate joined / withdrew                                                          | `task_managers`                                                                                                            | `task:{id}:queue`             | `Coadă: {title}`                                 | `{n} candidați în așteptare.` (`n` = live pending count after the change) |
+| Queue closed (manager close, completion, unfulfilled, cancel)                        | the pending Candidates being closed                                                                                        | null                          | `Coadă închisă: {title}`                         | `Nu mai poți fi selectat pentru acest task.`                              |
+| Content updated                                                                      | the active Executor                                                                                                        | null                          | `Task actualizat: {title}`                       | `Modificat: {changed fields joined by ', '}.`                             |
+| Gave up                                                                              | `task_managers`                                                                                                            | null                          | `Renunțare: {title}`                             | `{name} a renunțat: {reason}`                                             |
+| Executor replaced by selection                                                       | the replaced Executor                                                                                                      | null                          | `Înlocuit: {title}`                              | `Managerul a ales alt executant.`                                         |
+| Submitted for review                                                                 | `task_managers`                                                                                                            | null                          | `De verificat: {title}`                          | `{name} a trimis taskul spre verificare.`                                 |
+| Returned to progress                                                                 | the active Executor                                                                                                        | null                          | `Feedback de implementat: {title}`               | `{note}`                                                                  |
+| Evaluated completed                                                                  | the evaluated Executor                                                                                                     | null                          | `Task evaluat: {title}`                          | `{points} puncte (dificultate {difficulty}, calificativ {rating}).`       |
+| Evaluated unfulfilled                                                                | the evaluated Executor                                                                                                     | null                          | `Task nerealizat: {title}`                       | `{points} puncte (dificultate {difficulty}, calificativ {rating}).`       |
+| Reopened                                                                             | the reactivated Executor                                                                                                   | null                          | `Task redeschis: {title}`                        | `{reason}`                                                                |
+| Cancelled                                                                            | the active Executor and the pending Candidates                                                                             | null                          | `Task anulat: {title}`                           | `{reason}`                                                                |
+| Subtask became terminal                                                              | `task_managers(umbrella_id, actor)`                                                                                        | `task:{umbrella_id}:subtasks` | `Subtask încheiat: {umbrella title}`             | `{terminal} din {total} subtaskuri încheiate.`                            |
+| Umbrella completed                                                                   | `task_managers(umbrella_id, actor)` (normally **non-empty**: the helper falls back to every live BC/Moderator — Ruling 24) | null                          | `Umbrelă finalizată: {title}`                    | `Toate subtaskurile sunt încheiate.`                                      |
+| Completed-work request created                                                       | the request's deciders (Task 17 pins the set)                                                                              | `request:{id}`                | `Cerere nouă: {description, first 60 chars}`     | `{name} a trimis o cerere de muncă realizată.`                            |
+| Request approved                                                                     | the requester                                                                                                              | null                          | `Cerere aprobată: {description, first 60 chars}` | `{points} puncte (dificultate {difficulty}, calificativ {rating}).`       |
+| Request rejected                                                                     | the requester                                                                                                              | null                          | `Cerere respinsă: {description, first 60 chars}` | `{note}`                                                                  |
 
 **Tests (conventions §8, binding for every command suite):**
 
@@ -179,6 +179,77 @@ else n || ' de candidați în așteptare.' end`.
   `malformed array literal`). And never resolve a fixture id inside a `format()` while the persona
   being denied is logged in — it returns NULL through that persona's RLS and the assertion passes for
   the wrong reason. Resolve ids as the owner, before `test_login`.
+
+### Rulings 19–29 and the closeout three (added 2026-09-16, whole-wave review finding 10)
+
+The rulings below were made during Tasks 12–19 and in the closeout PR. Most lived only in a
+migration header or in the git-ignored SDD ledger, which is exactly how the wave's most expensive
+lesson (Ruling 20) came to be contradicted by the binding conventions document. They are recorded
+here so they survive the workspace. **Rulings 20, 22, 23, 28 and the three closeout entries are
+also in `docs/backend/conventions.md`, which is the binding document** — this list is the wave's
+own history of them, not a second source of truth.
+
+- **Ruling 19 — a documented lock-probe gap is a fallback, not a first answer.** Report honestly
+  when a probe does not discriminate; then check whether a two-session `pg_temp.test_race` would.
+  Where a discriminating race is cheap and available, add it. Accept the gap only when none exists
+  (e.g. the vulnerable window is _before_ any lock is taken).
+- **Ruling 20 — a parent/Umbrella row is locked `for no key update`, never `for update`.**
+  `private.evaluate_task`'s parent-naming `task_activity`/`notifications` inserts take an implicit
+  FK `FOR KEY SHARE` on the parent; `FOR KEY SHARE` conflicts with `FOR UPDATE` and with nothing
+  else, so the stronger mode forms a real ABBA cycle (`40P01`) against a concurrent evaluation of
+  a child. Reproduced under mutation three times (#338, #339, #340). `pgrowlocks` reports the mode
+  as the exact string `For No Key Update`. Child rows a command only reads are `for share`.
+- **Ruling 22 — `for no key update` on a target that _may_ be an Umbrella is free**, so take it
+  unconditionally rather than branching on `kind` after an unlocked pre-read. It still conflicts
+  with itself and with `FOR UPDATE`, so serialization is unchanged; the only unique index on
+  `public.tasks` is the primary key, so the writes take the no-key updater lock anyway and the
+  pre-taken lock never needs upgrading. All it gives up is `FOR KEY SHARE`, which nothing takes
+  explicitly on `tasks`.
+- **Ruling 23 — a `throws_ok` on a constraint violation names the constraint, never `null`.**
+  Postgres evaluates CHECKs in name order, so a newly added constraint can silently untest an older
+  one while the assertion stays green (#339: `tasks_cancel_reason_ck` shadowed #312's rule).
+  Re-check every negative test on a table whenever you add a constraint to it.
+- **Ruling 24 — `private.task_managers` is normally non-empty.** Its last-resort branch returns
+  every live BC/Moderator, so the ordinary production case notifies all of them. A genuinely empty
+  recipient set requires deactivating the seed's BC and Moderator accounts inside a rolled-back
+  test transaction.
+- **Ruling 26 — a Completed-work Request's visibility keys to its read policy.** A caller who can
+  already `SELECT` the row (`requester_id = uid or can_manage_origin`) gets `42501`; a caller who
+  cannot gets `PT404`. `completed_work_requests_read` is the single source of truth about what a
+  persona can see, and no persona receives `42501` while unable to read the row.
+- **Ruling 27 — a decider may decide their own Request.** ADR-0007 is silent, `can_evaluate_task`
+  already lets a Project lead evaluate their own Assignment, and the audit trail is explicit: the
+  Request's `decided_by`/`decided_at` and the Task's activity rows. Encoded as a test rather than
+  left accidental. (Its self-award consequence is filed as an issue draft — see the section at the
+  end of this plan.)
+- **Ruling 28 — the reason names what the thing IS, not which command took it.**
+  `evaluation_note_required` for a note that becomes an Evaluation's note (three commands);
+  `note_required` for a decision or feedback note; `reason_required` for a reason recorded on a row.
+- **Ruling 29 — the seed's cleanup order follows the FKs, not the brief.** Requests before Tasks,
+  Campaigns after, because the `task_id`/`campaign_id` foreign keys have no `on delete` action; the
+  schema wins over the instruction. The extra `request:` fingerprint line stays: without it a missed
+  request cleanup escapes the re-runnability check.
+- **Closeout — a value outside a CHECK's range is raised at step 1, before the gate.** It is
+  malformed for every caller, so no one could ever have succeeded with it. Validation that depends
+  on the loaded row (kind, status, Origin) stays at step 5. Sibling commands over one core must
+  agree: `complete_task_review` and `mark_task_unfulfilled` were aligned with
+  `approve_completed_work_request`, which already hoisted both numeric inputs.
+- **Closeout — only `set_task_queue` logs a `queue_closed` activity row.**
+  `select_task_candidate` and `cancel_task` close the queue and fold `closed_candidates` into their
+  own row (`candidate_selected` / `cancelled`); `private.evaluate_task` records the close nowhere on
+  the Task's own timeline. `decided_by` is the actor for a manual close and **null** for an
+  Evaluation's automatic one. The ledger's "an automatic close writes none" was too loose — two of
+  the three silent closers are manual by that criterion.
+- **Closeout — `create_completed_work_request_impl`'s missing `for share` locks are an accepted
+  deviation.** It is a membership-only check by a non-privileged actor _filing_ a request; the worst
+  race outcome is a `pending` Request against an Origin the requester just left, which a decider
+  must still act on. The `require_*` locking discipline is binding wherever the actor **exercises**
+  authority, which is why `approve`/`reject` keep it in full.
+- **Ruling 6's deferred half is still open.** The gate triple (`uid is null` / `auth_is_member()` /
+  a live `activ` profile) is copied five times — `require_task_visible`, `create_task_impl`,
+  `create_completed_work_request_impl`, `approve_…`, `reject_…` — and the intended fix is a shared
+  `private.require_member()`. Deferred from Task 1 "for the final whole-stack review", not done
+  there either; filed as an issue draft at the end of this plan.
 
 ---
 
@@ -1105,7 +1176,8 @@ public.reject_completed_work_request(p_request_id bigint, p_note text) returns p
 
 1. Merge bottom-up as before (each merge retargets the next; wait for the retargeted PR to show base `main`). Task 18 is the point of no return for the legacy paths — merge it only after 1–17 are on `main` and staging deployed them.
 2. Refresh `CLAUDE.md`'s **Status** section (docs-only commit on `main`): migrations/assertion counts, "the command set is complete", the frontend as the next lane.
-3. Post the drafted items still waiting in `.superpowers/sdd/2026-09-11-tracker-schema-completion/github-drafts.md` (the `profiles` security issue especially; the `assignee_manage` item is closed by Task 18).
+3. Post the two issue drafts in the **Issue drafts to post** section at the end of this file — the self-award paths (four of them, one decision) and the `private.require_member()` extraction. Their full text is here rather than in the SDD workspace precisely because that workspace is git-ignored and goes away; paste each fenced block into `gh issue create` as-is.
+4. Post the drafted items still waiting in `.superpowers/sdd/2026-09-11-tracker-schema-completion/github-drafts.md` if that workspace still exists (the `profiles` security issue especially; the `assignee_manage` item is closed by Task 18).
 
 ## Risks and rulings
 
@@ -1122,3 +1194,168 @@ public.reject_completed_work_request(p_request_id bigint, p_note text) returns p
 - **Tracker frontend** #164–#191, #346–#354 (36 issues) — needs `app/` conventions from dobrerares' shadcn/TanStack foundation; blocked on this stack's commands.
 - **Leadership/points** #258 (SuperGod25), #259, #260, #262; **notifications** #66, #68.
 - **#364** consolidation of the five live "who is the caller" helpers (dobrerares).
+
+## Issue drafts to post
+
+The two issues this wave surfaced but did not file. They live here, in a tracked file, because the
+SDD workspace they were drafted in is git-ignored and will be deleted; each fenced block is the
+issue body verbatim, in the house format (house rule 15), ready to paste into `gh issue create`.
+Both are `needs-triage`; the second is also `max-1h`.
+
+### Draft 1 - Self-award paths: a manager can evaluate, reverse, approve and cancel their own work
+
+```markdown
+## Self-award paths: a manager can evaluate, reverse, approve and cancel their own work
+
+**Labels:** `needs-triage`
+
+## Goal
+
+Decide whether a member who holds manager or evaluator authority over an Origin may exercise it on
+their **own** work, and close whichever of the four paths below the answer says should be closed.
+
+## Why
+
+`private.can_evaluate_task` carries a self-carve-out on the **Project** branch only: a Project
+Responsible may not evaluate the lead's Assignment or their own. Nothing else in the Tracker has
+one. Four distinct self-award paths follow, all of them reachable today, all of them consistent
+with ADR-0007 as written — which is why none was patched inside the wave.
+
+1. **A local BCE evaluates their own Department Task.** The BCE branch of `can_evaluate_task` has
+   no self-carve-out, so a local BCE can complete-review their own work on a Department or
+   Department-Team Task and take the points.
+2. **…and can reverse it.** With `public.reopen_task` (#338) the same BCE can reverse an award —
+   including erasing their own `unfulfilled` penalty, which is a direct self-benefit. #336, #337
+   and #338 all inherit the same predicate, so this is a model decision, not a bug in one command.
+3. **A decider approves their own Completed-work Request** (Ruling 27). A local BCE, a Project lead
+   or any BC/Moderator can file a Request against their own Origin and immediately approve it:
+   `require_request_decider` admits them, nothing forbids deciding one's own Request, and
+   `private.notify` drops the actor — so the call mints a completed Task, an Evaluation and up to
+   **+15** ledger points with **zero** notifications to anyone. This is strictly wider than 1–2,
+   because it needs no underlying tracked work at all: the Request's description is the only
+   record that the work happened.
+4. **A manager cancels their own failing Task ahead of the deadline.** `public.cancel_task` is
+   manager-gated with no self-carve-out and no deadline condition, while
+   `public.mark_task_unfulfilled` requires an elapsed deadline. So an Independent-Team member
+   (every active member manages the Team), a local BCE, or a Project lead who is _also_ the
+   Executor can cancel their own Task before it can ever be marked unfulfilled. A cancelled Task
+   carries no Evaluation and no points, so the negative award never lands.
+
+ADR-0007 §Authorization grants the BCE branch without a self-carve-out and is silent on Requests
+and on cancellation, so today's code matches the ADR. The question is whether the ADR intended it.
+The audit trail exists in every case (`task_evaluations.evaluated_by`,
+`completed_work_requests.decided_by`/`decided_at`, `tasks.cancel_reason` and the Task's activity
+rows) — the question is whether an audit trail is the right control, or whether the commands should
+refuse.
+
+Found during the review of #338 (paths 1–2) and the final whole-wave review (paths 3–4, findings 7
+and G). Deliberately **not** patched inside the wave: fixing one command in isolation would make it
+inconsistent with its siblings over the same shared predicate.
+
+## What to build
+
+Either (a) amend ADR-0007 §Authorization to state that self-evaluation, self-decision and
+self-cancellation are intended, naming the audit trail as the control, and add a test pinning each
+of the four paths; or (b) close the ones the decision says to close:
+
+- paths 1–2: extend `private.can_evaluate_task`'s BCE branch with the same self-carve-out the
+  Project branch has, and re-verify #336/#337/#338's authority matrices. Note that #338
+  additionally needs the carve-out applied against the **evaluated** Assignment rather than the
+  active one, since a terminal Task has no active Assignment — see the local fix already shipped in
+  `reopen_task_impl` for the shape.
+- path 3: refuse `requester_id = actor` in `private.require_request_decider`'s decide copy only
+  (never in the create copy), or require a second decider.
+- path 4: give `cancel_task` a self-carve-out when the actor is the active Executor, or a deadline
+  condition mirroring `mark_task_unfulfilled`'s.
+
+Decide the four together: they are one question about self-authority, and answering them
+separately is how the asymmetry arose.
+
+## Acceptance criteria
+
+- [ ] A decision for each of the four paths is recorded in ADR-0007 §Authorization.
+- [ ] A test pins whichever behavior was chosen, for each path.
+- [ ] If any path is closed, the commands that share the predicate stay consistent with each other.
+
+## Required tests
+
+`supabase/tests/complete_task_review.test.sql`, `mark_task_unfulfilled.test.sql` and
+`reopen_task.test.sql` each gain a case for a local BCE acting on their own Department Task;
+`completed_work_request_commands.test.sql` already has a `lives_ok` for self-approval (Ruling 27)
+that flips to `throws_ok` if path 3 is closed; `cancel_task.test.sql` gains a case for a manager
+cancelling a Task they are themselves executing, before its deadline.
+
+## Blocked by
+
+None — can start immediately.
+```
+
+### Draft 2 - Extract `private.require_member()`: the gate triple is copied five times
+
+```markdown
+## Extract `private.require_member()`: the gate triple is copied five times
+
+**Labels:** `needs-triage`, `max-1h`
+
+## Goal
+
+Replace the five hand-copied copies of the Tracker's membership gate with one
+`private.require_member()` helper.
+
+## Why
+
+Every command that has no target row to check visibility against opens with the identical three
+conditions — no `auth.uid()`, no organization claims (`public.auth_is_member()`), or no live
+`activ` row in `public.profiles` — and raises `42501`. It appears five times:
+
+- `private.require_task_visible` (#327)
+- `private.create_task_impl` (#327)
+- `private.create_completed_work_request_impl` (#344)
+- `private.approve_completed_work_request_impl` (#344)
+- `private.reject_completed_work_request_impl` (#344)
+
+Five copies of a security gate is five places to get a future amendment wrong — and the wave has
+already seen what a one-character slip in a copied guard costs (`null <> 'reopen'` is NULL, the
+#327 review's I1). The three Request commands additionally raise `request_command_forbidden` where
+the two Task commands raise `task_command_forbidden`, so the helper takes the scope noun as a
+parameter rather than pinning one string.
+
+This was deferred twice: from #327's fix round as "a structural refactor of the kit's entry points,
+logged for the final whole-stack review" (Ruling 6), and from the whole-wave review itself, which
+found it still outstanding (finding 10).
+
+## What to build
+
+`private.require_member(p_scope text) returns uuid` in a new migration: reads the actor as
+`(select auth.uid())`, applies the three conditions, raises
+`42501 <p_scope>_command_forbidden` on failure and returns the actor otherwise. It is a
+`require_*` helper, so per conventions §4 it revokes execute from all four roles and gets **no**
+grant back.
+
+Then `create or replace` the five callers to delegate to it — bodies otherwise byte-identical, one
+`create or replace` per function, no grants added (`CREATE OR REPLACE` preserves the ACL). Bump
+`supabase/tests/tracker_grants.test.sql`'s roster by one, to 84, with category `require`.
+
+Do not fold the `PT404 task_not_found` half of `require_task_visible` into the helper: that half
+needs a target row and the other four callers have none.
+
+## Acceptance criteria
+
+- [ ] `private.require_member` exists, is `security definer set search_path = ''`, and carries no
+      grant to `authenticated` (`supabase/tests/conventions.test.sql` enforces the last one).
+- [ ] All five callers delegate to it; no copy of the three conditions remains in a command body.
+- [ ] Every existing `task_command_forbidden` / `request_command_forbidden` assertion across the
+      command suites still passes unchanged — the refactor changes no behavior.
+- [ ] The pinned roster is 84 and `unpinned`/`missing` are both `{}`.
+
+## Required tests
+
+No new suite. The existing claimless / `anon` / deactivated-member denials in
+`create_task.test.sql`, `completed_work_request_commands.test.sql` and every suite that reaches
+`require_task_visible` are the regression net, and they must pass byte-identically.
+`tracker_grants.test.sql` gains the roster row.
+
+## Blocked by
+
+None — can start immediately.
+```
