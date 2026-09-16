@@ -116,7 +116,8 @@ create or replace view public.dept_cup
 with (security_invoker = on)
 as
   select cup.dept_id, cup.name, cup.points, cup.members
-    from private.department_cup_rows(null::bigint) as cup;
+    from private.department_cup_rows(null::bigint) as cup
+   order by cup.points desc, cup.name asc;
 
 comment on view public.dept_cup is
   'Unfiltered Department standings for live BCE, BC, and Moderator Members. Task Points follow each Task Origin: Department and Department-Team Tasks qualify; Project and Independent-Team Tasks do not. Diverse and Secretariat never compete.';

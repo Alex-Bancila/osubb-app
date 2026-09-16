@@ -259,10 +259,12 @@ insert into member_departments (member_id, dept_id) values
   ('d0000000-0000-0000-0000-000000000007', 'org'),
   ('d0000000-0000-0000-0000-000000000008', 'diverse'),
   -- Financiar and Resurse Umane get a member each so all five real
-  -- departments appear in the cup. `dept_cup` inner-joins through
-  -- member_departments, so a department with nobody in it disappears from the
-  -- standings entirely (issue #134) — which would be a strange thing for BC
-  -- to notice mid-demo.
+  -- departments show a member in the directory and the Department picker.
+  -- Since #259, `dept_cup`'s standings follow each Task's Origin, not
+  -- `member_departments` -- every `kind = 'department'` row is a Cup row even
+  -- on zero members -- so this membership fixture is for the `members`
+  -- column and the picker, not for a department's presence in the cup
+  -- (issue #134, closed by #259).
   ('d0000000-0000-0000-0000-000000000007', 'fin'),
   ('d0000000-0000-0000-0000-000000000005', 'hr'),
   -- Secretariat is the other coordination structure #310 created. It carries
