@@ -65,6 +65,13 @@ export const keys = {
       ['tasks', 'all', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
+  requests: {
+    all: ['requests'] as const,
+    origins: (memberId: string | undefined) =>
+      ['requests', 'origins', { memberId }] as const,
+    mine: (memberId: string | undefined) =>
+      ['requests', 'mine', { memberId }] as const,
+  },
   events: {
     all: ['events'] as const,
     upcoming: (memberId: string) =>
