@@ -65,10 +65,8 @@ values (
   'a5100000-0000-0000-0000-000000000003',
   'edu'
 );
-insert into public.task_assignees (task_id, member_id)
-select id, 'a5100000-0000-0000-0000-000000000001'::uuid
-  from public.tasks
- where title = 'my-points-task';
+-- #345 retired task_assignees; pg_temp.test_credit_task below opens the
+-- Assignment its Evaluation needs, so the participant is named there.
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 4
  where title = 'my-points-task';
