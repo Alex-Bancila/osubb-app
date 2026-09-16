@@ -119,3 +119,36 @@ describe('DataTable', () => {
     ).toHaveClass('overflow-x-auto');
   });
 });
+
+describe('DataTable filters', () => {
+  it('filters supplied rows and composes filtering with keyboard sorting', async () => {
+    const user = userEvent.setup();
+    render(
+      <DataTable
+        columns={columns}
+        data={[
+          { member: 'Mara', points: 18 },
+          { member: 'Maria', points: 7 },
+          { member: 'Andrei', points: 3 },
+        ]}
+        emptyTitle="Niciun rezultat"
+        filters={[{ columnId: 'member', label: 'Caută membru' }]}
+      />,
+    );
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Caută membru' }),
+      'Mar',
+    );
+    expect(visibleMembers()).toEqual(['Mara', 'Maria']);
+    const sort = screen.getByRole('button', {
+      name: 'Sortează Puncte crescător',
+    });
+    sort.focus();
+    await user.keyboard('{Enter}');
+    expect(visibleMembers()).toEqual(['Maria', 'Mara']);
+    await user.clear(screen.getByRole('searchbox'));
+    expect(visibleMembers()).toEqual(['Andrei', 'Maria', 'Mara']);
+    await user.type(screen.getByRole('searchbox'), 'nimeni');
+    expect(screen.getByText('Niciun rezultat')).toBeVisible();
+  });
+});
