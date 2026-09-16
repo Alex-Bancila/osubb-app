@@ -375,6 +375,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('approve_completed_work_request_impl',         'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text',                                           'impl'),
   ('archive_project_impl',                        'p_project_id bigint',                                                                                                'impl'),
   ('assign_task_executor_impl',                   'p_task_id bigint, p_member_id uuid',                                                                                 'impl'),
+  ('actor_level',                                 'p_actor uuid',                                                                                                      'none'),
   -- #339: cancelling a Task with a recorded reason, plus its Umbrella cascade.
   ('cancel_task_impl',                            'p_task_id bigint, p_reason text',                                                                                    'impl'),
   ('caller_level',                                 '',                                                                                                                   'predicate'),
@@ -443,6 +444,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- #338: the undo of an Evaluation -- the one command that reverses points.
   ('reopen_task_impl',                            'p_task_id bigint, p_reason text',                                                                                    'impl'),
   ('require_active_project_lead',                 'p_project_id bigint',                                                                                                'require'),
+  ('require_active_member',                       '',                                                                                                                   'require'),
   ('require_campaign_manager',                    'p_department_id text',                                                                                               'require'),
   ('require_department_team_membership_manager',  'p_team_id text',                                                                                                     'require'),
   ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
@@ -477,8 +479,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 86,
-  'the pinned private-schema roster itself has exactly the 86 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, #341''s duplicate_task_impl plus its provenance trigger guard, and #344''s four -- require_request_decider plus the create/approve/reject Completed-work Request _impl trio -- LESS #345''s one removal, task_is_unassigned, dropped with the legacy table it queried, PLUS #259''s department_cup_rows, #260''s leadership_member_tasks_impl and #258''s leadership_leaderboard_impl');
+  (select count(*) from pinned_private_functions)::int, 88,
+  'the audited roster contains the 86 post-#258 functions plus #364''s actor_level and require_active_member helpers');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
