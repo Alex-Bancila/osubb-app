@@ -57,26 +57,23 @@ insert into public.member_departments (member_id, dept_id) values
 insert into public.tasks (title, difficulty, dept_id) values
   ('pv-flor', 1, 'edu'), ('pv-felix', 2, 'edu'), ('pv-fiona', 3, 'edu'),
   ('pv-frida', 4, 'edu'), ('pv-fane', 5, 'edu');
-insert into public.task_assignees (task_id, member_id)
-select t.id, case t.title
-  when 'pv-flor' then 'f1000000-0000-0000-0000-0000000000f1'::uuid
-  when 'pv-felix' then 'f2000000-0000-0000-0000-0000000000f2'::uuid
-  when 'pv-fiona' then 'f3000000-0000-0000-0000-0000000000f3'::uuid
-  when 'pv-frida' then 'f4000000-0000-0000-0000-0000000000f4'::uuid
-  else 'f5000000-0000-0000-0000-0000000000f5'::uuid
-end
-from public.tasks t
-where t.title like 'pv-%';
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 3
  where title like 'pv-%';
 -- #317: one Evaluation and one ledger entry per participant — the Rating
--- alone no longer credits anybody.
-select pg_temp.test_credit_task(task.id, assignee.member_id,
+-- alone no longer credits anybody. #345 retired the task_assignees join
+-- table the participant list used to live in; pg_temp.test_credit_task
+-- opens the Assignment each Evaluation needs.
+select pg_temp.test_credit_task(task.id, participant.member_id,
                                 'f5000000-0000-0000-0000-0000000000f5')
-  from public.tasks task
-  join public.task_assignees assignee on assignee.task_id = task.id
- where task.title like 'pv-%';
+  from (values
+    ('pv-flor',  'f1000000-0000-0000-0000-0000000000f1'::uuid),
+    ('pv-felix', 'f2000000-0000-0000-0000-0000000000f2'::uuid),
+    ('pv-fiona', 'f3000000-0000-0000-0000-0000000000f3'::uuid),
+    ('pv-frida', 'f4000000-0000-0000-0000-0000000000f4'::uuid),
+    ('pv-fane',  'f5000000-0000-0000-0000-0000000000f5'::uuid)
+  ) as participant (title, member_id)
+  join public.tasks task on task.title = participant.title;
 
 -- Ordinary members, including Responsabil, receive no global metrics.
 select pg_temp.test_login('f1000000-0000-0000-0000-0000000000f1', jsonb_build_object(

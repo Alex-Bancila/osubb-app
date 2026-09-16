@@ -31,24 +31,21 @@ insert into public.member_departments (member_id, dept_id) values
 
 insert into public.tasks (title, difficulty, dept_id) values
   ('cup-active', 5, 'hr'), ('cup-inactive', 5, 'hr'), ('cup-alumni', 5, 'hr');
-insert into public.task_assignees (task_id, member_id)
-select t.id, case t.title
-  when 'cup-active' then 'c1000000-0000-0000-0000-000000000001'::uuid
-  when 'cup-inactive' then 'c2000000-0000-0000-0000-000000000002'::uuid
-  else 'c3000000-0000-0000-0000-000000000003'::uuid
-end
-from public.tasks t
-where t.title like 'cup-%';
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 3
  where title like 'cup-%';
 -- #317: the Rating no longer credits anyone by itself — each participant's
 -- Evaluation and ledger entry are written explicitly (5 x 1 = 5 each).
-select pg_temp.test_credit_task(task.id, assignee.member_id,
+-- #345 retired the task_assignees join table this list used to live in;
+-- pg_temp.test_credit_task writes the Assignment each Evaluation needs.
+select pg_temp.test_credit_task(task.id, participant.member_id,
                                 'c1000000-0000-0000-0000-000000000001')
-  from public.tasks task
-  join public.task_assignees assignee on assignee.task_id = task.id
- where task.title like 'cup-%';
+  from (values
+    ('cup-active',   'c1000000-0000-0000-0000-000000000001'::uuid),
+    ('cup-inactive', 'c2000000-0000-0000-0000-000000000002'::uuid),
+    ('cup-alumni',   'c3000000-0000-0000-0000-000000000003'::uuid)
+  ) as participant (title, member_id)
+  join public.tasks task on task.title = participant.title;
 
 select ok(
   exists (
