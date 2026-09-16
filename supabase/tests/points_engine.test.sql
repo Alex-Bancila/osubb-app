@@ -254,7 +254,7 @@ select ok(
 
 select is(
   (select count(*) from dept_cup where dept_id = 'tst'),
-  0::bigint, 'Department Cup returns only the five canonical competing Departments');
+  0::bigint, 'the database owner sees no dept_cup row for tst either -- this suite''s own extra department competes under a real BCE+ session (department_cup_task_origins.test.sql), the owner just never sees any row at all (next assertion)');
 
 select is(
   (select count(*) from dept_cup),

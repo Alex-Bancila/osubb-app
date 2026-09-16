@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(33);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -31,6 +31,15 @@ select ok(not has_function_privilege('anon', 'public.department_cup(bigint)', 'E
   'anon cannot execute the Campaign-filtered Department Cup read');
 select ok(not has_function_privilege('service_role', 'private.department_cup_rows(bigint)', 'EXECUTE'),
   'the server role cannot bypass the BCE+ gate through the private body');
+-- Pins the view-level revoke too, not only the function grant above: dept_cup
+-- is security_invoker over a body service_role has no `usage` on `private` to
+-- reach anyway (conventions.test.sql), so a retained grant here could never
+-- return rows -- it would fail 42501 on the private schema. Nothing needs it
+-- (grepped app/, supabase/functions/, scripts/, .github/workflows/), so the
+-- revoke stands and this assertion keeps a future migration from quietly
+-- restoring it.
+select ok(not has_table_privilege('service_role', 'public.dept_cup', 'SELECT'),
+  'service_role holds no select on the Department Cup view -- it could never satisfy it without private schema usage');
 
 -- ==================== 2. kind = 'department' IS the competing set ====================
 -- The first draft of #259 wrote `department.id in ('edu','pr','youth','fin','hr')`
@@ -41,18 +50,27 @@ select ok(not has_function_privilege('service_role', 'private.department_cup_row
 select set_eq(
   $$ select id from public.departments where kind = 'department' $$,
   $$ values ('edu'::text), ('pr'::text), ('youth'::text), ('fin'::text), ('hr'::text) $$,
-  'departments.kind = ''department'' is exactly the five competing Departments; diverse, secretariat and org carry another kind');
+  'reference data pin, not a schema invariant: today''s seeded rows put kind = ''department'' on exactly these five ids -- a sixth real Department added later must update this pin and be re-read into the Cup, not be taken as a sign the Cup broke');
 
 -- ==================== 3. Fixtures ====================
 
 insert into auth.users (id, email) values
   ('25900000-0000-0000-0000-000000000001', 'bce259@example.test'),
   ('25900000-0000-0000-0000-000000000002', 'member259@example.test'),
-  ('25900000-0000-0000-0000-000000000003', 'inactive259@example.test');
+  ('25900000-0000-0000-0000-000000000003', 'inactive259@example.test'),
+  ('25900000-0000-0000-0000-000000000004', 'responsabil259@example.test'),
+  ('25900000-0000-0000-0000-000000000005', 'bc259@example.test');
 insert into public.profiles (id, full_name, email, role, status) values
   ('25900000-0000-0000-0000-000000000001', 'BCE 259', 'bce259@example.test', 'bce', 'activ'),
   ('25900000-0000-0000-0000-000000000002', 'Member 259', 'member259@example.test', 'activ', 'activ'),
-  ('25900000-0000-0000-0000-000000000003', 'Inactive BCE 259', 'inactive259@example.test', 'bce', 'inactiv');
+  ('25900000-0000-0000-0000-000000000003', 'Inactive BCE 259', 'inactive259@example.test', 'bce', 'inactiv'),
+  -- Level 4 -- the rank directly below the gate. This is the persona that
+  -- pins the threshold: `app/src/lib/capabilities.ts` carries `manageTasks: 4`
+  -- for `responsabil`, so a gate accidentally loosened to `>= 4` must be
+  -- caught here rather than shipping unnoticed (review finding 1).
+  ('25900000-0000-0000-0000-000000000004', 'Responsabil 259', 'responsabil259@example.test', 'responsabil', 'activ'),
+  -- Level 6 -- proves the allow side is not carried by BCE alone.
+  ('25900000-0000-0000-0000-000000000005', 'BC 259', 'bc259@example.test', 'bc', 'activ');
 
 -- The Executor belongs to no Department at all: every point below has to reach
 -- a Department through its Task's Origin or not at all.
@@ -180,6 +198,24 @@ select is((select count(*) from public.dept_cup), 0::bigint,
   'an ordinary Member (level 2) sees no protected rows');
 select is((select count(*) from public.department_cup(2590001)), 0::bigint,
   'an ordinary Member gets no rows from the filtered read either -- and no error');
+
+-- Pins the threshold itself, not merely "some level is denied". A responsabil
+-- is level 4, the rank directly below the gate, and is the plausible-drift
+-- case named in review finding 1: loosening `>= 5` to `>= 4` would leave every
+-- other persona in this suite green.
+select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000004');
+select is((select count(*) from public.dept_cup), 0::bigint,
+  'a responsabil (level 4, one rank below the gate) sees no protected rows');
+select is((select count(*) from public.department_cup(2590001)), 0::bigint,
+  'a responsabil gets no rows from the filtered read either -- the gate is >= 5, not >= 4');
+
+-- Pins the allow side above BCE alone: a gate accidentally narrowed to `= 5`
+-- must fail here.
+select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000005');
+select is((select count(*) from public.dept_cup), 5::bigint,
+  'a BC (level 6) also sees the Department Cup -- the gate is >= 5, not = 5');
+select is((select points from public.department_cup(2590001) where dept_id = 'edu'), 12,
+  'a BC sees the same Campaign-filtered totals a BCE would');
 
 select pg_temp.test_login('25900000-0000-0000-0000-000000000002',
   '{"member_role":"bce","member_level":5,"dept_ids":[],"team_ids":[]}'::jsonb);
