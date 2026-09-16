@@ -3160,6 +3160,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      leadership_leaderboard: {
+        Args: {
+          p_campaign_id?: number
+          p_department_id?: string
+          p_project_id?: number
+          p_team_id?: string
+        }
+        Returns: {
+          full_name: string
+          member_id: string
+          points: number
+          rank: number
+        }[]
+      }
       leadership_member_tasks: {
         Args: { p_member_id: string }
         Returns: {

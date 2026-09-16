@@ -320,7 +320,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- nothing: the BCE+ gate lives inside the function, not in the grant.
   ('department_cup',                 'p_campaign_id bigint',         false, true,  false, false),
   -- #260: the leadership drill-down over one Member's Assignment history.
-  ('leadership_member_tasks',        'p_member_id uuid',             false, true,  false, false);
+  ('leadership_member_tasks',        'p_member_id uuid',             false, true,  false, false),
+  -- #258: the Task-Points Leaderboard, filterable by Origin and Campaign.
+  ('leadership_leaderboard',         'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',
+                                                                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -352,7 +355,7 @@ end
 $$;
 
 select is(pg_temp.public_function_mismatches(), '{}'::text[],
-  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, every #327-#344 Task command wrapper, and the two leadership read wrappers #259''s department_cup and #260''s leadership_member_tasks) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
+  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, every #327-#344 Task command wrapper, and the three leadership read wrappers #259''s department_cup, #260''s leadership_member_tasks and #258''s leadership_leaderboard) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
 
 -- ==================== 7. private schema: pinned function roster ====================
 
@@ -416,6 +419,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_candidate',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
+  -- #258: the Task-Points Leaderboard body behind
+  -- `public.leadership_leaderboard(department, team, project, campaign)`.
+  ('leadership_leaderboard_impl',                 'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',                                   'authenticated_only'),
   ('leadership_member_tasks_impl',                'p_member_id uuid',                                                                                                  'impl'),
   ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
   -- #337: the second command over the shared evaluate_task core (#336) --
@@ -471,8 +477,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 85,
-  'the pinned private-schema roster itself has exactly the 85 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, #341''s duplicate_task_impl plus its provenance trigger guard, and #344''s four -- require_request_decider plus the create/approve/reject Completed-work Request _impl trio -- LESS #345''s one removal, task_is_unassigned, dropped with the legacy table it queried, PLUS #259''s department_cup_rows and #260''s leadership_member_tasks_impl');
+  (select count(*) from pinned_private_functions)::int, 86,
+  'the pinned private-schema roster itself has exactly the 86 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, #341''s duplicate_task_impl plus its provenance trigger guard, and #344''s four -- require_request_decider plus the create/approve/reject Completed-work Request _impl trio -- LESS #345''s one removal, task_is_unassigned, dropped with the legacy table it queried, PLUS #259''s department_cup_rows, #260''s leadership_member_tasks_impl and #258''s leadership_leaderboard_impl');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
