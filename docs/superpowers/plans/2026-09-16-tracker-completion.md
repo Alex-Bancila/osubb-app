@@ -18,7 +18,7 @@ Read these before arguing with any task below; every line was checked, not remem
 
 **Backend — complete.** All 24 commands in ADR-0007's server-command boundary exist as `public.<verb>_<noun>()` wrappers over `private.*_impl`, including `create_campaign`, `update_campaign`, `set_campaign_active` and the three Completed-work Request commands. `task_assignees`, `task_requests`, `claim_open_task` and every direct-DML policy are gone (#345). The pinned `private` roster is **83**. `app/src/lib/database.types.ts` is current: every command is under `Functions`, every Tracker table and view under `Tables`/`Views`.
 
-**Backend — reporting is still legacy.** `public.leaderboard` (`20260907204817`) ranks `member_points` — the *whole* ledger, not task points — for level ≥ 5 and active profiles only; `public.dept_cup` sums it by the member's *current* department. ADR-0007 §Lifecycle and points requires: member name + Task points only; Cup by the **Task's Origin** (Department and Department-Team Tasks; Project and Independent-Team work never); filters by Department (including its Teams), Team, Project, Campaign applied to the producing Task; a row opens that member's authorized full Tracker; eligibility regardless of current Profile status. That is #258 (SuperGod25), #259 and #260 (dobrerares, PRs #475/#476 — see below), #262, and the frontend #354.
+**Backend — reporting is still legacy.** `public.leaderboard` (`20260907204817`) ranks `member_points` — the _whole_ ledger, not task points — for level ≥ 5 and active profiles only; `public.dept_cup` sums it by the member's _current_ department. ADR-0007 §Lifecycle and points requires: member name + Task points only; Cup by the **Task's Origin** (Department and Department-Team Tasks; Project and Independent-Team work never); filters by Department (including its Teams), Team, Project, Campaign applied to the producing Task; a row opens that member's authorized full Tracker; eligibility regardless of current Profile status. That is #258 (SuperGod25), #259 and #260 (dobrerares, PRs #475/#476 — see below), #262, and the frontend #354.
 
 **Backend — notifications.** `public.notifications` **has** self policies since `20260911030000_notification_self_access.sql` (`select` own rows; `update (read)` own rows); `private.notify` writes Task-kind rows with a `link` column meant for in-app routes. `push_tokens` has **no** policies (#66). No deadline reminder job exists (#69). Web Push is a deferred decision (#70). Realtime is not configured; ADR-0007 allows it only as a cache-invalidation signal, and 30 s `staleTime` polling is acceptable for the go-live.
 
@@ -46,13 +46,13 @@ Read these before arguing with any task below; every line was checked, not remem
 
 ## Stack overview and order
 
-| Stack | Tasks | What it delivers | Owner | Blocks |
-| --- | --- | --- | --- | --- |
-| **F — Unblock** | F1, F2 | dobrerares' 13 frontend PRs rebased onto post-wave `main` and merged bottom-up; his 2 reporting PRs rebased | dobrerares (spec written here; I do it with his go-ahead) | everything in H–J that touches his files |
-| **G — Reporting backend** | G1–G4 | `leadership_leaderboard(filters)`, `department_cup(filters)`, `leadership_member_tasks`, the points authorization matrix, the deadline reminder job | G1 SuperGod25 (#258); G2 dobrerares (#259/#260 → aligned to one filter signature); G3, G4 unassigned | J1 |
-| **H — Command layer + member flows** | H1–H4 | one typed `callCommand()`, start/submit/give-up, own points + ledger, my requests | unassigned | I, J |
-| **I — Manager flows** | I1–I7 | task form (direct/public, umbrella/subtask, campaign), edit/convert/duplicate, queue management, the evaluation dialog family, umbrella progress, campaigns panel, request decisions | unassigned | — |
-| **J — Leadership + notifications** | J1–J3 | `/clasament` with filters and drill-down, notifications screen + badge, Tracker off Ionic + routing tests | unassigned | — |
+| Stack                                | Tasks  | What it delivers                                                                                                                                                                     | Owner                                                                                                | Blocks                                   |
+| ------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **F — Unblock**                      | F1, F2 | dobrerares' 13 frontend PRs rebased onto post-wave `main` and merged bottom-up; his 2 reporting PRs rebased                                                                          | dobrerares (spec written here; I do it with his go-ahead)                                            | everything in H–J that touches his files |
+| **G — Reporting backend**            | G1–G4  | `leadership_leaderboard(filters)`, `department_cup(filters)`, `leadership_member_tasks`, the points authorization matrix, the deadline reminder job                                  | G1 SuperGod25 (#258); G2 dobrerares (#259/#260 → aligned to one filter signature); G3, G4 unassigned | J1                                       |
+| **H — Command layer + member flows** | H1–H4  | one typed `callCommand()`, start/submit/give-up, own points + ledger, my requests                                                                                                    | unassigned                                                                                           | I, J                                     |
+| **I — Manager flows**                | I1–I7  | task form (direct/public, umbrella/subtask, campaign), edit/convert/duplicate, queue management, the evaluation dialog family, umbrella progress, campaigns panel, request decisions | unassigned                                                                                           | —                                        |
+| **J — Leadership + notifications**   | J1–J3  | `/clasament` with filters and drill-down, notifications screen + badge, Tracker off Ionic + routing tests                                                                            | unassigned                                                                                           | —                                        |
 
 **Critical path to 1 October:** F1 → H1 → I1 (create) → I4 (evaluate) → H2 (start/submit) → J1 (leaderboard). Those six give BC/BCE the loop they run today in Google Sheets: create work, hand it out, evaluate it, see the standings. Everything else improves it.
 
@@ -71,7 +71,7 @@ Read these before arguing with any task below; every line was checked, not remem
 - This is dobrerares' work. The plan writes the exact procedure so it takes an hour, not a day; **who runs it is his call** (he can hand it to me — the branches are on the shared remote). Nothing in Stack H–J that touches his files starts before this merges.
 - Rebase **bottom-up**, one branch at a time, each onto its rebased parent; after each rebase run `cd app && npm run gen:types` and commit only if the file changed. Because the stack's tips carry the same stale types, most branches will show only the regenerated file as their own change.
 - `#487`'s migration `20260915193556_my_managed_task_ids.sql` sorts **before** `20260915193604_retire_legacy_task_writes.sql` on `main`; rename it to a timestamp **after** `20260916101117_tracker_wave_closeout.sql` (`npx supabase migration new my_managed_task_ids` and move the body) so it applies on top of the wave, then re-pin the roster: it adds three **public** functions and no `private` ones, so the count stays **83** and only `expected_function_privs` gains three rows.
-- ~~`#482` reads `task_queue_summary`, which does not exist.~~ **Corrected 2026-09-16 before execution: the view *does* exist on `main`**, created by `20260911211200_task_history_read_policies.sql` (`security_invoker`, `select` to `authenticated`/`service_role`), exposing `task_id`, `pending_count` and `my_position` through the `SECURITY DEFINER` helpers `private.pending_candidate_count` and `private.queue_position`. `#482`'s read is correct as written and needs no change. The research note behind the original ruling was wrong; nothing in the stack creates or needs to create that view.
+- ~~`#482` reads `task_queue_summary`, which does not exist.~~ **Corrected 2026-09-16 before execution: the view _does_ exist on `main`**, created by `20260911211200_task_history_read_policies.sql` (`security_invoker`, `select` to `authenticated`/`service_role`), exposing `task_id`, `pending_count` and `my_position` through the `SECURITY DEFINER` helpers `private.pending_candidate_count` and `private.queue_position`. `#482`'s read is correct as written and needs no change. The research note behind the original ruling was wrong; nothing in the stack creates or needs to create that view.
 - Each rebased PR must pass **the types gate and the roster gate**; a red types diff means a branch still carries a `task_assignees` or `task_requests` type — search the file, do not hand-edit it.
 
 - [ ] For each branch bottom-up: `git fetch origin && git switch <branch> && git rebase origin/<parent>` (parent = `main` for #471), resolve, `cd app && npm run gen:types`, `git add app/src/lib/database.types.ts && git commit -m "chore(types): regenerate after #345"` when changed, `git push --force-with-lease`.
@@ -87,7 +87,7 @@ Read these before arguing with any task below; every line was checked, not remem
 **Rulings:**
 
 - Both were written before the wave; `#475` is `CONFLICTING` and its db job fails for real. Rebase onto `main`, re-pin the roster (each adds `private` functions: read, then `+N`), re-timestamp after the closeout migration.
-- `#475`'s `private.department_cup_rows()` already attributes points to `coalesce(task.dept_id, team.dept_id)` over `reason in ('task','task_reversal')` — the ADR rule. Keep it, but **align its signature with G1**: `department_cup(p_team_id text default null, p_project_id bigint default null, p_campaign_id bigint default null)` is meaningless for the Cup (Cup rows *are* departments); the Cup takes only `p_campaign_id`. Rule: `department_cup_rows(p_campaign_id bigint default null)`, filtering `task.campaign_id = p_campaign_id` when given.
+- `#475`'s `private.department_cup_rows()` already attributes points to `coalesce(task.dept_id, team.dept_id)` over `reason in ('task','task_reversal')` — the ADR rule. Keep it, but **align its signature with G1**: `department_cup(p_team_id text default null, p_project_id bigint default null, p_campaign_id bigint default null)` is meaningless for the Cup (Cup rows _are_ departments); the Cup takes only `p_campaign_id`. Rule: `department_cup_rows(p_campaign_id bigint default null)`, filtering `task.campaign_id = p_campaign_id` when given.
 - `#476`'s `public.leadership_member_tasks(p_member_id uuid)` is the drill-down J1's row click needs; keep its shape, make sure it returns `tasks_with_overdue` columns plus the member's Assignment state and the Evaluation (difficulty, rating, points) so the drill-down needs no second query.
 - The five-department hard-code `department.id in ('edu','pr','youth','fin','hr')` in #475 duplicates `departments.kind = 'department'`; keep only the `kind` predicate (ADR: `diverse`/`secretariat` never enter the Cup, and they are `kind <> 'department'`).
 
@@ -115,7 +115,7 @@ public.leadership_leaderboard(
 
 **Rulings:**
 
-- Sum only `points_ledger.reason in ('task','task_reversal')`, joined to `tasks` through `entry.task_id`; awards, sanctions and every other reason are excluded (ADR: "Awards do not exist. Sanctions … may affect a member's personal total" — the Leaderboard is *Task* points).
+- Sum only `points_ledger.reason in ('task','task_reversal')`, joined to `tasks` through `entry.task_id`; awards, sanctions and every other reason are excluded (ADR: "Awards do not exist. Sanctions … may affect a member's personal total" — the Leaderboard is _Task_ points).
 - **Filters apply to the producing Task, never to the member's memberships.** `p_department_id` matches `task.dept_id = p_department_id` **or** `task.team_id in (select id from teams where dept_id = p_department_id)` (a Department includes its Department Teams — the same rule as the Cup). `p_team_id`, `p_project_id`, `p_campaign_id` match the Task's column directly. Filters combine with `and`. All null = unfiltered.
 - **Eligibility regardless of current Profile status**: join `profiles` for the name only; no `status = 'activ'` predicate (ADR: "Anyone with completed Task history remains eligible").
 - Rows: `member_id, full_name, points, rank() over (order by points desc, full_name asc)`; members with zero task points are **not** rows (the Leaderboard is "members ordered by Task Points").
@@ -201,15 +201,32 @@ Delivered by F2's rebased PRs. The only plan-level rulings: `department_cup(p_ca
 **Interfaces — Produces (every later frontend task consumes):**
 
 ```ts
-export type CommandName = keyof Database['public']['Functions'];
-export type CommandArgs<F extends CommandName> = Database['public']['Functions'][F]['Args'];
-export type CommandResult<F extends CommandName> = Database['public']['Functions'][F]['Returns'];
-export type CommandErrorKind = 'forbidden' | 'not_found' | 'conflict' | 'invalid' | 'unknown';
-export class CommandError extends Error { readonly kind: CommandErrorKind; readonly code?: string; readonly reason?: string; }
-export function classifyCommandError(error: { code?: string; message?: string } | null): CommandError;
-export async function callCommand<F extends CommandName>(fn: F, args: CommandArgs<F>): Promise<CommandResult<F>>;
-export function commandMessage(error: CommandError): string;   // Romanian, by reason, with a per-kind fallback
-export const invalidations: { task: QueryKey[]; points: QueryKey[]; requests: QueryKey[]; campaigns: QueryKey[] };
+export type CommandName = keyof Database["public"]["Functions"];
+export type CommandArgs<F extends CommandName> =
+  Database["public"]["Functions"][F]["Args"];
+export type CommandResult<F extends CommandName> =
+  Database["public"]["Functions"][F]["Returns"];
+export type CommandErrorKind =
+  "forbidden" | "not_found" | "conflict" | "invalid" | "unknown";
+export class CommandError extends Error {
+  readonly kind: CommandErrorKind;
+  readonly code?: string;
+  readonly reason?: string;
+}
+export function classifyCommandError(
+  error: { code?: string; message?: string } | null,
+): CommandError;
+export async function callCommand<F extends CommandName>(
+  fn: F,
+  args: CommandArgs<F>,
+): Promise<CommandResult<F>>;
+export function commandMessage(error: CommandError): string; // Romanian, by reason, with a per-kind fallback
+export const invalidations: {
+  task: QueryKey[];
+  points: QueryKey[];
+  requests: QueryKey[];
+  campaigns: QueryKey[];
+};
 ```
 
 **Rulings:**
@@ -227,7 +244,7 @@ export const invalidations: { task: QueryKey[]; points: QueryKey[]; requests: Qu
 
 **Files:** Create `app/src/queries/task-progress-commands.ts` (+ test), `app/src/screens/tracker/GiveUpDialog.tsx` (+ test); modify the merged `TaskCard.tsx` (actions slot). Model: standard tier. Blocked by F1, H1. One PR per issue (three small PRs sharing the query file's growth), or one PR closing all three if the reviewer accepts the batch — ruling: **three PRs**, `Closes #185` / `#186` / `#176`, since each has its own acceptance criteria and gating.
 
-**Rulings:** actions appear only for the member's **own active** Assignment: `Începe` when `status = 'todo'` → `start_task`; `Trimite la verificare` when `in_progress` → `submit_task_for_review`; `Renunță` when `todo|in_progress` → `GiveUpDialog` (required non-blank reason) → `give_up_task(p_task_id, p_reason)`. No give-up in `in_review` (ADR). After give-up the card disappears from "Taskurile mele" on invalidation; a public Task shows nothing about promotion to the leaver (the promoted Candidate learns by notification — #176's AC "reflects automatic candidate promotion" is satisfied by the queue position refresh on the *other* member's card, test that through the query invalidation, not through UI the leaver cannot see).
+**Rulings:** actions appear only for the member's **own active** Assignment: `Începe` when `status = 'todo'` → `start_task`; `Trimite la verificare` when `in_progress` → `submit_task_for_review`; `Renunță` when `todo|in_progress` → `GiveUpDialog` (required non-blank reason) → `give_up_task(p_task_id, p_reason)`. No give-up in `in_review` (ADR). After give-up the card disappears from "Taskurile mele" on invalidation; a public Task shows nothing about promotion to the leaver (the promoted Candidate learns by notification — #176's AC "reflects automatic candidate promotion" is satisfied by the queue position refresh on the _other_ member's card, test that through the query invalidation, not through UI the leaver cannot see).
 
 - [ ] Mutations: `useStartTask()`, `useSubmitTaskForReview()`, `useGiveUpTask()` over `callCommand`, `onSettled: invalidations.task`.
 - [ ] `GiveUpDialog`: shadcn `sheet` or dialog, textarea, disabled submit on blank, shows `commandMessage` on error, closes on success.
