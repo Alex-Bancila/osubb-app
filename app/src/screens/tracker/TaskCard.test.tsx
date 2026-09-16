@@ -7,6 +7,7 @@ import {
   toTaskPresentation,
   type TaskPresentationRow,
 } from './task-presentation';
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { taskRow } from '../../test/task-fixtures';
 
 function card(
