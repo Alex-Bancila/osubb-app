@@ -1,63 +1,73 @@
-import { IonContent, IonPage } from '@ionic/react';
+import { useEffect, useState } from 'react';
 import { useMyTasks } from '../../queries/tasks';
-import { Empty, ErrorState, Loading } from '../../components/states';
-import { formatDate } from '../../lib/format';
+import { useTaskProgress } from '../../queries/task-progress';
+import { useAuth } from '../../lib/auth';
+import { Button } from '../../components/ui/button';
+import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import { TaskCard } from './TaskCard';
+import { toTaskPresentation } from './task-presentation';
 
-const STATUS_LABEL: Record<string, string> = {
-  todo: 'De făcut',
-  in_progress: 'În lucru',
-  in_review: 'În verificare',
-  completed: 'Finalizat',
-  unfulfilled: 'Neîndeplinit',
-  cancelled: 'Anulat',
-};
-
-/* Deliberately plain: it exists to show the query layer returning live data
-   (#87). The shadcn + TanStack Table tracker (ADR-0002) with tabs, candidate
-   queue and evaluation is #88–#92. */
 export default function TrackerScreen() {
   const tasks = useMyTasks();
+  const progress = useTaskProgress();
+  const { session } = useAuth();
+  const [now, setNow] = useState(() => new Date());
+  // Derived overdue badges advance while the screen stays open, without reads.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
-    <IonPage>
-      <IonContent className="ion-padding">
-        <section className="card">
-          <h2 className="card-title">Taskurile mele</h2>
-
-          {tasks.isPending ? (
-            <Loading />
-          ) : tasks.isError ? (
-            <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
-          ) : tasks.data.length === 0 ? (
-            <Empty text="Nu ai niciun task asignat acum." />
-          ) : (
-            <ul className="task-list">
-              {tasks.data.map((task) => (
-                <li key={task.id}>
-                  <span className="task-title">{task.title}</span>
-                  <span className={`chip chip--${task.status}`}>
-                    {STATUS_LABEL[task.status] ?? task.status}
-                  </span>
-                  <span className="task-meta">{formatDate(task.deadline)}</span>
-                  {/* Difficulty, and the Rating once there is one. Points
-                      moved onto the Evaluation with #317 and are not
-                      readable from here yet (#164 rebuilds this screen
-                      around them); showing a number this screen would have
-                      to recompute from the scoring guide would be a second
-                      copy of a rule the ledger already owns. */}
-                  <span className="task-meta">
-                    {task.difficulty === null
-                      ? 'dificultate —'
-                      : task.rating === null
-                        ? `dificultate ${task.difficulty}`
-                        : `dificultate ${task.difficulty} · nota ${task.rating}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </IonContent>
-    </IonPage>
+    <section
+      className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6"
+      aria-labelledby="my-tasks-title"
+    >
+      <header className="space-y-2">
+        <h1 id="my-tasks-title" className="text-2xl font-semibold">
+          Taskurile mele
+        </h1>
+        <p className="text-muted-foreground">
+          Lucrul tău de acum și taskurile la care ai contribuit.
+        </p>
+      </header>
+      {tasks.isPending ? (
+        <p role="status">Se încarcă taskurile…</p>
+      ) : tasks.isError ? (
+        <div role="alert" className="space-y-3">
+          <p>Nu am putut încărca taskurile.</p>
+          <Button
+            variant="outline"
+            className="min-h-11 min-w-11"
+            onClick={() => tasks.refetch()}
+          >
+            Încearcă din nou
+          </Button>
+        </div>
+      ) : tasks.data.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Nu ai niciun task atribuit încă.</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ul className="grid min-w-0 list-none gap-4 p-0 md:grid-cols-2">
+          {tasks.data.map((row) => (
+            <li key={row.id} className="min-w-0">
+              <TaskCard
+                task={toTaskPresentation(row, now)}
+                memberId={session?.user.id}
+                pending={
+                  progress.isPending && progress.variables?.taskId === row.id
+                }
+                onProgress={(taskId, action) =>
+                  progress.mutateAsync({ taskId, action })
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

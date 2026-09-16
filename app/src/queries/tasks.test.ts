@@ -6,7 +6,6 @@ const api = vi.hoisted(() => ({
   byMode: vi.fn(),
   queueOpened: vi.fn(),
   queueOpen: vi.fn(),
-  myTasksSelect: vi.fn(),
   byMember: vi.fn(),
   orderAssignedAt: vi.fn(),
   orderId: vi.fn(),
@@ -15,6 +14,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../lib/supabase', () => ({ supabase: { from: api.from } }));
 
 import { fetchMyTasks, fetchOpenTasks } from './tasks';
+import { taskRow } from '../test/task-fixtures';
 
 describe('public Task opportunities', () => {
   beforeEach(() => {
@@ -88,111 +88,117 @@ describe('public Task opportunities', () => {
   });
 });
 
-describe('my tasks', () => {
+describe('normalized My tasks reads', () => {
   beforeEach(() => {
-    api.from.mockReturnValue({ select: api.myTasksSelect });
-    api.myTasksSelect.mockReturnValue({ eq: api.byMember });
+    api.from.mockReturnValue({ select: api.select });
+    api.select.mockReturnValue({ eq: api.byMember });
     api.byMember.mockReturnValue({ order: api.orderAssignedAt });
     api.orderAssignedAt.mockReturnValue({ order: api.orderId });
   });
 
-  /* This is the residual from #345's review (Finding 4): the old query
-     filtered `ended_at is null`, which silently dropped every completed,
-     unfulfilled and cancelled Task from "Taskurile mele". Points come from
-     completed work, so a member's own list must keep terminal Tasks — this
-     test fails the moment that filter comes back. */
-  it('keeps completed, unfulfilled and cancelled Tasks in the list', async () => {
+  it('reads current and past own Assignments, deduplicates Tasks, and sorts exact instants', async () => {
+    const later = taskRow({ id: 2, deadline: '2026-09-16T08:00:00Z' });
+    const earlier = taskRow({ id: 1, deadline: '2026-09-16T10:00:00+03:00' });
     api.orderId.mockResolvedValue({
       data: [
-        {
-          task: {
-            id: 1,
-            title: 'Finished work',
-            status: 'completed',
-            deadline: null,
-          },
-        },
-        {
-          task: {
-            id: 2,
-            title: 'Failed work',
-            status: 'unfulfilled',
-            deadline: null,
-          },
-        },
-        {
-          task: {
-            id: 3,
-            title: 'Cancelled work',
-            status: 'cancelled',
-            deadline: null,
-          },
-        },
+        { task: later },
+        { task: earlier },
+        { task: later },
+        { task: null },
       ],
       error: null,
     });
 
-    const result = await fetchMyTasks('member-1');
+    await expect(fetchMyTasks('member')).resolves.toEqual([earlier, later]);
+    expect(api.from).toHaveBeenCalledWith('task_assignments');
+    expect(api.byMember).toHaveBeenCalledWith('member_id', 'member');
+    expect(api.select.mock.lastCall?.[0]).toContain(
+      'evaluations:task_evaluations',
+    );
+    expect(api.select.mock.lastCall?.[0]).not.toContain('task_assignees');
+  });
+
+  /* #345's review, Finding 4: the query once filtered `ended_at is null`,
+     which silently dropped every completed, unfulfilled and cancelled Task
+     from "Taskurile mele". Points come from completed work, so a member's own
+     list must keep terminal Tasks — this fails the moment that filter comes
+     back. */
+  it('keeps completed, unfulfilled and cancelled Tasks in the list', async () => {
+    api.orderId.mockResolvedValue({
+      data: [
+        { task: taskRow({ id: 1, status: 'completed', deadline: null }) },
+        { task: taskRow({ id: 2, status: 'unfulfilled', deadline: null }) },
+        { task: taskRow({ id: 3, status: 'cancelled', deadline: null }) },
+      ],
+      error: null,
+    });
+
+    const result = await fetchMyTasks('member');
 
     expect(result.map((task) => task.status).sort()).toEqual([
       'cancelled',
       'completed',
       'unfulfilled',
     ]);
-    expect(api.from).toHaveBeenCalledWith('task_assignments');
-    expect(api.byMember).toHaveBeenCalledWith('member_id', 'member-1');
+  });
+
+  /* A reopened Task has two Assignment rows for the same member (Task History
+     is append-only). The dedupe is structural, and *which* Assignment wins is
+     deterministic: newest-first ordering means the first row seen for a Task
+     id is its most recent Assignment. */
+  it('collapses a reopened Task’s Assignments into one row, newest first', async () => {
+    api.orderId.mockResolvedValue({
+      data: [
+        { task: taskRow({ id: 5, status: 'in_progress', deadline: null }) },
+        { task: taskRow({ id: 5, status: 'completed', deadline: null }) },
+      ],
+      error: null,
+    });
+
+    const result = await fetchMyTasks('member');
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe(5);
+    expect(result[0]?.status).toBe('in_progress');
     expect(api.orderAssignedAt).toHaveBeenCalledWith('assigned_at', {
       ascending: false,
     });
     expect(api.orderId).toHaveBeenCalledWith('id', { ascending: false });
   });
 
-  /* A reopened Task has two Assignment rows for the same member (Task
-     History is append-only). Without a structural dedupe this would render
-     the Task twice and collide on `key={task.id}` — asserted here by picking
-     the most recent Assignment (the row PostgREST returns first once ordered
-     `assigned_at, id` descending) to represent the Task. */
-  it('collapses a reopened Task’s two Assignments into a single row', async () => {
+  it('batches parent titles and retains a fallback for RLS-hidden parents', async () => {
+    const child = taskRow({ parent_task_id: 10 });
+    const hiddenChild = taskRow({ id: 2, parent_task_id: 11 });
+    const parents = vi.fn().mockResolvedValue({
+      data: [{ id: 10, title: 'Recrutare' }],
+      error: null,
+    });
+    api.select
+      .mockReturnValueOnce({ eq: api.byMember })
+      .mockReturnValueOnce({ in: parents });
     api.orderId.mockResolvedValue({
-      data: [
-        {
-          task: {
-            id: 5,
-            title: 'Reopened task',
-            status: 'in_progress',
-            deadline: null,
-          },
-        },
-        {
-          task: {
-            id: 5,
-            title: 'Reopened task',
-            status: 'in_progress',
-            deadline: null,
-          },
-        },
-      ],
+      data: [{ task: child }, { task: hiddenChild }],
       error: null,
     });
 
-    const result = await fetchMyTasks('member-1');
+    const tasks = await fetchMyTasks('member');
 
-    expect(result).toHaveLength(1);
-    expect(result[0]?.id).toBe(5);
+    expect(parents).toHaveBeenCalledWith('id', [10, 11]);
+    expect(tasks.find((task) => task.id === 1)?.parent).toEqual({
+      id: 10,
+      title: 'Recrutare',
+    });
+    expect(tasks.find((task) => task.id === 2)?.parent).toBeNull();
   });
 
   it('drops rows whose embedded Task did not come back (e.g. hidden by RLS)', async () => {
-    api.orderId.mockResolvedValue({
-      data: [{ task: null }],
-      error: null,
-    });
-
-    await expect(fetchMyTasks('member-1')).resolves.toEqual([]);
+    api.orderId.mockResolvedValue({ data: [{ task: null }], error: null });
+    await expect(fetchMyTasks('member')).resolves.toEqual([]);
   });
 
-  it('surfaces read failures', async () => {
-    const error = { code: '42501', message: 'permission denied' };
+  it('surfaces failures without returning a misleading empty list', async () => {
+    const error = { code: '42501', message: 'denied' };
     api.orderId.mockResolvedValue({ data: null, error });
-    await expect(fetchMyTasks('member-1')).rejects.toBe(error);
+    await expect(fetchMyTasks('member')).rejects.toBe(error);
   });
 });
