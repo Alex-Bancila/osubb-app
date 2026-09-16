@@ -4,11 +4,13 @@ import { useTaskProgress } from '../../queries/task-progress';
 import { useAuth } from '../../lib/auth';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { TaskCard } from './TaskCard';
 import { toTaskPresentation } from './task-presentation';
 
 export default function TrackerScreen() {
   const tasks = useMyTasks();
+  const [detailId, setDetailId] = useState<number | null>(null);
   const progress = useTaskProgress();
   const { session } = useAuth();
   const [now, setNow] = useState(() => new Date());
@@ -56,6 +58,7 @@ export default function TrackerScreen() {
             <li key={row.id} className="min-w-0">
               <TaskCard
                 task={toTaskPresentation(row, now)}
+                onOpenTask={setDetailId}
                 memberId={session?.user.id}
                 pending={
                   progress.isPending && progress.variables?.taskId === row.id
@@ -68,6 +71,11 @@ export default function TrackerScreen() {
           ))}
         </ul>
       )}
+      <TaskDetailsSheet
+        key={detailId}
+        taskId={detailId}
+        onClose={() => setDetailId(null)}
+      />
     </section>
   );
 }
