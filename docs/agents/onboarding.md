@@ -23,7 +23,7 @@ supabase/
 │   │                                    # rating/difficulty guides · profiles · member_departments ·
 │   │                                    # teams · team_members (+ reference data seeded here)
 │   ├── 20260812184706_tasks_and_requests.sql   # tasks (points = generated column via rating_mult) ·
-│   │                                           # task_assignees · task_requests · RLS enabled
+│   │                                           # the legacy assignee/request tables (retired by #345) · RLS enabled
 │   ├── 20260819160713_points_engine.sql        # points_ledger · grading triggers (sync_task_ledger,
 │   │                                           # sync_assignee_ledger) · views member_points/
 │   │                                           # leaderboard/dept_cup (security_invoker)
@@ -33,8 +33,8 @@ supabase/
 │   ├── 20260819171628_capabilities_and_rls.sql # role_capabilities (17 rows from level thresholds) ·
 │   │                                           # RLS enabled on ALL tables · grant normalization
 │   │                                           # (anon = nothing; no TRUNCATE for clients)
-│   ├── 20260819172728_tasks_points_policies.sql # policies: tasks/task_assignees/points_ledger/
-│   │                                            # task_requests · helpers is_assigned()/in_my_dept()
+│   ├── 20260819172728_tasks_points_policies.sql # policies: tasks/points_ledger + the two legacy
+│   │                                            # tables (all retired by #345) · helpers in_my_dept()
 │   ├── 202608222*                       # the v1 tables and their policies: events+event_attendance ·
 │   │                                    # announcements+announcement_reads · notifications ·
 │   │                                    # notif_suppression (bc+bce)+push_tokens · provision_profile()
@@ -117,6 +117,8 @@ gh pr checks <pr> --watch                    # CI green, then a HUMAN merges
 ```
 
 Definition of done = migration applies on reset · tests pass and would fail without the feature · CI green · the issue's AC boxes checked · PR closes the issue. After merge: staging updates itself; delete the branch.
+
+Two scripts make the pre-push check cheaper. `bash scripts/check-local-ci.sh` runs every gate CI runs, in CI's order, across all four jobs, and prints one PASS/FAIL line each — everything except the gitleaks secret scan and the merge-only staging push, both of which it names on every run; pass `repo`, `db`, `functions` or `frontend` to run one job. `bash scripts/smoke-tracker-commands.sh` drives the whole Task Tracker command set end to end against the seeded local database — queue, assignment, review round trip, evaluation and its reversal, Umbrella rollup, Completed-work Request — through the `public` wrappers only, and ends by proving `authenticated` cannot write any Task table directly; run `npx supabase db reset` first, it rolls back and leaves the seed byte-identical. Neither replaces CI on the pull request (house rule 7). Both are described in `docs/backend/conventions.md`.
 
 ## Queue snapshot (historical, 2026-08-23 — `CLAUDE.md` holds the current queue)
 
