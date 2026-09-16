@@ -16,8 +16,8 @@ alter table public.tasks
   drop column review_round, drop column returned_to_progress_at;
 -- #318: today's read policy is tasks_read (it replaced task_read).
 drop policy tasks_read on public.tasks;
-drop function public.claim_open_task(bigint);
-drop function private.task_is_unassigned(bigint);
+-- #345 dropped public.claim_open_task and private.task_is_unassigned, so the
+-- two explicit drops that stood here have nothing left to drop.
 truncate public.tasks cascade;
 -- #312: tasks_evaluation_inputs_ck's compiled expression embeds 'completed'/
 -- 'unfulfilled' literals bound to today's task_status OID. Converting the
