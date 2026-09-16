@@ -2,7 +2,7 @@ begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 
-select plan(11);
+select plan(10);
 
 select is(
   (select array_agg(enumlabel::text order by enumsortorder)
@@ -13,13 +13,11 @@ select is(
 select col_has_default('public', 'tasks', 'status',
   'new Tasks have a lifecycle default');
 
+-- #345 dropped private.task_is_unassigned along with the legacy
+-- task_assignees table it queried and the claim command that called it; the
+-- grant assertion that stood here went with it.
 -- #312: completed/unfulfilled rows must also carry a rating
 -- (tasks_evaluation_inputs_ck) — every other state must not.
-select is(
-  has_function_privilege(
-    'service_role', 'private.task_is_unassigned(bigint)', 'execute'),
-  false,
-  'service role cannot execute the private Task policy helper');
 
 -- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
 -- exclusive to -- a cancelled Task, so the cancelled fixture states why it

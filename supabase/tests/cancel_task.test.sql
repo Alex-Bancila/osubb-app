@@ -4,7 +4,7 @@
 -- What this suite pins that no earlier suite does:
 --   * public.tasks.cancel_reason and tasks_cancel_reason_ck, the biconditional
 --     that makes a reasonless cancellation unwritable by ANY path -- the
---     command, the legacy tasks_update_legacy policy, or the table owner;
+--     command or the table owner (#345 removed the third, a direct write);
 --   * public.tasks_with_overdue carrying the new column (a `select task.*`
 --     view expands its star at CREATE time, so a column added later is
 --     invisible until the view is recreated);
@@ -765,20 +765,19 @@ select is((select format('%s|%s', notification.member_id::text, notification.tit
   'while the Project member whose work was called off is told, by the lead who called it off');
 
 -- ==================== 8. The command is the only write path ====================
--- public.tasks itself is still directly writable by level >= 4 through the
--- legacy tasks_update_legacy policy (#345 retires it), so the guarantee here
--- is the CONSTRAINT, not a policy: even that legacy path cannot cancel a Task
--- without recording why. The two history tables are stopped by table
--- privileges, which is stronger than a policy denial -- pinning their
--- messages is what stops a future migration granting DML back from passing
--- this test by swapping one 42501 for another.
+-- Since #345 `public.tasks` is stopped the same way the two history tables
+-- always were: by table privileges, before RLS is ever consulted. Pinning
+-- each message is what stops a future migration granting DML back from
+-- passing this test by swapping one 42501 for another. The
+-- tasks_cancel_reason_ck biconditional itself is still proven -- section 4
+-- exercises it as the table owner, where no grant can mask it.
 select pg_temp.test_login('33900000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ update public.tasks
      set status = 'cancelled', cancelled_at = now() where id = %s $$,
   (select direct_write_task_id from f339)),
-  '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
-  'even the legacy direct-update path cannot cancel a Task without a reason -- the constraint, not a policy, is the invariant');
+  '42501', 'permission denied for table tasks',
+  'a manager cannot cancel a Task by hand at all since #345 -- the table grants stop the direct update before RLS or the constraint is reached');
 select throws_ok(format($$ update public.task_assignments
      set ended_at = now(), end_reason = 'cancelled' where id = %s $$,
   (select direct_write_assignment_id from f339)),
