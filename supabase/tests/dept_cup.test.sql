@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(12);
 
 
 -- Remove the demo members and every dependent row inside this rolled-back
@@ -59,24 +59,36 @@ select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
 
 select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE sees all five canonical departments');
-select is((select points from public.dept_cup where dept_id = 'edu'), 5,
-  'the cup keeps the active member points total');
+select is((select points from public.dept_cup where dept_id = 'edu'), 0,
+  'current Department membership does not redirect another Origin''s Task Points');
 select is((select members from public.dept_cup where dept_id = 'edu'), 1::bigint,
   'the cup counts the active member');
 select is((select points from public.dept_cup where dept_id = 'pr'), 0,
-  'an inactive member contributes no points');
+  'a Department that owns no Task shows zero, regardless of its members'' status');
 select is((select members from public.dept_cup where dept_id = 'pr'), 0::bigint,
   'an inactive member is not counted');
-select is((select points from public.dept_cup where dept_id = 'hr'), 0,
-  'an alumni member contributes no points');
+select is((select points from public.dept_cup where dept_id = 'hr'), 15,
+  'Task Points follow the Department Task Origin regardless of Executor membership status');
 select is((select members from public.dept_cup where dept_id = 'hr'), 0::bigint,
   'an alumni member is not counted');
+-- ADR-0007 keeps anyone with completed Task history eligible regardless of
+-- profile status: the inactive and alumni Executors' own credits are exactly
+-- what make hr 15 rather than 5 (the active member's own award alone) --
+-- proven positively, not left implicit in the total above.
+select is(
+  (select sum(entry.delta)::int from public.points_ledger as entry
+     join public.tasks as task on task.id = entry.task_id
+    where entry.member_id in ('c2000000-0000-0000-0000-000000000002',
+                               'c3000000-0000-0000-0000-000000000003')
+      and task.dept_id = 'hr'),
+  10,
+  'the inactive and alumni Executors'' own Task credits (5 each) are what carry hr to 15, not merely the active member''s');
 select is((select points from public.dept_cup where dept_id = 'fin'), 0,
   'a department without any member remains visible with zero points');
 
 select results_eq(
   $$ select dept_id from public.dept_cup $$,
-  $$ values ('edu'::text), ('fin'::text), ('pr'::text), ('hr'::text), ('youth'::text) $$,
+  $$ values ('hr'::text), ('edu'::text), ('fin'::text), ('pr'::text), ('youth'::text) $$,
   'standings sort by points descending and then by department name');
 
 reset role;

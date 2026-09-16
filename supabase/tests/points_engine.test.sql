@@ -253,12 +253,12 @@ select ok(
   'higher total ranks higher (Bogdan 0 over Ana -7)');
 
 select is(
-  (select points from dept_cup where dept_id = 'tst'),
-  -7, 'dept_cup sums its members'' totals');
+  (select count(*) from dept_cup where dept_id = 'tst'),
+  0::bigint, 'the database owner sees no dept_cup row for tst either -- this suite''s own extra department competes under a real BCE+ session (department_cup_task_origins.test.sql), the owner just never sees any row at all (next assertion)');
 
 select is(
-  (select members from dept_cup where dept_id = 'tst'),
-  1::bigint, 'dept_cup counts distinct members');
+  (select count(*) from dept_cup),
+  0::bigint, 'the database owner does not bypass the authenticated BCE+ Department Cup gate');
 
 -- ==================== Security posture ====================
 select ok(

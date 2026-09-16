@@ -195,13 +195,6 @@ export type Database = {
             referencedRelation: "departments"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "announcements_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
-          },
         ]
       }
       campaigns: {
@@ -281,13 +274,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "campaigns_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
         ]
       }
@@ -383,13 +369,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
           {
             foreignKeyName: "completed_work_requests_project_id_fkey"
@@ -692,13 +671,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "events_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
-          },
-          {
             foreignKeyName: "events_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -734,13 +706,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_departments_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
           {
             foreignKeyName: "member_departments_member_id_fkey"
@@ -2118,13 +2083,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
-          },
-          {
             foreignKeyName: "tasks_duplicated_from_task_id_fkey"
             columns: ["duplicated_from_task_id"]
             isOneToOne: false
@@ -2273,13 +2231,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "teams_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
         ]
       }
@@ -2540,13 +2491,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "dept_cup"
-            referencedColumns: ["dept_id"]
           },
           {
             foreignKeyName: "tasks_duplicated_from_task_id_fkey"
@@ -3072,6 +3016,15 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      department_cup: {
+        Args: { p_campaign_id?: number }
+        Returns: {
+          dept_id: string
+          members: number
+          name: string
+          points: number
+        }[]
+      }
       duplicate_task: {
         Args: { p_deadline: string; p_task_id: number }
         Returns: {

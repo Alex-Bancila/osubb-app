@@ -314,7 +314,11 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('approve_completed_work_request', 'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text',
                                                                      false, true,  false, false),
   ('reject_completed_work_request',  'p_request_id bigint, p_note text',
-                                                                     false, true,  false, false);
+                                                                     false, true,  false, false),
+  -- #259: the Campaign-filtered Department Cup read wrapper. Same grant shape
+  -- as every command wrapper -- authenticated only -- even though it writes
+  -- nothing: the BCE+ gate lives inside the function, not in the grant.
+  ('department_cup',                 'p_campaign_id bigint',         false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -346,7 +350,7 @@ end
 $$;
 
 select is(pg_temp.public_function_mismatches(), '{}'::text[],
-  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, and every #327-#344 Task command wrapper) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
+  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, every #327-#344 Task command wrapper, and #259''s department_cup read wrapper) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
 
 -- ==================== 7. private schema: pinned function roster ====================
 
@@ -387,6 +391,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_completed_work_request_impl',          'p_description text, p_dept_id text, p_team_id text, p_project_id bigint',                                            'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
+  -- #259: the Department Cup body behind both the legacy `dept_cup` view and
+  -- the filtered `public.department_cup(p_campaign_id)` wrapper.
+  ('department_cup_rows',                         'p_campaign_id bigint',                                                                                               'authenticated_only'),
   -- #341: clone a Task into a brand-new todo Task with a fresh deadline.
   ('duplicate_task_impl',                         'p_task_id bigint, p_deadline timestamp with time zone',                                                             'impl'),
   ('end_task_assignment',                         'p_assignment_id bigint, p_reason text, p_note text',                                                                 'none'),
@@ -461,8 +468,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 83,
-  'the pinned private-schema roster itself has exactly the 83 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, #341''s duplicate_task_impl plus its provenance trigger guard, and #344''s four -- require_request_decider plus the create/approve/reject Completed-work Request _impl trio -- LESS #345''s one removal, task_is_unassigned, dropped with the legacy table it queried');
+  (select count(*) from pinned_private_functions)::int, 84,
+  'the pinned private-schema roster itself has exactly the 84 rows the audit found (a typo here would silently weaken every check below) -- 47 plus #317''s reject_legacy_evaluation_source, #368''s set_updated_at, #372''s caller_level, #327''s eleven-function Task command kit, #328''s update_task_content_impl, #329''s convert_task_mode_impl, #330''s express_/withdraw_task_interest_impl pair, #331''s set_task_queue_impl, #342''s assign_task_executor_impl, #332''s give_up_task_impl, #333''s select_task_candidate_impl, #334''s start_task_impl/submit_task_for_review_impl pair, #335''s return_task_to_progress_impl, #336''s complete_task_review_impl plus the shared evaluate_task core, #337''s mark_task_unfulfilled_impl, #338''s reopen_task_impl, #339''s cancel_task_impl (#339 also amends reopen_task_impl in place with create or replace, which adds no row), #340''s complete_umbrella_task_impl, #341''s duplicate_task_impl plus its provenance trigger guard, and #344''s four -- require_request_decider plus the create/approve/reject Completed-work Request _impl trio -- LESS #345''s one removal, task_is_unassigned, dropped with the legacy table it queried, PLUS #259''s department_cup_rows');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

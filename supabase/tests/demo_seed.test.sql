@@ -110,7 +110,7 @@ select is(
     where p.email like '%@demo.osubb'
       and md.dept_id in (select id from departments where kind = 'department')),
   5::bigint,
-  'all five real departments have a demo member (dept_cup inner-joins through member_departments)');
+  'all five real departments have a demo member (dept_cup''s members column counts them through member_departments)');
 
 select ok(
   exists (select 1 from member_departments md join profiles p on p.id = md.member_id
@@ -710,15 +710,33 @@ select is(
     where lb.points is distinct from mp.points),
   0::bigint, 'leaderboard reports member_points unchanged');
 
-select is(
-  (select count(*) from dept_cup cup
-    where cup.points is distinct from coalesce((
-      select sum(mp.points)::int
-        from member_departments md
-        join profiles member on member.id = md.member_id and member.status = 'activ'
-        join member_points mp on mp.member_id = member.id
-       where md.dept_id = cup.dept_id), 0)),
-  0::bigint, 'dept_cup sums its active members'' member_points totals');
+-- #259 changed what the Cup means. It is no longer "sum the whole ledgers of
+-- whoever is in this Department today" but "sum the Task Points whose Task
+-- Origin is this Department, or one of its Department Teams" -- so a member's
+-- sanction, and a Project or Independent-Team award, are outside it entirely.
+-- The view is also BCE+ only now: the owner sees no rows at all, so the
+-- expected figures are computed here, as the owner, and compared from inside a
+-- leadership session (the same shape as demo_totals below).
+create temp table demo_cup_expected as
+  select department.id as dept_id,
+         coalesce((
+           select sum(entry.delta)::int
+             from points_ledger entry
+             join tasks task on task.id = entry.task_id
+             left join teams team on team.id = task.team_id
+            where entry.reason in ('task', 'task_reversal')
+              and coalesce(task.dept_id, team.dept_id) = department.id
+         ), 0) as points
+    from departments department
+   where department.kind = 'department';
+grant select on demo_cup_expected to authenticated;
+
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000006');
+select results_eq(
+  $$ select dept_id, points from public.dept_cup order by dept_id $$,
+  $$ select dept_id, points from demo_cup_expected order by dept_id $$,
+  'dept_cup totals the seeded Task Points whose Task Origin is that Department or one of its Department Teams');
+reset role;
 
 -- my_points is the ordinary member's own-total endpoint, and member_points is
 -- leadership-only, so the two can never be compared from one session:
