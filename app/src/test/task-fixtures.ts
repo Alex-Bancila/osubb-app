@@ -20,6 +20,7 @@ export function taskRow(
     parent_task_id: null,
     campaign_id: null,
     duplicated_from_task_id: null,
+    queue_closed_at: null,
     department: { name: 'Educațional', color: 'var(--dept-edu)' },
     assignments: [{ id: 1, member_id: 'member', ended_at: null }],
     ...overrides,

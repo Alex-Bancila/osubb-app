@@ -27,6 +27,7 @@ export type TaskPresentationRow = Pick<
   | 'parent_task_id'
   | 'campaign_id'
   | 'duplicated_from_task_id'
+  | 'queue_closed_at'
 > & {
   department?: Pick<Tables['departments']['Row'], 'name' | 'color'> | null;
   team?: Pick<Tables['teams']['Row'], 'name' | 'dept_id'> | null;
@@ -69,6 +70,7 @@ export type TaskPresentation = {
   overdue: boolean;
   feedbackPending: boolean;
   completedLate: boolean;
+  queueClosed: boolean;
   reviewRound: number;
   difficulty: number | null;
   rating: number | null;
@@ -197,6 +199,7 @@ export function toTaskPresentation(
       deadline !== null &&
       completedAt !== null &&
       Date.parse(completedAt) > Date.parse(deadline),
+    queueClosed: validInstant(row.queue_closed_at) !== null,
     reviewRound: row.review_round,
     difficulty: evaluation?.difficulty ?? null,
     rating: evaluation?.rating ?? null,
