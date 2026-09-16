@@ -51,6 +51,10 @@ export const keys = {
       ['tasks', 'scopes', { memberId }] as const,
     queue: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'queue', { taskId, memberId }] as const,
+    history: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'history', { taskId, memberId }] as const,
+    detail: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'detail', { taskId, memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
   events: {
