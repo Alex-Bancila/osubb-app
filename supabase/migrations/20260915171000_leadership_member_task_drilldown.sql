@@ -1,4 +1,24 @@
 -- #260: BCE+ drill-down over one Member's complete Assignment history.
+--
+-- One row per Assignment, not per Task: a Task that was reopened and reassigned
+-- appears once for each time this Member held it, newest first.
+--
+-- The column list is deliberately wide. It is what ADR-0007's "a Leaderboard
+-- row opens that member's authorized full Task Tracker" costs: the drill-down
+-- screen (plan Task J1) must render a Task card, its Origin, its Campaign, its
+-- Umbrella parent and Subtasks, the Assignment's own outcome, and the
+-- Evaluation that produced the points -- without a second round trip. It
+-- carries every `public.tasks_with_overdue` column, renaming the eight that
+-- would collide with an Assignment-level name (`id`, `created_at`,
+-- `created_by`, `kind`) or that the Origin triple replaces (`dept_id`,
+-- `team_id`, `project_id`, plus the retired legacy `type`);
+-- `leadership_member_tasks.test.sql` pins exactly that mapping, so a new
+-- column on `public.tasks` fails there until this function carries it too.
+--
+-- The gate is the same one `public.department_cup` uses (#259) and the same
+-- one the leadership Leaderboard will use: JWT level >= 5, live role level
+-- >= 5, and an `activ` profile for `auth.uid()`. A caller who fails it gets
+-- **no rows**, never an error -- this is a read surface, not a command.
 
 create function private.leadership_member_tasks_impl(p_member_id uuid)
 returns table (
@@ -143,6 +163,9 @@ as $$
    order by assignment.assigned_at desc, assignment.id desc;
 $$;
 
+comment on function private.leadership_member_tasks_impl(uuid) is
+  'Body of the BCE+ Member drill-down: one row per current or historical Assignment of the selected Member, newest first, with the Task, its Origin, Campaign, Umbrella parent and Subtasks, and that Assignment''s Evaluation history. Returns no rows -- never an error -- to a caller below level 5, an inactive Member, or a claimless session.';
+
 create function public.leadership_member_tasks(p_member_id uuid)
 returns table (
   assignment_id bigint, member_id uuid, assigned_at timestamptz, assigned_by uuid,
@@ -161,6 +184,7 @@ returns table (
 )
 language sql
 stable
+security invoker
 set search_path = ''
 as $$
   select * from private.leadership_member_tasks_impl(p_member_id);

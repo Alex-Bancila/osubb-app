@@ -16,8 +16,8 @@ alter table public.tasks
   drop column review_round, drop column returned_to_progress_at;
 -- #318: today's read policy is tasks_read (it replaced task_read).
 drop policy tasks_read on public.tasks;
-drop function public.claim_open_task(bigint);
-drop function private.task_is_unassigned(bigint);
+-- #345 dropped public.claim_open_task and private.task_is_unassigned, so the
+-- two explicit drops that stood here have nothing left to drop.
 truncate public.tasks cascade;
 -- #312: tasks_evaluation_inputs_ck's compiled expression embeds 'completed'/
 -- 'unfulfilled' literals bound to today's task_status OID. Converting the
@@ -48,6 +48,13 @@ alter table public.task_activity drop column from_status, drop column to_status;
 -- transaction rolls back, so dropping and never recreating it is safe. Any
 -- later task_status-typed object must be dropped here too.
 drop function private.log_task_activity(bigint, text, uuid, bigint, public.task_status, public.task_status, text, jsonb);
+-- #260: the leadership drill-down returns a `status public.task_status` column,
+-- so its wrapper and its body both depend on the enum exactly the way
+-- log_task_activity's parameters do. This is the "any later task_status-typed
+-- object" the note above warned about; same treatment, same reasoning -- the
+-- scratch transaction rolls back, so they are never recreated here.
+drop function public.leadership_member_tasks(uuid);
+drop function private.leadership_member_tasks_impl(uuid);
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks
