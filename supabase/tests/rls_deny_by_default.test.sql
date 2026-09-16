@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(40);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -45,8 +45,6 @@ insert into team_members (team_id, member_id)
   values ('t-rls', 'ffffffff-0000-0000-0000-000000000006');
 
 insert into tasks (title, difficulty, dept_id) values ('rls-t1', 3, 'edu');
-insert into task_assignees (task_id, member_id)
-  select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from tasks where title = 'rls-t1';
 insert into task_assignments (task_id, member_id, assigned_by)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid,
          'ffffffff-0000-0000-0000-000000000006'::uuid
@@ -81,11 +79,6 @@ insert into points_ledger (member_id, delta, reason, task_id, evaluation_id)
     join task_assignments assignment on assignment.id = evaluation.assignment_id
     join tasks task on task.id = evaluation.task_id
    where task.title = 'rls-t1';
-insert into task_requests (kind, title, from_member)
-  values
-    ('award', 'rls-req', 'ffffffff-0000-0000-0000-000000000006'),
-    ('award', 'rls-req-claimless', 'eeeeeeee-0000-0000-0000-000000000156');
-
 -- #321: a Completed-work Request row, one Origin only.
 insert into completed_work_requests (requester_id, dept_id, description)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu', 'rls fixture completed-work request');
@@ -258,8 +251,8 @@ select is(pg_temp.tables_visible_to_claimless(), '{}'::text[],
 -- these say what was actually at stake.
 select is((select count(*) from profiles),       0::bigint, 'claimless: profiles hidden');
 select is((select count(*) from tasks),          0::bigint, 'claimless: tasks hidden, open ones included');
-select is((select count(*) from task_assignees), 0::bigint, 'claimless: task_assignees hidden');
-select is((select count(*) from task_requests),  0::bigint, 'claimless: task_requests hidden');
+select is((select count(*) from task_assignments), 0::bigint, 'claimless: Assignment history hidden');
+select is((select count(*) from completed_work_requests), 0::bigint, 'claimless: Completed-work Requests hidden');
 select is((select count(*) from points_ledger),  0::bigint, 'claimless: points_ledger hidden');
 
 -- Views are security_invoker, so they inherit the tables' answers.
@@ -267,16 +260,17 @@ select is((select count(*) from member_points),  0::bigint, 'claimless: member_p
 select is((select count(*) from leaderboard),    0::bigint, 'claimless: leaderboard empty');
 select is((select count(*) from dept_cup),       0::bigint, 'claimless: dept_cup empty');
 
--- …and writes nothing either.
+-- …and writes nothing either. #345 retired the two legacy tables these
+-- attempts used to target; their successors are commands, so the attempt is
+-- now a command call and the denial comes from the command's own gate.
 select throws_ok(
-  $$ insert into task_requests (kind, title) values ('award', 'sneaky') $$,
-  '42501', null, 'claimless: cannot file a task request');
+  $$ select public.create_completed_work_request('sneaky', 'edu', null, null) $$,
+  '42501', 'request_command_forbidden', 'claimless: cannot file a Completed-work Request');
 
 select throws_ok(
-  format($$ insert into task_assignees (task_id, member_id)
-            values (%s, 'ffffffff-0000-0000-0000-000000000006') $$,
+  format($$ select public.express_task_interest(%s) $$,
          (select open_task_id from fx)),
-  '42501', null, 'claimless: cannot claim an open task');
+  '42501', 'task_command_forbidden', 'claimless: cannot join an open Task''s Candidate Queue');
 
 reset role;
 
@@ -305,9 +299,9 @@ select is((select count(*) from dept_cup), 0::bigint,
   'real claimless user: dept_cup is empty');
 
 select throws_ok(
-  $$ insert into task_requests (kind, title, from_member)
-     values ('award', 'real-uid-sneaky', 'eeeeeeee-0000-0000-0000-000000000156') $$,
-  '42501', null, 'real claimless user: cannot file a self-owned task request');
+  $$ select public.create_completed_work_request('real-uid-sneaky', 'edu', null, null) $$,
+  '42501', 'request_command_forbidden',
+  'real claimless user: cannot file a self-owned Completed-work Request');
 select throws_ok(
   format($$ insert into announcement_reads (announcement_id, member_id)
             values (%s, 'eeeeeeee-0000-0000-0000-000000000156') $$,
@@ -354,6 +348,57 @@ select ok(not has_table_privilege('anon', 'profiles', 'select'),
   'anon has no SELECT grant');
 select ok(has_table_privilege('service_role', 'profiles', 'select'),
   'service_role keeps DML for admin flows');
+
+-- ==================== #345: the legacy write paths are gone ====================
+-- Two halves, and both are needed. First: the retired objects no longer
+-- exist, so nothing can reach them by name. Second, and the point of the
+-- whole issue: for one and the same live manager, in one and the same
+-- session, the direct door onto `public.tasks` is shut while the command
+-- door is open. Asserting only the first would be satisfied by a migration
+-- that broke the Tracker outright.
+select hasnt_table('public', 'task_assignees',
+  '#345: the legacy multi-assignee join table is gone -- task_assignments is the Assignment History');
+select hasnt_table('public', 'task_requests',
+  '#345: the legacy award/new-task request table is gone -- completed_work_requests replaced it');
+select hasnt_function('public', 'claim_open_task', array['bigint'],
+  '#345: the legacy volunteer claim command is gone -- express_task_interest and select_task_candidate replaced it');
+
+insert into auth.users (id, email)
+  values ('34500000-0000-0000-0000-000000000001', 'bc.345@test.local');
+insert into profiles (id, full_name, email, role, status)
+  values ('34500000-0000-0000-0000-000000000001', 'BC 345', 'bc.345@test.local', 'bc', 'activ');
+
+create temp table fx345 as
+  select (select id from tasks where title = 'rls-t1') as task_id;
+grant select on fx345 to authenticated;
+
+select pg_temp.test_login('34500000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6,
+  'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+
+select throws_ok(
+  $$ insert into tasks (title, difficulty, dept_id, audience, assignment_mode)
+     values ('345 direct insert', 1, 'edu', 'local', 'direct') $$,
+  '42501', 'permission denied for table tasks',
+  '#345: a BC with live claims cannot INSERT a Task directly');
+select throws_ok(
+  format($$ update tasks set title = '345 direct update' where id = %s $$,
+         (select task_id from fx345)),
+  '42501', 'permission denied for table tasks',
+  '#345: nor UPDATE one');
+select throws_ok(
+  format($$ delete from tasks where id = %s $$, (select task_id from fx345)),
+  '42501', 'permission denied for table tasks',
+  '#345: nor DELETE one');
+
+-- The same persona, the same session, through the command: this is what
+-- makes the three denials above a retirement rather than an outage.
+select lives_ok(
+  $$ select public.create_task('Task prin comandă #345', 'descriere',
+       now() + interval '7 days', 'edu', null, null, 'local', 'direct') $$,
+  '#345: and the very same BC still creates a Task through public.create_task');
+
+reset role;
 
 select * from finish();
 rollback;

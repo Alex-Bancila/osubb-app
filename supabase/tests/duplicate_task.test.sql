@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(69);
+select plan(70);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -574,25 +574,44 @@ select throws_ok(format($$ insert into public.task_activity (task_id, kind, acto
   (select direct_write_task_id from f341)),
   '42501', null, 'even the Task''s manager cannot fake a duplicated activity row by inserting directly');
 
+-- #345 revoked insert/update/delete on public.tasks from authenticated, so a
+-- direct write now dies on the table grant before any trigger runs.
 select throws_ok(format($$ insert into public.tasks
   (title, deadline, dept_id, audience, assignment_mode, duplicated_from_task_id)
   values ('Proveniență falsă #341', '2027-06-11 09:00:00+00', 'edu', 'local', 'direct', %s) $$,
   (select authority_task_id from f341)),
-  '42501', 'duplicate_provenance_write_forbidden',
-  'a manager cannot forge duplicate provenance on a direct Task insert');
+  '42501', 'permission denied for table tasks',
+  'a manager cannot forge duplicate provenance on a direct Task insert -- since #345 the table grants refuse it outright');
 
 select throws_ok(format($$ update public.tasks
   set duplicated_from_task_id = %s where id = %s $$,
   (select authority_task_id from f341), (select direct_write_task_id from f341)),
-  '42501', 'duplicate_provenance_write_forbidden',
-  'a manager cannot mark an existing Task as a clone through the legacy direct-update path');
+  '42501', 'permission denied for table tasks',
+  'nor mark an existing Task as a clone by direct update');
 
 select throws_ok(format($$ update public.tasks
   set duplicated_from_task_id = null
   where duplicated_from_task_id = %s $$,
   (select happy_source_id from f341)),
-  '42501', 'duplicate_provenance_write_forbidden',
-  'a manager cannot erase provenance from a genuine clone through the legacy direct-update path');
+  '42501', 'permission denied for table tasks',
+  'nor erase provenance from a genuine clone by direct update');
+
+-- The provenance guard now sits BEHIND that grant, so no client statement can
+-- reach it any more -- which is exactly why its continued existence has to be
+-- asserted structurally instead. A future migration that hands direct DML back
+-- to authenticated must find the trigger still there; deleting this assertion
+-- because "nothing can reach it" is how the forgery path comes back.
+-- (Exercising it for real would need a temporary GRANT plus a permissive
+-- UPDATE policy, and both take an AccessExclusiveLock on public.tasks that
+-- would deadlock this suite's own dblink lock probe below.)
+select is(
+  (select count(*)::int from pg_trigger as trigger_row
+    where trigger_row.tgrelid = 'public.tasks'::regclass
+      and trigger_row.tgname = 'tasks_duplicate_provenance_guard'
+      and not trigger_row.tgisinternal
+      and trigger_row.tgfoid = 'private.guard_task_duplicate_provenance()'::regprocedure),
+  1,
+  'and the provenance guard trigger is still installed behind that grant, for the day someone grants direct DML back');
 reset role;
 
 -- ==================== 11. The lock held while the command runs ====================

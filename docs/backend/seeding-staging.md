@@ -43,6 +43,8 @@ Production is not reachable from here. It is a different project with different 
 
 `seed.sql` begins by deleting the **demo cohort** — the eight `@demo.osubb` accounts and the rows they own — and then re-inserts everything. That makes it re-runnable, which matters twice: a demo database that has been clicked through gets restored to a known state, and a rerun after a failure is safe.
 
+The delete order is dictated by the foreign keys, not by taste: ledger → Evaluations → activity → Candidates → Assignments → completed-work requests → Tasks → Campaigns → events → announcements → Projects → Teams → `auth.users`. Requests come before Tasks because an approved request names the Task its approval created; Campaigns come after them because a Task pins the Campaign it is labelled with.
+
 The scope is deliberately narrow. A real person invited to staging for testing keeps their profile, the tasks they created and the points they earned; only demo rows are replaced. (Their claim on a _demo_ task disappears with that task — the task itself is re-created.)
 
 "Identical" means the data is identical, not the row ids: `tasks.id` and friends come from identity sequences, which keep counting. Nothing in the app depends on a specific id.
@@ -53,27 +55,46 @@ Reference data — roles, departments, the rating and difficulty guides, `role_c
 
 The job log ends with the leaderboard and a row count per table. It should match what you get locally after `npx supabase db reset`:
 
-| what          | count         |
-| ------------- | ------------- |
-| demo members  | 8             |
-| tasks         | 16 (9 graded) |
-| ledger rows   | 12            |
-| events        | 7             |
-| announcements | 5             |
-| notifications | 7             |
+| what                    | count                       |
+| ----------------------- | --------------------------- |
+| demo members            | 8                           |
+| campaigns               | 5 (one per real department) |
+| tasks                   | 19 (8 evaluated)            |
+| assignments             | 15                          |
+| candidates              | 5                           |
+| activity rows           | 78                          |
+| evaluations             | 9 (one of them reversed)    |
+| ledger rows             | 11                          |
+| completed-work requests | 3                           |
+| events                  | 7                           |
+| announcements           | 5                           |
+| notifications           | 7                           |
+
+### What the 19 demo Tasks cover (#296)
+
+The demo dataset is built on the normalized Tracker model (ADR-0007) and carries one Task per approved path, so a role-matrix walkthrough never has to invent data:
+
+- **Origins** — Department (all five real ones), Department Team (`it`, under Diverse), Independent Team (`t-logistica`), and the active Project.
+- **Assignment modes** — direct with an Executor from creation; public with an open Queue and nobody in it (in two different Departments — no command leaves a pending Candidate with no Executor); public with a first-come Executor and two Members queued behind them.
+- **Lifecycle** — `todo`, `in_progress`, `in_review` after one round of feedback (`review_round = 1`), `completed` on time, `completed` late, `unfulfilled` at Rating 1 (a **negative** ledger row), and `cancelled` with a reason.
+- **The awkward ones** — a Task evaluated, reopened and evaluated again (a reversed Evaluation, a `task_reversal` ledger row and a second Evaluation on a second Assignment); an Umbrella whose three Subtasks are completed, in progress and cancelled; a Task duplicated from the unfulfilled one (same title, `duplicated_from_task_id` set); and completed-work requests in all three states, the approved one naming the Task its approval created.
+
+Because the seed runs as the table owner with no `auth.uid()`, it cannot call the commands — it writes every row by hand. `supabase/tests/demo_seed.test.sql` is what proves the commands _could_ have produced the result: it checks the Evaluation/ledger/Assignment triple on every completed Task, the Queue-closed-before-terminal rule, the `assignment_id` stamping rule on activity rows, and that every Task's creator is somebody `private.require_origin_manager` would have accepted.
 
 Then sign in to the app as two different demo accounts and confirm the screens differ. All eight use the password `parola123`:
 
-| Email                    | Role                   | Level | Good for showing                             |
-| ------------------------ | ---------------------- | ----- | -------------------------------------------- |
-| `recrut@demo.osubb`      | Recrut                 | 0     | the smallest view: 4 events, 6 tasks         |
-| `voluntar@demo.osubb`    | Voluntar               | 1     | a normal member with points and a team       |
-| `activ@demo.osubb`       | Membru Activ           | 2     | a sanction on the ledger                     |
-| `vot@demo.osubb`         | Membru cu Drept de Vot | 3     | top of the leaderboard                       |
-| `responsabil@demo.osubb` | Responsabil de proiect | 4     | task management, two departments             |
-| `bce@demo.osubb`         | BCE                    | 5     | the volunteers directory                     |
-| `bc@demo.osubb`          | BC                     | 6     | everything: 7 events, 16 tasks, the BC panel |
-| `moderator@demo.osubb`   | Moderator              | 9     | the moderation view                          |
+| Email                    | Role                   | Level | Good for showing                                         |
+| ------------------------ | ---------------------- | ----- | -------------------------------------------------------- |
+| `recrut@demo.osubb`      | Recrut                 | 0     | the smallest view: 6 events, 6 tasks                     |
+| `voluntar@demo.osubb`    | Voluntar               | 1     | a normal member with points, a team and 8 visible tasks  |
+| `activ@demo.osubb`       | Membru Activ           | 2     | a sanction on the ledger, and a Project Responsible      |
+| `vot@demo.osubb`         | Membru cu Drept de Vot | 3     | top of the leaderboard; Tineret + Secretariat            |
+| `responsabil@demo.osubb` | Responsabil de proiect | 4     | Project lead authority — Department Tasks are not theirs |
+| `bce@demo.osubb`         | BCE                    | 5     | Diverse + Team `it`: the one BCE-managed Origin          |
+| `bc@demo.osubb`          | BC                     | 6     | everything: 7 events, 19 tasks, the BC panel             |
+| `moderator@demo.osubb`   | Moderator              | 9     | the moderation view                                      |
+
+⚠️ `bce@` and `moderator@` belong to **Diverse** and Team **`it`** (issue #296), not to a delivery Department. That is deliberate and visible: `private.can_manage_origin` gives Department authority to BC/Moderator and to a **local BCE of that Department** only, so with no BCE inside `edu`/`pr`/`youth`/`fin`/`hr`, every Department Task in the demo is created and evaluated by `bc@` or `moderator@`. The other three authority branches each have exactly one demo Origin: the Department Team `it` (BCE of its parent Department), the Independent Team `t-logistica` (any active member), and the active Project (its lead and its Responsible).
 
 These accounts exist only because clicking through a demo with eight magic links is miserable. `@demo.osubb` is a domain nobody can receive mail at, and real onboarding stays invite-only and passwordless (ADR-0003).
 
@@ -101,6 +122,8 @@ Run it twice; the data will be the same both times. If you change `seed.sql`, ch
 | `Migrations are not applied on this project`                                      | staging never got a `db push`. Merge to `main`, let CI finish, then re-run.                                                                                                                                                          |
 | `This database role cannot write auth.users`                                      | you are connected as something other than `postgres` — check the URI's username.                                                                                                                                                     |
 | `violates foreign key constraint "tasks_team_id_fkey"` (or `events_team_id_fkey`) | somebody's non-demo task or event is attached to a demo team (`t-app`, `t-recruti`), so the team cannot be replaced. The transaction rolled back and nothing was written: move that task to another team, or delete it, then re-run. |
+| `violates foreign key constraint "tasks_campaign_id_fkey"`                        | somebody's non-demo task is labelled with a demo Campaign, so the Campaign cannot be replaced. Same fix: clear that task's Campaign, then re-run. Nothing was written.                                                               |
+| `violates foreign key constraint "completed_work_requests_task_id_fkey"`          | a completed-work request outside the demo cohort names a demo Task. Decide or delete that request first; nothing was written.                                                                                                        |
 | `password authentication failed`                                                  | the password in `STAGING_DB_URL` is wrong or the secret is empty (see the ⚠️ above).                                                                                                                                                 |
 | Logins fail with a 500 and _"converting NULL to string is unsupported"_           | GoTrue read a null token column. `seed.sql` sets all eight to `''`; if you add a user by hand, do the same.                                                                                                                          |
 | Sign-in works but every screen is empty                                           | the **claims hook** is off on staging — the JWT carries no `member_role`, so RLS denies everything. See `docs/backend/auth-config.md` and issue #54.                                                                                 |
