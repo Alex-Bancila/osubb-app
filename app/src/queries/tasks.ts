@@ -17,14 +17,27 @@ const TASK_FIELDS =
   'id, title, status, type, difficulty, rating, deadline, dept_id, team_id';
 
 /**
- * The tasks I am currently the Executor of.
+ * Every Task I have ever been the Executor of — in progress and decided
+ * alike. Points come from completed work (ADR-0007: an ordinary member's own
+ * points are exactly the sum of their Evaluations), so a "my tasks" view
+ * that stopped showing a Task the moment it was finished would hide the very
+ * thing it exists to show. `completed`, `unfulfilled` and `cancelled` Tasks
+ * stay in this list; the Tracker rebuild (#164, #346-#354) is what will give
+ * them their own tab.
  *
  * Asked from `task_assignments` inwards rather than from `tasks` outwards,
  * because "assigned to me" is a fact about the Assignment row. PostgREST
  * embeds the task through the foreign key, so this is one request, not one
- * plus N. `ended_at is null` is what makes it *current*: Assignment History
- * keeps every past Assignment too, and a Task someone gave up or finished is
- * no longer theirs to do (ADR-0007, one Executor at a time).
+ * plus N.
+ *
+ * A reopened Task produces two Assignment rows for the same member — Task
+ * History is append-only, so nothing ever deletes the first one — and both
+ * would otherwise render as separate list items and collide on
+ * `key={task.id}`. The fix is structural, not a filter that hides finished
+ * work: order by `assigned_at, id` descending and keep only the first row
+ * seen for each Task id, i.e. its most recent Assignment. One row per Task
+ * id is then true by construction, not by excluding whichever rows happen to
+ * be terminal.
  *
  * #345 retired the multi-assignee join table this used to read; the read
  * policy on `task_assignments` already admits a member their own rows.
@@ -44,18 +57,26 @@ export function useMyTasks() {
   });
 }
 
-async function fetchMyTasks(memberId: string) {
+export async function fetchMyTasks(memberId: string) {
   const { data, error } = await supabase
     .from('task_assignments')
     .select(`task:tasks(${TASK_FIELDS})`)
     .eq('member_id', memberId)
-    .is('ended_at', null);
+    .order('assigned_at', { ascending: false })
+    .order('id', { ascending: false });
   if (error) throw error;
 
-  return data
-    .map((row) => row.task)
-    .filter((task) => task !== null)
-    .sort(byDeadlineThenTitle);
+  const byTaskId = new Map<
+    number,
+    NonNullable<(typeof data)[number]['task']>
+  >();
+  for (const row of data) {
+    if (row.task !== null && !byTaskId.has(row.task.id)) {
+      byTaskId.set(row.task.id, row.task);
+    }
+  }
+
+  return [...byTaskId.values()].sort(byDeadlineThenTitle);
 }
 
 /** Tasks anyone may put themselves forward for — the tracker's "Deschise" tab (#89).

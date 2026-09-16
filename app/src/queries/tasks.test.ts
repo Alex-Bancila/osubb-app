@@ -6,11 +6,15 @@ const api = vi.hoisted(() => ({
   byMode: vi.fn(),
   queueOpened: vi.fn(),
   queueOpen: vi.fn(),
+  myTasksSelect: vi.fn(),
+  byMember: vi.fn(),
+  orderAssignedAt: vi.fn(),
+  orderId: vi.fn(),
 }));
 
 vi.mock('../lib/supabase', () => ({ supabase: { from: api.from } }));
 
-import { fetchOpenTasks } from './tasks';
+import { fetchMyTasks, fetchOpenTasks } from './tasks';
 
 describe('public Task opportunities', () => {
   beforeEach(() => {
@@ -81,5 +85,114 @@ describe('public Task opportunities', () => {
     const error = { code: '42501', message: 'permission denied' };
     api.queueOpen.mockResolvedValue({ data: null, error });
     await expect(fetchOpenTasks()).rejects.toBe(error);
+  });
+});
+
+describe('my tasks', () => {
+  beforeEach(() => {
+    api.from.mockReturnValue({ select: api.myTasksSelect });
+    api.myTasksSelect.mockReturnValue({ eq: api.byMember });
+    api.byMember.mockReturnValue({ order: api.orderAssignedAt });
+    api.orderAssignedAt.mockReturnValue({ order: api.orderId });
+  });
+
+  /* This is the residual from #345's review (Finding 4): the old query
+     filtered `ended_at is null`, which silently dropped every completed,
+     unfulfilled and cancelled Task from "Taskurile mele". Points come from
+     completed work, so a member's own list must keep terminal Tasks — this
+     test fails the moment that filter comes back. */
+  it('keeps completed, unfulfilled and cancelled Tasks in the list', async () => {
+    api.orderId.mockResolvedValue({
+      data: [
+        {
+          task: {
+            id: 1,
+            title: 'Finished work',
+            status: 'completed',
+            deadline: null,
+          },
+        },
+        {
+          task: {
+            id: 2,
+            title: 'Failed work',
+            status: 'unfulfilled',
+            deadline: null,
+          },
+        },
+        {
+          task: {
+            id: 3,
+            title: 'Cancelled work',
+            status: 'cancelled',
+            deadline: null,
+          },
+        },
+      ],
+      error: null,
+    });
+
+    const result = await fetchMyTasks('member-1');
+
+    expect(result.map((task) => task.status).sort()).toEqual([
+      'cancelled',
+      'completed',
+      'unfulfilled',
+    ]);
+    expect(api.from).toHaveBeenCalledWith('task_assignments');
+    expect(api.byMember).toHaveBeenCalledWith('member_id', 'member-1');
+    expect(api.orderAssignedAt).toHaveBeenCalledWith('assigned_at', {
+      ascending: false,
+    });
+    expect(api.orderId).toHaveBeenCalledWith('id', { ascending: false });
+  });
+
+  /* A reopened Task has two Assignment rows for the same member (Task
+     History is append-only). Without a structural dedupe this would render
+     the Task twice and collide on `key={task.id}` — asserted here by picking
+     the most recent Assignment (the row PostgREST returns first once ordered
+     `assigned_at, id` descending) to represent the Task. */
+  it('collapses a reopened Task’s two Assignments into a single row', async () => {
+    api.orderId.mockResolvedValue({
+      data: [
+        {
+          task: {
+            id: 5,
+            title: 'Reopened task',
+            status: 'in_progress',
+            deadline: null,
+          },
+        },
+        {
+          task: {
+            id: 5,
+            title: 'Reopened task',
+            status: 'in_progress',
+            deadline: null,
+          },
+        },
+      ],
+      error: null,
+    });
+
+    const result = await fetchMyTasks('member-1');
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe(5);
+  });
+
+  it('drops rows whose embedded Task did not come back (e.g. hidden by RLS)', async () => {
+    api.orderId.mockResolvedValue({
+      data: [{ task: null }],
+      error: null,
+    });
+
+    await expect(fetchMyTasks('member-1')).resolves.toEqual([]);
+  });
+
+  it('surfaces read failures', async () => {
+    const error = { code: '42501', message: 'permission denied' };
+    api.orderId.mockResolvedValue({ data: null, error });
+    await expect(fetchMyTasks('member-1')).rejects.toBe(error);
   });
 });
