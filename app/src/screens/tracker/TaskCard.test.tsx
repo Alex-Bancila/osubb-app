@@ -8,6 +8,12 @@ import {
   type TaskPresentationRow,
 } from './task-presentation';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock('./TaskQueueStatus', () => ({
+  TaskQueueStatus: () => <p>Stare înscriere</p>,
+}));
+vi.mock('./TaskInterestControls', () => ({
+  TaskInterestControls: () => <button>Participă</button>,
+}));
 import { taskRow } from '../../test/task-fixtures';
 
 function card(
@@ -33,6 +39,31 @@ function card(
 }
 
 describe('Member Task cards', () => {
+  it.each([
+    { status: 'todo' as const, queue_closed_at: '2026-09-15T10:00:00Z' },
+    { status: 'completed' as const, queue_closed_at: null },
+  ])(
+    'keeps participation visible without actions for closed/terminal work',
+    (overrides) => {
+      const task = toTaskPresentation(
+        taskRow({ ...overrides, assignment_mode: 'public' }),
+        new Date('2026-09-15'),
+      );
+      render(
+        <TaskCard
+          task={task}
+          allowInterest
+          memberId="member"
+          pending={false}
+          onProgress={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Stare înscriere')).toBeVisible();
+      expect(
+        screen.queryByRole('button', { name: 'Participă' }),
+      ).not.toBeInTheDocument();
+    },
+  );
   it('shows a named Origin, Bucharest deadline and the current stage', () => {
     card();
     expect(
