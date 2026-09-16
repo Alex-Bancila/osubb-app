@@ -184,7 +184,7 @@ exception
 end;
 $function$;
 
--- #317 retired `tasks_sync_ledger` / `task_assignees_sync_ledger`, so setting
+-- #317 retired the two ledger sync triggers, so setting
 -- a Task's Rating no longer credits anyone. A fixture that needs a member to
 -- hold real Task points calls this instead, and it does exactly what the
 -- evaluation commands (#336-#338) will do: reuse that member's Assignment for

@@ -20,12 +20,12 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(63);
+select plan(64);
 
 -- ==================== Shape of the read surface ====================
 select policies_are('public', 'tasks',
-  array['tasks_read', 'tasks_create_legacy', 'tasks_update_legacy', 'tasks_delete_legacy'],
-  'tasks carries the #318 read policy and the split legacy write policies; task_read and task_write are gone');
+  array['tasks_read'],
+  'tasks carries the #318 read policy and nothing else -- task_read, task_write and #345''s three split legacy write policies are all gone');
 
 -- A FOR ALL policy also answers SELECT. The legacy task_write was FOR ALL
 -- on auth_level() >= 4, so it handed every Task to any JWT at level 4+ no
@@ -49,22 +49,32 @@ select is(
   'SELECT PERMISSIVE {authenticated}',
   'tasks_read is a permissive SELECT policy for authenticated only');
 
+-- #345 retired the legacy direct write path outright: no `%_legacy` policy
+-- survives on tasks, and authenticated holds no write privilege on the table
+-- to reach one with. Both halves are asserted -- a policy could be dropped
+-- while the grant stayed open, or the reverse.
 select is(
-  array(select format('%s %s using=%s check=%s', policy.policyname, policy.cmd,
-                      coalesce(policy.qual, '-'), coalesce(policy.with_check, '-'))
+  array(select policy.policyname::text
           from pg_policies as policy
          where policy.schemaname = 'public'
            and policy.tablename = 'tasks'
            and policy.policyname like '%\_legacy'
          order by policy.policyname),
-  array[
-    'tasks_create_legacy INSERT using=- check=(auth_level() >= 4)',
-    'tasks_delete_legacy DELETE using=(auth_level() >= 4) check=-',
-    'tasks_update_legacy UPDATE using=(auth_level() >= 4) check=(auth_level() >= 4)'],
-  'the legacy direct write path keeps its exact level >= 4 predicate until #345 retires it');
+  '{}'::text[],
+  'no legacy direct-write policy survives on tasks');
+
+select is(
+  array(select privilege_type::text
+          from information_schema.role_table_grants
+         where grantee = 'authenticated'
+           and table_schema = 'public'
+           and table_name = 'tasks'
+         order by 1),
+  array['SELECT'],
+  'and authenticated holds SELECT on tasks and nothing else -- the commands own every write');
 
 select hasnt_function('public', 'is_assigned', array['bigint'],
-  'public.is_assigned (the legacy task_assignees predicate) is gone with its last consumer');
+  'public.is_assigned (the legacy assignee predicate) is gone with its last consumer');
 
 select is(
   (select count(*)
@@ -553,30 +563,25 @@ select throws_ok($$ select count(*) from public.tasks_with_overdue $$, '42501', 
   'anon has no privilege on tasks_with_overdue either');
 
 -- ==================== Decision 4: writes vs tasks_read ====================
--- Round 1: pin the corrected consequence of splitting task_write. Postgres
--- applies the table's SELECT policies to a new row whenever the statement
--- needs SELECT rights on it (a RETURNING clause -- how PostgREST's
--- `Prefer: return=representation` / supabase-js `.insert().select()` work).
--- can_read_task resolves the row by id via a fresh query, and within the
--- same command the row it just inserted is not yet visible to that query,
--- so the check always fails -- for every caller, BC included, since R1
--- never gets evaluated (it lives inside the same failing EXISTS). Without
--- RETURNING, no SELECT policy applies and the insert succeeds.
+-- #318 split the legacy FOR ALL task_write into three write-only policies,
+-- and this section pinned the awkward consequence: a direct INSERT was
+-- refused WITH a RETURNING clause (which needs SELECT rights on the new row,
+-- and can_read_task cannot see a row that does not exist yet) but SUCCEEDED
+-- without one. #345 removed the question by removing the path: `authenticated`
+-- holds no INSERT/UPDATE/DELETE privilege on public.tasks at all, so both
+-- forms are now refused identically, before RLS is consulted. Both are still
+-- asserted -- the asymmetry was subtle enough to be worth proving gone, not
+-- merely deleting.
 reset role;
 select pg_temp.login_as('bce_local');
--- A savepoint, not just reliance on throws_ok's own internal rollback: the
--- lives_ok insert below succeeds and would otherwise leave a stray
--- 'm318:%' row behind for every later query that scans public.tasks by
--- that prefix (visible_titles(), every_task()).
-savepoint sp_write_consequence;
 select throws_ok(
   $$ insert into public.tasks (title, dept_id) values ('m318:write-insert-returning', 'edu') returning id $$,
-  '42501', null,
-  'decision 4: a direct INSERT ... RETURNING is refused even for a BCE -- can_read_task cannot see a row that does not exist yet');
-select lives_ok(
+  '42501', 'permission denied for table tasks',
+  'decision 4, after #345: a direct INSERT ... RETURNING is refused even for a BCE');
+select throws_ok(
   $$ insert into public.tasks (title, dept_id) values ('m318:write-insert-noreturning', 'edu') $$,
-  'decision 4: the same direct INSERT without RETURNING still succeeds -- no SELECT policy applies to it');
-rollback to savepoint sp_write_consequence;
+  '42501', 'permission denied for table tasks',
+  'decision 4, after #345: and so is the same INSERT without RETURNING -- the table grant, not a SELECT policy, decides now');
 
 -- ==================== The helpers ====================
 reset role;

@@ -40,7 +40,8 @@ select is(
      union all select dept_id from tasks where dept_id = 'it'
      union all select dept_id from events where dept_id = 'it'
      union all select dept_id from announcements where dept_id = 'it'
-     union all select dept_id from task_requests where dept_id = 'it') x),
+     -- #345 dropped task_requests, the sixth table #310 had to sweep.
+     union all select dept_id from completed_work_requests where dept_id = 'it') x),
   0::bigint,
   'nothing references department it'
 );

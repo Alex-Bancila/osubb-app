@@ -51,8 +51,8 @@ alter table public.points_ledger
 alter table public.points_ledger
   add constraint points_ledger_task_reference_ck
     check ((reason in ('task', 'task_reversal')) = (task_id is not null));
-create unique index points_ledger_task_member_uidx
-  on public.points_ledger (task_id, member_id) where (reason = 'task');
+-- points_ledger_task_member_uidx is deliberately NOT recreated here: see the
+-- note beside the TRUNCATE below.
 
 drop view public.tasks_with_overdue;
 alter table public.tasks
@@ -68,6 +68,19 @@ select
     and task.status in ('todo', 'in_progress', 'in_review')
   ) as is_overdue
 from public.tasks as task;
+
+-- #345 dropped public.task_assignees outright. The pre-#317 world this
+-- harness reconstructs had it -- both sync triggers below are defined on or
+-- against it, and the replayed migration drops one of them from it -- so it
+-- is recreated here in its 20260812184706 shape, exactly as every other
+-- pre-#317 object is. The transaction rolls back, so it never outlives the
+-- run.
+create table public.task_assignees (
+  task_id   bigint references public.tasks (id) on delete cascade,
+  member_id uuid references public.profiles (id) on delete cascade,
+  primary key (task_id, member_id)
+);
+alter table public.task_assignees enable row level security;
 
 create function public.sync_task_ledger() returns trigger
   language plpgsql security definer set search_path = ''
@@ -133,6 +146,18 @@ create trigger task_assignees_sync_ledger
 -- TRUNCATE, so unlike seed.sql's DELETE-based cleanup this needs no
 -- disable/enable around it.
 truncate public.tasks cascade;
+
+-- Only NOW can the retired (task_id, member_id) uniqueness rule come back.
+-- #296 rebuilt the demo seed on the normalized model, and one of its Tasks is
+-- evaluated, reopened and evaluated again: two `reason = 'task'` rows for the
+-- same (task, member), netted by a `task_reversal` row in between. That shape
+-- is legal after #317 and is precisely what the pre-#317 index forbade, so
+-- recreating the index over the live ledger now fails with a duplicate key.
+-- Recreating it over the emptied ledger reconstructs the pre-#317 world just
+-- as faithfully, because the fixtures below are the entire population the
+-- replayed backfill sees.
+create unique index points_ledger_task_member_uidx
+  on public.points_ledger (task_id, member_id) where (reason = 'task');
 
 insert into auth.users (id, email) values
   ('31700000-0000-0000-0000-000000000001', 'ledger-one-317@test.local'),
