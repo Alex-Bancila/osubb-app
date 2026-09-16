@@ -56,7 +56,7 @@ select is(
 select throws_ok(
   $$ insert into public.campaigns (department_id, name, created_by)
      values ('edu', 'aDmItErE', 'a3130000-0000-0000-0000-000000000001') $$,
-  '23505', null,
+  '23505', 'duplicate key value violates unique constraint "campaigns_department_name_uidx"',
   'Campaign names are unique case-insensitively within a Department');
 
 select ok(not has_table_privilege('anon', 'public.campaigns', 'select'),

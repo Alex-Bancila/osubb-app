@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(62);
+select plan(63);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -239,19 +239,22 @@ select ok(
   ),
   'public + open queue: no Executor, no Candidate, queue_opened_at set');
 
--- The same state one step on: a Candidate waiting for a manager to choose.
+-- The same state again, in a second Department: still empty. No command
+-- leaves a pending Candidate with no Executor at all — express_task_interest
+-- takes the first-come branch and becomes the Executor itself when there is
+-- none — so this mirrors pr-open-queue rather than being "one step on" from
+-- it (#296 fix round 1, review finding 1).
 select ok(
   exists (
     select 1 from tasks task
      where task.title = 'Voluntari pentru standul de recrutare'
        and task.status = 'todo'
-       and task.assignment_mode = 'public'
+       and task.assignment_mode = 'public' and task.audience = 'org'
        and task.queue_opened_at is not null and task.queue_closed_at is null
        and not exists (select 1 from task_assignments a where a.task_id = task.id)
-       and (select count(*) from task_candidates c
-             where c.task_id = task.id and c.status = 'pending') = 1
+       and not exists (select 1 from task_candidates c where c.task_id = task.id)
   ),
-  'public + open queue with one pending Candidate and still no Executor');
+  'public + open queue in a second Department: no Executor, no Candidate, queue_opened_at set');
 
 -- Public with an Executor and two Members queued behind them, each with its
 -- own `interest_expressed` row.
@@ -475,30 +478,51 @@ select ok(
   'a rejected completed-work request carries its note and creates no Task');
 
 -- ==================== The commands could have produced this ====================
--- Every completed Task must look exactly like `private.evaluate_task` left it.
--- The reopened Task's FIRST Assignment also ended `completed`, but at a
--- completion the reopen later reversed — which is why the Assignment clause
--- keys on `ended_at = completed_at` rather than on the reason alone.
+-- Every completed OR unfulfilled Task must look exactly like
+-- `private.evaluate_task` left it (#296 fix round 1, review finding 6 —
+-- restoring the general coverage the retired task_assignments_backfill
+-- suite had, rather than leaving `unfulfilled` covered only by the named
+-- pr-unfulfilled matrix assertion above). The reopened Task's FIRST
+-- Assignment also ended `completed`, but at a completion the reopen later
+-- reversed — which is why the Assignment clause keys on
+-- `ended_at = coalesce(completed_at, unfulfilled_at)` rather than on the
+-- reason alone.
 select ok(
   not exists (
     select 1
       from tasks task
       join profiles creator on creator.id = task.created_by
      where creator.email like '%@demo.osubb'
-       and task.status = 'completed'
+       and task.status in ('completed', 'unfulfilled')
        and task.kind = 'task'
        and (
          (select count(*) from task_evaluations e
            where e.task_id = task.id and e.source = 'command' and e.reversed_at is null) <> 1
          or (select count(*) from points_ledger l
                join task_evaluations e on e.id = l.evaluation_id
-              where l.reason = 'task' and e.task_id = task.id and e.reversed_at is null) <> 1
+              where l.reason = 'task' and e.task_id = task.id and e.reversed_at is null
+                and (task.status <> 'unfulfilled' or l.delta < 0)) <> 1
          or (select count(*) from task_assignments a
-              where a.task_id = task.id and a.end_reason = 'completed'
-                and a.ended_at = task.completed_at) <> 1
+              where a.task_id = task.id
+                and a.end_reason = case task.status when 'completed' then 'completed' else 'failed' end
+                and a.ended_at = coalesce(task.completed_at, task.unfulfilled_at)) <> 1
        )
   ),
-  'every completed demo Task carries one open Evaluation, one task ledger row and an Assignment ended completed at completed_at');
+  'every completed or unfulfilled demo Task carries one open Evaluation, one task ledger row (negative when unfulfilled) and an Assignment ended at the matching terminal timestamp');
+
+-- Review finding 2: private.open_task_assignment writes its executor_assigned
+-- row unconditionally — only the notification is suppressed for
+-- `via = 'reopen'` — so every Assignment, including a reopened Task's
+-- second one, must be announced by exactly that row.
+select ok(
+  not exists (
+    select 1 from task_assignments a
+      join tasks task on task.id = a.task_id
+      join profiles creator on creator.id = task.created_by
+     where creator.email like '%@demo.osubb'
+       and not exists (select 1 from task_activity ev
+                        where ev.assignment_id = a.id and ev.kind = 'executor_assigned')),
+  'every demo Assignment is announced by exactly the executor_assigned row open_task_assignment writes');
 
 select ok(
   not exists (

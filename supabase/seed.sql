@@ -346,7 +346,7 @@ select project.id, fixture.member_id, fixture.project_role
 -- Scenario matrix (one Task key per row unless noted):
 --
 --   direct, in progress ............ edu-in-progress
---   public, open queue, no Executor  pr-open-queue (0 candidates), hr-open-queue (1)
+--   public, open queue, no Executor  pr-open-queue, hr-open-queue (both 0 candidates)
 --   public, Executor + 2 pending ... edu-public-queue
 --   in review, once returned ....... project-in-review
 --   completed on time .............. it-completed          (Department Team)
@@ -465,7 +465,10 @@ insert into demo_task_seed values
    'task', 'org', 'public', null, null,
    pg_temp.demo_deadline(3), 'd0000000-0000-0000-0000-000000000007', now() - interval '2 days'),
 
-  -- Public, open queue, one Candidate waiting and still no Executor.
+  -- Public, open queue, nobody in it either: a second empty queue in a
+  -- different Department. No command leaves a `pending` Candidate with no
+  -- Executor (express_task_interest takes the first-come branch when there
+  -- is none), so this mirrors pr-open-queue rather than pairing with it.
   ('hr-open-queue', 'Voluntari pentru standul de recrutare',
    'Două ore la stand, în campus.', 'logistic', 'hr', null, null,
    'task', 'org', 'public', null, null,
@@ -622,13 +625,15 @@ select fixture.key, task.id
 -- audience, assignment mode and a still-active Campaign, takes a fresh
 -- deadline, resets the status to `todo` and drops the Executor — so the clone
 -- carries the source's title verbatim and `duplicated_from_task_id` is the
--- only thing that tells the two apart.
+-- only thing that tells the two apart. `type` is null on the clone: no
+-- command in the wave writes `tasks.type` at all, and `duplicate_task`'s own
+-- column list does not carry it over.
 with cloned as (
   insert into tasks
     (title, description, type, dept_id, team_id, campaign_id, audience,
      assignment_mode, kind, status, deadline, created_by, created_at,
      duplicated_from_task_id)
-  select source.title, source.description, source.type, source.dept_id,
+  select source.title, source.description, null::text, source.dept_id,
          source.team_id, source.campaign_id, source.audience,
          source.assignment_mode, 'task', 'todo'::public.task_status,
          pg_temp.demo_deadline(6), 'd0000000-0000-0000-0000-000000000007',
@@ -864,9 +869,9 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.member_id, fixture.status
      now() - interval '4 days', null::timestamptz, null::uuid, null::text),
     ('edu-public-queue', 'd0000000-0000-0000-0000-000000000005', 'pending',
      now() - interval '3 days', null, null, null),
-    -- A queue that is still open and has nobody working yet.
-    ('hr-open-queue', 'd0000000-0000-0000-0000-000000000001', 'pending',
-     now() - interval '3 days', null, null, null),
+    -- hr-open-queue carries no Candidate at all (#296 fix round 1): no
+    -- command leaves a pending Candidature with no Executor, so it stays a
+    -- second empty queue rather than "one step on" from pr-open-queue.
     -- Closed automatically when the Evaluation made the Task terminal:
     -- decided_at, no decider.
     ('edu-completed-late', 'd0000000-0000-0000-0000-000000000002', 'closed',
@@ -1029,7 +1034,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('edu-in-progress', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-in-progress',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
-     interval '9 days'),
+     interval '9 days' - interval '2 seconds'),
     ('edu-in-progress', 'started', 'd0000000-0000-0000-0000-000000000002', 'edu-in-progress',
      'todo', 'in_progress', null, '{}'::jsonb, interval '7 days'),
 
@@ -1040,19 +1045,12 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '2 days'),
 
-    -- ---- hr-open-queue: public, open, one Candidate waiting
+    -- ---- hr-open-queue: public, open, second empty queue (no Candidate)
     ('hr-open-queue', 'created', 'd0000000-0000-0000-0000-000000000008', null,
      null, 'todo', null,
      jsonb_build_object('kind', 'task', 'audience', 'org', 'assignment_mode', 'public',
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '4 days'),
-    ('hr-open-queue', 'interest_expressed', 'd0000000-0000-0000-0000-000000000001', null,
-     null, null, null,
-     jsonb_build_object('position', 1,
-                        'candidate_id', (select candidate.id from task_candidates candidate
-                                          where candidate.task_id = pg_temp.demo_task_id('hr-open-queue')
-                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000001')),
-     interval '3 days'),
 
     -- ---- edu-public-queue: first-come Executor, two Members queued behind
     ('edu-public-queue', 'created', 'd0000000-0000-0000-0000-000000000007', null,
@@ -1065,7 +1063,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
      jsonb_build_object('via', 'first_come', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
      interval '5 days'),
     ('edu-public-queue', 'started', 'd0000000-0000-0000-0000-000000000002', 'edu-public-queue',
-     'todo', 'in_progress', null, '{}'::jsonb, interval '5 days'),
+     'todo', 'in_progress', null, '{}'::jsonb, interval '5 days' - interval '2 seconds'),
     ('edu-public-queue', 'interest_expressed', 'd0000000-0000-0000-0000-000000000001', null,
      null, null, null,
      jsonb_build_object('position', 1,
@@ -1091,7 +1089,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('project-in-review', 'executor_assigned', 'd0000000-0000-0000-0000-000000000005', 'project-in-review',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
-     interval '14 days'),
+     interval '14 days' - interval '2 seconds'),
     ('project-in-review', 'started', 'd0000000-0000-0000-0000-000000000002', 'project-in-review',
      'todo', 'in_progress', null, '{}'::jsonb, interval '12 days'),
     ('project-in-review', 'submitted', 'd0000000-0000-0000-0000-000000000002', 'project-in-review',
@@ -1112,7 +1110,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('it-completed', 'executor_assigned', 'd0000000-0000-0000-0000-000000000006', 'it-completed',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000008'),
-     interval '20 days'),
+     interval '20 days' - interval '2 seconds'),
     ('it-completed', 'started', 'd0000000-0000-0000-0000-000000000008', 'it-completed',
      'todo', 'in_progress', null, '{}'::jsonb, interval '18 days'),
     ('it-completed', 'submitted', 'd0000000-0000-0000-0000-000000000008', 'it-completed',
@@ -1160,7 +1158,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('pr-unfulfilled', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'pr-unfulfilled',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000003'),
-     interval '25 days'),
+     interval '25 days' - interval '2 seconds'),
     ('pr-unfulfilled', 'started', 'd0000000-0000-0000-0000-000000000003', 'pr-unfulfilled',
      'todo', 'in_progress', null, '{}'::jsonb, interval '22 days'),
     ('pr-unfulfilled', 'unfulfilled', 'd0000000-0000-0000-0000-000000000007', 'pr-unfulfilled',
@@ -1183,7 +1181,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('edu-reopened', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-reopened-1',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
-     interval '40 days'),
+     interval '40 days' - interval '2 seconds'),
     ('edu-reopened', 'started', 'd0000000-0000-0000-0000-000000000002', 'edu-reopened-1',
      'todo', 'in_progress', null, '{}'::jsonb, interval '38 days'),
     ('edu-reopened', 'submitted', 'd0000000-0000-0000-0000-000000000002', 'edu-reopened-1',
@@ -1193,6 +1191,14 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
      jsonb_build_object('evaluation_id', pg_temp.demo_evaluation_id('edu-reopened-1'),
                         'difficulty', 4, 'rating', 4, 'points', 4 * rating_mult(4)),
      interval '24 days'),
+    -- private.open_task_assignment (via = 'reopen') writes its
+    -- executor_assigned row unconditionally -- only the notification is
+    -- suppressed for a reopen -- and reopen_task_impl calls it BEFORE
+    -- logging its own `reopened` row, so this occurs a moment earlier.
+    ('edu-reopened', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-reopened-2',
+     null, null, null,
+     jsonb_build_object('via', 'reopen', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
+     interval '12 days' + interval '2 seconds'),
     ('edu-reopened', 'reopened', 'd0000000-0000-0000-0000-000000000007', 'edu-reopened-2',
      'completed', 'in_progress', 'Au apărut materialele complete; reluăm evaluarea.',
      jsonb_build_object('evaluation_id', pg_temp.demo_evaluation_id('edu-reopened-1'),
@@ -1240,7 +1246,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
                                             and candidate.member_id = 'd0000000-0000-0000-0000-000000000004'),
                         'replaced_assignment_id', null, 'closed_remaining', false,
                         'closed_candidates', 0),
-     interval '13 days'),
+     interval '13 days' - interval '2 seconds'),
     ('team-cancelled', 'started', 'd0000000-0000-0000-0000-000000000004', 'team-cancelled',
      'todo', 'in_progress', null, '{}'::jsonb, interval '12 days'),
     ('team-cancelled', 'cancelled', 'd0000000-0000-0000-0000-000000000007', null,
@@ -1276,7 +1282,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('edu-subtask-done', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-subtask-done',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
-     interval '34 days'),
+     interval '34 days' - interval '2 seconds'),
     ('edu-subtask-done', 'started', 'd0000000-0000-0000-0000-000000000001', 'edu-subtask-done',
      'todo', 'in_progress', null, '{}'::jsonb, interval '33 days'),
     ('edu-subtask-done', 'submitted', 'd0000000-0000-0000-0000-000000000001', 'edu-subtask-done',
@@ -1296,7 +1302,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('edu-subtask-progress', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-subtask-progress',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
-     interval '34 days'),
+     interval '34 days' - interval '2 seconds'),
     ('edu-subtask-progress', 'started', 'd0000000-0000-0000-0000-000000000002', 'edu-subtask-progress',
      'todo', 'in_progress', null, '{}'::jsonb, interval '30 days'),
 
@@ -1327,7 +1333,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('youth-completed', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'youth-completed',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000004'),
-     interval '28 days'),
+     interval '28 days' - interval '2 seconds'),
     ('youth-completed', 'started', 'd0000000-0000-0000-0000-000000000004', 'youth-completed',
      'todo', 'in_progress', null, '{}'::jsonb, interval '27 days'),
     ('youth-completed', 'submitted', 'd0000000-0000-0000-0000-000000000004', 'youth-completed',
@@ -1347,7 +1353,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('fin-completed', 'executor_assigned', 'd0000000-0000-0000-0000-000000000008', 'fin-completed',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000007'),
-     interval '18 days'),
+     interval '18 days' - interval '2 seconds'),
     ('fin-completed', 'started', 'd0000000-0000-0000-0000-000000000007', 'fin-completed',
      'todo', 'in_progress', null, '{}'::jsonb, interval '16 days'),
     ('fin-completed', 'submitted', 'd0000000-0000-0000-0000-000000000007', 'fin-completed',
@@ -1367,7 +1373,7 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('hr-in-progress', 'executor_assigned', 'd0000000-0000-0000-0000-000000000008', 'hr-in-progress',
      null, null, null,
      jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000005'),
-     interval '10 days'),
+     interval '10 days' - interval '2 seconds'),
     ('hr-in-progress', 'started', 'd0000000-0000-0000-0000-000000000005', 'hr-in-progress',
      'todo', 'in_progress', null, '{}'::jsonb, interval '8 days'),
 
@@ -1381,12 +1387,12 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
     ('edu-request-task', 'executor_assigned', 'd0000000-0000-0000-0000-000000000008', 'edu-request-task',
      null, null, null,
      jsonb_build_object('via', 'request_approval', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
-     interval '3 days'),
+     interval '3 days' - interval '2 seconds'),
     ('edu-request-task', 'evaluated', 'd0000000-0000-0000-0000-000000000008', 'edu-request-task',
      'todo', 'completed', 'Muncă reală, confirmată de coordonatorul standului.',
      jsonb_build_object('evaluation_id', pg_temp.demo_evaluation_id('edu-request-task'),
                         'difficulty', 2, 'rating', 3, 'points', 2 * rating_mult(3)),
-     interval '3 days')
+     interval '3 days' - interval '4 seconds')
   ) as fixture (task_key, kind, actor_id, assignment_key, from_status, to_status,
                 note, details, ago);
 
@@ -1482,9 +1488,24 @@ select a.id, r.member_id
 -- the task/deadline broadcasts.
 insert into notifications (member_id, kind, icon, title, body, critical, read, link, created_at) values
   ('d0000000-0000-0000-0000-000000000002', 'announce', '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, '/anunturi', now() - interval '1 day'),
-  ('d0000000-0000-0000-0000-000000000002', 'task',     '✅', 'Task nou: Contactare lectori',      'Deadline peste 5 zile.',  false, false, '/tracker',  now() - interval '2 days'),
   ('d0000000-0000-0000-0000-000000000002', 'event',    '📅', 'Ședință Educational',               'Poimâine, sala 305.',     false, true,  '/calendar', now() - interval '3 days'),
   ('d0000000-0000-0000-0000-000000000001', 'announce', '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, '/anunturi', now() - interval '1 day'),
   ('d0000000-0000-0000-0000-000000000001', 'event',    '📅', 'Training pentru recruți',           'Peste 6 zile, sala 210.', false, false, '/calendar', now() - interval '1 day'),
   ('d0000000-0000-0000-0000-000000000003', 'system',   '⚠️', 'Ai primit o sancțiune',             'Contactează BC pentru detalii.', true, false, '/profil', now() - interval '4 days'),
   ('d0000000-0000-0000-0000-000000000007', 'announce', '📢', 'Recrutarea de toamnă începe luni',  'Standul are nevoie de voluntari.', false, false, '/anunturi', now() - interval '2 days');
+
+-- The one Task-kind notification is rebuilt from its command source rather
+-- than hand-written (#296 fix round 1): `edu-in-progress` was created with an
+-- Executor, so `private.create_task_impl` calls
+-- `private.open_task_assignment(..., 'create')`, which sends exactly this
+-- body — copied verbatim from the migration — with no dedupe_key and
+-- link/task_id derived the way `private.notify` derives them.
+insert into notifications (member_id, kind, icon, title, body, critical, read, link, task_id, created_at)
+select 'd0000000-0000-0000-0000-000000000002'::uuid, 'task'::public.noti_kind, '✅',
+       'Task nou: ' || task.title,
+       'Ți-a fost atribuit acest task. Deadline: ' ||
+         to_char(task.deadline at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI') || '.',
+       false, false, '/tracker/' || task.id::text, task.id,
+       now() - (interval '9 days' - interval '2 seconds')
+  from tasks task
+ where task.id = pg_temp.demo_task_id('edu-in-progress');
