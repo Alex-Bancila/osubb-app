@@ -2,15 +2,16 @@
 --
 -- Epic 1.4 built the engine out of two triggers: editing `tasks.rating` (or
 -- the generated `tasks.points`) wrote, rewrote or deleted ledger rows, and
--- editing `task_assignees` added or removed them. #317 retired both. Points
+-- editing the legacy assignee join table added or removed them. #317 retired
+-- both triggers; #345 then dropped the join table itself. Points
 -- are now decided once, recorded on an append-only `task_evaluations` row,
 -- and credited by a single `points_ledger` row that names that Evaluation;
 -- reopening appends a `task_reversal` row against the same Evaluation rather
 -- than rewriting or deleting the credit (ADR-0007, Lifecycle and points).
 --
 -- This suite therefore asserts the opposite of what it used to: that moving a
--- Rating or an assignee moves no points at all, and that the Evaluation is
--- the only thing that does. The scoring guide itself (rating_mult) is
+-- Rating moves no points at all, and that the Evaluation is the only thing
+-- that does. The scoring guide itself (rating_mult) is
 -- unchanged and still proven here, because it is what an Evaluation's points
 -- must equal.
 --
@@ -21,7 +22,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(37);
+select plan(35);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -57,40 +58,28 @@ select hasnt_column('public', 'tasks_with_overdue', 'points',
 select ok(
   (select count(*) from pg_trigger trigger
      join pg_class table_ on table_.oid = trigger.tgrelid
-    where table_.relname in ('tasks', 'task_assignees')
-      and trigger.tgname in ('tasks_sync_ledger', 'task_assignees_sync_ledger')) = 0,
-  'neither ledger sync trigger survives on tasks or task_assignees');
+    where table_.relname = 'tasks'
+      and trigger.tgname = 'tasks_sync_ledger') = 0,
+  'no ledger sync trigger survives on tasks (the assignee-side trigger went with its table in #345)');
 
 select hasnt_function('public', 'sync_task_ledger',
   'sync_task_ledger() is gone, not merely detached from its trigger');
 select hasnt_function('public', 'sync_assignee_ledger',
   'sync_assignee_ledger() is gone, not merely detached from its trigger');
 
--- The AC in its strongest form: nothing on either legacy table may move a
--- ledger row, whatever a writer does to it.
+-- The AC in its strongest form: nothing a writer does to `tasks` may move a
+-- ledger row.
 insert into tasks (title, difficulty, dept_id) values ('pe-t1', 3, 'edu');
-insert into task_assignees (task_id, member_id)
-  select id, 'aaaaaaaa-0000-0000-0000-000000000001'::uuid from tasks where title = 'pe-t1'
-  union all
-  select id, 'bbbbbbbb-0000-0000-0000-000000000002'::uuid from tasks where title = 'pe-t1';
 
 -- #312: a Rating may only be set once the Task is terminal, so grading also
--- completes it. Under the old engine this single statement credited both
--- assignees.
+-- completes it. Under the old engine this single statement credited every
+-- participant of the Task.
 update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 'pe-t1';
 
 select is(
   (select count(*) from points_ledger l join tasks t on t.id = l.task_id
     where t.title = 'pe-t1'),
   0::bigint, 'grading a Task writes no ledger row by itself');
-
-insert into task_assignees (task_id, member_id)
-  select id, 'cccccccc-0000-0000-0000-000000000003'::uuid from tasks where title = 'pe-t1';
-
-select is(
-  (select count(*) from points_ledger l join tasks t on t.id = l.task_id
-    where t.title = 'pe-t1'),
-  0::bigint, 'adding an assignee to a graded Task credits nobody');
 
 -- ==================== An Evaluation is what credits a member ====================
 insert into task_assignments (task_id, member_id, ended_at, end_reason)
@@ -123,7 +112,7 @@ select is(
   (select count(*) from points_ledger l join tasks t on t.id = l.task_id
     where t.title = 'pe-t1'),
   1::bigint,
-  'only the evaluated Executor is credited — the other two assignees are not');
+  'only the evaluated Executor is credited — one Evaluation, one ledger row');
 
 select is(
   (select points from member_points where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
@@ -143,17 +132,6 @@ select is(
      join tasks task on task.id = evaluation.task_id
     where task.title = 'pe-t1'),
   4, 'the Evaluation preserves the Rating it was made with');
-
--- Removing an assignee used to delete that member's ledger row.
-delete from task_assignees ta
-  using tasks t
-  where t.id = ta.task_id and t.title = 'pe-t1'
-    and ta.member_id = 'aaaaaaaa-0000-0000-0000-000000000001';
-
-select is(
-  (select count(*) from points_ledger l join tasks t on t.id = l.task_id
-    where t.title = 'pe-t1' and l.member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  1::bigint, 'removing a legacy assignee no longer deletes their credit');
 
 -- ==================== A credit and its reversal coexist (#317 AC) ====================
 -- The old points_ledger_task_member_uidx keyed on (task_id, member_id) and
@@ -275,12 +253,12 @@ select ok(
   'higher total ranks higher (Bogdan 0 over Ana -7)');
 
 select is(
-  (select points from dept_cup where dept_id = 'tst'),
-  -7, 'dept_cup sums its members'' totals');
+  (select count(*) from dept_cup where dept_id = 'tst'),
+  0::bigint, 'the database owner sees no dept_cup row for tst either -- this suite''s own extra department competes under a real BCE+ session (department_cup_task_origins.test.sql), the owner just never sees any row at all (next assertion)');
 
 select is(
-  (select members from dept_cup where dept_id = 'tst'),
-  1::bigint, 'dept_cup counts distinct members');
+  (select count(*) from dept_cup),
+  0::bigint, 'the database owner does not bypass the authenticated BCE+ Department Cup gate');
 
 -- ==================== Security posture ====================
 select ok(

@@ -16,13 +16,16 @@ import { formatPoints } from '../../lib/format';
  *
  * Bars are scaled against the leader, which is the comparison the cup is
  * about — a department on 24 points next to one on 26 should look like a race.
- * A department in the negative (sanctions outweighing awards) shows no bar and
- * its real, negative total: the number is the honest one, and a bar pointing
- * backwards would be a novelty rather than information.
+ * A department in the negative shows no bar and its real, negative total: the
+ * number is the honest one, and a bar pointing backwards would be a novelty
+ * rather than information.
  *
- * Known gap, tracked as #134: `dept_cup` inner-joins `member_departments`, so a
- * department with no members is missing from this list entirely rather than
- * showing zero. That is a view to fix, not something to paper over here.
+ * #259 closed the old #134 gap: `dept_cup` no longer inner-joins
+ * `member_departments`, so every competing Department is a row even on zero,
+ * and its total is now the Task Points whose Task Origin is that Department or
+ * one of its Department Teams — not its current members' whole ledgers. A
+ * negative total is still reachable (a Rating of 1 subtracts points), but a
+ * member's sanction no longer reaches the Cup at all.
  */
 export default function DeptCupCard() {
   const cup = useDeptCup();

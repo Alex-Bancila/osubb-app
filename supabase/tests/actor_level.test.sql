@@ -5,7 +5,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(19);
+select plan(20);
 
 insert into auth.users (id, email) values
   ('36400000-0000-0000-0000-000000000001', 'actor.active.364@test.local'),
@@ -42,6 +42,7 @@ reset role;
 
 select pg_temp.test_login('36400000-0000-0000-0000-000000000002', jsonb_build_object('member_role','bc','member_level',6,'dept_ids','[]'::jsonb,'team_ids','[]'::jsonb));
 select is(pg_temp.call_actor_level(), null::integer, 'an inactive actor receives null despite stale claims');
+select is(private.caller_level(), -1, 'caller_level preserves its inactive-caller -1 sentinel');
 select is(private.is_global_task_reader(), false, 'a stale leadership token yields false from the global-reader predicate');
 select throws_ok($$ select pg_temp.call_require_active_member() $$, '42501', 'not_active_member', 'the inactive actor is rejected');
 reset role;

@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(12);
 
 
 -- Remove the demo members and every dependent row inside this rolled-back
@@ -31,24 +31,21 @@ insert into public.member_departments (member_id, dept_id) values
 
 insert into public.tasks (title, difficulty, dept_id) values
   ('cup-active', 5, 'hr'), ('cup-inactive', 5, 'hr'), ('cup-alumni', 5, 'hr');
-insert into public.task_assignees (task_id, member_id)
-select t.id, case t.title
-  when 'cup-active' then 'c1000000-0000-0000-0000-000000000001'::uuid
-  when 'cup-inactive' then 'c2000000-0000-0000-0000-000000000002'::uuid
-  else 'c3000000-0000-0000-0000-000000000003'::uuid
-end
-from public.tasks t
-where t.title like 'cup-%';
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 3
  where title like 'cup-%';
 -- #317: the Rating no longer credits anyone by itself — each participant's
 -- Evaluation and ledger entry are written explicitly (5 x 1 = 5 each).
-select pg_temp.test_credit_task(task.id, assignee.member_id,
+-- #345 retired the task_assignees join table this list used to live in;
+-- pg_temp.test_credit_task writes the Assignment each Evaluation needs.
+select pg_temp.test_credit_task(task.id, participant.member_id,
                                 'c1000000-0000-0000-0000-000000000001')
-  from public.tasks task
-  join public.task_assignees assignee on assignee.task_id = task.id
- where task.title like 'cup-%';
+  from (values
+    ('cup-active',   'c1000000-0000-0000-0000-000000000001'::uuid),
+    ('cup-inactive', 'c2000000-0000-0000-0000-000000000002'::uuid),
+    ('cup-alumni',   'c3000000-0000-0000-0000-000000000003'::uuid)
+  ) as participant (title, member_id)
+  join public.tasks task on task.title = participant.title;
 
 select ok(
   exists (
@@ -62,24 +59,36 @@ select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
 
 select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE sees all five canonical departments');
-select is((select points from public.dept_cup where dept_id = 'edu'), 5,
-  'the cup keeps the active member points total');
+select is((select points from public.dept_cup where dept_id = 'edu'), 0,
+  'current Department membership does not redirect another Origin''s Task Points');
 select is((select members from public.dept_cup where dept_id = 'edu'), 1::bigint,
   'the cup counts the active member');
 select is((select points from public.dept_cup where dept_id = 'pr'), 0,
-  'an inactive member contributes no points');
+  'a Department that owns no Task shows zero, regardless of its members'' status');
 select is((select members from public.dept_cup where dept_id = 'pr'), 0::bigint,
   'an inactive member is not counted');
-select is((select points from public.dept_cup where dept_id = 'hr'), 0,
-  'an alumni member contributes no points');
+select is((select points from public.dept_cup where dept_id = 'hr'), 15,
+  'Task Points follow the Department Task Origin regardless of Executor membership status');
 select is((select members from public.dept_cup where dept_id = 'hr'), 0::bigint,
   'an alumni member is not counted');
+-- ADR-0007 keeps anyone with completed Task history eligible regardless of
+-- profile status: the inactive and alumni Executors' own credits are exactly
+-- what make hr 15 rather than 5 (the active member's own award alone) --
+-- proven positively, not left implicit in the total above.
+select is(
+  (select sum(entry.delta)::int from public.points_ledger as entry
+     join public.tasks as task on task.id = entry.task_id
+    where entry.member_id in ('c2000000-0000-0000-0000-000000000002',
+                               'c3000000-0000-0000-0000-000000000003')
+      and task.dept_id = 'hr'),
+  10,
+  'the inactive and alumni Executors'' own Task credits (5 each) are what carry hr to 15, not merely the active member''s');
 select is((select points from public.dept_cup where dept_id = 'fin'), 0,
   'a department without any member remains visible with zero points');
 
 select results_eq(
   $$ select dept_id from public.dept_cup $$,
-  $$ values ('edu'::text), ('fin'::text), ('pr'::text), ('hr'::text), ('youth'::text) $$,
+  $$ values ('hr'::text), ('edu'::text), ('fin'::text), ('pr'::text), ('youth'::text) $$,
   'standings sort by points descending and then by department name');
 
 reset role;

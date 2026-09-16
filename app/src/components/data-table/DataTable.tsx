@@ -1,4 +1,9 @@
+import { useId, useState } from 'react';
 import {
+  columnFilteringFeature,
+  createFilteredRowModel,
+  filterFns,
+  type SortingState,
   createSortedRowModel,
   columnVisibilityFeature,
   rowSortingFeature,
@@ -27,6 +32,9 @@ import {
 
 const dataTableFeatures = tableFeatures({
   columnVisibilityFeature,
+  columnFilteringFeature,
+  filterFns,
+  filteredRowModel: createFilteredRowModel(),
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
 });
@@ -41,6 +49,10 @@ type DataTableProps<TData extends RowData> = {
   data: TData[];
   emptyTitle: string;
   emptyDescription?: string;
+  filters?: { columnId: string; label: string }[];
+  initialSorting?: SortingState;
+  prioritySort?: SortingState[number];
+  rowClassName?: (row: TData) => string;
 };
 
 function columnLabel<TData extends RowData>(
@@ -83,78 +95,133 @@ function DataTable<TData extends RowData>({
   data,
   emptyTitle,
   emptyDescription,
+  filters = [],
+  initialSorting = [],
+  prioritySort,
+  rowClassName,
 }: DataTableProps<TData>) {
+  const filterId = useId();
+  const [sorting, setSorting] = useState<SortingState>(() =>
+    prioritySort
+      ? [
+          prioritySort,
+          ...initialSorting.filter((sort) => sort.id !== prioritySort.id),
+        ]
+      : initialSorting,
+  );
   const table = useTable({
     features: dataTableFeatures,
     data,
     columns,
+    state: { sorting },
+    onSortingChange: (updater) =>
+      setSorting((previous) => {
+        const next =
+          typeof updater === 'function' ? updater(previous) : updater;
+        return prioritySort
+          ? [
+              prioritySort,
+              ...next.filter((sort) => sort.id !== prioritySort.id),
+            ]
+          : next;
+      }),
     enableSortingRemoval: false,
     sortDescFirst: false,
   });
 
   return (
-    <Table>
-      <TableHeader>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
-            {headerGroup.headers.map((header) => {
-              const column = header.column;
-              return (
-                <TableHead
-                  key={header.id}
-                  colSpan={header.colSpan}
-                  aria-sort={
-                    column.getCanSort() ? sortDirection(column) : undefined
+    <div className="space-y-3">
+      {filters.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {filters.map(({ columnId, label }) => {
+            const column = table.getColumn(columnId);
+            if (!column?.getCanFilter()) return null;
+            return (
+              <label
+                key={columnId}
+                htmlFor={`${filterId}-${columnId}`}
+                className="grid gap-1 text-sm"
+              >
+                {label}
+                <input
+                  id={`${filterId}-${columnId}`}
+                  type="search"
+                  className="min-h-11 rounded-md border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  value={String(column.getFilterValue() ?? '')}
+                  onChange={(event) =>
+                    column.setFilterValue(event.target.value)
                   }
-                >
-                  {header.isPlaceholder ? null : column.getCanSort() ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={nextSortLabel(column)}
-                      onClick={column.getToggleSortingHandler()}
-                    >
+                />
+              </label>
+            );
+          })}
+        </div>
+      )}
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => {
+                const column = header.column;
+                return (
+                  <TableHead
+                    key={header.id}
+                    colSpan={header.colSpan}
+                    aria-sort={
+                      column.getCanSort() ? sortDirection(column) : undefined
+                    }
+                  >
+                    {header.isPlaceholder ? null : column.getCanSort() &&
+                      column.id !== prioritySort?.id ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-11 min-w-11"
+                        aria-label={nextSortLabel(column)}
+                        onClick={column.getToggleSortingHandler()}
+                      >
+                        <table.FlexRender header={header} />
+                        <SortIcon column={column} />
+                      </Button>
+                    ) : (
                       <table.FlexRender header={header} />
-                      <SortIcon column={column} />
-                    </Button>
-                  ) : (
-                    <table.FlexRender header={header} />
-                  )}
-                </TableHead>
-              );
-            })}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {table.getRowModel().rows.length ? (
-          table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  <table.FlexRender cell={cell} />
-                </TableCell>
-              ))}
+                    )}
+                  </TableHead>
+                );
+              })}
             </TableRow>
-          ))
-        ) : (
-          <TableRow>
-            <TableCell
-              colSpan={Math.max(table.getVisibleLeafColumns().length, 1)}
-            >
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>{emptyTitle}</EmptyTitle>
-                  {emptyDescription && (
-                    <EmptyDescription>{emptyDescription}</EmptyDescription>
-                  )}
-                </EmptyHeader>
-              </Empty>
-            </TableCell>
-          </TableRow>
-        )}
-      </TableBody>
-    </Table>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.length ? (
+            table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id} className={rowClassName?.(row.original)}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    <table.FlexRender cell={cell} />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell
+                colSpan={Math.max(table.getVisibleLeafColumns().length, 1)}
+              >
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyTitle>{emptyTitle}</EmptyTitle>
+                    {emptyDescription && (
+                      <EmptyDescription>{emptyDescription}</EmptyDescription>
+                    )}
+                  </EmptyHeader>
+                </Empty>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 

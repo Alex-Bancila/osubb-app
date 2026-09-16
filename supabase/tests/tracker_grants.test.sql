@@ -52,22 +52,24 @@ select plan(16);
 
 create function pg_temp.task_surface_objects() returns text[]
 language sql as $$
+  -- #345 dropped task_assignees and task_requests; both are gone from this
+  -- roster with their tables, and rls_deny_by_default.test.sql asserts they
+  -- no longer exist at all.
   select array[
-    'tasks', 'task_assignees', 'task_assignments', 'task_candidates',
+    'tasks', 'task_assignments', 'task_candidates',
     'task_activity', 'task_evaluations', 'campaigns',
-    'completed_work_requests', 'task_requests', 'points_ledger',
+    'completed_work_requests', 'points_ledger',
     'tasks_with_overdue', 'task_queue_summary'
   ]
 $$;
 
 create function pg_temp.task_surface_sequences() returns text[]
 language sql as $$
-  -- task_assignees has a composite (task_id, member_id) primary key and no
-  -- surrogate identity column, so it has no sequence.
+  -- #345: task_requests_id_seq went with its table.
   select array[
     'tasks_id_seq', 'task_assignments_id_seq', 'task_candidates_id_seq',
     'task_activity_id_seq', 'task_evaluations_id_seq', 'campaigns_id_seq',
-    'completed_work_requests_id_seq', 'task_requests_id_seq',
+    'completed_work_requests_id_seq',
     'points_ledger_id_seq'
   ]
 $$;
@@ -117,12 +119,14 @@ select is(pg_temp.ddl_adjacent_grants('service_role'), '{}'::text[],
   'service_role cannot truncate, reference, or trigger any Task table/view either');
 
 -- ==================== 3. DML matrix (authenticated / service_role) ====================
--- The legacy direct-write paths (tasks/task_write, task_assignees/
--- assignee_manage, task_requests/request_*, points_ledger/ledger_*) keep
--- their existing DML on purpose -- #345 retires task_write, not #295.
--- Every command-owned table (campaigns, task_assignments, task_candidates,
--- task_activity, task_evaluations, completed_work_requests) is select-only
--- for authenticated, since #327-#345's commands own their writes.
+-- Every command-owned table (tasks, campaigns, task_assignments,
+-- task_candidates, task_activity, task_evaluations, completed_work_requests)
+-- is select-only for authenticated, since #327-#345's commands own their
+-- writes -- #345 closed the last of them, `tasks`, along with the two legacy
+-- tables that used to appear here with full DML.
+-- points_ledger keeps INSERT for authenticated: the sanction path
+-- (ledger_sanction) is still a direct, policy-gated write, not a command.
+-- service_role is untouched by #345 -- narrowing it further is #295's audit.
 
 create temporary table expected_table_privs (
   object_name text not null,
@@ -132,12 +136,8 @@ create temporary table expected_table_privs (
 ) on commit drop;
 
 insert into expected_table_privs (object_name, role_name, expected) values
-  ('tasks',                    'authenticated', 'DELETE,INSERT,SELECT,UPDATE'),
+  ('tasks',                    'authenticated', 'SELECT'),
   ('tasks',                    'service_role',  'DELETE,INSERT,SELECT,UPDATE'),
-  ('task_assignees',           'authenticated', 'DELETE,INSERT,SELECT,UPDATE'),
-  ('task_assignees',           'service_role',  'DELETE,INSERT,SELECT,UPDATE'),
-  ('task_requests',            'authenticated', 'DELETE,INSERT,SELECT,UPDATE'),
-  ('task_requests',            'service_role',  'DELETE,INSERT,SELECT,UPDATE'),
   ('points_ledger',            'authenticated', 'INSERT,SELECT'),
   ('points_ledger',            'service_role',  'SELECT'),
   ('task_activity',            'authenticated', 'SELECT'),
@@ -192,8 +192,6 @@ create temporary table expected_sequence_privs (
 insert into expected_sequence_privs (object_name, role_name, expected) values
   ('tasks_id_seq',                    'authenticated', 'SELECT,USAGE'),
   ('tasks_id_seq',                    'service_role',  'SELECT,USAGE'),
-  ('task_requests_id_seq',            'authenticated', 'SELECT,USAGE'),
-  ('task_requests_id_seq',            'service_role',  'SELECT,USAGE'),
   ('points_ledger_id_seq',            'authenticated', 'SELECT,USAGE'),
   ('points_ledger_id_seq',            'service_role',  ''),
   ('task_activity_id_seq',            'authenticated', ''),
@@ -258,7 +256,7 @@ create temporary table expected_function_privs (
 ) on commit drop;
 
 insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) values
-  ('claim_open_task',    'p_task_id bigint',                        false, true,  false, false),
+  -- #345 dropped public.claim_open_task; its row went with it.
   ('rating_mult',        'r integer',                                false, true,  true,  false),
   ('auth_level',         '',                                         false, true,  true,  false),
   ('auth_role',          '',                                         false, true,  true,  false),
@@ -316,6 +314,15 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('approve_completed_work_request', 'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text',
                                                                      false, true,  false, false),
   ('reject_completed_work_request',  'p_request_id bigint, p_note text',
+                                                                     false, true,  false, false),
+  -- #259: the Campaign-filtered Department Cup read wrapper. Same grant shape
+  -- as every command wrapper -- authenticated only -- even though it writes
+  -- nothing: the BCE+ gate lives inside the function, not in the grant.
+  ('department_cup',                 'p_campaign_id bigint',         false, true,  false, false),
+  -- #260: the leadership drill-down over one Member's Assignment history.
+  ('leadership_member_tasks',        'p_member_id uuid',             false, true,  false, false),
+  -- #258: the Task-Points Leaderboard, filterable by Origin and Campaign.
+  ('leadership_leaderboard',         'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',
                                                                      false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
@@ -348,7 +355,7 @@ end
 $$;
 
 select is(pg_temp.public_function_mismatches(), '{}'::text[],
-  'every public Task-related command/helper (claim_open_task, rating_mult, the auth_* JWT helpers, the three Campaign wrappers, #327''s create_task) has exactly its audited execute grants -- claim_open_task no longer executable by service_role');
+  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, every #327-#344 Task command wrapper, and the three leadership read wrappers #259''s department_cup, #260''s leadership_member_tasks and #258''s leadership_leaderboard) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
 
 -- ==================== 7. private schema: pinned function roster ====================
 
@@ -390,6 +397,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_completed_work_request_impl',          'p_description text, p_dept_id text, p_team_id text, p_project_id bigint',                                            'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
+  -- #259: the Department Cup body behind both the legacy `dept_cup` view and
+  -- the filtered `public.department_cup(p_campaign_id)` wrapper.
+  ('department_cup_rows',                         'p_campaign_id bigint',                                                                                               'authenticated_only'),
   -- #341: clone a Task into a brand-new todo Task with a fresh deadline.
   ('duplicate_task_impl',                         'p_task_id bigint, p_deadline timestamp with time zone',                                                             'impl'),
   ('end_task_assignment',                         'p_assignment_id bigint, p_reason text, p_note text',                                                                 'none'),
@@ -410,6 +420,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_candidate',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
+  -- #258: the Task-Points Leaderboard body behind
+  -- `public.leadership_leaderboard(department, team, project, campaign)`.
+  ('leadership_leaderboard_impl',                 'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',                                   'authenticated_only'),
+  ('leadership_member_tasks_impl',                'p_member_id uuid',                                                                                                  'impl'),
   ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
   -- #337: the second command over the shared evaluate_task core (#336) --
   -- the `unfulfilled` outcome for overdue, undelivered work.
@@ -453,7 +467,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
   ('submit_task_for_review_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   ('sync_project_leader_membership',              '',                                                                                                                   'trigger'),
-  ('task_is_unassigned',                          'p_task_id bigint',                                                                                                   'authenticated_only'),
+  -- #345 dropped private.task_is_unassigned with the legacy task table it
+  -- queried and the claim command that was its last caller.
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
   ('update_campaign_impl',                        'p_campaign_id bigint, p_name text',                                                                                  'impl'),
   ('update_task_content_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',        'impl'),
@@ -464,8 +479,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 86,
-  'the pinned private-schema roster contains main''s 84 audited functions plus #364''s actor_level and require_active_member helpers');
+  (select count(*) from pinned_private_functions)::int, 88,
+  'the audited roster contains the 86 post-#258 functions plus #364''s actor_level and require_active_member helpers');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

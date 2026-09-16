@@ -17,9 +17,21 @@ alter table public.tasks
   drop column review_round, drop column returned_to_progress_at;
 -- #318: today's read policy is tasks_read (it replaced task_read).
 drop policy tasks_read on public.tasks;
-drop function public.claim_open_task(bigint);
-drop function private.task_is_unassigned(bigint);
+-- #345 dropped public.claim_open_task and private.task_is_unassigned, so the
+-- two explicit drops that stood here have nothing left to drop.
 truncate public.tasks cascade;
+-- #345 also dropped public.task_assignees itself. The pre-#287 world this
+-- harness replays had it, and so do public.is_assigned below, the replayed
+-- 20260826231354_atomic_claim_open_task.sql, and this file's own fixtures --
+-- so it is recreated here in exactly its 20260812184706 shape. Like every
+-- other object this scratch transaction builds, it is never cleaned up: the
+-- rollback at the end removes it.
+create table public.task_assignees (
+  task_id   bigint references public.tasks (id) on delete cascade,
+  member_id uuid references public.profiles (id) on delete cascade,
+  primary key (task_id, member_id)
+);
+alter table public.task_assignees enable row level security;
 -- #318 also dropped public.is_assigned with task_read, its last consumer.
 -- The pre-#287 schema had it, and both the legacy task_read recreated
 -- below and the replayed migration's own task_read call it.
@@ -58,6 +70,13 @@ alter table public.task_activity drop column from_status, drop column to_status;
 -- transaction rolls back, so dropping and never recreating it is safe. Any
 -- later task_status-typed object must be dropped here too.
 drop function private.log_task_activity(bigint, text, uuid, bigint, public.task_status, public.task_status, text, jsonb);
+-- #260: the leadership drill-down returns a `status public.task_status` column,
+-- so its wrapper and its body both depend on the enum exactly the way
+-- log_task_activity's parameters do. This is the "any later task_status-typed
+-- object" the note above warned about; same treatment, same reasoning -- the
+-- scratch transaction rolls back, so they are never recreated here.
+drop function public.leadership_member_tasks(uuid);
+drop function private.leadership_member_tasks_impl(uuid);
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks
