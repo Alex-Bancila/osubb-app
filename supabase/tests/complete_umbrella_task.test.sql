@@ -133,7 +133,7 @@ select 'Subtask deschis #340', 'Inca in lucru', now() + interval '10 days', 'edu
 -- ---- U2 + S2: the EMPTY-notify case. Creator and actor are the SAME BCE,
 -- and the Subtask is already terminal, so a single call finishes the
 -- Umbrella outright. Department 'edu' has no other local BCE in this
--- database (the seed BCE sits in 'diverse'/'pr'), so private.task_managers'
+-- database (the seed BCE sits in 'diverse'), so private.task_managers'
 -- Department branch already returns nobody once the actor is excluded; the
 -- ONLY thing standing between that and a literal empty recipient set is
 -- task_managers' global BC/Moderator fallback, which the seed's two demo
