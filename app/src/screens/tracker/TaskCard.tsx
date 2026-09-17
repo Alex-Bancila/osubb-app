@@ -67,7 +67,7 @@ export function TaskCard({
   }
 
   return (
-    <article aria-labelledby={titleId} className="min-w-0">
+    <article aria-labelledby={titleId} className="h-full min-w-0">
       <Card
         className={
           task.overdue ? 'h-full border-l-4 border-l-destructive' : 'h-full'

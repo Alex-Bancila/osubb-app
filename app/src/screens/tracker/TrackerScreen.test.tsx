@@ -130,6 +130,34 @@ describe('My tasks screen', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 
+  it('owns the vertical viewport and lays task cards out in responsive rows', () => {
+    query({ data: [taskRow(), taskRow({ id: 2, title: 'Al doilea task' })] });
+
+    const { container } = render(<TrackerScreen />);
+
+    expect(screen.getByRole('region', { name: 'Taskuri' })).toHaveClass(
+      'h-full',
+      'overflow-y-auto',
+      'overflow-x-hidden',
+    );
+    expect(container.querySelector('[data-slot="task-card-grid"]')).toHaveClass(
+      'grid-cols-1',
+      'md:grid-cols-2',
+      'items-stretch',
+    );
+    expect(
+      container.querySelectorAll('[data-slot="task-card-row"]'),
+    ).toHaveLength(2);
+    for (const row of container.querySelectorAll(
+      '[data-slot="task-card-row"]',
+    )) {
+      expect(row).toHaveClass('h-full', 'min-w-0');
+    }
+    for (const card of screen.getAllByRole('article')) {
+      expect(card).toHaveClass('h-full', 'min-w-0');
+    }
+  });
+
   it('shows only authorized tabs and keyboard navigation opens Available', async () => {
     const user = userEvent.setup();
     query();
