@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { TASK_PRESENTATION_FIELDS } from './tasks';
+import { attachVisibleTaskExecutors } from './task-executors';
 import type {
   TaskPresentationRow,
   TaskStatus,
@@ -24,7 +25,6 @@ export async function fetchTaskDetails(
   if (error) throw error;
   if (!data) return null;
   const task: TaskPresentationRow = data;
-  let executorName: string | null = null;
   let subtasks: TaskDetailsData['subtasks'] = [];
   if (task.parent_task_id !== null) {
     const parent = await supabase
@@ -45,19 +45,14 @@ export async function fetchTaskDetails(
     subtasks = children.data;
     task.subtasks = subtasks;
   }
-  const executor = task.assignments?.find(
-    (assignment) => assignment.ended_at === null,
-  );
-  if (executor) {
-    const profile = await supabase
-      .from('profiles_directory')
-      .select('full_name')
-      .eq('id', executor.member_id)
-      .maybeSingle();
-    if (profile.error) throw profile.error;
-    executorName = profile.data?.full_name ?? null;
-  }
-  return { task, executorName, subtasks };
+  const [taskWithExecutor] = await attachVisibleTaskExecutors([task]);
+  if (!taskWithExecutor)
+    throw new Error('Task Executor enrichment returned no Task.');
+  return {
+    task: taskWithExecutor,
+    executorName: taskWithExecutor.visibleExecutor?.fullName ?? null,
+    subtasks,
+  };
 }
 export function useTaskDetails(taskId: number) {
   const memberId = useAuth().session?.user.id;

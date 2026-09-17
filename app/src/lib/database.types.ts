@@ -3675,6 +3675,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      visible_task_executors: {
+        Args: { p_task_ids: number[] }
+        Returns: {
+          full_name: string
+          member_id: string
+          task_id: number
+        }[]
+      }
       withdraw_task_interest: {
         Args: { p_task_id: number }
         Returns: {

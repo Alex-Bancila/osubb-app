@@ -19,7 +19,7 @@ describe('Romanian current-stage summary', () => {
   it.each<[Partial<TaskStage>, string]>([
     [{}, 'Taskul este de făcut.'],
     [
-      { executor: { memberId: 'member', assignmentId: 2 } },
+      { executor: { memberId: 'member', assignmentId: 2, name: null } },
       'Taskul este atribuit și așteaptă să fie început.',
     ],
     [{ status: 'in_progress' }, 'Lucrul la task a început.'],
@@ -49,7 +49,7 @@ describe('Romanian current-stage summary', () => {
     [
       {
         candidature: { status: 'selected', position: null },
-        executor: { memberId: 'member', assignmentId: 2 },
+        executor: { memberId: 'member', assignmentId: 2, name: null },
       },
       'Taskul este atribuit și așteaptă să fie început.',
     ],

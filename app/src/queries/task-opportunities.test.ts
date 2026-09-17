@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-const from = vi.hoisted(() => vi.fn());
-vi.mock('../lib/supabase', () => ({ supabase: { from } }));
+const api = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+vi.mock('../lib/supabase', () => ({ supabase: api }));
 import {
   fetchTaskOpportunities,
   orderOpportunities,
@@ -83,7 +83,7 @@ it('keeps an own candidature after its queue closes without broadening other row
   participatedQuery.select.mockReturnValue(participatedQuery);
   participatedQuery.eq.mockReturnValue(participatedQuery);
   let taskQueryCount = 0;
-  from.mockImplementation((table) => {
+  api.from.mockImplementation((table) => {
     if (table === 'tasks')
       return taskQueryCount++ === 0 ? openQuery : participatedQuery;
     if (table === 'task_candidates')
@@ -98,10 +98,22 @@ it('keeps an own candidature after its queue closes without broadening other row
       }),
     };
   });
+  api.rpc.mockResolvedValue({
+    data: [
+      { task_id: 1, member_id: 'executor', full_name: 'Executor Disponibil' },
+    ],
+    error: null,
+  });
 
-  await expect(fetchTaskOpportunities('member')).resolves.toEqual([
-    openTask,
-    participatedTask,
+  await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
+    {
+      id: 1,
+      visibleExecutor: {
+        memberId: 'executor',
+        fullName: 'Executor Disponibil',
+      },
+    },
+    { id: 2, visibleExecutor: null },
   ]);
   expect(openQuery.is).toHaveBeenCalledWith('queue_closed_at', null);
   expect(openQuery.in).toHaveBeenCalledWith('status', [
@@ -110,4 +122,7 @@ it('keeps an own candidature after its queue closes without broadening other row
     'in_review',
   ]);
   expect(participatedQuery.in).toHaveBeenCalledWith('id', [2]);
+  expect(api.rpc).toHaveBeenCalledWith('visible_task_executors', {
+    p_task_ids: [1, 2],
+  });
 });
