@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router';
+import iconDark from '../../assets/brand/osubb-icon-on-dark.png';
+import iconLight from '../../assets/brand/osubb-icon-on-light.png';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
@@ -227,6 +229,18 @@ export default function AppShell() {
           >
             <Menu aria-hidden="true" />
           </SheetTrigger>
+          <span className="shrink-0 lg:hidden" aria-hidden="true">
+            <img
+              className="h-8 w-auto object-contain dark:hidden"
+              src={iconLight}
+              alt=""
+            />
+            <img
+              className="hidden h-8 w-auto object-contain dark:block"
+              src={iconDark}
+              alt=""
+            />
+          </span>
           <span className="truncate text-lg font-extrabold">
             {current?.label ?? 'OSUBB'}
           </span>

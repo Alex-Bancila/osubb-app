@@ -81,6 +81,20 @@ describe('AppShell', () => {
     ).toHaveAttribute('aria-current', 'page');
   });
 
+  it('uses the compact official mark as decorative mobile branding', () => {
+    const { container } = renderShell();
+
+    const topbar = container.querySelector('header');
+    const marks = [...(topbar?.querySelectorAll('img') ?? [])];
+
+    expect(marks).toHaveLength(2);
+    expect(marks.map((mark) => mark.getAttribute('src'))).toEqual([
+      expect.stringContaining('osubb-icon-on-light'),
+      expect.stringContaining('osubb-icon-on-dark'),
+    ]);
+    marks.forEach((mark) => expect(mark).toHaveAttribute('alt', ''));
+  });
+
   it('shows directory and BC destinations at the existing leadership gate', () => {
     auth.useAuth.mockReturnValue({
       claims: { ...ordinaryClaims, member_role: 'bc', member_level: 6 },
