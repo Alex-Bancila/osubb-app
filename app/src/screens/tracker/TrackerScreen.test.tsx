@@ -130,21 +130,22 @@ describe('My tasks screen', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 
-  it('owns the vertical viewport and lays task cards out in responsive rows', () => {
+  it('leaves scrolling to the shell and lays out one task per row', () => {
     query({ data: [taskRow(), taskRow({ id: 2, title: 'Al doilea task' })] });
 
     const { container } = render(<TrackerScreen />);
 
-    expect(screen.getByRole('region', { name: 'Taskuri' })).toHaveClass(
+    expect(screen.getByRole('region', { name: 'Taskuri' })).not.toHaveClass(
       'h-full',
       'overflow-y-auto',
-      'overflow-x-hidden',
     );
     expect(container.querySelector('[data-slot="task-card-grid"]')).toHaveClass(
       'grid-cols-1',
-      'md:grid-cols-2',
       'items-stretch',
     );
+    expect(
+      container.querySelector('[data-slot="task-card-grid"]'),
+    ).not.toHaveClass('md:grid-cols-2');
     expect(
       container.querySelectorAll('[data-slot="task-card-row"]'),
     ).toHaveLength(2);

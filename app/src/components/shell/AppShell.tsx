@@ -247,7 +247,7 @@ export default function AppShell() {
         </header>
       </Sheet>
 
-      <main className="relative min-h-0 overflow-hidden [grid-area:main]">
+      <main className="relative min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain [grid-area:main] [scrollbar-gutter:stable]">
         <Outlet />
       </main>
 
