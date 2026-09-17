@@ -12,6 +12,12 @@ vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: 'member' } } }),
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock('../../queries/task-give-up', () => ({
+  useGiveUpTask: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
+}));
 vi.mock('./TaskHistory', () => ({
   TaskHistory: () => <p>Istoric autorizat</p>,
 }));

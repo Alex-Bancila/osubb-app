@@ -13,6 +13,7 @@ import type { TaskProgressAction } from '../../queries/task-progress';
 import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
+import { TaskGiveUpControl } from './TaskGiveUpControl';
 
 type TaskCardProps = {
   task: TaskPresentation;
@@ -42,6 +43,11 @@ export function TaskCard({
           ? 'submit'
           : null
       : null;
+  const canGiveUp =
+    task.kind === 'task' &&
+    memberId !== undefined &&
+    task.executor?.memberId === memberId &&
+    (task.status === 'todo' || task.status === 'in_progress');
 
   async function progress() {
     if (!action || pending || saving) return;
@@ -155,19 +161,22 @@ export function TaskCard({
             </p>
           )}
         </CardContent>
-        {action && (
-          <CardFooter className="mt-auto">
-            <Button
-              className="min-h-11 min-w-11 w-full whitespace-normal sm:w-auto"
-              disabled={pending || saving}
-              onClick={progress}
-            >
-              {pending || saving
-                ? 'Se salvează…'
-                : action === 'start'
-                  ? 'Începe taskul'
-                  : 'Trimite la verificare'}
-            </Button>
+        {(action || canGiveUp) && (
+          <CardFooter className="mt-auto flex flex-wrap gap-2">
+            {action && (
+              <Button
+                className="min-h-11 min-w-11 w-full whitespace-normal sm:w-auto"
+                disabled={pending || saving}
+                onClick={progress}
+              >
+                {pending || saving
+                  ? 'Se salvează…'
+                  : action === 'start'
+                    ? 'Începe taskul'
+                    : 'Trimite la verificare'}
+              </Button>
+            )}
+            {canGiveUp && <TaskGiveUpControl taskId={task.id} />}
           </CardFooter>
         )}
       </Card>
