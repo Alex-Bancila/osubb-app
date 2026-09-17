@@ -9,9 +9,12 @@ const api = vi.hoisted(() => ({
   byMember: vi.fn(),
   orderAssignedAt: vi.fn(),
   orderId: vi.fn(),
+  rpc: vi.fn(),
 }));
 
-vi.mock('../lib/supabase', () => ({ supabase: { from: api.from } }));
+vi.mock('../lib/supabase', () => ({
+  supabase: { from: api.from, rpc: api.rpc },
+}));
 
 import { fetchMyTasks, fetchOpenTasks } from './tasks';
 import { taskRow } from '../test/task-fixtures';
@@ -94,6 +97,7 @@ describe('normalized My tasks reads', () => {
     api.select.mockReturnValue({ eq: api.byMember });
     api.byMember.mockReturnValue({ order: api.orderAssignedAt });
     api.orderAssignedAt.mockReturnValue({ order: api.orderId });
+    api.rpc.mockResolvedValue({ data: [], error: null });
   });
 
   it('reads current and past own Assignments, deduplicates Tasks, and sorts exact instants', async () => {
@@ -108,14 +112,32 @@ describe('normalized My tasks reads', () => {
       ],
       error: null,
     });
+    api.rpc.mockResolvedValue({
+      data: [
+        { task_id: 1, member_id: 'member', full_name: 'Executor Vizibil' },
+      ],
+      error: null,
+    });
 
-    await expect(fetchMyTasks('member')).resolves.toEqual([earlier, later]);
+    await expect(fetchMyTasks('member')).resolves.toMatchObject([
+      {
+        id: 1,
+        visibleExecutor: {
+          memberId: 'member',
+          fullName: 'Executor Vizibil',
+        },
+      },
+      { id: 2, visibleExecutor: null },
+    ]);
     expect(api.from).toHaveBeenCalledWith('task_assignments');
     expect(api.byMember).toHaveBeenCalledWith('member_id', 'member');
     expect(api.select.mock.lastCall?.[0]).toContain(
       'evaluations:task_evaluations',
     );
     expect(api.select.mock.lastCall?.[0]).not.toContain('task_assignees');
+    expect(api.rpc).toHaveBeenCalledWith('visible_task_executors', {
+      p_task_ids: [1, 2],
+    });
   });
 
   /* #345's review, Finding 4: the query once filtered `ended_at is null`,

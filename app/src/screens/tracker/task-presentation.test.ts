@@ -178,13 +178,35 @@ describe('TaskPresentation', () => {
           { id: 1, member_id: 'former', ended_at: '2026-09-14T00:00:00Z' },
           { id: 2, member_id: 'current', ended_at: null },
         ],
+        visibleExecutor: { memberId: 'current', fullName: 'Ioana Pop' },
       }),
       now,
       candidature,
     );
-    expect(model.executor).toEqual({ assignmentId: 2, memberId: 'current' });
+    expect(model.executor).toEqual({
+      assignmentId: 2,
+      memberId: 'current',
+      name: 'Ioana Pop',
+    });
     expect(model.candidature).toEqual(candidature);
-    expect(toTaskPresentation(taskRow(), now).executor).toBeNull();
+    expect(
+      toTaskPresentation(
+        taskRow({ assignments: [], visibleExecutor: null }),
+        now,
+      ).executor,
+    ).toBeNull();
+  });
+
+  it('preserves a visible Executor when Assignment details or the name are unavailable', () => {
+    expect(
+      toTaskPresentation(
+        taskRow({
+          assignments: [],
+          visibleExecutor: { memberId: 'current', fullName: null },
+        }),
+        now,
+      ).executor,
+    ).toEqual({ assignmentId: null, memberId: 'current', name: null });
   });
 
   it('uses only the current evaluation points, including zero and negative values', () => {
@@ -268,6 +290,7 @@ describe('TaskPresentation', () => {
           { id: 5, status: 'todo' },
         ],
         assignments: [{ id: 1, member_id: 'member', ended_at: null }],
+        visibleExecutor: { memberId: 'member', fullName: 'Executor Umbrelă' },
       }),
       now,
       { status: 'pending', position: 1 },

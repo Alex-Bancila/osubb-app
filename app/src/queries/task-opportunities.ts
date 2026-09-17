@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { TASK_PRESENTATION_FIELDS } from './tasks';
+import { attachVisibleTaskExecutors } from './task-executors';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
 export type TaskMemberships = {
@@ -110,7 +111,9 @@ export async function fetchTaskOpportunities(
   const tasks = new Map<number, TaskPresentationRow>();
   for (const task of [...openResult.data, ...participatedTasks])
     tasks.set(task.id, task);
-  return orderOpportunities([...tasks.values()], scopes, participatedTaskIds);
+  return attachVisibleTaskExecutors(
+    orderOpportunities([...tasks.values()], scopes, participatedTaskIds),
+  );
 }
 
 export function useTaskOpportunities() {

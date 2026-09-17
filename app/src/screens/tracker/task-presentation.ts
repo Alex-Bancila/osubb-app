@@ -38,6 +38,11 @@ export type TaskPresentationRow = Pick<
     Tables['task_assignments']['Row'],
     'id' | 'member_id' | 'ended_at'
   >[];
+  /** Explicitly null means #499's safe Executor lookup found no active row. */
+  visibleExecutor?: {
+    memberId: string;
+    fullName: string | null;
+  } | null;
   evaluations?: Pick<
     Tables['task_evaluations']['Row'],
     'id' | 'difficulty' | 'rating' | 'points' | 'reversed_at'
@@ -60,7 +65,11 @@ export type TaskPresentation = {
   audience: 'local' | 'org' | null;
   audienceLabel: string;
   assignmentMode: 'direct' | 'public' | null;
-  executor: { memberId: string; assignmentId: number } | null;
+  executor: {
+    memberId: string;
+    assignmentId: number | null;
+    name: string | null;
+  } | null;
   candidature: {
     status: 'pending' | 'selected' | 'withdrawn' | 'closed';
     position: number | null;
@@ -145,6 +154,12 @@ export function toTaskPresentation(
   const activeAssignment = row.assignments?.find(
     (item) => item.ended_at === null,
   );
+  const visibleExecutor =
+    row.visibleExecutor === undefined
+      ? activeAssignment
+        ? { memberId: activeAssignment.member_id, fullName: null }
+        : null
+      : row.visibleExecutor;
   // RLS may withhold Evaluations. Absence is unknown, never zero points.
   const evaluation =
     kind === 'task' && ['completed', 'unfulfilled'].includes(row.status)
@@ -178,10 +193,14 @@ export function toTaskPresentation(
         ? row.assignment_mode
         : null,
     executor:
-      kind === 'task' && activeAssignment
+      kind === 'task' && visibleExecutor
         ? {
-            memberId: activeAssignment.member_id,
-            assignmentId: activeAssignment.id,
+            memberId: visibleExecutor.memberId,
+            assignmentId:
+              activeAssignment?.member_id === visibleExecutor.memberId
+                ? activeAssignment.id
+                : null,
+            name: visibleExecutor.fullName?.trim() || null,
           }
         : null,
     candidature: kind === 'task' ? candidature : null,

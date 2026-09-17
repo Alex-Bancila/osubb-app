@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { TASK_PRESENTATION_FIELDS } from './tasks';
+import { attachVisibleTaskExecutors } from './task-executors';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
 export async function fetchManagedTasks(): Promise<TaskPresentationRow[]> {
@@ -28,7 +29,7 @@ export async function fetchManagedTasks(): Promise<TaskPresentationRow[]> {
     if (result.error) throw result.error;
     rows.push(...result.data);
   }
-  return rows;
+  return attachVisibleTaskExecutors(rows);
 }
 export function useTaskManagement() {
   const memberId = useAuth().session?.user.id;
@@ -78,7 +79,7 @@ export function useAllTasks(enabled: boolean) {
                 .range(offset, offset + 499);
               if (error) throw error;
               rows.push(...data);
-              if (data.length < 500) return rows;
+              if (data.length < 500) return attachVisibleTaskExecutors(rows);
             }
           }
         : skipToken,

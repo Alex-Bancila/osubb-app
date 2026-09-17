@@ -323,7 +323,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('leadership_member_tasks',        'p_member_id uuid',             false, true,  false, false),
   -- #258: the Task-Points Leaderboard, filterable by Origin and Campaign.
   ('leadership_leaderboard',         'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',
-                                                                     false, true,  false, false);
+                                                                     false, true,  false, false),
+  -- #499: a deliberately narrow batch read for the current Executor of Tasks
+  -- the caller may already read. Assignment history remains behind its RLS.
+  ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -355,7 +358,7 @@ end
 $$;
 
 select is(pg_temp.public_function_mismatches(), '{}'::text[],
-  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, every #327-#344 Task command wrapper, and the three leadership read wrappers #259''s department_cup, #260''s leadership_member_tasks and #258''s leadership_leaderboard) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
+  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, every #327-#344 Task command wrapper, the three leadership read wrappers, and #499''s narrow visible Executor read) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
 
 -- ==================== 7. private schema: pinned function roster ====================
 
@@ -476,11 +479,14 @@ insert into pinned_private_functions (proname, args, category) values
   ('validate_project_membership_change',          '',                                                                                                                   'trigger'),
   ('validate_task_campaign',                      '',                                                                                                                   'trigger'),
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger'),
+  -- #499: the body behind public.visible_task_executors(bigint[]). It reveals
+  -- only the current Executor for Tasks private.can_read_task authorizes.
+  ('visible_task_executors',                      'p_task_ids bigint[]',                                                                                                'authenticated_only'),
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 88,
-  'the audited roster contains the 86 post-#258 functions plus #364''s actor_level and require_active_member helpers');
+  (select count(*) from pinned_private_functions)::int, 89,
+  'the audited roster contains the 88 pre-#499 functions plus the narrow visible Task Executor read helper');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

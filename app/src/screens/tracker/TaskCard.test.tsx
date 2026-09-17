@@ -85,6 +85,37 @@ describe('Member Task cards', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the active Executor name on an ordinary Task', () => {
+    card({
+      visibleExecutor: { memberId: 'member', fullName: 'Ioana Executor' },
+    });
+
+    expect(screen.getByText('Responsabil:')).toBeInTheDocument();
+    expect(screen.getByText('Ioana Executor')).toBeInTheDocument();
+  });
+
+  it('distinguishes an unassigned Task from an unavailable Executor name', () => {
+    const { unmount } = card({ assignments: [], visibleExecutor: null });
+    expect(screen.getByText('Neatribuit')).toBeInTheDocument();
+    unmount();
+
+    card({
+      visibleExecutor: { memberId: 'member', fullName: null },
+    });
+    expect(screen.getByText('Nume indisponibil')).toBeInTheDocument();
+  });
+
+  it('does not show an Executor row for an Umbrella Task', () => {
+    card({
+      kind: 'umbrella',
+      assignments: [],
+      visibleExecutor: { memberId: 'member', fullName: 'Nume imposibil' },
+    });
+
+    expect(screen.queryByText('Responsabil:')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nume imposibil')).not.toBeInTheDocument();
+  });
+
   it('shows the Umbrella, Campaign and independent feedback/overdue markers', () => {
     card({
       status: 'in_progress',

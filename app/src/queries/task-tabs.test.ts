@@ -34,7 +34,20 @@ it('pages authorized IDs and reads only those Tasks through RLS in bounded batch
     .fn()
     .mockResolvedValueOnce({ data: ids.slice(0, 500), error: null })
     .mockResolvedValueOnce({ data: ids.slice(500), error: null });
-  mocks.rpc.mockReturnValue({ range });
+  mocks.rpc.mockImplementation((name: string) =>
+    name === 'my_managed_task_ids'
+      ? { range }
+      : Promise.resolve({
+          data: [
+            {
+              task_id: 1,
+              member_id: 'executor',
+              full_name: 'Executor Gestionat',
+            },
+          ],
+          error: null,
+        }),
+  );
   const filter = vi.fn().mockImplementation((_column, values: number[]) =>
     Promise.resolve({
       data: values.map((id) => taskRow({ id })),
@@ -42,7 +55,15 @@ it('pages authorized IDs and reads only those Tasks through RLS in bounded batch
     }),
   );
   mocks.from.mockReturnValue({ select: () => ({ in: filter }) });
-  await expect(fetchManagedTasks()).resolves.toHaveLength(501);
+  const tasks = await fetchManagedTasks();
+  expect(tasks).toHaveLength(501);
+  expect(tasks[0]).toMatchObject({
+    id: 1,
+    visibleExecutor: {
+      memberId: 'executor',
+      fullName: 'Executor Gestionat',
+    },
+  });
   expect(range.mock.calls).toEqual([
     [0, 499],
     [500, 999],
@@ -50,6 +71,9 @@ it('pages authorized IDs and reads only those Tasks through RLS in bounded batch
   expect(filter).toHaveBeenCalledTimes(6);
   expect(filter).toHaveBeenLastCalledWith('id', [501]);
   expect(mocks.rpc).toHaveBeenCalledWith('my_managed_task_ids');
+  expect(mocks.rpc).toHaveBeenCalledWith('visible_task_executors', {
+    p_task_ids: ids.map((item) => item.task_id),
+  });
 });
 
 it('propagates a capability read failure without falling back to a broad Tasks query', async () => {

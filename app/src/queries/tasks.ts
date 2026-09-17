@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { keys } from './keys';
+import { attachVisibleTaskExecutors } from './task-executors';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
 /* The columns a task list needs. Named once so the row type stays identical
@@ -112,7 +113,9 @@ export async function fetchMyTasks(
         task.parent = titles.get(task.parent_task_id) ?? null;
     }
   }
-  return [...tasks.values()].sort(byDeadlineThenTitle);
+  return attachVisibleTaskExecutors(
+    [...tasks.values()].sort(byDeadlineThenTitle),
+  );
 }
 
 /** Tasks anyone may put themselves forward for — the tracker's "Deschise" tab (#89).

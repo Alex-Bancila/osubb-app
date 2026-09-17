@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { UserRound } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -125,6 +126,20 @@ export function TaskCard({
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {task.kind === 'task' && (
+            <p className="flex min-w-0 items-center gap-2 text-sm">
+              <UserRound
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted-foreground"
+              />
+              <span className="font-medium">Responsabil:</span>
+              <span className="min-w-0 wrap-anywhere">
+                {task.executor
+                  ? (task.executor.name ?? 'Nume indisponibil')
+                  : 'Neatribuit'}
+              </span>
+            </p>
+          )}
           <p className="text-sm">
             <span className="font-medium">Termen: </span>
             {task.deadline ? (
