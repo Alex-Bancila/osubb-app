@@ -8,6 +8,12 @@ import {
   type TaskPresentationRow,
 } from './task-presentation';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock('../../queries/task-give-up', () => ({
+  useGiveUpTask: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
+}));
 vi.mock('./TaskQueueStatus', () => ({
   TaskQueueStatus: () => <p>Stare înscriere</p>,
 }));
@@ -154,6 +160,19 @@ describe('Member Task cards', () => {
     expect(onProgress).toHaveBeenCalledWith(1, 'submit');
   });
 
+  it('offers give-up only to the active Executor before review', () => {
+    const { unmount } = card({ status: 'in_progress' });
+    expect(
+      screen.getByRole('button', { name: 'Renunță la task' }),
+    ).toBeVisible();
+    unmount();
+
+    card({ status: 'in_review' });
+    expect(
+      screen.queryByRole('button', { name: 'Renunță la task' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('withholds actions from a former Executor', () => {
     card({}, vi.fn(), 'former');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -170,8 +189,8 @@ describe('Member Task cards', () => {
     );
     card({}, onProgress);
     await user.click(screen.getByRole('button', { name: 'Începe taskul' }));
-    expect(screen.getByRole('button')).toBeDisabled();
-    await user.click(screen.getByRole('button'));
+    expect(screen.getByRole('button', { name: 'Se salvează…' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Se salvează…' }));
     expect(onProgress).toHaveBeenCalledOnce();
     reject(new Error('Taskul s-a schimbat.'));
     expect(await screen.findByRole('alert')).toHaveTextContent(

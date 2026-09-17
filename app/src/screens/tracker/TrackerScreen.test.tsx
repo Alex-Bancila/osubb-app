@@ -27,6 +27,12 @@ vi.mock('../../queries/tasks', () => ({ useMyTasks: hooks.useMyTasks }));
 vi.mock('../../queries/task-progress', () => ({
   useTaskProgress: hooks.useTaskProgress,
 }));
+vi.mock('../../queries/task-give-up', () => ({
+  useGiveUpTask: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
+}));
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({
     session: { user: { id: 'member' } },
