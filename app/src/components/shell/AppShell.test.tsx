@@ -95,6 +95,17 @@ describe('AppShell', () => {
     marks.forEach((mark) => expect(mark).toHaveAttribute('alt', ''));
   });
 
+  it('owns vertical page scrolling in the shared content viewport', () => {
+    renderShell();
+
+    expect(screen.getByRole('main')).toHaveClass(
+      'overflow-y-auto',
+      'overflow-x-hidden',
+      'overscroll-contain',
+    );
+    expect(screen.getByRole('main')).not.toHaveClass('overflow-hidden');
+  });
+
   it('shows directory and BC destinations at the existing leadership gate', () => {
     auth.useAuth.mockReturnValue({
       claims: { ...ordinaryClaims, member_role: 'bc', member_level: 6 },

@@ -70,7 +70,7 @@ function TaskQueryPanel({
   return (
     <ul
       data-slot="task-card-grid"
-      className="grid min-w-0 grid-cols-1 items-stretch gap-4 p-0 md:grid-cols-2"
+      className="grid min-w-0 grid-cols-1 items-stretch gap-4 p-0"
     >
       {query.data.map((row) => (
         <li key={row.id} data-slot="task-card-row" className="h-full min-w-0">
@@ -113,10 +113,7 @@ export default function TrackerScreen() {
   const tabClass =
     'min-h-11 min-w-11 rounded-md px-3 py-2 text-sm font-medium data-active:bg-primary data-active:text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring';
   return (
-    <section
-      className="h-full w-full overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
-      aria-labelledby="tracker-title"
-    >
+    <section className="w-full" aria-labelledby="tracker-title">
       <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
         <header className="space-y-2">
           <h1 id="tracker-title" className="text-2xl font-semibold">
