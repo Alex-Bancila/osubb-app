@@ -1039,6 +1039,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          joined_at: string | null
           joined_year: number | null
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
@@ -1051,6 +1052,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          joined_at?: string | null
           joined_year?: number | null
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
@@ -1063,6 +1065,7 @@ export type Database = {
           email?: string
           full_name?: string
           id?: string
+          joined_at?: string | null
           joined_year?: number | null
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
@@ -2293,6 +2296,7 @@ export type Database = {
           created_at: string | null
           full_name: string | null
           id: string | null
+          joined_at: string | null
           joined_year: number | null
           role: Database["public"]["Enums"]["member_role"] | null
           status: Database["public"]["Enums"]["member_status"] | null
@@ -2303,6 +2307,7 @@ export type Database = {
           created_at?: string | null
           full_name?: string | null
           id?: string | null
+          joined_at?: string | null
           joined_year?: number | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null
@@ -2313,6 +2318,7 @@ export type Database = {
           created_at?: string | null
           full_name?: string | null
           id?: string | null
+          joined_at?: string | null
           joined_year?: number | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null

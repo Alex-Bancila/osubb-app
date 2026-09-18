@@ -24,11 +24,19 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(63);
+select plan(64);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
   'eight demo members exist');
+
+-- #160: joined_at is January 1 of joined_year for every demo profile, so a
+-- rebuilt database and a backfilled live one agree (issue AC 3).
+select ok(
+  not exists (select 1 from profiles
+               where email like '%@demo.osubb'
+                 and joined_at is distinct from make_date(joined_year, 1, 1)),
+  'every demo profile''s joined_at is January 1 of its joined_year');
 
 select is(
   (select count(distinct role) from profiles where email like '%@demo.osubb'), 8::bigint,
