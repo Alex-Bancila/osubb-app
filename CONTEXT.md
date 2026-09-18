@@ -32,6 +32,14 @@ The ordered authority associated with a Role. A higher Level may grant broader o
 Whether a Member is active, inactive, or alumni. Only an active Member may perform organization work in the application.
 _Avoid_: Task status
 
+**Group**:
+A named body of OSUBB people and work, created by BC or Moderator with its own name and settings. A Group holds one roster of Members with Group roles and one Minimum Level. Departments, Teams, Projects, and the Adunarea Generală are Groups; every Task Origin and Event Scope is a Group.
+_Avoid_: Scope, structure, org unit, entity
+
+**Child Group**:
+A Group created inside a parent Group and overseen by the parent's managers. A Department Team is a Child Group of its Department; a Child Group's Task Points count toward its parent's Department Cup only when both are set to compete.
+_Avoid_: Sub-team, child team, nested team
+
 **Department**:
 One of the five OSUBB departments: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane; or one of the two coordination structures, Diverse and Secretariat, which use the Department model but never compete in the Department Cup.
 
