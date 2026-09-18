@@ -88,6 +88,17 @@ select extensions.dblink_connect('race_setup_509', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
 select extensions.dblink_exec('race_setup_509', $$
+  -- Plain `set`, not `set local`: this connection runs in autocommit, so the
+  -- timeouts have to outlive the statement that sets them and cover the
+  -- cleanup block at the end of the section too. Its two siblings below are
+  -- already time-boxed; a fixture connection that is not would, if a future
+  -- edit ever let the main transaction hold a `groups` row this block needs,
+  -- wait on a transaction that is itself waiting on `dblink_exec` — the
+  -- unbreakable cycle #509 spent 1042 seconds diagnosing elsewhere. Failing
+  -- loudly beats hanging until the harness watchdog notices.
+  set statement_timeout = '15s';
+  set lock_timeout = '10s';
+
   delete from public.teams
    where id in ('c-race-a-509', 'c-race-b-509', 'c-race-c-509', 'c-race-d-509',
                 'c-race-e-509', 'c-race-f-509');

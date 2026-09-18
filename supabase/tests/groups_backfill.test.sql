@@ -19,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(33);
 
 -- ==================== Fixtures ====================
 -- Scratch legacy rows, in the two Department kinds that map differently and
@@ -287,11 +287,28 @@ select is(
   'and every roster row too');
 
 -- ==================== 13. Orphan cleanup ====================
--- A legacy row deleted while no mirror was watching. After #509 its trigger
--- has already removed the Group and this assertion still holds.
+-- A legacy row deleted while no mirror was watching — the staging shape on
+-- deploy day, and any later drift. Mutation this catches: delete step 2 (the
+-- orphan sweep) from private.sync_groups_from_legacy.
+--
+-- #509 review S1: that mutation only shows up if an orphan actually exists
+-- when the resync runs, and `teams_mirror_group` now deletes the Group in the
+-- same statement as the Team. So the mirror is switched off for exactly the
+-- one delete that has to leave an orphan behind — the idiom this file already
+-- uses for `projects_sync_leader_membership` above. Without it this assertion
+-- stays green with the sweep deleted, which conventions section 8 calls not a
+-- test at all.
 
 delete from public.team_members where team_id = 'b-team-ind';
+alter table public.teams disable trigger teams_mirror_group;
 delete from public.teams where id = 'b-team-ind';
+alter table public.teams enable trigger teams_mirror_group;
+
+select is(
+  (select count(*) from public.groups as grp where grp.legacy_team_id = 'b-team-ind'),
+  1::bigint,
+  'the orphan is real before the sweep runs: the Team is gone from the write master and its Group is still there');
+
 select private.sync_groups_from_legacy();
 
 select is(
@@ -349,10 +366,32 @@ select is(
 -- this catches: move `perform private.sync_team_groups();` back after the sweep.
 -- (`b-dept` is referenced only by these two roster rows and the Team below —
 -- no Campaign, Task, Event or Announcement fixture names it.)
+--
+-- #509 review S1: reaching that state now takes two switched-off mirrors. With
+-- `teams_mirror_group` live the Team Group is re-parented to top level the
+-- moment `dept_id` goes null, and with `departments_mirror_group` live the
+-- Department Group is deleted with its Department — between them there is
+-- neither an orphan nor a reference to it, and the ordering mutation has
+-- nothing to break. Switching both off for exactly these two statements
+-- restores the deploy-day shape this section exists to prove.
 
 delete from public.member_departments where dept_id = 'b-dept';
+alter table public.teams disable trigger teams_mirror_group;
+alter table public.departments disable trigger departments_mirror_group;
 update public.teams set dept_id = null where id = 'b-team-dept';
 delete from public.departments where id = 'b-dept';
+alter table public.departments enable trigger departments_mirror_group;
+alter table public.teams enable trigger teams_mirror_group;
+
+select is(
+  (select format('%s|%s',
+                 (select count(*) from public.groups as grp where grp.legacy_dept_id = 'b-dept'),
+                 (select (grp.parent_id = parent.id)::text
+                    from public.groups as grp, public.groups as parent
+                   where grp.legacy_team_id = 'b-team-dept'
+                     and parent.legacy_dept_id = 'b-dept'))),
+  '1|true',
+  'the state the sweep has to survive is real: the dissolved Department''s Group is still there, and its Team''s Group still names it as parent');
 
 select lives_ok(
   $$ select private.sync_groups_from_legacy() $$,
