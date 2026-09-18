@@ -52,6 +52,7 @@ const member = {
     member_level: 6,
     dept_ids: [],
     team_ids: [],
+    group_ids: [],
   },
   loading: false,
   signOut: vi.fn(),

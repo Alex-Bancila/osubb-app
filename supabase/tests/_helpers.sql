@@ -49,6 +49,11 @@ begin
              select jsonb_agg(membership.team_id order by membership.team_id)
                from public.team_members as membership
               where membership.member_id = profile.id
+           ), '[]'::jsonb),
+           'group_ids', coalesce((
+             select jsonb_agg(membership.group_id order by membership.group_id)
+               from public.group_members as membership
+              where membership.member_id = profile.id
            ), '[]'::jsonb)
          )
     into strict v_app_metadata
@@ -294,8 +299,9 @@ select lives_ok($$
 $$, 'test_login_leadership derives claims from fixtures');
 select is(auth.jwt() -> 'app_metadata', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5,
-  'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb),
-  'leadership login derives role, level, Departments, and Teams');
+  'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb,
+  'group_ids', (select jsonb_agg(grp.id) from public.groups grp where grp.legacy_dept_id = 'edu')),
+  'leadership login derives role, level, Departments, Teams and Groups');
 
 select throws_ok($call$
   select * from pg_temp.test_race(

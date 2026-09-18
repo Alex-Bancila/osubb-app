@@ -17,6 +17,11 @@ export type MemberClaims = {
   member_level: number;
   dept_ids: string[];
   team_ids: string[];
+  /**
+   * Explicit Group memberships (ADR-0009 Wave 1); the Organization Group is
+   * automatic and never listed.
+   */
+  group_ids: number[];
 };
 
 export type AuthState = {
@@ -67,6 +72,9 @@ function decodeClaims(accessToken: string): MemberClaims | null {
       member_level: Number(meta.member_level ?? 0),
       dept_ids: Array.isArray(meta.dept_ids) ? (meta.dept_ids as string[]) : [],
       team_ids: Array.isArray(meta.team_ids) ? (meta.team_ids as string[]) : [],
+      group_ids: Array.isArray(meta.group_ids)
+        ? (meta.group_ids as number[])
+        : [],
     };
   } catch {
     // A token we cannot read is a token we do not trust.

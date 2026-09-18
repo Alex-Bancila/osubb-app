@@ -41,6 +41,28 @@ function sessionFor(id: string): StoredSession {
   return { user: { id }, access_token: 'x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y' };
 }
 
+// Builds a fake access token whose payload segment decodes to the given
+// app_metadata, base64url-encoded the same way a real JWT is (no padding).
+function tokenWithAppMetadata(appMetadata: unknown): string {
+  const json = JSON.stringify({ app_metadata: appMetadata });
+  const base64url = btoa(json)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `x.${base64url}.y`;
+}
+
+// Renders the decoded claims so a test can assert on them without exporting
+// decodeClaims() itself -- useAuth() is the one sanctioned way to read them.
+function ClaimsProbe() {
+  const { claims } = useAuth();
+  return (
+    <div data-testid="group-ids">
+      {JSON.stringify(claims?.group_ids ?? null)}
+    </div>
+  );
+}
+
 function notifyListener() {
   const notify = auth.listener();
   if (!notify) throw new Error('no auth listener registered');
@@ -219,5 +241,34 @@ describe('AuthProvider cache hygiene', () => {
     expect(client.getQueryData(['profile', 'me', { memberId: 'a' }])).toEqual({
       full_name: 'A',
     });
+  });
+});
+
+describe('decodeClaims', () => {
+  it('decodes group_ids from the access token (#510, ADR-0009 Wave 1)', async () => {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <ClaimsProbe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    notifyListener()('SIGNED_IN', {
+      user: { id: 'g' },
+      access_token: tokenWithAppMetadata({
+        member_role: 'bc',
+        member_level: 6,
+        dept_ids: [],
+        team_ids: [],
+        group_ids: [3, 9],
+      }),
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('group-ids').textContent).toBe('[3,9]'),
+    );
   });
 });

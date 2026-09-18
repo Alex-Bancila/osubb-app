@@ -41,6 +41,7 @@ function claims(level: number) {
       member_level: level,
       dept_ids: [],
       team_ids: [],
+      group_ids: [],
     },
     session: { user: { id: 'm' } },
     loading: false,

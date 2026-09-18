@@ -5,7 +5,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap;
-select plan(15);
+select plan(17);
 
 -- search_path pinned on every JWT helper (auth_role was fixed in #237).
 select is(
@@ -13,10 +13,10 @@ select is(
      from pg_proc p
      join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
-      and p.proname in ('auth_level','auth_role','auth_in_dept','auth_in_team','auth_is_member')
+      and p.proname in ('auth_level','auth_role','auth_in_dept','auth_in_team','auth_is_member','auth_in_group')
       and coalesce(array_to_string(p.proconfig, ','), '') like '%search_path=%'),
-  5::bigint,
-  'all five JWT helpers pin search_path'
+  6::bigint,
+  'all six JWT helpers pin search_path'
 );
 
 -- anon holds no execute on any helper.
@@ -26,6 +26,8 @@ select is(has_function_privilege('anon', 'public.auth_role()', 'execute'), false
 select is(has_function_privilege('anon', 'public.auth_in_dept(text)', 'execute'), false, 'anon: auth_in_dept denied');
 select is(has_function_privilege('anon', 'public.auth_in_team(text)', 'execute'), false, 'anon: auth_in_team denied');
 select is(has_function_privilege('anon', 'public.auth_is_member()', 'execute'), false, 'anon: auth_is_member denied');
+select is(has_function_privilege('anon', 'public.auth_in_group(bigint)', 'execute'), false, 'anon: auth_in_group denied');
+select is(has_function_privilege('authenticated', 'public.auth_in_group(bigint)', 'execute'), true, 'authenticated: auth_in_group allowed');
 
 -- authenticated keeps execute (policies and the generated points column need it).
 select is(has_function_privilege('authenticated', 'public.auth_level()', 'execute'), true, 'authenticated: auth_level allowed');
