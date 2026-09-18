@@ -61,6 +61,18 @@ _Avoid_: Lead, leader, coordinator, owner; Manager alone where it could be read 
 A Member appointed by a Group Manager to manage a Group's ordinary members, their work, and its Events under a custom display name. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible.
 _Avoid_: Deputy, sub-manager, co-lead
 
+**Appointment**:
+A Group Manager, Group Responsible, BC, or Moderator adding a Member to a Group directly. Provisioning uses an Appointment to place a new Member in their initial Department.
+_Avoid_: Assignment (a Task term), invite, enrolment
+
+**Application**:
+A Member's request to join a Group that accepts applications, made at or above the Group's Application Level and accepted or declined by a Group Manager or Group Responsible.
+_Avoid_: Join request, call form, candidature (a Task term)
+
+**Application Level**:
+The lowest Level allowed to apply to a Group, never below its Minimum Level. A Member below it may still be placed by Appointment.
+_Avoid_: Apply level, join level
+
 **Department**:
 A top-level Group in the Department category: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane, which compete in the Department Cup; or Diverse and Secretariat, which share every Department setting except competing.
 
@@ -240,7 +252,7 @@ The rule that only a person provisioned by OSUBB leadership becomes a Member of 
 The passwordless email link used by a provisioned Member to sign in.
 
 **Provisioning**:
-Creating the organization membership information associated with an invited person.
+Creating the organization membership information associated with an invited person, including their initial Department by Appointment.
 
 **Organization Claims**:
 The signed membership facts attached to a session, including Role, Level, and the Groups the Member belongs to.
