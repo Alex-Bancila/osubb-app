@@ -73,6 +73,10 @@ _Avoid_: Join request, call form, candidature (a Task term)
 The lowest Level allowed to apply to a Group, never below its Minimum Level. A Member below it may still be placed by Appointment.
 _Avoid_: Apply level, join level
 
+**Shared Work Visibility**:
+A Group setting under which every member sees every Task of the Group, not only their own. It is pre-filled on for the Team category and off for the others; it never grants management authority.
+_Avoid_: Team visibility, open board, transparency mode
+
 **Department**:
 A top-level Group in the Department category: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane, which compete in the Department Cup; or Diverse and Secretariat, which share every Department setting except competing.
 
