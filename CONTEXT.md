@@ -14,7 +14,7 @@ Biroul de Conducere, the organization’s highest operational leadership group.
 Biroul de Conducere Extins, the extended leadership group immediately below BC.
 
 **AG / AGO**:
-Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions.
+Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions. In the application the Adunarea Generală is a Group with Automatic Membership at Minimum Level 3, created and named by BC; a Member joins it by gaining Drept de Vot and leaves it only when BC withdraws that Role.
 
 ## Members and structure
 
@@ -42,7 +42,7 @@ A Group created inside a parent Group and overseen by the parent's managers. A D
 _Avoid_: Sub-team, child team, nested team
 
 **Group Category**:
-The presentation label chosen when a Group is created: Department, Project, Team, or Adunarea Generală. It pre-fills the Group's settings and names it in the interface; no authority, visibility, or Cup rule depends on it.
+The presentation label chosen when a Group is created: Department, Project, or Team. It pre-fills the Group's settings and names it in the interface; no authority, visibility, or Cup rule depends on it.
 _Avoid_: Kind, type, group type
 
 **Minimum Level**:
@@ -76,6 +76,14 @@ _Avoid_: Apply level, join level
 **Shared Work Visibility**:
 A Group setting under which every member sees every Task of the Group, not only their own. It is pre-filled on for the Team category and off for the others; it never grants management authority.
 _Avoid_: Team visibility, open board, transparency mode
+
+**Automatic Membership**:
+A Group setting under which every active Member at or above the Group's Minimum Level belongs to it. The roster follows each Member's Role, is never edited by hand, and accepts no Applications; Group Roles are still appointed.
+_Avoid_: Derived roster, virtual group, implicit membership
+
+**Organization Group**:
+The root Group named OSUBB, with Automatic Membership at Minimum Level 0, so every active Member belongs to it. Organization-wide Events and Opportunities are its Events and Opportunities.
+_Avoid_: Org scope, org pseudo-department, everyone group
 
 **Department**:
 A top-level Group in the Department category: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane, which compete in the Department Cup; or Diverse and Secretariat, which share every Department setting except competing.
@@ -115,7 +123,7 @@ The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse fla
 A planned or recognized unit of OSUBB work with one Origin, one Audience, one Assignment Mode, and a defined lifecycle.
 
 **Task Origin**:
-The Department, Project, or Team that owns a Task. Every Task has exactly one Origin.
+The Group that owns a Task. Every Task has exactly one Origin.
 _Avoid_: Scope when ownership is meant
 
 **Task Audience**:
@@ -208,16 +216,16 @@ A deferred BC/Moderator action that may reduce a Member’s Personal Score and m
 ## Calendar
 
 **Event**:
-A future or past OSUBB activity owned by the organization, a Department, a Team, or a Project.
+A future or past OSUBB activity owned by one Group.
 
 **Event Scope**:
-The organization structure that owns an Event: organization, Department, Team, or Project.
+The Group that owns an Event. An organization-wide Event belongs to the Organization Group.
 
 **Relevant Event**:
-An organization Event or an Event belonging to one of the Member’s Departments, Teams, or Projects.
+An Event of a Group the Member belongs to, which includes every Event of the Organization Group.
 
 **Other OSUBB Event**:
-A visible Event outside the Member’s own structures, presented separately until the Member answers “Vin”.
+A visible Event of a Group the Member does not belong to, presented separately until the Member answers “Vin”.
 
 **RSVP**:
 A Member’s “Vin” or “Nu vin” response to an Event.
@@ -278,7 +286,7 @@ Two different columns share this identifier. `profiles.role = 'activ'` is the Ro
 `public.profiles` is the Member table; there is no separate `members` table. Every `member_id` column elsewhere is a foreign key to `profiles (id)`, not to an identity table of its own — see `points_ledger.member_id`, `notifications.member_id`, `project_members.member_id`, and the rest.
 
 **`event_scope` ↔ Event Origin**:
-The enum backing an Event's Origin: `org`, `dept`, `team`, or `project`.
+The legacy enum backing an Event's Origin: `org`, `dept`, `team`, or `project`. The Group model replaces the four values with the owning Group, the Organization Group standing in for `org`.
 
 **`noti_kind` ↔ Notification kind**:
 The enum distinguishing what a Notification is about: `announce`, `deadline`, `event`, `task`, or `system`.
