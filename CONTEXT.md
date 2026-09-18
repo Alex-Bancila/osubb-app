@@ -44,6 +44,10 @@ _Avoid_: Sub-team, child team, nested team
 The presentation label chosen when a Group is created: Department, Project, Team, or Adunarea Generală. It pre-fills the Group's settings and names it in the interface; no authority, visibility, or Cup rule depends on it.
 _Avoid_: Kind, type, group type
 
+**Minimum Level**:
+The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Opportunities and Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it but never lower it, and a creator cannot set it above their own Level.
+_Avoid_: Min level, access level, role gate
+
 **Department**:
 A top-level Group in the Department category: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane, which compete in the Department Cup; or Diverse and Secretariat, which share every Department setting except competing.
 
@@ -179,9 +183,6 @@ A future or past OSUBB activity owned by the organization, a Department, a Team,
 
 **Event Scope**:
 The organization structure that owns an Event: organization, Department, Team, or Project.
-
-**Minimum Level**:
-The lowest organizational Level allowed to discover an Event, such as Everyone, AG+, Responsible+, BCE+, or BC+.
 
 **Relevant Event**:
 An organization Event or an Event belonging to one of the Member’s Departments, Teams, or Projects.
