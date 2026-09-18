@@ -19,14 +19,15 @@ Adunarea Generală / Adunarea Generală Ordinară, where voting members make org
 ## Members and structure
 
 **Member**:
-A person recognized as part of OSUBB. A Member has one organizational Role, one membership Status, and may belong to Departments, Teams, and Projects.
+A person recognized as part of OSUBB. A Member has one organizational Role, one Membership Status, and belongs to Groups, holding a Group Role in each.
 _Avoid_: User, account, volunteer when referring to every possible role
 
 **Role**:
-One of the eight organization positions: Recrut, Voluntar, Membru Activ, Voluntar cu Drept de Vot, Responsabil, BCE, BC, or Moderator.
+One of the seven organization-wide ranks: Recrut, Voluntar, Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, or Moderator. A higher Role holds every attribute of the Roles below it. Coordonator Principal and Responsabil are Group Roles, not Roles.
+_Avoid_: Rank, grade, position; Membru Activ; Role alone where a Group Role is meant
 
 **Level**:
-The ordered authority associated with a Role. A higher Level may grant broader organizational responsibility, but membership in a Department, Team, or Project still determines local authority.
+The number attached to a Role: 0, 1, 2, 3, 5, 6, or 9; 4 is no longer used. Level decides what a Member may see or join across OSUBB; authority inside a Group comes only from a Group Role.
 
 **Membership Status**:
 Whether a Member is active, inactive, or alumni. Only an active Member may perform organization work in the application.
@@ -242,10 +243,10 @@ The passwordless email link used by a provisioned Member to sign in.
 Creating the organization membership information associated with an invited person.
 
 **Organization Claims**:
-The signed membership facts attached to a session, including Role, Level, Departments, and Teams.
+The signed membership facts attached to a session, including Role, Level, and the Groups the Member belongs to.
 
 **Capability**:
-A named product action available at or above an organizational Level, without replacing local Department, Team, or Project authority.
+A named product action available at or above an organizational Level, without replacing Group Role authority.
 
 ## Term → identifier
 
@@ -255,7 +256,7 @@ Where a term above is not spelled the same way in the schema. Use the Term in pr
 `edu` → Educațional (the identifier never carries the diacritic; only the display name does — corrected in `supabase/migrations/20260911004317_educational_display_name.sql`) · `pr` → Imagine & PR · `youth` → Tineret · `fin` → Financiar · `hr` → Resurse Umane · `diverse` → Diverse · `secretariat` → Secretariat. `it` is retired (`supabase/migrations/20260910173341_departments_diverse_secretariat.sql` folds it into `diverse`) — don't reuse it for a new Department Team.
 
 **`activ` as a Role vs. `activ` as a Status**:
-Two different columns share this identifier. `profiles.role = 'activ'` is the Role Membru Activ (`member_role` enum, level 2); `profiles.status = 'activ'` is the Membership Status active (`member_status` enum). A row can be `role = 'activ', status = 'inactiv'` — a Membru Activ who is not currently active — so never assume one from the other.
+Two different columns share this identifier. `profiles.role = 'activ'` is the Role Voluntar Activ (`member_role` enum, level 2); `profiles.status = 'activ'` is the Membership Status active (`member_status` enum). A row can be `role = 'activ', status = 'inactiv'` — a Membru Activ who is not currently active — so never assume one from the other.
 
 **`profiles` rows are Members**:
 `public.profiles` is the Member table; there is no separate `members` table. Every `member_id` column elsewhere is a foreign key to `profiles (id)`, not to an identity table of its own — see `points_ledger.member_id`, `notifications.member_id`, `project_members.member_id`, and the rest.
@@ -267,4 +268,4 @@ The enum backing an Event's Origin: `org`, `dept`, `team`, or `project`.
 The enum distinguishing what a Notification is about: `announce`, `deadline`, `event`, `task`, or `system`.
 
 **`roles.id` → Role display name**:
-`recrut` → Recrut · `voluntar` → Voluntar · `activ` → Membru Activ · `vot` → Voluntar cu Drept de Vot (the database's `roles.name` still reads "Membru cu Drept de Vot" — known drift; the glossary term wins) · `responsabil` → Responsabil (the database's `roles.name` still reads "Responsabil de proiect" — known drift; the glossary term wins) · `bce` → BCE · `bc` → BC · `moderator` → Moderator.
+`recrut` → Recrut · `voluntar` → Voluntar · `activ` → Voluntar Activ (the database's `roles.name` still reads "Membru Activ" — known drift; the glossary term wins) · `vot` → Voluntar cu Drept de Vot (the database's `roles.name` still reads "Membru cu Drept de Vot" — known drift; the glossary term wins) · `responsabil` → retired: level 4 is no longer a rank, and Responsabil de Proiect is a Group Role · `bce` → BCE · `bc` → BC · `moderator` → Moderator.
