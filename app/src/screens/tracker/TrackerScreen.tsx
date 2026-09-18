@@ -106,6 +106,7 @@ export default function TrackerScreen() {
     return () => window.clearInterval(timer);
   }, []);
   const showAll = leadership.data === true;
+  const managedTaskIds = new Set((managed.data ?? []).map((task) => task.id));
   const selected =
     (tab === 'managed' && !management.data) || (tab === 'all' && !showAll)
       ? 'mine'
@@ -222,6 +223,7 @@ export default function TrackerScreen() {
         <TaskDetailsSheet
           key={detailId}
           taskId={detailId}
+          managedTaskIds={managedTaskIds}
           onClose={() => setDetailId(null)}
         />
       </div>

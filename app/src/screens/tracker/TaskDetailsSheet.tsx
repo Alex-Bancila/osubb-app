@@ -12,15 +12,18 @@ import { useAuth } from '../../lib/auth';
 import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
+import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { TaskHistory } from './TaskHistory';
 import { toTaskPresentation } from './task-presentation';
 
 function TaskDetails({
   taskId,
   onNavigate,
+  canManage,
 }: {
   taskId: number;
   onNavigate: (id: number) => void;
+  canManage: boolean;
 }) {
   const query = useTaskDetails(taskId);
   const progress = useTaskProgress();
@@ -123,6 +126,25 @@ function TaskDetails({
           )}
         </section>
       )}
+      {canManage && task.kind === 'task' && (
+        <section
+          aria-labelledby={`task-${taskId}-candidate-heading`}
+          className="space-y-3 rounded-lg border border-border p-4"
+        >
+          <div className="space-y-1">
+            <h3
+              id={`task-${taskId}-candidate-heading`}
+              className="font-semibold"
+            >
+              Coada taskului
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Poți înlocui executorul numai cu o persoană înscrisă în coadă.
+            </p>
+          </div>
+          <TaskCandidateSelector taskId={taskId} />
+        </section>
+      )}
       <details>
         <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">
           Istoricul taskului
@@ -134,9 +156,11 @@ function TaskDetails({
 }
 export function TaskDetailsSheet({
   taskId,
+  managedTaskIds = new Set<number>(),
   onClose,
 }: {
   taskId: number | null;
+  managedTaskIds?: ReadonlySet<number>;
   onClose: () => void;
 }) {
   const [relatedId, setRelatedId] = useState<number | null>(null);
@@ -168,6 +192,7 @@ export function TaskDetailsSheet({
             <TaskDetails
               key={relatedId ?? taskId}
               taskId={relatedId ?? taskId}
+              canManage={managedTaskIds.has(relatedId ?? taskId)}
               onNavigate={setRelatedId}
             />
           )}

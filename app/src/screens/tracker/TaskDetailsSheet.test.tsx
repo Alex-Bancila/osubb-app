@@ -3,7 +3,30 @@ import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
 const useTaskDetails = vi.hoisted(() => vi.fn());
+const candidateHooks = vi.hoisted(() => ({
+  candidates: vi.fn(() => ({
+    data: [
+      {
+        id: 31,
+        memberId: 'candidate',
+        memberName: 'Ana Pop',
+        joinedAt: '2026-09-18T08:00:00Z',
+      },
+    ],
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })),
+  selection: {
+    mutateAsync: vi.fn().mockResolvedValue({ id: 1 }),
+    isPending: false,
+  },
+}));
 vi.mock('../../queries/task-details', () => ({ useTaskDetails }));
+vi.mock('../../queries/task-candidate-selection', () => ({
+  usePendingTaskCandidates: candidateHooks.candidates,
+  useSelectTaskCandidate: () => candidateHooks.selection,
+}));
 vi.mock('../../queries/task-progress', () => ({
   useTaskProgress: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
@@ -60,5 +83,33 @@ describe('Task details sheet', () => {
     useTaskDetails.mockReturnValue({ data: null });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
     expect(await screen.findByText('Taskul nu este disponibil.')).toBeVisible();
+  });
+
+  it('shows candidate selection only for a Task authorized by the live management query', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow(),
+        executorName: 'Executor actual',
+        subtasks: [],
+      },
+    });
+    const { rerender } = render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set<number>()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('Alege din coadă')).not.toBeInTheDocument();
+
+    rerender(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Alege din coadă')).toBeVisible();
+    expect(screen.getByRole('radio', { name: /Ana Pop/ })).toBeVisible();
   });
 });
