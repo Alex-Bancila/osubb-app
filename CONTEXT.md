@@ -310,4 +310,4 @@ The enum distinguishing what a Notification is about: `announce`, `deadline`, `e
 The root Group named OSUBB, with `automatic_membership = true` so every active Member belongs to it. Never the `departments` row itself, which is the legacy row this Group mirrors, not the Group.
 
 **`group_ids` claim**:
-The organization claim listing the Groups a Member explicitly belongs to, via `group_members` rows only — Automatic Membership is derived from Role and Minimum Level and is never in the token, the same rule `dept_ids`/`team_ids` already follow.
+The organization claim listing the Groups a Member explicitly belongs to, via `group_members` rows only, memberships of archived Groups included — Automatic Membership is derived from Role and Minimum Level and is never in the token, the same rule `dept_ids`/`team_ids` already follow.
