@@ -302,3 +302,12 @@ The enum distinguishing what a Notification is about: `announce`, `deadline`, `e
 
 **`roles.id` → Role display name**:
 `recrut` → Recrut · `voluntar` → Voluntar · `activ` → Voluntar Activ · `vot` → Voluntar cu Drept de Vot · `responsabil` → retired: level 4 is no longer a rank, and Responsabil de Proiect is a Group Role · `bce` → BCE · `bc` → BC · `moderator` → Moderator.
+
+**Group → `groups`; Group Role → `group_members.group_role`**:
+`group_members.group_role` spells the three Group Roles as `manager` → Group Manager, `responsible` → Group Responsible, and `member` → ordinary membership. `groups.category` is the Group Category (Department, Project, Team, or the one Organization root); `groups.path` is the root-first ancestor chain, ending in the row's own id. `legacy_dept_id` / `legacy_team_id` / `legacy_project_id` name the legacy `departments` / `teams` / `projects` row that still masters a Wave 1 Group — Wave 1 is a read-only shadow of those six tables, mirrored by trigger — and are dropped in Wave 3.
+
+**Organization Group → the `groups` row with `legacy_dept_id = 'org'`**:
+The root Group named OSUBB, with `automatic_membership = true` so every active Member belongs to it. Never the `departments` row itself, which is the legacy row this Group mirrors, not the Group.
+
+**`group_ids` claim**:
+The organization claim listing the Groups a Member explicitly belongs to, via `group_members` rows only — Automatic Membership is derived from Role and Minimum Level and is never in the token, the same rule `dept_ids`/`team_ids` already follow.

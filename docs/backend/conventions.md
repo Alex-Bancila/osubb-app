@@ -117,6 +117,18 @@ Example: `supabase/tests/department_team_membership_commands.test.sql` (skeleton
 
 `bash scripts/smoke-tracker-commands.sh` runs the Task Tracker command set end to end — create a public Task, two members queue and one withdraws and rejoins, the manager closes the queue, the Executor starts and submits, the Reviewer returns and then completes, the award lands and is reversed by a reopen, an Umbrella completes over a completed and a cancelled Subtask, and a Completed-work Request is approved — every step through the `public` wrappers only, asserting the key fact at each one, and ending by proving `authenticated` cannot write a single Task table directly. It needs a freshly reset, seeded database (`npx supabase db reset` first), runs inside one transaction and rolls back, so it leaves the seeded data byte-identical. The wrapper uses `psql` when the host has one and otherwise `docker exec`s into the local stack's db container; on the docker path it splices `supabase/tests/_helpers.sql` into the SQL, because psql inside the container cannot see this repo on disk.
 
+## 10. Groups (ADR-0009 Wave 1)
+
+`public.groups` and `public.group_members` exist on `main`, but Wave 1 is a shadow: `departments`, `teams`, `projects`, `member_departments`, `team_members`, and `project_members` stay the write master until Wave 3 drops them. The two Group tables carry `groups.path` (the root-first ancestor chain), `groups.category` (a presentation label only), and a `legacy_dept_id` / `legacy_team_id` / `legacy_project_id` naming the legacy row that currently masters each Group row.
+
+Never write `groups` or `group_members` directly. No client grant exists — both tables are `revoke all from public, anon, authenticated, service_role` with `grant select` only — and a migration that hand-edits a row is overwritten by the next scoped sync anyway. To change what a Group looks like, change the legacy row, or extend the mapping in `private.sync_*` (`supabase/migrations/20260918132313_groups_backfill_from_legacy.sql`) and the fixpoint assertion in `supabase/tests/groups_sync.test.sql`.
+
+The mirror is seven `after` triggers, all `security definer`: `departments_mirror_group`, `teams_mirror_group`, `projects_mirror_group`, `member_departments_mirror_membership`, `team_members_mirror_membership`, `project_members_mirror_membership`, and `profiles_rederive_group_roles` (`supabase/migrations/20260918195138_groups_sync_triggers.sql`). They run as `security definer` because ordinary `authenticated` writes on the legacy tables — `teams_create`, `member_departments_manage`, `profiles_self_update` — fire them, and an invoker-rights mirror would answer those writes with `42501` instead of mirroring them. `private.sync_groups_from_legacy()` is the repair function and fixpoint: safe to run any time as `postgres`, it re-derives every Group and roster row from the legacy tables in one call.
+
+New authority reads `groups.path` (ancestor-chain membership) and `group_members.group_role` (house rule 13 — no new authority helper may add a `dept_id` / `team_id` / `project_id` branch). Pair `public.auth_in_group()` with a live check exactly as `public.auth_in_dept()` is paired today: the claim only proves what a token said at issue time, so a policy or helper reads it alongside a live `group_members` row, not instead of one.
+
+`groups_parent_name_uidx` is a **partial** unique index — native Groups only — because the legacy tables it shadows were never unique against each other; Wave 3 dedupes the legacy names and makes the index total. Wave 3 also re-parents Groups one row per statement: `private.cascade_group_path` rewrites descendants from a single `path` change and cannot cope with a multi-row re-parent in one statement.
+
 ## 9. Pull-request checklist
 
 - [ ] Migration header is `-- #<issue>: <purpose>`.
@@ -129,3 +141,4 @@ Example: `supabase/tests/department_team_membership_commands.test.sql` (skeleton
 - [ ] Names follow §5 (policies, constraints, indexes, functions, triggers, columns).
 - [ ] Tests ship in the same PR and fail if the feature is reverted.
 - [ ] `npx supabase db lint --level warning --fail-on warning` is clean (§4).
+- [ ] Touching the six legacy structure tables or `profiles.role`? `groups_sync.test.sql`'s fixpoint stays green and nothing writes `groups` by hand.
