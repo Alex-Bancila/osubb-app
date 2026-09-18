@@ -48,6 +48,18 @@ _Avoid_: Kind, type, group type
 The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Opportunities and Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it but never lower it, and a creator cannot set it above their own Level.
 _Avoid_: Min level, access level, role gate
 
+**Group Role**:
+The position a Member holds in one Group: Group Manager, Group Responsible, or ordinary membership. The same three positions exist in every Group.
+_Avoid_: Project role, team role, local role
+
+**Group Manager**:
+A Member appointed to run a Group: its roster, Group Responsibles, Child Groups, work, and Events. BC or Moderator appoints the Group Managers of a top-level Group; the parent's Group Managers appoint a Child Group's. The Group's settings give the position its display name, such as BCE or Coordonator Principal. A Group with no Group Manager is run by its parent's Group Managers, or by BC and Moderator at the top level.
+_Avoid_: Lead, leader, coordinator, owner; Manager alone where it could be read as Task Manager
+
+**Group Responsible**:
+A Member appointed by a Group Manager to manage a Group's ordinary members, their work, and its Events under a custom display name. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible.
+_Avoid_: Deputy, sub-manager, co-lead
+
 **Department**:
 A top-level Group in the Department category: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane, which compete in the Department Cup; or Diverse and Secretariat, which share every Department setting except competing.
 
@@ -58,24 +70,24 @@ The coordination structure hosting the IT and Interne Department Teams. It is a 
 The organization's secretariat, modeled as a Department for Task Origins and authority and excluded from the Department Cup.
 
 **Project**:
-A temporary or ongoing body of work independent of Departments. A Project has one Project Lead, Members, and may have Project Responsibles.
+A top-level Group in the Project category, independent of Departments and never in the Department Cup. Its Group Manager is the Coordonator Principal; its Group Responsibles carry custom names. Any Member may belong to a Project.
 
-**Project Lead**:
-The active Project Member who manages Project membership, Project Responsibles, and Project work.
-_Avoid_: Team lead
+**Coordonator Principal**:
+The display name of a Project's Group Manager, appointed by BC or Moderator.
+_Avoid_: Project Lead, leader, team lead
 
-**Project Responsible**:
-An active Project Member trusted to manage Project work alongside the Project Lead.
-_Avoid_: Project manager when the organizational role is meant
+**Responsabil de Proiect**:
+A Group Responsible of a Project, shown under the custom display name chosen at appointment.
+_Avoid_: Project Responsible, project manager
 
 **Team**:
 A working group whose Members share a work context. A Team is either a Department Team or an Independent Team and does not have a single internal lead.
 
 **Department Team**:
-A Child Group of a Department in the Team category, overseen by that Department's managers.
+A Child Group of a Department in the Team category, overseen by the Department's Group Managers.
 
 **Independent Team**:
-A top-level Group in the Team category, with no parent Group. Its active Members jointly manage its planned work, while BC or Moderator manages membership.
+A top-level Group in the Team category with no parent Group and no Group Manager: every member is a Group Responsible, so they jointly manage its planned work while BC or Moderator manages its roster and evaluates their Tasks.
 
 **Interne**:
 The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse flagged `is_interne`, responsible for tracking AG eligibility and voting-right information.
