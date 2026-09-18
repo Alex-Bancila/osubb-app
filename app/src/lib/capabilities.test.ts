@@ -19,6 +19,7 @@ function claims(memberLevel: number): MemberClaims {
     member_level: memberLevel,
     dept_ids: [],
     team_ids: [],
+    group_ids: [],
   };
 }
 

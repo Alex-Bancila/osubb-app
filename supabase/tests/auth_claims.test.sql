@@ -6,11 +6,12 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(32);
 
 -- ==================== Helper defaults (no JWT in this session) ====================
 select is(auth_level(), 0, 'auth_level() defaults to 0 without a JWT');
 select is(auth_in_dept('edu'), false, 'auth_in_dept() defaults to false without a JWT');
+select is(auth_in_group(1), false, 'auth_in_group() defaults to false without a JWT');
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -23,6 +24,13 @@ insert into profiles (id, full_name, email, role, status) values
 
 insert into member_departments (member_id, dept_id)
   values ('cccccccc-0000-0000-0000-000000000003', 'edu');
+
+-- Carmen also holds the Organization Department. Automatic Membership means
+-- #509's mirror deliberately never rosters her into the OSUBB Group, so a hook
+-- that derived group_ids from member_departments instead of group_members
+-- would wrongly claim it -- this fixture is what assertion (3) below catches.
+insert into member_departments (member_id, dept_id)
+  values ('cccccccc-0000-0000-0000-000000000003', 'org');
 
 insert into teams (id, name, dept_id) values ('t-test', 'Test Team', 'edu');
 insert into team_members (team_id, member_id)
@@ -58,6 +66,40 @@ select is(
   (select ev -> 'claims' -> 'app_metadata' ->> 'provider' from hook_result),
   'email', 'pre-existing app_metadata claims are preserved');
 
+-- ==================== Hook: group_ids (#510, ADR-0009 Wave 1) ====================
+select ok(
+  (select ev -> 'claims' -> 'app_metadata' -> 'group_ids'
+     @> to_jsonb((select grp.id from groups grp where grp.legacy_dept_id = 'edu'))
+     from hook_result),
+  'group_ids carries the Group mirrored from the member''s Department (AC)');
+
+select ok(
+  (select ev -> 'claims' -> 'app_metadata' -> 'group_ids'
+     @> to_jsonb((select grp.id from groups grp where grp.legacy_team_id = 't-test'))
+     from hook_result),
+  'group_ids carries the Group mirrored from the member''s Team');
+
+select ok(
+  not (select coalesce(ev -> 'claims' -> 'app_metadata' -> 'group_ids'
+         @> to_jsonb((select grp.id from groups grp where grp.legacy_dept_id = 'org')), false)
+         from hook_result),
+  'group_ids excludes the OSUBB Group even though Carmen also holds the Organization Department -- Automatic Membership is never a claim (a hook reading member_departments instead of the roster would fail this)');
+
+select is(
+  (select jsonb_typeof(ev -> 'claims' -> 'app_metadata' -> 'group_ids') from hook_result),
+  'array', 'group_ids is emitted as a JSON array');
+
+select ok(
+  (select bool_and(jsonb_typeof(element) = 'number')
+     from hook_result, jsonb_array_elements(ev -> 'claims' -> 'app_metadata' -> 'group_ids') as element),
+  'every group_ids element is a JSON number, never a string (ids emitted as text would fail this)');
+
+select is(
+  (select ev -> 'claims' -> 'app_metadata' -> 'group_ids' from hook_result),
+  (select jsonb_agg(element order by (element::text)::bigint)
+     from hook_result, jsonb_array_elements(ev -> 'claims' -> 'app_metadata' -> 'group_ids') as element),
+  'group_ids elements are ascending -- a nondeterministic order would make token bytes unstable across logins');
+
 -- ==================== Hook: fail-closed cases ====================
 select ok(
   custom_access_token_hook(jsonb_build_object(
@@ -79,7 +121,7 @@ select ok(
 
 -- ==================== Helpers reading a simulated JWT ====================
 select set_config('request.jwt.claims',
-  '{"app_metadata":{"member_role":"bce","member_level":5,"dept_ids":["edu"],"team_ids":["t-test"]}}',
+  '{"app_metadata":{"member_role":"bce","member_level":5,"dept_ids":["edu"],"team_ids":["t-test"],"group_ids":[42,7]}}',
   true);
 
 select is(auth_level(), 5, 'auth_level() reads member_level from the JWT');
@@ -102,6 +144,19 @@ select is(auth_in_dept('fin'), false, 'auth_in_dept() false for other department
 select is(auth_in_team('t-test'), true,  'auth_in_team() true for the member''s team');
 select is(auth_in_team('t-nope'), false, 'auth_in_team() false for other teams');
 
+select is(auth_in_group(42), true,  'auth_in_group() true for a Group id listed in the token');
+select is(auth_in_group(43), false, 'auth_in_group() false for a Group id absent from the token');
+select is(auth_in_group(null), false, 'auth_in_group() false for a null argument');
+
+-- A forged string-typed array must not satisfy containment (`?` matches string
+-- elements; `@>` against a numeric argument does not) -- fails closed rather
+-- than trusting a client-shaped token.
+select set_config('request.jwt.claims',
+  '{"app_metadata":{"group_ids":["42"]}}',
+  true);
+select is(auth_in_group(42), false,
+  'auth_in_group() rejects a forged string-typed group_ids array');
+
 -- ==================== Privileges ====================
 select ok(
   has_function_privilege('supabase_auth_admin', 'public.custom_access_token_hook(jsonb)', 'execute'),
@@ -110,6 +165,18 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'public.custom_access_token_hook(jsonb)', 'execute'),
   'clients may not execute the hook');
+
+select ok(
+  not has_function_privilege('anon', 'public.auth_in_group(bigint)', 'execute'),
+  'anon may not execute auth_in_group');
+
+select ok(
+  has_table_privilege('supabase_auth_admin', 'public.groups', 'select'),
+  'the Auth server may read groups');
+
+select ok(
+  has_table_privilege('supabase_auth_admin', 'public.group_members', 'select'),
+  'the Auth server may read group_members');
 
 select * from finish();
 rollback;

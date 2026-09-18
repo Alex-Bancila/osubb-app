@@ -336,9 +336,9 @@ select ok(has_table_privilege('supabase_auth_admin', 'profiles', 'select'),
 select is(
   (select count(*) from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'roles', 'member_departments', 'team_members')
+      and tablename in ('profiles', 'roles', 'member_departments', 'team_members', 'groups', 'group_members')
       and 'supabase_auth_admin' = any (roles)),
-  4::bigint, 'claims-hook read policies cover all four tables (logins keep working)');
+  6::bigint, 'claims-hook read policies cover all six tables (logins keep working)');
 
 -- ==================== Grant posture ====================
 -- Epic 3.2a narrowed this from a table grant to column grants: members may

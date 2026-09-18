@@ -41,8 +41,9 @@ covered without repeating those assertions in every suite.
   such as `'["edu"]'::jsonb`; the helper deliberately does not derive,
   normalize, or repair stale and forged metadata.
 - `pg_temp.test_login_leadership(uuid)` derives canonical role, level,
-  Department IDs, and Team IDs from the suite's live profile and membership
-  fixtures. Use it only when the test needs those current database facts.
+  Department IDs, Team IDs, and Group IDs from the suite's live profile and
+  membership fixtures. Use it only when the test needs those current database
+  facts.
 - `pg_temp.test_clear_jwt()` clears `request.jwt.claims` but preserves the
   current SQL role. Write `reset role` or `set local role ...` explicitly
   when the next assertion needs a different role.

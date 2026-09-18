@@ -263,6 +263,8 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('auth_in_dept',       'd text',                                   false, true,  true,  false),
   ('auth_in_team',       't text',                                   false, true,  true,  false),
   ('auth_is_member',     '',                                         false, true,  true,  false),
+  -- #510: the Group Wave 1 JWT helper, same grant shape as auth_in_team.
+  ('auth_in_group',      'g bigint',                                 false, true,  true,  false),
   ('create_campaign',    'p_department_id text, p_name text',        false, true,  false, false),
   ('update_campaign',    'p_campaign_id bigint, p_name text',        false, true,  false, false),
   ('set_campaign_active','p_campaign_id bigint, p_active boolean',   false, true,  false, false),
@@ -358,7 +360,7 @@ end
 $$;
 
 select is(pg_temp.public_function_mismatches(), '{}'::text[],
-  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers, the three Campaign wrappers, every #327-#344 Task command wrapper, the three leadership read wrappers, and #499''s narrow visible Executor read) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
+  'every public Task-related command/helper (rating_mult, the auth_* JWT helpers incl. #510''s auth_in_group, the three Campaign wrappers, every #327-#344 Task command wrapper, the three leadership read wrappers, and #499''s narrow visible Executor read) has exactly its audited execute grants -- authenticated only, never anon, service_role or PUBLIC');
 
 -- ==================== 7. private schema: pinned function roster ====================
 

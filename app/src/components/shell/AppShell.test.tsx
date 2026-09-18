@@ -22,6 +22,7 @@ const ordinaryClaims = {
   member_level: 1,
   dept_ids: [],
   team_ids: [],
+  group_ids: [],
 };
 
 function renderShell(path = '/calendar') {
