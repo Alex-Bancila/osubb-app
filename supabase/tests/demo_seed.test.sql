@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(64);
+select plan(70);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -135,6 +135,73 @@ select is((select count(*) from teams where id = 't-logistica' and dept_id is nu
 
 select is((select min_level from events where title = 'Training pentru recruți'), 0,
   't-recruti''s own event stays min_level 0 — the branch the calendar rule turns on');
+
+-- ==================== The demo, seen as Groups (#509) ====================
+-- `groups`/`group_members` are mirrored from the legacy structure tables by
+-- the #509 triggers, so the demo Departments, Teams, Projects and rosters have
+-- to show up there too — the seed never writes a Group itself. These six are
+-- seed-dependent by design: they are what a Wave 2 screen reading the Group
+-- model will actually find after `db reset`. Mutation they catch: drop any of
+-- the six mirror triggers and the Group or the roster role it owns is missing.
+
+select is(
+  (select count(*) from groups),
+  (select count(*) from departments) + (select count(*) from teams) + (select count(*) from projects),
+  'every Department, Team and Project of the seeded database is mirrored as exactly one Group, and nothing else is');
+
+select is(
+  (select string_agg(format('%s=%s', grp.legacy_dept_id, membership.group_role), ',' order by grp.legacy_dept_id)
+     from group_members membership
+     join groups grp on grp.id = membership.group_id
+    where membership.member_id = (select id from profiles where email = 'bce@demo.osubb')
+      and grp.legacy_dept_id is not null),
+  'diverse=manager',
+  'the demo BCE is Group Manager of the one Department Group they belong to — Diverse — and of no other (#296 put them in a coordination structure on purpose)');
+
+select is(
+  (select format('%s|%s',
+                 (select string_agg(format('%s=%s', grp.legacy_dept_id, membership.group_role), ',' order by grp.legacy_dept_id)
+                    from group_members membership
+                    join groups grp on grp.id = membership.group_id
+                   where membership.member_id = (select id from profiles where email = 'bc@demo.osubb')
+                     and grp.legacy_dept_id is not null),
+                 (select count(*) from group_members membership
+                    join groups grp on grp.id = membership.group_id
+                   where grp.category = 'organization'))),
+  'fin=member|0',
+  'the demo BC is an ordinary member of Financiar, and the OSUBB Group carries no roster row at all — Automatic Membership derives it, `org` is never mirrored');
+
+select is(
+  (select string_agg(membership.group_role, ',' order by member.email)
+     from group_members membership
+     join groups grp on grp.id = membership.group_id
+     join profiles member on member.id = membership.member_id
+    where grp.legacy_team_id = 't-logistica'),
+  'responsible,responsible',
+  'the Independent Team''s two members are both Group Responsibles — ADR-0007''s joint management, with no special case in the model');
+
+select is(
+  (select format('%s|%s', grp.status,
+                 string_agg(format('%s=%s', member.email, membership.group_role), ',' order by member.email))
+     from groups grp
+     join projects project on project.id = grp.legacy_project_id
+     join group_members membership on membership.group_id = grp.id
+     join profiles member on member.id = membership.member_id
+    where project.name = 'Festivalul Studențesc 2026'
+    group by grp.status),
+  'active|activ@demo.osubb=responsible,responsabil@demo.osubb=manager,voluntar@demo.osubb=member',
+  'the active demo Project is an active Group whose lead is its Group Manager, its Project Responsible a Group Responsible, and its ordinary member an ordinary member');
+
+select is(
+  (select format('%s|%s', grp.status,
+                 (select membership.group_role from group_members membership
+                   where membership.group_id = grp.id
+                     and membership.member_id = (select id from profiles where email = 'vot@demo.osubb')))
+     from groups grp
+     join projects project on project.id = grp.legacy_project_id
+    where project.name = 'Gala Voluntarilor 2025'),
+  'archived|manager',
+  'and the archived demo Project is an archived Group that keeps its lead as Group Manager — archiving carries the lifecycle, it does not dissolve the roster');
 
 -- ==================== Project authorization scenarios ====================
 -- These rows are local/staging fixtures for Project policy and Task origin
