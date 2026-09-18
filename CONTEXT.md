@@ -40,8 +40,12 @@ _Avoid_: Scope, structure, org unit, entity
 A Group created inside a parent Group and overseen by the parent's managers. A Department Team is a Child Group of its Department; a Child Group's Task Points count toward its parent's Department Cup only when both are set to compete.
 _Avoid_: Sub-team, child team, nested team
 
+**Group Category**:
+The presentation label chosen when a Group is created: Department, Project, Team, or Adunarea Generală. It pre-fills the Group's settings and names it in the interface; no authority, visibility, or Cup rule depends on it.
+_Avoid_: Kind, type, group type
+
 **Department**:
-One of the five OSUBB departments: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane; or one of the two coordination structures, Diverse and Secretariat, which use the Department model but never compete in the Department Cup.
+A top-level Group in the Department category: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane, which compete in the Department Cup; or Diverse and Secretariat, which share every Department setting except competing.
 
 **Diverse**:
 The coordination structure hosting the IT and Interne Department Teams. It is a Department for Task Origins and authority and is excluded from the Department Cup.
@@ -64,10 +68,10 @@ _Avoid_: Project manager when the organizational role is meant
 A working group whose Members share a work context. A Team is either a Department Team or an Independent Team and does not have a single internal lead.
 
 **Department Team**:
-A Team belonging to exactly one Department and overseen by that Department’s leadership.
+A Child Group of a Department in the Team category, overseen by that Department's managers.
 
 **Independent Team**:
-A Team with no parent Department. Its active Members jointly manage its planned work, while BC or Moderator manages membership.
+A top-level Group in the Team category, with no parent Group. Its active Members jointly manage its planned work, while BC or Moderator manages membership.
 
 **Interne**:
 The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse flagged `is_interne`, responsible for tracking AG eligibility and voting-right information.
@@ -159,7 +163,7 @@ The total visible to an individual Member from their own Points Ledger entries.
 A BCE/BC/Moderator view of Members ordered by Task Points only.
 
 **Department Cup**:
-A BCE/BC/Moderator comparison of Task Points earned through Department Tasks and Department-Team Tasks.
+A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in their Child Groups set to count toward them. Project and Independent-Team work never contributes.
 
 **Completed-work Request**:
 A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together.
