@@ -224,15 +224,17 @@ select '00000000-0000-0000-0000-000000000000', m.id, 'authenticated', 'authentic
 
 -- Names are ordinary Romanian names on purpose: a demo full of "Test User 1"
 -- reads as a prototype, and BC are looking at this on September 15.
-insert into profiles (id, full_name, email, role, joined_year, avatar_color) values
-  ('d0000000-0000-0000-0000-000000000001', 'Andrei Mureșan',   'recrut@demo.osubb',      'recrut',      2026, '#ED2025'),
-  ('d0000000-0000-0000-0000-000000000002', 'Ioana Popescu',    'voluntar@demo.osubb',    'voluntar',    2025, '#284C93'),
-  ('d0000000-0000-0000-0000-000000000003', 'Vlad Constantin',  'activ@demo.osubb',       'activ',       2025, '#7500A0'),
-  ('d0000000-0000-0000-0000-000000000004', 'Maria Dobre',      'vot@demo.osubb',         'vot',         2024, '#007F33'),
-  ('d0000000-0000-0000-0000-000000000005', 'Raluca Ionescu',   'responsabil@demo.osubb', 'responsabil', 2024, '#F2A700'),
-  ('d0000000-0000-0000-0000-000000000006', 'Alex Băncilă',     'bce@demo.osubb',         'bce',         2023, '#ED2025'),
-  ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          2023, '#FF3B3B'),
-  ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   2023, '#241F1E');
+-- #160: joined_at is January 1 of joined_year for every demo profile, so a
+-- rebuilt database and a backfilled live one agree.
+insert into profiles (id, full_name, email, role, joined_year, joined_at, avatar_color) values
+  ('d0000000-0000-0000-0000-000000000001', 'Andrei Mureșan',   'recrut@demo.osubb',      'recrut',      2026, '2026-01-01', '#ED2025'),
+  ('d0000000-0000-0000-0000-000000000002', 'Ioana Popescu',    'voluntar@demo.osubb',    'voluntar',    2025, '2025-01-01', '#284C93'),
+  ('d0000000-0000-0000-0000-000000000003', 'Vlad Constantin',  'activ@demo.osubb',       'activ',       2025, '2025-01-01', '#7500A0'),
+  ('d0000000-0000-0000-0000-000000000004', 'Maria Dobre',      'vot@demo.osubb',         'vot',         2024, '2024-01-01', '#007F33'),
+  ('d0000000-0000-0000-0000-000000000005', 'Raluca Ionescu',   'responsabil@demo.osubb', 'responsabil', 2024, '2024-01-01', '#F2A700'),
+  ('d0000000-0000-0000-0000-000000000006', 'Alex Băncilă',     'bce@demo.osubb',         'bce',         2023, '2023-01-01', '#ED2025'),
+  ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          2023, '2023-01-01', '#FF3B3B'),
+  ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   2023, '2023-01-01', '#241F1E');
 
 -- Departments: spread across the five real ones so the department cup has
 -- something to compare, and two members sit in two (that combination is what

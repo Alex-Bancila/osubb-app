@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(27);
 
 -- ==================== Structure ====================
 select has_function('public', 'guard_profile_privileged_columns',
@@ -82,6 +82,9 @@ select throws_ok(
 select throws_ok(
   $$ update profiles set joined_year = 2019 where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
   '42501', null, 'SELF cannot backdate when they joined (the promotion clock)');
+select throws_ok(
+  $$ update profiles set joined_at = '2019-01-01' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '42501', null, 'SELF cannot backdate their exact join date either (#160)');
 
 select is(
   (select role::text from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
