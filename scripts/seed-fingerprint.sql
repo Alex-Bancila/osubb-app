@@ -19,6 +19,16 @@ select md5(string_agg(x, '|' order by x))
                 from project_members membership
                 join projects project on project.id = membership.project_id
                 join profiles member on member.id = membership.member_id
+    -- #507: the Group shadow tables (ADR-0009 Wave 1). Keyed on names, never
+    -- ids: a Project Group's id moves with the projects sequence on every
+    -- re-seed, exactly like the `project:` line above.
+    union all select format('group:%s:%s:%s:%s:%s:%s', grp.name, grp.category, coalesce(parent.name, '-'),
+                            grp.status, grp.competes_in_cup, grp.min_level)
+                from groups grp left join groups parent on parent.id = grp.parent_id
+    union all select format('group-member:%s:%s:%s', grp.name, member.full_name, membership.group_role)
+                from group_members membership
+                join groups grp on grp.id = membership.group_id
+                join profiles member on member.id = membership.member_id
     -- #296: `kind`, `assignment_mode` and `audience` joined this line when the
     -- demo was rebuilt on the normalized model — an Umbrella, a public
     -- Opportunity and a direct Task are three different demo scenarios that

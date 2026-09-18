@@ -301,4 +301,4 @@ The legacy enum backing an Event's Origin: `org`, `dept`, `team`, or `project`. 
 The enum distinguishing what a Notification is about: `announce`, `deadline`, `event`, `task`, or `system`.
 
 **`roles.id` → Role display name**:
-`recrut` → Recrut · `voluntar` → Voluntar · `activ` → Voluntar Activ (the database's `roles.name` still reads "Membru Activ" — known drift; the glossary term wins) · `vot` → Voluntar cu Drept de Vot (the database's `roles.name` still reads "Membru cu Drept de Vot" — known drift; the glossary term wins) · `responsabil` → retired: level 4 is no longer a rank, and Responsabil de Proiect is a Group Role · `bce` → BCE · `bc` → BC · `moderator` → Moderator.
+`recrut` → Recrut · `voluntar` → Voluntar · `activ` → Voluntar Activ · `vot` → Voluntar cu Drept de Vot · `responsabil` → retired: level 4 is no longer a rank, and Responsabil de Proiect is a Group Role · `bce` → BCE · `bc` → BC · `moderator` → Moderator.

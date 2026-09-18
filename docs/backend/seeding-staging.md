@@ -83,16 +83,16 @@ Because the seed runs as the table owner with no `auth.uid()`, it cannot call th
 
 Then sign in to the app as two different demo accounts and confirm the screens differ. All eight use the password `parola123`:
 
-| Email                    | Role                   | Level | Good for showing                                         |
-| ------------------------ | ---------------------- | ----- | -------------------------------------------------------- |
-| `recrut@demo.osubb`      | Recrut                 | 0     | the smallest view: 6 events, 6 tasks                     |
-| `voluntar@demo.osubb`    | Voluntar               | 1     | a normal member with points, a team and 8 visible tasks  |
-| `activ@demo.osubb`       | Membru Activ           | 2     | a sanction on the ledger, and a Project Responsible      |
-| `vot@demo.osubb`         | Membru cu Drept de Vot | 3     | top of the leaderboard; Tineret + Secretariat            |
-| `responsabil@demo.osubb` | Responsabil de proiect | 4     | Project lead authority — Department Tasks are not theirs |
-| `bce@demo.osubb`         | BCE                    | 5     | Diverse + Team `it`: the one BCE-managed Origin          |
-| `bc@demo.osubb`          | BC                     | 6     | everything: 7 events, 19 tasks, the BC panel             |
-| `moderator@demo.osubb`   | Moderator              | 9     | the moderation view                                      |
+| Email                    | Role                     | Level | Good for showing                                         |
+| ------------------------ | ------------------------ | ----- | -------------------------------------------------------- |
+| `recrut@demo.osubb`      | Recrut                   | 0     | the smallest view: 6 events, 6 tasks                     |
+| `voluntar@demo.osubb`    | Voluntar                 | 1     | a normal member with points, a team and 8 visible tasks  |
+| `activ@demo.osubb`       | Voluntar Activ           | 2     | a sanction on the ledger, and a Project Responsible      |
+| `vot@demo.osubb`         | Voluntar cu Drept de Vot | 3     | top of the leaderboard; Tineret + Secretariat            |
+| `responsabil@demo.osubb` | Responsabil de proiect   | 4     | Project lead authority — Department Tasks are not theirs |
+| `bce@demo.osubb`         | BCE                      | 5     | Diverse + Team `it`: the one BCE-managed Origin          |
+| `bc@demo.osubb`          | BC                       | 6     | everything: 7 events, 19 tasks, the BC panel             |
+| `moderator@demo.osubb`   | Moderator                | 9     | the moderation view                                      |
 
 ⚠️ `bce@` and `moderator@` belong to **Diverse** and Team **`it`** (issue #296), not to a delivery Department. That is deliberate and visible: `private.can_manage_origin` gives Department authority to BC/Moderator and to a **local BCE of that Department** only, so with no BCE inside `edu`/`pr`/`youth`/`fin`/`hr`, every Department Task in the demo is created and evaluated by `bc@` or `moderator@`. The other three authority branches each have exactly one demo Origin: the Department Team `it` (BCE of its parent Department), the Independent Team `t-logistica` (any active member), and the active Project (its lead and its Responsible).
 
