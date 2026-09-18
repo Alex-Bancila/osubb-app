@@ -38,7 +38,7 @@ A named body of OSUBB people and work, created by BC or Moderator with its own n
 _Avoid_: Scope, structure, org unit, entity
 
 **Child Group**:
-A Group created inside a parent Group and overseen by the parent's managers. A Department Team is a Child Group of its Department; a Child Group's Task Points count toward its parent's Department Cup only when both are set to compete.
+A Group created inside a parent Group and overseen by the parent's Group Managers; a Child Group may have Child Groups of its own, to any depth. A Department Team is a Child Group of its Department; a Child Group's Task Points count toward the Department Cup of its nearest competing ancestor when every Group on the path is set to count.
 _Avoid_: Sub-team, child team, nested team
 
 **Group Category**:
@@ -54,11 +54,11 @@ The position a Member holds in one Group: Group Manager, Group Responsible, or o
 _Avoid_: Project role, team role, local role
 
 **Group Manager**:
-A Member appointed to run a Group: its roster, Group Responsibles, Child Groups, work, and Events. BC or Moderator appoints the Group Managers of a top-level Group; the parent's Group Managers appoint a Child Group's. The Group's settings give the position its display name, such as BCE or Coordonator Principal. A Group with no Group Manager is run by its parent's Group Managers, or by BC and Moderator at the top level.
+A Member appointed to run a Group: its roster, Group Responsibles, Child Groups, work, and Events. BC or Moderator appoints the Group Managers of a top-level Group; the parent's Group Managers appoint a Child Group's, and the position carries down to every Group below. The Group's settings give the position its display name, such as BCE or Coordonator Principal. A Group with no Group Manager is run by the Group Managers of its nearest ancestor that has one, or by BC and Moderator.
 _Avoid_: Lead, leader, coordinator, owner; Manager alone where it could be read as Task Manager
 
 **Group Responsible**:
-A Member appointed by a Group Manager to manage a Group's ordinary members, their work, and its Events under a custom display name. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible.
+A Member appointed by a Group Manager to manage the ordinary members, their work, and the Events of a Group and every Group below it, under a custom display name. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible.
 _Avoid_: Deputy, sub-manager, co-lead
 
 **Appointment**:
@@ -106,7 +106,7 @@ A Group Responsible of a Project, shown under the custom display name chosen at 
 _Avoid_: Project Responsible, project manager
 
 **Team**:
-A Group in the Team category: a Child Group of a Department, a Project, or the Adunarea Generală, or an Independent Team with no parent.
+A Group in the Team category: a Child Group of any other Group, or an Independent Team with no parent.
 
 **Department Team**:
 A Child Group of a Department in the Team category, overseen by the Department's Group Managers.
@@ -133,7 +133,7 @@ Whether a public Task opportunity is local to its Origin Group or open to every 
 Whether a Task is assigned directly to one active Member or offered publicly through the Candidate Queue.
 
 **Campaign**:
-A label owned by one Group that tags Tasks whose Origin is that Group or one of its Child Groups. A Campaign filters the Tracker, Leaderboard, and Department Cup; it is not an Origin, has no roster, and is managed by the owning Group's Managers and Responsibles.
+A label owned by one Group that tags Tasks whose Origin is that Group or any Group below it. A Campaign filters the Tracker, Leaderboard, and Department Cup; it is not an Origin, has no roster, and is managed by the owning Group's Managers and Responsibles.
 _Avoid_: Campaign as a Task Origin
 
 **Umbrella Task**:
@@ -204,7 +204,7 @@ The total visible to an individual Member from their own Points Ledger entries.
 A BCE/BC/Moderator view of Members ordered by Task Points only.
 
 **Department Cup**:
-A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in their Child Groups set to count toward them. Project and Independent-Team work never contributes.
+A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in every Group below them set to count toward them. Project and Independent-Team work never contributes.
 
 **Completed-work Request**:
 A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together.

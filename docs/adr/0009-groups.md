@@ -23,17 +23,17 @@ A **Group** is one entity. BC or Moderator creates a top-level Group with a cust
 
 A Group carries **settings, not a kind**:
 
-| Setting                        | Meaning                                                                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| Parent Group                   | Optional. Nesting is one level deep: a Child Group has no children.                                                            |
-| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.  |
-| Counts toward the parent's Cup | Child only, default on. A Child Group's Task Points reach the Cup only when this and the parent's setting are both on.         |
-| Minimum Level                  | Join and visibility gate (below).                                                                                              |
-| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                            |
-| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                 |
-| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.            |
-| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal") and each Group Responsible ("Responsabil Logistică"). |
-| Lifecycle                      | Active or archived; archiving keeps history.                                                                                   |
+| Setting                        | Meaning                                                                                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parent Group                   | Optional, to any depth: a Child Group may have Child Groups of its own; cycles are impossible.                                                        |
+| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.                         |
+| Counts toward the parent's Cup | Child only, default on. A Group's Task Points reach the Cup of its nearest competing ancestor only when this setting is on at every link of the path. |
+| Minimum Level                  | Join and visibility gate (below).                                                                                                                     |
+| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                                                   |
+| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                                        |
+| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.                                   |
+| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal") and each Group Responsible ("Responsabil Logistică").                        |
+| Lifecycle                      | Active or archived; archiving keeps history.                                                                                                          |
 
 **Department**, **Project**, and **Team** are presentation categories chosen at creation. They pre-fill settings and label the interface. No authority, visibility, membership, notification, or Cup rule may branch on the category, and a conventions test enforces it.
 
@@ -51,9 +51,9 @@ Two ways into a Group, the same everywhere. **Appointment**: a Group Manager, a 
 
 Every Group has the same three positions: **Group Manager**, **Group Responsible**, and ordinary membership.
 
-- BC or Moderator appoints the Group Managers (one or more) of a top-level Group; the parent's Group Managers appoint a Child Group's.
+- BC or Moderator appoints the Group Managers (one or more) of a top-level Group; the parent's Group Managers appoint a Child Group's, and authority flows down the whole chain: an ancestor's Group Managers and Responsibles hold their positions in every Group below.
 - A Group Manager appoints Group Responsibles, each under its own custom display name.
-- A Group with no Group Manager is run by its parent's Group Managers, or by BC and Moderator at the top level.
+- A Group with no Group Manager is run by the Group Managers of its nearest ancestor that has one, or by BC and Moderator when none does.
 - An **Independent Team** is a top-level Group in the Team category with no Group Manager in which every member is a Group Responsible: they jointly manage its planned work, and BC or Moderator evaluates theirs. This reproduces ADR-0007's Independent Team without a special case.
 
 BCE remains a rank and is also the display name of a Department's Group Manager; the two are linked by Appointment, never by the schema. Coordonator Principal is the display name of a Project's Group Manager, appointed by BC or Moderator; Responsabil de Proiect is a Group Responsible of a Project.
@@ -66,25 +66,25 @@ Every rule that gated on level 4 — Events' "Responsible+", organization-wide E
 
 ### Authority
 
-One matrix, five rows, applied to a Group and its Child Groups:
+One matrix, five rows, applied to a Group and every Group below it:
 
-| Actor             | May                                                                                                                                                                                                                                                                                           |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BC / Moderator    | Everything, everywhere: create and archive top-level Groups, appoint their Managers, change Roles, manage and evaluate any Task.                                                                                                                                                              |
-| Rank BCE          | Read everything: every Task, every roster, the leadership metrics. Write nothing by rank alone.                                                                                                                                                                                               |
-| Group Manager     | Everything inside the Group and its Child Groups: roster, Applications, Group Responsibles, Child Groups, Campaigns, Events, and every Task, including evaluating Group Responsibles and their own Task.                                                                                      |
-| Group Responsible | Ordinary members' Tasks, Applications, and Events in the Group and its Child Groups. May create a Task for themselves but never manages or evaluates their own Task, another Group Responsible's, or a Group Manager's; those go to the Group Manager, or to BC/Moderator when there is none. |
-| Ordinary member   | Own Tasks and Candidatures, the Opportunities their Groups' Minimum Levels admit, and every Task of a Group whose Shared Work Visibility is on.                                                                                                                                               |
+| Actor             | May                                                                                                                                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BC / Moderator    | Everything, everywhere: create and archive top-level Groups, appoint their Managers, change Roles, manage and evaluate any Task.                                                                                                                                                                  |
+| Rank BCE          | Read everything: every Task, every roster, the leadership metrics. Write nothing by rank alone.                                                                                                                                                                                                   |
+| Group Manager     | Everything inside the Group and every Group below it: roster, Applications, Group Responsibles, Child Groups, Campaigns, Events, and every Task, including evaluating Group Responsibles and their own Task.                                                                                      |
+| Group Responsible | Ordinary members' Tasks, Applications, and Events in the Group and every Group below it. May create a Task for themselves but never manages or evaluates their own Task, another Group Responsible's, or a Group Manager's; those go to the Group Manager, or to BC/Moderator when there is none. |
+| Ordinary member   | Own Tasks and Candidatures, the Opportunities their Groups' Minimum Levels admit, and every Task of a Group whose Shared Work Visibility is on.                                                                                                                                                   |
 
-Direct assignment may still target any active Member (ADR-0007), except one below the Group's Minimum Level. The Task Manager remains the Task's creator; where ADR-0007 says "the Origin's managers", read the Group's Managers, then the parent's, then BC. Leadership metrics stay gated at rank 5 and above, and their Department, Team, and Project filters become one Group filter that includes Child Groups.
+Direct assignment may still target any active Member (ADR-0007), except one below the Group's Minimum Level. The Task Manager remains the Task's creator; where ADR-0007 says "the Origin's managers", read the Group's Managers, then its ancestors' from the nearest up, then BC. Leadership metrics stay gated at rank 5 and above, and their Department, Team, and Project filters become one Group filter that includes every Group below it.
 
 ### Campaigns
 
-A Campaign is a label owned by one Group, any Group. It tags Tasks whose Origin is that Group or one of its Child Groups and is managed by the owning Group's Managers and Responsibles. It has no roster, no roles, and no Minimum Level, and it is never an Origin.
+A Campaign is a label owned by one Group, any Group. It tags Tasks whose Origin is that Group or any Group below it and is managed by the owning Group's Managers and Responsibles. It has no roster, no roles, and no Minimum Level, and it is never an Origin.
 
 ### Calendar
 
-An Event is owned by one Group; the four-value scope enum disappears. A Group's Managers and Responsibles, and those of its parent, create, edit, and cancel its Events. Anyone holding a Group Role may create an Event in the Organization Group; only its creator or BC/Moderator edits it. Relevance, RSVP, capacity, and important-change notifications keep ADR-0008's rules with "the member's Departments, Teams, and Projects" read as "the member's Groups".
+An Event is owned by one Group; the four-value scope enum disappears. A Group's Managers and Responsibles, and those of its ancestors, create, edit, and cancel its Events. Anyone holding a Group Role may create an Event in the Organization Group; only its creator or BC/Moderator edits it. Relevance, RSVP, capacity, and important-change notifications keep ADR-0008's rules with "the member's Departments, Teams, and Projects" read as "the member's Groups".
 
 ### Promotion hooks
 
@@ -111,6 +111,7 @@ A strangler in three waves, every PR merged green, each wave its own plan:
 ## Consequences
 
 - One roster and one authority helper family replace three; a new kind of body is a row, not a migration.
+- Groups nest to any depth, so authority, visibility, Campaign tagging, and Cup attribution walk the ancestor chain. Wave 1 stores each Group's ancestor path and forbids cycles; the helpers read that path rather than recursing per row.
 - ADR-0007, ADR-0008, and ADR-0004 are amended by reference in their headers; `CONTEXT.md` is updated in the same change; house rule 13 in `CLAUDE.md` names this ADR.
 - The pinned `private` roster, the claimless sweep, the points authorization matrix (#262), and the actor-helper suites are rewritten in Wave 2; the Tracker smoke script follows.
 - `capabilities.ts` loses `manageTasks: 4`; management controls render from server capability rows, as the 2026-09-18 Tracker plan already requires.
