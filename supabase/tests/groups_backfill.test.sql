@@ -19,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(31);
 
 -- ==================== Fixtures ====================
 -- Scratch legacy rows, in the two Department kinds that map differently and
@@ -325,7 +325,52 @@ select is(
   'member',
   'and writes the roster row it was asked for, into the Group it had to create first');
 
--- ==================== 15. Grants ====================
+-- ==================== 15. The whole-table Team sync heals parents too ====================
+-- Review S1: the `left join` that finds a Team's parent Department Group yields
+-- null rather than raising, so a whole-table Team sync against a wiped mirror
+-- would silently produce *top-level* Department Teams — a wrong row, with no
+-- error anywhere. #509 consumes this function directly, so the null path carries
+-- the same self-heal as the scoped one. Mutation this catches: delete the `else
+-- perform private.sync_department_groups();` branch from private.sync_team_groups.
+
+truncate public.groups cascade;
+select private.sync_team_groups();
+
+select is(
+  (select grp.path from public.groups as grp where grp.legacy_team_id = 'b-team-dept'),
+  array[(select parent.id from public.groups as parent where parent.legacy_dept_id = 'b-dept'),
+        (select grp.id from public.groups as grp where grp.legacy_team_id = 'b-team-dept')],
+  'a whole-table Team sync into an empty mirror still lands each Department Team under its own Department Group, two deep');
+
+-- ==================== 16. The resync survives a dissolved Department ====================
+-- Review S2: `groups.parent_id` is ON DELETE NO ACTION, so sweeping an orphaned
+-- Department Group while a Team Group still names it as parent aborts the whole
+-- repair with 23503. The resync therefore re-parents before it sweeps. Mutation
+-- this catches: move `perform private.sync_team_groups();` back after the sweep.
+-- (`b-dept` is referenced only by these two roster rows and the Team below —
+-- no Campaign, Task, Event or Announcement fixture names it.)
+
+delete from public.member_departments where dept_id = 'b-dept';
+update public.teams set dept_id = null where id = 'b-team-dept';
+delete from public.departments where id = 'b-dept';
+
+select lives_ok(
+  $$ select private.sync_groups_from_legacy() $$,
+  'a Department dissolved out from under its Team is repaired, not refused: the Team Group is re-parented before the orphan sweep reaches its old parent');
+
+select is(
+  (select format('%s|%s|%s',
+                 (select count(*) from public.groups as grp where grp.legacy_dept_id = 'b-dept'),
+                 coalesce((select grp.parent_id::text from public.groups as grp
+                            where grp.legacy_team_id = 'b-team-dept'), '-'),
+                 (select membership.group_role from public.group_members as membership
+                    join public.groups as grp on grp.id = membership.group_id
+                   where grp.legacy_team_id = 'b-team-dept'
+                     and membership.member_id = '50800000-0000-0000-0000-000000000002'))),
+  '0|-|responsible',
+  'and the repair is complete: the orphaned Department Group is gone, its Team is top-level, and its roster is re-derived as an Independent Team''s');
+
+-- ==================== 17. Grants ====================
 -- Category `none` (tracker_grants.test.sql): the migration and #509's triggers
 -- run as the table owner, so nobody else may ever reach the sync family.
 

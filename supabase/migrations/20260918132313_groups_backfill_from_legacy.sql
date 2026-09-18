@@ -80,6 +80,14 @@ begin
     perform private.sync_department_groups(team.dept_id)
        from public.teams as team
       where team.id = p_team_id and team.dept_id is not null;
+  else
+    -- The whole-table path needs the same guarantee, and needs it more: the
+    -- `left join` below yields null rather than raising, so against a wiped or
+    -- partial mirror a missing parent would quietly make every Department Team
+    -- a *top-level* Group carrying a Coordonator and no ancestor path -- a
+    -- wrong row, with no error anywhere. The `is distinct from` guards make
+    -- this call free whenever the Department Groups are already current.
+    perform private.sync_department_groups();
   end if;
 
   insert into public.groups as grp
@@ -280,7 +288,16 @@ security definer
 set search_path = ''
 as $$
 begin
-  -- 1. Orphans: a legacy row deleted while no mirror existed.
+  -- 1. Re-parent before sweeping. A Team whose Department was dissolved points at
+  --    no Department any more, but its Group still points at the Group step 2 is
+  --    about to delete -- and `groups.parent_id` is ON DELETE NO ACTION, so that
+  --    delete would abort with 23503 and the whole repair with it. Running the
+  --    Team sync first re-parents the child to top level, and the sweep then has
+  --    nothing referencing the row it removes. (The common shape -- a Department
+  --    and its Teams deleted together -- was always safe: NO ACTION defers to
+  --    end-of-statement and one delete removes both.)
+  perform private.sync_team_groups();
+  -- 2. Orphans: a legacy row deleted while no mirror existed.
   delete from public.groups as grp
    where (grp.legacy_dept_id is not null
           and not exists (select 1 from public.departments as dept where dept.id = grp.legacy_dept_id))
@@ -288,11 +305,11 @@ begin
           and not exists (select 1 from public.teams as team where team.id = grp.legacy_team_id))
       or (grp.legacy_project_id is not null
           and not exists (select 1 from public.projects as project where project.id = grp.legacy_project_id));
-  -- 2. Groups, parents before children.
+  -- 3. Groups, parents before children.
   perform private.sync_department_groups();
   perform private.sync_team_groups();
   perform private.sync_project_groups();
-  -- 3. Rosters.
+  -- 4. Rosters.
   perform private.sync_department_memberships();
   perform private.sync_team_memberships();
   perform private.sync_project_memberships();
