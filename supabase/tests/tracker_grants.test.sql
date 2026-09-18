@@ -476,6 +476,18 @@ insert into pinned_private_functions (proname, args, category) values
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
   ('submit_task_for_review_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   ('sync_project_leader_membership',              '',                                                                                                                   'trigger'),
+  -- #508: the Group mirror family (ADR-0009 Wave 1). Category `none`: the
+  -- backfill statement at the end of its own migration and #509's row triggers
+  -- are the only callers, and both run as the table owner. Granting any of
+  -- these back would hand a client a write path into `groups`/`group_members`,
+  -- which #507 deliberately left read-only for every role.
+  ('sync_department_groups',                      'p_dept_id text',                                                                                                     'none'),
+  ('sync_team_groups',                            'p_team_id text',                                                                                                     'none'),
+  ('sync_project_groups',                         'p_project_id bigint',                                                                                                'none'),
+  ('sync_department_memberships',                 'p_member_id uuid, p_dept_id text',                                                                                   'none'),
+  ('sync_team_memberships',                       'p_team_id text, p_member_id uuid',                                                                                   'none'),
+  ('sync_project_memberships',                    'p_project_id bigint, p_member_id uuid',                                                                              'none'),
+  ('sync_groups_from_legacy',                     '',                                                                                                                   'none'),
   -- #345 dropped private.task_is_unassigned with the legacy task table it
   -- queried and the claim command that was its last caller.
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
@@ -495,8 +507,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 93,
-  'the audited roster contains the 89 pre-#507 functions plus the four Group invariant/predicate helpers (#507)');
+  (select count(*) from pinned_private_functions)::int, 100,
+  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507) and the seven Group mirror syncs (#508)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
