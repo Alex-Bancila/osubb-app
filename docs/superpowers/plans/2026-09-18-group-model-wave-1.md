@@ -39,22 +39,22 @@ Alex ran a grilling session on 2026-09-18 that produced ADR-0009 (merged as PR #
 - Never stage the untracked `docs/superpowers/plans/2026-09-11-project-team-role-matrix.md` (another session's file) or the other two untracked plan files.
 - Never two database passes at once; never two implementers at once; reviewers are read-only.
 - **Verification order per PR** (sequential, never two db passes at once): `npx supabase db reset` → `npx supabase test db` → `for h in supabase/tests/*_upgrade.test.sh; do bash "$h"; done` → `bash scripts/check-seed-rerunnable.sh` → `npx supabase db lint --level warning --fail-on warning` → `cd app && npm run gen:types && npm run typecheck && npm run lint && npm run format:check && npm run test:run` → `git status` shows `database.types.ts` changed only when the public surface changed. `bash scripts/check-local-ci.sh` runs all of it in CI's order.
-- **Fixture prefixes and placeholders:** `#A`–`#E` stand for the issue numbers Task 0 creates; fixture UUID prefixes are `<issue>00000-0000-0000-0000-00000000000N` (e.g. `51000000-…` for #510); branches `backend/<issue>-<slug>` (`docs/<issue>-<slug>` for Task 6).
+- **Fixture prefixes and placeholders:** `#507`–`#511` stand for the issue numbers Task 0 creates; fixture UUID prefixes are `<issue>00000-0000-0000-0000-00000000000N` (e.g. `51000000-…` for #510); branches `backend/<issue>-<slug>` (`docs/<issue>-<slug>` for Task 6).
 
 ## Rulings on the draft's open points (2026-09-18, recorded so nobody re-litigates them mid-wave)
 
-| Point                                          | Ruling                                                                                                                                                                                                                                                             | Why                                                                                                                                                                                                        | Cost if wrong                                       |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Deviation 1 — sibling-name unique index        | **Partial: native Groups only** (`where legacy_*_id is null`), total in Wave 3 after the drop-legacy migration dedupes names.                                                                                                                                      | `scripts/check-seed-rerunnable.sh:199` inserts a second top-level Project named exactly like the demo one; legacy names were never unique and a legacy-mastered row cannot honour a rule its master lacks. | One `drop index` + `create unique index` in Wave 3. |
-| Deviation 2 — `groups.created_by`              | `references public.profiles (id) on delete set null`.                                                                                                                                                                                                              | A Group must outlive its creator; the seed deletes demo profiles after their Projects.                                                                                                                     | None.                                               |
-| Deviation 3 — `service_role` grants            | `select` only on `groups` and `group_members`.                                                                                                                                                                                                                     | Nothing but the mirror writes them; the `campaigns` precedent in `tracker_grants.test.sql`.                                                                                                                | A one-line grant later.                             |
-| Deviation 4 — auth-admin policy names          | `groups_read_auth_admin`, `group_members_read_auth_admin` (conventions §5).                                                                                                                                                                                        | `auth_admin_read_*` is the grandfathered family; the count assertion is by role, not name.                                                                                                                 | None.                                               |
-| (d) `group_ids` and archived Groups            | Included.                                                                                                                                                                                                                                                          | Mirrors `dept_ids`/`team_ids`, which know no status; Wave 2 decides per policy.                                                                                                                            | A `where status = 'active'` in the hook.            |
-| (e) `application_level` on backfilled rows     | Pre-filled to the ADR values (Departments 1, Teams/Projects 0, OSUBB null); `accepts_applications` false everywhere.                                                                                                                                               | No Application flow exists before Wave 3; flipping the switch later is one column.                                                                                                                         | None.                                               |
-| (f) `manager_title` on Diverse and Secretariat | `'BCE'`, like the five departments.                                                                                                                                                                                                                                | ADR-0009: they share every Department setting except the Cup.                                                                                                                                              | A two-row update.                                   |
-| (g) `roles.name` rename                        | Inside Task 2's PR as a second migration file and a second commit.                                                                                                                                                                                                 | Two-line reference-data change; CONTEXT.md already calls the drift out.                                                                                                                                    | None.                                               |
-| Task numbering                                 | The issue graph is **Task 0**; the draft's Tasks 1–6 keep their numbers so `scripts/task-brief` finds them. `#A`–`#E` in Tasks 2–6 are the numbers Task 0 creates for N1–N5, in that order; substitute them in this file (docs-only commit) as soon as they exist. | —                                                                                                                                                                                                          | —                                                   |
-| Merging                                        | Alex's standing instruction for planned multi-PR work applies: each PR is opened against `main` and merged once its task review is clean and CI is green.                                                                                                          | —                                                                                                                                                                                                          | —                                                   |
+| Point                                          | Ruling                                                                                                                                                                                                                                                                 | Why                                                                                                                                                                                                        | Cost if wrong                                       |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Deviation 1 — sibling-name unique index        | **Partial: native Groups only** (`where legacy_*_id is null`), total in Wave 3 after the drop-legacy migration dedupes names.                                                                                                                                          | `scripts/check-seed-rerunnable.sh:199` inserts a second top-level Project named exactly like the demo one; legacy names were never unique and a legacy-mastered row cannot honour a rule its master lacks. | One `drop index` + `create unique index` in Wave 3. |
+| Deviation 2 — `groups.created_by`              | `references public.profiles (id) on delete set null`.                                                                                                                                                                                                                  | A Group must outlive its creator; the seed deletes demo profiles after their Projects.                                                                                                                     | None.                                               |
+| Deviation 3 — `service_role` grants            | `select` only on `groups` and `group_members`.                                                                                                                                                                                                                         | Nothing but the mirror writes them; the `campaigns` precedent in `tracker_grants.test.sql`.                                                                                                                | A one-line grant later.                             |
+| Deviation 4 — auth-admin policy names          | `groups_read_auth_admin`, `group_members_read_auth_admin` (conventions §5).                                                                                                                                                                                            | `auth_admin_read_*` is the grandfathered family; the count assertion is by role, not name.                                                                                                                 | None.                                               |
+| (d) `group_ids` and archived Groups            | Included.                                                                                                                                                                                                                                                              | Mirrors `dept_ids`/`team_ids`, which know no status; Wave 2 decides per policy.                                                                                                                            | A `where status = 'active'` in the hook.            |
+| (e) `application_level` on backfilled rows     | Pre-filled to the ADR values (Departments 1, Teams/Projects 0, OSUBB null); `accepts_applications` false everywhere.                                                                                                                                                   | No Application flow exists before Wave 3; flipping the switch later is one column.                                                                                                                         | None.                                               |
+| (f) `manager_title` on Diverse and Secretariat | `'BCE'`, like the five departments.                                                                                                                                                                                                                                    | ADR-0009: they share every Department setting except the Cup.                                                                                                                                              | A two-row update.                                   |
+| (g) `roles.name` rename                        | Inside Task 2's PR as a second migration file and a second commit.                                                                                                                                                                                                     | Two-line reference-data change; CONTEXT.md already calls the drift out.                                                                                                                                    | None.                                               |
+| Task numbering                                 | The issue graph is **Task 0**; the draft's Tasks 1–6 keep their numbers so `scripts/task-brief` finds them. `#507`–`#511` in Tasks 2–6 are the numbers Task 0 creates for N1–N5, in that order; substitute them in this file (docs-only commit) as soon as they exist. | —                                                                                                                                                                                                          | —                                                   |
+| Merging                                        | Alex's standing instruction for planned multi-PR work applies: each PR is opened against `main` and merged once its task review is clean and CI is green.                                                                                                              | —                                                                                                                                                                                                          | —                                                   |
 
 ## Task order and dependencies
 
@@ -129,7 +129,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 - [ ] Draft `issues/milestones.md` (A1), `issues/new-u1.md` … `new-u3.md`, `issues/new-n1.md` … `new-n5.md` (A2), and `issues/edit-<n>.md` for every row of A3 — full bodies in house-rule-15 shape (umbrellas in the #90 shape), CONTEXT.md terms, ADR-0009 section references, Romanian UI terms where the issue names screens. Each `new-n*.md` body's `## What to build` / `## Acceptance criteria` / `## Required tests` is lifted from the matching Task 2–6 of this plan (files, functions, test suites, roster/plan bumps), never invented.
 - [ ] Produce `issues/DRY-RUN.md`: one line per milestone/issue (action, title, labels, milestone, blockers, draft path) plus a unified diff per edit (`current-<n>` body vs `edit-<n>.md`). Show it to Alex and **stop until he gives the go-ahead**. Nothing below runs before that.
 - [ ] Apply in order: milestones (`gh api repos/Alex-Bancila/osubb-app/milestones -X POST -f title=… -f description=…`); U1, U2, U3 (`gh issue create --title … --body-file … --label … --milestone …`); N1–N5 in lane order, each `## Blocked by` naming the previous number; then `gh issue edit U1..U3 --body-file` with the child numbers filled in; then every A3 edit (`gh issue edit <n> --body-file … --milestone … --add-label … --remove-label …`, and `--title` where A3 retitles).
-- [ ] Record the mapping N1→#A … N5→#E in the ledger, substitute the real numbers into this plan file (Tasks 2–6 headings, `Closes`, fixture prefixes, branch names), commit that as a docs-only change to `main`, and mark Task 0 complete.
+- [ ] Record the mapping N1→#507 … N5→#511 in the ledger, substitute the real numbers into this plan file (Tasks 2–6 headings, `Closes`, fixture prefixes, branch names), commit that as a docs-only change to `main`, and mark Task 0 complete.
 
 ---
 
@@ -236,9 +236,9 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 
 ---
 
-## Task 2 — #A: Groups schema, invariants, read policies, roles display names
+## Task 2 — #507: Groups schema, invariants, read policies, roles display names
 
-**Issue:** #A ("Groups Wave 1: `groups` and `group_members` schema") · **Branch:** `backend/A-groups-schema`
+**Issue:** #507 ("Groups Wave 1: `groups` and `group_members` schema") · **Branch:** `backend/507-groups-schema`
 
 **Files**
 
@@ -255,9 +255,9 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 
 - [ ] `npx supabase migration new groups_schema`. Tables and indexes:
   ```sql
-  -- #A: Groups (ADR-0009 Wave 1): groups and group_members as read-only shadow tables with
+  -- #507: Groups (ADR-0009 Wave 1): groups and group_members as read-only shadow tables with
   -- ancestor paths, Group Roles and the settings ADR-0009 names. Legacy tables stay the
-  -- write master; #B backfills, #C mirrors. Clients read, never write.
+  -- write master; #508 backfills, #509 mirrors. Clients read, never write.
 
   create table public.groups (
     id                       bigint generated always as identity primary key,
@@ -513,7 +513,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
   `caller_level()` returns -1 for a caller with no live active profile, so an inactive Member with stale claims fails both branches; house rule 12 is satisfied by `auth_is_member()` on every branch.
 - [ ] `npx supabase migration new roles_display_names`:
   ```sql
-  -- #A: roles.name follows CONTEXT.md — Voluntar Activ and Voluntar cu Drept de Vot (display names only; the member_role enum and the 8-row ladder are untouched).
+  -- #507: roles.name follows CONTEXT.md — Voluntar Activ and Voluntar cu Drept de Vot (display names only; the member_role enum and the 8-row ladder are untouched).
   update public.roles set name = 'Voluntar Activ'           where id = 'activ';
   update public.roles set name = 'Voluntar cu Drept de Vot' where id = 'vot';
   ```
@@ -525,7 +525,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
     select id, 'ffffffff-0000-0000-0000-000000000006', 'manager' from groups where name = 'RLS Group';
   ```
   No `plan` change: the two sweeps discover the tables. Mutation caught by the existing sweep: any unconditional branch on either table.
-- [ ] `supabase/tests/tracker_grants.test.sql`: add `('can_read_group_roster', 'p_group_id bigint', 'predicate')`, `('cascade_group_path', '', 'trigger')`, `('validate_group_hierarchy', '', 'trigger')`, `('validate_group_member', '', 'trigger')`; count `89 -> 93`; message: "...plus the four Group invariant/predicate helpers (#A)".
+- [ ] `supabase/tests/tracker_grants.test.sql`: add `('can_read_group_roster', 'p_group_id bigint', 'predicate')`, `('cascade_group_path', '', 'trigger')`, `('validate_group_hierarchy', '', 'trigger')`, `('validate_group_member', '', 'trigger')`; count `89 -> 93`; message: "...plus the four Group invariant/predicate helpers (#507)".
 - [ ] `scripts/seed-fingerprint.sql`, two new lines (names, never ids — Project Group ids change on every re-seed):
   ```sql
   union all select format('group:%s:%s:%s:%s:%s:%s', grp.name, grp.category, coalesce(parent.name, '-'),
@@ -536,7 +536,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
               join groups grp on grp.id = membership.group_id
               join profiles member on member.id = membership.member_id
   ```
-- [ ] `supabase/tests/groups_schema.test.sql` (fixture prefix `<A>00000-...`; recount `plan(N)` when written, expect about 46). Assertions and the mutation each catches:
+- [ ] `supabase/tests/groups_schema.test.sql` (fixture prefix `50700000-...`; recount `plan(N)` when written, expect about 46). Assertions and the mutation each catches:
       _Shape (postgres):_ `has_table` x2; `col_type_is(groups.path, 'bigint[]')`; `has_index('public','groups','groups_path_idx')`; `has_index('public','group_members','group_members_member_idx')`.
       _Constraints, each `throws_ok(..., '23514', 'new row for relation "groups" violates check constraint "<name>"')` per Ruling 23:_ blank name -> `groups_name_ck`; category `'club'` -> `groups_category_ck`; child with `competes_in_cup = true` -> `groups_competes_top_level_ck`; `min_level 4` -> `groups_min_level_ck`; `application_level 0` on `min_level 3` -> `groups_application_level_ck`; `accepts_applications` without a level -> `groups_applications_shape_ck`; automatic + accepts -> `groups_automatic_no_applications_ck`; status `'draft'` -> `groups_status_ck`; two `legacy_*` set -> `groups_legacy_one_ck`; `group_role 'lead'` -> `group_members_role_ck`; two native siblings `'Echipa X'` / `'echipa x'` -> `23505` naming `groups_parent_name_uidx`; the same two names with `legacy_team_id` set on both -> `lives_ok` (documents Deviation 1 — delete this assertion when Wave 3 makes the index total).
       _Path and hierarchy:_ root path `= array[id]`; child `= array[root, child]`; grandchild three deep; `update grandchild set parent_id = null` re-roots (`path = array[id]`); `update root set parent_id = grandchild` -> `23514 group_cycle`; `update root set parent_id = root` -> `group_cycle`; insert with `parent_id = 999999` -> `group_parent_not_found`; child `min_level 0` under parent `min_level 3` -> `group_min_level_below_parent`; `update parent set min_level = 5` over a child at 3 -> `group_min_level_above_children`; move a subtree under another root and assert every descendant's path prefix changed (mutation: `groups_cascade_path` dropped); `updated_at` advances on update (mutation: `groups_set_updated_at` dropped).
@@ -547,13 +547,13 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 - [ ] `CONTEXT.md:304`: remove both "(the database's `roles.name` still reads ... — known drift; the glossary term wins)" parentheticals. `docs/backend/seeding-staging.md:90-92`: `Membru Activ` -> `Voluntar Activ`, `Membru cu Drept de Vot` -> `Voluntar cu Drept de Vot` (leave `Responsabil de proiect`; level 4 is Wave 3's).
 - [ ] `cd app && npm run gen:types`; run the full verification list. `db lint` sees only plpgsql bodies with every declared variable read.
 
-**Commit:** `feat(db): groups and group_members shadow schema with path, Group Role and read policies (#A)` + trailer. If Alex wants the rename separate, a second commit in the same PR: `chore(db): roles display names follow CONTEXT.md (#A)`.
+**Commit:** `feat(db): groups and group_members shadow schema with path, Group Role and read policies (#507)` + trailer. If Alex wants the rename separate, a second commit in the same PR: `chore(db): roles display names follow CONTEXT.md (#507)`.
 
 ---
 
-## Task 3 — #B: Backfill from the legacy tables (+ the sync helpers the triggers reuse)
+## Task 3 — #508: Backfill from the legacy tables (+ the sync helpers the triggers reuse)
 
-**Issue:** #B ("Groups Wave 1: backfill `groups`/`group_members` from departments, teams, projects and rosters") · **Branch:** `backend/B-groups-backfill`
+**Issue:** #508 ("Groups Wave 1: backfill `groups`/`group_members` from departments, teams, projects and rosters") · **Branch:** `backend/508-groups-backfill`
 
 **Files**
 
@@ -563,7 +563,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 
 **Interfaces**
 
-- Produces: `private.sync_department_groups(text)`, `private.sync_team_groups(text)`, `private.sync_project_groups(bigint)`, `private.sync_department_memberships(uuid, text)`, `private.sync_team_memberships(text, uuid)`, `private.sync_project_memberships(bigint, uuid)`, `private.sync_groups_from_legacy()` — all `security definer`, category `none` (no caller but the migration and #C's triggers). Every argument defaults to null = whole table; a non-null argument scopes the upsert **and** the stale-row delete to that key. Every `do update` carries an `is distinct from` guard so a no-op resync leaves `updated_at` alone (the fixpoint test depends on it).
+- Produces: `private.sync_department_groups(text)`, `private.sync_team_groups(text)`, `private.sync_project_groups(bigint)`, `private.sync_department_memberships(uuid, text)`, `private.sync_team_memberships(text, uuid)`, `private.sync_project_memberships(bigint, uuid)`, `private.sync_groups_from_legacy()` — all `security definer`, category `none` (no caller but the migration and #509's triggers). Every argument defaults to null = whole table; a non-null argument scopes the upsert **and** the stale-row delete to that key. Every `do update` carries an `is distinct from` guard so a no-op resync leaves `updated_at` alone (the fixpoint test depends on it).
 - Consumes: Task 2's tables and invariant triggers (the path is computed by `groups_validate_hierarchy`, never by the sync).
 
 **Mapping (one place, reused by Task 4):**
@@ -583,8 +583,8 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 
 - [ ] `npx supabase migration new groups_backfill_from_legacy`. Group syncs (all `create or replace` — the harness replays this file). Header and the Department sync:
   ```sql
-  -- #B: backfill groups/group_members from departments, teams, projects and their rosters
-  -- (ADR-0009 Wave 1). The private.sync_* helpers are set-based and key-scoped so #C's
+  -- #508: backfill groups/group_members from departments, teams, projects and their rosters
+  -- (ADR-0009 Wave 1). The private.sync_* helpers are set-based and key-scoped so #509's
   -- mirror triggers call the very same code per row; create or replace keeps the file
   -- replayable by groups_backfill_upgrade.test.sh.
 
@@ -848,11 +848,11 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
     from public, anon, authenticated, service_role;
 
   -- The backfill itself. On a fresh reset this sees reference data only (the seed runs
-  -- afterwards and #C's triggers mirror it); on staging it converts the live database.
+  -- afterwards and #509's triggers mirror it); on staging it converts the live database.
   select private.sync_groups_from_legacy();
   ```
 - [ ] `supabase/tests/tracker_grants.test.sql`: seven rows, category `none` — `('sync_department_groups','p_dept_id text','none')`, `('sync_team_groups','p_team_id text','none')`, `('sync_project_groups','p_project_id bigint','none')`, `('sync_department_memberships','p_member_id uuid, p_dept_id text','none')`, `('sync_team_memberships','p_team_id text, p_member_id uuid','none')`, `('sync_project_memberships','p_project_id bigint, p_member_id uuid','none')`, `('sync_groups_from_legacy','','none')` (`pg_get_function_identity_arguments` omits defaults, so these strings match); count `93 -> 100`.
-- [ ] `supabase/tests/groups_backfill.test.sql` (prefix `<B>00000-...`, seed-independent; recount `plan(N)`, expect about 24). Fixtures as `postgres`: scratch departments `b-dept` (kind `department`) and `b-coord` (`coordination`); Teams `b-team-dept` under `b-dept` and `b-team-ind` (null dept); profiles bce, voluntar, bc; `member_departments` bce->`b-dept`, voluntar->`b-dept`, bc->`org`; `team_members` voluntar->`b-team-dept`, bce->`b-team-ind`; Projects `B Active` (leader bce, created_by bc, `created_at '2026-01-02 10:00+00'`) with voluntar `member` and bc `responsible`, and `B Archived` (archived). Then `select private.sync_groups_from_legacy();` (before Task 4 this is what creates the mirror; after Task 4 the triggers already did and the call is a no-op — every assertion holds in both worlds). Assertions and what each catches:
+- [ ] `supabase/tests/groups_backfill.test.sql` (prefix `50800000-...`, seed-independent; recount `plan(N)`, expect about 24). Fixtures as `postgres`: scratch departments `b-dept` (kind `department`) and `b-coord` (`coordination`); Teams `b-team-dept` under `b-dept` and `b-team-ind` (null dept); profiles bce, voluntar, bc; `member_departments` bce->`b-dept`, voluntar->`b-dept`, bc->`org`; `team_members` voluntar->`b-team-dept`, bce->`b-team-ind`; Projects `B Active` (leader bce, created_by bc, `created_at '2026-01-02 10:00+00'`) with voluntar `member` and bc `responsible`, and `B Archived` (archived). Then `select private.sync_groups_from_legacy();` (before Task 4 this is what creates the mirror; after Task 4 the triggers already did and the call is a no-op — every assertion holds in both worlds). Assertions and what each catches:
   1. `count(groups where legacy_dept_id is not null) = count(departments)` (a department left unmirrored)
   2. `edu` Group: `category department, competes true, parent null, min_level 0, application_level 1, accepts false, manager_title 'BCE', short 'EDU', color '#284C93'` (mapping drift)
   3. `b-coord` Group: `competes false, category department, manager_title 'BCE'` (coordination treated as competing)
@@ -871,7 +871,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 - [ ] `supabase/tests/groups_backfill_upgrade.test.sh` — the staging shape (legacy rows exist, no mirror), replayed. Frame from `task_assignments_backfill_upgrade.test.sh`:
   ```bash
   #!/usr/bin/env bash
-  # #B: the Wave 1 backfill replayed over a database that already holds legacy rows but no
+  # #508: the Wave 1 backfill replayed over a database that already holds legacy rows but no
   # mirror -- the staging shape on deploy day. A db reset runs the migration against reference
   # data only, so this harness is the only place the conversion of live rows is proven.
   set -euo pipefail
@@ -881,12 +881,12 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
     cat <<'SQL'
   begin;
   set local client_min_messages = warning;
-  -- legacy fixtures as a live database would hold them (prefix <B>00000-)
+  -- legacy fixtures as a live database would hold them (prefix 50800000-)
   --   profiles: bce, voluntar, bc; teams: upgrade-dept-team-B (edu), upgrade-independent-B (null);
   --   member_departments: bce->edu, voluntar->edu, voluntar->org; team_members: voluntar->dept team,
   --   bce->independent; projects: 'Upgrade Project B' active (leader bce, created_by bc) with
   --   voluntar 'responsible', 'Upgrade Archived B' archived.
-  -- pre-#B shape: no mirror at all. Once #C lands the fixtures above are mirrored on insert;
+  -- pre-#508 shape: no mirror at all. Once #509 lands the fixtures above are mirrored on insert;
   -- wiping makes the replay honest in both worlds.
   truncate public.groups cascade;
   create temp table before_b as
@@ -924,13 +924,13 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
   (The fixture inserts and assertions are spelled out in full in the real file; the comment lines above are the checklist.)
 - [ ] Run the full verification list; confirm `git status` shows no change to `app/src/lib/database.types.ts`.
 
-**Commit:** `feat(db): backfill groups and group_members from the legacy structure tables (#B)` + trailer.
+**Commit:** `feat(db): backfill groups and group_members from the legacy structure tables (#508)` + trailer.
 
 ---
 
-## Task 4 — #C: One-way sync triggers on the six legacy tables + profiles role re-derivation
+## Task 4 — #509: One-way sync triggers on the six legacy tables + profiles role re-derivation
 
-**Issue:** #C ("Groups Wave 1: mirror legacy writes into groups by trigger") · **Branch:** `backend/C-groups-sync-triggers`
+**Issue:** #509 ("Groups Wave 1: mirror legacy writes into groups by trigger") · **Branch:** `backend/509-groups-sync-triggers`
 
 **Files**
 
@@ -947,7 +947,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 
 - [ ] `npx supabase migration new groups_sync_triggers`. All seven are `after ... for each row`, `security definer` (the legacy writes arrive from `authenticated` sessions that hold no write grant on `groups`), `set search_path = ''`, return `null`:
   ```sql
-  -- #C: mirror departments, teams, projects and their rosters into groups/group_members one
+  -- #509: mirror departments, teams, projects and their rosters into groups/group_members one
   -- way (legacy -> groups) and re-derive Department Group Managers when a profile's role
   -- changes (ADR-0009 Wave 1). Definer on purpose: member_departments_manage, teams_create
   -- and profiles_self_update let authenticated sessions write the legacy rows, and those
@@ -1085,7 +1085,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
   ```
   Why deletes are safe in either trigger order: a `delete from teams` runs the RI cascade (`RI_ConstraintTrigger_*`, sorts first) that removes `team_members` and fires `team_members_mirror_membership` per row (the Team row is already gone, so the scoped sync only deletes stale roster rows), then `teams_mirror_group` deletes the Group and `group_members.group_id ... on delete cascade` sweeps whatever is left. The seed's delete-then-insert of `t-app`/`t-recruti`/`t-logistica` and of both demo Projects therefore yields exactly one Group per legacy row after every run; ids move, names do not, and the fingerprint reads names.
 - [ ] `supabase/tests/tracker_grants.test.sql`: seven rows, category `trigger` — `mirror_department_group`, `mirror_team_group`, `mirror_project_group`, `mirror_department_membership`, `mirror_team_membership`, `mirror_project_membership`, `rederive_department_group_roles` (all args `''`); count `100 -> 107`.
-- [ ] `supabase/tests/groups_sync.test.sql` (prefix `<C>00000-...`; recount `plan(N)`, expect about 48). Personas: `postgres` for legacy-only writes; BC via `test_login_leadership` for `member_departments` direct DML and the Project/Independent-Team commands; a local BCE of `edu` via `test_login_leadership` for `teams_create` and the Department-Team commands. Assertions (persona x operation -> mutation caught):
+- [ ] `supabase/tests/groups_sync.test.sql` (prefix `50900000-...`; recount `plan(N)`, expect about 48). Personas: `postgres` for legacy-only writes; BC via `test_login_leadership` for `member_departments` direct DML and the Project/Independent-Team commands; a local BCE of `edu` via `test_login_leadership` for `teams_create` and the Department-Team commands. Assertions (persona x operation -> mutation caught):
       _Triggers exist:_ seven `pg_trigger` existence checks by name and table (`shared_timestamps.test.sql:16-31` idiom) — a dropped trigger with the function still pinned.
       _departments (postgres):_ insert scratch `c-dept` -> Group with `manager_title 'BCE'`, competes true; `update ... set name` -> renamed; delete (after removing its memberships) -> Group gone.
       _teams:_ **BCE, authenticated**, `insert into teams ('c-bce-team', 'Echipa C', 'edu')` -> Group under the `edu` Group with `manager_title 'Coordonator'` (mutation: function not `security definer` -> `42501 permission denied for table groups`); postgres `update teams set name` -> renamed; postgres `update teams set dept_id = null` -> `parent_id null`, `path = array[self]`, every roster row `responsible`; back to `'edu'` -> rows `member` (mutation: the `dept_id` branch dropped); postgres `delete from teams` -> Group and roster gone.
@@ -1101,13 +1101,13 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 - [ ] `supabase/tests/demo_seed.test.sql` (+6, seed-dependent by design): `count(groups) = count(departments) + count(teams) + count(projects)`; `bce@` is `manager` of the `diverse` Group and `member` of nothing else in Departments; `bc@` is `member` of `fin` and the OSUBB Group has no roster rows; `t-logistica` members (`vot@`, `bc@`) are `responsible`; `Festivalul Studentesc 2026`: `responsabil@` `manager`, `activ@` `responsible`, `voluntar@` `member`; `Gala Voluntarilor 2025` Group is `archived` with `vot@` `manager`. Bump `plan`.
 - [ ] Run the full verification list. `check-seed-rerunnable.sh` is the seed-idempotency proof: the `group:`/`group-member:` fingerprint lines must be identical before and after the second apply. Confirm `database.types.ts` is unchanged.
 
-**Commit:** `feat(db): mirror legacy structure tables into groups with one-way triggers (#C)` + trailer.
+**Commit:** `feat(db): mirror legacy structure tables into groups with one-way triggers (#509)` + trailer.
 
 ---
 
-## Task 5 — #D: `group_ids` claim, `auth_in_group()`, auth-admin read path, helpers, frontend type
+## Task 5 — #510: `group_ids` claim, `auth_in_group()`, auth-admin read path, helpers, frontend type
 
-**Issue:** #D ("Groups Wave 1: `group_ids` organization claim") · **Branch:** `backend/D-group-ids-claim`
+**Issue:** #510 ("Groups Wave 1: `group_ids` organization claim") · **Branch:** `backend/510-group-ids-claim`
 
 **Files**
 
@@ -1202,13 +1202,13 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 - [ ] `docs/backend/auth-config.md:20`: "Stamps `member_role`, `member_level`, `dept_ids`, `team_ids`, `group_ids` into the token"; `:68`: "access_token whose app_metadata has member_role / member_level / dept_ids / group_ids".
 - [ ] `cd app && npm run gen:types` (adds `auth_in_group` to `Functions`), then the full verification list (frontend gates included).
 
-**Commit:** `feat(auth): group_ids organization claim and auth_in_group() (#D)` + trailer.
+**Commit:** `feat(auth): group_ids organization claim and auth_in_group() (#510)` + trailer.
 
 ---
 
-## Task 6 — #E: Docs closeout
+## Task 6 — #511: Docs closeout
 
-**Issue:** #E ("Groups Wave 1: document the shadow model") · **Branch:** `docs/E-groups-wave1`
+**Issue:** #511 ("Groups Wave 1: document the shadow model") · **Branch:** `docs/511-groups-wave1`
 
 **Files**
 
@@ -1221,7 +1221,7 @@ Dry-run output shown to Alex before any call: one line per milestone/issue with 
 - [ ] `CLAUDE.md`: in Status, replace "the Group model of ADR-0009 (three strangler waves, the next thing to plan)" under **Not built yet** with a new bullet "**Groups Wave 1 is on `main`**: `groups`/`group_members` mirrored from the legacy tables by trigger, read-only to clients, `group_ids` in the claims; Waves 2 (authority helpers and commands read Groups) and 3 (Administrare, legacy drop) are the next plans"; `:66` "stamps role/level/depts/teams" -> "stamps role/level/depts/teams/groups".
 - [ ] `npm run check:root` (prettier on Markdown + `remark-validate-links`) must pass; format only the touched files by hand or with `npx prettier --write <file>` on exactly those paths.
 
-**Commit:** `docs: record the Groups Wave 1 shadow model (#E)` + trailer.
+**Commit:** `docs: record the Groups Wave 1 shadow model (#511)` + trailer.
 
 ## Risks (ranked)
 
