@@ -3,10 +3,13 @@
 - **Status:** Accepted
 - **Date:** 2026-09-07
 - **Amended:** 2026-09-10 — `unfulfilled` outcome, Feedback-pending sub-state, Campaigns, Umbrella Tasks, any-active-member direct assignment and self-selection, evaluation-time Difficulty, notification recipients, Leaderboard filters, coordination departments, BC/Moderator Project roster override
+- **Amended:** 2026-09-18 — ADR-0009: Origins are Groups; the Work origins, Campaigns, and Authorization sections are read through ADR-0009's settings and Group Roles
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
 - **Related:** ADR-0001, ADR-0003, ADR-0004, `CONTEXT.md`
+
+> **Amended 2026-09-18 by ADR-0009.** A Department, Project, or Team is a Group with settings rather than a table of its own; a Task's Origin is a Group. Read "Project lead" as Group Manager (Coordonator Principal), "Project Responsible" as Group Responsible, "local BCE" as the Department's Group Manager, and "the Origin's managers" as the Group's Managers, then its ancestors', then BC. Campaigns are owned by any Group. The lifecycle, the Candidate Queue, the command boundary, Umbrella Tasks, Completed-work Requests, and the points rules are unchanged.
 
 ## Context
 
