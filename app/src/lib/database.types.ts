@@ -686,6 +686,205 @@ export type Database = {
           },
         ]
       }
+      group_members: {
+        Row: {
+          created_at: string
+          group_id: number
+          group_role: string
+          member_id: string
+          position_title: string | null
+        }
+        Insert: {
+          created_at?: string
+          group_id: number
+          group_role?: string
+          member_id: string
+          position_title?: string | null
+        }
+        Update: {
+          created_at?: string
+          group_id?: number
+          group_role?: string
+          member_id?: string
+          position_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          accepts_applications: boolean
+          application_level: number | null
+          automatic_membership: boolean
+          category: string
+          color: string | null
+          competes_in_cup: boolean
+          counts_toward_parent_cup: boolean
+          created_at: string
+          created_by: string | null
+          id: number
+          legacy_dept_id: string | null
+          legacy_project_id: number | null
+          legacy_team_id: string | null
+          manager_title: string | null
+          min_level: number
+          name: string
+          parent_id: number | null
+          path: number[]
+          shared_work_visibility: boolean
+          short: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepts_applications?: boolean
+          application_level?: number | null
+          automatic_membership?: boolean
+          category: string
+          color?: string | null
+          competes_in_cup?: boolean
+          counts_toward_parent_cup?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: never
+          legacy_dept_id?: string | null
+          legacy_project_id?: number | null
+          legacy_team_id?: string | null
+          manager_title?: string | null
+          min_level?: number
+          name: string
+          parent_id?: number | null
+          path: number[]
+          shared_work_visibility?: boolean
+          short?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepts_applications?: boolean
+          application_level?: number | null
+          automatic_membership?: boolean
+          category?: string
+          color?: string | null
+          competes_in_cup?: boolean
+          counts_toward_parent_cup?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: never
+          legacy_dept_id?: string | null
+          legacy_project_id?: number | null
+          legacy_team_id?: string | null
+          manager_title?: string | null
+          min_level?: number
+          name?: string
+          parent_id?: number | null
+          path?: number[]
+          shared_work_visibility?: boolean
+          short?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "groups_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_departments: {
         Row: {
           dept_id: string

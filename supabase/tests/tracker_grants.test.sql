@@ -381,8 +381,14 @@ insert into pinned_private_functions (proname, args, category) values
   ('actor_level',                                 'p_actor uuid',                                                                                                      'none'),
   -- #339: cancelling a Task with a recorded reason, plus its Umbrella cascade.
   ('cancel_task_impl',                            'p_task_id bigint, p_reason text',                                                                                    'impl'),
+  -- #507: rewrites every descendant's ancestor prefix when a Group moves.
+  ('cascade_group_path',                          '',                                                                                                                   'trigger'),
   ('caller_level',                                 '',                                                                                                                   'predicate'),
   ('can_administer_team_structure',               'p_dept_id text',                                                                                                     'predicate'),
+  -- #507: the Group roster predicate behind group_members_read. It walks
+  -- groups.path, so a Group Manager or Responsible of an ancestor reads every
+  -- Group below it.
+  ('can_read_group_roster',                       'p_group_id bigint',                                                                                                  'predicate'),
   ('can_evaluate_task',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('can_manage_department_memberships',           '',                                                                                                                   'predicate'),
   ('can_manage_origin',                           'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'predicate'),
@@ -475,6 +481,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
   ('update_campaign_impl',                        'p_campaign_id bigint, p_name text',                                                                                  'impl'),
   ('update_task_content_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',        'impl'),
+  -- #507: the two Group invariant triggers — the hierarchy/path/Minimum Level
+  -- rules on `groups`, and the immutable-identity rule on `group_members`.
+  ('validate_group_hierarchy',                    '',                                                                                                                   'trigger'),
+  ('validate_group_member',                       '',                                                                                                                   'trigger'),
   ('validate_project_manager_state',              '',                                                                                                                   'trigger'),
   ('validate_project_membership_change',          '',                                                                                                                   'trigger'),
   ('validate_task_campaign',                      '',                                                                                                                   'trigger'),
@@ -485,8 +495,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 89,
-  'the audited roster contains the 88 pre-#499 functions plus the narrow visible Task Executor read helper');
+  (select count(*) from pinned_private_functions)::int, 93,
+  'the audited roster contains the 89 pre-#507 functions plus the four Group invariant/predicate helpers (#507)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

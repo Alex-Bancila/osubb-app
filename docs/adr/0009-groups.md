@@ -104,14 +104,15 @@ One "Administrare" area, scoped by authority. BC and Moderator see the whole Gro
 
 A strangler in three waves, every PR merged green, each wave its own plan:
 
-1. **Wave 1 — schema.** Add `groups`, `group_members` with the Group Role, the settings above, Campaign ownership by Group, and the Organization Group; backfill from `departments`, `teams`, `projects`, `member_departments`, `team_members`, and `project_members`; keep those tables as read-only compatibility views; add `group_ids` to the organization claims.
+1. **Wave 1 — schema.** Add `groups`, `group_members` with the Group Role, the settings above, Campaign ownership by Group, and the Organization Group; backfill from `departments`, `teams`, `projects`, `member_departments`, `team_members`, and `project_members`; keep those tables as the write master, mirrored one way into `groups`/`group_members` by triggers (no compatibility views); add `group_ids` to the organization claims.
 2. **Wave 2 — authority and commands.** Rewrite the `private` authority helpers and the 21 commands to read Groups only; give `tasks` and `events` one `group_id` beside the legacy columns, kept in sync by the commands; add the no-category-branch check to `conventions.test.sql`. Tracker frontend and Calendar work resume on top of this wave.
-3. **Wave 3 — frontend and cleanup.** Move the 18 `app/src` files and the generated types to Groups, ship the Administrare screen, drop the legacy columns, the `event_scope` enum values, the compatibility views, and level 4.
+3. **Wave 3 — frontend and cleanup.** Move the 18 `app/src` files and the generated types to Groups, ship the Administrare screen, drop the legacy columns and tables, the mirror triggers and `groups.legacy_*`, the `event_scope` enum values, and level 4.
 
 ## Consequences
 
 - One roster and one authority helper family replace three; a new kind of body is a row, not a migration.
 - Groups nest to any depth, so authority, visibility, Campaign tagging, and Cup attribution walk the ancestor chain. Wave 1 stores each Group's ancestor path and forbids cycles; the helpers read that path rather than recursing per row.
+- Until Wave 3 dedupes legacy names, the sibling-name rule binds native Groups only.
 - ADR-0007, ADR-0008, and ADR-0004 are amended by reference in their headers; `CONTEXT.md` is updated in the same change; house rule 13 in `CLAUDE.md` names this ADR.
 - The pinned `private` roster, the claimless sweep, the points authorization matrix (#262), and the actor-helper suites are rewritten in Wave 2; the Tracker smoke script follows.
 - `capabilities.ts` loses `manageTasks: 4`; management controls render from server capability rows, as the 2026-09-18 Tracker plan already requires.

@@ -43,6 +43,12 @@ insert into campaigns (department_id, name, created_by)
 insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-rls', 'ffffffff-0000-0000-0000-000000000006');
+-- #507: the Group model's two Wave 1 shadow tables. They hold no rows of
+-- their own yet (#508 backfills), so without these fixtures both sweeps below
+-- would pass hollow over them.
+insert into groups (name, category) values ('RLS Group', 'team');
+insert into group_members (group_id, member_id, group_role)
+  select id, 'ffffffff-0000-0000-0000-000000000006', 'manager' from groups where name = 'RLS Group';
 
 insert into tasks (title, difficulty, dept_id) values ('rls-t1', 3, 'edu');
 insert into task_assignments (task_id, member_id, assigned_by)
