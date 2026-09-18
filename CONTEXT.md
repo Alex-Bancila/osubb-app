@@ -125,7 +125,7 @@ Whether a public Task opportunity is local to its Origin or open across OSUBB.
 Whether a Task is assigned directly to one active Member or offered publicly through the Candidate Queue.
 
 **Campaign**:
-A Department-owned label grouping Tasks whose Origin is that Department or one of its Department Teams. A Campaign filters the Tracker, Leaderboard, and Department Cup; it is not an Origin and has no members.
+A label owned by one Group that tags Tasks whose Origin is that Group or one of its Child Groups. A Campaign filters the Tracker, Leaderboard, and Department Cup; it is not an Origin, has no roster, and is managed by the owning Group's Managers and Responsibles.
 _Avoid_: Campaign as a Task Origin
 
 **Umbrella Task**:
