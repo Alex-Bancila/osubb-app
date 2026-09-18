@@ -249,11 +249,20 @@ Turning one organization event into targeted Notifications for its intended reci
 
 ## Governance
 
-**AG Eligibility**:
-The qualification that allows a Member to participate in the AG after reaching the accepted Task-Point threshold.
+**Evaluation Period**:
+A named span of time opened and closed by BC, typically from one AGO to the next, within which Task Points are ranked for Promotion Rules and the vote re-check.
+_Avoid_: Season, scoring window, semester when the ranking window is meant
 
-**Quorum / Top 25%**:
-The ranking rule used to determine which eligible Members retain voting rights at an AGO.
+**Promotion Rule**:
+A BC-set rule that moves a Member to a higher Role. Automatic for Recrut to Voluntar (tenure) and for Voluntar to Voluntar Activ (a top share of the Evaluation Period's Leaderboard plus tenure); human-confirmed for Voluntar Activ to Voluntar cu Drept de Vot; never automatic downward.
+_Avoid_: Auto-promotion, level-up, threshold alone
+
+**AG Eligibility**:
+The qualification a Voluntar Activ reaches under the Promotion Rule for Drept de Vot. It sends the adherence form to BC; only BC's confirmation grants the Role and, through Automatic Membership, a seat in the Adunarea Generală.
+
+**Vote Retention Threshold**:
+The top share of the Evaluation Period's Leaderboard a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after the Period closes; nobody is removed automatically.
+_Avoid_: Quorum, Top 25%
 
 ## Access
 
