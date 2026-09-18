@@ -87,8 +87,8 @@ Then sign in to the app as two different demo accounts and confirm the screens d
 | ------------------------ | ---------------------- | ----- | -------------------------------------------------------- |
 | `recrut@demo.osubb`      | Recrut                 | 0     | the smallest view: 6 events, 6 tasks                     |
 | `voluntar@demo.osubb`    | Voluntar               | 1     | a normal member with points, a team and 8 visible tasks  |
-| `activ@demo.osubb`       | Membru Activ           | 2     | a sanction on the ledger, and a Project Responsible      |
-| `vot@demo.osubb`         | Membru cu Drept de Vot | 3     | top of the leaderboard; Tineret + Secretariat            |
+| `activ@demo.osubb`       | Voluntar Activ           | 2     | a sanction on the ledger, and a Project Responsible      |
+| `vot@demo.osubb`         | Voluntar cu Drept de Vot | 3     | top of the leaderboard; Tineret + Secretariat            |
 | `responsabil@demo.osubb` | Responsabil de proiect | 4     | Project lead authority — Department Tasks are not theirs |
 | `bce@demo.osubb`         | BCE                    | 5     | Diverse + Team `it`: the one BCE-managed Origin          |
 | `bc@demo.osubb`          | BC                     | 6     | everything: 7 events, 19 tasks, the BC panel             |
