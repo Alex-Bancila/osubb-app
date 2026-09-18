@@ -2,10 +2,13 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-12
+- **Amended:** 2026-09-18 — ADR-0009: the level-2 rank is displayed as Voluntar Activ and its rule becomes top x% of the Evaluation Period's Leaderboard plus tenure; Drept de vot is granted only after BC confirms; level 4 (`responsabil`) leaves the ladder
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
 - **Related:** `docs/org/directii-prioritati-it.md` §2.2, `docs/org/plan-managerial.md` §IV.3, architecture spec §8.4, `docs/superpowers/specs/2026-06-28-osubb-app-mockup-design.md` (Revizia 2)
+
+> **Amended 2026-09-18 by ADR-0009.** Read "Membru Activ" as Voluntar Activ, read the points threshold for Voluntar → Voluntar Activ as "top x% of the current Evaluation Period's Leaderboard and at least the required tenure", and read "Responsabil (4)" as retired: Coordonator Principal and Responsabil are Group Roles, not ranks. The hybrid split, the manual tiers, and the no-automatic-demotion rule stand.
 
 ## Context
 

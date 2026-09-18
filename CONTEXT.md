@@ -89,10 +89,10 @@ _Avoid_: Org scope, org pseudo-department, everyone group
 A top-level Group in the Department category: Educațional, Imagine & PR, Tineret, Financiar, or Resurse Umane, which compete in the Department Cup; or Diverse and Secretariat, which share every Department setting except competing.
 
 **Diverse**:
-The coordination structure hosting the IT and Interne Department Teams. It is a Department for Task Origins and authority and is excluded from the Department Cup.
+The Department hosting the IT and Interne Department Teams. Its Cup setting is off, so it never competes in the Department Cup.
 
 **Secretariat**:
-The organization's secretariat, modeled as a Department for Task Origins and authority and excluded from the Department Cup.
+The organization's secretariat, a Department whose Cup setting is off, so it never competes in the Department Cup.
 
 **Project**:
 A top-level Group in the Project category, independent of Departments and never in the Department Cup. Its Group Manager is the Coordonator Principal; its Group Responsibles carry custom names. Any Member may belong to a Project.
@@ -106,7 +106,7 @@ A Group Responsible of a Project, shown under the custom display name chosen at 
 _Avoid_: Project Responsible, project manager
 
 **Team**:
-A working group whose Members share a work context. A Team is either a Department Team or an Independent Team and does not have a single internal lead.
+A Group in the Team category: a Child Group of a Department, a Project, or the Adunarea Generală, or an Independent Team with no parent.
 
 **Department Team**:
 A Child Group of a Department in the Team category, overseen by the Department's Group Managers.
@@ -115,7 +115,7 @@ A Child Group of a Department in the Team category, overseen by the Department's
 A top-level Group in the Team category with no parent Group and no Group Manager: every member is a Group Responsible, so they jointly manage its planned work while BC or Moderator manages its roster and evaluates their Tasks.
 
 **Interne**:
-The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse flagged `is_interne`, responsible for tracking AG eligibility and voting-right information.
+The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse. Its members track AG eligibility and voting-right information as Group Responsibles of the Adunarea Generală.
 
 ## Task Tracker
 
@@ -127,7 +127,7 @@ The Group that owns a Task. Every Task has exactly one Origin.
 _Avoid_: Scope when ownership is meant
 
 **Task Audience**:
-Whether a public Task opportunity is local to its Origin or open across OSUBB.
+Whether a public Task opportunity is local to its Origin Group or open to every Member its Minimum Level admits.
 
 **Assignment Mode**:
 Whether a Task is assigned directly to one active Member or offered publicly through the Candidate Queue.

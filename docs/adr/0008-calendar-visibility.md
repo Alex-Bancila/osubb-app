@@ -2,10 +2,13 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-07
+- **Amended:** 2026-09-18 — ADR-0009: an Event is owned by one Group; the `org`/`dept`/`team`/`project` scope and the per-scope management table are read through Group Roles; Minimum Level choices become 0, 3, 5, 6
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
 - **Related:** ADR-0001, ADR-0003, ADR-0007, `CONTEXT.md`
+
+> **Amended 2026-09-18 by ADR-0009.** Event Scope is the owning Group; organization-wide Events belong to the Organization Group. Read the Event management table as: a Group's Managers and Responsibles, and its parent's, manage its Events; anyone holding a Group Role may create an Organization Group Event, which only its creator or BC/Moderator edits. "Responsible+" (level 4) is retired as a Minimum Level choice. Visibility, relevance, RSVP, capacity, and notification rules stand, with "the member's Departments, Teams, and Projects" read as "the member's Groups".
 
 ## Context
 
