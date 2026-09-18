@@ -437,12 +437,27 @@ insert into pinned_private_functions (proname, args, category) values
   -- #337: the second command over the shared evaluate_task core (#336) --
   -- the `unfulfilled` outcome for overdue, undelivered work.
   ('mark_task_unfulfilled_impl',                  'p_task_id bigint, p_difficulty integer, p_rating integer, p_note text',                                             'impl'),
+  -- #509: the seven mirror trigger functions (ADR-0009 Wave 1). Category
+  -- `trigger`: nothing may call one directly. They are `security definer`
+  -- because the legacy writes they observe arrive from `authenticated`
+  -- sessions (member_departments_manage, teams_create, profiles_self_update)
+  -- that hold no write grant on `groups`/`group_members` at all.
+  ('mirror_department_group',                     '',                                                                                                                   'trigger'),
+  ('mirror_department_membership',                '',                                                                                                                   'trigger'),
+  ('mirror_project_group',                        '',                                                                                                                   'trigger'),
+  ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
+  ('mirror_team_group',                           '',                                                                                                                   'trigger'),
+  ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
   ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
   ('protect_project_leader_membership',           '',                                                                                                                   'trigger'),
   ('queue_position',                              'p_task_id bigint, p_member_id uuid',                                                                                 'authenticated_only'),
+  -- #509: rank BCE *is* a Department Group's Group Manager, so a promotion or
+  -- demotion re-derives that Group Role. Same `trigger` category and the same
+  -- definer reasoning as the six mirrors above.
+  ('rederive_department_group_roles',             '',                                                                                                                   'trigger'),
   -- #344: rejecting a Completed-work Request -- a reason, and no Task.
   ('reject_completed_work_request_impl',          'p_request_id bigint, p_note text',                                                                                   'impl'),
   ('reject_legacy_evaluation_source',             '',                                                                                                                   'trigger'),
@@ -507,8 +522,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 100,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507) and the seven Group mirror syncs (#508)');
+  (select count(*) from pinned_private_functions)::int, 107,
+  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508) and the seven mirror trigger functions (#509)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
