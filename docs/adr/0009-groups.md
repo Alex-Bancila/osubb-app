@@ -41,7 +41,7 @@ Two Groups are special only by their settings. The **Organization Group** ("OSUB
 
 ### Minimum Level
 
-A Member below a Group's Minimum Level cannot join it, cannot be assigned or appointed into it, and does not see the Group, its org-wide Opportunities, or its Events. A Child Group's Minimum Level is at least its parent's. An Event may raise the bar with its own Minimum Level but never lower it below its Group's. A creator cannot set a Minimum Level above their own Level; Moderator is exempt, as ADR-0008 already rules for Events. Event Minimum Level choices become 0, 3, 5, and 6.
+A Member below a Group's Minimum Level cannot join it, cannot be assigned or appointed into it, and does not see the Group, its org-wide Opportunities, or its Events. Holding a Group Role on the Group or on one of its ancestors overrides that gate for the Group row and its roster, because authority flows down the chain. A Child Group's Minimum Level is at least its parent's. An Event may raise the bar with its own Minimum Level but never lower it below its Group's. A creator cannot set a Minimum Level above their own Level; Moderator is exempt, as ADR-0008 already rules for Events. Event Minimum Level choices become 0, 3, 5, and 6.
 
 ### Entry paths
 

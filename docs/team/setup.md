@@ -182,16 +182,16 @@ Three things worth five minutes each.
 
 **The demo accounts.** The seed creates eight, one per role, all with the password `parola123`:
 
-| Email                    | Role         | What they show                         |
-| ------------------------ | ------------ | -------------------------------------- |
-| `recrut@demo.osubb`      | Recrut       | the smallest view: 4 events, 6 tasks   |
-| `voluntar@demo.osubb`    | Voluntar     | a normal member with points and a team |
-| `activ@demo.osubb`       | Membru Activ | a sanction on the ledger               |
-| `vot@demo.osubb`         | Drept de Vot | top of the leaderboard                 |
-| `responsabil@demo.osubb` | Responsabil  | task management, two departments       |
-| `bce@demo.osubb`         | BCE          | the volunteers directory               |
-| `bc@demo.osubb`          | BC           | everything: 7 events, 16 tasks         |
-| `moderator@demo.osubb`   | Moderator    | the moderation view                    |
+| Email                    | Role           | What they show                         |
+| ------------------------ | -------------- | -------------------------------------- |
+| `recrut@demo.osubb`      | Recrut         | the smallest view: 4 events, 6 tasks   |
+| `voluntar@demo.osubb`    | Voluntar       | a normal member with points and a team |
+| `activ@demo.osubb`       | Voluntar Activ | a sanction on the ledger               |
+| `vot@demo.osubb`         | Drept de Vot   | top of the leaderboard                 |
+| `responsabil@demo.osubb` | Responsabil    | task management, two departments       |
+| `bce@demo.osubb`         | BCE            | the volunteers directory               |
+| `bc@demo.osubb`          | BC             | everything: 7 events, 16 tasks         |
+| `moderator@demo.osubb`   | Moderator      | the moderation view                    |
 
 Signing in as two of them and seeing different data — with no conditional code anywhere — is the clearest demonstration of how this app works. The database decides what you can see.
 

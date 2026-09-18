@@ -16,7 +16,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(58);
+select plan(60);
 
 -- ==================== 1. Shape ====================
 
@@ -354,6 +354,30 @@ select is(
   (select array_agg(grp.name order by grp.name) from public.groups as grp where grp.name like '%#507p'),
   array['Grup A #507p', 'Grup B #507p', 'Grup C #507p', 'Grup D #507p'],
   'BC reads every Group too');
+reset role;
+
+-- ---- Authority flows down the chain, and only authority does ----
+-- A Group Manager or Responsible of an ancestor sees the Group they hold
+-- authority over even when their rank sits below its Minimum Level; otherwise
+-- groups_read and group_members_read would disagree about the same authority
+-- and every roster join would drop the rows the roster policy just allowed.
+-- Mutation this catches: delete `or private.can_read_group_roster(id)`.
+select pg_temp.test_login('50700000-0000-0000-0000-000000000007', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(
+  (select array_agg(grp.name order by grp.name) from public.groups as grp where grp.name like '%#507p'),
+  array['Grup A #507p', 'Grup B #507p'],
+  'a level-1 Group Manager of the root reads the Child Group whose Minimum Level is above their rank');
+reset role;
+
+-- The same rank and the same Group, without the Group Role: the override is
+-- authority, never mere membership.
+select pg_temp.test_login('50700000-0000-0000-0000-000000000011', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(
+  (select array_agg(grp.name order by grp.name) from public.groups as grp where grp.name like '%#507p'),
+  array['Grup A #507p'],
+  'an ordinary level-1 member of that same root does not — the Minimum Level still gates them');
 reset role;
 
 -- ---- An ordinary member of B ----

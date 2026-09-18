@@ -235,6 +235,13 @@ create policy groups_read on public.groups
     and (
       (status = 'active' and (select private.caller_level()) >= min_level)
       or (select private.caller_level()) >= 5
+      -- Authority flows down the chain (ADR-0009 Group Roles), so it overrides
+      -- the Minimum Level gate for the Group row itself. Without this branch
+      -- the two policies would disagree about one authority: a level-1 Group
+      -- Manager of a Department could read its level-3 Child Group's roster
+      -- through group_members_read while the Group row naming it stayed hidden,
+      -- and every roster join would drop the rows it had just been allowed.
+      or private.can_read_group_roster(id)
     )
   );
 
@@ -250,7 +257,7 @@ create policy group_members_read on public.group_members
   );
 
 comment on policy groups_read on public.groups is
-  'An active Member reads an active Group at or above their live level; rank BCE and above read every Group, archived ones included.';
+  'An active Member reads an active Group at or above their live level; a Group Manager or Responsible of the Group or of any ancestor reads it whatever their rank; rank BCE and above read every Group, archived ones included.';
 comment on policy group_members_read on public.group_members is
   'A Member reads their own roster rows; rank BCE and above read every roster; a Group Manager or Responsible reads the roster of their Group and of every Group below it.';
 
