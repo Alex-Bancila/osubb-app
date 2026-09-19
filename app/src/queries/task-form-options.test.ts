@@ -35,7 +35,10 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
                   category: 'team',
                 }))
               : table === 'campaigns'
-                ? [{ id: 10, name: 'Campanie', group_id: 1 }]
+                ? [
+                    { id: 10, name: 'Campanie', group_id: 1, is_active: true },
+                    { id: 11, name: 'Inactivă', group_id: 1, is_active: false },
+                  ]
                 : [
                     { id: 20, title: 'Umbrelă administrată', group_id: 501 },
                     { id: 21, title: 'Doar vizibilă', group_id: 999 },
@@ -51,7 +54,7 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
   const data = await fetchTaskFormOptions();
   expect(data.groups).toHaveLength(501);
   expect(calls).toContainEqual(['managed_work_groups', 'range', 500, 999]);
-  expect(calls).toContainEqual(['campaigns', 'eq', 'is_active', true]);
+  expect(data.campaigns.map((row) => row.id)).toEqual([10]);
   expect(calls).toContainEqual(['tasks', 'eq', 'kind', 'umbrella']);
   expect(calls).toContainEqual([
     'tasks',

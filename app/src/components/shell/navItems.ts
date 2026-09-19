@@ -33,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Acasă', icon: LayoutDashboard, onTabBar: true },
   { path: '/tracker', label: 'Taskuri', icon: ListTodo, onTabBar: true },
   { path: '/cereri', label: 'Cereri', icon: ClipboardPlus },
+  { path: '/administrare/campanii', label: 'Campanii', icon: ListTodo },
   {
     path: '/calendar',
     label: 'Calendar',

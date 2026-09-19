@@ -37,6 +37,9 @@ vi.mock('./screens/requests/CompletedWorkRequestScreen', () => ({
   default: () => <h1>Cereri screen</h1>,
 }));
 
+vi.mock('./screens/campaigns/CampaignsScreen', () => ({
+  default: () => <h1>Campanii screen</h1>,
+}));
 import App from './App';
 
 const signedOut = {

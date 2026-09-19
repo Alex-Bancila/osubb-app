@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
+import { fetchCampaigns } from './campaigns';
 import type { TaskFormOptions } from '../screens/tracker/task-form-model';
 
 async function pages<T>(
@@ -28,13 +29,8 @@ export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
   );
   if (!groups.length) return { groups: [], campaigns: [], umbrellas: [] };
   const [campaigns, umbrellas] = await Promise.all([
-    pages((from, to) =>
-      supabase
-        .from('campaigns')
-        .select('id,name,group_id')
-        .eq('is_active', true)
-        .order('id')
-        .range(from, to),
+    fetchCampaigns().then((rows) =>
+      rows.filter((campaign) => campaign.is_active),
     ),
     pages((from, to) =>
       supabase

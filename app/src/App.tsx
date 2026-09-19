@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { IonApp } from '@ionic/react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router';
 import { useAuth } from './lib/auth';
 import { can, type Capability } from './lib/capabilities';
 import AppShell from './components/shell/AppShell';
@@ -8,6 +8,7 @@ import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
+import CampaignsScreen from './screens/campaigns/CampaignsScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
 import CalendarScreen from './screens/calendar/CalendarScreen';
@@ -128,6 +129,14 @@ export default function App() {
           >
             <Route path="/" element={<DashboardScreen />} />
             <Route path="/tracker" element={<TrackerScreen />} />
+            <Route
+              path="/administrare/campanii"
+              element={<CampaignsScreen />}
+            />
+            <Route
+              path="/administrare/grupuri/:groupId/campanii"
+              element={<CampaignsScreen />}
+            />
             <Route path="/calendar" element={<CalendarScreen />} />
             <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
             <Route
@@ -150,7 +159,15 @@ export default function App() {
               path="/bc"
               element={
                 <RequireCapability capability="manageRoles">
-                  <Placeholder title="Panou BC" issue="#104–#107" />
+                  <section>
+                    <Placeholder title="Panou BC" issue="#104–#107" />
+                    <Link
+                      className="inline-flex min-h-11 items-center p-4 underline"
+                      to="/administrare/campanii"
+                    >
+                      Gestionează campaniile grupurilor
+                    </Link>
+                  </section>
                 </RequireCapability>
               }
             />

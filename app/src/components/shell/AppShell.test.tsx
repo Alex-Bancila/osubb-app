@@ -61,7 +61,7 @@ describe('AppShell', () => {
     const primary = screen.getByRole('navigation', {
       name: 'Navigare principală',
     });
-    expect(within(primary).getAllByRole('link')).toHaveLength(6);
+    expect(within(primary).getAllByRole('link')).toHaveLength(7);
     expect(
       within(primary).getByRole('link', { name: 'Cereri' }),
     ).toHaveAttribute('href', '/cereri');
