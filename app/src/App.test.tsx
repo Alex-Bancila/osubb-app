@@ -25,6 +25,9 @@ vi.mock('./screens/login/AuthCallback', () => ({
 vi.mock('./screens/no-profile/NoProfileScreen', () => ({
   default: () => <h1>No profile screen</h1>,
 }));
+vi.mock('./screens/volunteers/VolunteersScreen', () => ({
+  default: () => <h1>Voluntari</h1>,
+}));
 vi.mock('./screens/Placeholder', () => ({
   default: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
