@@ -69,7 +69,7 @@ export default function VolunteersScreen() {
       : baseColumns
   ).map((column): DataTableColumn<DirectoryMember> => ({
     ...column,
-    sortingFn: (left, right, columnId) => {
+    sortFn: (left, right, columnId) => {
       const a = left.getValue<string | number>(columnId);
       const b = right.getValue<string | number>(columnId);
       return typeof a === 'number' && typeof b === 'number'
