@@ -9,7 +9,7 @@
 
 ## Context
 
-The Tracker backend is complete, and every authority rule in it is written three times. Departments, Teams, and Projects are three tables with three roster tables, and each of the ninety `private` helpers that decides who may read, manage, or evaluate a Task carries a `dept_id / team_id / project_id` branch; 53 of the 105 migrations and nearly every pgTAP suite repeat the shape. Adding the Adunarea Generală, Project teams, or any body OSUBB invents next means new tables and new branches in every helper.
+Before this decision, the completed Tracker backend repeated authority rules across three structures. Departments, Teams, and Projects are three tables with three roster tables, and the `private` helpers deciding who may read, manage, or evaluate a Task carried a `dept_id / team_id / project_id` branch; migrations and pgTAP suites repeated the shape. Adding the Adunarea Generală, Project teams, or any body OSUBB invents next means new tables and new branches in every helper.
 
 The vocabulary is also split. `responsabil` is a global rank at level 4 in `member_role`, and `responsible` is a per-Project role in `project_members`; Events gate "Responsible+" on the rank while the Tracker gates on the Project role. The Department Cup depends on `departments.kind`, Campaigns are Department-only, and organization-wide Events hang off an `org` pseudo-department row.
 
@@ -84,7 +84,7 @@ A Campaign is a label owned by one Group, any Group. It tags Tasks whose Origin 
 
 ### Calendar
 
-An Event is owned by one Group; the four-value scope enum disappears. A Group's Managers and Responsibles, and those of its ancestors, create, edit, and cancel its Events. Anyone holding a Group Role may create an Event in the Organization Group; only its creator or BC/Moderator edits it. Relevance, RSVP, capacity, and important-change notifications keep ADR-0008's rules with "the member's Departments, Teams, and Projects" read as "the member's Groups".
+An Event is owned by one Group. Wave 2 stores `events.group_id`; the origin-sync trigger maintains the legacy scope and foreign keys until Wave 3 removes them. A Group's Managers and Responsibles, and those of its ancestors, create, edit, and cancel its Events. Anyone holding a Group Role may create an Event in the Organization Group; only its creator or BC/Moderator edits or cancels it. `create_event` accepts the owning Group directly; `update_event` replaces the full content state, requires authority over both source and target when moving an Event, and `cancel_event` preserves the Event with a required reason. Important changes notify the relevant roster and going attendees through the shared notification helper with a `/calendar` link; text and capacity-only edits do not fan out. Relevance, RSVP, capacity, and important-change notifications keep ADR-0008's rules with "the member's Departments, Teams, and Projects" read as "the member's Groups".
 
 ### Promotion hooks
 
@@ -105,8 +105,8 @@ One "Administrare" area, scoped by authority. BC and Moderator see the whole Gro
 A strangler in three waves, every PR merged green, each wave its own plan:
 
 1. **Wave 1 — schema.** Add `groups`, `group_members` with the Group Role, the settings above, and the Organization Group; backfill from `departments`, `teams`, `projects`, `member_departments`, `team_members`, and `project_members`; keep those tables as the write master, mirrored one way into `groups`/`group_members` by triggers (no compatibility views); add `group_ids` to the organization claims. Wave 1's `groups_read` publishes every active Group to every Member at or above its Minimum Level, which for the backfilled rows is 0 — so Team and Project names become organization-visible before Wave 2 re-expresses `teams_read`/`projects_read`, and Team/Project rosters become visible to rank BCE. Accepted: it is ADR-0009's end state and the shadow carries no personal data beyond membership.
-2. **Wave 2 — authority and commands.** Rewrite the `private` authority helpers and the 21 commands to read Groups only; give `tasks` and `events` one `group_id` beside the legacy columns, kept in sync by the commands; move Campaign ownership to any Group (`campaigns.group_id` replacing `department_id`); add the no-category-branch check to `conventions.test.sql`. Tracker frontend and Calendar work resume on top of this wave.
-3. **Wave 3 — frontend and cleanup.** Move the 18 `app/src` files and the generated types to Groups, ship the Administrare screen, drop the legacy columns and tables, the mirror triggers and `groups.legacy_*`, the `event_scope` enum values, and level 4.
+2. **Wave 2 — authority and commands (implemented by #519–#524, #370, and #248).** Tracker authority and command decisions read Group Roles, paths, and settings; legacy Origin signatures remain compatibility inputs. `tasks`, `events`, `campaigns`, and `completed_work_requests` carry `group_id` with two-way Origin-sync triggers. Campaigns are owned by any Group, leadership filters include descendants, Department Cup follows settings at every ancestor link, and Calendar creation/update/cancellation use Group authority. `conventions.test.sql` enforces the category-word boundary; the 23-step smoke test exercises allowed and refused Group behavior. This closeout branch contains the implementation; consult the PR graph before treating the entire stack as merged to `main`.
+3. **Wave 3 — Group administration and cleanup (next).** Ship Group settings/roster/appointment/application commands and the Administrare surface, finish moving frontend consumers to Groups, then remove compatibility signatures, legacy structure/Origin columns and tables, mirror and bridge triggers, `groups.legacy_*`, the `event_scope` enum, and the retired level-4 rank. Regenerate database types from the resulting schema.
 
 ## Consequences
 
@@ -114,7 +114,7 @@ A strangler in three waves, every PR merged green, each wave its own plan:
 - Groups nest to any depth, so authority, visibility, Campaign tagging, and Cup attribution walk the ancestor chain. Wave 1 stores each Group's ancestor path and forbids cycles; the helpers read that path rather than recursing per row.
 - Until Wave 3 dedupes legacy names, the sibling-name rule binds native Groups only.
 - ADR-0007, ADR-0008, and ADR-0004 are amended by reference in their headers; `CONTEXT.md` is updated in the same change; house rule 13 in `CLAUDE.md` names this ADR.
-- The pinned `private` roster, the claimless sweep, the points authorization matrix (#262), and the actor-helper suites are rewritten in Wave 2; the Tracker smoke script follows.
+- The pinned `private` roster, the claimless sweep, the points authorization matrix (#262), and the actor-helper suites now prove the Wave 2 matrix; the Tracker smoke script exercises four additional Group scenarios.
 - `capabilities.ts` loses `manageTasks: 4`; management controls render from server capability rows, as the 2026-09-18 Tracker plan already requires.
 - Issues to reframe: #47, #48, #49–#52 on Evaluation Periods; #66 on the Adunarea Generală roster; #103, #105, #107 into Administrare; #354 filters by Group; #248 and #370 by Group Role; #160 becomes a Wave 1 prerequisite. New issues are filed per wave.
 - Until Wave 3 lands, code still speaks `dept_id / team_id / project_id`; new authority written in the meantime must read Groups, never add a fourth branch.
