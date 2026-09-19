@@ -13,6 +13,7 @@ import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
+import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { toTaskPresentation } from './task-presentation';
 
@@ -126,6 +127,12 @@ function TaskDetails({
           )}
         </section>
       )}
+      {canManage &&
+        task.kind === 'task' &&
+        task.assignmentMode === 'public' &&
+        !['completed', 'unfulfilled', 'cancelled'].includes(task.status) && (
+          <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
+        )}
       {canManage && task.kind === 'task' && (
         <section
           aria-labelledby={`task-${taskId}-candidate-heading`}
