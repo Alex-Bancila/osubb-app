@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { taskRow } from '../../test/task-fixtures';
 const complete = vi.hoisted(() => vi.fn());
 const create = vi.hoisted(() => vi.fn());
+const form = vi.hoisted(() => ({
+  onDraft: (_draft: object): void => undefined,
+}));
 vi.mock('../../queries/task-umbrella', () => ({
   useCompleteUmbrella: () => ({ mutateAsync: complete }),
   useCreateSubtask: () => ({ mutateAsync: create, isPending: false }),
@@ -16,11 +19,14 @@ vi.mock('./ManagedTaskForm', () => ({
   }: {
     parentTaskId: number;
     onDraft: (draft: object) => void;
-  }) => (
-    <button onClick={() => onDraft({ parentTaskId, title: 'Copil nou' })}>
-      Trimite subtask pentru #{parentTaskId}
-    </button>
-  ),
+  }) => {
+    form.onDraft = onDraft;
+    return (
+      <button onClick={() => onDraft({ parentTaskId, title: 'Copil nou' })}>
+        Trimite subtask pentru #{parentTaskId}
+      </button>
+    );
+  },
 }));
 import { UmbrellaTaskSection } from './UmbrellaTaskSection';
 const common = {
@@ -150,5 +156,17 @@ describe('Umbrella progress and actions', () => {
       title: 'Copil nou',
     });
     expect(common.onNavigate).toHaveBeenCalledWith(27);
+  });
+  it('does not create after an option refresh completes for a closed form', async () => {
+    const user = userEvent.setup();
+    render(<UmbrellaTaskSection {...common} subtasks={[]} />);
+    await user.click(screen.getByRole('button', { name: 'Adaugă subtask' }));
+    const oldSubmission = form.onDraft;
+    await user.click(
+      screen.getByRole('button', { name: 'Închide formularul' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Adaugă subtask' }));
+    await act(async () => oldSubmission({ parentTaskId: 10 }));
+    expect(create).not.toHaveBeenCalled();
   });
 });
