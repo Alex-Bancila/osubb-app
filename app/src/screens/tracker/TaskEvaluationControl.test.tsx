@@ -141,4 +141,9 @@ it('announces and focuses success after the refetch changes status before mutati
   );
   expect(screen.getByRole('status')).toHaveFocus();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  view.rerender(<TaskEvaluationControl {...props} />);
+  expect(
+    screen.getByRole('button', { name: 'Evaluează taskul' }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
