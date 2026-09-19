@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(74);
+select plan(75);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -754,5 +754,6 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select throws_ok($$select public.duplicate_task((select id from g521_tasks where name='command3'),now()+interval '1 day')$$,'42501','task_manage_forbidden','duplicate_task: Group persona 8 on executor 5 in dt');
 reset role;
 
+select ok(not exists(select 1 from public.tasks clone join public.tasks source on source.id=clone.duplicated_from_task_id where clone.group_id is distinct from source.group_id),'every clone preserves the source Group');
 select * from finish();
 rollback;
