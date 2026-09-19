@@ -15,40 +15,44 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
 select plan(59);
+create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
+returns bigint language sql stable as $$
+  select coalesce((select id from public.groups where legacy_dept_id=p_dept or legacy_team_id=p_team or legacy_project_id=p_project),-1)
+$$;
 
 -- ==================== 1. Surface, shape and grants ====================
 
 select has_function('public', 'leadership_leaderboard',
-  array['text', 'text', 'bigint', 'bigint'],
+  array['bigint', 'bigint'],
   'the filtered leadership Leaderboard read exists');
 select has_function('private', 'leadership_leaderboard_impl',
-  array['text', 'text', 'bigint', 'bigint'],
+  array['bigint', 'bigint'],
   'its security-definer body exists in private');
 
 -- ADR-0007: "The leadership Leaderboard contains member name and Task points
 -- only." Pinning the result type is what keeps a later "while we are here"
 -- commit from adding role, email or Department to a leadership export.
 select is(
-  pg_get_function_result('public.leadership_leaderboard(text, text, bigint, bigint)'::regprocedure),
+  pg_get_function_result('public.leadership_leaderboard(bigint, bigint)'::regprocedure),
   'TABLE(member_id uuid, full_name text, points integer, rank integer)',
   'the board returns member id, name, points and rank -- no role, no email, no Department');
 
 select is(
-  (select prosecdef from pg_proc where oid = 'public.leadership_leaderboard(text, text, bigint, bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'public.leadership_leaderboard(bigint, bigint)'::regprocedure),
   false, 'the public wrapper is security invoker');
 select is(
-  (select prosecdef from pg_proc where oid = 'private.leadership_leaderboard_impl(text, text, bigint, bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.leadership_leaderboard_impl(bigint, bigint)'::regprocedure),
   true, 'the private body is security definer -- it reads the whole ledger past RLS and gates itself');
 
-select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(text, text, bigint, bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint)', 'EXECUTE'),
   'authenticated may execute the leadership Leaderboard');
-select ok(not has_function_privilege('anon', 'public.leadership_leaderboard(text, text, bigint, bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.leadership_leaderboard(bigint, bigint)', 'EXECUTE'),
   'anon cannot execute the leadership Leaderboard');
-select ok(has_function_privilege('authenticated', 'private.leadership_leaderboard_impl(text, text, bigint, bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'private.leadership_leaderboard_impl(bigint, bigint)', 'EXECUTE'),
   'authenticated may execute the body -- the security-invoker wrapper calls it as the caller');
-select ok(not has_function_privilege('anon', 'private.leadership_leaderboard_impl(text, text, bigint, bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'private.leadership_leaderboard_impl(bigint, bigint)', 'EXECUTE'),
   'anon cannot reach the body directly');
-select ok(not has_function_privilege('service_role', 'private.leadership_leaderboard_impl(text, text, bigint, bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('service_role', 'private.leadership_leaderboard_impl(bigint, bigint)', 'EXECUTE'),
   'the server role cannot bypass the BCE+ gate through the private body');
 
 -- #258 is additive. `app/src/queries/points.ts` still reads the legacy
@@ -274,34 +278,29 @@ select is((select points from public.leadership_leaderboard()
   'a deactivated member with completed Task history stays on the board -- eligibility is history, not Profile status');
 
 -- ==================== 3b. Independent Teams belong to no Department ====================
--- `teams.dept_id` is nullable (ADR-0007's Independent Team). The Leaderboard
--- keeps that work -- unlike the Department Cup, which drops it -- and no
--- Department filter may reach it. The code is correct only because
--- `origin_team.dept_id = p_department_id` is `null = 'x'` -> `null`; a
--- `coalesce(origin_team.dept_id, '')` would file it, and every Department-less
--- Task besides, under the empty Department id.
+-- Independent Group work remains on its own subtree and the global board.
 
 select is((select points from public.leadership_leaderboard()
             where member_id = '25800000-0000-0000-0000-000000000010'), 6,
   'work on an Independent Team is on the unfiltered board -- the Leaderboard keeps what the Department Cup drops');
-select is((select count(*) from public.leadership_leaderboard(null, '258-indep-team')), 1::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group(p_team=>'258-indep-team'))), 1::bigint,
   'the Team filter reaches an Independent Team like any other');
-select is((select points from public.leadership_leaderboard(null, '258-indep-team')
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group(p_team=>'258-indep-team'))
             where member_id = '25800000-0000-0000-0000-000000000010'), 6,
   'and returns that Team''s award');
 select is((select count(*)
              from public.departments as department
-             left join lateral public.leadership_leaderboard(department.id) as board on true
+             left join lateral public.leadership_leaderboard(pg_temp.g523_group(department.id)) as board on true
             where board.member_id = '25800000-0000-0000-0000-000000000010'), 0::bigint,
   'no Department filter at all reaches an Independent Team''s work -- not one of them, not just 258-dept');
-select is((select count(*) from public.leadership_leaderboard('')), 0::bigint,
-  'and the empty string is an unknown Department id, not the bucket Independent-Team work falls into');
+select is((select count(*) from public.leadership_leaderboard(-1)), 0::bigint,
+  'an unknown Group id returns no work');
 
 -- ==================== 4. The Department filter ====================
 -- ADR-0007: the filters apply to the Task that produced the points, never to
 -- the member's current memberships. None of these fixtures belongs to 258-dept.
 
-select is((select points from public.leadership_leaderboard('258-dept')
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))
             where member_id = '25800000-0000-0000-0000-000000000002'), 27,
   'the Department filter sums the Department Task (12) and the Department-Team Task (15) and drops the Project Task (12)');
 
@@ -312,62 +311,62 @@ select is((select points from public.leadership_leaderboard('258-dept')
 -- the window and `rank` degenerates into a row number (2, 3, 4), which is what
 -- this assertion catches.
 select results_eq(
-  $$ select full_name, points, rank from public.leadership_leaderboard('258-dept') $$,
+  $$ select full_name, points, rank from public.leadership_leaderboard(pg_temp.g523_group('258-dept')) $$,
   $$ values ('Mihai Executor 258'::text, 27, 1),
             ('Ana Egalitate 258',        3,  2),
             ('Bogdan Dezactivat 258',    3,  2),
             ('Zoia Anulata 258',         0,  4) $$,
   'the Department board is points-descending with a full-name tiebreak on the rows, equal points share a rank, and the rank after a tie skips');
 
-select is((select points from public.leadership_leaderboard('258-dept')
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))
             where member_id = '25800000-0000-0000-0000-000000000008'), 0,
   'the net-zero member is a row on the filtered board too, at zero -- the reversal nets under a filter exactly as it does unfiltered');
 
 -- Still 33: Zoia contributes +9 and -9, so admitting her row changes the board's
 -- membership without changing its arithmetic. If this ever reads 42, a reversal
 -- stopped being subtracted.
-select is((select sum(points)::int from public.leadership_leaderboard('258-dept')), 33,
+select is((select sum(points)::int from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 33,
   'nothing else reaches 258-dept -- the whole Department board is the three qualifying awards and one reversed one');
 
 -- ==================== 5. The Team filter ====================
 
-select is((select count(*) from public.leadership_leaderboard(null, '258-dept-team')), 1::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group(p_team=>'258-dept-team'))), 1::bigint,
   'the Team filter returns only the one member with a Task on that Team');
-select is((select points from public.leadership_leaderboard(null, '258-dept-team')
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group(p_team=>'258-dept-team'))
             where member_id = '25800000-0000-0000-0000-000000000002'), 15,
   'and only that Task''s award -- the Department Task the same member also holds is gone');
-select is((select rank from public.leadership_leaderboard(null, '258-dept-team')
+select is((select rank from public.leadership_leaderboard(pg_temp.g523_group(p_team=>'258-dept-team'))
             where member_id = '25800000-0000-0000-0000-000000000002'), 1,
   'rank is computed over the filtered board, not over the whole organisation');
 
 -- ==================== 6. The Project filter ====================
 
-select is((select count(*) from public.leadership_leaderboard(null, null, 2580003)), 1::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group(p_project=>2580003))), 1::bigint,
   'the Project filter returns only the Project Task''s Executor');
-select is((select points from public.leadership_leaderboard(null, null, 2580003)
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group(p_project=>2580003))
             where member_id = '25800000-0000-0000-0000-000000000002'), 12,
   'Project work is on the Leaderboard -- unlike the Department Cup, which excludes it');
-select is((select count(*) from public.leadership_leaderboard('258-dept', null, 2580003)), 0::bigint,
-  'a Project Task has no Department, so no Department filter can reach it -- and filters combine with `and`');
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group(p_project=>2580003), 2580001)), 0::bigint,
+  'a Project Group combined with a Department Campaign has no matching work');
 
 -- ==================== 7. The Campaign filter ====================
 
-select is((select points from public.leadership_leaderboard(null, null, null, 2580001)
+select is((select points from public.leadership_leaderboard(null, 2580001)
             where member_id = '25800000-0000-0000-0000-000000000002'), 12,
   'Campania A shows only its own award for the Executor');
-select is((select points from public.leadership_leaderboard(null, null, null, 2580002)
+select is((select points from public.leadership_leaderboard(null, 2580002)
             where member_id = '25800000-0000-0000-0000-000000000002'), 15,
   'Campania B shows a different total for the same member -- the Campaign filter really discriminates');
-select is((select count(*) from public.leadership_leaderboard(null, null, null, 2580002)), 1::bigint,
+select is((select count(*) from public.leadership_leaderboard(null, 2580002)), 1::bigint,
   'nobody else earned under Campania B');
 select results_eq(
-  $$ select full_name, points, rank from public.leadership_leaderboard(null, null, null, 2580001) $$,
+  $$ select full_name, points, rank from public.leadership_leaderboard(null, 2580001) $$,
   $$ values ('Mihai Executor 258'::text, 12, 1),
             ('Ana Egalitate 258',        3,  2),
             ('Bogdan Dezactivat 258',    3,  2),
             ('Zoia Anulata 258',         0,  4) $$,
   'Campania A ranks its own four earners with the tie sharing rank 2, the reversed award netting its member to zero at the bottom rather than off the board');
-select is((select count(*) from public.leadership_leaderboard(null, null, null, -1)), 0::bigint,
+select is((select count(*) from public.leadership_leaderboard(null, -1)), 0::bigint,
   'an unknown Campaign id yields an empty board, not the unfiltered one');
 
 -- ==================== 8. Agreement with the Department Cup ====================
@@ -379,64 +378,40 @@ select is((select count(*) from public.leadership_leaderboard(null, null, null, 
 -- BCE+ gates while the comparison query remains independent and complete.
 reset role;
 
--- The Leaderboard's Department rule (`task.dept_id = p or origin_team.dept_id
--- = p`) and `private.department_cup_rows`' attribution
--- (`coalesce(task.dept_id, team.dept_id)`) are two spellings of one rule, and
--- nothing but this assertion stops them drifting: each suite pins its own body,
--- neither pins the agreement. They are provably identical only because
--- `tasks_exactly_one_origin_ck` is `num_nonnulls(dept_id, team_id,
--- project_id) = 1`, so a Task never carries both a Department and a Team --
--- meaning this test pins that constraint as much as it pins the two bodies.
---
--- The `kind = 'department'` restriction is part of the assertion, not an
--- accident of how it happens to be written. The Cup competes only real
--- Departments (#310 gave `diverse` and `secretariat` kind = 'coordination'
--- precisely so they never appear, and `org` is kind = 'org'), while the
--- Leaderboard accepts **any** Department id as a filter -- a BCE may legitimately
--- ask for Diverse's Task points. Drop the restriction and this assertion fails
--- on the coordination rows for a correct reason, which is the wrong failure.
--- The two assertions after it pin that asymmetry directly, so the comment is
--- not the only thing defending it.
+-- With every fixture link counting, each competing subtree has the same
+-- attribution on the Leaderboard and the Cup. Group settings define this set.
 select set_eq(
-  $$ select department.id, board.member_id, board.points
-       from public.departments as department
-       cross join lateral public.leadership_leaderboard(department.id) as board
-      where department.kind = 'department' $$,
-  $$ select department.id, entry.member_id, sum(entry.delta)::int
-       from public.departments as department
-       join public.tasks as task
-         on task.dept_id = department.id
-         or task.team_id in (
-              select team.id from public.teams as team
-               where team.dept_id = department.id
-            )
-       join public.points_ledger as entry on entry.task_id = task.id
-      where department.kind = 'department'
-        and entry.reason in ('task', 'task_reversal')
-      group by department.id, entry.member_id $$,
-  'for every competing Department, the Leaderboard and Cup attribution select the same contributing members with the same net Task points');
-
+  $$ select grp.id, board.member_id, board.points
+       from public.groups grp
+       cross join lateral public.leadership_leaderboard(grp.id) board
+      where grp.competes_in_cup $$,
+  $$ select grp.id, entry.member_id, sum(entry.delta)::int
+       from public.groups grp
+       join public.groups origin on origin.path @> array[grp.id]
+       join public.tasks task on task.group_id=origin.id
+       join public.points_ledger entry on entry.task_id=task.id
+      where grp.competes_in_cup and entry.reason in ('task','task_reversal')
+      group by grp.id,entry.member_id $$,
+  'each competing Group subtree includes the same members and net Task points');
 select set_eq(
-  $$ select department.id, coalesce(sum(board.points), 0)::int
-       from public.departments as department
-       left join lateral public.leadership_leaderboard(department.id) as board on true
-      where department.kind = 'department'
-      group by department.id $$,
-  $$ select cup.dept_id, cup.points from public.department_cup() as cup $$,
-  'for every competing Department, the Cup total equals the sum of that Department''s Leaderboard rows -- the two leadership surfaces cannot drift about which Department a Task belongs to');
+  $$ select grp.id,coalesce(sum(board.points),0)::int
+       from public.groups grp left join lateral public.leadership_leaderboard(grp.id) board on true
+      where grp.competes_in_cup group by grp.id $$,
+  $$ select group_id,points from public.department_cup() $$,
+  'Cup equals subtree Leaderboard totals when every link counts');
 
-select is((select points from public.leadership_leaderboard('diverse')
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group('diverse'))
             where member_id = '25800000-0000-0000-0000-000000000012'), 6,
   'the Leaderboard filters on any Department id, coordination structures included');
 select is((select count(*) from public.department_cup() where dept_id = 'diverse'), 0::bigint,
-  'the Department Cup competes only kind = ''department'' rows -- which is why the cross-check above is kind-scoped');
+  'the Department Cup includes only Groups whose competing setting is enabled');
 
 -- ==================== 9. The BCE+ gate returns no rows, never an error ====================
 
 select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000002');
 select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
   'an ordinary Member (level 2) sees no protected rows');
-select is((select count(*) from public.leadership_leaderboard('258-dept')), 0::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 0::bigint,
   'an ordinary Member gets no rows from a filtered read either -- and no error');
 select is((select count(*) from public.leadership_leaderboard()
             where member_id = '25800000-0000-0000-0000-000000000002'), 0::bigint,
@@ -446,22 +421,22 @@ select is((select count(*) from public.leadership_leaderboard()
 select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000004');
 select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
   'a responsabil (level 4, one rank below the gate) sees no protected rows');
-select is((select count(*) from public.leadership_leaderboard('258-dept')), 0::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 0::bigint,
   'a responsabil gets no rows from a filtered read either -- the gate is >= 5, not >= 4');
 
 -- …and the allow side by every role the function's comment promises it to, not
 -- by BCE alone: BC (6) and Moderator (9).
 select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000005');
-select is((select count(*) from public.leadership_leaderboard('258-dept')), 4::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 4::bigint,
   'a BC (level 6) also sees the Leaderboard -- the gate is >= 5, not = 5');
-select is((select points from public.leadership_leaderboard('258-dept')
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))
             where member_id = '25800000-0000-0000-0000-000000000002'), 27,
   'a BC sees the same filtered totals a BCE would');
 
 select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000009');
-select is((select count(*) from public.leadership_leaderboard('258-dept')), 4::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 4::bigint,
   'a Moderator (level 9) sees the Leaderboard -- the public function''s comment promises it to BCE, BC *and* Moderator');
-select is((select points from public.leadership_leaderboard('258-dept')
+select is((select points from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))
             where member_id = '25800000-0000-0000-0000-000000000002'), 27,
   'and the same filtered totals -- the gate is a level threshold, not a role list');
 
@@ -477,7 +452,7 @@ select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
 select pg_temp.test_login('25800000-0000-0000-0000-000000000001', '{}'::jsonb);
 select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
   'a claimless session sees no board, even as a real active BCE uid');
-select is((select count(*) from public.leadership_leaderboard('258-dept')), 0::bigint,
+select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 0::bigint,
   'a claimless session gets no rows from a filtered read either');
 
 select pg_temp.test_clear_jwt();
@@ -485,7 +460,7 @@ set local role anon;
 select throws_ok('select * from public.leadership_leaderboard()', '42501', null,
   'anon holds no grant on the leadership Leaderboard');
 select throws_ok(
-  'select * from private.leadership_leaderboard_impl(null, null, null, null)', '42501', null,
+  'select * from private.leadership_leaderboard_impl(null, null)', '42501', null,
   'anon cannot reach the body behind it either');
 reset role;
 

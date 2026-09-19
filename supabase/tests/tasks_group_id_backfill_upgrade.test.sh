@@ -16,6 +16,12 @@ migration="supabase/migrations/20260919135332_group_id_on_work_and_events.sql"
 teardown() {
   cat <<'SQL'
 drop view public.tasks_with_overdue;
+-- #522: these validators name group_id in their UPDATE column lists, and the
+-- Request read policy names it directly. Remove those post-#519 dependencies
+-- only inside this scratch transaction; rollback restores the live definitions.
+drop trigger tasks_validate_campaign on public.tasks;
+drop trigger tasks_validate_hierarchy on public.tasks;
+drop policy completed_work_requests_read on public.completed_work_requests;
 drop trigger tasks_sync_group_origin on public.tasks;
 drop trigger completed_work_requests_sync_group_origin on public.completed_work_requests;
 drop trigger campaigns_sync_group_origin on public.campaigns;

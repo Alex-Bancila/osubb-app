@@ -39,7 +39,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(48);
+select plan(52);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -758,6 +758,39 @@ select extensions.dblink_exec('cu_setup', $$
   delete from auth.users where id = '34000000-0000-0000-0000-000000000051';
 $$);
 select extensions.dblink_disconnect('cu_setup');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',null,'todo','direct','umbrella');
+insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command0');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command0'))$$,'complete_umbrella_task: Group persona 2 in project');
+reset role;
+select pg_temp.g521_task('command1','project',null,'todo','direct','umbrella');
+insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command1');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command1'))$$,'complete_umbrella_task: Group persona 3 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',null,'todo','direct','umbrella');
+insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command2');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command2'))$$,'complete_umbrella_task: Group persona 6 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',null,'todo','direct','umbrella');
+insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command3');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','complete_umbrella_task: Group persona 8 in dt');
+reset role;
 
 select * from finish();
 rollback;
