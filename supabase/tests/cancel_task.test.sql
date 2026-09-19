@@ -472,7 +472,7 @@ select is((select format('%s|%s|%s|%s',
                          (task.queue_closed_at is not null)::text)
              from public.tasks as task where task.id = (select happy_task_id from f339)),
   'cancelled|true|Evenimentul a fost amânat.|true',
-  'the Task is cancelled, stamped, carries the TRIMMED reason, and its Candidate Queue is closed (tasks_queue_timestamp_state_check demands the last one)');
+  'the Task is cancelled, stamped, carries the TRIMMED reason, and its Candidate Queue is closed (tasks_queue_timestamp_state_ck demands the last one)');
 select is((select format('%s|%s|%s',
                          (assignment.ended_at is not null)::text,
                          assignment.end_reason,

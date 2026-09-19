@@ -19,7 +19,7 @@
 -- submission -- #335 (evaluate_task) and #337 own those writes. Section 4
 -- hand-fixtures a Task already in that returned shape (review_round = 1,
 -- returned_to_progress_at set, status in_progress, submitted_at null per
--- tasks_submitted_at_state_check) and asserts both survive a resubmit
+-- tasks_submitted_at_state_ck) and asserts both survive a resubmit
 -- byte-for-byte.
 --
 -- The Umbrella case (section 6): an Umbrella never has an Executor -- no

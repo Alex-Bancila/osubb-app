@@ -156,7 +156,7 @@ select fixture.title, 'Fixture', now() - interval '2 days',
        'completed', fixture.difficulty, fixture.rating,
        '25800000-0000-0000-0000-000000000001',
        -- completed_at is `now()`: test_credit_task ends the Assignment at
-       -- completed_at, and task_assignments_end_chronology_check refuses an end
+       -- completed_at, and task_assignments_end_chronology_ck refuses an end
        -- before the Assignment's own start.
        now() - interval '3 days', now()
   from (values
@@ -384,7 +384,7 @@ reset role;
 -- (`coalesce(task.dept_id, team.dept_id)`) are two spellings of one rule, and
 -- nothing but this assertion stops them drifting: each suite pins its own body,
 -- neither pins the agreement. They are provably identical only because
--- `tasks_exactly_one_origin_check` is `num_nonnulls(dept_id, team_id,
+-- `tasks_exactly_one_origin_ck` is `num_nonnulls(dept_id, team_id,
 -- project_id) = 1`, so a Task never carries both a Department and a Team --
 -- meaning this test pins that constraint as much as it pins the two bodies.
 --

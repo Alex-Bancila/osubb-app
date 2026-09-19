@@ -84,10 +84,10 @@ Policies are `<table>_<verb>[_qualifier]`, named after the table's real name, wi
 
 Example: `supabase/migrations/20260909151741_project_membership_commands.sql` (`private.require_active_project_lead`, `private.add_project_member_impl`); trigger naming in `supabase/migrations/20260909003930_project_manager_invariants.sql` (`projects_validate_leader_profile` on `private.validate_project_manager_state()`).
 
-**Grandfathered until #379 or the issue that rewrites them:**
+**Existing schema after #379:**
 
-- Policies: `ledger_read`, `ledger_sanction`, `announcements_write`, `announcement_reads_self`, `profiles_self_update`, `attendance_*` (`attendance_read`, `attendance_insert_self`, `attendance_update_self`), `auth_admin_read_*` (`auth_admin_read_profiles`, `auth_admin_read_roles`, `auth_admin_read_member_departments`, `auth_admin_read_team_members`) — verb-first, domain-specific, wrong-verb, or oddly-ordered names instead of `<table>_<verb>[_qualifier]`. The list shrinks as the offenders are retired rather than renamed: Stack C replaced `task_read` and `event_read`, and #345 dropped `task_write`'s three legacy successors along with the `request_*` and `assignee_*` families and their tables.
-- Constraints: `projects_name_not_blank`, `projects_status_valid`, `projects_timestamps_ordered`, `project_members_role_valid` (no `_ck` suffix); `teams_id_dept_unique` (a unique constraint named `_unique`, not `_key`).
+- Existing policy and CHECK constraint names were normalized by #379. New names follow §5; policy predicates and constraint expressions remain unchanged. The legacy `teams_id_dept_unique` unique constraint is now `teams_id_dept_key`.
+- `tasks.type` and `profiles.tier` remain nullable free-form text; no finite vocabulary has been accepted. `push_tokens.id` remains a UUID identity. Restricting those domains or replacing existing identifiers is outside cosmetic naming cleanup.
 
 ## 6. Enum vs. `text check`
 

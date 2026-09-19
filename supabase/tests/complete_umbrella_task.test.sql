@@ -734,7 +734,7 @@ select throws_ok(format($$ insert into public.points_ledger (member_id, delta, r
   values ('34000000-0000-0000-0000-000000000002', 5, 'task', %s) $$,
   (select u1_id from f340)),
   '42501', 'new row violates row-level security policy for table "points_ledger"',
-  'nor credit points directly -- ledger_sanction is the only insert policy authenticated holds, and it requires reason = sanction');
+  'nor credit points directly -- points_ledger_create_sanction is the only insert policy authenticated holds, and it requires reason = sanction');
 select throws_ok(format($$ insert into public.task_activity (task_id, kind, actor_id, details)
   values (%s, 'umbrella_completed', '34000000-0000-0000-0000-000000000002', '{}'::jsonb) $$,
   (select u1_id from f340)),

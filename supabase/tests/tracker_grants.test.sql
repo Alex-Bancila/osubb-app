@@ -125,7 +125,7 @@ select is(pg_temp.ddl_adjacent_grants('service_role'), '{}'::text[],
 -- writes -- #345 closed the last of them, `tasks`, along with the two legacy
 -- tables that used to appear here with full DML.
 -- points_ledger keeps INSERT for authenticated: the sanction path
--- (ledger_sanction) is still a direct, policy-gated write, not a command.
+-- (points_ledger_create_sanction) is still a direct, policy-gated write, not a command.
 -- service_role is untouched by #345 -- narrowing it further is #295's audit.
 
 create temporary table expected_table_privs (
@@ -446,7 +446,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- #509: the seven mirror trigger functions (ADR-0009 Wave 1). Category
   -- `trigger`: nothing may call one directly. They are `security definer`
   -- because the legacy writes they observe arrive from `authenticated`
-  -- sessions (member_departments_manage, teams_create, profiles_self_update)
+  -- sessions (member_departments_manage, teams_create, profiles_update_self)
   -- that hold no write grant on `groups`/`group_members` at all.
   ('mirror_department_group',                     '',                                                                                                                   'trigger'),
   ('mirror_department_membership',                '',                                                                                                                   'trigger'),

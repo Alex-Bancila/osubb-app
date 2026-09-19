@@ -677,7 +677,7 @@ select is((select format('%s|%s|%s|%s', task.status, (task.unfulfilled_at is nul
                          (task.started_at is not null)::text, (task.started_at >= task.created_at)::text)
              from public.tasks as task where task.id = (select unfulfilled_task_id from f338)),
   'in_progress|true|true|true',
-  'unfulfilled_at is cleared and started_at is set -- an unfulfilled Task may never have been started (tasks_started_at_state_check)');
+  'unfulfilled_at is cleared and started_at is set -- an unfulfilled Task may never have been started (tasks_started_at_state_ck)');
 select set_eq(
   format($$ select format('%%s|%%s', ledger.reason, ledger.delta)
               from public.points_ledger as ledger where ledger.task_id = %s $$,
@@ -954,7 +954,7 @@ select is(
 -- than a policy denial, and pinning its message is what stops a future
 -- migration that grants `update` back from passing this test by swapping one
 -- 42501 for another. The two points_ledger inserts do exercise RLS: the table
--- is insertable by `authenticated` and ledger_sanction, its only insert
+-- is insertable by `authenticated` and points_ledger_create_sanction, its only insert
 -- policy, demands reason = 'sanction' -- so they fail the policy, with the
 -- policy's own message.
 
@@ -970,7 +970,7 @@ select throws_ok(format($$ insert into public.points_ledger (member_id, delta, r
   values ('33800000-0000-0000-0000-000000000016', 99, 'task_reversal', %s, %s) $$,
   (select direct_write_task_id from f338), (select direct_write_evaluation_id from e338)),
   '42501', 'new row violates row-level security policy for table "points_ledger"',
-  'and cannot hand-write a reversal ledger row either -- the RLS POLICY rejects it: ledger_sanction is the only insert policy and it demands reason = sanction');
+  'and cannot hand-write a reversal ledger row either -- the RLS POLICY rejects it: points_ledger_create_sanction is the only insert policy and it demands reason = sanction');
 reset role;
 select pg_temp.test_login('33800000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
