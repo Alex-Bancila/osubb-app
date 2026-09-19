@@ -4,7 +4,24 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(15);
+-- A second scheduler session must wait for the same advisory lock, before
+-- reading any Task. Both remote transactions roll back, preserving seed data.
+select extensions.dblink_connect('deadline_lock',
+  'host=db.supabase.internal port=5432 dbname=postgres user=postgres password=postgres');
+select extensions.dblink_connect('deadline_retry',
+  'host=db.supabase.internal port=5432 dbname=postgres user=postgres password=postgres');
+select extensions.dblink_exec('deadline_lock',
+  'begin; do $lock$ begin perform pg_catalog.pg_advisory_xact_lock(69, 1); end $lock$;');
+select extensions.dblink_exec('deadline_retry', 'begin; set local lock_timeout = ''250ms'';');
+select throws_ok(
+  $$select * from extensions.dblink('deadline_retry', 'select private.remind_deadlines()') as result(notifications integer)$$,
+  '55P03', 'canceling statement due to lock timeout',
+  'Concurrent scheduler retries serialize on the advisory lock');
+select extensions.dblink_exec('deadline_retry', 'rollback;');
+select extensions.dblink_exec('deadline_lock', 'rollback;');
+select extensions.dblink_disconnect('deadline_retry');
+select extensions.dblink_disconnect('deadline_lock');
 truncate public.tasks cascade;
 truncate public.notifications;
 insert into auth.users (id, email) values
