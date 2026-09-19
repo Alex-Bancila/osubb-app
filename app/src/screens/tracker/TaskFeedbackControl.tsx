@@ -1,5 +1,5 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
 import { useReturnTaskToProgress } from '../../queries/task-feedback';
@@ -17,6 +17,9 @@ export function TaskFeedbackControl({
   const capability = useTaskEvaluationCapability(taskId);
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
+  useEffect(() => {
+    setDone(false);
+  }, [status]);
   if (done)
     return (
       <TaskActionSuccess>
