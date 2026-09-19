@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import {
   useCompleteUmbrella,
+  umbrellaCompletionErrorMessage,
   useCreateSubtask,
 } from '../../queries/task-umbrella';
 import type { TaskDetailsData } from '../../queries/task-details';
@@ -86,21 +87,7 @@ function UmbrellaActions({
                   await complete.mutateAsync(taskId);
                   setDone(true);
                 } catch (failure) {
-                  const code =
-                    typeof failure === 'object' &&
-                    failure !== null &&
-                    'code' in failure
-                      ? failure.code
-                      : undefined;
-                  setError(
-                    code === '42501'
-                      ? 'Nu ai permisiunea să finalizezi acest task-umbrelă.'
-                      : code === 'PT409'
-                        ? 'Starea subtaskurilor s-a schimbat. Verifică lista actualizată.'
-                        : code === 'PT404'
-                          ? 'Taskul-umbrelă nu mai este disponibil.'
-                          : 'Nu am putut finaliza taskul-umbrelă. Reîncearcă.',
-                  );
+                  setError(umbrellaCompletionErrorMessage(failure));
                 } finally {
                   saving.current = false;
                   setPending(false);

@@ -8,7 +8,9 @@ const create = vi.hoisted(() => vi.fn());
 const form = vi.hoisted(() => ({
   onDraft: (_draft: object): void => undefined,
 }));
-vi.mock('../../queries/task-umbrella', () => ({
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock('../../queries/task-umbrella', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/task-umbrella')>()),
   useCompleteUmbrella: () => ({ mutateAsync: complete }),
   useCreateSubtask: () => ({ mutateAsync: create, isPending: false }),
 }));
@@ -122,7 +124,11 @@ describe('Umbrella progress and actions', () => {
   });
   it('shows safe conflicts and allows retry after the list changes', async () => {
     complete
-      .mockRejectedValueOnce({ code: 'PT409', message: 'private internals' })
+      .mockRejectedValueOnce({
+        code: 'PT409',
+        message: 'subtasks_not_terminal',
+        details: 'private internals',
+      })
       .mockResolvedValueOnce({ id: 10 });
     const user = userEvent.setup();
     render(
