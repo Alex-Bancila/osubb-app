@@ -78,13 +78,11 @@ it('maps authoritative submission errors and prevents duplicate commands while r
       finish = resolve;
     }),
   );
-  const onDraft = vi
-    .fn()
-    .mockRejectedValue({
-      code: '42501',
-      message: 'task_manage_forbidden',
-      details: 'private authority SQL',
-    });
+  const onDraft = vi.fn().mockRejectedValue({
+    code: '42501',
+    message: 'task_manage_forbidden',
+    details: 'private authority SQL',
+  });
   const { container } = render(<ManagedTaskForm onDraft={onDraft} />);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Titlu (obligatoriu)'), 'Task');
