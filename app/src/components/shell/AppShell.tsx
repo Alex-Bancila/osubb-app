@@ -265,7 +265,7 @@ export default function AppShell() {
               className={({ isActive }) =>
                 cn(
                   'flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10.5px] font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-                  isActive && 'text-primary',
+                  isActive && 'text-red-700',
                 )
               }
             >
