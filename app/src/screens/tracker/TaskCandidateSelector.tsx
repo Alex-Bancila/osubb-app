@@ -9,6 +9,9 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
   const candidates = usePendingTaskCandidates(taskId);
   const selection = useSelectTaskCandidate();
   const [candidateId, setCandidateId] = useState<number | null>(null);
+  const [queueDecision, setQueueDecision] = useState<'keep' | 'close' | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -38,16 +41,23 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
     (candidate) => candidate.id === candidateId,
   );
 
+  const hasRemaining = candidates.data.length > 1;
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) {
       setError('Alege un candidat valid din coadă.');
       return;
     }
+    if (hasRemaining && queueDecision === null) return;
     setError(null);
     setMessage(null);
     try {
-      await selection.mutateAsync({ taskId, candidateId: selected.id });
+      await selection.mutateAsync({
+        taskId,
+        candidateId: selected.id,
+        ...(hasRemaining ? { closeRemaining: queueDecision === 'close' } : {}),
+      });
       setMessage(`${selected.memberName} este acum executorul taskului.`);
     } catch (failure) {
       const kind =
@@ -76,9 +86,7 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
     <form className="space-y-3" onSubmit={submit}>
       <fieldset className="space-y-2" disabled={selection.isPending}>
         <legend className="text-sm font-semibold">Alege din coadă</legend>
-        <p className="text-sm text-muted-foreground">
-          După alegere, coada rămâne deschisă pentru candidaturile rămase.
-        </p>
+
         <div className="grid gap-2">
           {candidates.data.map((candidate, index) => (
             <label
@@ -100,6 +108,26 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
             </label>
           ))}
         </div>
+        {hasRemaining && (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-semibold">
+              Ce se întâmplă cu celelalte candidaturi?
+            </legend>
+            {(['keep', 'close'] as const).map((choice) => (
+              <label key={choice} className="flex min-h-11 items-center gap-3">
+                <input
+                  type="radio"
+                  name={`task-${taskId}-remaining`}
+                  checked={queueDecision === choice}
+                  onChange={() => setQueueDecision(choice)}
+                />
+                {choice === 'keep'
+                  ? 'Păstrează candidaturile rămase'
+                  : 'Închide candidaturile rămase'}
+              </label>
+            ))}
+          </fieldset>
+        )}
       </fieldset>
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -114,7 +142,11 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
       <Button
         type="submit"
         className="min-h-11 min-w-11 w-full sm:w-auto"
-        disabled={!selected || selection.isPending}
+        disabled={
+          !selected ||
+          (hasRemaining && queueDecision === null) ||
+          selection.isPending
+        }
       >
         {selection.isPending ? 'Se atribuie…' : 'Alege executorul'}
       </Button>

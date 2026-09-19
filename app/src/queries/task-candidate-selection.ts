@@ -73,13 +73,15 @@ export async function fetchPendingTaskCandidates(
   }));
 }
 
-export async function selectTaskCandidate(taskId: number, candidateId: number) {
+export async function selectTaskCandidate(
+  taskId: number,
+  candidateId: number,
+  closeRemaining = false,
+) {
   const { data, error } = await supabase.rpc('select_task_candidate', {
     p_task_id: taskId,
     p_candidate_id: candidateId,
-    // #178 adds the explicit keep/close decision. Until then selection keeps
-    // the remaining candidates available instead of discarding them silently.
-    p_close_remaining: false,
+    p_close_remaining: closeRemaining,
   });
   if (error) throw taskCandidateSelectionError(error.code);
   return data;
@@ -99,10 +101,12 @@ export function useSelectTaskCandidate() {
     mutationFn: ({
       taskId,
       candidateId,
+      closeRemaining,
     }: {
       taskId: number;
       candidateId: number;
-    }) => selectTaskCandidate(taskId, candidateId),
+      closeRemaining?: boolean;
+    }) => selectTaskCandidate(taskId, candidateId, closeRemaining),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.tasks.all }),
   });
 }

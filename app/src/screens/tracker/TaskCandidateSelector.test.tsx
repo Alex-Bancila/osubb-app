@@ -50,16 +50,55 @@ describe('Task candidate selector', () => {
     const submit = screen.getByRole('button', { name: 'Alege executorul' });
     expect(submit).toBeDisabled();
     await user.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    expect(submit).toBeDisabled();
+    await user.click(
+      screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
+    );
     await user.click(submit);
 
     expect(hooks.selection.mutateAsync).toHaveBeenCalledWith({
       taskId: 17,
       candidateId: 31,
+      closeRemaining: false,
     });
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Ana Pop este acum executorul taskului.',
     );
-    expect(screen.getByText(/coada rămâne deschisă/i)).toBeVisible();
+  });
+
+  it('closes the remaining candidatures only after an explicit decision', async () => {
+    render(<TaskCandidateSelector taskId={17} />);
+    await userEvent.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'Închide candidaturile rămase' }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Alege executorul' }),
+    );
+    expect(hooks.selection.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      taskId: 17,
+      candidateId: 31,
+      closeRemaining: true,
+    });
+  });
+
+  it('omits the decision when no candidates remain', async () => {
+    hooks.candidates.mockReturnValue({
+      ...hooks.candidates(),
+      data: hooks.candidates().data.slice(0, 1),
+    });
+    render(<TaskCandidateSelector taskId={17} />);
+    expect(
+      screen.queryByText('Ce se întâmplă cu celelalte candidaturi?'),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Alege executorul' }),
+    );
+    expect(hooks.selection.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      taskId: 17,
+      candidateId: 31,
+    });
   });
 
   it('preserves the selection and refreshes the queue after a race conflict', async () => {
@@ -81,6 +120,9 @@ describe('Task candidate selector', () => {
 
     const ana = screen.getByRole('radio', { name: /Ana Pop/ });
     await user.click(ana);
+    await user.click(
+      screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
+    );
     await user.click(screen.getByRole('button', { name: 'Alege executorul' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -98,6 +140,9 @@ describe('Task candidate selector', () => {
     render(<TaskCandidateSelector taskId={17} />);
 
     await user.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await user.click(
+      screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
+    );
     await user.click(screen.getByRole('button', { name: 'Alege executorul' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -141,7 +186,7 @@ describe('Task candidate selector', () => {
 
   it('uses semantic controls with no accessibility violations', async () => {
     const { container } = render(<TaskCandidateSelector taskId={17} />);
-    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
     expect((await axe.run(container)).violations).toEqual([]);
   });
 });
