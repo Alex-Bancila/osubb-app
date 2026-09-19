@@ -42,6 +42,8 @@ export const keys = {
   },
   tasks: {
     all: ['tasks'] as const,
+    directExecutors: (memberId: string | undefined) =>
+      ['tasks', 'direct-executors', { memberId }] as const,
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
