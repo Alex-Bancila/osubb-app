@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { keys } from './keys';
+import type { Database } from '../lib/database.types';
 
 /**
  * My points total.
@@ -30,13 +31,25 @@ export function useMyPoints() {
   });
 }
 
-/** One RLS-protected read feeds every dashboard ranking projection. */
-export async function fetchLeaderboard() {
-  const { data, error } = await supabase.rpc('leadership_leaderboard');
-  if (error) throw error;
-  return data;
+type Board =
+  Database['public']['Functions']['leadership_leaderboard']['Returns'];
+const BOARD_PAGE_SIZE = 500;
+
+/** One shared, complete RLS-protected board feeds every ranking projection. */
+export async function fetchLeaderboard(): Promise<Board> {
+  const board: Board = [];
+  for (let from = 0; ; from += BOARD_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .rpc('leadership_leaderboard')
+      .order('rank')
+      .order('full_name')
+      .order('member_id')
+      .range(from, from + BOARD_PAGE_SIZE - 1);
+    if (error) throw error;
+    board.push(...data);
+    if (data.length < BOARD_PAGE_SIZE) return board;
+  }
 }
-type Board = Awaited<ReturnType<typeof fetchLeaderboard>>;
 
 export function standingFromBoard(board: Board, memberId: string) {
   const mine = board.find((row) => row.member_id === memberId) ?? null;
