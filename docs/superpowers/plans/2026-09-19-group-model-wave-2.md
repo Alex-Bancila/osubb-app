@@ -49,7 +49,7 @@ These rulings are **binding**. The eight task sections below carry the full step
 | OD5 `update_event` semantics | Full-state replace. | Matches how the form submits; a field can be cleared. | — |
 | OD8 Organization-Group Campaigns | Allowed; only level ≥ 6 manages them. | No category branch; the org Group is a Group. | — |
 | OD9 test fixtures writing `groups.min_level` / native Groups inside rolled-back suites | Accepted exception, recorded in conventions §10. | The kit cannot be tested otherwise before Wave 3. | — |
-| Issue numbers | Task 0 files N1–N8 first; `#N1`…`#N8` are substituted into the plan (docs-only commit) before Task 1 is dispatched, as in Wave 1. | — | — |
+| Issue numbers | Task 0 files N1–N8 first; `#519`…`#524` are substituted into the plan (docs-only commit) before Task 1 is dispatched, as in Wave 1. | — | — |
 
 ## Global constraints
 
@@ -66,14 +66,14 @@ These rulings are **binding**. The eight task sections below carry the full step
 
 **Cross-cutting decisions the draft fixes** (kept): `group_id bigint not null references groups(id)` on `tasks`, `events`, `campaigns`, `completed_work_requests` with a `before insert or update` trigger per table (`<table>_sync_group_origin`, sorting before `tasks_validate_campaign`/`_hierarchy`) that derives whichever side was not written and raises 23514 on disagreement; resolver `private.group_id_for_legacy_origin(text,text,bigint)` (project > team > dept); `require_group_work_manager` locks the actor's profile and their `group_members` rows on the path `for share` and never a `groups` row (#509 ruling); ancestry probed with `path @> array[x]`; roster 107 → 112 → 120 → 120 → 122 → 123 → 126; nothing gates on level 4 after #370 (`announcements_write`, `attendance_read`, `capabilities.ts` deferred to Wave 3).
 
-- **Task 1 — #N1 `group_id` columns.** Migration adds the four columns, indexes, `campaigns.department_id` nullable + `campaigns_group_name_uidx` replacing the department index (handlers in `create/update_campaign_impl` re-issued), relaxed `events_scope_fields_ck` (a `team` Event may have `dept_id null`), `events_min_level_ck in (0,3,5,6)` after moving 4 → 5, backfill through `legacy_*` with an "unmapped row IDs" guard, `set not null`, the four trigger functions, `tasks_with_overdue` recreated. Suite `group_origin_sync.test.sql` (≈34: both derivation directions per table, mismatch, required, unmapped, fill-when-null vs FK, trigger order pin, view column); retargets in `tasks_origin`, `completed_work_requests_schema`, `campaigns_schema`, `event_constraints`, `rls_events`, `rls_event_attendance`, `set_event_rsvp`, `leadership_member_tasks`; harness `tasks_group_id_backfill_upgrade.test.sh` (happy path + orphan failure path + live post-check); `seed-fingerprint` campaign line `coalesce`; types regenerated.
-- **Task 2 — #N2 authority kit.** `private.group_role_of(bigint,uuid)` (manager/responsible from the path, member per Group — ruling D2), `is_group_member`, `has_group_manager`, `is_group_manager`, `is_group_responsible`, `can_manage_group_work` (level ≥ 6, or Manager/Responsible on the path of an active Group), `require_group_work_manager` (`42501 group_manage_forbidden`), `group_managers` (Managers → nearest ancestor's → Responsibles ∪ BC when none — ruling D4). Suite `group_authority.test.sql` (≈44 over Department → Child Team (min 3), Project active/archived, Independent Team, Organization Group, native automatic Group; 14 personas incl. stale-claim, inactive, claimless, anon; `pgrowlocks` lock pin; `test_race` revocation wait). `conventions.test.sql` gains the two `category` sweeps with probes (plan 10 → 14).
-- **Task 3 — #N3 Task predicates on Groups.** `create or replace` with unchanged signatures: `can_manage_task` (manage-work ∧ (level ≥ 6 ∨ Manager on path ∨ no Manager on path ∨ Executor not a Manager/Responsible of the chain)), `can_evaluate_task` (level ≥ 6 ∨ Manager on active path ∨ Responsible when the Executor is ordinary/outsider and not the caller), `can_read_task` (R1 level ≥ 5; R2 own Assignment/Candidature; then Minimum Level unless a Group Role on the path; R3 Group Role on the path; R4 Shared Work Visibility of the Task's Group; R6 open Opportunity, `org` by level, `local` by membership of the Task's Group — ruling D2; judged on Task and Umbrella), `is_task_team_member` (member of the Task's Group with Shared Work Visibility on), shims `can_manage_origin`/`require_origin_manager` over the resolver, `require_task_manager`/`require_task_evaluator` (Task rule first, then the locked re-validation, reasons preserved), `task_managers` (creator first, else `group_managers`), `public.can_manage_tasks()`. Suites: `can_manage_origin` rewritten as shim + `can_manage_task` matrix, `rls_tasks_read_matrix` re-derived (new personas: level-1 Coordonator, below-min-level member, stale role), `points_authorization_matrix` + Coordonator/Responsible personas, 16 command suites gain Coordonator / Responsible-on-peer / Independent-Team-peer / Department-Team-member assertions, recipient `set_eq`s per D4, `rls_task_history_read`, `tracker_management_reads`, `notify_helper`. Re-run #318's 5,000-Task timing before merge.
-- **Task 4 — #N4 commands, Requests, Campaigns.** `create_task(+p_group_id)` writes `group_id` (old arity dropped); `duplicate`/`approve` copy it; `private.request_deciders(p_request_id) returns setof uuid` + `can_decide_request` as the single decider source (Manager on path; Responsible for ordinary requesters; level ≥ 6), `require_request_decider` delegates, the two inline copies removed, `create_completed_work_request(+p_group_id)` (membership = `group_role_of(...) is not null` on the Group itself), `completed_work_requests_read` on `can_manage_group_work(group_id)`; `require_campaign_manager(bigint)`, `create_campaign(bigint,text)` + the `(text,text)` compat overload (distinct parameter names), `validate_task_campaign` on the path (Projects and Independent Teams may carry Campaigns), `validate_task_hierarchy`/`validate_task_campaign` `of` lists gain `group_id`. Suites `completed_work_request_commands`, `campaign_commands`, `tasks_campaign` rewritten; `create_task`, `duplicate_task`, `tasks_umbrella` extended; roster 120 → 122; types + frontend gates (`completed-work-requests.ts` compiles unchanged).
+- **Task 1 — #519 `group_id` columns.** Migration adds the four columns, indexes, `campaigns.department_id` nullable + `campaigns_group_name_uidx` replacing the department index (handlers in `create/update_campaign_impl` re-issued), relaxed `events_scope_fields_ck` (a `team` Event may have `dept_id null`), `events_min_level_ck in (0,3,5,6)` after moving 4 → 5, backfill through `legacy_*` with an "unmapped row IDs" guard, `set not null`, the four trigger functions, `tasks_with_overdue` recreated. Suite `group_origin_sync.test.sql` (≈34: both derivation directions per table, mismatch, required, unmapped, fill-when-null vs FK, trigger order pin, view column); retargets in `tasks_origin`, `completed_work_requests_schema`, `campaigns_schema`, `event_constraints`, `rls_events`, `rls_event_attendance`, `set_event_rsvp`, `leadership_member_tasks`; harness `tasks_group_id_backfill_upgrade.test.sh` (happy path + orphan failure path + live post-check); `seed-fingerprint` campaign line `coalesce`; types regenerated.
+- **Task 2 — #520 authority kit.** `private.group_role_of(bigint,uuid)` (manager/responsible from the path, member per Group — ruling D2), `is_group_member`, `has_group_manager`, `is_group_manager`, `is_group_responsible`, `can_manage_group_work` (level ≥ 6, or Manager/Responsible on the path of an active Group), `require_group_work_manager` (`42501 group_manage_forbidden`), `group_managers` (Managers → nearest ancestor's → Responsibles ∪ BC when none — ruling D4). Suite `group_authority.test.sql` (≈44 over Department → Child Team (min 3), Project active/archived, Independent Team, Organization Group, native automatic Group; 14 personas incl. stale-claim, inactive, claimless, anon; `pgrowlocks` lock pin; `test_race` revocation wait). `conventions.test.sql` gains the two `category` sweeps with probes (plan 10 → 14).
+- **Task 3 — #521 Task predicates on Groups.** `create or replace` with unchanged signatures: `can_manage_task` (manage-work ∧ (level ≥ 6 ∨ Manager on path ∨ no Manager on path ∨ Executor not a Manager/Responsible of the chain)), `can_evaluate_task` (level ≥ 6 ∨ Manager on active path ∨ Responsible when the Executor is ordinary/outsider and not the caller), `can_read_task` (R1 level ≥ 5; R2 own Assignment/Candidature; then Minimum Level unless a Group Role on the path; R3 Group Role on the path; R4 Shared Work Visibility of the Task's Group; R6 open Opportunity, `org` by level, `local` by membership of the Task's Group — ruling D2; judged on Task and Umbrella), `is_task_team_member` (member of the Task's Group with Shared Work Visibility on), shims `can_manage_origin`/`require_origin_manager` over the resolver, `require_task_manager`/`require_task_evaluator` (Task rule first, then the locked re-validation, reasons preserved), `task_managers` (creator first, else `group_managers`), `public.can_manage_tasks()`. Suites: `can_manage_origin` rewritten as shim + `can_manage_task` matrix, `rls_tasks_read_matrix` re-derived (new personas: level-1 Coordonator, below-min-level member, stale role), `points_authorization_matrix` + Coordonator/Responsible personas, 16 command suites gain Coordonator / Responsible-on-peer / Independent-Team-peer / Department-Team-member assertions, recipient `set_eq`s per D4, `rls_task_history_read`, `tracker_management_reads`, `notify_helper`. Re-run #318's 5,000-Task timing before merge.
+- **Task 4 — #522 commands, Requests, Campaigns.** `create_task(+p_group_id)` writes `group_id` (old arity dropped); `duplicate`/`approve` copy it; `private.request_deciders(p_request_id) returns setof uuid` + `can_decide_request` as the single decider source (Manager on path; Responsible for ordinary requesters; level ≥ 6), `require_request_decider` delegates, the two inline copies removed, `create_completed_work_request(+p_group_id)` (membership = `group_role_of(...) is not null` on the Group itself), `completed_work_requests_read` on `can_manage_group_work(group_id)`; `require_campaign_manager(bigint)`, `create_campaign(bigint,text)` + the `(text,text)` compat overload (distinct parameter names), `validate_task_campaign` on the path (Projects and Independent Teams may carry Campaigns), `validate_task_hierarchy`/`validate_task_campaign` `of` lists gain `group_id`. Suites `completed_work_request_commands`, `campaign_commands`, `tasks_campaign` rewritten; `create_task`, `duplicate_task`, `tasks_umbrella` extended; roster 120 → 122; types + frontend gates (`completed-work-requests.ts` compiles unchanged).
 - **Task 5 — #370 `create_event`.** Wrapper + `private.create_event_impl(p_title, p_type, p_group_id, p_starts_at, p_ends_at, p_location, p_capacity, p_description, p_min_level)`; Organization Group → any live Group-Role holder or level ≥ 6, otherwise `require_group_work_manager`; `PT400 event_min_level_below_group` / `event_min_level_above_actor` (Moderator exempt); legacy `scope/dept_id/team_id` derived by the N1 trigger; the 10-arg direct-definer dropped; `create_event.test.sql` rewritten (Coordonator on a Project Event, Independent-Team Event, ancestor Manager, ordinary member refused, min-level bounds); conventions §2 grandfathered list updated; roster 122 → 123.
 - **Task 6 — #248 `update_event`, `cancel_event`.** Full-state `update_event` and `cancel_event(p_event_id, p_reason)`; authority: Organization Group Events by creator or level ≥ 6, others by `can_manage_group_work` on the path; `private.event_notification_recipients` = current attendees ∪ explicit members of the Event's Group; important changes (`starts_at`/`ends_at`, location, Group, `min_level`, cancellation) notify with `dedupe_key 'event:<id>:<field>'` and `p_link '/calendar'` (OD4: `private.notify` gains `p_link`); `events.updated_at` + trigger; suites `update_event.test.sql`, `cancel_event.test.sql`; roster 123 → 126.
-- **Task 7 — #N7 leadership.** `leadership_leaderboard(p_group_id bigint default null, p_campaign_id bigint default null)` (Group filter includes every Group below via `path @>`); `private.department_cup_rows` credits a Task to the nearest ancestor-or-self with `competes_in_cup` only when every link up to it has `counts_toward_parent_cup` (`departments.kind` no longer read); `dept_cup` keeps `dept_id, name, points, members` and appends `group_id`; `leadership_member_tasks` adds `group_id, group_name`; suites `leadership_leaderboard`, `department_cup_task_origins`, `dept_cup`, `leadership_member_tasks` rewritten; the Dashboard's `points.ts` contract untouched.
-- **Task 8 — #N8 closeout.** Smoke script gains four scenarios (Coordonator manages a Project Task; a Responsible refused on a Manager's Task; an Independent-Team peer manages a teammate's Task; a below-min-level member sees no org Opportunity) and two denials; `docs/backend/conventions.md` §10 → "Groups (Waves 1–2)" (kit, shims, trigger ordering rule for future BEFORE triggers on `tasks`, OD9 fixture exception); `CONTEXT.md` identifiers (`tasks.group_id`, `events.group_id`, `campaigns.group_id`); ADR-0008/0009 amendments (`create_event` signature, the two new commands, Campaign ownership landed); `CLAUDE.md` Status.
+- **Task 7 — #523 leadership.** `leadership_leaderboard(p_group_id bigint default null, p_campaign_id bigint default null)` (Group filter includes every Group below via `path @>`); `private.department_cup_rows` credits a Task to the nearest ancestor-or-self with `competes_in_cup` only when every link up to it has `counts_toward_parent_cup` (`departments.kind` no longer read); `dept_cup` keeps `dept_id, name, points, members` and appends `group_id`; `leadership_member_tasks` adds `group_id, group_name`; suites `leadership_leaderboard`, `department_cup_task_origins`, `dept_cup`, `leadership_member_tasks` rewritten; the Dashboard's `points.ts` contract untouched.
+- **Task 8 — #524 closeout.** Smoke script gains four scenarios (Coordonator manages a Project Task; a Responsible refused on a Manager's Task; an Independent-Team peer manages a teammate's Task; a below-min-level member sees no org Opportunity) and two denials; `docs/backend/conventions.md` §10 → "Groups (Waves 1–2)" (kit, shims, trigger ordering rule for future BEFORE triggers on `tasks`, OD9 fixture exception); `CONTEXT.md` identifiers (`tasks.group_id`, `events.group_id`, `campaigns.group_id`); ADR-0008/0009 amendments (`create_event` signature, the two new commands, Campaign ownership landed); `CLAUDE.md` Status.
 
 ## Verification (whole wave)
 
@@ -110,12 +110,12 @@ Body rules unchanged (house rule 15 sections, CONTEXT.md terms, `## What to buil
 | Issue | Change | Blockers / milestone |
 | ----- | ------ | -------------------- |
 | #505 | Fill child numbers N1–N8 into `## Scope`; add one sentence: roster and structure gates (`add/remove_*_team_member`, `add/remove_project_member`, `grant/revoke_project_responsible`, `can_administer_team_structure`, `can_manage_department_memberships`) stay on the legacy tables until Wave 3 replaces them with Group commands. | — |
-| #370 | Milestone Calendar rebuild → Wave 2; title `Calendar: create_event authorizes by Group Role`; body: wrapper + `private.create_event_impl`, `p_group_id` replaces `p_scope/p_dept_id/p_team_id` (legacy params kept as defaulted aliases for one release), `events.group_id` from N1, Organization Group Event by any Group-Role holder, ancestor Managers/Responsibles otherwise, min-level rules; Independent-Team Events become possible. | `- #N2` (replace the closed `#276 #364 #369 #505`) |
-| #248 | Title `Calendar: update and cancel an Event by Group Role`; body: `update_event` and `cancel_event` do not exist today — this issue creates both (wrapper + impl), important-change notifications through `private.notify`, cancellation reason preserved. | `- #N5`, `- #98` (replace `#505`) |
-| #353 | Append ADR-0009 note: deciders are the Group Managers of the Request's Group or an ancestor, Group Responsibles for ordinary members' Requests, BC/Moderator; "local BCE sees only their departments' requests" becomes "a Group Manager sees the Requests of their Groups and every Group below". | `+ #N4` |
-| #349 | Append: `create_campaign(p_group_id, p_name)`; the Department-only kind check is gone; Campaigns of a Group tag Tasks of that Group and every Group below it. | `#505` → `#N4` |
-| #180, #182, #183, #184, #350, #354 | Replace the `#505` blocker with the concrete Wave 2 child each depends on: #180/#182/#184 → `#N4` (campaign rule) ; #183/#350 → `#N3` (Minimum-Level exclusion, manage authority); #354 → `#N7`. No body change beyond the blocker line. | as stated |
-| #67 | `#505` → `#N3` (the per-role sweep needs the rewritten Task authority, not the whole wave). | |
+| #370 | Milestone Calendar rebuild → Wave 2; title `Calendar: create_event authorizes by Group Role`; body: wrapper + `private.create_event_impl`, `p_group_id` replaces `p_scope/p_dept_id/p_team_id` (legacy params kept as defaulted aliases for one release), `events.group_id` from N1, Organization Group Event by any Group-Role holder, ancestor Managers/Responsibles otherwise, min-level rules; Independent-Team Events become possible. | `- #520` (replace the closed `#276 #364 #369 #505`) |
+| #248 | Title `Calendar: update and cancel an Event by Group Role`; body: `update_event` and `cancel_event` do not exist today — this issue creates both (wrapper + impl), important-change notifications through `private.notify`, cancellation reason preserved. | `- #370`, `- #98` (replace `#505`) |
+| #353 | Append ADR-0009 note: deciders are the Group Managers of the Request's Group or an ancestor, Group Responsibles for ordinary members' Requests, BC/Moderator; "local BCE sees only their departments' requests" becomes "a Group Manager sees the Requests of their Groups and every Group below". | `+ #522` |
+| #349 | Append: `create_campaign(p_group_id, p_name)`; the Department-only kind check is gone; Campaigns of a Group tag Tasks of that Group and every Group below it. | `#505` → `#522` |
+| #180, #182, #183, #184, #350, #354 | Replace the `#505` blocker with the concrete Wave 2 child each depends on: #180/#182/#184 → `#522` (campaign rule) ; #183/#350 → `#521` (Minimum-Level exclusion, manage authority); #354 → `#523`. No body change beyond the blocker line. | as stated |
+| #67 | `#505` → `#521` (the per-role sweep needs the rewritten Task authority, not the whole wave). | |
 | #68 | Append: "Department announcements fan out to that Department's Group members, including every Group below it, once `announcements` carries `group_id` (Wave 3, #506)". | `+ #506` |
 | #98, #96 | Append an ADR-0009 note restating "organization, department, team, project" as "the Event's Group, its ancestors, and the Organization Group"; #98's children stay #370 and #248. | — |
 | #379 | Append: skip the `departments.kind` check constraint — Wave 3 (#506) drops the column. | — |
@@ -167,9 +167,9 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 ```
 
 ---
-## Task 1 — #N1: `group_id` on tasks, events, campaigns, completed_work_requests
+## Task 1 — #519: `group_id` on tasks, events, campaigns, completed_work_requests
 
-**Issue/Branch:** `#N1` · `backend/N1-group-id-columns`
+**Issue/Branch:** `#519` · `backend/N1-group-id-columns`
 
 **Files**
 - create `supabase/migrations/<ts>_group_id_on_work_and_events.sql`
@@ -193,10 +193,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 - [ ] 2. Migration header and the resolver:
 
 ```sql
--- #N1: group_id on tasks, events, campaigns and completed_work_requests -- backfilled from the
+-- #519: group_id on tasks, events, campaigns and completed_work_requests -- backfilled from the
 -- legacy Origin through groups.legacy_*, kept consistent both ways by trigger (ADR-0009 Wave 2).
 -- Legacy columns stay the write master; the two-way trigger lets the Wave 2 commands write
--- group_id while every older writer (seed, smoke script, the 21 commands until #N4) keeps
+-- group_id while every older writer (seed, smoke script, the 21 commands until #522) keeps
 -- writing dept_id/team_id/project_id.
 
 create function private.group_id_for_legacy_origin(
@@ -218,7 +218,7 @@ as $$
          end;
 $$;
 comment on function private.group_id_for_legacy_origin(text, text, bigint) is
-  'The Group that masters a legacy Origin (project, else team, else department). Null when nothing matches. Wave 2 bridge; dropped in Wave 3 (#N1).';
+  'The Group that masters a legacy Origin (project, else team, else department). Null when nothing matches. Wave 2 bridge; dropped in Wave 3 (#519).';
 revoke execute on function private.group_id_for_legacy_origin(text, text, bigint)
   from public, anon, authenticated, service_role;
 ```
@@ -420,7 +420,7 @@ Existing suites to retarget (one line each, the reason in the assertion text):
 - `event_constraints.test.sql:49–53` (project without project), `:163–166`, `:188–191` → `event_group_required`; `:182–186` 'a team event requires its department' → `lives_ok` + `is(dept_id, 'edu')`; `:193–197` stays `23503`.
 - `rls_events.test.sql` — the two `min_level 4` rows become 5 ('Dept gated 5', 'Recrutare grea' 5); the Responsabil set drops them; BCE/BC sets keep them.
 - `rls_event_attendance.test.sql:69`, `set_event_rsvp.test.sql:41` — 'RSVP imagine' `min_level 4 → 3` (still hidden from the level-1 Voluntar, still read by the level-4 persona; every expectation unchanged).
-- `leadership_member_tasks.test.sql:41–43` — the exclusion list gains `('group_id')` with a `-- #N7 exposes it` note (removed again in Task 7).
+- `leadership_member_tasks.test.sql:41–43` — the exclusion list gains `('group_id')` with a `-- #523 exposes it` note (removed again in Task 7).
 - `tracker_grants.test.sql` — five rows: `group_id_for_legacy_origin` `none`; `sync_task_group_origin`, `sync_event_group_origin`, `sync_campaign_group_origin`, `sync_request_group_origin` `trigger`; count 107 → 112.
 
 **Harness outline — `supabase/tests/tasks_group_id_backfill_upgrade.test.sh`** (model: `tasks_origin_upgrade.test.sh` for the teardown and the failure path, `groups_backfill_upgrade.test.sh` for the post-transaction proof)
@@ -432,13 +432,13 @@ Existing suites to retarget (one line each, the reason in the assertion text):
 
 **Verification:** shared sequence; the new harness runs in the loop; `check-seed-rerunnable.sh` proves the seed's delete order (`tasks`, `completed_work_requests`, `campaigns`, `events` before `projects`/`teams`) survives the four new FKs; smoke unchanged.
 
-**Commit:** `feat(db): group_id on tasks, events, campaigns and completed-work requests, kept in sync with the legacy Origin both ways (#N1)`.
+**Commit:** `feat(db): group_id on tasks, events, campaigns and completed-work requests, kept in sync with the legacy Origin both ways (#519)`.
 
 ---
 
-## Task 2 — #N2: the Group authority kit + `group_authority.test.sql` + the no-category-branch check
+## Task 2 — #520: the Group authority kit + `group_authority.test.sql` + the no-category-branch check
 
-**Issue/Branch:** `#N2` · `backend/N2-group-authority-kit`
+**Issue/Branch:** `#520` · `backend/N2-group-authority-kit`
 
 **Files**
 - create `supabase/migrations/<ts>_group_authority_kit.sql`
@@ -462,8 +462,8 @@ Existing suites to retarget (one line each, the reason in the assertion text):
 - [ ] 2. The kit:
 
 ```sql
--- #N2: the Group authority kit (ADR-0009 Wave 2): one family of predicates over groups.path
--- and group_members.group_role that #N3 puts under every Task predicate, #N4 under the
+-- #520: the Group authority kit (ADR-0009 Wave 2): one family of predicates over groups.path
+-- and group_members.group_role that #521 puts under every Task predicate, #522 under the
 -- Request and Campaign commands, #370/#248 under the Calendar. Nothing here reads the
 -- presentation label on groups (conventions.test.sql now machine-checks that).
 
@@ -753,13 +753,13 @@ Personas: `bc` (level 6); `bce_edu` (rank bce + `member_departments edu` → man
 
 `plan(44)` (adjust to the final count).
 
-**Commit:** `feat(db): Group authority kit -- group_role_of, can_manage_group_work, require_group_work_manager, group_managers -- and the no-category-branch conventions check (#N2)`.
+**Commit:** `feat(db): Group authority kit -- group_role_of, can_manage_group_work, require_group_work_manager, group_managers -- and the no-category-branch conventions check (#520)`.
 
 ---
 
-## Task 3 — #N3: the Task predicates and `require_*` helpers read Groups
+## Task 3 — #521: the Task predicates and `require_*` helpers read Groups
 
-**Issue/Branch:** `#N3` · `backend/N3-task-authority-on-groups`
+**Issue/Branch:** `#521` · `backend/N3-task-authority-on-groups`
 
 **Files**
 - create `supabase/migrations/<ts>_task_authority_on_groups.sql`
@@ -781,7 +781,7 @@ Personas: `bc` (level 6); `bce_edu` (rank bce + `member_departments edu` → man
 - [ ] 2. The predicates:
 
 ```sql
--- #N3: every Task predicate and require_* helper reads Groups (ADR-0009 Wave 2). Signatures
+-- #521: every Task predicate and require_* helper reads Groups (ADR-0009 Wave 2). Signatures
 -- are unchanged; the four history read policies, the 21 commands and the Request commands
 -- keep calling the same names. can_manage_origin / require_origin_manager become shims over
 -- the legacy id -> Group mapping and are dropped in Wave 3.
@@ -1077,13 +1077,13 @@ Command suites — add these personas/assertions (one `throws_ok`/`lives_ok` eac
 - `tracker_management_reads.test.sql`: `can_manage_tasks()` true for the Coordonator and the Independent-Team member, false for the ordinary Member; `my_managed_task_ids()` sets re-derived.
 - `notify_helper.test.sql`: recipient expectations follow `task_managers` above.
 
-**Commit:** `feat(db): Task predicates, require_* helpers and task_managers read Groups; can_manage_origin/require_origin_manager become shims (#N3)`.
+**Commit:** `feat(db): Task predicates, require_* helpers and task_managers read Groups; can_manage_origin/require_origin_manager become shims (#521)`.
 
 ---
 
-## Task 4 — #N4: commands write `group_id`; Requests and Campaigns decide by Group
+## Task 4 — #522: commands write `group_id`; Requests and Campaigns decide by Group
 
-**Issue/Branch:** `#N4` · `backend/N4-commands-on-groups`
+**Issue/Branch:** `#522` · `backend/N4-commands-on-groups`
 
 **Files**
 - create `supabase/migrations/<ts>_commands_write_group_id.sql`
@@ -1215,7 +1215,7 @@ create policy completed_work_requests_read on public.completed_work_requests
 
 `create_task.test.sql`: add `p_group_id`-only creation by coord ✔; `p_group_id` + `p_project_id` both ✘ `invalid_origin`; Subtask with `p_group_id` ≠ Umbrella's ✘ `subtask_origin_mismatch`; the created row's `dept_id/team_id/project_id` derived; unknown `p_group_id` ✘ `task_manage_forbidden` for coord **and** for bc. `duplicate_task.test.sql`: the clone's `group_id` equals the source's. `tasks_umbrella.test.sql`: `update … set group_id` on a Subtask ✘ `subtask_origin_immutable`.
 
-**Commit:** `feat(db): create_task/duplicate_task write group_id; Requests decide by Group Role; Campaigns owned by any Group (#N4)`.
+**Commit:** `feat(db): create_task/duplicate_task write group_id; Requests decide by Group Role; Campaigns owned by any Group (#522)`.
 
 ---
 
@@ -1322,9 +1322,9 @@ create policy completed_work_requests_read on public.completed_work_requests
 
 ---
 
-## Task 7 — #N7: leadership filters by Group; Department Cup by settings
+## Task 7 — #523: leadership filters by Group; Department Cup by settings
 
-**Issue/Branch:** `#N7` · `backend/N7-leadership-on-groups`
+**Issue/Branch:** `#523` · `backend/N7-leadership-on-groups`
 
 **Files**
 - create `supabase/migrations/<ts>_leadership_on_groups.sql`
@@ -1392,13 +1392,13 @@ create policy completed_work_requests_read on public.completed_work_requests
 
 `leadership_member_tasks.test.sql`: the exclusion list goes back to the eight columns (`group_id` is carried now); `group_id`/`group_name` asserted for the fixture Subtask; the rest unchanged.
 
-**Commit:** `feat(db): leadership Leaderboard filters by Group subtree; Department Cup rows and attribution follow Group settings (#N7)`.
+**Commit:** `feat(db): leadership Leaderboard filters by Group subtree; Department Cup rows and attribution follow Group settings (#523)`.
 
 ---
 
-## Task 8 — #N8: closeout — smoke scenarios, docs, CONTEXT, ADR amendments, CLAUDE.md
+## Task 8 — #524: closeout — smoke scenarios, docs, CONTEXT, ADR amendments, CLAUDE.md
 
-**Issue/Branch:** `#N8` · `chore/N8-groups-wave2-closeout`
+**Issue/Branch:** `#524` · `chore/N8-groups-wave2-closeout`
 
 **Files**
 - modify `scripts/smoke-tracker-commands.sql` (new steps 20–23; the existing 19 untouched), `scripts/smoke-tracker-commands.sh` (unchanged unless the docker-splice needs the new `\gset` names)
@@ -1419,7 +1419,7 @@ create policy completed_work_requests_read on public.completed_work_requests
 
 **Verification:** `npx supabase db reset`; `bash scripts/smoke-tracker-commands.sh`; `bash scripts/check-local-ci.sh repo` (links, prettier on the docs); no db suites change.
 
-**Commit:** `chore(db,docs): Groups Wave 2 closeout -- smoke Group scenarios, conventions §10, CONTEXT, ADR-0008/0009 amendments, CLAUDE.md status (#N8)`.
+**Commit:** `chore(db,docs): Groups Wave 2 closeout -- smoke Group scenarios, conventions §10, CONTEXT, ADR-0008/0009 amendments, CLAUDE.md status (#524)`.
 
 ---
 
