@@ -43,10 +43,7 @@ export function TaskCancelControl({
         </Button>
       )}
       {done && (
-        <p role="status">
-          Taskul este în lucru, cu feedback de aplicat. Executorul primește
-          nota.
-        </p>
+        <p role="status">Taskul este anulat. Istoricul rămâne păstrat.</p>
       )}
     </section>
   );
