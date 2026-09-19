@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(70);
+select plan(74);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -699,11 +699,12 @@ select ok(coalesce((
 ), false), 'duplicate_task holds the actor''s live profile row FOR SHARE (private.require_origin_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
+    join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '34100000-0000-0000-0000-000000000051'
-     and membership.dept_id = 'edu'
-), false), 'and the Department membership row its authority rests on FOR SHARE too, since a BCE (unlike BC/Moderator) reaches that branch');
+     and authority_group.legacy_dept_id = 'edu'
+), false), 'and the Group roster row its authority rests on FOR SHARE too, since a BCE (unlike BC/Moderator) reaches that branch');
 
 select extensions.dblink_exec('dt_lock', 'rollback');
 select extensions.dblink_disconnect('dt_lock');
@@ -727,6 +728,31 @@ select is((select count(*) from public.tasks where title like '%#341 committed%'
 select is((select count(*) from public.profiles
             where id = '34100000-0000-0000-0000-000000000051'), 0::bigint,
   'including the persona it ran as');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',5,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.duplicate_task((select id from g521_tasks where name='command0'),now()+interval '1 day')$$,'duplicate_task: Group persona 2 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command1','project',4,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.duplicate_task((select id from g521_tasks where name='command1'),now()+interval '1 day')$$,'42501','task_manage_forbidden','duplicate_task: Group persona 3 on executor 4 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',7,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.duplicate_task((select id from g521_tasks where name='command2'),now()+interval '1 day')$$,'duplicate_task: Group persona 6 on executor 7 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',5,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.duplicate_task((select id from g521_tasks where name='command3'),now()+interval '1 day')$$,'42501','task_manage_forbidden','duplicate_task: Group persona 8 on executor 5 in dt');
+reset role;
 
 select * from finish();
 rollback;

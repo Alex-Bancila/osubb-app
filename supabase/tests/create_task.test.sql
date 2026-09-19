@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(129);
+select plan(133);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -630,13 +630,17 @@ select is((select private.can_evaluate_task((select plain_task_id from f327))), 
   'a BCE of another Department does not evaluate an EDU Task');
 reset role;
 
+-- #521: the evaluated Executor holds the Independent Group Responsible role.
+insert into public.task_assignments(task_id,member_id,assigned_by)
+select ind_task_id,'32700000-0000-0000-0000-000000000004','32700000-0000-0000-0000-000000000001' from f327;
+
 select pg_temp.test_login('32700000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb,
   'team_ids', '["t-327-ind"]'::jsonb));
 select is((select private.can_manage_task((select ind_task_id from f327))), true,
   'an Independent-Team member manages their Team''s Task');
 select is((select private.can_evaluate_task((select ind_task_id from f327))), false,
-  'but an Independent-Team member never evaluates it — the branch can_manage_origin has is deliberately absent');
+  'but a Group Responsible never evaluates their own or peer Responsible work');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000008', jsonb_build_object(
@@ -841,11 +845,12 @@ select ok(coalesce((
 ), false), 'create_task holds the actor''s live profile row FOR SHARE');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
+    join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '32700000-0000-0000-0000-000000000021'
-     and membership.dept_id = 'edu'
-), false), 'a BCE create holds the Department membership row its authority rests on FOR SHARE');
+     and authority_group.legacy_dept_id = 'edu'
+), false), 'a BCE create holds the Group roster row its authority rests on FOR SHARE');
 
 -- Ruling 20's payoff, reproduced rather than argued. Session task_lock still
 -- holds the Umbrella. A THIRD session now evaluates an existing Subtask of
@@ -1136,6 +1141,31 @@ select is((select private.close_task_queue(
 select is((select task.queue_closed_at from public.tasks as task where task.title = 'Direct #327'),
   null::timestamptz,
   'a direct Task keeps queue_closed_at null after a no-op close_task_queue');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',null,'todo','direct','umbrella');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command0'),'task')$$,'create_task: Group persona 2 in project');
+reset role;
+select pg_temp.g521_task('command1','project',null,'todo','direct','umbrella');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select lives_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command1'),'task')$$,'create_task: Group persona 3 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',null,'todo','direct','umbrella');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command2'),'task')$$,'create_task: Group persona 6 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',null,'todo','direct','umbrella');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command3'),'task')$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
+reset role;
 
 select * from finish();
 rollback;
