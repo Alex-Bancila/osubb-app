@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  Trophy,
   LayoutDashboard,
   ListTodo,
   Megaphone,
@@ -32,6 +33,12 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Acasă', icon: LayoutDashboard, onTabBar: true },
   { path: '/tracker', label: 'Taskuri', icon: ListTodo, onTabBar: true },
+  {
+    path: '/clasament',
+    label: 'Clasament',
+    icon: Trophy,
+    capability: 'seeLeadership',
+  },
   { path: '/cereri', label: 'Cereri', icon: ClipboardPlus },
   {
     path: '/calendar',

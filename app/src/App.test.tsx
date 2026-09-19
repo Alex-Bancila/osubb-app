@@ -37,6 +37,12 @@ vi.mock('./screens/requests/CompletedWorkRequestScreen', () => ({
   default: () => <h1>Cereri screen</h1>,
 }));
 
+vi.mock('./screens/leadership/LeadershipScreen', () => ({
+  default: () => <h1>Clasament screen</h1>,
+}));
+vi.mock('./screens/leadership/MemberTrackerScreen', () => ({
+  default: () => <h1>Member history screen</h1>,
+}));
 import App from './App';
 
 const signedOut = {
@@ -228,4 +234,26 @@ describe('route guards', () => {
     await screen.findByRole('heading', { name: 'Dashboard' });
     expect(window.location.pathname).toBe('/');
   });
+});
+
+it.each(['/clasament', '/tracker/membru/35400000-0000-0000-0000-000000000001'])(
+  'protects leadership route %s with an explanation',
+  async (path) => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    window.history.pushState({}, '', path);
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(window.history.state.usr).toEqual({ leadershipDenied: true });
+  },
+);
+it('opens the leadership page for BCE', () => {
+  auth.useAuth.mockReturnValue({
+    ...member,
+    claims: { ...member.claims, member_level: 5 },
+  });
+  window.history.pushState({}, '', '/clasament');
+  render(<App />);
+  expect(
+    screen.getByRole('heading', { name: 'Clasament screen' }),
+  ).toBeInTheDocument();
 });

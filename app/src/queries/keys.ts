@@ -19,6 +19,12 @@
 export const keys = {
   points: {
     all: ['points'] as const,
+    leadership: (
+      memberId: string | undefined,
+      filters: { groupId?: number; campaignId?: number },
+    ) => ['points', 'leadership', memberId, filters] as const,
+    leadershipCup: (memberId: string | undefined, campaignId?: number) =>
+      ['points', 'leadership-cup', memberId, campaignId] as const,
     me: (memberId: string | undefined) =>
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
@@ -42,6 +48,8 @@ export const keys = {
   },
   tasks: {
     all: ['tasks'] as const,
+    memberHistory: (memberId: string | undefined, targetId: string) =>
+      ['tasks', 'member-history', memberId, targetId] as const,
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,

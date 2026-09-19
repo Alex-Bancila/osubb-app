@@ -248,7 +248,18 @@ export default function AppShell() {
       </Sheet>
 
       <main className="relative min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain [grid-area:main] [scrollbar-gutter:stable]">
-        <Outlet />
+        <>
+          {location.state?.leadershipDenied === true && (
+            <p
+              role="alert"
+              className="m-4 rounded-lg border border-border bg-card p-4"
+            >
+              Clasamentul și istoricul membrilor sunt disponibile doar
+              conducerii active (nivel 5 sau mai mare).
+            </p>
+          )}
+          <Outlet />
+        </>
       </main>
 
       <nav
