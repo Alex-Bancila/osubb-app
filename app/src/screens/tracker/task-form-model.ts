@@ -5,7 +5,6 @@ export type ManagedWorkGroup = {
   name: string;
   path: number[];
   min_level: number;
-  category: string;
 };
 export type TaskFormOptions = {
   groups: ManagedWorkGroup[];

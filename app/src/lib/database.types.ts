@@ -3511,6 +3511,15 @@ export type Database = {
           unfulfilled_at: string
         }[]
       }
+      managed_work_groups: {
+        Args: never
+        Returns: {
+          id: number
+          min_level: number
+          name: string
+          path: number[]
+        }[]
+      }
       mark_task_unfulfilled: {
         Args: {
           p_difficulty: number
