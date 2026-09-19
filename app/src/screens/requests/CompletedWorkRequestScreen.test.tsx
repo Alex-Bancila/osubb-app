@@ -9,6 +9,10 @@ const hooks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../queries/completed-work-requests', () => hooks);
+vi.mock('../tracker/TaskDetailsSheet', () => ({
+  TaskDetailsSheet: ({ taskId }: { taskId: number | null }) =>
+    taskId === null ? null : <p>Detalii task #{taskId}</p>,
+}));
 
 import CompletedWorkRequestScreen from './CompletedWorkRequestScreen';
 
@@ -44,6 +48,44 @@ describe('CompletedWorkRequestScreen', () => {
       isError: false,
       error: null,
     });
+  });
+
+  it('shows pending, approved and rejected requests, notes and the created Task', async () => {
+    hooks.useMyCompletedWorkRequests.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          description: 'Activitate în așteptare',
+          status: 'pending',
+          decision_note: null,
+          task_id: null,
+        },
+        {
+          id: 2,
+          description: 'Activitate aprobată',
+          status: 'approved',
+          decision_note: 'Mulțumim pentru contribuție.',
+          task_id: 42,
+        },
+        {
+          id: 3,
+          description: 'Activitate respinsă',
+          status: 'rejected',
+          decision_note: 'Adaugă detalii despre rezultat.',
+          task_id: null,
+        },
+      ],
+    });
+    render(<CompletedWorkRequestScreen />);
+    expect(screen.getByText('În așteptare')).toBeVisible();
+    expect(screen.getByText('Aprobată')).toBeVisible();
+    expect(screen.getByText('Respinsă')).toBeVisible();
+    expect(screen.getByText('Adaugă detalii despre rezultat.')).toBeVisible();
+    expect(screen.getByText('Mulțumim pentru contribuție.')).toBeVisible();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Deschide taskul #42' }),
+    );
+    expect(screen.getByText('Detalii task #42')).toBeVisible();
   });
 
   it('offers only the membership Origins supplied by the query', () => {
