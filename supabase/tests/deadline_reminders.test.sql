@@ -22,8 +22,9 @@ insert into tasks (title, dept_id, deadline, status, kind) values
   ('too late', 'edu', now() + interval '49 hours', 'todo', 'task'),
   ('already overdue', 'edu', now() - interval '1 second', 'todo', 'task'),
   ('inactive executor', 'edu', now() + interval '1 hour', 'todo', 'task'),
-  ('no executor', 'edu', now() + interval '1 hour', 'todo', 'task'),
-  ('umbrella', 'edu', now() + interval '1 hour', 'todo', 'umbrella');
+  ('no executor', 'edu', now() + interval '1 hour', 'todo', 'task');
+insert into tasks (title, dept_id, deadline, status, kind, audience, assignment_mode) values
+  ('umbrella', 'edu', now() + interval '1 hour', 'todo', 'umbrella', null, null);
 update tasks set status = 'in_review', submitted_at = now() where title = 'due review';
 insert into tasks (title, dept_id, deadline, status, completed_at, unfulfilled_at, cancelled_at, cancel_reason, difficulty, rating) values
   ('completed', 'edu', now() + interval '1 hour', 'completed', now(), null, null, null, 2, 4),
