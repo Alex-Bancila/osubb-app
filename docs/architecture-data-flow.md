@@ -45,7 +45,7 @@ sequenceDiagram
     UI->>UI: Invalidate query keys and refetch through RLS
 ```
 
-Only `public` is exposed through the Data API; `private` holds implementation functions and authority helpers with restricted execute grants. A security-definer function is an explicit privilege boundary, so it must validate authority and pin an empty search path. Browser code never writes Task tables directly. [Backend conventions](backend/conventions.md) define wrappers, locks, grants, error vocabulary, and tests. Realtime, when used, only tells the browser to refetch; its payload never creates a second authorization path.
+Application tables and RPCs are exposed through `public`; the local API configuration also exposes `graphql_public`, but never `private`. The `private` schema holds implementation functions and authority helpers with restricted execute grants. A security-definer function is an explicit privilege boundary, so it must validate authority and pin an empty search path. Browser code never writes Task tables directly. [Backend conventions](backend/conventions.md) define wrappers, locks, grants, error vocabulary, and tests. Realtime, when used, only tells the browser to refetch; its payload never creates a second authorization path.
 
 ## Privileged invitation flow
 
