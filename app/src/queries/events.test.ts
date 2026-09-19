@@ -32,6 +32,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     capacity: 30,
     description: 'Planificarea semestrului',
     created_at: '2026-08-20T10:00:00.000Z',
+    updated_at: '2026-08-20T10:00:00.000Z',
     created_by: null,
     has_qr: false,
     project_id: null,
