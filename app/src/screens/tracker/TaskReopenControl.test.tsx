@@ -133,4 +133,3 @@ it('preserves success when mutation resolves before status refetch before mutati
   ).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
-
