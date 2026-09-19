@@ -1,3 +1,4 @@
+import { TaskActionSuccess } from './TaskActionSuccess';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { useScoringGuide } from '../../queries/scoring-guide';
@@ -29,6 +30,12 @@ export function TaskEvaluationControl({
   const [outcome, setOutcome] = useState<'completed' | 'unfulfilled'>(
     'completed',
   );
+  if (done)
+    return (
+      <TaskActionSuccess>
+        Evaluarea a fost salvată. Punctele Executorului au fost actualizate.
+      </TaskActionSuccess>
+    );
   if (
     capability.data !== true ||
     kind !== 'task' ||
@@ -76,11 +83,6 @@ export function TaskEvaluationControl({
             </Button>
           )}
         </div>
-      )}
-      {done && (
-        <p role="status">
-          Evaluarea a fost salvată. Punctele Executorului au fost actualizate.
-        </p>
       )}
     </section>
   );
