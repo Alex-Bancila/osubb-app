@@ -265,12 +265,13 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('auth_is_member',     '',                                         false, true,  true,  false),
   -- #510: the Group Wave 1 JWT helper, same grant shape as auth_in_team.
   ('auth_in_group',      'g bigint',                                 false, true,  true,  false),
+  ('create_campaign',    'p_group_id bigint, p_name text', false, true, false, false),
   ('create_campaign',    'p_department_id text, p_name text',        false, true,  false, false),
   ('update_campaign',    'p_campaign_id bigint, p_name text',        false, true,  false, false),
   ('set_campaign_active','p_campaign_id bigint, p_active boolean',   false, true,  false, false),
   -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
   -- adds its own row here the same way.
-  ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text',
+  ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
                                                                      false, true,  false, false),
   -- #328: the second Task command wrapper, added the same way #327's own
   -- comment above instructs every later wrapper (#329-#345) to.
@@ -311,7 +312,7 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #341: the sixteenth Task command wrapper, added the same way.
   ('duplicate_task',         'p_task_id bigint, p_deadline timestamp with time zone', false, true, false, false),
   -- #344: the three Completed-work Request wrappers, added the same way.
-  ('create_completed_work_request',  'p_description text, p_dept_id text, p_team_id text, p_project_id bigint',
+  ('create_completed_work_request',  'p_description text, p_dept_id text, p_team_id text, p_project_id bigint, p_group_id bigint',
                                                                      false, true,  false, false),
   ('approve_completed_work_request', 'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text',
                                                                      false, true,  false, false),
@@ -403,11 +404,11 @@ insert into pinned_private_functions (proname, args, category) values
   -- #340: the Umbrella rollup -- completes it once every Subtask is terminal.
   ('complete_umbrella_task_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   ('convert_task_mode_impl',                      'p_task_id bigint, p_assignment_mode text, p_audience text',                                                         'impl'),
-  ('create_campaign_impl',                        'p_department_id text, p_name text',                                                                                  'impl'),
+  ('create_campaign_impl',                        'p_group_id bigint, p_name text',                                                                                  'impl'),
   -- #344: filing a Completed-work Request -- membership, not management.
-  ('create_completed_work_request_impl',          'p_description text, p_dept_id text, p_team_id text, p_project_id bigint',                                            'impl'),
+  ('create_completed_work_request_impl',          'p_description text, p_dept_id text, p_team_id text, p_project_id bigint, p_group_id bigint',                                            'impl'),
   ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
-  ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text', 'impl'),
+  ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint', 'impl'),
   -- #259: the Department Cup body behind both the legacy `dept_cup` view and
   -- the filtered `public.department_cup(p_campaign_id)` wrapper.
   ('department_cup_rows',                         'p_campaign_id bigint',                                                                                               'authenticated_only'),
@@ -421,6 +422,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('express_task_interest_impl',                  'p_task_id bigint',                                                                                                   'impl'),
   ('give_up_task_impl',                           'p_task_id bigint, p_reason text',                                                                                    'impl'),
   ('grant_project_responsible_impl',              'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
+  -- #519: the resolver behind the four group_id/legacy-Origin sync triggers below --
+  -- the Group that masters a legacy Origin (project, else team, else department).
+  -- `none`: called only by those four triggers and by the migration's own backfill.
+  ('group_id_for_legacy_origin',                  'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'none'),
   ('guard_task_evaluation_change',                '',                                                                                                                   'trigger'),
   ('guard_task_duplicate_provenance',             '',                                                                                                                   'trigger'),
   ('is_active_project_member',                    'p_project_id bigint',                                                                                                'predicate'),
@@ -471,7 +476,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('reopen_task_impl',                            'p_task_id bigint, p_reason text',                                                                                    'impl'),
   ('require_active_project_lead',                 'p_project_id bigint',                                                                                                'require'),
   ('require_active_member',                       '',                                                                                                                   'require'),
-  ('require_campaign_manager',                    'p_department_id text',                                                                                               'require'),
+  ('request_deciders', 'p_request_id bigint', 'none'),
+  ('can_decide_request', 'p_request_id bigint', 'predicate'),
+  ('require_campaign_manager',                    'p_group_id bigint',                                                                                               'require'),
   ('require_department_team_membership_manager',  'p_team_id text',                                                                                                     'require'),
   ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
   ('require_origin_manager',                      'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'require'),
@@ -493,6 +500,13 @@ insert into pinned_private_functions (proname, args, category) values
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
   ('submit_task_for_review_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   ('sync_project_leader_membership',              '',                                                                                                                   'trigger'),
+  -- #519: the four two-way group_id/legacy-Origin sync triggers (ADR-0009 Wave 2 bridge).
+  -- A legacy write derives group_id; a Group write derives the legacy Origin; both sides
+  -- set inconsistently is refused. `trigger`: nothing may call one directly.
+  ('sync_campaign_group_origin',                  '',                                                                                                                   'trigger'),
+  ('sync_event_group_origin',                     '',                                                                                                                   'trigger'),
+  ('sync_request_group_origin',                   '',                                                                                                                   'trigger'),
+  ('sync_task_group_origin',                      '',                                                                                                                   'trigger'),
   -- #508: the Group mirror family (ADR-0009 Wave 1). Category `none`: the
   -- backfill statement at the end of its own migration and #509's row triggers
   -- are the only callers, and both run as the table owner. Granting any of
@@ -521,11 +535,20 @@ insert into pinned_private_functions (proname, args, category) values
   -- #499: the body behind public.visible_task_executors(bigint[]). It reveals
   -- only the current Executor for Tasks private.can_read_task authorizes.
   ('visible_task_executors',                      'p_task_ids bigint[]',                                                                                                'authenticated_only'),
+  -- #520: shared Group authority, three policy predicates and five internal helpers.
+  ('group_role_of', 'p_group_id bigint, p_member uuid', 'none'),
+  ('is_group_member', 'p_group_id bigint, p_member uuid', 'none'),
+  ('has_group_manager', 'p_group_id bigint', 'none'),
+  ('is_group_manager', 'p_group_id bigint', 'predicate'),
+  ('is_group_responsible', 'p_group_id bigint', 'predicate'),
+  ('can_manage_group_work', 'p_group_id bigint', 'predicate'),
+  ('require_group_work_manager', 'p_group_id bigint', 'require'),
+  ('group_managers', 'p_group_id bigint', 'none'),
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 107,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508) and the seven mirror trigger functions (#509)');
+  (select count(*) from pinned_private_functions)::int, 122,
+  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

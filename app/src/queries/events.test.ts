@@ -38,6 +38,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     min_level: 0,
     cancelled_at: null,
     cancel_reason: null,
+    group_id: 1,
     ...overrides,
   };
 }

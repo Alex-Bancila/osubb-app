@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(86);
+select plan(94);
 
 -- ==================== 1. Surface and grants ====================
 
@@ -300,6 +300,25 @@ select throws_ok($$ select * from public.department_cup() $$, '42501', null,
   'service_role: no accidental Cup wrapper bypass');
 select throws_ok($$ select * from public.leadership_member_tasks('26200000-0000-0000-0000-000000000001') $$,
   '42501', null, 'service_role: no accidental drill-down wrapper bypass');
+reset role;
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+insert into public.points_ledger(member_id,delta,reason,note,awarded_by)
+select pg_temp.g521_uid(n),-1,'sanction','Own ledger #521',pg_temp.g521_uid(1) from generate_series(2,5) n;
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select is((select count(*) from public.points_ledger where member_id<>pg_temp.g521_uid(2)),0::bigint,'Group persona 2 sees no other Member ledger');
+select is((select count(*) from public.points_ledger where member_id=pg_temp.g521_uid(2)),1::bigint,'Group persona 2 retains own ledger');
+select is((select count(*) from public.leadership_leaderboard()),0::bigint,'Group persona 2 does not gain leadership ranking');
+select is((select count(*) from public.department_cup()),0::bigint,'Group persona 2 does not gain Department Cup');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is((select count(*) from public.points_ledger where member_id<>pg_temp.g521_uid(3)),0::bigint,'Group persona 3 sees no other Member ledger');
+select is((select count(*) from public.points_ledger where member_id=pg_temp.g521_uid(3)),1::bigint,'Group persona 3 retains own ledger');
+select is((select count(*) from public.leadership_leaderboard()),0::bigint,'Group persona 3 does not gain leadership ranking');
+select is((select count(*) from public.department_cup()),0::bigint,'Group persona 3 does not gain Department Cup');
 reset role;
 
 select * from finish();

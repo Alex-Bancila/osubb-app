@@ -55,7 +55,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(91);
+select plan(97);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1082,6 +1082,40 @@ select is((select count(*) from public.notifications
               ) as committed_task_ids
             )), 0::bigint,
   'no notification survives with a nulled task_id after the committed Tasks are deleted -- checked by link, which ON DELETE SET NULL cannot erase');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('executor0','project',2,'todo','direct');
+update public.tasks set created_by=pg_temp.g521_uid(2) where id=(select id from g521_tasks where name='executor0');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.give_up_task((select id from g521_tasks where name='executor0'),'Leaving #521')$$,'give_up_task: Executor persona 2 remains authorized');
+reset role;
+reset role;
+select pg_temp.g521_task('executor1','project',4,'todo','direct');
+update public.tasks set created_by=pg_temp.g521_uid(4) where id=(select id from g521_tasks where name='executor1');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(4));
+select lives_ok($$select public.give_up_task((select id from g521_tasks where name='executor1'),'Leaving #521')$$,'give_up_task: Executor persona 4 remains authorized');
+reset role;
+select results_eq($$select distinct member_id from public.notifications where task_id=(select id from g521_tasks where name='executor1') order by 1$$,$$select pg_temp.g521_uid(2)$$,'Group Manager alone receives fallback work notifications');
+reset role;
+select pg_temp.g521_task('executor2','ind',7,'todo','direct');
+update public.tasks set created_by=pg_temp.g521_uid(7) where id=(select id from g521_tasks where name='executor2');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(7));
+select lives_ok($$select public.give_up_task((select id from g521_tasks where name='executor2'),'Leaving #521')$$,'give_up_task: Executor persona 7 remains authorized');
+reset role;
+select ok(exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(6)) and exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(1)),'Manager-less peers and BC receive fallback work notifications');
+reset role;
+select pg_temp.g521_task('executor3','dt',8,'todo','direct');
+update public.tasks set created_by=pg_temp.g521_uid(8) where id=(select id from g521_tasks where name='executor3');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select lives_ok($$select public.give_up_task((select id from g521_tasks where name='executor3'),'Leaving #521')$$,'give_up_task: Executor persona 8 remains authorized');
+reset role;
 
 select * from finish();
 rollback;
