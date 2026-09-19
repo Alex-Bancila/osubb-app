@@ -456,7 +456,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
   ('mirror_team_group',                           '',                                                                                                                   'trigger'),
   ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
-  ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
+  ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid, p_link text', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
   ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
@@ -545,11 +545,14 @@ insert into pinned_private_functions (proname, args, category) values
   ('can_manage_group_work', 'p_group_id bigint', 'predicate'),
   ('require_group_work_manager', 'p_group_id bigint', 'require'),
   ('group_managers', 'p_group_id bigint', 'none'),
+  ('cancel_event_impl', 'p_event_id bigint, p_reason text', 'impl'),
+  ('update_event_impl', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', 'impl'),
+  ('event_notification_recipients', 'p_event_id bigint', 'none'),
   ('create_event_impl', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', 'impl'),
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 123,
+  (select count(*) from pinned_private_functions)::int, 126,
   'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers and #370''s Event creation implementation');
 
 create function pg_temp.unpinned_private_functions() returns text[]
