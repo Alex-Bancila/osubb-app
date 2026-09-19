@@ -171,16 +171,16 @@ grant select on f327 to authenticated;
 
 select has_function('public', 'create_task',
   array['text', 'text', 'timestamptz', 'text', 'text', 'bigint', 'text', 'text',
-        'uuid', 'bigint', 'bigint', 'text'],
-  'public.create_task exists with the pinned twelve-parameter signature');
+        'uuid', 'bigint', 'bigint', 'text', 'bigint'],
+  'public.create_task exists with the pinned Group-compatible thirteen-parameter signature');
 
 select is(pg_get_function_identity_arguments(
-    'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text)'::regprocedure),
-  'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text',
+    'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
+  'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
   'create_task exposes no actor parameter — the actor is always auth.uid()');
 
 select is(pg_get_function_result(
-    'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text)'::regprocedure),
+    'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
   'tasks', 'create_task returns the created Task row');
 
 select ok(not (select procedure.prosecdef
@@ -214,15 +214,15 @@ select ok(coalesce((
 ), false), 'every function in the kit pins an empty search_path');
 
 select ok(has_function_privilege('authenticated',
-  'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
   'execute'), 'authenticated can execute public.create_task');
 
 select ok(not has_function_privilege('anon',
-  'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
   'execute'), 'anon cannot execute public.create_task');
 
 select ok(has_function_privilege('authenticated',
-  'private.create_task_impl(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text)'::regprocedure,
+  'private.create_task_impl(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
   'execute'), 'authenticated can execute private.create_task_impl');
 
 select ok(has_function_privilege('authenticated',
