@@ -1,6 +1,7 @@
 import { TaskCancelControl } from './TaskCancelControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
+import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
 import {
@@ -73,6 +74,7 @@ function TaskDetails({
         status={task.status}
         kind={task.kind}
       />
+      {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}
       <TaskEvaluationControl
         taskId={taskId}
         status={task.status}

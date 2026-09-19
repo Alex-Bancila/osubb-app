@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -70,4 +70,30 @@ it('keeps feedback on conflict and suppresses duplicate submissions', async () =
     screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
   );
   expect(state.mutation.mutateAsync).toHaveBeenCalledTimes(2);
+});
+
+it('announces and focuses success after status refetch before mutation resolves', async () => {
+  let finish!: () => void;
+  state.mutation.mutateAsync.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const view = render(<TaskReopenControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Redeschide taskul' }));
+  await user.type(
+    screen.getByLabelText('Motiv (obligatoriu)'),
+    'Motiv justificat',
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+  );
+  view.rerender(<TaskReopenControl {...props} status="in_progress" />);
+  await act(async () => finish());
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'punctele au fost actualizate',
+  );
+  expect(screen.getByRole('status')).toHaveFocus();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });

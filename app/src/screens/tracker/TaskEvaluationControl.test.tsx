@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -159,4 +159,68 @@ it('submits the unfulfilled outcome through the shared evaluation form', async (
     note: 'Termen depășit',
     outcome: 'unfulfilled',
   });
+});
+
+it('announces and focuses success after the refetch changes status before mutation resolves', async () => {
+  let finish!: () => void;
+  state.mutation.mutateAsync.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const view = render(<TaskEvaluationControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
+  await user.selectOptions(
+    screen.getByLabelText('Dificultate (obligatoriu)'),
+    '2',
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Calificativ (obligatoriu)'),
+    '5',
+  );
+  await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
+  await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
+  view.rerender(<TaskEvaluationControl {...props} status="completed" />);
+  await act(async () => finish());
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Evaluarea a fost salvată',
+  );
+  expect(screen.getByRole('status')).toHaveFocus();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+
+it('announces and focuses success for unfulfilled after the refetch changes status before mutation resolves', async () => {
+  let finish!: () => void;
+  state.mutation.mutateAsync.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const view = render(
+    <TaskEvaluationControl {...props} status="in_progress" overdue />,
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Marchează nerealizat' }),
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Dificultate (obligatoriu)'),
+    '2',
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Calificativ (obligatoriu)'),
+    '5',
+  );
+  await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
+  await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
+  view.rerender(
+    <TaskEvaluationControl {...props} status="unfulfilled" overdue />,
+  );
+  await act(async () => finish());
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Evaluarea a fost salvată',
+  );
+  expect(screen.getByRole('status')).toHaveFocus();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
