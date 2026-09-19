@@ -68,7 +68,15 @@ export function validateTaskDraft(
   return null;
 }
 
-const inputErrors: Record<string, string> = {
+const commandErrors: Record<string, string> = {
+  parent_not_umbrella: 'Alege un task-umbrelă valid pentru Subtask.',
+  parent_terminal: 'Taskul-umbrelă s-a schimbat. Alege un părinte nefinalizat.',
+  task_not_found: 'Grupul sau taskul-umbrelă nu mai este disponibil.',
+  task_command_forbidden:
+    'Nu mai ai permisiunea de a crea taskuri în acest grup.',
+  task_manage_forbidden:
+    'Nu mai ai permisiunea de a crea taskuri în acest grup.',
+  invalid_executor: 'Executorul nu mai este eligibil pentru grupul ales.',
   title_required: 'Scrie titlul taskului.',
   deadline_required: 'Alege termenul taskului.',
   invalid_origin: 'Alege un grup de origine disponibil.',
@@ -85,21 +93,12 @@ const inputErrors: Record<string, string> = {
     'Un task public primește Executor prin lista de candidați.',
 };
 
-/** Only allowlisted command codes/reasons become user-facing copy. */
+/** Only stable, allowlisted command reasons become user-facing copy. */
 export function taskDraftErrorMessage(error: unknown): string {
-  if (typeof error !== 'object' || error === null)
-    return 'Nu am putut pregăti taskul. Încearcă din nou.';
-  const code = 'code' in error ? error.code : undefined;
+  const fallback = 'Nu am putut pregăti taskul. Încearcă din nou.';
+  if (typeof error !== 'object' || error === null) return fallback;
   const reason = 'message' in error ? error.message : undefined;
-  if (code === 'PT400')
-    return typeof reason === 'string' && Object.hasOwn(inputErrors, reason)
-      ? (inputErrors[reason] ?? 'Verifică datele taskului și încearcă din nou.')
-      : 'Verifică datele taskului și încearcă din nou.';
-  if (code === '42501')
-    return 'Nu mai ai permisiunea de a crea taskuri în acest grup.';
-  if (code === 'PT404')
-    return 'Grupul sau taskul-umbrelă nu mai este disponibil.';
-  if (code === 'PT409')
-    return 'Taskul-umbrelă sau grupul s-a schimbat. Verifică opțiunile actuale.';
-  return 'Nu am putut pregăti taskul. Încearcă din nou.';
+  return typeof reason === 'string' && Object.hasOwn(commandErrors, reason)
+    ? (commandErrors[reason] ?? fallback)
+    : fallback;
 }
