@@ -106,6 +106,13 @@ jobs:
       # column then fails the PR that ships it, instead of failing the demo
       # three screens away. This is the only job with a live database, which is
       # why the check lives here rather than beside the other frontend gates.
+      - name: Generate review types artifact
+        run: supabase gen types typescript --local > /tmp/database.types.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review-database-types
+          path: /tmp/database.types.ts
+
       - name: Generated types match the schema
         run: |
           supabase gen types typescript --local > /tmp/database.types.ts
