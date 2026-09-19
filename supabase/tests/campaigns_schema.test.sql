@@ -4,19 +4,22 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(29);
 
 select has_table('public', 'campaigns', 'Campaigns table exists');
 select columns_are(
   'public', 'campaigns',
   array['id', 'department_id', 'name', 'is_active', 'created_by',
-        'created_at', 'updated_at'],
+        'created_at', 'updated_at', 'group_id'],
   'Campaigns expose exactly the requested fields');
 select col_is_pk('public', 'campaigns', 'id', 'Campaign id is the primary key');
 select col_type_is('public', 'campaigns', 'id', 'bigint', 'Campaign id is bigint');
-select col_not_null('public', 'campaigns', 'department_id', 'Department is required');
+select col_is_null('public', 'campaigns', 'department_id',
+  'Department went nullable in #519 -- a Team or Project Group Campaign carries none (Wave 2 bridge)');
 select fk_ok('public', 'campaigns', 'department_id', 'public', 'departments', 'id',
   'Campaign Department references the official list');
+select fk_ok('public', 'campaigns', 'group_id', 'public', 'groups', 'id',
+  'Campaign Group references the Group model (#519)');
 select col_not_null('public', 'campaigns', 'name', 'Campaign name is required');
 select col_not_null('public', 'campaigns', 'is_active', 'Campaign activity is required');
 select col_default_is('public', 'campaigns', 'is_active', 'true',
@@ -56,8 +59,8 @@ select is(
 select throws_ok(
   $$ insert into public.campaigns (department_id, name, created_by)
      values ('edu', 'aDmItErE', 'a3130000-0000-0000-0000-000000000001') $$,
-  '23505', 'duplicate key value violates unique constraint "campaigns_department_name_uidx"',
-  'Campaign names are unique case-insensitively within a Department');
+  '23505', 'duplicate key value violates unique constraint "campaigns_group_name_uidx"',
+  'Campaign names are unique case-insensitively within a Department (enforced via campaigns_group_name_uidx since #519)');
 
 select ok(not has_table_privilege('anon', 'public.campaigns', 'select'),
   'anon receives no Campaign read grant');
