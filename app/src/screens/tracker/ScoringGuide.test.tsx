@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 it('uses database multipliers and explains negative, zero and positive outcomes in text', () => {
   render(<ScoringGuide />);
-  expect(screen.getByText(/× -2/)).toBeVisible();
+  expect(screen.getByText(/× −2/)).toBeVisible();
   expect(screen.getByText(/× 7/)).toBeVisible();
   expect(screen.getByText('Se scad puncte.')).toBeVisible();
   expect(screen.getByText('Nu se acordă puncte.')).toBeVisible();

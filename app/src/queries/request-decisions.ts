@@ -45,6 +45,25 @@ export type RequestDecision =
       note: string;
     }
   | { kind: 'reject'; requestId: number; note: string };
+const commandErrors = new Map<string, string>([
+  [
+    'request_not_pending',
+    'Cererea a fost deja decisă. Lista a fost actualizată.',
+  ],
+  [
+    'request_command_forbidden',
+    'Nu mai ai permisiunea de a decide această cerere.',
+  ],
+  [
+    'request_decide_forbidden',
+    'Nu mai ai permisiunea de a decide această cerere.',
+  ],
+  ['request_not_found', 'Cererea nu mai este disponibilă.'],
+  ['invalid_difficulty', 'Alege o Dificultate validă.'],
+  ['invalid_rating', 'Alege un Calificativ valid.'],
+  ['evaluation_note_required', 'Scrie o notă pentru această decizie.'],
+  ['note_required', 'Scrie o notă pentru această decizie.'],
+]);
 export class RequestDecisionError extends Error {}
 export async function decideRequest(input: RequestDecision) {
   if (!input.note.trim())
@@ -73,13 +92,8 @@ export async function decideRequest(input: RequestDecision) {
         });
   if (error)
     throw new RequestDecisionError(
-      error.code === 'PT409'
-        ? 'Cererea a fost deja decisă. Lista a fost actualizată.'
-        : error.code === '42501'
-          ? 'Nu mai ai permisiunea de a decide această cerere.'
-          : error.code === 'PT404'
-            ? 'Cererea nu mai este disponibilă.'
-            : 'Nu am putut salva decizia. Reîncearcă.',
+      commandErrors.get(error.message) ??
+        'Nu am putut salva decizia. Reîncearcă.',
     );
   return data;
 }

@@ -58,7 +58,7 @@ it('requires all fields, previews live guide values and submits one Executor eva
     screen.getByLabelText('Calificativ (obligatoriu)'),
     '1',
   );
-  expect(screen.getByRole('status')).toHaveTextContent('-4 puncte');
+  expect(screen.getByRole('status')).toHaveTextContent('−4 puncte');
   await user.type(
     screen.getByLabelText('Notă (obligatoriu)'),
     '  De îmbunătățit  ',

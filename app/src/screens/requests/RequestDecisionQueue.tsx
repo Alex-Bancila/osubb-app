@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
-import { EvaluationFields } from '../tracker/TaskEvaluationControl';
-import { TaskActionSuccess } from '../tracker/TaskActionSuccess';
+import { EvaluationFields } from '../../components/tasks/EvaluationFields';
+import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
 import {
   RequestDecisionError,
   usePendingDecisions,

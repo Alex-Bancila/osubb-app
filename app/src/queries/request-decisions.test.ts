@@ -45,7 +45,7 @@ it('rejects blank notes and invalid scoring before a request', async () => {
 it('maps already-decided errors safely', async () => {
   api.rpc.mockResolvedValue({
     data: null,
-    error: { code: 'PT409', message: 'private detail' },
+    error: { code: 'PT409', message: 'request_not_pending' },
   });
   await expect(
     decideRequest({ kind: 'reject', requestId: 8, note: 'N' }),
