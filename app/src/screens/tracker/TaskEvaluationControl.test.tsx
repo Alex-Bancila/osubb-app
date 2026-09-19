@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -112,4 +112,33 @@ it('prevents repeated submits while the first command is unresolved', async () =
     screen.getByRole('button', { name: 'Confirmă evaluarea' }),
   );
   expect(state.mutation.mutateAsync).toHaveBeenCalledTimes(1);
+});
+
+it('announces and focuses success after the refetch changes status before mutation resolves', async () => {
+  let finish!: () => void;
+  state.mutation.mutateAsync.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const view = render(<TaskEvaluationControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
+  await user.selectOptions(
+    screen.getByLabelText('Dificultate (obligatoriu)'),
+    '2',
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Calificativ (obligatoriu)'),
+    '5',
+  );
+  await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
+  await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
+  view.rerender(<TaskEvaluationControl {...props} status="completed" />);
+  await act(async () => finish());
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Evaluarea a fost salvată',
+  );
+  expect(screen.getByRole('status')).toHaveFocus();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });

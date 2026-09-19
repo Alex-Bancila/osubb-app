@@ -1,3 +1,4 @@
+import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
 import {
@@ -54,6 +55,7 @@ function TaskDetails({
           progress.mutateAsync({ taskId: selectedId, action })
         }
       />
+      {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}
       <TaskEvaluationControl
         taskId={taskId}
         status={task.status}
