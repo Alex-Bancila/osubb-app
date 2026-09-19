@@ -5,6 +5,22 @@ import {
 } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
+const commandErrors = new Map<string, string>([
+  [
+    'invalid_executor',
+    'Membrul nu mai este eligibil. Alege un membru activ care îndeplinește nivelul minim.',
+  ],
+  ['task_command_forbidden', 'Nu mai ai permisiunea de a atribui acest task.'],
+  ['task_manage_forbidden', 'Nu mai ai permisiunea de a atribui acest task.'],
+  ['task_not_found', 'Taskul nu mai este disponibil.'],
+  ['task_is_umbrella', 'Un task-umbrelă nu primește Executor.'],
+  ['task_not_direct', 'Taskul nu mai folosește atribuirea directă.'],
+  ['task_terminal', 'Taskul a fost finalizat. Verifică starea actuală.'],
+  [
+    'task_already_assigned',
+    'Taskul are deja un Executor. Verifică starea actuală.',
+  ],
+]);
 export class TaskAssignmentError extends Error {}
 export async function assignTaskExecutor({
   taskId,
@@ -19,13 +35,8 @@ export async function assignTaskExecutor({
   });
   if (error)
     throw new TaskAssignmentError(
-      error.code === 'PT400'
-        ? 'Membrul nu mai este eligibil. Alege un membru activ care îndeplinește nivelul minim.'
-        : error.code === '42501'
-          ? 'Nu mai ai permisiunea de a atribui acest task.'
-          : ['PT409', 'PT404'].includes(error.code)
-            ? 'Taskul s-a schimbat. Verifică executorul și încearcă din nou.'
-            : 'Nu am putut atribui taskul. Încearcă din nou.',
+      commandErrors.get(error.message) ??
+        'Nu am putut atribui taskul. Încearcă din nou.',
     );
   return data;
 }

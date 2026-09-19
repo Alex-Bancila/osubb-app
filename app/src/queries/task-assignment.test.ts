@@ -27,3 +27,13 @@ it.each(['PT400', 'PT404', 'PT409', '42501', 'XX000'])(
     expect(refresh).toHaveBeenCalledWith({ queryKey: ['tasks'] });
   },
 );
+
+it('uses the stable reason even if its SQL code changes', async () => {
+  rpc.mockResolvedValue({
+    data: null,
+    error: { code: 'P0001', message: 'invalid_executor' },
+  });
+  await expect(
+    assignTaskExecutor({ taskId: 7, memberId: 'member' }),
+  ).rejects.toThrow('Membrul nu mai este eligibil');
+});
