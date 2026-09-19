@@ -1,3 +1,4 @@
+import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
@@ -54,6 +55,11 @@ function TaskDetails({
         onProgress={(selectedId, action) =>
           progress.mutateAsync({ taskId: selectedId, action })
         }
+      />
+      <TaskReopenControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
       />
       <TaskFeedbackControl
         taskId={taskId}
