@@ -1,3 +1,7 @@
+vi.mock('../../queries/task-umbrella', () => ({
+  useCreateSubtask: () => ({ mutateAsync: vi.fn() }),
+  useCompleteUmbrella: () => ({ mutateAsync: vi.fn() }),
+}));
 vi.mock('./TaskEditControl', () => ({ TaskEditControl: () => null }));
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

@@ -4,15 +4,12 @@ import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { TASK_PRESENTATION_FIELDS } from './tasks';
 import { attachVisibleTaskExecutors } from './task-executors';
-import type {
-  TaskPresentationRow,
-  TaskStatus,
-} from '../screens/tracker/task-presentation';
+import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
 export type TaskDetailsData = {
   task: TaskPresentationRow;
   executorName: string | null;
-  subtasks: { id: number; title: string; status: TaskStatus }[];
+  subtasks: TaskPresentationRow[];
 };
 export async function fetchTaskDetails(
   taskId: number,
@@ -36,13 +33,18 @@ export async function fetchTaskDetails(
     task.parent = parent.data;
   }
   if (task.kind === 'umbrella') {
-    const children = await supabase
-      .from('tasks')
-      .select('id, title, status')
-      .eq('parent_task_id', taskId)
-      .order('id');
-    if (children.error) throw children.error;
-    subtasks = children.data;
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const children = await supabase
+        .from('tasks')
+        .select(TASK_PRESENTATION_FIELDS)
+        .eq('parent_task_id', taskId)
+        .order('id')
+        .range(offset, offset + pageSize - 1);
+      if (children.error) throw children.error;
+      subtasks.push(...(await attachVisibleTaskExecutors(children.data)));
+      if (children.data.length < pageSize) break;
+    }
     task.subtasks = subtasks;
   }
   const [taskWithExecutor] = await attachVisibleTaskExecutors([task]);
