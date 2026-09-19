@@ -95,4 +95,9 @@ it('announces and focuses success after status refetch before mutation resolves'
   expect(screen.getByRole('status')).toHaveTextContent('feedback de aplicat');
   expect(screen.getByRole('status')).toHaveFocus();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  view.rerender(<TaskFeedbackControl {...props} />);
+  expect(
+    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
