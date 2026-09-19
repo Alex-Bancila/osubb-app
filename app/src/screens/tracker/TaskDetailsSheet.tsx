@@ -58,6 +58,7 @@ function TaskDetails({
         taskId={taskId}
         status={task.status}
         kind={task.kind}
+        overdue={task.overdue}
         executorName={query.data.executorName}
       />
       <dl className="grid gap-3 text-sm">

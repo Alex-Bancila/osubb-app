@@ -13,22 +13,34 @@ export function TaskEvaluationControl({
   status,
   kind,
   executorName,
+  overdue = false,
 }: {
   taskId: number;
   status: TaskStatus;
   kind: string;
   executorName: string | null;
+  overdue?: boolean;
 }) {
   const capability = useTaskEvaluationCapability(taskId);
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
-  if (capability.data !== true || status !== 'in_review' || kind !== 'task')
+  const canUnfulfilled =
+    overdue && ['todo', 'in_progress', 'in_review'].includes(status);
+  const [outcome, setOutcome] = useState<'completed' | 'unfulfilled'>(
+    'completed',
+  );
+  if (
+    capability.data !== true ||
+    kind !== 'task' ||
+    (status !== 'in_review' && !canUnfulfilled)
+  )
     return null;
   return (
     <section aria-label="Evaluare task" className="space-y-3">
       {open ? (
         <EvaluationForm
           taskId={taskId}
+          outcome={outcome}
           executorName={executorName}
           onCancel={() => setOpen(false)}
           onSuccess={() => {
@@ -37,15 +49,33 @@ export function TaskEvaluationControl({
           }}
         />
       ) : (
-        <Button
-          className="min-h-11"
-          onClick={() => {
-            setOpen(true);
-            setDone(false);
-          }}
-        >
-          Evaluează taskul
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {status === 'in_review' && (
+            <Button
+              className="min-h-11"
+              onClick={() => {
+                setOutcome('completed');
+                setOpen(true);
+                setDone(false);
+              }}
+            >
+              Evaluează taskul
+            </Button>
+          )}
+          {canUnfulfilled && (
+            <Button
+              className="min-h-11"
+              variant="outline"
+              onClick={() => {
+                setOutcome('unfulfilled');
+                setOpen(true);
+                setDone(false);
+              }}
+            >
+              Marchează nerealizat
+            </Button>
+          )}
+        </div>
       )}
       {done && (
         <p role="status">
@@ -61,11 +91,13 @@ export function EvaluationForm({
   executorName,
   onCancel,
   onSuccess,
+  outcome = 'completed',
 }: {
   taskId: number;
   executorName: string | null;
   onCancel: () => void;
   onSuccess: () => void;
+  outcome?: 'completed' | 'unfulfilled';
 }) {
   const id = useId();
   const guide = useScoringGuide();
@@ -95,6 +127,7 @@ export function EvaluationForm({
         difficulty: Number(difficulty),
         rating: Number(rating),
         note: note.trim(),
+        ...(outcome === 'unfulfilled' ? { outcome } : {}),
       });
       onSuccess();
     } catch (failure) {
@@ -114,11 +147,19 @@ export function EvaluationForm({
       aria-label="Evaluare finală"
       noValidate
     >
-      <h3 className="font-semibold">Evaluare finală</h3>
+      <h3 className="font-semibold">
+        {outcome === 'unfulfilled' ? 'Nerealizat' : 'Evaluare finală'}
+      </h3>
       <p className="text-sm">
         Executor: {executorName ?? 'Executorul taskului'}. Evaluarea încheie
         taskul și acordă punctele acestei persoane.
       </p>
+      {outcome === 'unfulfilled' && (
+        <p>
+          Confirmarea marchează taskul Nerealizat și păstrează încercarea în
+          istoric. Evaluarea poate acorda zero puncte sau poate scădea puncte.
+        </p>
+      )}
       <ScoringGuide />
       <fieldset
         disabled={mutation.isPending || !guide.data}
