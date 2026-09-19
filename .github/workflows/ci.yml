@@ -116,6 +116,13 @@ jobs:
           fi
           echo "Generated types are current."
 
+      - name: Export generated types for schema authoring
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-database-types
+          path: /tmp/database.types.ts
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
