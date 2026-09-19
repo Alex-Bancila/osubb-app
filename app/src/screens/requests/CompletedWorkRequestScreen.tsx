@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { TaskDetailsSheet } from '../tracker/TaskDetailsSheet';
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import {
@@ -33,6 +34,7 @@ export default function CompletedWorkRequestScreen() {
   const submit = useSubmitCompletedWork();
   const [originKey, setOriginKey] = useState('');
   const [description, setDescription] = useState('');
+  const [taskId, setTaskId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   async function onSubmit(event: FormEvent) {
@@ -199,6 +201,21 @@ export default function CompletedWorkRequestScreen() {
                         ? 'Aprobată'
                         : 'Respinsă'}
                   </p>
+                  {request.decision_note && (
+                    <p className="mt-2 text-sm wrap-anywhere">
+                      {request.decision_note}
+                    </p>
+                  )}
+                  {request.status === 'approved' &&
+                    request.task_id !== null && (
+                      <Button
+                        variant="link"
+                        className="min-h-11 min-w-11 px-0"
+                        onClick={() => setTaskId(request.task_id)}
+                      >
+                        Deschide taskul #{request.task_id}
+                      </Button>
+                    )}
                 </li>
               ))}
             </ul>
@@ -208,6 +225,7 @@ export default function CompletedWorkRequestScreen() {
             </p>
           )}
         </section>
+        <TaskDetailsSheet taskId={taskId} onClose={() => setTaskId(null)} />
       </div>
     </div>
   );
