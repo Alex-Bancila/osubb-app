@@ -19,7 +19,8 @@ select ok(
 select columns_are(
   'public', 'completed_work_requests',
   array['id', 'requester_id', 'dept_id', 'team_id', 'project_id', 'description',
-        'status', 'decided_by', 'decided_at', 'decision_note', 'task_id', 'created_at'],
+        'status', 'decided_by', 'decided_at', 'decision_note', 'task_id', 'created_at',
+        'group_id'],
   'completed_work_requests exposes exactly the requested fields');
 select has_pk('public', 'completed_work_requests', 'a Request has a primary key');
 select col_type_is('public', 'completed_work_requests', 'id', 'bigint', 'request id is bigint');
@@ -117,8 +118,8 @@ grant select on fx to authenticated;
 select throws_ok(
   $$ insert into public.completed_work_requests (requester_id, description)
      values ('32105000-0000-0000-0000-000000000001', 'no origin at all') $$,
-  '23514', null,
-  'zero Origins is rejected');
+  '23514', 'request_group_required',
+  'zero Origins is rejected -- private.sync_request_group_origin answers before the Origin XOR check can (#519)');
 select throws_ok(
   $$ insert into public.completed_work_requests
        (requester_id, dept_id, team_id, description)
