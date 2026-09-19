@@ -83,7 +83,8 @@ export const keys = {
   },
   announcements: {
     all: ['announcements'] as const,
-    feed: () => ['announcements', 'feed'] as const,
+    feed: (memberId?: string) =>
+      ['announcements', 'feed', { memberId }] as const,
   },
   notifications: {
     all: ['notifications'] as const,
