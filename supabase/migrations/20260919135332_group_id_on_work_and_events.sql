@@ -115,6 +115,34 @@ comment on column public.completed_work_requests.group_id is
   'The Group that masters this Request''s Origin (ADR-0009 Wave 2 bridge). Legacy dept_id/team_id/project_id stay the write master until Wave 3 drops them; private.sync_request_group_origin keeps both sides consistent.';
 
 -- ==================== 4. The four two-way trigger functions ====================
+--
+-- All four functions are instances of ONE rule. It is stated once here; each function below
+-- is the same four-branch shape over its own columns, so a change to the rule is a change to
+-- all four rather than a patch to one branch of one of them.
+--
+--   "The caller wrote field X" is `new.X is not null` on INSERT and `new.X is distinct from
+--   old.X` on UPDATE. It is never `new.X is not null` on UPDATE: Postgres carries every
+--   column the statement did not mention forward from `old` into `new`, and that carried
+--   value is not caller intent (review round 2, Defect A).
+--
+--   Group side written, legacy side not -> derive every legacy field from the NAMED Group's
+--       own legacy_* columns (and, for events, the scope those imply).
+--   Legacy side written, Group side not -> resolve the Group from the legacy fields; if
+--       nothing resolves, raise 23514 <row>_group_required. This arm exists on UPDATE as
+--       well as on INSERT: legacy columns stay the write master until Wave 3, so an older
+--       writer moves a row's Origin through them and group_id has to follow (review round 3,
+--       must-fix 1 -- its deletion for events refused every legacy Origin UPDATE, the shape
+--       20260910173341_departments_diverse_secretariat.sql:38 already uses on events).
+--   Both written -> verify: each written legacy value must equal the named Group's OWN
+--       legacy_* column, else 23514 <row>_group_origin_mismatch. Comparing against the
+--       Group's own columns rather than against the id the resolver would produce from the
+--       legacy side is review round 2's Defect B: the resolver's most-specific-first
+--       precedence silently skips a field, so two *resolved* ids can agree while the row
+--       itself disagrees.
+--   Neither written -> return unchanged, so a no-op touch never raises. (On INSERT
+--       "neither" still has to answer -- there is nothing to derive from -- so it falls into
+--       the resolve arm and its <row>_group_required, which tasks_origin.test.sql,
+--       completed_work_requests_schema.test.sql and event_constraints.test.sql all pin.)
 
 create function private.sync_task_group_origin()
 returns trigger
@@ -123,22 +151,43 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_legacy_changed boolean;
-  v_group_changed  boolean;
+  v_legacy_written boolean;
+  v_group_written  boolean;
   v_from_legacy    bigint;
   v_grp            public.groups%rowtype;
 begin
-  v_legacy_changed := tg_op = 'INSERT'
-    or new.dept_id    is distinct from old.dept_id
-    or new.team_id    is distinct from old.team_id
-    or new.project_id is distinct from old.project_id;
-  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
-  v_from_legacy    := private.group_id_for_legacy_origin(new.dept_id, new.team_id, new.project_id);
+  v_legacy_written := case
+    when tg_op = 'INSERT' then num_nonnulls(new.dept_id, new.team_id, new.project_id) > 0
+    else new.dept_id    is distinct from old.dept_id
+      or new.team_id    is distinct from old.team_id
+      or new.project_id is distinct from old.project_id
+  end;
+  v_group_written := case
+    when tg_op = 'INSERT' then new.group_id is not null
+    else new.group_id is distinct from old.group_id
+  end;
 
-  if (tg_op = 'INSERT' and new.group_id is not null
-      and num_nonnulls(new.dept_id, new.team_id, new.project_id) = 0)
-     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
-    -- Group side written: derive the legacy triple.
+  -- A legacy Origin naming two or three columns at once is malformed for EVERY caller, so
+  -- tasks_exactly_one_origin_check answers it under its own name instead of this trigger
+  -- re-describing it as a disagreement between the two sides (docs/backend/conventions.md
+  -- §2: a value a CHECK forbids "is malformed for every caller", judged ahead of anything
+  -- that depends on the loaded row). Without this, `dept_id = 'edu', project_id = 5,
+  -- group_id = <the Project's Group>` answered task_group_origin_mismatch even though the
+  -- Group named IS the right one for project_id -- what is wrong is the legacy side alone.
+  -- Two deliberate limits:
+  --   * guarded on group_id being present -- a legacy-only row with two Origins carries no
+  --     group_id yet, and returning early there would hand it to group_id's NOT NULL (23502)
+  --     instead of the CHECK;
+  --   * zero Origins is NOT routed here. It has no constraint-shaped repair, and
+  --     task_group_required (which names the real problem) is what tasks_origin.test.sql
+  --     pins for both the missing-Origin INSERT and the Origin-clearing UPDATE.
+  if new.group_id is not null
+     and num_nonnulls(new.dept_id, new.team_id, new.project_id) > 1 then
+    return new;                                     -- tasks_exactly_one_origin_check answers
+  end if;
+
+  if v_group_written and not v_legacy_written then
+    -- Group side written, legacy side not: derive the triple from the Group's own columns.
     select * into v_grp from public.groups where id = new.group_id;
     if not found then
       return new;                                   -- tasks_group_id_fkey answers
@@ -149,36 +198,36 @@ begin
     new.dept_id    := v_grp.legacy_dept_id;
     new.team_id    := v_grp.legacy_team_id;
     new.project_id := v_grp.legacy_project_id;
-  elsif new.group_id is null
-     or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
-    -- Legacy side written (every pre-Wave-2 writer): derive the Group.
-    if v_from_legacy is null then
-      raise exception using errcode = '23514', message = 'task_group_required';
-    end if;
-    new.group_id := v_from_legacy;
-  else
-    -- Both sides were given (or changed) together in the same statement: verify the
-    -- NAMED Group's own legacy_* columns against the legacy triple directly, rather than
-    -- resolving the legacy side backwards and comparing ids. Review round 2, Defect B:
-    -- the old `v_from_legacy is distinct from new.group_id` shape compared two
-    -- *resolved* ids, which is blind to a Group whose own legacy_* columns disagree with
-    -- the legacy triple in a way the resolver's most-specific-first precedence papers
-    -- over (e.g. a Task naming both a real dept_id and a real, unrelated project_id: the
-    -- resolver matches on project_id and never notices dept_id at all). Comparing
-    -- against the Group's own columns catches that regardless of which field the
-    -- resolver would have preferred.
+  elsif v_group_written then
+    -- Both sides written in one statement: verify against the Group's own legacy_* columns.
+    -- Recorded so nobody re-litigates it: once the early return above sends a triple naming
+    -- two or three Origins to the CHECK, this comparison and the one it replaced ("resolve
+    -- the legacy side and compare ids") are provably equivalent for every row this schema
+    -- can hold -- tasks_exactly_one_origin_check leaves exactly one legacy field set, and
+    -- groups_legacy_one_ck leaves a Group at most one legacy master, so the two comparisons
+    -- can only disagree on a triple naming more than one Origin. It is written this way
+    -- anyway because all four functions state the same rule, and on campaigns and events
+    -- (whose legacy sides are not a one-of-three count) the difference is load-bearing.
     select * into v_grp from public.groups where id = new.group_id;
     if found and (new.dept_id is distinct from v_grp.legacy_dept_id
                or new.team_id is distinct from v_grp.legacy_team_id
                or new.project_id is distinct from v_grp.legacy_project_id) then
       raise exception using errcode = '23514', message = 'task_group_origin_mismatch';
+    end if;                                         -- not found: tasks_group_id_fkey answers
+  elsif v_legacy_written or tg_op = 'INSERT' then
+    -- Legacy side written and the Group side not (every pre-Wave-2 writer), or an INSERT
+    -- that named neither side: resolve the Group from the legacy triple.
+    v_from_legacy := private.group_id_for_legacy_origin(new.dept_id, new.team_id, new.project_id);
+    if v_from_legacy is null then
+      raise exception using errcode = '23514', message = 'task_group_required';
     end if;
-  end if;
+    new.group_id := v_from_legacy;
+  end if;                                           -- neither written on UPDATE: unchanged
   return new;
 end;
 $$;
 comment on function private.sync_task_group_origin() is
-  'Keeps tasks.group_id and the legacy Origin triple consistent both ways (ADR-0009 Wave 2): a legacy write derives group_id, a Group write derives dept_id/team_id/project_id, and a row that sets both together is verified against the Group''s own legacy_dept_id/legacy_team_id/legacy_project_id -- not by resolving the legacy triple backwards and comparing ids -- and refused on any disagreement (23514 task_group_origin_mismatch, review round 2 Defect B). task_group_required: the legacy side names no Group; task_group_origin_unmapped: the Group has no legacy master (only reachable once Wave 3 creates native Groups).';
+  'Keeps tasks.group_id and the legacy Origin triple consistent both ways (ADR-0009 Wave 2), on the one rule the section header above this function states: a write of the Group side alone derives dept_id/team_id/project_id from that Group''s own legacy_* columns; a write of the legacy side alone (INSERT or UPDATE) derives group_id; a statement writing both is verified against the Group''s own legacy_* columns -- not by resolving the legacy triple backwards and comparing ids, which the resolver''s precedence makes blind (review round 2, Defect B); a statement writing neither passes through unchanged, so a no-op touch never raises. A legacy triple naming two or three Origins at once returns early so tasks_exactly_one_origin_check answers under its own name (review round 3, item 5); zero Origins keeps task_group_required, which names the real problem and has no constraint-shaped repair. task_group_required: the legacy side names no Group; task_group_origin_unmapped: the Group has no legacy master (only reachable once Wave 3 creates native Groups); task_group_origin_mismatch: both sides were written and disagree.';
 
 create trigger tasks_sync_group_origin
 before insert or update of group_id, dept_id, team_id, project_id on public.tasks
@@ -191,22 +240,32 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_legacy_changed boolean;
-  v_group_changed  boolean;
+  v_legacy_written boolean;
+  v_group_written  boolean;
   v_from_legacy    bigint;
   v_grp            public.groups%rowtype;
 begin
-  v_legacy_changed := tg_op = 'INSERT'
-    or new.dept_id    is distinct from old.dept_id
-    or new.team_id    is distinct from old.team_id
-    or new.project_id is distinct from old.project_id;
-  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
-  v_from_legacy    := private.group_id_for_legacy_origin(new.dept_id, new.team_id, new.project_id);
+  v_legacy_written := case
+    when tg_op = 'INSERT' then num_nonnulls(new.dept_id, new.team_id, new.project_id) > 0
+    else new.dept_id    is distinct from old.dept_id
+      or new.team_id    is distinct from old.team_id
+      or new.project_id is distinct from old.project_id
+  end;
+  v_group_written := case
+    when tg_op = 'INSERT' then new.group_id is not null
+    else new.group_id is distinct from old.group_id
+  end;
 
-  if (tg_op = 'INSERT' and new.group_id is not null
-      and num_nonnulls(new.dept_id, new.team_id, new.project_id) = 0)
-     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
-    -- Group side written: derive the legacy triple.
+  -- Two or three Origins at once: completed_work_requests_origin_ck answers under its own
+  -- name -- see private.sync_task_group_origin for the full reasoning and the two limits
+  -- (guarded on group_id; zero Origins deliberately keeps request_group_required).
+  if new.group_id is not null
+     and num_nonnulls(new.dept_id, new.team_id, new.project_id) > 1 then
+    return new;                                     -- completed_work_requests_origin_ck answers
+  end if;
+
+  if v_group_written and not v_legacy_written then
+    -- Group side written, legacy side not: derive the triple from the Group's own columns.
     select * into v_grp from public.groups where id = new.group_id;
     if not found then
       return new;                                   -- completed_work_requests_group_id_fkey answers
@@ -217,30 +276,27 @@ begin
     new.dept_id    := v_grp.legacy_dept_id;
     new.team_id    := v_grp.legacy_team_id;
     new.project_id := v_grp.legacy_project_id;
-  elsif new.group_id is null
-     or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
-    -- Legacy side written (every pre-Wave-2 writer): derive the Group.
-    if v_from_legacy is null then
-      raise exception using errcode = '23514', message = 'request_group_required';
-    end if;
-    new.group_id := v_from_legacy;
-  else
-    -- Both sides were given (or changed) together: verify the NAMED Group's own
-    -- legacy_* columns against the legacy triple directly (review round 2, Defect B --
-    -- see private.sync_task_group_origin's comment for why this replaces comparing two
-    -- resolved ids).
+  elsif v_group_written then
+    -- Both sides written in one statement: verify against the Group's own legacy_* columns.
     select * into v_grp from public.groups where id = new.group_id;
     if found and (new.dept_id is distinct from v_grp.legacy_dept_id
                or new.team_id is distinct from v_grp.legacy_team_id
                or new.project_id is distinct from v_grp.legacy_project_id) then
       raise exception using errcode = '23514', message = 'request_group_origin_mismatch';
+    end if;                                         -- not found: the FK answers
+  elsif v_legacy_written or tg_op = 'INSERT' then
+    -- Legacy side written and the Group side not, or an INSERT naming neither: resolve.
+    v_from_legacy := private.group_id_for_legacy_origin(new.dept_id, new.team_id, new.project_id);
+    if v_from_legacy is null then
+      raise exception using errcode = '23514', message = 'request_group_required';
     end if;
-  end if;
+    new.group_id := v_from_legacy;
+  end if;                                           -- neither written on UPDATE: unchanged
   return new;
 end;
 $$;
 comment on function private.sync_request_group_origin() is
-  'Keeps completed_work_requests.group_id and the legacy Origin triple consistent both ways (ADR-0009 Wave 2), mirroring private.sync_task_group_origin exactly, including the Defect-B comparison against the Group''s own legacy_* columns (review round 2). request_group_required: the legacy side names no Group; request_group_origin_unmapped: the Group has no legacy master; request_group_origin_mismatch: both sides were set together and disagree.';
+  'Keeps completed_work_requests.group_id and the legacy Origin triple consistent both ways (ADR-0009 Wave 2), mirroring private.sync_task_group_origin branch for branch -- including the comparison against the Group''s own legacy_* columns (review round 2, Defect B) and the early return that lets completed_work_requests_origin_ck answer a triple naming two or three Origins at once under its own name (review round 3, item 5). request_group_required: the legacy side names no Group (zero Origins included, deliberately); request_group_origin_unmapped: the Group has no legacy master; request_group_origin_mismatch: both sides were written and disagree.';
 
 create trigger completed_work_requests_sync_group_origin
 before insert or update of group_id, dept_id, team_id, project_id on public.completed_work_requests
@@ -253,55 +309,57 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_legacy_changed boolean;
-  v_group_changed  boolean;
+  v_legacy_written boolean;
+  v_group_written  boolean;
   v_from_legacy    bigint;
   v_grp            public.groups%rowtype;
 begin
-  v_legacy_changed := tg_op = 'INSERT'
-    or new.department_id is distinct from old.department_id;
-  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
-  v_from_legacy    := private.group_id_for_legacy_origin(new.department_id, null, null);
+  v_legacy_written := case
+    when tg_op = 'INSERT' then new.department_id is not null
+    else new.department_id is distinct from old.department_id
+  end;
+  v_group_written := case
+    when tg_op = 'INSERT' then new.group_id is not null
+    else new.group_id is distinct from old.group_id
+  end;
 
-  if (tg_op = 'INSERT' and new.group_id is not null and new.department_id is null)
-     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
-    -- Group side written: derive department_id -- null for a Team or Project Group, which is
-    -- exactly why the column went nullable in this migration. No _unmapped reason exists here:
-    -- an unmapped Group simply produces a null department_id, not an error.
+  -- No num_nonnulls guard here: the legacy side is the single column department_id, which
+  -- cannot be malformed on its own -- campaigns_department_id_fkey answers an unknown one.
+
+  if v_group_written and not v_legacy_written then
+    -- Group side written, legacy side not: derive department_id -- null for a Team or
+    -- Project Group, which is exactly why the column went nullable in this migration. No
+    -- _unmapped reason exists here: an unmapped Group simply produces a null department_id.
     select * into v_grp from public.groups where id = new.group_id;
     if not found then
       return new;                                   -- campaigns_group_id_fkey answers
     end if;
     new.department_id := v_grp.legacy_dept_id;
-  elsif new.group_id is null
-     or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
-    -- Legacy side written (every pre-Wave-2 writer): derive the Group.
+  elsif v_group_written then
+    -- Both sides written in one statement: verify department_id against the Group's own
+    -- legacy_dept_id directly. That column is null exactly when department_id should be (a
+    -- Team or Project Group) and set exactly when department_id must match it, so this one
+    -- comparison covers both the no-op touch of a Team-Group Campaign (review round 1,
+    -- Finding 1) and `department_id = null, group_id = <a real Department Group>` in one
+    -- statement (review round 2, Defect B), which the round-1 `department_id is not null`
+    -- guard skipped entirely.
+    select * into v_grp from public.groups where id = new.group_id;
+    if found and new.department_id is distinct from v_grp.legacy_dept_id then
+      raise exception using errcode = '23514', message = 'campaign_group_origin_mismatch';
+    end if;                                         -- not found: campaigns_group_id_fkey answers
+  elsif v_legacy_written or tg_op = 'INSERT' then
+    -- Legacy side written and the Group side not, or an INSERT naming neither: resolve.
+    v_from_legacy := private.group_id_for_legacy_origin(new.department_id, null, null);
     if v_from_legacy is null then
       raise exception using errcode = '23514', message = 'campaign_group_required';
     end if;
     new.group_id := v_from_legacy;
-  else
-    -- Both sides were given (or changed) together: verify the NAMED Group's own
-    -- legacy_dept_id against department_id directly, rather than resolving the legacy
-    -- side backwards and comparing ids. Review round 2, Defect B: the round-1 fix
-    -- guarded this branch on `department_id is not null`, which correctly stopped the
-    -- false positive on a Team/Project-Group Campaign's no-op touch, but also let a
-    -- genuine mismatch through -- `set department_id = null, group_id = <a real
-    -- Department Group>` changes both sides, department_id is null so the old guard
-    -- skipped the check entirely, and the row was stored with a Group that says
-    -- (say) edu while department_id said nothing. Comparing directly against
-    -- v_grp.legacy_dept_id has no such blind spot: it is null exactly when department_id
-    -- should be (a Team/Project Group), and set exactly when department_id must match it.
-    select * into v_grp from public.groups where id = new.group_id;
-    if found and new.department_id is distinct from v_grp.legacy_dept_id then
-      raise exception using errcode = '23514', message = 'campaign_group_origin_mismatch';
-    end if;
-  end if;
+  end if;                                           -- neither written on UPDATE: unchanged
   return new;
 end;
 $$;
 comment on function private.sync_campaign_group_origin() is
-  'Keeps campaigns.group_id and department_id consistent both ways (ADR-0009 Wave 2). A legacy write derives group_id; a Group write derives department_id, which is null when the Group is not a Department (a Team or Project Group carries no _unmapped error -- department_id simply goes null, the reason the column was made nullable in this migration). A statement that sets both together is verified against the Group''s own legacy_dept_id directly (review round 2, Defect B), so a Team/Project-Group Campaign (department_id always null) lives on a no-op touch of either column while a genuine mismatch -- e.g. department_id cleared while group_id still names a real Department -- is still caught. campaign_group_required: the legacy side names no Group; campaign_group_origin_mismatch: both sides were set together and disagree.';
+  'Keeps campaigns.group_id and department_id consistent both ways (ADR-0009 Wave 2), on the same rule as the other three sync_*_group_origin functions. A write of department_id alone derives group_id; a write of group_id alone derives department_id, which is null when the Group is not a Department (a Team or Project Group carries no _unmapped error -- department_id simply goes null, the reason the column was made nullable in this migration); a statement writing both is verified against the Group''s own legacy_dept_id (review round 2, Defect B), so a Team/Project-Group Campaign lives on a no-op touch of either column while department_id cleared under a real Department Group is still refused; a statement writing neither passes through unchanged. campaign_group_required: the legacy side names no Group; campaign_group_origin_mismatch: both sides were written and disagree.';
 
 create trigger campaigns_sync_group_origin
 before insert or update of group_id, department_id on public.campaigns
@@ -314,8 +372,8 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_legacy_changed boolean;
-  v_group_changed  boolean;
+  v_origin_written boolean;
+  v_group_written  boolean;
   v_from_legacy    bigint;
   v_grp            public.groups%rowtype;
   v_caller_scope   public.event_scope;
@@ -324,35 +382,37 @@ declare
   v_imp_team       text;
   v_imp_project    bigint;
 begin
-  v_legacy_changed := tg_op = 'INSERT'
-    or new.scope      is distinct from old.scope
-    or new.dept_id    is distinct from old.dept_id
-    or new.team_id    is distinct from old.team_id
-    or new.project_id is distinct from old.project_id;
-  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
-  -- What the caller actually asserted about scope in THIS statement: on INSERT, whatever
-  -- they supplied (null if omitted -- events.scope has no column default, and the NOT
-  -- NULL check runs only after this BEFORE trigger returns); on UPDATE, only a value that
-  -- DIFFERS from what was already there. `new.scope` otherwise carries the OLD persisted
-  -- value forward for every column the statement did not mention, and that carried-
-  -- forward value is not caller intent -- treating it as one is review round 2's Defect A
-  -- (it made a legitimate Group-move UPDATE, one that lands on a Group with a different
-  -- derived scope, raise a spurious mismatch).
+  -- events splits its legacy side in two: the Origin columns, and scope. What the caller
+  -- actually asserted about scope in THIS statement is v_caller_scope -- on INSERT whatever
+  -- they supplied (null if omitted; events.scope has no column default and its NOT NULL is
+  -- checked only after this BEFORE trigger returns), on UPDATE only a value that DIFFERS
+  -- from what was already there (review round 2, Defect A).
+  v_origin_written := case
+    when tg_op = 'INSERT' then num_nonnulls(new.dept_id, new.team_id, new.project_id) > 0
+    else new.dept_id    is distinct from old.dept_id
+      or new.team_id    is distinct from old.team_id
+      or new.project_id is distinct from old.project_id
+  end;
+  v_group_written := case
+    when tg_op = 'INSERT' then new.group_id is not null
+    else new.group_id is distinct from old.group_id
+  end;
   v_caller_scope := case
     when tg_op = 'INSERT' then new.scope
     when new.scope is distinct from old.scope then new.scope
     else null
   end;
-  -- legacy -> Group: scope decides which column is the Origin
-  v_from_legacy := case when new.scope = 'org'
-                        then (select grp.id from public.groups as grp where grp.legacy_dept_id = 'org')
-                        else private.group_id_for_legacy_origin(
-                               case when new.scope = 'dept' then new.dept_id end, new.team_id, new.project_id) end;
 
-  if (tg_op = 'INSERT' and new.group_id is not null
-      and new.dept_id is null and new.team_id is null and new.project_id is null)
-     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
-    -- Group -> legacy: scope, the Origin column, and the Team's parent Department.
+  -- No num_nonnulls guard of the kind private.sync_task_group_origin carries, and the
+  -- asymmetry is deliberate: a Task's invariant is a count (exactly one of three columns),
+  -- which two lines can restate, while an Event's is events_scope_fields_ck's four-way
+  -- disjunction over scope AND the Origin columns. Restating that here would either
+  -- duplicate the constraint or drift from it, so every malformed Origin combination is left
+  -- to the constraint, which sees the row after this trigger returns and names itself.
+
+  if v_group_written and not v_origin_written then
+    -- Group side written: derive scope, the one Origin column the Group implies, and a Team
+    -- Event's parent Department.
     select * into v_grp from public.groups where id = new.group_id;
     if not found then
       return new;                                   -- events_group_id_fkey answers
@@ -369,35 +429,18 @@ begin
     else
       raise exception using errcode = '23514', message = 'event_group_origin_unmapped';
     end if;
+    -- A scope the caller asserted alongside the Group is held to the Group; a scope merely
+    -- carried forward is not. One consequence worth stating so the next reader does not file
+    -- it as a bug: `update events set scope = <the value it already had>, group_id = <a
+    -- Group of a different scope>` re-derives scope silently, because writing back the value
+    -- that was already there is not an assertion under the rule above. It is compliant, and
+    -- the row that lands is the one the named Group implies.
     if v_caller_scope is not null and v_caller_scope is distinct from new.scope then
       raise exception using errcode = '23514', message = 'event_group_origin_mismatch';
     end if;
-  elsif new.group_id is null then
-    -- Legacy side written, with no existing Group to anchor to: resolve fresh, and
-    -- nothing more. Deliberately NOT verified against anything here: the resolver's own
-    -- most-specific-first precedence (project, else team, else dept, with 'org' short-
-    -- circuiting all three) is not the same judgment as events_scope_fields_ck, and
-    -- re-deriving a verification here would sometimes catch a malformed fresh row under
-    -- the wrong name -- e.g. `scope = 'org'` with a real project_id still resolves the
-    -- Organization Group (the 'org' path ignores project_id by design) and would raise
-    -- event_group_origin_mismatch instead of the more specific events_scope_fields_ck
-    -- violation event_constraints.test.sql pins for exactly that row.
-    if v_from_legacy is null then
-      raise exception using errcode = '23514', message = 'event_group_required';
-    end if;
-    new.group_id := v_from_legacy;
-  else
-    -- group_id is already non-null here -- the row's existing value, since branch one
-    -- above already handled every case where the caller changed it. Either nothing
-    -- changed, the legacy side alone changed, or both changed together: verify the
-    -- EXISTING group_id's own legacy_* columns against every legacy field, comparing
-    -- against the Group's own truth rather than resolving the legacy side backwards and
-    -- comparing ids (review round 2, Defect B, applied here too -- and the only way to
-    -- also catch, e.g., a bare `scope = 'org'` UPDATE that leaves a stale
-    -- dept_id/team_id/project_id behind while group_id stays put: the 'org' resolution
-    -- path above ignores those columns entirely by design, and a resolve-only branch
-    -- like private.sync_task_group_origin's would silently retarget group_id to the
-    -- (still valid) Organization Group rather than notice).
+  elsif v_group_written then
+    -- Both sides written: verify every legacy field against the named Group's own legacy_*
+    -- columns (review round 2, Defect B).
     select * into v_grp from public.groups where id = new.group_id;
     if found then
       if v_grp.legacy_dept_id = 'org' then
@@ -405,10 +448,10 @@ begin
       elsif v_grp.legacy_dept_id is not null then
         v_imp_scope := 'dept';    v_imp_dept := v_grp.legacy_dept_id; v_imp_team := null; v_imp_project := null;
       elsif v_grp.legacy_team_id is not null then
-        -- dept_id is deliberately excluded from this comparison (compared to itself, so
-        -- it can never differ): a Team Event's Department is filled in below when the
-        -- caller left it null, and a WRONG one is refused by events_team_department_fkey
-        -- (23503), never by this trigger.
+        -- dept_id is deliberately excluded from this comparison (compared to itself, so it
+        -- can never differ): a Team Event's Department is filled in below when the caller
+        -- left it null, and a WRONG one is refused by events_team_department_fkey (23503),
+        -- never by this trigger.
         v_imp_scope := 'team';    v_imp_dept := new.dept_id; v_imp_team := v_grp.legacy_team_id; v_imp_project := null;
       elsif v_grp.legacy_project_id is not null then
         v_imp_scope := 'project'; v_imp_dept := null; v_imp_team := null; v_imp_project := v_grp.legacy_project_id;
@@ -422,10 +465,30 @@ begin
         raise exception using errcode = '23514', message = 'event_group_origin_mismatch';
       end if;
     end if;                                          -- not found: events_group_id_fkey answers
-  end if;
+  elsif v_origin_written or v_caller_scope is not null or tg_op = 'INSERT' then
+    -- Legacy side written and the Group side not -- every pre-Wave-2 writer's INSERT, and
+    -- equally an UPDATE that moves an Event's Origin through the legacy columns, which is
+    -- the shape 20260910173341_departments_diverse_secretariat.sql:38 uses and which the
+    -- other three tables accept (review round 3, must-fix 1; round 2 had deleted this arm).
+    -- Resolve and stop: the resolver's most-specific-first precedence (project, else team,
+    -- else dept, with 'org' short-circuiting all three) is not the same judgement as
+    -- events_scope_fields_ck, so verifying here would re-describe a malformed row under the
+    -- wrong name. Nothing is lost by not verifying -- events_scope_fields_ck sees the row
+    -- after this trigger returns and names itself. That is also what answers a bare
+    -- `set scope = 'org'` that leaves a stale dept_id/team_id/project_id behind: the 'org'
+    -- path resolves the Organization Group, and the constraint then refuses the row.
+    v_from_legacy := case when new.scope = 'org'
+                          then (select grp.id from public.groups as grp where grp.legacy_dept_id = 'org')
+                          else private.group_id_for_legacy_origin(
+                                 case when new.scope = 'dept' then new.dept_id end, new.team_id, new.project_id) end;
+    if v_from_legacy is null then
+      raise exception using errcode = '23514', message = 'event_group_required';
+    end if;
+    new.group_id := v_from_legacy;
+  end if;                                            -- neither written on UPDATE: unchanged
 
-  -- legacy-path normalisation: a Team Event fills its parent Department when the caller left it
-  -- null (an Independent Team keeps null). A client-supplied WRONG Department is never
+  -- legacy-path normalisation: a Team Event fills its parent Department when the caller left
+  -- it null (an Independent Team keeps null). A client-supplied WRONG Department is never
   -- overwritten -- events_team_department_fkey keeps answering 23503 for it.
   if new.scope = 'team' and new.dept_id is null then
     select team.dept_id into new.dept_id from public.teams as team where team.id = new.team_id;
@@ -435,7 +498,7 @@ begin
 end;
 $$;
 comment on function private.sync_event_group_origin() is
-  'Keeps events.group_id and the legacy (scope, dept_id, team_id, project_id) Origin consistent both ways (ADR-0009 Wave 2), in three cases. (1) A Group write derives scope plus the one Origin column it implies, filling a Team Event''s parent Department along the way, and refuses a caller-supplied scope that disagrees with what the Group implies (v_caller_scope: what the caller actually asserted in THIS statement -- non-null on INSERT, or a value distinct from old.scope on UPDATE, never a value merely carried forward, review round 2 Defect A). (2) group_id starts null: resolve it fresh from the legacy side and stop -- never verified, so a malformed fresh row (e.g. scope=org with a real project_id, which the org short-circuit ignores) is still caught by events_scope_fields_ck under its own name, not reinterpreted here. (3) group_id is already non-null (the legacy side alone changed, nothing changed, or both changed together): verify the EXISTING group_id''s own legacy_* columns against every legacy field, comparing against the Group''s own truth rather than resolving the legacy side backwards and comparing ids (review round 2 Defect B; this is also what catches a bare scope change that leaves a stale dept_id/team_id/project_id behind while group_id stays put). event_group_required: case (2) resolved to no Group; event_group_origin_unmapped: the Group has no legacy master; event_group_origin_mismatch: the two sides disagree. Never overwrites a caller-supplied, wrong dept_id on a Team Event -- events_team_department_fkey answers that with 23503.';
+  'Keeps events.group_id and the legacy (scope, dept_id, team_id, project_id) Origin consistent both ways (ADR-0009 Wave 2), on the same rule as the other three sync_*_group_origin functions, with scope treated as part of the legacy side. A write of the Group side alone derives scope plus the one Origin column it implies, fills a Team Event''s parent Department, and refuses a scope the caller asserted in the same statement and that disagrees with the Group -- a scope merely carried forward is not an assertion (review round 2, Defect A), so writing back the scope a row already had while moving group_id to a different-scope Group re-derives scope silently, which is compliant. A write of the legacy side alone resolves group_id and stops, on UPDATE as well as INSERT (review round 3, must-fix 1): the resolver''s precedence is not events_scope_fields_ck''s judgement, so a malformed row is left to that constraint to name -- including a bare scope change that leaves a stale Origin column behind. A statement writing both sides is verified against the named Group''s own legacy_* columns (review round 2, Defect B). A statement writing neither passes through unchanged. Unlike private.sync_task_group_origin there is no num_nonnulls early return, because an Event''s Origin invariant is events_scope_fields_ck''s four-way disjunction rather than a count of columns. event_group_required: the legacy side names no Group; event_group_origin_unmapped: the Group has no legacy master; event_group_origin_mismatch: both sides were written and disagree. Never overwrites a caller-supplied, wrong dept_id on a Team Event -- events_team_department_fkey answers that with 23503.';
 
 create trigger events_sync_group_origin
 before insert or update of group_id, scope, dept_id, team_id, project_id on public.events

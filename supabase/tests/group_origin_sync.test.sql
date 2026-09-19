@@ -9,7 +9,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(68);
+select plan(76);
 
 -- ==================== Fixtures ====================
 -- A Department Team under edu, an Independent Team, and an active Project created through
@@ -185,8 +185,13 @@ select ok(
      from public.tasks where title = 'GOS Task Dept 519'),
   'updating group_id alone (Group changed, legacy unchanged) makes the legacy triple follow');
 
+-- project_id is cleared in the same statement on purpose: the row is Project-origin at this
+-- point, and leaving it set would make the written triple name two Origins, which
+-- tasks_exactly_one_origin_check answers first (review round 3, item 5). This has to be a
+-- well-formed triple so that what it pins is the both-sides-disagree branch.
 select throws_ok(
-  format($$ update public.tasks set group_id = %s, dept_id = 'edu' where title = 'GOS Task Dept 519' $$,
+  format($$ update public.tasks set group_id = %s, dept_id = 'edu', project_id = null
+     where title = 'GOS Task Dept 519' $$,
     (select pr_group_id from fx)),
   '23514', 'task_group_origin_mismatch',
   'updating both sides to inconsistent values in the same statement is rejected');
@@ -310,8 +315,11 @@ select lives_ok(
     (select project_group_id from fx), (select project_id from fx)),
   'requests: updating group_id and the matching legacy field together, consistently, lives (review round 2)');
 
+-- project_id cleared in the same statement for the same reason as the tasks case above: a
+-- written triple naming two Origins belongs to completed_work_requests_origin_ck, and this
+-- assertion is about the both-sides-disagree branch (review round 3, item 5).
 select throws_ok(
-  format($$ update public.completed_work_requests set group_id = %s, dept_id = 'pr'
+  format($$ update public.completed_work_requests set group_id = %s, dept_id = 'pr', project_id = null
      where description = 'GOS Request IndepTeam 519' $$,
     (select edu_group_id from fx)),
   '23514', 'request_group_origin_mismatch',
@@ -366,11 +374,16 @@ select ok(
      from public.events where title = 'GOS Event Consistent 519'),
   'events: updating group_id alone to a Group with a different derived scope lives and re-derives scope/dept_id/team_id (review round 2, Defect A)');
 
--- The companion case: scope alone changes, group_id stays put, and the two now disagree.
+-- The companion case: scope alone changes and leaves a stale dept_id/team_id behind. This is
+-- a legacy-only write, so group_id is re-resolved (to the Organization Group) and nothing is
+-- verified here on purpose -- events_scope_fields_ck sees the row a moment later and refuses
+-- it under its own, more specific name. Review round 2 pinned event_group_origin_mismatch for
+-- this input, which is what made the missing legacy-only UPDATE arm look intentional; round 3
+-- re-points the assertion at the constraint that actually answers.
 select throws_ok(
   $$ update public.events set scope = 'org' where title = 'GOS Event Consistent 519' $$,
-  '23514', 'event_group_origin_mismatch',
-  'events: updating scope alone to a value inconsistent with the unchanged group_id is rejected (review round 2, Defect B)');
+  '23514', 'new row for relation "events" violates check constraint "events_scope_fields_ck"',
+  'events: changing scope alone and leaving a stale Origin column behind is refused by events_scope_fields_ck, not reinterpreted by the trigger (review round 3, must-fix 2)');
 
 select lives_ok(
   format($$ update public.events
@@ -392,6 +405,68 @@ select lives_ok(
 select lives_ok(
   $$ update public.events set group_id = group_id where title = 'GOS Event Consistent 519' $$,
   'events: a no-op touch of group_id lives (review round 2)');
+
+-- ==================== Review round 3, must-fix 1: an Event's Origin moves through the legacy columns ====================
+-- Legacy columns stay the write master until Wave 3, so an UPDATE that moves an Event's
+-- Origin through them must live and re-derive group_id, exactly as tasks, requests and
+-- campaigns already do (the shape 20260910173341_departments_diverse_secretariat.sql:38
+-- uses on events). Round 2 deleted this arm from the function; nothing in the suite noticed,
+-- because every existing events UPDATE assertion writes group_id too.
+
+insert into public.events (title, type, scope, dept_id, starts_at)
+  values ('GOS Event LegacyUpd Dept 519', 'sedinta', 'dept', 'edu', now());
+select lives_ok(
+  $$ update public.events set dept_id = 'pr' where title = 'GOS Event LegacyUpd Dept 519' $$,
+  'events: moving a Department Event to another Department through dept_id alone lives (review round 3, must-fix 1)');
+select is(
+  (select group_id from public.events where title = 'GOS Event LegacyUpd Dept 519'),
+  (select pr_group_id from fx),
+  'events: that legacy-only UPDATE re-derives group_id from the new Department');
+
+insert into public.events (title, type, scope, starts_at)
+  values ('GOS Event LegacyUpd Org 519', 'sedinta', 'org', now());
+select lives_ok(
+  $$ update public.events set scope = 'dept', dept_id = 'edu'
+     where title = 'GOS Event LegacyUpd Org 519' $$,
+  'events: moving an org Event down to a Department through scope + dept_id lives (review round 3, must-fix 1)');
+select is(
+  (select group_id from public.events where title = 'GOS Event LegacyUpd Org 519'),
+  (select edu_group_id from fx),
+  'events: that scope-changing legacy-only UPDATE re-derives group_id from the Department');
+
+insert into public.events (title, type, scope, team_id, starts_at)
+  values ('GOS Event LegacyUpd Team 519', 'sedinta', 'team', 'team-indep-519', now());
+select lives_ok(
+  $$ update public.events set team_id = 'team-dept-519', dept_id = 'edu'
+     where title = 'GOS Event LegacyUpd Team 519' $$,
+  'events: moving a Team Event to a Department Team through team_id + dept_id lives (review round 3, must-fix 1)');
+select is(
+  (select group_id from public.events where title = 'GOS Event LegacyUpd Team 519'),
+  (select dept_team_group_id from fx),
+  'events: that Team-to-Team legacy-only UPDATE re-derives group_id from the new Team');
+
+-- ==================== Review round 3, item 5: a malformed legacy Origin is named by its own constraint ====================
+-- A legacy triple naming two Origins at once is malformed for every caller, so the CHECK
+-- answers it rather than the trigger calling it a disagreement between the two sides -- the
+-- Group named here IS the right Group for project_id; what is wrong is the legacy side
+-- alone. This is also the one input shape that distinguishes the round-1 comparison (two
+-- resolved ids, which the resolver's most-specific-first precedence makes blind to dept_id
+-- here) from the round-2 comparison (against the Group's own legacy_* columns): under the
+-- round-2 function it answered <row>_group_origin_mismatch.
+
+select throws_ok(
+  format($$ insert into public.tasks (title, difficulty, dept_id, project_id, group_id)
+     values ('GOS Task TwoOrigins 519', 1, 'edu', %s, %s) $$,
+    (select project_id from fx), (select project_group_id from fx)),
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_exactly_one_origin_check"',
+  'tasks: a row naming a Group and two legacy Origins is answered by tasks_exactly_one_origin_check, not by the mismatch branch (review round 3, item 5)');
+
+select throws_ok(
+  format($$ insert into public.completed_work_requests (requester_id, dept_id, project_id, group_id, description)
+     values ('51900000-0000-0000-0000-000000000001', 'edu', %s, %s, 'GOS Request TwoOrigins 519') $$,
+    (select project_id from fx), (select project_group_id from fx)),
+  '23514', 'new row for relation "completed_work_requests" violates check constraint "completed_work_requests_origin_ck"',
+  'requests: a row naming a Group and two legacy Origins is answered by completed_work_requests_origin_ck, not by the mismatch branch (review round 3, item 5)');
 
 -- ==================== 28-35: shape -- NOT NULL and FK on the four group_id columns ====================
 
