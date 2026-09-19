@@ -1,0 +1,242 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AnnouncementFeedRow } from '../../queries/announcements';
+import type { Department } from '../../queries/reference';
+
+const hooks = vi.hoisted(() => ({
+  useAnnouncementsFeed: vi.fn(),
+  useMarkAnnouncementRead: vi.fn(),
+  useDepartments: vi.fn(),
+}));
+
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+
+vi.mock('../../lib/auth', () => ({
+  useAuth: () => ({
+    session: { user: { id: 'test-user-id' } },
+  }),
+}));
+
+vi.mock('../../queries/announcements', () => ({
+  useAnnouncementsFeed: hooks.useAnnouncementsFeed,
+  useMarkAnnouncementRead: hooks.useMarkAnnouncementRead,
+}));
+
+vi.mock('../../queries/reference', () => ({
+  useDepartments: hooks.useDepartments,
+}));
+
+import AnnouncementsScreen from './AnnouncementsScreen';
+
+const mockDepartments = new Map<string, Department>([
+  [
+    'it',
+    {
+      id: 'it',
+      name: 'IT',
+      short: 'IT',
+      color: '#3B82F6',
+      kind: 'department',
+    },
+  ],
+]);
+
+function createRow(
+  overrides: Partial<AnnouncementFeedRow> = {},
+): AnnouncementFeedRow {
+  return {
+    id: 1,
+    title: 'Anunț test',
+    body: 'Conținut detaliat anunț.',
+    priority: 'normal',
+    category: 'general',
+    pinned: false,
+    author: 'Admin',
+    dept_id: 'it',
+    published_at: '2026-09-18T10:00:00Z',
+    created_by: null,
+    form_label: null,
+    form_url: null,
+    announcement_reads: [],
+    ...overrides,
+  };
+}
+
+describe('AnnouncementsScreen', () => {
+  const mutate = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hooks.useDepartments.mockReturnValue({ data: mockDepartments });
+    hooks.useMarkAnnouncementRead.mockReturnValue({ mutate, isPending: false });
+  });
+
+  it('renders loading state when feed query is pending', () => {
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: true,
+      isError: false,
+      data: undefined,
+    });
+
+    render(<AnnouncementsScreen />);
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
+  });
+
+  it('renders error state and retry button when feed query fails', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const refetch = vi.fn();
+    const user = userEvent.setup();
+
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: true,
+      error: new Error('Failed to load'),
+      refetch,
+    });
+
+    render(<AnnouncementsScreen />);
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(
+      screen.getByText('Nu am putut încărca anunțurile.'),
+    ).toBeInTheDocument();
+
+    const retryButton = screen.getByText('Încearcă din nou');
+    await user.click(retryButton);
+    expect(refetch).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('renders empty state when there are no announcements', () => {
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [],
+    });
+
+    render(<AnnouncementsScreen />);
+
+    expect(
+      screen.getByText('Nu sunt anunțuri disponibile în acest moment.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Toate anunțurile sunt citite'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders feed sorted pinned-first then newest, showing critical banner and unread counts', () => {
+    const rowNormalOld = createRow({
+      id: 1,
+      title: 'Anunț Vechi',
+      pinned: false,
+      priority: 'normal',
+      published_at: '2026-09-15T10:00:00Z',
+      announcement_reads: [{ read_at: '2026-09-16T10:00:00Z' }],
+    });
+
+    const rowCriticalNew = createRow({
+      id: 2,
+      title: 'Urgență Server',
+      pinned: false,
+      priority: 'critical',
+      published_at: '2026-09-18T12:00:00Z',
+      announcement_reads: [], // unread!
+    });
+
+    const rowPinnedOlder = createRow({
+      id: 3,
+      title: 'Regulament Intern',
+      pinned: true,
+      priority: 'important',
+      published_at: '2026-09-10T10:00:00Z',
+      announcement_reads: [{ read_at: '2026-09-11T10:00:00Z' }],
+    });
+
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [rowNormalOld, rowCriticalNew, rowPinnedOlder],
+    });
+
+    render(<AnnouncementsScreen />);
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Anunțuri' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('1 anunț necitit')).toBeInTheDocument();
+
+    // Critical banner is present for unread critical announcement
+    const alert = screen.getByRole('alert');
+    expect(alert).toBeInTheDocument();
+    expect(within(alert).getByText(/Urgență Server/)).toBeInTheDocument();
+
+    // Feed items ordering: pinned first (Regulament Intern), then newer (Urgență Server), then older (Anunț Vechi)
+    const articles = screen.getAllByRole('article');
+    expect(articles).toHaveLength(3);
+    expect(articles[0]).toHaveAccessibleName('Regulament Intern');
+    expect(articles[1]).toHaveAccessibleName('Urgență Server');
+    expect(articles[2]).toHaveAccessibleName('Anunț Vechi');
+  });
+
+  it('opens details sheet when a card is clicked and marks it as read', async () => {
+    const user = userEvent.setup();
+    const row = createRow({
+      id: 42,
+      title: 'Ședință Generală',
+      body: 'Prezența este obligatorie.',
+      announcement_reads: [], // unread
+    });
+
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [row],
+    });
+
+    render(<AnnouncementsScreen />);
+
+    // Click card
+    const card = screen.getByRole('article', { name: 'Ședință Generală' });
+    await user.click(card);
+
+    // Details sheet dialog should be open
+    const dialog = screen.getByRole('dialog', { name: 'Detalii anunț' });
+    expect(dialog).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Prezența este obligatorie.'),
+    ).toBeInTheDocument();
+
+    // Mark as read should have been triggered
+    expect(mutate).toHaveBeenCalledWith(42);
+  });
+
+  it('opens details sheet when critical banner is clicked', async () => {
+    const user = userEvent.setup();
+    const row = createRow({
+      id: 99,
+      title: 'Atenție Server Cazut',
+      priority: 'critical',
+      announcement_reads: [], // unread critical
+    });
+
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [row],
+    });
+
+    render(<AnnouncementsScreen />);
+
+    const bannerButton = screen.getByRole('button', { name: 'Citește acum' });
+    await user.click(bannerButton);
+
+    const dialog = screen.getByRole('dialog', { name: 'Detalii anunț' });
+    expect(dialog).toBeInTheDocument();
+    expect(mutate).toHaveBeenCalledWith(99);
+  });
+});

@@ -36,6 +36,9 @@ vi.mock('./screens/calendar/CalendarScreen', () => ({ default: () => null }));
 vi.mock('./screens/requests/CompletedWorkRequestScreen', () => ({
   default: () => <h1>Cereri screen</h1>,
 }));
+vi.mock('./screens/announcements/AnnouncementsScreen', () => ({
+  default: () => <h1>Anunțuri screen</h1>,
+}));
 
 import App from './App';
 
@@ -227,5 +230,16 @@ describe('route guards', () => {
 
     await screen.findByRole('heading', { name: 'Dashboard' });
     expect(window.location.pathname).toBe('/');
+  });
+
+  it('renders the announcements screen for an active member at /anunturi', () => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', '/anunturi');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Anunțuri screen' }),
+    ).toBeInTheDocument();
   });
 });
