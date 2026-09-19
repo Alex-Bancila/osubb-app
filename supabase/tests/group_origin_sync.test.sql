@@ -9,7 +9,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(49);
+select plan(68);
 
 -- ==================== Fixtures ====================
 -- A Department Team under edu, an Independent Team, and an active Project created through
@@ -261,6 +261,137 @@ select throws_ok(
      values ('GOS Event ScopeMismatch 519', 'sedinta', 'org', %s, now()) $$, (select edu_group_id from fx)),
   '23514', 'event_group_origin_mismatch',
   'an Event naming both a Group and an inconsistent caller-supplied scope is rejected, not silently rewritten (Finding 2)');
+
+-- ==================== Review round 2: UPDATE-shape coverage per table ====================
+-- Round 1's must-fix findings were both keyed on the wrong signal (Defect A: `new.scope`
+-- carries the OLD value forward on an UPDATE that never mentioned it, indistinguishable
+-- from caller intent; Defect B: comparing two *resolved* ids is blind to a Group whose own
+-- legacy_* columns disagree in a way the resolver's precedence papers over) and every
+-- existing assertion up to this point is about INSERT. These continue each table's
+-- existing fixture row through the four UPDATE shapes -- only the Group side changed, only
+-- the legacy side changed, both changed consistently, both changed inconsistently -- plus a
+-- no-op touch of a legacy column and of group_id.
+
+-- ---------- tasks (continuing 'GOS Task Dept 519', now project_id-origin/project_group) ----------
+update public.tasks set group_id = (select dept_team_group_id from fx), team_id = 'team-dept-519', project_id = null
+  where title = 'GOS Task Dept 519';
+select ok(
+  (select team_id = 'team-dept-519' and dept_id is null and project_id is null
+     and group_id = (select dept_team_group_id from fx)
+     from public.tasks where title = 'GOS Task Dept 519'),
+  'tasks: updating group_id and the matching legacy field together, consistently, lives (review round 2)');
+
+select lives_ok(
+  $$ update public.tasks set team_id = team_id where title = 'GOS Task Dept 519' $$,
+  'tasks: a no-op touch of team_id lives (review round 2)');
+select lives_ok(
+  $$ update public.tasks set group_id = group_id where title = 'GOS Task Dept 519' $$,
+  'tasks: a no-op touch of group_id lives (review round 2)');
+
+-- ---------- completed_work_requests (continuing 'GOS Request IndepTeam 519') ----------
+update public.completed_work_requests set group_id = (select dept_team_group_id from fx)
+  where description = 'GOS Request IndepTeam 519';
+select ok(
+  (select team_id = 'team-dept-519' and dept_id is null and project_id is null
+     from public.completed_work_requests where description = 'GOS Request IndepTeam 519'),
+  'requests: updating group_id alone lives and re-derives the legacy triple (review round 2)');
+
+update public.completed_work_requests set team_id = null, dept_id = 'edu'
+  where description = 'GOS Request IndepTeam 519';
+select is(
+  (select group_id from public.completed_work_requests where description = 'GOS Request IndepTeam 519'),
+  (select edu_group_id from fx),
+  'requests: updating the legacy triple alone lives and re-derives group_id (review round 2)');
+
+select lives_ok(
+  format($$ update public.completed_work_requests
+       set group_id = %s, dept_id = null, project_id = %s
+     where description = 'GOS Request IndepTeam 519' $$,
+    (select project_group_id from fx), (select project_id from fx)),
+  'requests: updating group_id and the matching legacy field together, consistently, lives (review round 2)');
+
+select throws_ok(
+  format($$ update public.completed_work_requests set group_id = %s, dept_id = 'pr'
+     where description = 'GOS Request IndepTeam 519' $$,
+    (select edu_group_id from fx)),
+  '23514', 'request_group_origin_mismatch',
+  'requests: updating group_id and a legacy field together to an inconsistent pair is rejected (review round 2)');
+
+select lives_ok(
+  $$ update public.completed_work_requests set project_id = project_id
+     where description = 'GOS Request IndepTeam 519' $$,
+  'requests: a no-op touch of project_id lives (review round 2)');
+select lives_ok(
+  $$ update public.completed_work_requests set group_id = group_id
+     where description = 'GOS Request IndepTeam 519' $$,
+  'requests: a no-op touch of group_id lives (review round 2)');
+
+-- ---------- campaigns (continuing 'GOS Campaign TeamGroup 519' from Finding 1's coverage) ----------
+update public.campaigns set group_id = (select edu_group_id from fx) where name = 'GOS Campaign TeamGroup 519';
+select is(
+  (select department_id from public.campaigns where name = 'GOS Campaign TeamGroup 519'),
+  'edu',
+  'campaigns: updating group_id alone (Department Group) lives and re-derives department_id (review round 2)');
+
+update public.campaigns set department_id = 'pr' where name = 'GOS Campaign TeamGroup 519';
+select is(
+  (select group_id from public.campaigns where name = 'GOS Campaign TeamGroup 519'),
+  (select pr_group_id from fx),
+  'campaigns: updating department_id alone lives and re-derives group_id (review round 2)');
+
+select lives_ok(
+  format($$ update public.campaigns set group_id = %s, department_id = 'edu'
+     where name = 'GOS Campaign TeamGroup 519' $$,
+    (select edu_group_id from fx)),
+  'campaigns: updating group_id and department_id together, consistently, lives (review round 2)');
+
+-- Defect B repro: department_id cleared while group_id is pointed at a real Department
+-- Group in the SAME statement. The round-1 fix (`department_id is not null`) skipped this
+-- check outright since department_id is null on the written row; comparing against
+-- v_grp.legacy_dept_id directly (the fix here) has no such blind spot.
+select throws_ok(
+  format($$ update public.campaigns set department_id = null, group_id = %s
+     where name = 'GOS Campaign TeamGroup 519' $$,
+    (select pr_group_id from fx)),
+  '23514', 'campaign_group_origin_mismatch',
+  'campaigns: clearing department_id while group_id still names a real Department Group is rejected (review round 2, Defect B)');
+
+-- ---------- events (continuing 'GOS Event Consistent 519') ----------
+-- Defect A repro: a legitimate Group move lands on a Group with a different derived
+-- scope -- must live and re-derive, not raise, because the caller never touched scope.
+update public.events set group_id = (select dept_team_group_id from fx)
+  where title = 'GOS Event Consistent 519';
+select ok(
+  (select scope = 'team' and team_id = 'team-dept-519' and dept_id = 'edu'
+     from public.events where title = 'GOS Event Consistent 519'),
+  'events: updating group_id alone to a Group with a different derived scope lives and re-derives scope/dept_id/team_id (review round 2, Defect A)');
+
+-- The companion case: scope alone changes, group_id stays put, and the two now disagree.
+select throws_ok(
+  $$ update public.events set scope = 'org' where title = 'GOS Event Consistent 519' $$,
+  '23514', 'event_group_origin_mismatch',
+  'events: updating scope alone to a value inconsistent with the unchanged group_id is rejected (review round 2, Defect B)');
+
+select lives_ok(
+  format($$ update public.events
+       set group_id = %s, scope = 'project', project_id = %s, dept_id = null, team_id = null
+     where title = 'GOS Event Consistent 519' $$,
+    (select project_group_id from fx), (select project_id from fx)),
+  'events: updating group_id and the matching legacy fields together, consistently, lives (review round 2)');
+
+select throws_ok(
+  format($$ update public.events set group_id = %s, scope = 'org'
+     where title = 'GOS Event Consistent 519' $$,
+    (select edu_group_id from fx)),
+  '23514', 'event_group_origin_mismatch',
+  'events: updating group_id and scope together to an inconsistent pair is rejected (review round 2)');
+
+select lives_ok(
+  $$ update public.events set scope = scope where title = 'GOS Event Consistent 519' $$,
+  'events: a no-op touch of scope lives (review round 2)');
+select lives_ok(
+  $$ update public.events set group_id = group_id where title = 'GOS Event Consistent 519' $$,
+  'events: a no-op touch of group_id lives (review round 2)');
 
 -- ==================== 28-35: shape -- NOT NULL and FK on the four group_id columns ====================
 
