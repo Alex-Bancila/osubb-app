@@ -1,3 +1,4 @@
+import { formatPoints } from '../../lib/format';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Trophy } from 'lucide-react';
@@ -31,7 +32,9 @@ const columns: DataTableColumn<LeaderboardRow>[] = [
     accessorKey: 'points',
     header: 'Puncte',
     cell: ({ row }) => (
-      <span className="font-semibold tabular-nums">{row.original.points}</span>
+      <span className="font-semibold tabular-nums">
+        {formatPoints(row.original.points)}
+      </span>
     ),
   },
 ];
@@ -206,7 +209,7 @@ function LeadershipContent() {
                     </p>
                   </div>
                   <span className="shrink-0 font-bold tabular-nums">
-                    {group.points}{' '}
+                    {formatPoints(group.points)}{' '}
                     <span className="text-sm font-normal">pct.</span>
                   </span>
                 </li>

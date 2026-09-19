@@ -38,12 +38,12 @@ beforeEach(() => {
       {
         member_id: uid,
         full_name: 'Ioana Popescu',
-        points: filters.groupId ? 12 : 30,
+        points: filters.groupId ? 12 : -1234,
       },
     ],
   }));
   state.cup.mockReturnValue({
-    data: [{ group_id: 7, name: 'Educație', points: 40, members: 8 }],
+    data: [{ group_id: 7, name: 'Educație', points: -1200, members: 8 }],
   });
   state.options.mockReturnValue({
     data: {
@@ -55,7 +55,7 @@ beforeEach(() => {
 it('changes authoritative filters, displays returned totals and removes chips', async () => {
   const user = userEvent.setup();
   renderPage();
-  expect(screen.getByText('30')).toBeInTheDocument();
+  expect(screen.getByText('−1.234')).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText('Grup'), '7');
   expect(state.board).toHaveBeenLastCalledWith({
     groupId: 7,
@@ -94,7 +94,7 @@ it('keeps Cup independent when board fails and offers retry', async () => {
   const retry = vi.fn();
   state.board.mockReturnValue({ isError: true, refetch: retry });
   renderPage();
-  expect(screen.getByText('40')).toBeInTheDocument();
+  expect(screen.getByText('−1.200')).toBeInTheDocument();
   await userEvent.click(
     screen.getByRole('button', { name: 'Reîncarcă clasamentul' }),
   );
@@ -121,7 +121,7 @@ it('mounts no metric queries when the live leadership gate denies stale claims',
 
 it('opens the same member from the non-link portion of a row', async () => {
   renderPage();
-  await userEvent.click(screen.getByText('30'));
+  await userEvent.click(screen.getByText('−1.234'));
   expect(
     screen.getByRole('heading', { name: 'Istoric membru' }),
   ).toBeInTheDocument();

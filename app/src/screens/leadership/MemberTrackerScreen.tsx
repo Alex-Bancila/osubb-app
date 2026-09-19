@@ -1,3 +1,4 @@
+import { formatPoints } from '../../lib/format';
 import { Link, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { formatBucharestDay } from '../../lib/calendar-time';
@@ -146,7 +147,11 @@ function MemberHistory({ memberId }: { memberId: string }) {
                           {entry.outcome === 'completed'
                             ? 'Finalizat'
                             : 'Nerealizat'}{' '}
-                          · {text(entry.points)} puncte
+                          ·{' '}
+                          {typeof entry.points === 'number'
+                            ? formatPoints(entry.points)
+                            : '—'}{' '}
+                          puncte
                           {entry.reversed_at ? ' · Evaluare anulată' : ''}
                         </p>
                         <p>

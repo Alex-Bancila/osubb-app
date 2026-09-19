@@ -41,7 +41,7 @@ beforeEach(() => {
           {
             id: 2,
             outcome: 'completed',
-            points: 12,
+            points: -1234,
             difficulty: 3,
             rating: 4,
             note: 'Bine pregătit',
@@ -63,7 +63,7 @@ it('uses the route member id and shows ended assignment plus reversed evaluation
     screen.getByText(/Finalizat ·/, { selector: 'dd' }),
   ).toBeInTheDocument();
   await user.click(screen.getByText('Evaluări (1)'));
-  expect(screen.getByText(/12 puncte · Evaluare anulată/)).toBeVisible();
+  expect(screen.getByText(/−1\.234 puncte · Evaluare anulată/)).toBeVisible();
   expect(screen.getByText(/Corecție/)).toBeVisible();
   await user.click(screen.getByText('Subtaskuri (1)'));
   expect(screen.getByText(/Materiale · Finalizat/)).toBeVisible();
