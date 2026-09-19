@@ -40,7 +40,9 @@ export function reviewError(code?: string) {
           : 'Nu am putut salva evaluarea. Încearcă din nou.',
   );
 }
-export async function evaluateTask(input: EvaluationInput) {
+export async function evaluateTask(
+  input: EvaluationInput & { outcome?: 'completed' | 'unfulfilled' },
+) {
   if (
     !input.note.trim() ||
     !Number.isInteger(input.difficulty) ||
@@ -51,12 +53,17 @@ export async function evaluateTask(input: EvaluationInput) {
     input.rating > 5
   )
     throw new Error('Alege Dificultatea, Calificativul și scrie o notă.');
-  const { data, error } = await supabase.rpc('complete_task_review', {
-    p_task_id: input.taskId,
-    p_difficulty: input.difficulty,
-    p_rating: input.rating,
-    p_note: input.note.trim(),
-  });
+  const { data, error } = await supabase.rpc(
+    input.outcome === 'unfulfilled'
+      ? 'mark_task_unfulfilled'
+      : 'complete_task_review',
+    {
+      p_task_id: input.taskId,
+      p_difficulty: input.difficulty,
+      p_rating: input.rating,
+      p_note: input.note.trim(),
+    },
+  );
   if (error) throw reviewError(error.code);
   return data;
 }

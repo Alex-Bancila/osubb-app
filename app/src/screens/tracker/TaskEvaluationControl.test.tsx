@@ -113,3 +113,50 @@ it('prevents repeated submits while the first command is unresolved', async () =
   );
   expect(state.mutation.mutateAsync).toHaveBeenCalledTimes(1);
 });
+it('offers unfulfilled only for an authorized overdue unfinished Task', () => {
+  const view = render(
+    <TaskEvaluationControl {...props} status="todo" overdue={false} />,
+  );
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  view.rerender(<TaskEvaluationControl {...props} status="todo" overdue />);
+  expect(
+    screen.getByRole('button', { name: 'Marchează nerealizat' }),
+  ).toBeInTheDocument();
+  view.rerender(
+    <TaskEvaluationControl {...props} status="completed" overdue />,
+  );
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  state.capability = false;
+  view.rerender(<TaskEvaluationControl {...props} status="todo" overdue />);
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+it('submits the unfulfilled outcome through the shared evaluation form', async () => {
+  const user = userEvent.setup();
+  render(<TaskEvaluationControl {...props} status="in_progress" overdue />);
+  await user.click(
+    screen.getByRole('button', { name: 'Marchează nerealizat' }),
+  );
+  expect(
+    screen.getByText(/păstrează încercarea în istoric/),
+  ).toBeInTheDocument();
+  await user.selectOptions(
+    screen.getByLabelText('Dificultate (obligatoriu)'),
+    '2',
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Calificativ (obligatoriu)'),
+    '1',
+  );
+  await user.type(
+    screen.getByLabelText('Notă (obligatoriu)'),
+    'Termen depășit',
+  );
+  await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
+  expect(state.mutation.mutateAsync).toHaveBeenCalledWith({
+    taskId: 17,
+    difficulty: 2,
+    rating: 1,
+    note: 'Termen depășit',
+    outcome: 'unfulfilled',
+  });
+});
