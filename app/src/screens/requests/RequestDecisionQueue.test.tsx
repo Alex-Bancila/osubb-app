@@ -79,9 +79,7 @@ it('shares evaluation fields and retains success after the queue refetches empty
 it('requires a rejection note, calls rejection only, and has no axe violations', async () => {
   const user = userEvent.setup();
   const { container } = render(<RequestDecisionQueue />);
-  await user.click(
-    screen.getByRole('button', { name: 'Respinge', exact: true }),
-  );
+  await user.click(screen.getByRole('button', { name: 'Respinge' }));
   expect(
     screen.getByRole('button', { name: 'Respinge cererea' }),
   ).toBeDisabled();
@@ -113,9 +111,7 @@ it('has no decision actions when the live server queue is empty', () => {
 it('keeps the request and note on unexpected failure without leaking details', async () => {
   state.mutate.mockRejectedValue(new Error('private SQL'));
   render(<RequestDecisionQueue />);
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Respinge', exact: true }),
-  );
+  await userEvent.click(screen.getByRole('button', { name: 'Respinge' }));
   await userEvent.type(
     screen.getByLabelText('Motivul respingerii (obligatoriu)'),
     'Notă',
