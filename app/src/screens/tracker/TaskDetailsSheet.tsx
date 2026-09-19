@@ -1,3 +1,4 @@
+import { TaskAssignControl } from './TaskAssignControl';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
 import {
@@ -51,6 +52,15 @@ function TaskDetails({
         onProgress={(selectedId, action) =>
           progress.mutateAsync({ taskId: selectedId, action })
         }
+      />
+      <TaskAssignControl
+        taskId={taskId}
+        groupId={query.data.task.group_id}
+        status={task.status}
+        kind={task.kind}
+        assignmentMode={task.assignmentMode}
+        hasExecutor={task.executor !== null}
+        canManage={canManage}
       />
       <dl className="grid gap-3 text-sm">
         {task.kind === 'task' && (
