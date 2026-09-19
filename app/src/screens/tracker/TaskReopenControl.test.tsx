@@ -102,3 +102,35 @@ it('announces and focuses success after status refetch before mutation resolves'
   ).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
+
+it('preserves success when mutation resolves before status refetch before mutation resolves', async () => {
+  let finish!: () => void;
+  state.mutation.mutateAsync.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const view = render(<TaskReopenControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Redeschide taskul' }));
+  await user.type(
+    screen.getByLabelText('Motiv (obligatoriu)'),
+    'Motiv justificat',
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+  );
+  await act(async () => finish());
+  view.rerender(<TaskReopenControl {...props} status="in_progress" />);
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'punctele au fost actualizate',
+  );
+  expect(screen.getByRole('status')).toHaveFocus();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  view.rerender(<TaskReopenControl {...props} />);
+  expect(
+    screen.getByRole('button', { name: 'Redeschide taskul' }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+

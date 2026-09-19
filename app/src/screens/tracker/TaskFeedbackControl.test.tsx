@@ -101,3 +101,33 @@ it('announces and focuses success after status refetch before mutation resolves'
   ).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
+
+it('preserves success when mutation resolves before status refetch before mutation resolves', async () => {
+  let finish!: () => void;
+  state.mutation.mutateAsync.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const view = render(<TaskFeedbackControl {...props} />);
+  await user.click(
+    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+  );
+  await user.type(
+    screen.getByLabelText('Notă pentru Executor (obligatoriu)'),
+    'Motiv justificat',
+  );
+  await user.click(screen.getByRole('button', { name: 'Confirmă feedbackul' }));
+  await act(async () => finish());
+  view.rerender(<TaskFeedbackControl {...props} status="in_progress" />);
+  expect(screen.getByRole('status')).toHaveTextContent('feedback de aplicat');
+  expect(screen.getByRole('status')).toHaveFocus();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  view.rerender(<TaskFeedbackControl {...props} />);
+  expect(
+    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+

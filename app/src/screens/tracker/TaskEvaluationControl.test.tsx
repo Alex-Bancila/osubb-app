@@ -229,3 +229,38 @@ it('announces and focuses success for unfulfilled after the refetch changes stat
   expect(screen.getByRole('status')).toHaveFocus();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
+
+it('preserves success when mutation resolves before the refetch changes status before mutation resolves', async () => {
+  let finish!: () => void;
+  state.mutation.mutateAsync.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const view = render(<TaskEvaluationControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
+  await user.selectOptions(
+    screen.getByLabelText('Dificultate (obligatoriu)'),
+    '2',
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Calificativ (obligatoriu)'),
+    '5',
+  );
+  await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
+  await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
+  await act(async () => finish());
+  view.rerender(<TaskEvaluationControl {...props} status="completed" />);
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Evaluarea a fost salvată',
+  );
+  expect(screen.getByRole('status')).toHaveFocus();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  view.rerender(<TaskEvaluationControl {...props} />);
+  expect(
+    screen.getByRole('button', { name: 'Evaluează taskul' }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+

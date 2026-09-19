@@ -33,7 +33,7 @@ export function TaskEvaluationControl({
   const [previousStatus, setPreviousStatus] = useState(status);
   if (previousStatus !== status) {
     setPreviousStatus(status);
-    setDone(false);
+    if (status !== outcome) setDone(false);
   }
   if (done)
     return (
