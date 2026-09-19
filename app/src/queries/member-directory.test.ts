@@ -22,19 +22,23 @@ const fixtures: Record<string, unknown[]> = {
     { id: 'bc', name: 'BC' },
   ],
 };
+function query(data: unknown[] | null, error: unknown = null) {
+  const builder = {
+    select: vi.fn(() => builder),
+    order: vi.fn(() => builder),
+    range: vi.fn((from: number, to: number) =>
+      Promise.resolve({ data: data?.slice(from, to + 1) ?? null, error }),
+    ),
+  };
+  return builder;
+}
 beforeEach(() => {
-  mocks.from.mockReset().mockImplementation((name: string) => {
-    const response = { data: fixtures[name], error: null };
-    return {
-      select: vi.fn().mockReturnValue({
-        ...response,
-        order: vi.fn().mockResolvedValue(response),
-      }),
-    };
-  });
+  mocks.from
+    .mockReset()
+    .mockImplementation((name: string) => query(fixtures[name]));
   mocks.rpc
     .mockReset()
-    .mockResolvedValue({ data: [{ member_id: 'a', points: -3 }], error: null });
+    .mockImplementation(() => query([{ member_id: 'a', points: -3 }]));
 });
 describe('directory reads', () => {
   it('joins only authorized projections and leadership Task points without inventing contacts', async () => {
@@ -53,7 +57,29 @@ describe('directory reads', () => {
   });
   it('surfaces a denied point read rather than displaying fabricated zero totals', async () => {
     const error = { code: '42501', message: 'denied' };
-    mocks.rpc.mockResolvedValue({ data: null, error });
+    mocks.rpc.mockReturnValue(query(null, error));
     await expect(fetchMemberDirectory()).rejects.toEqual(error);
+  });
+  it('reads subsequent membership and leaderboard pages before joining totals and filters', async () => {
+    const memberships = Array.from({ length: 500 }, (_, index) => ({
+      member_id: `other-${index}`,
+      group_id: 1,
+    }));
+    const pages = query([...memberships, { member_id: 'b', group_id: 2 }]);
+    mocks.from.mockImplementation((name: string) =>
+      name === 'group_members' ? pages : query(fixtures[name]),
+    );
+    const ranking = query([
+      ...Array.from({ length: 500 }, (_, index) => ({
+        member_id: `other-${index}`,
+        points: 1,
+      })),
+      { member_id: 'b', points: 42 },
+    ]);
+    mocks.rpc.mockReturnValue(ranking);
+    const members = await fetchMemberDirectory();
+    expect(members[1]).toMatchObject({ teams: ['Logistică'], points: 42 });
+    expect(pages.range).toHaveBeenCalledWith(500, 999);
+    expect(ranking.range).toHaveBeenCalledWith(500, 999);
   });
 });

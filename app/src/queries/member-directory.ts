@@ -14,40 +14,74 @@ export type DirectoryMember = {
   contact: { email: string | null; phone: string | null } | undefined;
 };
 
+// Supabase caps each response at 1,000 rows. Memberships can exceed that
+// before the directory does, so every projection is read in stable pages.
+async function readAllRows<T>(
+  readPage: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await readPage(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
 export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
   const [profiles, contacts, memberships, groups, roles, points] =
     await Promise.all([
-      supabase
-        .from('profiles_directory')
-        .select('id, full_name, role, status')
-        .order('full_name'),
-      supabase.from('profiles_contact').select('id, email, phone'),
-      supabase.from('group_members').select('member_id, group_id'),
-      supabase.from('groups').select('id, name, category'),
-      supabase.from('roles').select('id, name'),
-      supabase.rpc('leadership_leaderboard', {}),
+      readAllRows((from, to) =>
+        supabase
+          .from('profiles_directory')
+          .select('id, full_name, role, status')
+          .order('id')
+          .range(from, to),
+      ),
+      readAllRows((from, to) =>
+        supabase
+          .from('profiles_contact')
+          .select('id, email, phone')
+          .order('id')
+          .range(from, to),
+      ),
+      readAllRows((from, to) =>
+        supabase
+          .from('group_members')
+          .select('member_id, group_id')
+          .order('group_id')
+          .order('member_id')
+          .range(from, to),
+      ),
+      readAllRows((from, to) =>
+        supabase
+          .from('groups')
+          .select('id, name, category')
+          .order('id')
+          .range(from, to),
+      ),
+      readAllRows((from, to) =>
+        supabase.from('roles').select('id, name').order('id').range(from, to),
+      ),
+      readAllRows((from, to) =>
+        supabase
+          .rpc('leadership_leaderboard', {})
+          .order('member_id')
+          .range(from, to),
+      ),
     ]);
-  for (const result of [
-    profiles,
-    contacts,
-    memberships,
-    groups,
-    roles,
-    points,
-  ]) {
-    if (result.error) throw result.error;
-  }
-  const groupById = new Map(groups.data?.map((group) => [group.id, group]));
-  const roleById = new Map(roles.data?.map((role) => [role.id, role.name]));
-  const contactById = new Map(
-    contacts.data?.map((contact) => [contact.id, contact]),
-  );
-  const pointsById = new Map(
-    points.data?.map((row) => [row.member_id, row.points]),
-  );
-  return (profiles.data ?? []).flatMap((profile) => {
+  const groupById = new Map(groups.map((group) => [group.id, group]));
+  const roleById = new Map(roles.map((role) => [role.id, role.name]));
+  const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
+  const pointsById = new Map(points.map((row) => [row.member_id, row.points]));
+  return profiles.flatMap((profile) => {
     if (!profile.id) return [];
-    const memberGroups = (memberships.data ?? [])
+    const memberGroups = memberships
       .filter((membership) => membership.member_id === profile.id)
       .flatMap((membership) => {
         const group = groupById.get(membership.group_id);
