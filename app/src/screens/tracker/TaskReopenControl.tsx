@@ -1,3 +1,4 @@
+import { TaskActionSuccess } from './TaskActionSuccess';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
@@ -16,6 +17,12 @@ export function TaskReopenControl({
   const capability = useTaskEvaluationCapability(taskId);
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
+  if (done)
+    return (
+      <TaskActionSuccess>
+        Taskul este în lucru. Istoricul și punctele au fost actualizate.
+      </TaskActionSuccess>
+    );
   if (
     capability.data !== true ||
     !['completed', 'unfulfilled'].includes(status) ||
@@ -44,11 +51,6 @@ export function TaskReopenControl({
         >
           Redeschide taskul
         </Button>
-      )}
-      {done && (
-        <p role="status">
-          Taskul este în lucru. Istoricul și punctele au fost actualizate.
-        </p>
       )}
     </section>
   );
