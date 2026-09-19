@@ -49,9 +49,11 @@ alter table public.completed_work_requests add column group_id bigint references
 
 create index tasks_group_idx                   on public.tasks (group_id);
 create index events_group_idx                  on public.events (group_id);
-create index campaigns_group_idx               on public.campaigns (group_id);
 create index completed_work_requests_group_idx on public.completed_work_requests (group_id);
 
+-- campaigns gets no standalone group_id index: campaigns_group_name_uidx below is a
+-- unique index on (group_id, lower(name)), whose leading column already serves every
+-- plain group_id lookup -- a separate campaigns_group_idx would be a redundant prefix.
 alter table public.campaigns alter column department_id drop not null;
 drop index public.campaigns_department_name_uidx;
 create unique index campaigns_group_name_uidx on public.campaigns (group_id, lower(name));
@@ -254,14 +256,18 @@ begin
       raise exception using errcode = '23514', message = 'campaign_group_required';
     end if;
     new.group_id := v_from_legacy;
-  elsif v_from_legacy is distinct from new.group_id then
+  elsif new.department_id is not null and v_from_legacy is distinct from new.group_id then
+    -- Guarded on department_id is not null: a Team/Project-Group Campaign always has
+    -- v_from_legacy = group_id_for_legacy_origin(null, null, null) = null, which would
+    -- otherwise be "distinct from" any real group_id on every no-op touch of either
+    -- column -- exactly the row shape department_id went nullable to allow.
     raise exception using errcode = '23514', message = 'campaign_group_origin_mismatch';
   end if;
   return new;
 end;
 $$;
 comment on function private.sync_campaign_group_origin() is
-  'Keeps campaigns.group_id and department_id consistent both ways (ADR-0009 Wave 2). A legacy write derives group_id; a Group write derives department_id, which is null when the Group is not a Department (a Team or Project Group carries no _unmapped error -- department_id simply goes null, the reason the column was made nullable in this migration). campaign_group_required: the legacy side names no Group; campaign_group_origin_mismatch: both sides were set and disagree.';
+  'Keeps campaigns.group_id and department_id consistent both ways (ADR-0009 Wave 2). A legacy write derives group_id; a Group write derives department_id, which is null when the Group is not a Department (a Team or Project Group carries no _unmapped error -- department_id simply goes null, the reason the column was made nullable in this migration). campaign_group_required: the legacy side names no Group; campaign_group_origin_mismatch: both sides were set and disagree -- checked only when department_id is set, so a Team/Project-Group Campaign (department_id always null) is never flagged against its own null-resolving legacy side.';
 
 create trigger campaigns_sync_group_origin
 before insert or update of group_id, department_id on public.campaigns
@@ -278,6 +284,7 @@ declare
   v_group_changed  boolean;
   v_from_legacy    bigint;
   v_grp            public.groups%rowtype;
+  v_caller_scope   public.event_scope;
 begin
   v_legacy_changed := tg_op = 'INSERT'
     or new.scope      is distinct from old.scope
@@ -294,7 +301,13 @@ begin
   if (tg_op = 'INSERT' and new.group_id is not null
       and new.dept_id is null and new.team_id is null and new.project_id is null)
      or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
-    -- Group -> legacy: scope, the Origin column, and the Team's parent Department
+    -- Group -> legacy: scope, the Origin column, and the Team's parent Department.
+    -- new.scope is captured BEFORE this branch overwrites it: on INSERT it is null
+    -- exactly when the caller omitted it (events.scope has no column default, and
+    -- the NOT NULL check runs only after this BEFORE trigger returns) -- a caller
+    -- who DID supply one is held to it below, the same as dept_id/team_id/project_id
+    -- already are via v_from_legacy.
+    v_caller_scope := new.scope;
     select * into v_grp from public.groups where id = new.group_id;
     if not found then
       return new;                                   -- events_group_id_fkey answers
@@ -310,6 +323,9 @@ begin
       new.scope := 'project'; new.project_id := v_grp.legacy_project_id; new.dept_id := null; new.team_id := null;
     else
       raise exception using errcode = '23514', message = 'event_group_origin_unmapped';
+    end if;
+    if v_caller_scope is not null and v_caller_scope is distinct from new.scope then
+      raise exception using errcode = '23514', message = 'event_group_origin_mismatch';
     end if;
   elsif new.group_id is null
      or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
@@ -333,7 +349,7 @@ begin
 end;
 $$;
 comment on function private.sync_event_group_origin() is
-  'Keeps events.group_id and the legacy (scope, dept_id, team_id, project_id) Origin consistent both ways (ADR-0009 Wave 2). A legacy write derives group_id (the org pseudo-department is its own case); a Group write derives scope plus the one Origin column it implies, filling a Team Event''s parent Department along the way. event_group_required: the legacy side names no Group; event_group_origin_unmapped: the Group has no legacy master; event_group_origin_mismatch: both sides were set and disagree. Never overwrites a caller-supplied, wrong dept_id on a Team Event -- events_team_department_fkey answers that with 23503.';
+  'Keeps events.group_id and the legacy (scope, dept_id, team_id, project_id) Origin consistent both ways (ADR-0009 Wave 2). A legacy write derives group_id (the org pseudo-department is its own case); a Group write derives scope plus the one Origin column it implies, filling a Team Event''s parent Department along the way -- and, when the caller also supplied a scope of their own, refuses one that disagrees with what the Group implies (event_group_origin_mismatch), the same as dept_id/team_id/project_id already are via v_from_legacy. event_group_required: the legacy side names no Group; event_group_origin_unmapped: the Group has no legacy master. Never overwrites a caller-supplied, wrong dept_id on a Team Event -- events_team_department_fkey answers that with 23503.';
 
 create trigger events_sync_group_origin
 before insert or update of group_id, scope, dept_id, team_id, project_id on public.events
@@ -381,6 +397,12 @@ declare
   v_campaign public.campaigns%rowtype;
   v_constraint text;
 begin
+  -- Cheap gate before require_campaign_manager's Department lookup (#343
+  -- review round 1, for symmetry with update/set_campaign_active below): an
+  -- identity that can never manage any Campaign must not be able to use an
+  -- unknown/invalid p_department_id to learn PT404 vs PT400 vs 42501. This
+  -- is the same non-disclosure discipline the Task commands (#318) must
+  -- copy from this template.
   if v_actor is null
      or not coalesce(public.auth_is_member(), false)
      or not exists (
@@ -401,6 +423,10 @@ begin
     raise sqlstate 'PT400' using message = 'invalid_campaign_name';
   end if;
 
+  -- regexp_replace, not btrim: btrim only strips plain spaces, so a
+  -- tab-padded name would dodge the lower(name) uniqueness check below
+  -- while still colliding once trimmed for storage
+  -- (private.create_project_impl's precedent).
   v_name := regexp_replace(p_name, '^[[:space:]]+|[[:space:]]+$', '', 'g');
 
   begin
@@ -441,6 +467,15 @@ declare
   v_campaign public.campaigns%rowtype;
   v_constraint text;
 begin
+  -- Cheap gate BEFORE the row lock below (#343 review round 1): an identity
+  -- that can never manage any Campaign must not be able to take the
+  -- Campaign row's FOR UPDATE lock, or learn campaign_not_found vs a real
+  -- authorization decision, purely by naming an id. This does not replace
+  -- require_campaign_manager's Department-scoped check below (a BCE of the
+  -- wrong Department still passes this gate and fails there); it only keeps
+  -- a caller who can never manage *anything* from reaching the lock at all
+  -- -- the same non-disclosure discipline the Task commands (#318) must
+  -- copy from this template.
   if v_actor is null
      or not coalesce(public.auth_is_member(), false)
      or not exists (
@@ -455,6 +490,10 @@ begin
       message = 'campaign_manage_forbidden';
   end if;
 
+  -- An unknown Campaign is still PT404 no matter who is asking
+  -- (campaigns_read already lets every active member see every Campaign
+  -- row, so this does not disclose anything new to a caller who already
+  -- passed the gate above).
   select campaign.department_id
     into v_department_id
     from public.campaigns as campaign
@@ -471,6 +510,10 @@ begin
     raise sqlstate 'PT400' using message = 'invalid_campaign_name';
   end if;
 
+  -- regexp_replace, not btrim: btrim only strips plain spaces, so a
+  -- tab-padded name would dodge the lower(name) uniqueness check below
+  -- while still colliding once trimmed for storage
+  -- (private.create_project_impl's precedent).
   v_name := regexp_replace(p_name, '^[[:space:]]+|[[:space:]]+$', '', 'g');
 
   begin

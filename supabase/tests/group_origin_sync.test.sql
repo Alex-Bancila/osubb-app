@@ -9,7 +9,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(49);
 
 -- ==================== Fixtures ====================
 -- A Department Team under edu, an Independent Team, and an active Project created through
@@ -227,8 +227,40 @@ select is(
 select throws_ok(
   $$ insert into public.events (title, type, scope, dept_id, team_id, starts_at)
      values ('GOS Event TeamWrongDept 519', 'sedinta', 'team', 'pr', 'team-dept-519', now()) $$,
-  '23503', null,
+  '23503', 'insert or update on table "events" violates foreign key constraint "events_team_department_fkey"',
   'a team-scope Event with a WRONG dept_id is rejected by the FK -- the trigger never overwrites a caller-supplied value');
+
+-- ==================== Review Finding 1: a Team/Project-Group Campaign survives a no-op touch ====================
+-- department_id went nullable precisely so a Campaign whose Group is not a Department can
+-- exist; for such a row v_from_legacy = group_id_for_legacy_origin(null, null, null) = null,
+-- which the un-guarded mismatch branch treated as "distinct from" any real group_id on
+-- every no-op UPDATE that merely mentions either column. Guarding on `department_id is not
+-- null` is the fix; these two lives_ok calls are its regression coverage.
+
+insert into public.campaigns (group_id, name, created_by)
+  select dept_team_group_id, 'GOS Campaign TeamGroup 519', '51900000-0000-0000-0000-000000000001' from fx;
+select is(
+  (select department_id from public.campaigns where name = 'GOS Campaign TeamGroup 519'),
+  null,
+  'a Team-Group Campaign is created with department_id null (no _unmapped error)');
+select lives_ok(
+  $$ update public.campaigns set department_id = department_id where name = 'GOS Campaign TeamGroup 519' $$,
+  'a Team-Group Campaign survives a no-op UPDATE of department_id (Finding 1)');
+select lives_ok(
+  $$ update public.campaigns set group_id = group_id where name = 'GOS Campaign TeamGroup 519' $$,
+  'a Team-Group Campaign survives a no-op UPDATE of group_id (Finding 1)');
+
+-- ==================== Review Finding 2: an inconsistent caller-supplied scope is refused, not silently rewritten ====================
+-- The Group-side branch only tested dept_id/team_id/project_id for null, so an INSERT that
+-- named both a Group and a scope that disagrees with it was silently rewritten instead of
+-- refused -- the one legacy field exempt from the "both sides set inconsistently is
+-- refused" contract the migration and function comments both state.
+
+select throws_ok(
+  format($$ insert into public.events (title, type, scope, group_id, starts_at)
+     values ('GOS Event ScopeMismatch 519', 'sedinta', 'org', %s, now()) $$, (select edu_group_id from fx)),
+  '23514', 'event_group_origin_mismatch',
+  'an Event naming both a Group and an inconsistent caller-supplied scope is rejected, not silently rewritten (Finding 2)');
 
 -- ==================== 28-35: shape -- NOT NULL and FK on the four group_id columns ====================
 
@@ -246,7 +278,8 @@ select fk_ok('public', 'completed_work_requests', 'group_id', 'public', 'groups'
 
 select has_index('public', 'tasks', 'tasks_group_idx', 'tasks.group_id is indexed');
 select has_index('public', 'events', 'events_group_idx', 'events.group_id is indexed');
-select has_index('public', 'campaigns', 'campaigns_group_idx', 'campaigns.group_id is indexed');
+-- campaigns has no standalone group_id index -- campaigns_group_name_uidx below already
+-- serves every group_id lookup as its leading column (Note 9).
 select has_index('public', 'completed_work_requests', 'completed_work_requests_group_idx',
   'completed_work_requests.group_id is indexed');
 select matches(

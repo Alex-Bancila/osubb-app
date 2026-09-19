@@ -38,7 +38,6 @@ alter table public.completed_work_requests drop constraint completed_work_reques
 
 drop index public.tasks_group_idx;
 drop index public.events_group_idx;
-drop index public.campaigns_group_idx;
 drop index public.completed_work_requests_group_idx;
 drop index public.campaigns_group_name_uidx;
 
@@ -136,68 +135,71 @@ SQL
   cat <<'SQL'
 do $assert$
 begin
-  -- Every fixture row's group_id equals the Group whose legacy_* names its Origin.
-  if exists (
+  -- Every fixture row's group_id equals the Group whose legacy_* names its Origin. Each
+  -- check is `if not exists (… where … group_id = grp.id)`, not `if exists (… is distinct
+  -- from …)`: a missing fixture row or a mirror that never fired must fail loudly, not
+  -- pass silently because the join produced no rows at all (review note 6).
+  if not exists (
     select 1 from public.tasks as task
       join public.groups as grp on grp.legacy_dept_id = 'edu'
-     where task.title = 'Upgrade Task Dept 519' and task.group_id is distinct from grp.id
+     where task.title = 'Upgrade Task Dept 519' and task.group_id = grp.id
   ) then
     raise exception 'group_id backfill: Department Task did not map to the edu Group';
   end if;
 
-  if exists (
+  if not exists (
     select 1 from public.tasks as task
       join public.groups as grp on grp.legacy_team_id = 'upgrade-dept-team-519'
-     where task.title = 'Upgrade Task DeptTeam 519' and task.group_id is distinct from grp.id
+     where task.title = 'Upgrade Task DeptTeam 519' and task.group_id = grp.id
   ) then
     raise exception 'group_id backfill: Department-Team Task did not map to its Team Group';
   end if;
 
-  if exists (
+  if not exists (
     select 1 from public.tasks as task
       join public.groups as grp on grp.legacy_team_id = 'upgrade-indep-team-519'
-     where task.title = 'Upgrade Task IndepTeam 519' and task.group_id is distinct from grp.id
+     where task.title = 'Upgrade Task IndepTeam 519' and task.group_id = grp.id
   ) then
     raise exception 'group_id backfill: Independent-Team Task did not map to its Team Group';
   end if;
 
-  if exists (
+  if not exists (
     select 1 from public.tasks as task
       join public.projects as project on project.name = 'Upgrade Project 519'
       join public.groups as grp on grp.legacy_project_id = project.id
-     where task.title = 'Upgrade Task Project 519' and task.group_id is distinct from grp.id
+     where task.title = 'Upgrade Task Project 519' and task.group_id = grp.id
   ) then
     raise exception 'group_id backfill: Project Task did not map to its Project Group';
   end if;
 
-  if exists (
+  if not exists (
     select 1 from public.events as event
       join public.groups as grp on grp.legacy_dept_id = 'org'
-     where event.title = 'Upgrade Event Org 519' and event.group_id is distinct from grp.id
+     where event.title = 'Upgrade Event Org 519' and event.group_id = grp.id
   ) then
     raise exception 'group_id backfill: org Event did not map to the Organization Group';
   end if;
 
-  if exists (
+  if not exists (
     select 1 from public.events as event
       join public.groups as grp on grp.legacy_team_id = 'upgrade-dept-team-519'
-     where event.title = 'Upgrade Event DeptTeam 519' and event.group_id is distinct from grp.id
+     where event.title = 'Upgrade Event DeptTeam 519' and event.group_id = grp.id
   ) then
     raise exception 'group_id backfill: Department-Team Event did not map to its Team Group';
   end if;
 
-  if exists (
+  if not exists (
     select 1 from public.campaigns as campaign
       join public.groups as grp on grp.legacy_dept_id = 'edu'
-     where campaign.name = 'Upgrade Campaign 519' and campaign.group_id is distinct from grp.id
+     where campaign.name = 'Upgrade Campaign 519' and campaign.group_id = grp.id
   ) then
     raise exception 'group_id backfill: Campaign did not map to the edu Group';
   end if;
 
-  if exists (
+  if not exists (
     select 1 from public.completed_work_requests as request
       join public.groups as grp on grp.legacy_dept_id = 'edu'
-     where request.description = 'Upgrade Request 519' and request.group_id is distinct from grp.id
+     where request.description = 'Upgrade Request 519' and request.group_id = grp.id
   ) then
     raise exception 'group_id backfill: Request did not map to the edu Group';
   end if;
@@ -281,10 +283,14 @@ if [ "$live_before" != "$live_after" ]; then
   exit 1
 fi
 
-all_mapped=$(docker exec "$db_container" psql -X -At -U postgres -d postgres -c \
-  "select bool_and(group_id is not null) from public.tasks")
-if [ "$all_mapped" != "t" ]; then
-  echo "live public.tasks has a row with no group_id after the harness ran." >&2
+# bool_and(group_id is not null) would be self-fulfilling: the column is NOT NULL, so it
+# can never observe a failure. Instead recompute the resolver against every live row's own
+# legacy triple and require zero mismatches (review note 5).
+mismapped=$(docker exec "$db_container" psql -X -At -U postgres -d postgres -c \
+  "select count(*) from public.tasks as t
+    where t.group_id <> private.group_id_for_legacy_origin(t.dept_id, t.team_id, t.project_id)")
+if [ "$mismapped" != "0" ]; then
+  echo "live public.tasks has $mismapped row(s) whose group_id disagrees with its own legacy Origin." >&2
   exit 1
 fi
 
