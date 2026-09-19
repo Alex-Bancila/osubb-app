@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { toAuthErrorMessage } from '../../lib/auth-error-message';
+import { authCallbackUrl } from '../../lib/auth-destination';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '../../components/ui/field';
@@ -32,7 +33,7 @@ export default function LoginScreen() {
       ({ error: authError } = await supabase.auth.signInWithOtp({
         email: address,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: authCallbackUrl(),
           // Belt and braces: sign-up is already disabled server-side, but saying
           // so here means this screen can never become an account-creation path
           // by a change of configuration somewhere else.
