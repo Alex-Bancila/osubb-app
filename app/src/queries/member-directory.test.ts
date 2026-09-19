@@ -26,12 +26,10 @@ beforeEach(() => {
   mocks.from.mockReset().mockImplementation((name: string) => {
     const response = { data: fixtures[name], error: null };
     return {
-      select: vi
-        .fn()
-        .mockReturnValue({
-          ...response,
-          order: vi.fn().mockResolvedValue(response),
-        }),
+      select: vi.fn().mockReturnValue({
+        ...response,
+        order: vi.fn().mockResolvedValue(response),
+      }),
     };
   });
   mocks.rpc
