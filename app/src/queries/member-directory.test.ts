@@ -35,7 +35,7 @@ function query(data: unknown[] | null, error: unknown = null) {
 beforeEach(() => {
   mocks.from
     .mockReset()
-    .mockImplementation((name: string) => query(fixtures[name]));
+    .mockImplementation((name: string) => query(fixtures[name] ?? []));
   mocks.rpc
     .mockReset()
     .mockImplementation(() => query([{ member_id: 'a', points: -3 }]));
@@ -67,7 +67,7 @@ describe('directory reads', () => {
     }));
     const pages = query([...memberships, { member_id: 'b', group_id: 2 }]);
     mocks.from.mockImplementation((name: string) =>
-      name === 'group_members' ? pages : query(fixtures[name]),
+      name === 'group_members' ? pages : query(fixtures[name] ?? []),
     );
     const ranking = query([
       ...Array.from({ length: 500 }, (_, index) => ({
