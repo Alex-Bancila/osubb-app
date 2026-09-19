@@ -18,16 +18,17 @@ insert into profiles (id, full_name, email, role, status) values
 insert into tasks (title, dept_id, deadline, status, kind) values
   ('due todo', 'edu', now() + interval '1 hour', 'todo', 'task'),
   ('due progress', 'edu', now() + interval '48 hours', 'in_progress', 'task'),
-  ('due review', 'edu', now(), 'in_review', 'task'),
+  ('due review', 'edu', now(), 'todo', 'task'),
   ('too late', 'edu', now() + interval '49 hours', 'todo', 'task'),
   ('already overdue', 'edu', now() - interval '1 second', 'todo', 'task'),
   ('inactive executor', 'edu', now() + interval '1 hour', 'todo', 'task'),
   ('no executor', 'edu', now() + interval '1 hour', 'todo', 'task'),
   ('umbrella', 'edu', now() + interval '1 hour', 'todo', 'umbrella');
-insert into tasks (title, dept_id, deadline, status, completed_at, unfulfilled_at, cancelled_at, cancel_reason) values
-  ('completed', 'edu', now() + interval '1 hour', 'completed', now(), null, null, null),
-  ('unfulfilled', 'edu', now() + interval '1 hour', 'unfulfilled', null, now(), null, null),
-  ('cancelled', 'edu', now() + interval '1 hour', 'cancelled', null, null, now(), 'No longer needed');
+update tasks set status = 'in_review', submitted_at = now() where title = 'due review';
+insert into tasks (title, dept_id, deadline, status, completed_at, unfulfilled_at, cancelled_at, cancel_reason, difficulty, rating) values
+  ('completed', 'edu', now() + interval '1 hour', 'completed', now(), null, null, null, 2, 4),
+  ('unfulfilled', 'edu', now() + interval '1 hour', 'unfulfilled', null, now(), null, null, 2, 1),
+  ('cancelled', 'edu', now() + interval '1 hour', 'cancelled', null, null, now(), 'No longer needed', null, null);
 insert into task_assignments (task_id, member_id)
 select id, case when title = 'inactive executor' then '06900000-0000-0000-0000-000000000003'::uuid
                 when title = 'due progress' then '06900000-0000-0000-0000-000000000002'::uuid
