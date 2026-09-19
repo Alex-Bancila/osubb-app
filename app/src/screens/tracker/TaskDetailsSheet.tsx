@@ -15,6 +15,7 @@ import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { TaskHistory } from './TaskHistory';
 import { ScoringGuide } from './ScoringGuide';
+import { TaskEvaluationControl } from './TaskEvaluationControl';
 import { toTaskPresentation } from './task-presentation';
 
 function TaskDetails({
@@ -52,6 +53,12 @@ function TaskDetails({
         onProgress={(selectedId, action) =>
           progress.mutateAsync({ taskId: selectedId, action })
         }
+      />
+      <TaskEvaluationControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
+        executorName={query.data.executorName}
       />
       <dl className="grid gap-3 text-sm">
         {task.kind === 'task' && (

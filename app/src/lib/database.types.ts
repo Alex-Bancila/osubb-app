@@ -2893,6 +2893,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
       }
+      can_evaluate_task: { Args: { p_task_id: number }; Returns: boolean }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
       cancel_task: {
