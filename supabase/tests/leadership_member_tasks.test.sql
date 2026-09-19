@@ -39,8 +39,8 @@ select set_eq(
              where table_schema = 'public' and table_name = 'tasks_with_overdue'
                and column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
   $$ values ('id'::text), ('created_at'), ('created_by'), ('kind'),
-            ('dept_id'), ('team_id'), ('project_id'), ('type') $$,
-  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row, the three the Origin triple replaces, and the retired legacy `type`');
+            ('dept_id'), ('team_id'), ('project_id'), ('type'), ('group_id') $$,
+  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row, the three the Origin triple replaces, the retired legacy `type`, and `group_id` (#523 exposes it -- removed again in Task 7)');
 
 insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000001', 'bce260@example.test'),
