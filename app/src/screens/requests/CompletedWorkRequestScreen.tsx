@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { RequestDecisionQueue } from './RequestDecisionQueue';
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import {
@@ -61,6 +62,7 @@ export default function CompletedWorkRequestScreen() {
             Descrie contribuția, iar coordonatorii structurii o vor evalua.
           </p>
         </header>
+        <RequestDecisionQueue />
         <Card>
           <CardHeader>
             <CardTitle>Activitatea ta</CardTitle>

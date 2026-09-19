@@ -74,9 +74,39 @@ export function EvaluationForm({
   onCancel: () => void;
   onSuccess: () => void;
 }) {
+  const mutation = useEvaluateTask();
+  return (
+    <EvaluationFields
+      executorName={executorName}
+      onCancel={onCancel}
+      onSuccess={onSuccess}
+      isPending={mutation.isPending}
+      onEvaluate={(values) => mutation.mutateAsync({ taskId, ...values })}
+    />
+  );
+}
+
+export function EvaluationFields({
+  executorName,
+  onCancel,
+  onSuccess,
+  onEvaluate,
+  isPending,
+  request = false,
+}: {
+  executorName: string | null;
+  onCancel: () => void;
+  onSuccess: () => void;
+  onEvaluate: (values: {
+    difficulty: number;
+    rating: number;
+    note: string;
+  }) => Promise<unknown>;
+  isPending: boolean;
+  request?: boolean;
+}) {
   const id = useId();
   const guide = useScoringGuide();
-  const mutation = useEvaluateTask();
   const [difficulty, setDifficulty] = useState('');
   const [rating, setRating] = useState('');
   const [note, setNote] = useState('');
@@ -97,8 +127,7 @@ export function EvaluationForm({
     submitting.current = true;
     setError(null);
     try {
-      await mutation.mutateAsync({
-        taskId,
+      await onEvaluate({
         difficulty: Number(difficulty),
         rating: Number(rating),
         note: note.trim(),
@@ -123,14 +152,13 @@ export function EvaluationForm({
     >
       <h3 className="font-semibold">Evaluare finală</h3>
       <p className="text-sm">
-        Executor: {executorName ?? 'Executorul taskului'}. Evaluarea încheie
-        taskul și acordă punctele acestei persoane.
+        {request ? 'Solicitant' : 'Executor'}: {executorName ?? 'Membrul'}.{' '}
+        {request
+          ? 'Aprobarea înregistrează activitatea realizată și acordă punctele solicitantului.'
+          : 'Evaluarea încheie taskul și acordă punctele acestei persoane.'}
       </p>
       <ScoringGuide />
-      <fieldset
-        disabled={mutation.isPending || !guide.data}
-        className="space-y-3"
-      >
+      <fieldset disabled={isPending || !guide.data} className="space-y-3">
         <legend className="sr-only">
           Dificultate, calificativ și notă obligatorii
         </legend>
@@ -197,15 +225,19 @@ export function EvaluationForm({
         <Button
           type="submit"
           className="min-h-11"
-          disabled={mutation.isPending || !guide.data}
+          disabled={isPending || !guide.data}
         >
-          {mutation.isPending ? 'Se salvează…' : 'Confirmă evaluarea'}
+          {isPending
+            ? 'Se salvează…'
+            : request
+              ? 'Aprobă cererea'
+              : 'Confirmă evaluarea'}
         </Button>
         <Button
           type="button"
           variant="outline"
           className="min-h-11"
-          disabled={mutation.isPending}
+          disabled={isPending}
           onClick={onCancel}
         >
           Înapoi
