@@ -1,5 +1,5 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { useScoringGuide } from '../../queries/scoring-guide';
 import {
@@ -30,6 +30,9 @@ export function TaskEvaluationControl({
   const [outcome, setOutcome] = useState<'completed' | 'unfulfilled'>(
     'completed',
   );
+  useEffect(() => {
+    setDone(false);
+  }, [status]);
   if (done)
     return (
       <TaskActionSuccess>
