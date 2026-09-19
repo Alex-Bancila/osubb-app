@@ -48,7 +48,11 @@ describe('Duplicate task', () => {
       screen.getByRole('button', { name: 'Creează copia' }),
     ).toBeDisabled();
     await act(async () =>
-      rejectCommand({ code: '42501', message: 'private internal query' }),
+      rejectCommand({
+        code: '42501',
+        message: 'task_manage_forbidden',
+        details: 'private internal query',
+      }),
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Nu ai permisiunea');
     expect(screen.queryByText(/private internal/)).not.toBeInTheDocument();
