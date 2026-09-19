@@ -1,5 +1,5 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { useScoringGuide } from '../../queries/scoring-guide';
 import {
@@ -23,9 +23,11 @@ export function TaskEvaluationControl({
   const capability = useTaskEvaluationCapability(taskId);
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
-  useEffect(() => {
+  const [previousStatus, setPreviousStatus] = useState(status);
+  if (previousStatus !== status) {
+    setPreviousStatus(status);
     setDone(false);
-  }, [status]);
+  }
   if (done)
     return (
       <TaskActionSuccess>
