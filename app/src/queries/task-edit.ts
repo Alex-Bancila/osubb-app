@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
 import { keys } from './keys';
-import { taskDraftErrorMessage } from '../screens/tracker/task-draft-validation';
 export type TaskContentInput = {
   taskId: number;
   title: string;
@@ -10,6 +9,17 @@ export type TaskContentInput = {
   deadline: string | null;
   campaignId: number | null;
 };
+const commandErrors = new Map<string, string>([
+  ['title_required', 'Scrie titlul taskului.'],
+  ['deadline_required', 'Alege termenul taskului.'],
+  ['umbrella_has_no_campaign', 'Taskul-umbrelă nu poate avea o campanie.'],
+  ['task_terminal', 'Taskul a fost finalizat. Verifică starea actuală.'],
+  ['nothing_to_update', 'Nu există modificări de salvat.'],
+  ['invalid_campaign', 'Campania nu mai este disponibilă pentru grupul ales.'],
+  ['task_not_found', 'Taskul nu mai este disponibil.'],
+  ['task_command_forbidden', 'Nu mai ai permisiunea de a edita acest task.'],
+  ['task_manage_forbidden', 'Nu mai ai permisiunea de a edita acest task.'],
+]);
 export class TaskEditError extends Error {}
 export async function updateTaskContent(input: TaskContentInput) {
   const args = {
@@ -27,17 +37,8 @@ export async function updateTaskContent(input: TaskContentInput) {
   );
   if (error)
     throw new TaskEditError(
-      error.code === '42501'
-        ? 'Nu mai ai permisiunea de a edita acest task.'
-        : error.code === 'PT409'
-          ? error.message === 'nothing_to_update'
-            ? 'Nu există modificări de salvat.'
-            : 'Taskul s-a schimbat sau a fost finalizat. Verifică starea actuală.'
-          : error.code === 'PT404'
-            ? 'Taskul nu mai este disponibil.'
-            : error.code === 'PT400'
-              ? taskDraftErrorMessage(error)
-              : 'Nu am putut salva modificările. Reîncearcă.',
+      commandErrors.get(error.message) ??
+        'Nu am putut salva modificările. Reîncearcă.',
     );
   return data;
 }

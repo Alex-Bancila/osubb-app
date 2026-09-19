@@ -31,9 +31,9 @@ it('maps conflict and permission errors without backend details', async () => {
       deadline: null,
       campaignId: null,
     }),
-  ).rejects.toThrow('Taskul s-a schimbat');
+  ).rejects.toThrow('Taskul a fost finalizat');
   api.rpc.mockResolvedValue({
-    error: { code: '42501', message: 'private SQL' },
+    error: { code: '42501', message: 'task_manage_forbidden' },
   });
   await expect(
     updateTaskContent({
