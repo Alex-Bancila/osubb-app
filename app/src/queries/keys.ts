@@ -42,6 +42,8 @@ export const keys = {
   },
   tasks: {
     all: ['tasks'] as const,
+    formOptions: (memberId: string | undefined) =>
+      ['tasks', 'form-options', { memberId }] as const,
     directExecutors: (memberId: string | undefined) =>
       ['tasks', 'direct-executors', { memberId }] as const,
     mine: (memberId: string | undefined) =>
