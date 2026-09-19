@@ -1,3 +1,4 @@
+import { TaskActionSuccess } from './TaskActionSuccess';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { useCancelTask } from '../../queries/task-cancel';
@@ -16,6 +17,12 @@ export function TaskCancelControl({
 }) {
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
+  if (done)
+    return (
+      <TaskActionSuccess>
+        Taskul este anulat. Istoricul rămâne păstrat.
+      </TaskActionSuccess>
+    );
   if (!canManage || ['completed', 'unfulfilled', 'cancelled'].includes(status))
     return null;
   return (
@@ -41,9 +48,6 @@ export function TaskCancelControl({
         >
           Anulează taskul
         </Button>
-      )}
-      {done && (
-        <p role="status">Taskul este anulat. Istoricul rămâne păstrat.</p>
       )}
     </section>
   );
