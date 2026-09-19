@@ -131,7 +131,8 @@ function UmbrellaActions({
                   )
                     return;
                   const task = await create.mutateAsync(draft);
-                  onNavigate(task.id);
+                  if (mounted.current && attempt === formAttempt.current)
+                    onNavigate(task.id);
                 }}
               />
               <Button

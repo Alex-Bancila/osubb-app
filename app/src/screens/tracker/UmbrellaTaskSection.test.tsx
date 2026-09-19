@@ -169,4 +169,24 @@ describe('Umbrella progress and actions', () => {
     await act(async () => oldSubmission({ parentTaskId: 10 }));
     expect(create).not.toHaveBeenCalled();
   });
+  it('does not navigate after the details sheet closes during creation', async () => {
+    let resolve: (task: { id: number }) => void = () => undefined;
+    create.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <UmbrellaTaskSection {...common} subtasks={[]} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Adaugă subtask' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Trimite subtask pentru #10' }),
+    );
+    unmount();
+    await act(async () => resolve({ id: 27 }));
+    expect(common.onNavigate).not.toHaveBeenCalled();
+  });
 });
