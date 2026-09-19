@@ -14,6 +14,7 @@ import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { TaskHistory } from './TaskHistory';
+import { TaskEditControl } from './TaskEditControl';
 import { toTaskPresentation } from './task-presentation';
 
 function TaskDetails({
@@ -52,6 +53,7 @@ function TaskDetails({
           progress.mutateAsync({ taskId: selectedId, action })
         }
       />
+      <TaskEditControl task={query.data.task} canManage={canManage} />
       <dl className="grid gap-3 text-sm">
         {task.kind === 'task' && (
           <div>
