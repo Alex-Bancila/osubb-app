@@ -20,7 +20,7 @@ export function TaskFeedbackControl({
   const [previousStatus, setPreviousStatus] = useState(status);
   if (previousStatus !== status) {
     setPreviousStatus(status);
-    setDone(false);
+    if (status !== 'in_progress') setDone(false);
   }
   if (done)
     return (
