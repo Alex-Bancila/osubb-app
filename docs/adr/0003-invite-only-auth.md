@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-07
+- **Amended:** 2026-09-19 — magic links are the only member sign-in method in v1 (#204)
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -13,20 +14,21 @@ The app is an internal org tool. Real volunteers use **personal email addresses*
 
 ## Decision
 
-**Invite-only access.** Anyone may _authenticate_ (email/password or Google, any address), but access requires a **BC-provisioned `profiles` row**. Concretely:
+**Invite-only, magic-link-only access.** A provisioned Member signs in with an email magic link sent to their invited personal address. Magic links are the only member sign-in method in v1: password login and Google OAuth are not part of the accepted member flow. Authentication alone never grants organization access; that requires a **BC-provisioned `profiles` row**. Concretely:
 
 1. **Public sign-up is disabled** in Supabase Auth (`enable_signup = false`).
 2. Accounts are created only by BC via an **admin magic-link invite** — individually, or in bulk through the **CSV recruit import** Edge Function (Epic 4.1). The invite creates the `auth.users` row + the `profiles` row (with role/departments/teams) in one step.
 3. **RLS is the backstop:** a member with no `profiles` row (or `status <> 'activ'`) is denied every row, so even an authenticated stranger sees nothing.
 
-Recruits receive a **magic-link email** (no passwords to generate or distribute). Members may later also sign in with Google if it matches their invited email (Supabase links identities by email).
+Recruits receive a **magic-link email**, and subsequent sign-ins use another magic link to the same invited address. There are no temporary member passwords or alternate-provider sign-in paths. The local/staging demo password fixtures remain development tools, not a member authentication method. This decision changes neither provisioning nor the signed-in-without-profile state.
 
 ## Consequences
 
 - **+** No password handling/distribution; volunteers use whatever email they already have.
 - **+** Two independent gates (no sign-up + RLS-needs-profile) — defense in depth.
 - **−** Every member must be invited/imported before first login; there is no self-service onboarding (acceptable and desired for an internal tool).
-- **−** Google OAuth for a brand-new (un-invited) address is refused — expected behavior, must be documented for users.
+- **+** One member sign-in flow avoids password recovery and provider-linking complexity, and makes invite-only behavior easier to explain and test.
+- **−** Sign-in depends on email delivery and access to the invited mailbox; magic links must be short-lived and their redirect destinations controlled. This is the deliberate simplicity/security tradeoff instead of maintaining additional sign-in methods.
 
 ## Amendment (2026-08-23) — what "gate 2" means in practice
 
