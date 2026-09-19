@@ -52,9 +52,26 @@ it('keeps inactive rows and reads every page in a stable order', async () => {
 it('maps permission errors without leaking database text', async () => {
   api.rpc.mockResolvedValue({
     data: null,
-    error: { code: '42501', message: 'private schema' },
+    error: { code: '42501', message: 'campaign_manage_forbidden' },
   });
   await expect(
     changeCampaign({ kind: 'active', id: 10, active: true }),
   ).rejects.toThrow('Nu mai ai permisiunea');
+});
+
+it('normalizes stable Campaign reasons independently of status code', async () => {
+  api.rpc.mockResolvedValue({
+    data: null,
+    error: { code: '23505', message: 'campaign_name_taken' },
+  });
+  await expect(
+    changeCampaign({ kind: 'create', groupId: 2, name: 'Nume' }),
+  ).rejects.toThrow('Există deja o campanie');
+  api.rpc.mockResolvedValue({
+    data: null,
+    error: { code: '42501', message: 'private SQL' },
+  });
+  await expect(
+    changeCampaign({ kind: 'active', id: 10, active: true }),
+  ).rejects.toThrow('Nu am putut salva campania');
 });

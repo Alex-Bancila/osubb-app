@@ -40,6 +40,19 @@ export type CampaignChange =
   | { kind: 'create'; groupId: number; name: string }
   | { kind: 'rename'; id: number; name: string }
   | { kind: 'active'; id: number; active: boolean };
+const commandErrors = new Map<string, string>([
+  [
+    'campaign_manage_forbidden',
+    'Nu mai ai permisiunea de a modifica această campanie.',
+  ],
+  ['invalid_campaign_name', 'Verifică numele campaniei.'],
+  [
+    'campaign_name_taken',
+    'Există deja o campanie cu acest nume în grup. Alege alt nume.',
+  ],
+  ['campaign_not_found', 'Campania nu mai este disponibilă.'],
+  ['invalid_campaign_active', 'Verifică starea campaniei.'],
+]);
 export class CampaignError extends Error {}
 export async function changeCampaign(change: CampaignChange) {
   const result =
@@ -59,11 +72,8 @@ export async function changeCampaign(change: CampaignChange) {
           });
   if (result.error)
     throw new CampaignError(
-      result.error.code === '42501'
-        ? 'Nu mai ai permisiunea de a modifica această campanie.'
-        : result.error.code === 'PT400'
-          ? 'Verifică numele campaniei și grupul ales.'
-          : 'Nu am putut salva campania. Reîncearcă.',
+      commandErrors.get(result.error.message) ??
+        'Nu am putut salva campania. Reîncearcă.',
     );
   return result.data;
 }
