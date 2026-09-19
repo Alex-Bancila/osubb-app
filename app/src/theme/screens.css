@@ -81,14 +81,6 @@
   color: var(--text-faint);
 }
 
-.bignum {
-  margin: 0;
-  font-size: var(--fs-3xl);
-  font-weight: var(--fw-extrabold);
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------- query states ---------- */
 .state {
   display: flex;
@@ -220,6 +212,10 @@
   background: var(--surface-3);
   color: var(--text-muted);
   white-space: nowrap;
+}
+.chip--todo {
+  background: var(--surface);
+  color: var(--ink-700);
 }
 .chip--completed {
   background: var(--success-050);

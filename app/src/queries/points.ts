@@ -30,95 +30,45 @@ export function useMyPoints() {
   });
 }
 
-/**
- * Where I stand: my rank, out of how many, and what closes the gap.
- *
- * Three round trips rather than one, because the answer genuinely is three
- * questions and PostgREST cannot join them without an RPC:
- *
- *  - my row on the board — the top-10 the dashboard also shows is no help here,
- *    since rank 11 is exactly the member who most wants to know;
- *  - how many members the board has, so "#4" can say "of 8";
- *  - the member directly above me, which is what makes the number actionable.
- *
- * The gap is `their points − mine`, with no `+ 1`: `rank()` gives ties the same
- * rank, so drawing level with them really does take their place.
- *
- * A member absent from the board (`status <> 'activ'`) has no rank, and this
- * returns `null` for it rather than inventing one.
- *
- * `enabled` lets a caller that already knows the leaderboard is hidden below
- * level 5 (`seeLeadership`, mirroring `20260907204817_leadership_only_global_
- * points.sql`) skip the round trip entirely, rather than firing it and
- * discarding rows the database would return empty anyway.
- */
-export function useMyStanding({ enabled = true }: { enabled?: boolean } = {}) {
-  const { session } = useAuth();
-  const id = session?.user.id;
-
-  return useQuery({
-    queryKey: keys.points.standing(id),
-    queryFn: id && enabled ? () => fetchStanding(id) : skipToken,
-  });
+/** One RLS-protected read feeds every dashboard ranking projection. */
+export async function fetchLeaderboard() {
+  const { data, error } = await supabase.rpc('leadership_leaderboard');
+  if (error) throw error;
+  return data;
 }
+type Board = Awaited<ReturnType<typeof fetchLeaderboard>>;
 
-async function fetchStanding(memberId: string) {
-  const mine = await supabase
-    .from('leaderboard')
-    .select('rank, points')
-    .eq('member_id', memberId)
-    .maybeSingle();
-  if (mine.error) throw mine.error;
-
-  const total = await supabase
-    .from('leaderboard')
-    .select('member_id', { count: 'exact', head: true });
-  if (total.error) throw total.error;
-
-  if (!mine.data?.rank) {
-    return { rank: null, total: total.count ?? 0, next: null };
-  }
-
-  const above = await supabase
-    .from('leaderboard')
-    .select('rank, points')
-    .gt('points', mine.data.points ?? 0)
-    .order('points', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (above.error) throw above.error;
-
+export function standingFromBoard(board: Board, memberId: string) {
+  const mine = board.find((row) => row.member_id === memberId) ?? null;
+  const above = mine
+    ? [...board].reverse().find((row) => row.points > mine.points)
+    : null;
   return {
-    rank: mine.data.rank,
-    total: total.count ?? 0,
+    rank: mine?.rank ?? null,
+    total: board.length,
+    mine,
     next:
-      above.data && above.data.rank !== null
-        ? {
-            rank: above.data.rank,
-            gap: (above.data.points ?? 0) - (mine.data.points ?? 0),
-          }
+      above && mine
+        ? { rank: above.rank, gap: above.points - mine.points }
         : null,
   };
 }
 
-/**
- * The leaderboard, ranked, active members only — the view handles both.
- *
- * `rank` comes from the database, so ties tie properly (three members on 15
- * points are all rank 1) instead of the array index pretending otherwise.
- */
-export function useLeaderboard(limit = 10) {
+export function useMyStanding({ enabled = true }: { enabled?: boolean } = {}) {
+  const id = useAuth().session?.user.id;
   return useQuery({
-    queryKey: keys.points.leaderboard(limit),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('leaderboard')
-        .select('member_id, full_name, role, points, rank')
-        .order('rank')
-        .limit(limit);
-      if (error) throw error;
-      return data;
-    },
+    queryKey: keys.points.board(id),
+    queryFn: id && enabled ? fetchLeaderboard : skipToken,
+    select: (board) => standingFromBoard(board, id ?? ''),
+  });
+}
+
+export function useLeaderboard(limit = 10) {
+  const id = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.points.board(id),
+    queryFn: id ? fetchLeaderboard : skipToken,
+    select: (board) => board.slice(0, limit),
   });
 }
 

@@ -1,3 +1,5 @@
+import { format } from 'date-fns';
+import { ro } from 'date-fns/locale';
 /**
  * Dates, points and initials — in Romanian, the way a member reads them.
  *
@@ -42,20 +44,12 @@ export function parseLocalDate(value: string | null): Date | null {
 export function formatDate(iso: string | null): string {
   const date = parseLocalDate(iso);
   if (!date) return '—';
-  return new Intl.DateTimeFormat('ro-RO', {
-    day: 'numeric',
-    month: 'short',
-  }).format(date);
+  return format(date, 'd MMM', { locale: ro });
 }
 
 /** `miercuri, 26 august 2026` — long form, for the one date a screen leads with. */
 export function formatLongDate(date: Date): string {
-  return new Intl.DateTimeFormat('ro-RO', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(date);
+  return format(date, 'EEEE, d MMMM yyyy', { locale: ro });
 }
 
 /**

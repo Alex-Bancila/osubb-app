@@ -19,6 +19,8 @@
 export const keys = {
   points: {
     all: ['points'] as const,
+    board: (memberId: string | undefined) =>
+      ['points', 'board', { memberId }] as const,
     me: (memberId: string | undefined) =>
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>

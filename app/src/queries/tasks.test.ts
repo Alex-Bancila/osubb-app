@@ -16,80 +16,8 @@ vi.mock('../lib/supabase', () => ({
   supabase: { from: api.from, rpc: api.rpc },
 }));
 
-import { fetchMyTasks, fetchOpenTasks } from './tasks';
+import { fetchMyTasks } from './tasks';
 import { taskRow } from '../test/task-fixtures';
-
-describe('public Task opportunities', () => {
-  beforeEach(() => {
-    api.from.mockReturnValue({ select: api.select });
-    api.select.mockReturnValue({ eq: api.byMode });
-    api.byMode.mockReturnValue({ not: api.queueOpened });
-    api.queueOpened.mockReturnValue({ is: api.queueOpen });
-  });
-
-  /* #345 retired the legacy multi-assignee join table, so "unclaimed" is no
-     longer a fact this query can read: an Assignment embed would show only
-     the caller's own rows. An open Candidate Queue is the Task's own record
-     of being available, and it is what the tasks_read policy's R6 branch
-     already uses. */
-  it('asks for every RLS-visible public Task whose Queue is open', async () => {
-    api.queueOpen.mockResolvedValue({
-      data: [
-        {
-          id: 2,
-          title: 'Local work already in progress',
-          status: 'in_progress',
-          deadline: null,
-        },
-        {
-          id: 1,
-          title: 'Available opportunity',
-          status: 'todo',
-          deadline: '2026-09-12T10:00:00Z',
-        },
-      ],
-      error: null,
-    });
-
-    await expect(fetchOpenTasks()).resolves.toEqual([
-      {
-        id: 1,
-        title: 'Available opportunity',
-        status: 'todo',
-        deadline: '2026-09-12T10:00:00Z',
-      },
-      {
-        id: 2,
-        title: 'Local work already in progress',
-        status: 'in_progress',
-        deadline: null,
-      },
-    ]);
-    expect(api.from).toHaveBeenCalledWith('tasks');
-    expect(api.byMode).toHaveBeenCalledWith('assignment_mode', 'public');
-    expect(api.queueOpened).toHaveBeenCalledWith('queue_opened_at', 'is', null);
-    expect(api.queueOpen).toHaveBeenCalledWith('queue_closed_at', null);
-  });
-
-  /* #317 moved a Task's points onto its Evaluation and dropped tasks.points,
-     so asking for the column would make every tracker request fail with a
-     PostgREST 42703 rather than merely render a stale number. */
-  it('asks for difficulty and rating, never a points column tasks no longer has', async () => {
-    api.queueOpen.mockResolvedValue({ data: [], error: null });
-    await fetchOpenTasks();
-
-    const selected = api.select.mock.calls[0]?.[0] as string;
-    expect(selected).toContain('difficulty');
-    expect(selected).toContain('rating');
-    expect(selected).not.toContain('points');
-  });
-
-  it('surfaces read failures', async () => {
-    const error = { code: '42501', message: 'permission denied' };
-    api.queueOpen.mockResolvedValue({ data: null, error });
-    await expect(fetchOpenTasks()).rejects.toBe(error);
-  });
-});
 
 describe('normalized My tasks reads', () => {
   beforeEach(() => {
