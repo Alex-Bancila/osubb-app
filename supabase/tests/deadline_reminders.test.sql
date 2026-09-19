@@ -4,6 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
+create extension if not exists dblink with schema extensions;
 select plan(15);
 -- A second scheduler session must wait for the same advisory lock, before
 -- reading any Task. Both remote transactions roll back, preserving seed data.
