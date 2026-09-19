@@ -454,8 +454,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
   ('mirror_team_group',                           '',                                                                                                                   'trigger'),
   ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
-  (select count(*) from pinned_private_functions)::int, 114,
-  'the audited roster includes Groups Wave 1, the five #519 Origin bridge functions, the #50 Role history guard, and the #69 deadline job');
+  -- #50: internal trigger function; no client execution.
+  ('guard_role_history', '', 'trigger'),
+  -- #69: scheduler-only job.
+  ('remind_deadlines', '', 'none'),
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
@@ -537,12 +539,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 113,
-<<<<<<< HEAD
-  'the audited roster includes Groups Wave 1, the five #519 Origin bridge functions, and the internal #69 deadline job');
-=======
-  'the audited roster includes Groups Wave 1, the five #519 Origin bridge functions, and the internal #50 Role history guard');
->>>>>>> feat/50-role-history
+  (select count(*) from pinned_private_functions)::int, 114,
+  'the audited roster includes Groups Wave 1, the five #519 Origin bridge functions, the #50 Role history guard, and the #69 deadline job');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
