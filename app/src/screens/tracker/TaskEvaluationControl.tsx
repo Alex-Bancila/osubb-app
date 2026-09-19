@@ -26,7 +26,7 @@ export function TaskEvaluationControl({
   const [previousStatus, setPreviousStatus] = useState(status);
   if (previousStatus !== status) {
     setPreviousStatus(status);
-    setDone(false);
+    if (status !== 'completed') setDone(false);
   }
   if (done)
     return (
