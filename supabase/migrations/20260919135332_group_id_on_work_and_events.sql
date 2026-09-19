@@ -1,0 +1,513 @@
+-- #519: group_id on tasks, events, campaigns and completed_work_requests -- backfilled from the
+-- legacy Origin through groups.legacy_*, kept consistent both ways by trigger (ADR-0009 Wave 2).
+-- Legacy columns stay the write master; the two-way trigger lets the Wave 2 commands write
+-- group_id while every older writer (seed, smoke script, the 21 commands until #522) keeps
+-- writing dept_id/team_id/project_id.
+--
+-- Decision recorded here: the old campaign unique index (department_id, lower(name)) is
+-- dropped, not kept, alongside (group_id, lower(name)). Keeping both would mean two unique
+-- checks per write and two constraint names for create_campaign_impl's/update_campaign_impl's
+-- unique_violation handler to recognise -- for every Department Campaign, (department_id,
+-- lower(name)) is implied by (group_id, lower(name)) because the trigger below makes
+-- department_id a function of group_id. The two impl functions are re-issued in this same
+-- migration (create or replace, one constraint name changed) so a duplicate name never
+-- surfaces as a raw 23505 between this migration and Wave 2's later work.
+
+-- ==================== 1. The resolver ====================
+
+create function private.group_id_for_legacy_origin(
+  p_dept_id text, p_team_id text, p_project_id bigint)
+returns bigint
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  -- Most specific first: an Event carries team_id AND its parent dept_id together.
+  select grp.id
+    from public.groups as grp
+   where case
+           when p_project_id is not null then grp.legacy_project_id = p_project_id
+           when p_team_id    is not null then grp.legacy_team_id    = p_team_id
+           when p_dept_id    is not null then grp.legacy_dept_id    = p_dept_id
+           else false
+         end;
+$$;
+comment on function private.group_id_for_legacy_origin(text, text, bigint) is
+  'The Group that masters a legacy Origin (project, else team, else department). Null when nothing matches. Wave 2 bridge; dropped in Wave 3 (#519).';
+revoke execute on function private.group_id_for_legacy_origin(text, text, bigint)
+  from public, anon, authenticated, service_role;
+
+-- ==================== 2. Columns, indexes, Campaign changes, Event constraints ====================
+
+drop view public.tasks_with_overdue;
+
+alter table public.tasks                   add column group_id bigint references public.groups (id);
+alter table public.events                  add column group_id bigint references public.groups (id);
+alter table public.campaigns               add column group_id bigint references public.groups (id);
+alter table public.completed_work_requests add column group_id bigint references public.groups (id);
+
+create index tasks_group_idx                   on public.tasks (group_id);
+create index events_group_idx                  on public.events (group_id);
+create index campaigns_group_idx               on public.campaigns (group_id);
+create index completed_work_requests_group_idx on public.completed_work_requests (group_id);
+
+alter table public.campaigns alter column department_id drop not null;
+drop index public.campaigns_department_name_uidx;
+create unique index campaigns_group_name_uidx on public.campaigns (group_id, lower(name));
+
+-- events: an Independent Team has no Department; scope stays until Wave 3 and is derived
+-- from the Group by the trigger below.
+alter table public.events drop constraint events_scope_fields_ck;
+alter table public.events add constraint events_scope_fields_ck check (
+     (scope = 'org'     and dept_id is null     and team_id is null     and project_id is null)
+  or (scope = 'dept'    and dept_id is not null and team_id is null     and project_id is null)
+  or (scope = 'team'    and team_id is not null and project_id is null)
+  or (scope = 'project' and dept_id is null     and team_id is null     and project_id is not null)
+);
+
+-- Level 4 is retired (ADR-0009 Ranks). Existing rows move UP to 5, never down: a gate that
+-- meant "Responsible+" must not silently open to Voluntar cu Drept de Vot.
+update public.events set min_level = 5 where min_level = 4;
+alter table public.events drop constraint events_min_level_ck;
+alter table public.events add constraint events_min_level_ck check (min_level in (0, 3, 5, 6));
+
+-- ==================== 3. Backfill (plain updates, before the triggers exist) ====================
+
+update public.tasks set group_id = private.group_id_for_legacy_origin(dept_id, team_id, project_id) where group_id is null;
+update public.events
+   set group_id = case when scope = 'org'
+                       then (select grp.id from public.groups as grp where grp.legacy_dept_id = 'org')
+                       else private.group_id_for_legacy_origin(
+                              case when scope = 'dept' then dept_id end, team_id, project_id) end
+ where group_id is null;
+update public.campaigns set group_id = private.group_id_for_legacy_origin(department_id, null, null) where group_id is null;
+update public.completed_work_requests set group_id = private.group_id_for_legacy_origin(dept_id, team_id, project_id) where group_id is null;
+
+do $$
+declare v_ids text;
+begin
+  select string_agg(format('%s:%s', tbl, id), ', ') into v_ids from (
+    select 'tasks' as tbl, id from public.tasks where group_id is null
+    union all select 'events', id from public.events where group_id is null
+    union all select 'campaigns', id from public.campaigns where group_id is null
+    union all select 'completed_work_requests', id from public.completed_work_requests where group_id is null
+  ) as unmapped;
+  if v_ids is not null then
+    raise exception 'group_id backfill: rows whose Origin has no Group (run private.sync_groups_from_legacy() first) -- unmapped row IDs: %', v_ids;
+  end if;
+end $$;
+
+alter table public.tasks                   alter column group_id set not null;
+alter table public.events                  alter column group_id set not null;
+alter table public.campaigns               alter column group_id set not null;
+alter table public.completed_work_requests alter column group_id set not null;
+
+comment on column public.tasks.group_id is
+  'The Group that masters this Task''s Origin (ADR-0009 Wave 2 bridge). Legacy dept_id/team_id/project_id stay the write master until Wave 3 drops them; private.sync_task_group_origin keeps both sides consistent.';
+comment on column public.events.group_id is
+  'The Group that masters this Event''s Origin (ADR-0009 Wave 2 bridge). Legacy scope/dept_id/team_id/project_id stay the write master until Wave 3 drops them; private.sync_event_group_origin keeps both sides consistent.';
+comment on column public.campaigns.group_id is
+  'The Group that masters this Campaign''s Origin (ADR-0009 Wave 2 bridge). Legacy department_id stays the write master until Wave 3 drops it; private.sync_campaign_group_origin keeps both sides consistent.';
+comment on column public.completed_work_requests.group_id is
+  'The Group that masters this Request''s Origin (ADR-0009 Wave 2 bridge). Legacy dept_id/team_id/project_id stay the write master until Wave 3 drops them; private.sync_request_group_origin keeps both sides consistent.';
+
+-- ==================== 4. The four two-way trigger functions ====================
+
+create function private.sync_task_group_origin()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_legacy_changed boolean;
+  v_group_changed  boolean;
+  v_from_legacy    bigint;
+  v_grp            public.groups%rowtype;
+begin
+  v_legacy_changed := tg_op = 'INSERT'
+    or new.dept_id    is distinct from old.dept_id
+    or new.team_id    is distinct from old.team_id
+    or new.project_id is distinct from old.project_id;
+  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
+  v_from_legacy    := private.group_id_for_legacy_origin(new.dept_id, new.team_id, new.project_id);
+
+  if (tg_op = 'INSERT' and new.group_id is not null
+      and num_nonnulls(new.dept_id, new.team_id, new.project_id) = 0)
+     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
+    -- Group side written: derive the legacy triple.
+    select * into v_grp from public.groups where id = new.group_id;
+    if not found then
+      return new;                                   -- tasks_group_id_fkey answers
+    end if;
+    if num_nonnulls(v_grp.legacy_dept_id, v_grp.legacy_team_id, v_grp.legacy_project_id) = 0 then
+      raise exception using errcode = '23514', message = 'task_group_origin_unmapped';
+    end if;
+    new.dept_id    := v_grp.legacy_dept_id;
+    new.team_id    := v_grp.legacy_team_id;
+    new.project_id := v_grp.legacy_project_id;
+  elsif new.group_id is null
+     or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
+    -- Legacy side written (every pre-Wave-2 writer): derive the Group.
+    if v_from_legacy is null then
+      raise exception using errcode = '23514', message = 'task_group_required';
+    end if;
+    new.group_id := v_from_legacy;
+  elsif v_from_legacy is distinct from new.group_id then
+    raise exception using errcode = '23514', message = 'task_group_origin_mismatch';
+  end if;
+  return new;
+end;
+$$;
+comment on function private.sync_task_group_origin() is
+  'Keeps tasks.group_id and the legacy Origin triple consistent both ways (ADR-0009 Wave 2): a legacy write derives group_id, a Group write derives dept_id/team_id/project_id, and a row that sets both inconsistently is refused (23514 task_group_origin_mismatch). task_group_required: the legacy side names no Group; task_group_origin_unmapped: the Group has no legacy master (only reachable once Wave 3 creates native Groups).';
+
+create trigger tasks_sync_group_origin
+before insert or update of group_id, dept_id, team_id, project_id on public.tasks
+for each row execute function private.sync_task_group_origin();
+
+create function private.sync_request_group_origin()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_legacy_changed boolean;
+  v_group_changed  boolean;
+  v_from_legacy    bigint;
+  v_grp            public.groups%rowtype;
+begin
+  v_legacy_changed := tg_op = 'INSERT'
+    or new.dept_id    is distinct from old.dept_id
+    or new.team_id    is distinct from old.team_id
+    or new.project_id is distinct from old.project_id;
+  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
+  v_from_legacy    := private.group_id_for_legacy_origin(new.dept_id, new.team_id, new.project_id);
+
+  if (tg_op = 'INSERT' and new.group_id is not null
+      and num_nonnulls(new.dept_id, new.team_id, new.project_id) = 0)
+     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
+    -- Group side written: derive the legacy triple.
+    select * into v_grp from public.groups where id = new.group_id;
+    if not found then
+      return new;                                   -- completed_work_requests_group_id_fkey answers
+    end if;
+    if num_nonnulls(v_grp.legacy_dept_id, v_grp.legacy_team_id, v_grp.legacy_project_id) = 0 then
+      raise exception using errcode = '23514', message = 'request_group_origin_unmapped';
+    end if;
+    new.dept_id    := v_grp.legacy_dept_id;
+    new.team_id    := v_grp.legacy_team_id;
+    new.project_id := v_grp.legacy_project_id;
+  elsif new.group_id is null
+     or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
+    -- Legacy side written (every pre-Wave-2 writer): derive the Group.
+    if v_from_legacy is null then
+      raise exception using errcode = '23514', message = 'request_group_required';
+    end if;
+    new.group_id := v_from_legacy;
+  elsif v_from_legacy is distinct from new.group_id then
+    raise exception using errcode = '23514', message = 'request_group_origin_mismatch';
+  end if;
+  return new;
+end;
+$$;
+comment on function private.sync_request_group_origin() is
+  'Keeps completed_work_requests.group_id and the legacy Origin triple consistent both ways (ADR-0009 Wave 2), mirroring private.sync_task_group_origin exactly. request_group_required: the legacy side names no Group; request_group_origin_unmapped: the Group has no legacy master; request_group_origin_mismatch: both sides were set and disagree.';
+
+create trigger completed_work_requests_sync_group_origin
+before insert or update of group_id, dept_id, team_id, project_id on public.completed_work_requests
+for each row execute function private.sync_request_group_origin();
+
+create function private.sync_campaign_group_origin()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_legacy_changed boolean;
+  v_group_changed  boolean;
+  v_from_legacy    bigint;
+  v_grp            public.groups%rowtype;
+begin
+  v_legacy_changed := tg_op = 'INSERT'
+    or new.department_id is distinct from old.department_id;
+  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
+  v_from_legacy    := private.group_id_for_legacy_origin(new.department_id, null, null);
+
+  if (tg_op = 'INSERT' and new.group_id is not null and new.department_id is null)
+     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
+    -- Group side written: derive department_id -- null for a Team or Project Group, which is
+    -- exactly why the column went nullable in this migration. No _unmapped reason exists here:
+    -- an unmapped Group simply produces a null department_id, not an error.
+    select * into v_grp from public.groups where id = new.group_id;
+    if not found then
+      return new;                                   -- campaigns_group_id_fkey answers
+    end if;
+    new.department_id := v_grp.legacy_dept_id;
+  elsif new.group_id is null
+     or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
+    -- Legacy side written (every pre-Wave-2 writer): derive the Group.
+    if v_from_legacy is null then
+      raise exception using errcode = '23514', message = 'campaign_group_required';
+    end if;
+    new.group_id := v_from_legacy;
+  elsif v_from_legacy is distinct from new.group_id then
+    raise exception using errcode = '23514', message = 'campaign_group_origin_mismatch';
+  end if;
+  return new;
+end;
+$$;
+comment on function private.sync_campaign_group_origin() is
+  'Keeps campaigns.group_id and department_id consistent both ways (ADR-0009 Wave 2). A legacy write derives group_id; a Group write derives department_id, which is null when the Group is not a Department (a Team or Project Group carries no _unmapped error -- department_id simply goes null, the reason the column was made nullable in this migration). campaign_group_required: the legacy side names no Group; campaign_group_origin_mismatch: both sides were set and disagree.';
+
+create trigger campaigns_sync_group_origin
+before insert or update of group_id, department_id on public.campaigns
+for each row execute function private.sync_campaign_group_origin();
+
+create function private.sync_event_group_origin()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_legacy_changed boolean;
+  v_group_changed  boolean;
+  v_from_legacy    bigint;
+  v_grp            public.groups%rowtype;
+begin
+  v_legacy_changed := tg_op = 'INSERT'
+    or new.scope      is distinct from old.scope
+    or new.dept_id    is distinct from old.dept_id
+    or new.team_id    is distinct from old.team_id
+    or new.project_id is distinct from old.project_id;
+  v_group_changed  := tg_op = 'INSERT' or new.group_id is distinct from old.group_id;
+  -- legacy -> Group: scope decides which column is the Origin
+  v_from_legacy := case when new.scope = 'org'
+                        then (select grp.id from public.groups as grp where grp.legacy_dept_id = 'org')
+                        else private.group_id_for_legacy_origin(
+                               case when new.scope = 'dept' then new.dept_id end, new.team_id, new.project_id) end;
+
+  if (tg_op = 'INSERT' and new.group_id is not null
+      and new.dept_id is null and new.team_id is null and new.project_id is null)
+     or (tg_op = 'UPDATE' and v_group_changed and not v_legacy_changed) then
+    -- Group -> legacy: scope, the Origin column, and the Team's parent Department
+    select * into v_grp from public.groups where id = new.group_id;
+    if not found then
+      return new;                                   -- events_group_id_fkey answers
+    end if;
+    if v_grp.legacy_dept_id = 'org' then
+      new.scope := 'org';     new.dept_id := null; new.team_id := null; new.project_id := null;
+    elsif v_grp.legacy_dept_id is not null then
+      new.scope := 'dept';    new.dept_id := v_grp.legacy_dept_id; new.team_id := null; new.project_id := null;
+    elsif v_grp.legacy_team_id is not null then
+      new.scope := 'team';    new.team_id := v_grp.legacy_team_id; new.project_id := null;
+      select team.dept_id into new.dept_id from public.teams as team where team.id = v_grp.legacy_team_id;
+    elsif v_grp.legacy_project_id is not null then
+      new.scope := 'project'; new.project_id := v_grp.legacy_project_id; new.dept_id := null; new.team_id := null;
+    else
+      raise exception using errcode = '23514', message = 'event_group_origin_unmapped';
+    end if;
+  elsif new.group_id is null
+     or (tg_op = 'UPDATE' and v_legacy_changed and not v_group_changed) then
+    -- Legacy side written (every pre-Wave-2 writer): derive the Group.
+    if v_from_legacy is null then
+      raise exception using errcode = '23514', message = 'event_group_required';
+    end if;
+    new.group_id := v_from_legacy;
+  elsif v_from_legacy is distinct from new.group_id then
+    raise exception using errcode = '23514', message = 'event_group_origin_mismatch';
+  end if;
+
+  -- legacy-path normalisation: a Team Event fills its parent Department when the caller left it
+  -- null (an Independent Team keeps null). A client-supplied WRONG Department is never
+  -- overwritten -- events_team_department_fkey keeps answering 23503 for it.
+  if new.scope = 'team' and new.dept_id is null then
+    select team.dept_id into new.dept_id from public.teams as team where team.id = new.team_id;
+  end if;
+
+  return new;
+end;
+$$;
+comment on function private.sync_event_group_origin() is
+  'Keeps events.group_id and the legacy (scope, dept_id, team_id, project_id) Origin consistent both ways (ADR-0009 Wave 2). A legacy write derives group_id (the org pseudo-department is its own case); a Group write derives scope plus the one Origin column it implies, filling a Team Event''s parent Department along the way. event_group_required: the legacy side names no Group; event_group_origin_unmapped: the Group has no legacy master; event_group_origin_mismatch: both sides were set and disagree. Never overwrites a caller-supplied, wrong dept_id on a Team Event -- events_team_department_fkey answers that with 23503.';
+
+create trigger events_sync_group_origin
+before insert or update of group_id, scope, dept_id, team_id, project_id on public.events
+for each row execute function private.sync_event_group_origin();
+
+-- ==================== 5. Recreate tasks_with_overdue (now carries group_id) ====================
+-- Definition, storage parameter, grants and comment are #339's/#341's, unchanged except for
+-- the new column riding along with the star -- verified fresh against
+-- pg_get_viewdef('public.tasks_with_overdue') on this branch, not copied from an earlier file.
+
+create view public.tasks_with_overdue
+with (security_invoker = on)
+as
+select
+  task.*,
+  (
+    coalesce(task.deadline < statement_timestamp(), false)
+    and task.status in ('todo', 'in_progress', 'in_review')
+  ) as is_overdue
+from public.tasks as task;
+
+revoke all on public.tasks_with_overdue
+  from public, anon, authenticated, service_role;
+grant select on public.tasks_with_overdue to authenticated, service_role;
+
+comment on view public.tasks_with_overdue is
+  'RLS-aware Task query surface with overdue derived from the current clock and unfinished lifecycle state.';
+
+-- ==================== 6. Re-issue the Campaign commands (constraint name only) ====================
+-- create or replace preserves each function's ACL, so the roster in tracker_grants.test.sql
+-- does not move for these two.
+
+create or replace function private.create_campaign_impl(
+  p_department_id text,
+  p_name text
+)
+returns public.campaigns
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_name text;
+  v_campaign public.campaigns%rowtype;
+  v_constraint text;
+begin
+  if v_actor is null
+     or not coalesce(public.auth_is_member(), false)
+     or not exists (
+       select 1
+         from public.profiles as profile
+        where profile.id = v_actor
+          and profile.status = 'activ'
+          and profile.role in ('bc', 'moderator', 'bce')
+     ) then
+    raise exception using
+      errcode = '42501',
+      message = 'campaign_manage_forbidden';
+  end if;
+
+  perform private.require_campaign_manager(p_department_id);
+
+  if p_name is null or p_name !~ '[^[:space:]]' then
+    raise sqlstate 'PT400' using message = 'invalid_campaign_name';
+  end if;
+
+  v_name := regexp_replace(p_name, '^[[:space:]]+|[[:space:]]+$', '', 'g');
+
+  begin
+    insert into public.campaigns (department_id, name, created_by)
+    values (p_department_id, v_name, v_actor)
+    returning * into v_campaign;
+  exception
+    when unique_violation then
+      get stacked diagnostics v_constraint = constraint_name;
+
+      if v_constraint <> 'campaigns_group_name_uidx' then
+        raise;
+      end if;
+
+      raise sqlstate 'PT409' using message = 'campaign_name_taken';
+  end;
+
+  return v_campaign;
+end;
+$$;
+
+comment on function private.create_campaign_impl(text, text) is
+  'Creates one Campaign for a Department the caller manages; the actor is auth.uid(), never a parameter. Rejects a blank name, trims a padded one, and re-raises the campaigns_group_name_uidx unique_violation as campaign_name_taken (any other constraint violation propagates unchanged).';
+
+create or replace function private.update_campaign_impl(
+  p_campaign_id bigint,
+  p_name text
+)
+returns public.campaigns
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_department_id text;
+  v_name text;
+  v_campaign public.campaigns%rowtype;
+  v_constraint text;
+begin
+  if v_actor is null
+     or not coalesce(public.auth_is_member(), false)
+     or not exists (
+       select 1
+         from public.profiles as profile
+        where profile.id = v_actor
+          and profile.status = 'activ'
+          and profile.role in ('bc', 'moderator', 'bce')
+     ) then
+    raise exception using
+      errcode = '42501',
+      message = 'campaign_manage_forbidden';
+  end if;
+
+  select campaign.department_id
+    into v_department_id
+    from public.campaigns as campaign
+   where campaign.id = p_campaign_id
+   for update;
+
+  if not found then
+    raise sqlstate 'PT404' using message = 'campaign_not_found';
+  end if;
+
+  perform private.require_campaign_manager(v_department_id);
+
+  if p_name is null or p_name !~ '[^[:space:]]' then
+    raise sqlstate 'PT400' using message = 'invalid_campaign_name';
+  end if;
+
+  v_name := regexp_replace(p_name, '^[[:space:]]+|[[:space:]]+$', '', 'g');
+
+  begin
+    update public.campaigns as campaign
+       set name = v_name,
+           updated_at = clock_timestamp()
+     where campaign.id = p_campaign_id
+    returning campaign.* into v_campaign;
+  exception
+    when unique_violation then
+      get stacked diagnostics v_constraint = constraint_name;
+
+      if v_constraint <> 'campaigns_group_name_uidx' then
+        raise;
+      end if;
+
+      raise sqlstate 'PT409' using message = 'campaign_name_taken';
+  end;
+
+  return v_campaign;
+end;
+$$;
+
+comment on function private.update_campaign_impl(bigint, text) is
+  'Renames an existing Campaign; department_id never changes here or anywhere else. Gates on a live BC/Moderator/BCE before locking the Campaign row. Rejects a blank name, trims a padded one, and re-raises the campaigns_group_name_uidx unique_violation as campaign_name_taken (any other constraint violation propagates unchanged). Sets updated_at itself (private.set_updated_at(), #368, is not in this stack''s base).';
+
+-- ==================== 7. Grants ====================
+-- The five new functions: `none` for the resolver (called only by the four trigger functions
+-- and the backfill above), `trigger` for the four sync functions -- nobody calls a trigger
+-- function directly. create_campaign_impl/update_campaign_impl keep their existing grants
+-- (create or replace).
+
+revoke execute on function private.sync_task_group_origin()
+  from public, anon, authenticated, service_role;
+revoke execute on function private.sync_request_group_origin()
+  from public, anon, authenticated, service_role;
+revoke execute on function private.sync_campaign_group_origin()
+  from public, anon, authenticated, service_role;
+revoke execute on function private.sync_event_group_origin()
+  from public, anon, authenticated, service_role;
