@@ -47,8 +47,7 @@ export function TaskReopenControl({
       )}
       {done && (
         <p role="status">
-          Taskul este în lucru, cu feedback de aplicat. Executorul primește
-          nota.
+          Taskul este în lucru. Istoricul și punctele au fost actualizate.
         </p>
       )}
     </section>
