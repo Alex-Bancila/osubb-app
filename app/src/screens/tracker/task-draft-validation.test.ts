@@ -119,8 +119,8 @@ it.each([
   ['PT400', 'invalid_campaign', 'Campania nu mai este disponibilă'],
   ['PT400', 'invalid_origin', 'Alege un grup'],
   ['PT400', 'subtask_origin_mismatch', 'Subtaskul trebuie'],
-  ['42501', 'private_authority_detail', 'Nu mai ai permisiunea'],
-  ['PT404', 'private_lookup_detail', 'nu mai este disponibil'],
+  ['42501', 'task_manage_forbidden', 'Nu mai ai permisiunea'],
+  ['PT404', 'task_not_found', 'nu mai este disponibil'],
   ['PT409', 'parent_terminal', 's-a schimbat'],
 ])('maps %s/%s to safe Romanian copy', (code, message, expected) => {
   expect(
@@ -140,3 +140,26 @@ it('never displays unknown server payloads or arbitrary error messages', () => {
   ])
     expect(taskDraftErrorMessage(error)).not.toMatch(/secret|SQL/);
 });
+
+it.each([
+  ['parent_not_umbrella', 'task-umbrelă valid'],
+  ['parent_terminal', 's-a schimbat'],
+  ['task_command_forbidden', 'Nu mai ai permisiunea'],
+  ['task_manage_forbidden', 'Nu mai ai permisiunea'],
+  ['task_not_found', 'nu mai este disponibil'],
+  ['invalid_executor', 'nu mai este eligibil'],
+])(
+  'normalizes stable reason %s independently of transport code',
+  (message, expected) => {
+    for (const code of [undefined, 'PT409', 'unexpected'])
+      expect(taskDraftErrorMessage({ message, code })).toContain(expected);
+  },
+);
+it.each(['42501', 'PT400', 'PT404', 'PT409'])(
+  'does not classify unknown reasons from code %s',
+  (code) => {
+    expect(taskDraftErrorMessage({ code, message: 'private internals' })).toBe(
+      'Nu am putut pregăti taskul. Încearcă din nou.',
+    );
+  },
+);
