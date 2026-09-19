@@ -1,3 +1,4 @@
+import { TaskActionSuccess } from './TaskActionSuccess';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
@@ -16,6 +17,12 @@ export function TaskFeedbackControl({
   const capability = useTaskEvaluationCapability(taskId);
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
+  if (done)
+    return (
+      <TaskActionSuccess>
+        Taskul este în lucru, cu feedback de aplicat. Executorul primește nota.
+      </TaskActionSuccess>
+    );
   if (capability.data !== true || status !== 'in_review' || kind !== 'task')
     return null;
   return (
@@ -40,12 +47,6 @@ export function TaskFeedbackControl({
         >
           Trimite înapoi în lucru
         </Button>
-      )}
-      {done && (
-        <p role="status">
-          Taskul este în lucru, cu feedback de aplicat. Executorul primește
-          nota.
-        </p>
       )}
     </section>
   );
