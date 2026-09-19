@@ -67,7 +67,7 @@ export default function VolunteersScreen() {
     members.some((member) => member.contact)
       ? [...baseColumns, ...contactColumns]
       : baseColumns
-  ).map((column) => ({
+  ).map((column): DataTableColumn<DirectoryMember> => ({
     ...column,
     sortingFn: (left, right, columnId) => {
       const a = left.getValue<string | number>(columnId);
