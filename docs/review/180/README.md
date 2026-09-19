@@ -21,6 +21,8 @@ flowchart TD
   Form --> Draft[onDraft callback]
 ```
 
-`managed_work_groups()` delegates authority to the shared live Group helper and preserves its BC/Moderator override for archived Groups. It exposes only id, name, path, Minimum Level, and category. The form uses those paths for nesting and ancestor Campaign choices; it does not infer Group authority from member roles.
+`managed_work_groups()` delegates authority to the shared live Group helper and preserves its BC/Moderator override for archived Groups. It exposes only id, name, path, and Minimum Level. The form uses those paths for nesting and ancestor Campaign choices; it does not infer Group authority from member roles.
 
 The form deliberately ends at `onDraft`. Strict shared domain validation and safe server-error mapping belong to #182; create-command submission belongs to #184.
+
+Validation: the new RPC suite fails against the parent schema (missing function), then passes all 14 assertions after the migration. The complete database run passes 104 suites / 4,151 assertions, with strict lint, historical upgrade harnesses, seed repeatability, exact generated types, and the public-command smoke test. The full frontend suite passes 53 files / 298 tests; the final focused form/query run passes 10 tests, including axe.

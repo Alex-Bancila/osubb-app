@@ -1,9 +1,9 @@
 -- #180: read-only task-form origins, using the same live authority as commands.
 create function public.managed_work_groups()
-returns table (id bigint, name text, path bigint[], min_level integer, category text)
+returns table (id bigint, name text, path bigint[], min_level integer)
 language sql stable security invoker set search_path = ''
 as $$
-  select grp.id, grp.name, grp.path, grp.min_level, grp.category
+  select grp.id, grp.name, grp.path, grp.min_level
     from public.groups as grp
    where coalesce(public.auth_is_member(), false)
      and private.can_manage_group_work(grp.id)
