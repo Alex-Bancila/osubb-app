@@ -3193,13 +3193,12 @@ export type Database = {
       create_event: {
         Args: {
           p_capacity?: number
-          p_dept_id?: string
           p_description?: string
           p_ends_at?: string
+          p_group_id: number
           p_location?: string
-          p_scope: string
+          p_min_level?: number
           p_starts_at: string
-          p_team_id?: string
           p_title: string
           p_type: string
         }
