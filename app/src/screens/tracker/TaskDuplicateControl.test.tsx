@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const duplicate = vi.hoisted(() => vi.fn());
 vi.mock('../../queries/task-duplication', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/task-duplication')>()),
