@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(27);
 
 insert into auth.users(id,email)
 select ('16800000-0000-0000-0000-' || lpad(i::text,12,'0'))::uuid, 'm168.'||i||'@test.local' from generate_series(1,6) i;
@@ -70,6 +70,24 @@ select results_eq($$select f.name from public.my_managed_task_ids() m join g521_
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
 select results_eq($$select f.name from public.my_managed_task_ids() m join g521_tasks f on f.id=m.task_id order by 1$$,$$values ('ind'::text)$$,'Manager-less peers retain management list');
+select is(public.can_manage_tasks(),true,'an Independent-Team peer has the Tracker management capability');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is(public.can_manage_tasks(),false,'an ordinary Group Member has no Tracker management capability');
+reset role;
+-- #521 (delta): can_manage_tasks() now sweeps public.groups, not the three legacy Origin
+-- tables. This pins the one Group that has no legacy Origin of its own -- the Adunarea
+-- Generală organization Group at the root -- so a Group Role held only there still yields the
+-- capability. NOTE for the mutation record: this row does NOT distinguish the Groups sweep
+-- from the legacy departments/teams/projects sweep, because root authority flows down the
+-- path into every legacy Origin, so both bodies answer true. In Wave 2 no reachable state
+-- tells them apart; Wave 3's Groups without legacy rows are what makes the sweep load-bearing.
+-- Rolled back with the suite; no production roster write.
+insert into public.group_members(group_id,member_id,group_role)
+select grp.id,pg_temp.g521_uid(12),'manager' from public.groups as grp where grp.category='organization';
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(12));
+select is(public.can_manage_tasks(),true,'a Group Manager of the root Group, which has no legacy Origin of its own, has the Tracker management capability');
 reset role;
 
 select * from finish();
