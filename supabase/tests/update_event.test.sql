@@ -26,7 +26,7 @@ insert into public.events(title,type,group_id,starts_at,created_by,min_level)
 select 'Event '||name||' #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000002',0 from gx;
 insert into public.events(title,type,group_id,starts_at,created_by,min_level)
 select 'Hidden #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000001',5 from gx where name='a';
-create temp table ex as select id,group_id,title from public.events where title like '%#248';
+create temp table ex as select id,group_id,title,updated_at from public.events where title like '%#248';
 grant select on ex to authenticated,anon;
 insert into public.event_attendance(event_id,member_id,status)
 select id,'24800000-0000-0000-0000-000000000006','going' from ex where title='Event a #248';
@@ -106,7 +106,7 @@ select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');
 select lives_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='b'),'2026-10-01 12:00+00',null,null,null,null,3)$q$,'nullable replacement fields can be cleared');
 reset role;
 select ok((select ends_at is null and location is null and capacity is null and description is null from public.events where id=(select id from ex where title='Event a #248')),'NULL means clear');
-select ok((select updated_at>=created_at from public.events where id=(select id from ex where title='Event a #248')),'updated_at maintained');
+select ok((select updated_at>(select updated_at from ex where title='Event a #248') from public.events where id=(select id from ex where title='Event a #248')),'updated_at maintained');
 select pg_temp.test_login('24800000-0000-0000-0000-000000000001','{}');
 select throws_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='a'),'2026-10-01 12:00+00',null,null,null,null,0)$q$,'42501','calendar_manage_forbidden','claimless denied');
 reset role;
