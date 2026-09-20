@@ -10,7 +10,7 @@ vi.mock('../../queries/profile', () => ({
 }));
 vi.mock('../../queries/reference', () => ({
   useRoles: () => ({ data: new Map() }),
-  useDepartments: () => ({ data: new Map() }),
+  useGroups: () => ({ data: new Map() }),
 }));
 vi.mock('../../queries/points', () => ({
   useMyPoints: () => ({ isPending: false, isError: false, data: 12 }),

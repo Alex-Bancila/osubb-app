@@ -802,6 +802,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: number
+          is_organization: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -826,6 +827,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -850,6 +852,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null

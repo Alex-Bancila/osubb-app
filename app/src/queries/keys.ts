@@ -31,13 +31,12 @@ export const keys = {
     me: (memberId: string | undefined) =>
       ['profile', 'me', { memberId }] as const,
   },
-  /* Reference data — roles, departments, the scoring guides. It changes in a
-     migration, never at runtime, so these are fetched once and kept (see
-     `reference.ts`). Same family for all of it: one `['reference']`
-     invalidation after a deploy is the whole cache-busting story. */
+  /* Reference data — roles, Groups, the scoring guides. Same family for all of
+     it: one `['reference']` invalidation after a deploy, or after Administrare
+     changes a Group, is the whole cache-busting story (see `reference.ts`). */
   reference: {
     all: ['reference'] as const,
-    departments: () => ['reference', 'departments'] as const,
+    groups: () => ['reference', 'groups'] as const,
     roles: () => ['reference', 'roles'] as const,
   },
   tasks: {
