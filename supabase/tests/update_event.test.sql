@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(55);
 insert into auth.users(id,email)
 select ('24800000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid, 'event248-'||n||'@test.local'
 from generate_series(1,9) n;
@@ -188,6 +188,12 @@ update public.groups set status='archived' where id=(select id from gx where nam
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');
 select throws_ok($q$select public.update_event((select id from ex2 where title='Team ancestor #248'),'Updated','sedinta',(select id from gx where name='b'),'2026-10-04 12:00+00',null,null,null,null,3)$q$,'42501','calendar_manage_forbidden','an Event cannot be moved into an archived Group');
+-- #248: the other direction of the same rule. `Event a #248` already LIVES in
+-- Group b, archived a moment ago. The active requirement belongs to the MOVE:
+-- an edit that keeps the Event where it is is decided by the source authority
+-- rule alone, or an archived Group's Events could never be corrected again --
+-- only cancelled, since cancel_event has no target argument and no such check.
+select lives_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Archived-group edit','sedinta',(select id from gx where name='b'),'2026-10-01 12:00+00',null,null,null,null,3)$q$,'BC still edits an Event whose own Group has been archived');
 reset role;
 select * from finish();
 rollback;

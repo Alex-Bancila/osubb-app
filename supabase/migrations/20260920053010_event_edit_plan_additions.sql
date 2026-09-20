@@ -15,19 +15,32 @@
 --    placed it last: precedence between two malformed arguments is not a
 --    behaviour worth churning.
 --
--- 2. The target Group must be `status = 'active'`, as create_event requires.
---    Without it an Event could be moved INTO an archived Group, which no
---    command can create one in.
+-- 2. A MOVE's target Group must be `status = 'active'`, as create_event
+--    requires: without it an Event could be moved INTO an archived Group,
+--    which no command can create one in. The check is deliberately gated on
+--    `p_group_id is distinct from v_event.group_id` and is not a property of
+--    the target argument alone. update_event is a full-state REPLACE, so every
+--    call names a p_group_id, including a caller who is not moving anything --
+--    an ungated check would refuse every edit of an Event whose own Group has
+--    since been archived, BC/Moderator included, while cancel_event (same
+--    authority rule, no target argument) still allowed one. That Event's time
+--    could then never be corrected, only cancelled. An edit that keeps the
+--    Event where it is is therefore decided by the authority rule at step 4
+--    alone, and that rule already carries the right status gate:
+--    can_manage_group_work admits level >= 6 anywhere, archived Groups
+--    included, and a Group Role only on an ACTIVE Group.
 --
 -- 3. An Organization-Group TARGET applies the Organization rule rather than
---    private.require_group_work_manager. The Organization Group is the root of
---    every path, so it has no ancestor to reach it from: can_manage_group_work
---    on it is satisfied only by an explicit role on that row, and a Department
---    Coordinator who may CREATE an organization-wide Event (#370) could not
---    move one there. The rule is create_event's: level >= 6, or any live Group
---    Role anywhere. The SOURCE side of an Organization Event keeps the
---    narrower creator-or-level-6 rule -- editing someone else's Event is not
---    the same act as raising one of your own.
+--    private.require_group_work_manager. The Organization Group is a root
+--    Group with no ancestors of its own -- one root among several, since every
+--    Department, Independent Team and Project Group is a root too and most
+--    paths never contain it -- so nobody can reach it from above:
+--    can_manage_group_work on it is satisfied only by an explicit role on that
+--    row, and a Department Coordinator who may CREATE an organization-wide
+--    Event (#370) could not move one there. The rule is create_event's:
+--    level >= 6, or any live Group Role anywhere. The SOURCE side of an
+--    Organization Event keeps the narrower creator-or-level-6 rule -- editing
+--    someone else's Event is not the same act as raising one of your own.
 --
 -- 4. Step order. Minimum Level is judged against the loaded rows, so it is
 --    step 5 (conventions §2: "validation that can only be judged against the
@@ -118,8 +131,13 @@ begin
     end;
   end if;
 
-  select * into v_target from public.groups where id = p_group_id and status = 'active';
-  if not found then
+  -- An unknown Group is refused as "you may not", never as "no such Group".
+  -- The ACTIVE requirement belongs to the move, not to the argument: see the
+  -- header (reason 2). An edit that keeps the Event in its own Group is left
+  -- to step 4's rule, which already gates a Group Role on the Group's status.
+  select * into v_target from public.groups where id = p_group_id;
+  if not found
+     or (p_group_id is distinct from v_event.group_id and v_target.status <> 'active') then
     raise exception using errcode = '42501', message = 'calendar_manage_forbidden';
   end if;
   if p_group_id is distinct from v_event.group_id then
@@ -194,7 +212,7 @@ end;
 $$;
 
 comment on function private.update_event_impl(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer) is
-  'Replaces an Event''s whole editable state, authorized by Group Role (ADR-0009 Wave 2, #248). This is a full-state REPLACE, not a patch: every editable column is written from its argument, so a null clears a nullable column (ends_at, location, capacity, description) rather than leaving the old value -- a client that wants to keep a field must send it back. Malformed input is judged first, for everyone, with the same reasons as create_event including event_group_required. A caller who cannot see the Event (below its min_level) is answered PT404 event_not_found, the same as an id that does not exist: hidden is never distinguishable from missing. Authority on the SOURCE: an Organization Group Event (legacy_dept_id = ''org'' until Wave 3 gives it a setting of its own) belongs to its creator or to level >= 6; every other Event goes through private.require_group_work_manager, so a Group Manager or Group Responsible of the Group or any ancestor on its path qualifies. Moving the Event re-runs the rule on the TARGET Group, where an Organization target takes create_event''s rule -- level >= 6 or any live Group Role anywhere -- because the Organization Group is the root of every path and therefore has no ancestor anyone could reach it from. The target must be active. Minimum Level is then judged against the target Group and the live actor (PT400 event_min_level_below_group / event_min_level_above_actor), and a cancelled Event is PT409 event_cancelled. The legacy (scope, dept_id, team_id, project_id) Origin is never written here: events_sync_group_origin re-derives it from group_id. Important changes -- schedule, location, Group, Minimum Level -- notify the current attendees and the new Group''s explicit members (plus the old Group''s, when the Event moved) under dedupe key event:<id>:<field> and link /calendar, so a second unread change to the same field coalesces onto one row carrying the later value; title, type, description and capacity notify nobody.';
+  'Replaces an Event''s whole editable state, authorized by Group Role (ADR-0009 Wave 2, #248). This is a full-state REPLACE, not a patch: every editable column is written from its argument, so a null clears a nullable column (ends_at, location, capacity, description) rather than leaving the old value -- a client that wants to keep a field must send it back. Malformed input is judged first, for everyone, with the same reasons as create_event including event_group_required. A caller who cannot see the Event (below its min_level) is answered PT404 event_not_found, the same as an id that does not exist: hidden is never distinguishable from missing. Authority on the SOURCE: an Organization Group Event (legacy_dept_id = ''org'' until Wave 3 gives it a setting of its own) belongs to its creator or to level >= 6; every other Event goes through private.require_group_work_manager, so a Group Manager or Group Responsible of the Group or any ancestor on its path qualifies. Moving the Event re-runs the rule on the TARGET Group, where an Organization target takes create_event''s rule -- level >= 6 or any live Group Role anywhere -- because the Organization Group is a root Group with no ancestors of its own (one root among several: every Department, Independent Team and Project Group is a root too, and most Group paths never contain it), so nobody could reach it through an ancestor role. A MOVE''s target must be active. An edit that leaves the Event in its own Group is NOT refused when that Group has since been archived: this is a full-state replace, so every call names a Group, and an ungated check would leave such an Event uncorrectable while cancel_event -- same authority rule -- still cancelled it. Who may still edit it is decided by the source rule above alone: BC/Moderator always, a Group Role only while the Group is active, which is can_manage_group_work''s own status gate. Minimum Level is then judged against the target Group and the live actor (PT400 event_min_level_below_group / event_min_level_above_actor), and a cancelled Event is PT409 event_cancelled. The legacy (scope, dept_id, team_id, project_id) Origin is never written here: events_sync_group_origin re-derives it from group_id. Important changes -- schedule, location, Group, Minimum Level -- notify the current attendees and the new Group''s explicit members (plus the old Group''s, when the Event moved) under dedupe key event:<id>:<field> and link /calendar, so a second unread change to the same field coalesces onto one row carrying the later value; title, type, description and capacity notify nobody.';
 
 comment on function public.update_event(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer) is
   'Security-invoker wrapper over private.update_event_impl (#248).';
