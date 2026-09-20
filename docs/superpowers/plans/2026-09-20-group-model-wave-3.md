@@ -36,7 +36,7 @@ Wave 1 (merged) made `groups`/`group_members` a read-only shadow of the six lega
 - **R1 Organization marker:** `groups.is_organization boolean not null default false`, partial unique index `groups_one_organization_uidx` (exactly one true), backfilled on the `legacy_dept_id = 'org'` row; the three authority readers of `'org'` (`create/update/cancel_event_impl`) switch to it in T9's migration so `legacy_*` can go. Structural.
 - **R2 Colour and short already exist** on `groups` (Wave 1 backfilled them from `departments`); nothing to add — the frontend reads `groups.color`/`groups.short` directly; BC edits them through `update_group_structure`. ADR-0009's settings table gets them as a dated amendment.
 - **R3 Adunarea Generală:** capability, not row — Automatic Membership (BC-only) at Minimum Level 3, Cup off, Applications off, Responsibles appointed normally. The demo seed creates one and appoints Interne's members as its Responsibles; staging/production's is created by BC in Administrare.
-- **R4 The seeded `responsabil` holder:** seed, `shared_timestamps.test.sql` and `check-seed-rerunnable.sh` stop inserting level 4 in T22; the migration keeps "refuse while a holder remains" for real databases; BC's re-ranking on staging is its own issue (N20) — the ADR's #100 citation is wrong and is corrected.
+- **R4 The seeded `responsabil` holder:** seed, `shared_timestamps.test.sql` and `check-seed-rerunnable.sh` stop inserting level 4 in T22; the migration keeps "refuse while a holder remains" for real databases; BC's re-ranking on staging is its own issue (#592) — the ADR's #100 citation is wrong and is corrected.
 - **R5 Applications:** `public.group_applications` (R5 table below), one pending per (member, Group), withdraw while pending, re-apply after decline, notifications through `private.notify`.
 - **R6 Seed:** re-expressed through the Group commands (as `bc` for top-level Groups and Roles, as the Managers for Child Groups and Appointments). Direct `groups`/`group_members` inserts stay forbidden outside migrations' own backfills and rolled-back test fixtures.
 - **R7 Announcements:** `announcements.group_id` + the compose gate ("holds a Group Role, or rank BCE+", one definition: `private.holds_any_group_role()`) land in T8; #68 and #100 unblock there. `announcements.dept_id` is dropped in T20 (it blocks `drop table departments`).
@@ -65,50 +65,50 @@ Wave 1 (merged) made `groups`/`group_members` a read-only shadow of the six lega
 
 ## Task 0 — Issue graph (GitHub-visible; drafted to files, one go-ahead, explicit single `gh` commands)
 
-Mechanics as in Wave 2: bodies under `.superpowers/sdd/2026-09-20-group-model-wave-3/issues/` (`current-<n>.json` first, `new-<k>.md`, `edit-<n>.md`, `DRY-RUN.md` with a unified diff per edit), applied only after one go-ahead, as single explicit `gh` commands. Order: milestone 20, then U4, then N1–N21 in lane order so each `## Blocked by` names a real number, then the edits.
+Mechanics as in Wave 2: bodies under `.superpowers/sdd/2026-09-20-group-model-wave-3/issues/` (`current-<n>.json` first, `new-<k>.md`, `edit-<n>.md`, `DRY-RUN.md` with a unified diff per edit), applied only after one go-ahead, as single explicit `gh` commands. Order: milestone 20, then #594, then #574–#595 in lane order so each `## Blocked by` names a real number, then the edits.
 
 ### A1. New issues (milestone 19 unless stated; `ready-for-agent` + area labels; `max-1h` only where honest)
 
-| #   | Task | Title                                                                                                       | Blocked by                      |
-| --- | ---- | ----------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| U4  | —    | `Umbrella: Group model — Wave 4 (Evaluation Periods, promotions, sanctions, AG eligibility)` — milestone 20 | #506                            |
-| N1  | T1   | `Groups: Organization marker; the Dashboard Cup card and the Calendar read Groups`                          | None — can start immediately.   |
-| N2  | T2   | `Tracker: Opportunity membership decided from the group_ids claim`                                          | N3                              |
-| N3  | T3   | `Capabilities: my_capabilities() and my_groups(); the frontend level map retired`                           | #505                            |
-| N4  | T4   | `Tracker: Task rows, the Task form and the Request origin picker read Groups`                               | N2                              |
-| N5  | T5   | `Tests: the shared Group Task fixture built from native Group rows`                                         | #505                            |
-| N6  | T6   | `Groups: drop the legacy origin bridge and event_scope`                                                     | N4, N5                          |
-| N7  | T7   | `Members: set_member_role and set_member_status with role_history`                                          | #50                             |
-| N8  | T8   | `Announcements: group_id and a compose gate on Group Roles`                                                 | N3                              |
-| N9  | T9   | `Groups: structure commands — create, update, update_structure, archive, move`                              | N6                              |
-| N10 | T10  | `Groups: roster commands — set_group_role, add and remove a member`                                         | N9                              |
-| N11 | T11  | `Groups: Applications — apply, withdraw, decide`                                                            | N10                             |
-| N12 | T12  | `Groups: retire the legacy structure commands, gates and project-manager triggers`                          | N10                             |
-| N13 | T13  | `Groups: drop the forward mirror; Minimum Level enforced on the roster`                                     | N12                             |
-| N14 | T14  | `Seed and smoke re-expressed through the Group commands`                                                    | N13                             |
-| N15 | T15  | `Administrare: the Group tree, my Groups, and the Group screen`                                             | N3, N10                         |
-| N16 | T16  | `Administrare: Applications on both sides — browse and apply, decide`                                       | N11, N15                        |
-| N17 | T20  | `Groups: drop the six legacy tables, their policies and predicates`                                         | N14, N15, N16, #103, #105, #107 |
-| N18 | T21  | `Groups: drop groups.legacy_*, make the sibling-name index total, drop dept_ids/team_ids claims`            | N17                             |
-| N19 | T22  | `Roles: retire level 4 — attendance_read to 5, member_role recast, the responsabil row`                     | N18, N20                        |
-| N20 | ops  | `Staging: re-rank the responsabil holders before the level-4 drop` (`ready-for-human`)                      | N7                              |
-| N21 | T23  | `Groups Wave 3 closeout: smoke, roster, conventions, ADR amendments, status`                                | N19                             |
+| #    | Task | Title                                                                                                       | Blocked by                         |
+| ---- | ---- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| #594 | —    | `Umbrella: Group model — Wave 4 (Evaluation Periods, promotions, sanctions, AG eligibility)` — milestone 20 | #506                               |
+| #574 | T1   | `Groups: Organization marker; the Dashboard Cup card and the Calendar read Groups`                          | None — can start immediately.      |
+| #575 | T2   | `Tracker: Opportunity membership decided from the group_ids claim`                                          | #576                               |
+| #576 | T3   | `Capabilities: my_capabilities() and my_groups(); the frontend level map retired`                           | #505                               |
+| #577 | T4   | `Tracker: Task rows, the Task form and the Request origin picker read Groups`                               | #575                               |
+| #578 | T5   | `Tests: the shared Group Task fixture built from native Group rows`                                         | #505                               |
+| #579 | T6   | `Groups: drop the legacy origin bridge and event_scope`                                                     | #577, #578                         |
+| #580 | T7   | `Members: set_member_role and set_member_status with role_history`                                          | #50                                |
+| #581 | T8   | `Announcements: group_id and a compose gate on Group Roles`                                                 | #576                               |
+| #582 | T9   | `Groups: structure commands — create, update, update_structure, archive, move`                              | #579                               |
+| #583 | T10  | `Groups: roster commands — set_group_role, add and remove a member`                                         | #582                               |
+| #584 | T11  | `Groups: Applications — apply, withdraw, decide`                                                            | #583                               |
+| #585 | T12  | `Groups: retire the legacy structure commands, gates and project-manager triggers`                          | #583                               |
+| #586 | T13  | `Groups: drop the forward mirror; Minimum Level enforced on the roster`                                     | #585                               |
+| #587 | T14  | `Seed and smoke re-expressed through the Group commands`                                                    | #586                               |
+| #588 | T15  | `Administrare: the Group tree, my Groups, and the Group screen`                                             | #576, #583                         |
+| #589 | T16  | `Administrare: Applications on both sides — browse and apply, decide`                                       | #584, #588                         |
+| #590 | T20  | `Groups: drop the six legacy tables, their policies and predicates`                                         | #587, #588, #589, #103, #105, #107 |
+| #591 | T21  | `Groups: drop groups.legacy_*, make the sibling-name index total, drop dept_ids/team_ids claims`            | #590                               |
+| #593 | T22  | `Roles: retire level 4 — attendance_read to 5, member_role recast, the responsabil row`                     | #591, #592                         |
+| #592 | ops  | `Staging: re-rank the responsabil holders before the level-4 drop` (`ready-for-human`)                      | #580                               |
+| #595 | T23  | `Groups Wave 3 closeout: smoke, roster, conventions, ADR amendments, status`                                | #593                               |
 
 ### A2. Edits to existing issues
 
-| Issue                               | Change                                                                                                                                                                                                              |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #506                                | `## Children` = N1–N21, #103, #105, #107; Scope: promotions, #104 and #512 moved to Wave 4 (link U4); the "(#100)" citation corrected to N20; the flip order; Administrare on the installed foundation; R15 stated. |
-| #103, #105                          | Blockers `#506` → `N7, N15`; note: commands are `set_member_role`/`set_member_status` (N7); Group Roles are the Group screen's (N15).                                                                               |
-| #107                                | Blocker `#506` → `N14, N15`; note: the initial Group of a batch is an Appointment through `add_group_member`.                                                                                                       |
-| #104, #512, #47, #48, #49, #51, #52 | Milestone 19 → 20; blocker `#506` → `U4` (other blockers kept); #512 note: the AG Group capability lands in N9/N14.                                                                                                 |
-| #100, #68                           | Blocker `#506` → `N8`.                                                                                                                                                                                              |
-| #200                                | Blocker `#506` → `N1`.                                                                                                                                                                                              |
-| #96, #98                            | Note: `events.scope` and `event_scope` go in N6; the Calendar reads Groups from N1.                                                                                                                                 |
-| #50                                 | Note: N7 writes it; N7 stacks on dobre's #527 if still open.                                                                                                                                                        |
-| #379                                | Note: `departments.kind` drops in N17.                                                                                                                                                                              |
+| Issue                               | Change                                                                                                                                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #506                                | `## Children` = #574–#595, #103, #105, #107; Scope: promotions, #104 and #512 moved to Wave 4 (link #594); the "(#100)" citation corrected to #592; the flip order; Administrare on the installed foundation; R15 stated. |
+| #103, #105                          | Blockers `#506` → `#580, #588`; note: commands are `set_member_role`/`set_member_status` (#580); Group Roles are the Group screen's (#588).                                                                               |
+| #107                                | Blocker `#506` → `#587, #588`; note: the initial Group of a batch is an Appointment through `add_group_member`.                                                                                                           |
+| #104, #512, #47, #48, #49, #51, #52 | Milestone 19 → 20; blocker `#506` → `#594` (other blockers kept); #512 note: the AG Group capability lands in #582/#587.                                                                                                  |
+| #100, #68                           | Blocker `#506` → `#581`.                                                                                                                                                                                                  |
+| #200                                | Blocker `#506` → `#574`.                                                                                                                                                                                                  |
+| #96, #98                            | Note: `events.scope` and `event_scope` go in #579; the Calendar reads Groups from #574.                                                                                                                                   |
+| #50                                 | Note: #580 writes it; #580 stacks on dobre's #527 if still open.                                                                                                                                                          |
+| #379                                | Note: `departments.kind` drops in #590.                                                                                                                                                                                   |
 
-U4's body lists #47, #48, #49, #51, #52, #104, #512 and what Wave 3 leaves it (the AG Group capability; `set_member_role` for BC's Drept de Vot confirmation; `role_history`).
+#594's body lists #47, #48, #49, #51, #52, #104, #512 and what Wave 3 leaves it (the AG Group capability; `set_member_role` for BC's Drept de Vot confirmation; `role_history`).
 
 ---
 
@@ -121,29 +121,29 @@ U4's body lists #47, #48, #49, #51, #52, #104, #512 and what Wave 3 leaves it (t
 
 ## Lane 1 — reads onto Groups
 
-### T1 — N1 Organization marker; Cup card and Calendar read Groups (now, from `main`)
+### T1 — #574 Organization marker; Cup card and Calendar read Groups (now, from `main`)
 
 Migration: `groups.is_organization` + `groups_one_organization_uidx` + backfill (R1); `groups_schema.test.sql` proves a second true row fails naming the index. Frontend: `queries/reference.ts` gains `useGroups()` (`id, name, short, color, category, path, parent_id, min_level, status, is_organization`) and `useDepartments()` is deleted with its callers; `DeptCupCard.tsx` keys on `group_id` and colours from Groups (the view already carries `group_id`); `queries/events.ts` selects `group_id, group:groups(name, short, color, category, path)` instead of `scope, dept_id, team_id` and drops `.neq('scope','project')` (R13); `EventCard.tsx`/`calendar-presentation.ts` label and colour from the Group (category for the icon; path length for "Team of X"; `is_organization` for the org label). Gates: frontend five + `gen:types`. Mutation: the index; the backfill; the label per category and for the Organization Group.
 
-### T3 — N3 `holds_any_group_role()`, `my_capabilities()`, `my_groups()`; level map retired (after the merge)
+### T3 — #576 `holds_any_group_role()`, `my_capabilities()`, `my_groups()`; level map retired (after the merge)
 
 Migration: `private.holds_any_group_role()` (an active caller with a live `manager`/`responsible` row anywhere; policy-helper grant to `authenticated`); `private.my_capabilities_impl()` (`stable`, **always exactly one row**, all-false for claimless/inactive) + `public.my_capabilities()` returning `manages_any_group` (`holds_any_group_role() or level >= 6`), `manage_tasks` (`= public.can_manage_tasks()` — one predicate, two readers; it stays), `see_directory` (≥ 5), `see_leadership` (≥ 5), `manage_roles` (≥ 6), `provision_members` (≥ 6), `create_top_level_groups` (≥ 6), `administer` (`manages_any_group or level >= 6`); `private.my_groups_impl()` + `public.my_groups()` (R14). Roster +3, public +2, `tracker_grants`/`grants_hardening` rows. Suites `my_capabilities.test.sql` (14 personas incl. level-1 Coordonator, BCE with no Group Role, stale claim, inactive, anon), `my_groups.test.sql`. Frontend: `capabilities.ts` → `useCapabilities()` over the RPC (`.single()`, session `staleTime`, refetch on focus) keeping the capability names; `RequireCapability`/`navItems.ts` read it; `/administrare` placeholder (guard `administer`) replaces `/bc`; `seeAllEvents`, `manageTasks: 4`, `createTeams`, `seeInterne` disappear. Mutation: each column flips when its own input flips; claimless → one row of eight falses; anon.
 
-### T2 — N2 Opportunity membership (after T3; first PR of the T4 stack — the row type lives in the contested `task-presentation.ts`)
+### T2 — #575 Opportunity membership (after T3; first PR of the T4 stack — the row type lives in the contested `task-presentation.ts`)
 
 `task-opportunities.ts`: memberships = the `group_ids` claim; `hasOwnOrigin` = `myGroupIds.includes(task.group_id)` — exact membership, as today and as ruling D2; org-audience Tasks pass through `audience === 'org'`. `group_id` added to `TASK_FIELDS` and `TaskPresentationRow` (one additive line each). `auth.tsx`: `dept_ids`/`team_ids` optional in `MemberClaims` (removed in T21).
 
-### T4 — N4 the contested files (after T2; stacked on #559/#553/#546/#539 if open — R10)
+### T4 — #577 the contested files (after T2; stacked on #559/#553/#546/#539 if open — R10)
 
 `tasks.ts` + `task-presentation.ts` select `group:groups(name, short, color, category, path)` in place of the three embeds; `taskOrigin()` → Group label; `completed-work-requests.ts` builds its picker from `my_groups()` and calls `create_completed_work_request(p_description, p_group_id)`; the Task form's Group picker reuses dobre's #554 draft model; `points.ts` reads `group_id, name, points, members`; `task-fixtures.ts` carries `group_id` + `group`. Frontend gates; no schema change.
 
 ## Lane 2 — the origin bridge goes
 
-### T5 — N5 the shared fixture on native rows (after the merge; behaviour-neutral while the mirror runs)
+### T5 — #578 the shared fixture on native rows (after the merge; behaviour-neutral while the mirror runs)
 
 Rewrite `supabase/tests/_group_task_fixtures.psql` to insert `groups`/`group_members` directly (rolled-back, the accepted fixture exception) instead of legacy rows + mirror. Proof: the 23 including suites' assertion counts and outcomes are byte-identical before and after (diff of `npx supabase test db` output). This shrinks T13 to the migration plus the suites that name legacy tables directly.
 
-### T6 — N6 drop the legacy origin bridge and `event_scope` (after T4, T5)
+### T6 — #579 drop the legacy origin bridge and `event_scope` (after T4, T5)
 
 **Guards first** (each `raise exception` with a snake_case reason): `tasks_group_origin_disagreement` (any `tasks` row where `group_id is distinct from group_id_for_legacy_origin(dept_id, team_id, project_id)`; same for `completed_work_requests`, `campaigns` vs `department_id`, `events` vs `scope/dept_id/team_id/project_id`); `work_row_on_native_group` (any row of the four tables whose Group has no `legacy_*` — order-independent, stronger than "no native Group exists"); `tasks.group_id is null` count = 0 (cheap tripwire).
 
@@ -153,15 +153,15 @@ Rewrite `supabase/tests/_group_task_fixtures.psql` to insert `groups`/`group_mem
 
 ## Lane 3 — writers
 
-### T7 — N7 member commands (now, from `main`; stacked on #527 if #50 is still open)
+### T7 — #580 member commands (now, from `main`; stacked on #527 if #50 is still open)
 
 `set_member_role(p_member_id, p_role member_role) returns profiles`, `set_member_status(p_member_id, p_status member_status)`; wrappers + impls; `actor_level >= 6`, Moderator-only for granting/removing `bc`/`moderator`; `PT404 member_not_found`, `PT400 invalid_member_role`/`invalid_member_status`, `PT409 nothing_to_update`, `42501 member_manage_forbidden` (incl. self); `responsabil` accepted only as a source rank; each writes a `role_history` row (actor, from, to, reason); deactivation calls the existing session-revoke path; `comment on function` per R15. Roster +2, public +2; `member_commands.test.sql`; `rls_profiles_write` retargeted. Mutation: the level-6 gate; self-target; `nothing_to_update`; exactly one history row.
 
-### T8 — N8 announcements on Groups (after T3)
+### T8 — #581 announcements on Groups (after T3)
 
 `announcements.group_id` (FK → `groups`) backfilled from `dept_id` through `legacy_dept_id`, `not null`; `announcements_write` → `auth_is_member() and (caller_level() >= 5 or private.holds_any_group_role())`; `announcements_read` scoped by the Group's path where it was scoped by Department; fan-out (#68) reads `group_members` of the Group and every Group below. `dept_id` stays until T20. Suites `rls_announcements`, `announcements`. Mutation: the level-4 gate is gone; a Responsible may compose; an ordinary member may not.
 
-### T9 — N9 Group structure commands (after T6)
+### T9 — #582 Group structure commands (after T6)
 
 | Command                                                                                                                                                                                | Gate                                                                      | Reasons                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -173,7 +173,7 @@ Rewrite `supabase/tests/_group_task_fixtures.psql` to insert `groups`/`group_mem
 
 Plus `private.require_group_manager`. The three `'org'` authority readers switch to `is_organization` here. R16's exclusion list. Roster +6, public +5; suites `group_structure_commands.test.sql`, `group_structure_races.test.sql` (`pgrowlocks`: parent `for no key update`; the re-parent race). Mutation: each reason; the structural/operational split; the parent lock; one-row-per-statement.
 
-### T10 — N10 Group roster commands (after T9)
+### T10 — #583 Group roster commands (after T9)
 
 | Command                                                                                | Gate                                                                                                                                                                        | Reasons                                                                                                                                                                                                                                                                                                                                             |
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -183,29 +183,29 @@ Plus `private.require_group_manager`. The three `'org'` authority readers switch
 
 Retirement map (used by T12/T14): `create_project` → `create_group('project', p_manager_id)`; `archive_project` → `archive_group`; `add/remove_project_member`, `add/remove_department_team_member` → `add/remove_group_member`; `grant/revoke_project_responsible` → `set_group_role(…, 'responsible'|'member')`; `add/remove_independent_team_member` → `set_group_role(…, 'responsible')` / `remove_group_member`; the `teams_create` policy → `create_group('team', parent)`. Roster +3, public +3; `group_roster_commands.test.sql`. Mutation: the parent's-Manager gate; `group_member_holds_role`; delete-instead-of-demote.
 
-### T11 — N11 Applications (after T10)
+### T11 — #584 Applications (after T10)
 
 Table `public.group_applications (id bigserial pk, group_id bigint not null references groups on delete cascade, member_id uuid not null references profiles on delete cascade, note text, status text not null default 'pending' check in ('pending','accepted','declined','withdrawn'), decided_by uuid references profiles, decided_at timestamptz, created_at timestamptz not null default now())`, `group_applications_pending_uidx (group_id, member_id) where status = 'pending'`, `group_applications_decision_ck` (decided ⇔ `decided_by` + `decided_at`); RLS on; `group_applications_read` = `auth_is_member() and (member_id = auth.uid() or can_manage_group_work(group_id))`; no client writes. Commands: `apply_to_group(p_group_id, p_note default null)` (`require_active_member`; Group readable + `accepts_applications` + `actor_level >= application_level`; `PT404 group_not_found` for unknown _or_ invisible, `PT409 group_not_accepting_applications` / `already_group_member` / `application_pending`, `42501 group_apply_forbidden` below Application Level); `withdraw_group_application(p_application_id)` (applicant only; `PT404 application_not_found`, `PT409 application_not_pending`, `42501 application_withdraw_forbidden`); `decide_group_application(p_application_id, p_accept, p_note default null)` (`require_group_work_manager`; `PT404`, `PT409 application_not_pending` / `group_archived`, `PT400 group_member_below_min_level` if the level fell while pending). `private.group_application_recipients(p_application_id)` = `group_managers(group_id)` ∪ live Responsibles; filing → recipients, `'system'`, `dedupe_key 'application:<id>'`, `p_link '/administrare/grupuri/<group_id>'`; decision → applicant, same key. `groups_read` gains the pending-Application limb (R17). Roster +4, public +3; `group_applications.test.sql`; `rls_deny_by_default` retargeted. Mutation: one pending per pair; re-apply after decline; recipient set; the applicant sees the Group while pending and not after withdrawal; a below-Minimum-Level member with no Application sees nothing.
 
-### T12 — N12 retire the legacy structure commands (after T10)
+### T12 — #585 retire the legacy structure commands (after T10)
 
 Drop the ten commands and their impls, the `teams_create` policy, `require_project_admin`, `require_active_project_lead`, `require_department_team_membership_manager`, `require_independent_team_membership_manager`, `can_administer_team_structure`, the five project-manager triggers (their invariants: `validate_leader_profile` → none stored, authority is live; `protect_active_project_managers` → deliberately none (`group_managers` falls back); `sync_leader_membership` → the commands upsert; `protect_leader` → `group_member_holds_role`; `validate_manager` → `set_group_role`'s gate), and the three dead predicates. Roster −23 (approx.; the closeout pins it). Kill 15 suites (the command/invariant/matrix suites named in the facts). PR body carries the grep count from the cross-cutting rule.
 
-### T13 — N13 drop the forward mirror; Minimum Level on the roster (after T12)
+### T13 — #586 drop the forward mirror; Minimum Level on the roster (after T12)
 
 Drop the six `mirror_*` triggers, the six `sync_*`, `sync_groups_from_legacy`, `rederive_department_group_roles`; in the **same** migration, `validate_group_member` gains `23514 group_member_below_min_level` (earlier, the mirror would violate it on `db reset`). Roster −14; kill `groups_sync`, `groups_backfill`. PR body states R15. Mutation: no trigger remains on the six tables; the invariant fires; a legacy insert no longer moves `groups`.
 
-### T14 — N14 seed and smoke on the Group commands (after T13)
+### T14 — #587 seed and smoke on the Group commands (after T13)
 
 `seed.sql:254–330` re-expressed with a `pg_temp` claims helper (the `_group_task_fixtures.psql:49` shape): `create_group` as `bc@` for `t-app`/`t-recruti` (children of Diverse/Educațional), `t-logistica`, the two Projects; `set_group_role('manager')` for Project leads and BCE Department Managers; `add_group_member` for the rest; `set_group_role('responsible')` for the Project Responsibles and the Logistică peers; the Adunarea Generală via `create_group` + `update_group_structure(automatic_membership => true, min_level => 3)` with Interne's members as Responsibles (R3). Smoke line 944 → `set_group_role(:team_group, :'third_peer', 'responsible', 'Membru Logistică')` and its assertion reworded ("appoints", not "mirrors"). `seed-fingerprint.sql`, `check-seed-rerunnable.sh`, `demo_seed.test.sql`, `shared_timestamps` follow. Proof: seed re-runnable; smoke `SMOKE TEST PASSED`.
 
 ## Lane 4 — Administrare (shadcn, no Ionic)
 
-### T15 — N15 tree, my Groups, the Group screen (after T3, T10)
+### T15 — #588 tree, my Groups, the Group screen (after T3, T10)
 
 `/administrare`: BC/Moderator see the whole tree (`groups` + `path`; TanStack Table with expand/collapse; category badge, colour, Minimum Level, member count); Managers see "Grupurile mele" from `my_groups()`; "Creează Grup" for `create_top_level_groups`. `/administrare/grupuri/:id`: header (name, category, colour, path breadcrumb, status); tabs **Setări** (operational editors for Managers, structural editors for `create_top_level_groups`; a Child Group's Minimum Level bounded [parent, own Level]), **Roster** (Appointment by search over `profiles_contact`, removal, Group Role column), **Roluri** (appoint/remove Manager; appoint Responsible with a display name), **Grupuri copil** (create, archive), **Campanii** (dobre's #556 panel reused), **Cereri** (T16). Every control renders from `my_capabilities()` + the caller's `group_role_of` on the Group; every mutation is a command; one table maps snake_case reasons to Romanian copy. Component tests per tab against the Supabase mock; the `App.test.tsx` route matrix.
 
-### T16 — N16 Applications UI (after T11, T15)
+### T16 — #589 Applications UI (after T11, T15)
 
 Member side: `/grupuri` lists Groups accepting Applications at or above the member's Level, apply with a note, withdraw; pending state on the Group page. Manager side: the **Cereri** tab with accept/decline.
 
@@ -219,19 +219,19 @@ Per #107, plus the initial Group choice; the `csv-import` Edge Function places t
 
 ## Lane 5 — drop and closeout
 
-### T20 — N17 the six tables (after lanes 3–4)
+### T20 — #590 the six tables (after lanes 3–4)
 
 Guards: every `announcements` row has `group_id`. Order: `drop table private.legacy_team_leads` (its suite and `remove_team_lead_upgrade.test.sh` die); `announcements.dept_id` + FK + index; the policies `teams_create`, `teams_read`, `team_members_read`, `auth_admin_read_team_members`, `projects_read`, `project_members_read`, `departments_read`, `member_departments_read`, `member_departments_manage`, `auth_admin_read_member_departments`; `can_read_team`, `is_active_project_member`, `can_manage_department_memberships`; then `member_departments`, `team_members`, `project_members`, then `teams`, `projects`, then `departments` (`is_interne` and `kind` go with them; nothing succeeds either). Roster −3; the 21 legacy suites die (most already in T12); `groups_backfill_upgrade.test.sh` retired. Proof: each FK drops before its referent; `db lint` green.
 
-### T21 — N18 `groups.legacy_*`, the total sibling-name index, the claims (after T20)
+### T21 — #591 `groups.legacy_*`, the total sibling-name index, the claims (after T20)
 
 Guard `group_name_collision` (no two Groups share `(coalesce(parent_id,0), lower(name))` — clean locally, must be checked on staging). Drop `groups_legacy_*_key`, `groups_legacy_one_ck`, the three `legacy_*` columns; recreate `groups_parent_name_uidx` **total**; `custom_access_token_hook` without `dept_ids`/`team_ids` (`group_ids` stays, ordered); drop `auth_in_dept`, `auth_in_team` (zero call sites); `auth.tsx` drops the optional fields; `gen:types`. Suites `auth_claims`, `groups_schema`, `tracker_indexes`. Proof: the guard refuses on a seeded collision; a token carries no `dept_ids`/`team_ids`.
 
-### T22 — N19 level 4 retired (after T21 and N20)
+### T22 — #593 level 4 retired (after T21 and #592)
 
 Guard `responsabil_holder_remains`. `attendance_read` `>= 4` → `>= 5` (OD3, never down); `announcements_write` already moved in T8. **Enum recast (R19):** `create type member_role_new as enum (recrut, voluntar, activ, vot, bce, bc, moderator)`; drop dependent views `leaderboard`, `profiles_directory`; `delete from roles where id = 'responsabil'`; recast `roles.id`, `profiles.role`, `notif_suppression.role` `using id::text::member_role_new`; drop old type, rename; recreate the two views with their grants. Surviving suites with the literal `'responsabil'` retargeted mechanically (`'vot'` where the persona meant "between 3 and 5", `'bce'` where it stood in for a manager); seed/`shared_timestamps`/`check-seed-rerunnable.sh` stop inserting it (R4); `gen:types` (`member_role` union shrinks to seven). Suites `roles_display_names`, `member_level`, `actor_level`, `rls_event_attendance`. Proof: refusal while a holder remains; seven values; both views keep their grants.
 
-### T23 — N21 closeout
+### T23 — #595 closeout
 
 Smoke script gains a native-Group scenario (create a Group, appoint a Manager, a Child Group, an Application decided, a Task in the native Group, all through the wrappers); `docs/backend/conventions.md` §10 → "Groups (Waves 1–3)" (the model, the command set, the lock ban with its new reason, R16's exclusions, no legacy left); `CONTEXT.md` identifiers (`groups.is_organization`, `group_applications`, `role_history`; the retired identifiers removed: `event_scope`, `legacy_*`, `responsabil`, the Department-id list); ADR-0009 dated amendment (R1, R2, decision 5's split, cascade-archive, `require_group_manager`, the corrected re-ranking reference, R15); ADR-0008 (`event_scope` gone); `CLAUDE.md` Status (Wave 3 on `main`; #322–#325 line corrected; Wave 4 next); execution rulings appended to the plan.
 
@@ -240,7 +240,7 @@ Smoke script gains a native-Group scenario (create a Group, appoint a Manager, a
 - Per PR: the bounded gate sequence; CI green; `push-staging` succeeds on merge; a mutation table in every report.
 - After T23: no function, policy or view mentions `dept_id`/`team_id`/`project_id`/`departments`/`teams`/`projects`/`member_departments`/`team_members`/`project_members`/`event_scope`/`is_interne`/`kind` (the conventions sweep extended); `groups`/`group_members` written only by the Group commands; `app/src` has no read of the retired tables and no `@ionic/react` import under Administrare; `my_capabilities()` equals the ADR matrix for the 14 personas; `member_role` has seven values; the smoke script passes; on staging every drop guard passes, `select count(*) from public.groups where is_organization` = 1, and the Wave 4 handoff facts are recorded (AG Group present or not; `role_history` populated).
 
-## Deferred to Wave 4 (U4)
+## Deferred to Wave 4 (#594)
 
 #47, #48, #49, #51, #52, #104, #512; the AG ranking and adherence-form flow; the `dept_cup` suite's weak Cup-body coverage; the remaining `@ionic/react` imports in Tracker/Calendar screens; the stale-JWT (`auth_level`) vs live (`actor_level`) helper families — after this wave only `auth_level`, `auth_in_group`, `auth_is_member` remain, their live pairing documented.
 
