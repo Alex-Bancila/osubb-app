@@ -71,6 +71,19 @@ describe('AnnouncementsScreen', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mutate.mockImplementation(
+      (
+        _id: number,
+        options?: {
+          onSuccess?: () => void;
+          onError?: (err: Error) => void;
+          onSettled?: () => void;
+        },
+      ) => {
+        options?.onSuccess?.();
+        options?.onSettled?.();
+      },
+    );
     hooks.useGroups.mockReturnValue({ data: mockGroups, isPending: false });
     hooks.useMarkAnnouncementRead.mockReturnValue({ mutate, isPending: false });
   });
@@ -217,7 +230,7 @@ describe('AnnouncementsScreen', () => {
 
     // Mark as read should have been triggered exactly once
     expect(mutate).toHaveBeenCalledTimes(1);
-    expect(mutate).toHaveBeenCalledWith(42);
+    expect(mutate).toHaveBeenCalledWith(42, expect.any(Object));
   });
 
   it('triggers markRead exactly once for an unread announcement even across parent rerenders or mutation changes', async () => {
@@ -242,7 +255,7 @@ describe('AnnouncementsScreen', () => {
     await user.click(readButton);
 
     expect(mutate).toHaveBeenCalledTimes(1);
-    expect(mutate).toHaveBeenCalledWith(77);
+    expect(mutate).toHaveBeenCalledWith(77, expect.any(Object));
 
     // Simulate mutation state update rerendering parent (e.g. isPending: true)
     hooks.useMarkAnnouncementRead.mockReturnValue({
@@ -256,6 +269,75 @@ describe('AnnouncementsScreen', () => {
 
     // Must remain called exactly once
     expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows retrying markRead if previous mutation failed', async () => {
+    const user = userEvent.setup();
+    const row = createRow({
+      id: 88,
+      title: 'Anunț cu Eșec',
+      body: 'Test reîncercare.',
+      announcement_reads: [], // unread
+    });
+
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [row],
+    });
+
+    // First attempt fails
+    mutate.mockImplementationOnce(
+      (
+        _id: number,
+        options?: {
+          onError?: (err: Error) => void;
+          onSettled?: () => void;
+        },
+      ) => {
+        options?.onError?.(new Error('Network error'));
+        options?.onSettled?.();
+      },
+    );
+
+    render(<AnnouncementsScreen />);
+
+    const card = screen.getByRole('article', { name: 'Anunț cu Eșec' });
+    const readButton = within(card).getByRole('button', { name: /Citește/ });
+
+    // Open sheet 1st time - mutation fails
+    await user.click(readButton);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledWith(88, expect.any(Object));
+
+    // Close sheet
+    const closeButton = screen.getByRole('button', { name: 'Închide' });
+    await user.click(closeButton);
+
+    // Second attempt succeeds
+    mutate.mockImplementationOnce(
+      (
+        _id: number,
+        options?: {
+          onSuccess?: () => void;
+          onSettled?: () => void;
+        },
+      ) => {
+        options?.onSuccess?.();
+        options?.onSettled?.();
+      },
+    );
+
+    // Open sheet 2nd time - should retry mutation
+    await user.click(readButton);
+    expect(mutate).toHaveBeenCalledTimes(2);
+
+    // Close sheet again
+    await user.click(closeButton);
+
+    // Open sheet 3rd time - since 2nd attempt succeeded, it should not call mutate again
+    await user.click(readButton);
+    expect(mutate).toHaveBeenCalledTimes(2);
   });
 
   it('renders loading state when groups query is pending even if feed has loaded', () => {
@@ -297,6 +379,6 @@ describe('AnnouncementsScreen', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Detalii anunț' });
     expect(dialog).toBeInTheDocument();
-    expect(mutate).toHaveBeenCalledWith(99);
+    expect(mutate).toHaveBeenCalledWith(99, expect.any(Object));
   });
 });

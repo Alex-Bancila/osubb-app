@@ -27,12 +27,27 @@ export default function AnnouncementsScreen() {
     number | null
   >(null);
   const markedIdsRef = useRef<Set<number>>(new Set());
+  const inFlightIdsRef = useRef<Set<number>>(new Set());
 
   function handleOpenAnnouncement(announcement: AnnouncementPresentation) {
     setSelectedAnnouncementId(announcement.id);
-    if (!announcement.isRead && !markedIdsRef.current.has(announcement.id)) {
-      markedIdsRef.current.add(announcement.id);
-      markRead.mutate(announcement.id);
+    if (
+      !announcement.isRead &&
+      !markedIdsRef.current.has(announcement.id) &&
+      !inFlightIdsRef.current.has(announcement.id)
+    ) {
+      inFlightIdsRef.current.add(announcement.id);
+      markRead.mutate(announcement.id, {
+        onSuccess: () => {
+          markedIdsRef.current.add(announcement.id);
+        },
+        onError: () => {
+          markedIdsRef.current.delete(announcement.id);
+        },
+        onSettled: () => {
+          inFlightIdsRef.current.delete(announcement.id);
+        },
+      });
     }
   }
 
