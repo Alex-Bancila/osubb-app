@@ -87,6 +87,12 @@ export const keys = {
   },
   notifications: {
     all: ['notifications'] as const,
-    unread: () => ['notifications', 'unread'] as const,
+    /* The Notification centre and its badge are both "mine", so both carry the
+       member (rule 3) and both start with `['notifications']`: marking one row
+       read refreshes the list and the badge from a single invalidation. */
+    list: (memberId: string | undefined) =>
+      ['notifications', 'list', { memberId }] as const,
+    unread: (memberId?: string) =>
+      ['notifications', 'unread', { memberId }] as const,
   },
 } as const;
