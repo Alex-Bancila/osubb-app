@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Department } from '../../queries/reference';
+import type { Group } from '../../queries/reference';
 import {
   countUnreadAnnouncements,
   formatAnnouncementDate,
@@ -10,25 +10,37 @@ import {
   type RawAnnouncementRow,
 } from './announcements-presentation';
 
-const departments = new Map<string, Department>([
+const groupsByDeptId = new Map<string, Group>([
   [
     'edu',
     {
-      id: 'edu',
+      id: 1,
       name: 'Educațional',
       short: 'EDU',
       color: '#284C93',
-      kind: 'department',
+      category: 'department',
+      path: [1],
+      parent_id: null,
+      min_level: 1,
+      status: 'active',
+      is_organization: false,
+      legacy_dept_id: 'edu',
     },
   ],
   [
     'pr',
     {
-      id: 'pr',
+      id: 2,
       name: 'Imagine & PR',
       short: 'PR',
       color: '#7500A0',
-      kind: 'department',
+      category: 'department',
+      path: [2],
+      parent_id: null,
+      min_level: 1,
+      status: 'active',
+      is_organization: false,
+      legacy_dept_id: 'pr',
     },
   ],
 ]);
@@ -57,7 +69,7 @@ function rawRow(
 describe('announcements-presentation', () => {
   describe('toAnnouncementPresentation', () => {
     it('maps database row to presentation object for org-wide announcement', () => {
-      const item = toAnnouncementPresentation(rawRow(), departments);
+      const item = toAnnouncementPresentation(rawRow(), groupsByDeptId);
 
       expect(item.id).toBe(1);
       expect(item.title).toBe('Ședință extraordinară BC');
@@ -78,7 +90,7 @@ describe('announcements-presentation', () => {
     it('maps department identity when dept_id is provided', () => {
       const item = toAnnouncementPresentation(
         rawRow({ dept_id: 'edu', author: 'Educational', priority: 'normal' }),
-        departments,
+        groupsByDeptId,
       );
 
       expect(item.deptId).toBe('edu');
@@ -94,7 +106,7 @@ describe('announcements-presentation', () => {
     it('maps unresolved non-null dept_id to neutral fallback department and never labels it OSUBB', () => {
       const itemWithUnknownDept = toAnnouncementPresentation(
         rawRow({ dept_id: 'unknown-dept' }),
-        departments,
+        groupsByDeptId,
       );
       expect(itemWithUnknownDept.deptId).toBe('unknown-dept');
       expect(itemWithUnknownDept.department).toEqual({

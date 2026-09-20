@@ -2,7 +2,7 @@ import { ro } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BUCHAREST_TIME_ZONE } from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
-import type { Department } from '../../queries/reference';
+import type { Group } from '../../queries/reference';
 
 export type AnnouncementPriority =
   Database['public']['Enums']['announce_priority'];
@@ -63,18 +63,18 @@ export function formatAnnouncementDate(instant: string): string {
 
 export function toAnnouncementPresentation(
   row: RawAnnouncementRow,
-  departments?: Map<string, Department>,
+  groupsByDeptId?: ReadonlyMap<string, Group>,
 ): AnnouncementPresentation {
-  const dept = row.dept_id ? departments?.get(row.dept_id) : undefined;
+  const group = row.dept_id ? groupsByDeptId?.get(row.dept_id) : undefined;
   let department: AnnouncementDepartment | null = null;
 
   if (row.dept_id !== null) {
-    if (dept) {
+    if (group) {
       department = {
-        id: dept.id,
-        name: dept.name,
-        short: dept.short,
-        color: dept.color,
+        id: row.dept_id,
+        name: group.name,
+        short: group.short ?? undefined,
+        color: group.color,
       };
     } else {
       department = {

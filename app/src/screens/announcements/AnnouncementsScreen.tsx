@@ -4,7 +4,7 @@ import {
   useAnnouncementsFeed,
   useMarkAnnouncementRead,
 } from '../../queries/announcements';
-import { useDepartments } from '../../queries/reference';
+import { useGroups } from '../../queries/reference';
 import {
   countUnreadAnnouncements,
   sortAnnouncements,
@@ -20,7 +20,7 @@ export default function AnnouncementsScreen() {
   const { session } = useAuth();
   const memberId = session?.user.id;
   const feedQuery = useAnnouncementsFeed(memberId);
-  const departmentsQuery = useDepartments();
+  const groupsQuery = useGroups();
   const markRead = useMarkAnnouncementRead(memberId);
 
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
@@ -37,10 +37,18 @@ export default function AnnouncementsScreen() {
   }
 
   const rawAnnouncements = feedQuery.data ?? [];
-  const departments = departmentsQuery.data;
+  // Wave 2 stack / ADR-0009 bridge: announcements still carry dept_id, so the
+  // Group is reached through the Wave 1 bridge column `groups.legacy_dept_id`.
+  const groupByDeptId = new Map(
+    [...(groupsQuery.data?.values() ?? [])]
+      .filter((group) => group.legacy_dept_id !== null)
+      .map((group) => [group.legacy_dept_id as string, group]),
+  );
 
   const announcements: AnnouncementPresentation[] = sortAnnouncements(
-    rawAnnouncements.map((row) => toAnnouncementPresentation(row, departments)),
+    rawAnnouncements.map((row) =>
+      toAnnouncementPresentation(row, groupByDeptId),
+    ),
   );
 
   const unreadCount = countUnreadAnnouncements(announcements);
@@ -52,7 +60,7 @@ export default function AnnouncementsScreen() {
   const selectedAnnouncement =
     announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
 
-  const isPending = feedQuery.isPending || departmentsQuery.isPending;
+  const isPending = feedQuery.isPending || groupsQuery.isPending;
 
   return (
     <section

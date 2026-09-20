@@ -2,12 +2,12 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnnouncementFeedRow } from '../../queries/announcements';
-import type { Department } from '../../queries/reference';
+import type { Group } from '../../queries/reference';
 
 const hooks = vi.hoisted(() => ({
   useAnnouncementsFeed: vi.fn(),
   useMarkAnnouncementRead: vi.fn(),
-  useDepartments: vi.fn(),
+  useGroups: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -24,23 +24,26 @@ vi.mock('../../queries/announcements', () => ({
 }));
 
 vi.mock('../../queries/reference', () => ({
-  useDepartments: hooks.useDepartments,
+  useGroups: hooks.useGroups,
 }));
 
 import AnnouncementsScreen from './AnnouncementsScreen';
 
-const mockDepartments = new Map<string, Department>([
-  [
-    'it',
-    {
-      id: 'it',
-      name: 'IT',
-      short: 'IT',
-      color: '#3B82F6',
-      kind: 'department',
-    },
-  ],
-]);
+const mockGroup: Group = {
+  id: 10,
+  name: 'IT',
+  short: 'IT',
+  color: '#3B82F6',
+  category: 'department',
+  path: [10],
+  parent_id: null,
+  min_level: 1,
+  status: 'active',
+  is_organization: false,
+  legacy_dept_id: 'it',
+};
+
+const mockGroups = new Map<number, Group>([[10, mockGroup]]);
 
 function createRow(
   overrides: Partial<AnnouncementFeedRow> = {},
@@ -68,7 +71,7 @@ describe('AnnouncementsScreen', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    hooks.useDepartments.mockReturnValue({ data: mockDepartments });
+    hooks.useGroups.mockReturnValue({ data: mockGroups, isPending: false });
     hooks.useMarkAnnouncementRead.mockReturnValue({ mutate, isPending: false });
   });
 
@@ -255,13 +258,13 @@ describe('AnnouncementsScreen', () => {
     expect(mutate).toHaveBeenCalledTimes(1);
   });
 
-  it('renders loading state when departments query is pending even if feed has loaded', () => {
+  it('renders loading state when groups query is pending even if feed has loaded', () => {
     hooks.useAnnouncementsFeed.mockReturnValue({
       isPending: false,
       isError: false,
       data: [createRow()],
     });
-    hooks.useDepartments.mockReturnValue({
+    hooks.useGroups.mockReturnValue({
       isPending: true,
       data: undefined,
     });
