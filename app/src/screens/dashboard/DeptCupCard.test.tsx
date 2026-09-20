@@ -10,7 +10,15 @@ const hooks = vi.hoisted(() => ({
 
 vi.mock('../../queries/points', () => ({ useDeptCup: hooks.useDeptCup }));
 vi.mock('../../queries/reference', () => ({ useGroups: hooks.useGroups }));
-vi.mock('@ionic/react', () => ({ IonIcon: () => null }));
+// `components/states`' `Loading`/`ErrorState` reach into `@ionic/react` too
+// (`IonSpinner`, `IonButton`), so the mock has to cover them, not only the
+// `IonIcon` this card imports directly — otherwise the #200 loading-state
+// test below would blow up on an undefined component the moment it renders.
+vi.mock('@ionic/react', () => ({
+  IonIcon: () => null,
+  IonSpinner: () => null,
+  IonButton: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 
 import DeptCupCard from './DeptCupCard';
 
@@ -68,9 +76,13 @@ describe('DeptCupCard', () => {
 
   // The degradation path, stated rather than assumed: a competing Department
   // whose Group this member cannot read still gets a row, with the view's own
-  // values and no colour.
-  it('falls back to the view row when no Group matches the bridge', () => {
-    hooks.useGroups.mockReturnValue({ data: new Map<number, Group>() });
+  // values and no colour — and #200's neutral tag, never the raw id that
+  // would otherwise be the only thing left to show.
+  it('falls back to a neutral tag when a dept_id genuinely matches no Group', () => {
+    hooks.useGroups.mockReturnValue({
+      data: new Map<number, Group>(),
+      isPending: false,
+    });
     setCup([{ dept_id: 'edu', name: 'nume din view', points: 12, members: 3 }]);
 
     render(<DeptCupCard />);
@@ -78,5 +90,46 @@ describe('DeptCupCard', () => {
     const row = screen.getByRole('listitem');
     expect(within(row).getByText('nume din view')).toBeInTheDocument();
     expect(row).toHaveStyle({ '--dept': 'var(--ink-400)' });
+    expect(within(row).getByText('—')).toBeInTheDocument();
+    expect(within(row).queryByText('edu')).not.toBeInTheDocument();
+  });
+
+  // #200 — the flash this issue exists to close: `dept_cup` and `groups` are
+  // two independent queries, and `dept_cup` can resolve first. While `groups`
+  // is still in flight, the card must show a neutral placeholder instead of
+  // rendering rows keyed off `row.dept_id` ('edu', 'pr', …).
+  it('shows a neutral placeholder, never the raw id, while Groups are loading', () => {
+    hooks.useGroups.mockReturnValue({ data: undefined, isPending: true });
+    setCup([{ dept_id: 'edu', name: 'nume din view', points: 12, members: 3 }]);
+
+    render(<DeptCupCard />);
+
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+    expect(screen.queryByText('edu')).not.toBeInTheDocument();
+    expect(screen.queryByText('nume din view')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  // The same flash, from the other side: `dept_cup`'s own query can still be
+  // pending while `groups` has already resolved. No row — and so no raw id —
+  // may render until both are ready.
+  it('shows a neutral placeholder, never the raw id, while the Cup itself is loading', () => {
+    hooks.useGroups.mockReturnValue({
+      data: new Map([[7, eduGroup]]),
+      isPending: false,
+    });
+    hooks.useDeptCup.mockReturnValue({
+      data: undefined,
+      error: null,
+      isError: false,
+      isPending: true,
+      refetch: vi.fn(),
+    });
+
+    render(<DeptCupCard />);
+
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+    expect(screen.queryByText('edu')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });
