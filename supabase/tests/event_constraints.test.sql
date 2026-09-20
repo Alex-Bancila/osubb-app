@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(31);
 
 -- The demo seed fills the calendar. This suite owns its rows and rolls the
 -- truncation back after the assertions.
@@ -49,8 +49,8 @@ select lives_ok(
 select throws_ok(
   $$ insert into events (title, type, scope, starts_at)
      values ('Proiect fără proiect', 'activitate', 'project', now()) $$,
-  '23514', 'new row for relation "events" violates check constraint "events_scope_fields_ck"',
-  'a project event requires a project');
+  '23514', 'event_group_required',
+  'a project event requires a project -- private.sync_event_group_origin answers before events_scope_fields_ck can (#519)');
 
 select lives_ok(
   $$ insert into events (title, type, scope, project_id, starts_at)
@@ -163,7 +163,7 @@ select throws_ok(
 select throws_ok(
   $$ insert into events (title, type, scope, starts_at)
      values ('Departament lipsă', 'sedinta', 'dept', now()) $$,
-  '23514', null, 'a department event requires a department');
+  '23514', 'event_group_required', 'a department event requires a department');
 
 select throws_ok(
   $$ insert into events (title, type, scope, dept_id, team_id, starts_at)
@@ -179,16 +179,19 @@ select throws_ok(
   '23514', 'new row for relation "events" violates check constraint "events_scope_fields_ck"',
   'a department event cannot name a project');
 
-select throws_ok(
+select lives_ok(
   $$ insert into events (title, type, scope, team_id, starts_at)
      values ('Echipă fără departament', 'sedinta', 'team',
              't-event-integrity', now()) $$,
-  '23514', null, 'a team event requires its department');
+  'a team event no longer requires an explicit department -- private.sync_event_group_origin fills it from the Team (#519)');
+select is(
+  (select dept_id from events where title = 'Echipă fără departament'),
+  'edu', 'the filled-in department matches the Team''s own department');
 
 select throws_ok(
   $$ insert into events (title, type, scope, dept_id, starts_at)
      values ('Echipă lipsă', 'sedinta', 'team', 'edu', now()) $$,
-  '23514', null, 'a team event requires a team');
+  '23514', 'event_group_required', 'a team event requires a team');
 
 select throws_ok(
   $$ insert into events (title, type, scope, dept_id, team_id, starts_at)

@@ -421,6 +421,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('express_task_interest_impl',                  'p_task_id bigint',                                                                                                   'impl'),
   ('give_up_task_impl',                           'p_task_id bigint, p_reason text',                                                                                    'impl'),
   ('grant_project_responsible_impl',              'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
+  -- #519: the resolver behind the four group_id/legacy-Origin sync triggers below --
+  -- the Group that masters a legacy Origin (project, else team, else department).
+  -- `none`: called only by those four triggers and by the migration's own backfill.
+  ('group_id_for_legacy_origin',                  'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'none'),
   ('guard_task_evaluation_change',                '',                                                                                                                   'trigger'),
   ('guard_task_duplicate_provenance',             '',                                                                                                                   'trigger'),
   ('is_active_project_member',                    'p_project_id bigint',                                                                                                'predicate'),
@@ -493,6 +497,13 @@ insert into pinned_private_functions (proname, args, category) values
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
   ('submit_task_for_review_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   ('sync_project_leader_membership',              '',                                                                                                                   'trigger'),
+  -- #519: the four two-way group_id/legacy-Origin sync triggers (ADR-0009 Wave 2 bridge).
+  -- A legacy write derives group_id; a Group write derives the legacy Origin; both sides
+  -- set inconsistently is refused. `trigger`: nothing may call one directly.
+  ('sync_campaign_group_origin',                  '',                                                                                                                   'trigger'),
+  ('sync_event_group_origin',                     '',                                                                                                                   'trigger'),
+  ('sync_request_group_origin',                   '',                                                                                                                   'trigger'),
+  ('sync_task_group_origin',                      '',                                                                                                                   'trigger'),
   -- #508: the Group mirror family (ADR-0009 Wave 1). Category `none`: the
   -- backfill statement at the end of its own migration and #509's row triggers
   -- are the only callers, and both run as the table owner. Granting any of
@@ -524,8 +535,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 107,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508) and the seven mirror trigger functions (#509)');
+  (select count(*) from pinned_private_functions)::int, 112,
+  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
