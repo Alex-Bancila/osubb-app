@@ -66,6 +66,41 @@ if [ "$ONLY" = all ] || [ "$ONLY" = db ]; then
   step "db: private schema stays out of the Data API" bash -c '
     ! grep -nE "^\s*schemas\s*=.*\bprivate\b" supabase/config.toml'
 
+  # #617. The local gate is only worth running if it runs against the same
+  # database CI does. Nothing checked that, so a stack brought up on a
+  # different postgres major version would go green here and mean nothing:
+  # collation (and so sort order), planner choices where a query has no
+  # explicit ORDER BY, and lock and isolation behaviour all move between
+  # majors, and the pg_temp.test_race suites lean on the last of those.
+  # The 17.x image sits beside the pinned 15.x one in the local image store,
+  # so this is one `docker images` away from happening by accident.
+  step "db: running postgres major version matches config.toml" bash -c '
+    set -uo pipefail
+    pinned="$(sed -n "s/^major_version[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p" supabase/config.toml | head -1)"
+    project="$(sed -n "s/^project_id[[:space:]]*=[[:space:]]*\"\([^\"]*\)\".*/\1/p" supabase/config.toml | head -1)"
+    if [ -z "$pinned" ] || [ -z "$project" ]; then
+      echo "could not read major_version / project_id from supabase/config.toml"
+      exit 1
+    fi
+    container="supabase_db_$project"
+    if ! docker inspect "$container" >/dev/null 2>&1; then
+      echo "the local stack is not running: no container named $container (start it with \`npx supabase start\`)"
+      exit 1
+    fi
+    num="$(docker exec "$container" psql -U postgres -d postgres -tAc "show server_version_num" 2>/dev/null | tr -d "\r")"
+    if [ -z "$num" ]; then
+      echo "could not read server_version_num from $container -- is the database up?"
+      exit 1
+    fi
+    running="$(( num / 10000 ))"
+    echo "config.toml major_version=$pinned  running=$running (server_version_num=$num, image=$(docker inspect "$container" --format "{{.Config.Image}}"))"
+    if [ "$pinned" != "$running" ]; then
+      echo "the running stack is postgres $running but supabase/config.toml pins $pinned --"
+      echo "every gate below would prove something about the wrong engine."
+      echo "rebuild it: npx supabase stop --no-backup && npx supabase start"
+      exit 1
+    fi'
+
   step "db: reset (applies every migration + seed)" npx supabase db reset
 
   step "db: lint" npx supabase db lint --level warning --fail-on warning
