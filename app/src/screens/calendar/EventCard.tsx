@@ -1,23 +1,25 @@
+import { IonIcon } from '@ionic/react';
 import type { CSSProperties } from 'react';
 
 import type { EventPresentation } from '../../queries/events';
-import type { Department } from '../../queries/reference';
-import { eventScopeLabel, eventTypeLabel } from './calendar-presentation';
+import type { Group } from '../../queries/reference';
+import {
+  eventAccentColor,
+  eventGroupIcon,
+  eventGroupLabel,
+  eventTypeLabel,
+} from './calendar-presentation';
 import EventRsvpControls from './EventRsvpControls';
 
 type EventCardProps = {
   event: EventPresentation;
-  departments?: Map<string, Department>;
+  groups?: Map<number, Group>;
 };
 
-export default function EventCard({ event, departments }: EventCardProps) {
-  const department = event.departmentId
-    ? departments?.get(event.departmentId)
-    : undefined;
-  const accent =
-    event.scope === 'org'
-      ? 'var(--scope-org)'
-      : (department?.color ?? 'var(--ink-400)');
+export default function EventCard({ event, groups }: EventCardProps) {
+  // Colour comes off the Group chain, not off a scope enum — see
+  // eventAccentColor. The category icon is painted from the same variable.
+  const accent = eventAccentColor(event, groups);
   const titleId = `calendar-event-${event.id}`;
   const timeLabel = event.endTime
     ? `${event.startTime}–${event.endTime}`
@@ -32,8 +34,12 @@ export default function EventCard({ event, departments }: EventCardProps) {
       <header className="event-card-head">
         <span className="event-type">{eventTypeLabel(event.type)}</span>
         <span className="event-scope">
-          <span className="event-scope-dot" aria-hidden="true" />
-          {eventScopeLabel(event, departments)}
+          <IonIcon
+            className="event-scope-icon"
+            icon={eventGroupIcon(event)}
+            aria-hidden="true"
+          />
+          {eventGroupLabel(event, groups)}
         </span>
       </header>
 
