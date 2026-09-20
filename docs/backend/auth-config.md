@@ -21,6 +21,8 @@ Local settings live in `supabase/config.toml`. **Hosted projects do not read tha
 | **`[auth.email] enable_signup`**          | **`true`**                                                     | **`GOTRUE_EXTERNAL_EMAIL_ENABLED=true`**         | **Whether the email provider exists at all.** See the trap below.                                                                                                                                                                                                                                |
 | `[auth.email] enable_confirmations`       | `true`                                                         | `GOTRUE_MAILER_AUTOCONFIRM=false`                | An address must be confirmed by clicking its link — which is exactly what the invite flow does anyway.                                                                                                                                                                                           |
 | `[auth.email] double_confirm_changes`     | `true`                                                         | `GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED`      | Changing an email confirms at both the old and new address, so a hijacked session cannot quietly move the account.                                                                                                                                                                               |
+| `[auth.email.template.magic_link]`        | `supabase/templates/magic-link.html`                           | the sign-in email body                           | Carries the link **and** `{{ .Token }}` — see "The six-digit code beside the link" below.                                                                                                                                                                                                        |
+| `[auth.email.template.invite]`            | `supabase/templates/invite.html`                               | the invitation email body                        | Same two halves in the email that creates an account.                                                                                                                                                                                                                                            |
 | `[auth.external.google] enabled`          | `false`                                                        | `GOTRUE_EXTERNAL_GOOGLE_ENABLED=false`           | Phase 2 (#55). Magic links carry the BC/BCE launch; Google is convenience at 200-member scale.                                                                                                                                                                                                   |
 | `[functions.invite-member] verify_jwt`    | `true`                                                         | —                                                | The gateway rejects unauthenticated calls; the function still does the real check (level ≥ 6, read from the database).                                                                                                                                                                           |
 
@@ -50,6 +52,10 @@ docker inspect supabase_auth_osubb-app --format '{{range .Config.Env}}{{println 
   | grep -E "EXTERNAL_EMAIL_ENABLED|DISABLE_SIGNUP"
 ```
 
+## The six-digit code beside the link
+
+Supabase sends a magic link and a six-digit code as **one** OTP: same secret, same expiry, same single use. Our templates (`supabase/templates/magic-link.html` and `supabase/templates/invite.html`) print both, and the login screen offers the code as a second step — _"Apasă linkul din email sau introdu codul de 6 cifre"_ — calling `verifyOtp({ email, token, type: 'email' })`. The reason is storage, not convenience: an installed PWA on iOS has its own storage, separate from Safari, so a member who installs the app and taps the link in Mail is signed into **Safari** while the app they installed keeps showing the login screen; Android shares storage, so the failure is invisible until the first iPhone. A link opened on a different device than the one that typed the address breaks the same way. This adds no authentication path and does not touch invite-only access — an address with no `profiles` row still comes back with no organization claims, exactly as the link would.
+
 ## Verifying the whole thing works
 
 Two commands, both of which must behave as written:
@@ -72,12 +78,13 @@ If (1) succeeds, the app is not invite-only. If (2) fails with _"Email logins ar
 
 ## Hosted projects
 
-`config.toml` never leaves your machine. On staging and production the same four things must be set by hand, in Authentication:
+`config.toml` never leaves your machine. On staging and production the same five things must be set by hand, in Authentication:
 
 1. **Email provider: enabled**
 2. **Allow new users to sign up: OFF**
 3. **Hooks → Customize Access Token (JWT) Claims: enabled**, pointing at `public.custom_access_token_hook`
 4. **URL Configuration**: Site URL + redirect URLs matching the deployed app
+5. **Email Templates → Magic Link and Invite**: paste `supabase/templates/magic-link.html` and `supabase/templates/invite.html`. A dashboard still on the stock template sends the link without the code, and iPhone members cannot sign in to the installed app.
 
 Checklists: **#54** (staging) and **#77** (production). Run the two curl checks above against the hosted URL afterwards — the settings page can say the right thing while the behaviour differs, and only the behaviour matters.
 
