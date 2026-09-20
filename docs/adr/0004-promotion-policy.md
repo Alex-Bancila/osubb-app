@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-12
 - **Amended:** 2026-09-18 — ADR-0009: the level-2 rank is displayed as Voluntar Activ and its rule becomes top x% of the Evaluation Period's Leaderboard plus tenure; Drept de vot is granted only after BC confirms; level 4 (`responsabil`) leaves the ladder
+- **Amended:** 2026-09-20 — Moderator is a transferable Role, not a fixed account; a manual Role change notifies the Member and, when it drops them below a Group's Minimum Level, removes them from that Group
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
@@ -36,3 +37,9 @@ Roles carry permissions (level thresholds drive RLS), so automatic promotion is 
 - **+** Thresholds are data, not code — BC can tune them per semester.
 - **−** Requires `profiles.joined_at` (full date; `joined_year` is not enough) and the promotion engine (Phase 2, before org-wide rollout — BC/BCE launch users are all manual-tier, so v1 for them doesn't need it).
 - **−** An automatic role change with wrong data self-corrects only via manual intervention; `role_history` makes every change auditable and reversible.
+
+## Amendment (2026-09-20) — the Moderator seat and manual Role changes
+
+Read "Moderator (9) — fixed account" as **a transferable Role held by the IT Coordinator**. The sitting Moderator grants it to the successor, who then removes it from the predecessor; nobody may change their own Role, and only a Moderator may change the Role or Status of a Member holding BC or Moderator, so the seat can never be emptied by its holder or by BC (ADR-0003, amended 2026-09-20).
+
+Every manual Role change, upward or downward, writes `role_history` with the real actor and notifies the Member of their new Role; when the change grants Drept de Vot the notification names the seat in the Adunarea Generală it brings. When a change puts the Member below a Group's Minimum Level they leave that Group entirely at that moment (ADR-0009, amended 2026-09-20), and the notification names the Groups left. Demotions remain a human act; nothing in the promotion engine ever lowers a Role.
