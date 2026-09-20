@@ -28,46 +28,34 @@ function presentation(
 }
 
 describe('AnnouncementDetailsSheet', () => {
-  it('calls onMarkRead on mount when opened with an unread announcement', () => {
-    const onMarkRead = vi.fn();
-    const item = presentation({ isRead: false });
-
-    render(
-      <AnnouncementDetailsSheet
-        announcement={item}
-        onClose={vi.fn()}
-        onMarkRead={onMarkRead}
-      />,
+  it('renders nothing when announcement is null', () => {
+    const { container } = render(
+      <AnnouncementDetailsSheet announcement={null} onClose={vi.fn()} />,
     );
-
-    expect(onMarkRead).toHaveBeenCalledWith(1);
+    expect(container).toBeEmptyDOMElement();
   });
 
-  it('does not call onMarkRead when opened with an already read announcement', () => {
-    const onMarkRead = vi.fn();
-    const item = presentation({ isRead: true });
+  it('renders neutral fallback badge when department is unresolved and does not label it OSUBB', () => {
+    const item = presentation({
+      deptId: 'unresolved-dept',
+      department: {
+        id: 'unresolved-dept',
+        name: 'Departament',
+        short: 'DEP',
+      },
+      departmentLabel: 'Departament',
+    });
 
-    render(
-      <AnnouncementDetailsSheet
-        announcement={item}
-        onClose={vi.fn()}
-        onMarkRead={onMarkRead}
-      />,
-    );
+    render(<AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />);
 
-    expect(onMarkRead).not.toHaveBeenCalled();
+    expect(screen.getByText('Departament')).toBeInTheDocument();
+    expect(screen.queryByText('OSUBB')).not.toBeInTheDocument();
   });
 
   it('displays full announcement title, body, author, and date', () => {
     const item = presentation();
 
-    render(
-      <AnnouncementDetailsSheet
-        announcement={item}
-        onClose={vi.fn()}
-        onMarkRead={vi.fn()}
-      />,
-    );
+    render(<AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />);
 
     expect(
       screen.getByRole('heading', { level: 2, name: 'Detalii anunț' }),
@@ -86,13 +74,7 @@ describe('AnnouncementDetailsSheet', () => {
       formUrl: 'https://forms.gle/feedback',
     });
 
-    render(
-      <AnnouncementDetailsSheet
-        announcement={item}
-        onClose={vi.fn()}
-        onMarkRead={vi.fn()}
-      />,
-    );
+    render(<AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />);
 
     const formLink = screen.getByRole('link', {
       name: /Deschide formular: Feedback formular/,
@@ -108,13 +90,7 @@ describe('AnnouncementDetailsSheet', () => {
     const onClose = vi.fn();
     const item = presentation();
 
-    render(
-      <AnnouncementDetailsSheet
-        announcement={item}
-        onClose={onClose}
-        onMarkRead={vi.fn()}
-      />,
-    );
+    render(<AnnouncementDetailsSheet announcement={item} onClose={onClose} />);
 
     await user.click(screen.getByRole('button', { name: 'Închide' }));
     expect(onClose).toHaveBeenCalled();

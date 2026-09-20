@@ -91,6 +91,34 @@ describe('announcements-presentation', () => {
       expect(item.departmentLabel).toBe('Educațional');
     });
 
+    it('maps unresolved non-null dept_id to neutral fallback department and never labels it OSUBB', () => {
+      const itemWithUnknownDept = toAnnouncementPresentation(
+        rawRow({ dept_id: 'unknown-dept' }),
+        departments,
+      );
+      expect(itemWithUnknownDept.deptId).toBe('unknown-dept');
+      expect(itemWithUnknownDept.department).toEqual({
+        id: 'unknown-dept',
+        name: 'Departament',
+        short: 'DEP',
+      });
+      expect(itemWithUnknownDept.departmentLabel).toBe('Departament');
+      expect(itemWithUnknownDept.departmentLabel).not.toBe('OSUBB');
+
+      const itemWithLoadingDept = toAnnouncementPresentation(
+        rawRow({ dept_id: 'edu' }),
+        undefined,
+      );
+      expect(itemWithLoadingDept.deptId).toBe('edu');
+      expect(itemWithLoadingDept.department).toEqual({
+        id: 'edu',
+        name: 'Departament',
+        short: 'DEP',
+      });
+      expect(itemWithLoadingDept.departmentLabel).toBe('Departament');
+      expect(itemWithLoadingDept.departmentLabel).not.toBe('OSUBB');
+    });
+
     it('detects read status from announcement_reads relation', () => {
       const unreadItem = toAnnouncementPresentation(
         rawRow({ announcement_reads: [] }),

@@ -75,7 +75,22 @@ describe('CriticalAnnouncementBanner', () => {
     expect(onOpen).toHaveBeenCalledWith(item);
   });
 
-  it('calls onOpen when banner is clicked', async () => {
+  it('calls onOpen when action button is activated via keyboard Enter', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const item = presentation({ isRead: false, priority: 'critical' });
+
+    render(<CriticalAnnouncementBanner announcement={item} onOpen={onOpen} />);
+
+    const button = screen.getByRole('button', { name: /Citește acum/ });
+    button.focus();
+    await user.keyboard('{Enter}');
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith(item);
+  });
+
+  it('does not trigger onOpen when clicking non-interactive alert container', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
     const item = presentation({ isRead: false, priority: 'critical' });
@@ -83,6 +98,6 @@ describe('CriticalAnnouncementBanner', () => {
     render(<CriticalAnnouncementBanner announcement={item} onOpen={onOpen} />);
 
     await user.click(screen.getByRole('alert'));
-    expect(onOpen).toHaveBeenCalledWith(item);
+    expect(onOpen).not.toHaveBeenCalled();
   });
 });

@@ -200,9 +200,10 @@ describe('AnnouncementsScreen', () => {
 
     render(<AnnouncementsScreen />);
 
-    // Click card
+    // Click "Citește" button inside card
     const card = screen.getByRole('article', { name: 'Ședință Generală' });
-    await user.click(card);
+    const readButton = within(card).getByRole('button', { name: /Citește/ });
+    await user.click(readButton);
 
     // Details sheet dialog should be open
     const dialog = screen.getByRole('dialog', { name: 'Detalii anunț' });
@@ -211,8 +212,64 @@ describe('AnnouncementsScreen', () => {
       within(dialog).getByText('Prezența este obligatorie.'),
     ).toBeInTheDocument();
 
-    // Mark as read should have been triggered
+    // Mark as read should have been triggered exactly once
+    expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith(42);
+  });
+
+  it('triggers markRead exactly once for an unread announcement even across parent rerenders or mutation changes', async () => {
+    const user = userEvent.setup();
+    const row = createRow({
+      id: 77,
+      title: 'Anunț Unic',
+      body: 'Test unicitate marcare.',
+      announcement_reads: [], // unread
+    });
+
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [row],
+    });
+
+    const { rerender } = render(<AnnouncementsScreen />);
+
+    const card = screen.getByRole('article', { name: 'Anunț Unic' });
+    const readButton = within(card).getByRole('button', { name: /Citește/ });
+    await user.click(readButton);
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledWith(77);
+
+    // Simulate mutation state update rerendering parent (e.g. isPending: true)
+    hooks.useMarkAnnouncementRead.mockReturnValue({
+      mutate,
+      isPending: true,
+    });
+    rerender(<AnnouncementsScreen />);
+
+    // Simulate another unrelated rerender
+    rerender(<AnnouncementsScreen />);
+
+    // Must remain called exactly once
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders loading state when departments query is pending even if feed has loaded', () => {
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [createRow()],
+    });
+    hooks.useDepartments.mockReturnValue({
+      isPending: true,
+      data: undefined,
+    });
+
+    render(<AnnouncementsScreen />);
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
   });
 
   it('opens details sheet when critical banner is clicked', async () => {

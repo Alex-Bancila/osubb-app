@@ -22,15 +22,7 @@ export default function CriticalAnnouncementBanner({
   return (
     <div
       role="alert"
-      tabIndex={0}
-      onClick={() => onOpen(announcement)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen(announcement);
-        }
-      }}
-      className="mb-6 flex cursor-pointer flex-col gap-3 rounded-xl border border-destructive/60 bg-destructive/10 p-4 text-destructive shadow-sm transition-colors hover:bg-destructive/15 focus-visible:outline-2 focus-visible:outline-ring sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      className="mb-6 flex flex-col gap-3 rounded-xl border border-destructive/60 bg-destructive/10 p-4 text-destructive shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5"
     >
       <div className="flex items-start gap-3">
         <AlertTriangle
@@ -50,10 +42,7 @@ export default function CriticalAnnouncementBanner({
       <Button
         variant="destructive"
         size="sm"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen(announcement);
-        }}
+        onClick={() => onOpen(announcement)}
         className="min-h-11 shrink-0 self-start sm:self-center"
       >
         Citește acum

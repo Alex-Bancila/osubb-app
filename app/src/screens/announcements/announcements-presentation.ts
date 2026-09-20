@@ -15,8 +15,8 @@ export type RawAnnouncementRow =
 export type AnnouncementDepartment = {
   id: string;
   name: string;
-  short: string;
-  color: string;
+  short?: string;
+  color?: string | null;
 };
 
 export type AnnouncementPresentation = {
@@ -66,14 +66,24 @@ export function toAnnouncementPresentation(
   departments?: Map<string, Department>,
 ): AnnouncementPresentation {
   const dept = row.dept_id ? departments?.get(row.dept_id) : undefined;
-  const department: AnnouncementDepartment | null = dept
-    ? {
+  let department: AnnouncementDepartment | null = null;
+
+  if (row.dept_id !== null) {
+    if (dept) {
+      department = {
         id: dept.id,
         name: dept.name,
         short: dept.short,
         color: dept.color,
-      }
-    : null;
+      };
+    } else {
+      department = {
+        id: row.dept_id,
+        name: 'Departament',
+        short: 'DEP',
+      };
+    }
+  }
 
   const isRead = Array.isArray(row.announcement_reads)
     ? row.announcement_reads.length > 0
@@ -85,7 +95,7 @@ export function toAnnouncementPresentation(
     body: row.body,
     deptId: row.dept_id,
     department,
-    departmentLabel: department?.name ?? 'OSUBB',
+    departmentLabel: department ? department.name : 'OSUBB',
     author: row.author,
     priority: row.priority,
     category: row.category,

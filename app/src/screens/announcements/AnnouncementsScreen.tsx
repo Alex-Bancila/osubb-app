@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import {
   useAnnouncementsFeed,
@@ -26,6 +26,15 @@ export default function AnnouncementsScreen() {
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
     number | null
   >(null);
+  const markedIdsRef = useRef<Set<number>>(new Set());
+
+  function handleOpenAnnouncement(announcement: AnnouncementPresentation) {
+    setSelectedAnnouncementId(announcement.id);
+    if (!announcement.isRead && !markedIdsRef.current.has(announcement.id)) {
+      markedIdsRef.current.add(announcement.id);
+      markRead.mutate(announcement.id);
+    }
+  }
 
   const rawAnnouncements = feedQuery.data ?? [];
   const departments = departmentsQuery.data;
@@ -42,6 +51,8 @@ export default function AnnouncementsScreen() {
 
   const selectedAnnouncement =
     announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
+
+  const isPending = feedQuery.isPending || departmentsQuery.isPending;
 
   return (
     <section
@@ -64,7 +75,7 @@ export default function AnnouncementsScreen() {
         </p>
       </header>
 
-      {feedQuery.isPending ? (
+      {isPending ? (
         <Loading label="Se încarcă anunțurile…" />
       ) : feedQuery.isError ? (
         <ErrorState
@@ -79,7 +90,7 @@ export default function AnnouncementsScreen() {
           {unreadCritical && (
             <CriticalAnnouncementBanner
               announcement={unreadCritical}
-              onOpen={(item) => setSelectedAnnouncementId(item.id)}
+              onOpen={handleOpenAnnouncement}
             />
           )}
 
@@ -88,7 +99,7 @@ export default function AnnouncementsScreen() {
               <li key={announcement.id}>
                 <AnnouncementCard
                   announcement={announcement}
-                  onOpen={(item) => setSelectedAnnouncementId(item.id)}
+                  onOpen={handleOpenAnnouncement}
                 />
               </li>
             ))}
@@ -99,7 +110,6 @@ export default function AnnouncementsScreen() {
       <AnnouncementDetailsSheet
         announcement={selectedAnnouncement}
         onClose={() => setSelectedAnnouncementId(null)}
-        onMarkRead={(id) => markRead.mutate(id)}
       />
     </section>
   );

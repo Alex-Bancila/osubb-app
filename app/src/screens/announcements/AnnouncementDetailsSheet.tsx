@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -17,6 +16,7 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
+import { cn } from '../../lib/utils';
 import {
   priorityMeta,
   type AnnouncementPresentation,
@@ -25,20 +25,12 @@ import {
 type AnnouncementDetailsSheetProps = {
   announcement: AnnouncementPresentation | null;
   onClose: () => void;
-  onMarkRead: (id: number) => void;
 };
 
 export default function AnnouncementDetailsSheet({
   announcement,
   onClose,
-  onMarkRead,
 }: AnnouncementDetailsSheetProps) {
-  useEffect(() => {
-    if (announcement && !announcement.isRead) {
-      onMarkRead(announcement.id);
-    }
-  }, [announcement, onMarkRead]);
-
   if (!announcement) return null;
 
   const meta = priorityMeta(announcement.priority);
@@ -86,8 +78,17 @@ export default function AnnouncementDetailsSheet({
 
               {announcement.department ? (
                 <span
-                  className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold text-white"
-                  style={{ backgroundColor: announcement.department.color }}
+                  className={cn(
+                    'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold',
+                    announcement.department.color
+                      ? 'text-white'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                  style={
+                    announcement.department.color
+                      ? { backgroundColor: announcement.department.color }
+                      : undefined
+                  }
                 >
                   {announcement.department.name}
                 </span>

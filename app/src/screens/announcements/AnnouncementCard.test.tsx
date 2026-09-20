@@ -115,6 +115,26 @@ describe('AnnouncementCard', () => {
     expect(screen.getByText('OSUBB')).toBeInTheDocument();
   });
 
+  it('renders neutral fallback badge when department is unresolved and does not label it OSUBB', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({
+          deptId: 'unresolved-dept',
+          department: {
+            id: 'unresolved-dept',
+            name: 'Departament',
+            short: 'DEP',
+          },
+          departmentLabel: 'Departament',
+        })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('DEP')).toBeInTheDocument();
+    expect(screen.queryByText('OSUBB')).not.toBeInTheDocument();
+  });
+
   it('renders unread indicator when isRead is false', () => {
     render(
       <AnnouncementCard
@@ -157,7 +177,7 @@ describe('AnnouncementCard', () => {
     expect(formLink).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it('calls onOpen when read button or card is clicked', async () => {
+  it('calls onOpen when read button is clicked', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
     const item = presentation();
@@ -166,6 +186,38 @@ describe('AnnouncementCard', () => {
 
     await user.click(screen.getByRole('button', { name: /Citește/ }));
     expect(onOpen).toHaveBeenCalledWith(item);
+  });
+
+  it('calls onOpen when Citește button is activated via keyboard Enter', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const item = presentation();
+
+    render(<AnnouncementCard announcement={item} onOpen={onOpen} />);
+
+    const readBtn = screen.getByRole('button', { name: /Citește/ });
+    readBtn.focus();
+    await user.keyboard('{Enter}');
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith(item);
+  });
+
+  it('keyboard activation of form link with Enter does not trigger onOpen', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const item = presentation({
+      formLabel: 'Formular',
+      formUrl: 'https://forms.gle/test',
+    });
+
+    render(<AnnouncementCard announcement={item} onOpen={onOpen} />);
+
+    const formLink = screen.getByRole('link', { name: /Formular/ });
+    formLink.focus();
+    await user.keyboard('{Enter}');
+
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it('clicking form link does not trigger onOpen', async () => {
