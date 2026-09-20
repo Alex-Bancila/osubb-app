@@ -57,6 +57,8 @@ export const keys = {
       ['tasks', 'queue', { taskId, memberId }] as const,
     candidates: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'candidates', { taskId, memberId }] as const,
+    participation: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'participation', { taskId, memberId }] as const,
     history: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'history', { taskId, memberId }] as const,
     detail: (taskId: number, memberId: string | undefined) =>

@@ -1,4 +1,5 @@
 vi.mock('./TaskEditControl', () => ({ TaskEditControl: () => null }));
+vi.mock('./TaskModeControl', () => ({ TaskModeControl: () => null }));
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
