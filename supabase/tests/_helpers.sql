@@ -88,6 +88,12 @@ declare
   v_jwt text := current_setting('request.jwt.claims', true);
   v_busy integer;
   v_saw_state boolean := false;
+  v_discard text;
+  v_connections text[];
+  v_original_state text;
+  v_original_message text;
+  v_original_detail text;
+  v_original_hint text;
 begin
   if coalesce(v_jwt, '') = '' then
     raise exception 'test_race requires test_login first';
@@ -157,11 +163,32 @@ begin
     raise exception 'test_race query B neither blocked nor completed within 1 second';
   end if;
 
+  -- Connection A is only ever read through extensions.dblink(), which is
+  -- synchronous (PQexec) and leaves nothing queued, so A needs no drain.
   perform extensions.dblink_exec(v_connection_a, 'commit');
   select remote_result
     into strict result_b
     from extensions.dblink_get_result(v_connection_b)
       as remote(remote_result text);
+
+  -- Connection B is asynchronous, and libpq only returns it to the idle
+  -- state once PQgetResult has answered NULL: while the terminal
+  -- ReadyForQuery has not been consumed, the connection still counts as
+  -- busy and the next PQexec fails with "another command is already in
+  -- progress". dblink surfaces that terminal read as one more result set
+  -- that yields no row, so drain until a read comes back empty -- exactly
+  -- the contract dblink documents for dblink_get_result. Whether the
+  -- single read above happened to leave the connection idle depends on how
+  -- much of the server's answer libpq had buffered, which is why the same
+  -- file passes in CI and fails on a busier local stack (#596).
+  loop
+    select remote_result
+      into v_discard
+      from extensions.dblink_get_result(v_connection_b)
+        as remote(remote_result text);
+    exit when not found;
+  end loop;
+
   perform extensions.dblink_exec(v_connection_b, 'commit');
 
   perform extensions.dblink_disconnect(v_connection_a);
@@ -169,23 +196,63 @@ begin
   return next;
 exception
   when others then
-    begin
-      perform extensions.dblink_exec(v_connection_a, 'rollback');
-    exception when others then null;
-    end;
-    begin
-      perform extensions.dblink_exec(v_connection_b, 'rollback');
-    exception when others then null;
-    end;
-    begin
-      perform extensions.dblink_disconnect(v_connection_a);
-    exception when others then null;
-    end;
-    begin
-      perform extensions.dblink_disconnect(v_connection_b);
-    exception when others then null;
-    end;
-    raise;
+    -- Keep the failure the test actually cares about. Everything below is
+    -- best-effort cleanup, and nothing it does may replace this error.
+    v_original_state := sqlstate;
+    v_original_message := sqlerrm;
+    get stacked diagnostics
+      v_original_detail = pg_exception_detail,
+      v_original_hint = pg_exception_hint;
+
+    v_connections := coalesce(
+      extensions.dblink_get_connections(), '{}'::text[]);
+
+    -- B first, and only if it was ever opened: it is the asynchronous one,
+    -- so it can still be running (cancel it) or still be holding queued
+    -- results (drain them) before a rollback can be sent. Each step gets
+    -- its own block so one failure cannot skip the disconnect that keeps
+    -- the next test from meeting a leaked connection.
+    if v_connection_b = any(v_connections) then
+      begin
+        if extensions.dblink_is_busy(v_connection_b) = 1 then
+          perform extensions.dblink_cancel_query(v_connection_b);
+        end if;
+
+        for attempt in 1..100 loop
+          select remote_result
+            into v_discard
+            from extensions.dblink_get_result(v_connection_b)
+              as remote(remote_result text);
+          exit when not found;
+        end loop;
+      exception when others then null;
+      end;
+      begin
+        perform extensions.dblink_exec(v_connection_b, 'rollback');
+      exception when others then null;
+      end;
+      begin
+        perform extensions.dblink_disconnect(v_connection_b);
+      exception when others then null;
+      end;
+    end if;
+
+    if v_connection_a = any(v_connections) then
+      begin
+        perform extensions.dblink_exec(v_connection_a, 'rollback');
+      exception when others then null;
+      end;
+      begin
+        perform extensions.dblink_disconnect(v_connection_a);
+      exception when others then null;
+      end;
+    end if;
+
+    raise exception using
+      errcode = v_original_state,
+      message = v_original_message,
+      detail = coalesce(v_original_detail, ''),
+      hint = coalesce(v_original_hint, '');
 end;
 $function$;
 
@@ -256,7 +323,7 @@ $function$;
 
 \if :{?osubb_test_suite}
 \else
-select plan(17);
+select plan(20);
 
 insert into auth.users (id, email)
 values ('e3670000-0000-0000-0000-000000000001', 'helpers.bce@test.local');
@@ -318,6 +385,30 @@ select is((select race.result_a || ':' || race.result_b || ':' || race.b_waited
     $$ with lock as (select pg_advisory_xact_lock(367)) select 'a'::text from lock $$,
     $$ with lock as (select pg_advisory_xact_lock(367)) select 'b'::text from lock $$
   ) as race), 'a:b:true', 'test_race runs both statements around a real lock wait');
+
+-- #596: query B below leaves a second result set queued on purpose, so the
+-- connection is guaranteed still busy after the one strict read. Without the
+-- drain loop the commit that follows dies with "another command is already in
+-- progress" -- the failure that made 14 suites red on a local stack.
+select is((select race.result_a || ':' || race.result_b
+  from pg_temp.test_race(
+    $$ select 'a'::text $$,
+    $$ select 'b'::text; select 'queued'::text $$
+  ) as race), 'a:b',
+  'test_race drains every queued result before it reuses connection B');
+
+select throws_ok($call$
+  select * from pg_temp.test_race(
+    $race$ with lock as (select pg_advisory_xact_lock(368))
+           select 'a'::text from lock $race$,
+    $race$ with lock as (select pg_advisory_xact_lock(368))
+           select (1 / 0)::text from lock $race$)
+$call$, '22012', 'division by zero',
+  'test_race reports query B''s own failure with its original SQLSTATE');
+select ok(not exists (
+  select 1 from unnest(coalesce(extensions.dblink_get_connections(), '{}'::text[])) connection_name
+   where connection_name like 'test_race_%'
+), 'test_race disconnects both sessions after an asynchronous failure too');
 
 reset role;
 
