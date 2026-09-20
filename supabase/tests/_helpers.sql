@@ -87,6 +87,7 @@ declare
   v_database text := current_database();
   v_jwt text := current_setting('request.jwt.claims', true);
   v_busy integer;
+  v_discard text;
   v_saw_state boolean := false;
 begin
   if coalesce(v_jwt, '') = '' then
@@ -162,6 +163,18 @@ begin
     into strict result_b
     from extensions.dblink_get_result(v_connection_b)
       as remote(remote_result text);
+
+  -- libpq keeps an async connection busy until PQgetResult returns NULL.
+  -- dblink exposes that terminal read as one additional empty result set;
+  -- drain it (and any queued statement results) before reusing connection B.
+  loop
+    select remote_result
+      into v_discard
+      from extensions.dblink_get_result(v_connection_b)
+        as remote(remote_result text);
+    exit when not found;
+  end loop;
+
   perform extensions.dblink_exec(v_connection_b, 'commit');
 
   perform extensions.dblink_disconnect(v_connection_a);
@@ -169,22 +182,49 @@ begin
   return next;
 exception
   when others then
-    begin
-      perform extensions.dblink_exec(v_connection_a, 'rollback');
-    exception when others then null;
-    end;
-    begin
-      perform extensions.dblink_exec(v_connection_b, 'rollback');
-    exception when others then null;
-    end;
-    begin
-      perform extensions.dblink_disconnect(v_connection_a);
-    exception when others then null;
-    end;
-    begin
-      perform extensions.dblink_disconnect(v_connection_b);
-    exception when others then null;
-    end;
+    if v_connection_a = any(coalesce(
+      extensions.dblink_get_connections(), '{}'::text[]
+    )) then
+      begin
+        perform extensions.dblink_exec(v_connection_a, 'rollback');
+      exception when others then null;
+      end;
+      begin
+        perform extensions.dblink_disconnect(v_connection_a);
+      exception when others then null;
+      end;
+    end if;
+
+    if v_connection_b = any(coalesce(
+      extensions.dblink_get_connections(), '{}'::text[]
+    )) then
+      -- A failure can arrive while B is still running or while its remote
+      -- error/result remains queued. Cancel first when needed, then collect
+      -- every result with fail_on_error=false so cleanup cannot replace the
+      -- original exception raised by the test.
+      begin
+        if extensions.dblink_is_busy(v_connection_b) = 1 then
+          perform extensions.dblink_cancel_query(v_connection_b);
+        end if;
+
+        loop
+          select remote_result
+            into v_discard
+            from extensions.dblink_get_result(v_connection_b, false)
+              as remote(remote_result text);
+          exit when not found;
+        end loop;
+      exception when others then null;
+      end;
+      begin
+        perform extensions.dblink_exec(v_connection_b, 'rollback');
+      exception when others then null;
+      end;
+      begin
+        perform extensions.dblink_disconnect(v_connection_b);
+      exception when others then null;
+      end;
+    end if;
     raise;
 end;
 $function$;
@@ -256,7 +296,7 @@ $function$;
 
 \if :{?osubb_test_suite}
 \else
-select plan(17);
+select plan(20);
 
 insert into auth.users (id, email)
 values ('e3670000-0000-0000-0000-000000000001', 'helpers.bce@test.local');
@@ -318,6 +358,24 @@ select is((select race.result_a || ':' || race.result_b || ':' || race.b_waited
     $$ with lock as (select pg_advisory_xact_lock(367)) select 'a'::text from lock $$,
     $$ with lock as (select pg_advisory_xact_lock(367)) select 'b'::text from lock $$
   ) as race), 'a:b:true', 'test_race runs both statements around a real lock wait');
+
+select is((select race.result_a || ':' || race.result_b
+  from pg_temp.test_race(
+    $$ select 'a'::text $$,
+    $$ select 'b'::text; select 'queued'::text $$
+  ) as race), 'a:b',
+  'test_race drains every asynchronous result before reusing connection B');
+
+select throws_ok($call$
+  select * from pg_temp.test_race(
+    $$ with lock as (select pg_advisory_xact_lock(368)) select 'a'::text from lock $$,
+    $$ with lock as (select pg_advisory_xact_lock(368)) select (1 / 0)::text from lock $$)
+$call$, '22012', 'division by zero',
+  'test_race propagates an asynchronous query B failure after a real lock wait');
+select ok(not exists (
+  select 1 from unnest(coalesce(extensions.dblink_get_connections(), '{}'::text[])) connection_name
+   where connection_name like 'test_race_%'
+), 'test_race disconnects both sessions after an asynchronous query B failure');
 
 reset role;
 
