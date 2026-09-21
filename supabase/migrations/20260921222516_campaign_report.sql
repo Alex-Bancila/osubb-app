@@ -77,14 +77,21 @@
 -- with zero rows, this pair raises -- the issue is explicit that an
 -- unauthorized caller on a real Campaign gets `42501`, not a silently empty
 -- report.
+--
+-- The two `_impl` bodies share one preamble byte for byte (membership,
+-- existence, authority), so it lives once in
+-- `private.require_campaign_report_access`, a `require_*` helper in the
+-- usual sense (docs/backend/conventions.md Sec5): it raises or returns the
+-- Campaign's `group_id`, gets no execute grant of its own (nothing outside
+-- these two bodies may call it, and it adds no public surface), and both
+-- `_impl`s call it with `perform`, not an assignment -- the returned
+-- `group_id` is only needed for the authority check the helper already made,
+-- so binding it to a local variable that is never read again would trip
+-- plpgsql's unused-variable lint (conventions.md Sec4's own warning about
+-- this exact trap).
 
-create function private.campaign_report_impl(p_campaign_id bigint)
-returns table (
-  member_id       uuid,
-  full_name       text,
-  tasks_completed int,
-  points          int
-)
+create function private.require_campaign_report_access(p_campaign_id bigint)
+returns bigint
 language plpgsql
 stable
 security definer
@@ -120,6 +127,28 @@ begin
       message = 'campaign_report_forbidden';
   end if;
 
+  return v_group_id;
+end;
+$$;
+
+comment on function private.require_campaign_report_access(bigint) is
+  'Shared preamble for the Campaign reporting reads: PT404 campaign_not_found for an unknown Campaign (checked before authority -- ruling 2), 42501 campaign_report_forbidden for a claimless/inactive caller or one private.can_manage_group_work refuses. Returns the Campaign''s group_id; callable only by private.campaign_report_impl/private.campaign_totals_impl, which run as its owner -- no execute grant of its own.';
+
+create function private.campaign_report_impl(p_campaign_id bigint)
+returns table (
+  member_id       uuid,
+  full_name       text,
+  tasks_completed int,
+  points          int
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform private.require_campaign_report_access(p_campaign_id);
+
   return query
   with campaign_tasks as (
     select task.id, task.status
@@ -144,21 +173,36 @@ begin
       join campaign_tasks as ct on ct.id = entry.task_id
      where entry.reason in ('task', 'task_reversal')
   ),
-  points_by_member as (
-    select ledger_rows.member_id, sum(ledger_rows.delta)::int as points
+  -- One row per (member, Task): the member's NET ledger contribution to that
+  -- Task -- both points and tasks_completed are derived from this single
+  -- number, never from ledger row counts (fix round 1, controller review).
+  -- Without this, a Task that was completed by A, reopened, and reassigned
+  -- to B (A: +N then -N, B: +M) left A with a `task` row on a `completed`
+  -- Task, so A's net-zero history still counted the Task as completed for
+  -- A as well as for B -- two "completions" off one Task.
+  member_task_net as (
+    select ledger_rows.member_id, ledger_rows.task_id,
+           sum(ledger_rows.delta)::int as net_points
       from ledger_rows
-     group by ledger_rows.member_id
+     group by ledger_rows.member_id, ledger_rows.task_id
   ),
-  -- Distinct Task ids only: a reopened Task can carry more than one 'task'
-  -- ledger row for the same member (one per evaluation cycle) but must
-  -- still count once.
+  points_by_member as (
+    select member_task_net.member_id, sum(member_task_net.net_points)::int as points
+      from member_task_net
+     group by member_task_net.member_id
+  ),
+  -- A completed Task counts toward tasks_completed only where the member's
+  -- OWN net on it is positive -- a fully reversed cycle (net zero, or
+  -- negative from a penalty rating) is not "their" completion, whoever else
+  -- went on to actually finish the Task.
   completed_by_member as (
-    select ledger_rows.member_id,
-           count(distinct ledger_rows.task_id)::int as tasks_completed
-      from ledger_rows
+    select member_task_net.member_id,
+           count(*)::int as tasks_completed
+      from member_task_net
       join campaign_tasks as ct
-        on ct.id = ledger_rows.task_id and ct.status = 'completed'
-     group by ledger_rows.member_id
+        on ct.id = member_task_net.task_id and ct.status = 'completed'
+     where member_task_net.net_points > 0
+     group by member_task_net.member_id
   )
   select executors.member_id,
          profile.full_name,
@@ -173,7 +217,7 @@ end;
 $$;
 
 comment on function private.campaign_report_impl(bigint) is
-  'One row per volunteer who ever held the Executor Assignment on a Task of this Campaign (Assignment History, not the ledger -- ruling 3), with tasks_completed/points read from the points_ledger rows private.evaluate_task writes, netted per Task so a reopen-and-re-evaluate cycle counts once. PT404 campaign_not_found for an unknown Campaign, checked before authority (ruling 2); 42501 campaign_report_forbidden for a claimless/inactive caller or one private.can_manage_group_work refuses.';
+  'One row per volunteer who ever held the Executor Assignment on a Task of this Campaign (Assignment History, not the ledger -- ruling 3). points is each member''s net points_ledger sum over the Campaign''s Tasks; tasks_completed counts only a completed Task on which that member''s OWN net for it is positive (fix round 1: a fully-reversed-then-reassigned Task does not count as a completion for the member it was taken away from). PT404 campaign_not_found for an unknown Campaign, checked before authority (ruling 2); 42501 campaign_report_forbidden for a claimless/inactive caller or one private.can_manage_group_work refuses.';
 
 create function public.campaign_report(p_campaign_id bigint)
 returns table (
@@ -203,35 +247,8 @@ stable
 security definer
 set search_path = ''
 as $$
-declare
-  v_group_id bigint;
 begin
-  if not coalesce(public.auth_is_member(), false)
-     or not exists (
-       select 1
-         from public.profiles as profile
-        where profile.id = (select auth.uid())
-          and profile.status = 'activ'
-     ) then
-    raise exception using
-      errcode = '42501',
-      message = 'campaign_report_forbidden';
-  end if;
-
-  select campaign.group_id
-    into v_group_id
-    from public.campaigns as campaign
-   where campaign.id = p_campaign_id;
-
-  if not found then
-    raise sqlstate 'PT404' using message = 'campaign_not_found';
-  end if;
-
-  if not coalesce(private.can_manage_group_work(v_group_id), false) then
-    raise exception using
-      errcode = '42501',
-      message = 'campaign_report_forbidden';
-  end if;
+  perform private.require_campaign_report_access(p_campaign_id);
 
   return query
   with campaign_tasks as (
@@ -253,7 +270,7 @@ end;
 $$;
 
 comment on function private.campaign_totals_impl(bigint) is
-  'tasks_total/tasks_completed/points_total for one Campaign -- every Task (any kind) carrying campaign_id = p_campaign_id, points summed off the points_ledger rows private.evaluate_task writes exactly as private.campaign_report_impl does. Same PT404/42501 shape as private.campaign_report_impl.';
+  'tasks_total/tasks_completed/points_total for one Campaign -- every Task (any kind) carrying campaign_id = p_campaign_id, points summed off the points_ledger rows private.evaluate_task writes exactly as private.campaign_report_impl does. Same PT404/42501 preamble as private.campaign_report_impl -- both share private.require_campaign_report_access.';
 
 create function public.campaign_totals(p_campaign_id bigint)
 returns table (
@@ -270,6 +287,9 @@ $$;
 
 comment on function public.campaign_totals(bigint) is
   'Whole-Campaign totals (tasks_total, tasks_completed, points_total); same authority and error shape as public.campaign_report.';
+
+revoke execute on function private.require_campaign_report_access(bigint)
+  from public, anon, authenticated, service_role;
 
 revoke execute on function private.campaign_report_impl(bigint)
   from public, anon, authenticated, service_role;

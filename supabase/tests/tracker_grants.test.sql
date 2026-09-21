@@ -499,6 +499,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('request_deciders', 'p_request_id bigint', 'none'),
   ('can_decide_request', 'p_request_id bigint', 'predicate'),
   ('require_campaign_manager',                    'p_group_id bigint',                                                                                               'require'),
+  -- #625 fix round 1: the shared preamble both Campaign reporting bodies
+  -- call with `perform`, never an assignment (Sec4's unused-variable trap).
+  ('require_campaign_report_access',              'p_campaign_id bigint',                                                                                               'require'),
   ('require_department_team_membership_manager',  'p_team_id text',                                                                                                     'require'),
   ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
   ('require_origin_manager',                      'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'require'),
@@ -577,8 +580,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 129,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, and #625''s two Campaign reporting bodies');
+  (select count(*) from pinned_private_functions)::int, 130,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, and #625''s two Campaign reporting bodies plus their shared require_* preamble');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

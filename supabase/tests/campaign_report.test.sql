@@ -15,7 +15,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(61);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -83,7 +83,9 @@ insert into auth.users (id, email) values
   ('62500000-0000-0000-0000-000000000009', 'gaveup625@example.test'),
   ('62500000-0000-0000-0000-000000000010', 'subtask625@example.test'),
   ('62500000-0000-0000-0000-000000000011', 'notin625@example.test'),
-  ('62500000-0000-0000-0000-000000000012', 'claimless625@example.test');
+  ('62500000-0000-0000-0000-000000000012', 'claimless625@example.test'),
+  ('62500000-0000-0000-0000-000000000013', 'reassigneda625@example.test'),
+  ('62500000-0000-0000-0000-000000000014', 'reassignedb625@example.test');
 
 insert into public.profiles (id, full_name, email, role, status) values
   -- The live Group Manager of 625-dept (BCE), and a global BC/Moderator
@@ -100,7 +102,13 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('62500000-0000-0000-0000-000000000009', 'Emil GaveUp 625', 'gaveup625@example.test', 'activ', 'activ'),
   ('62500000-0000-0000-0000-000000000010', 'Flori Subtask 625', 'subtask625@example.test', 'activ', 'activ'),
   ('62500000-0000-0000-0000-000000000011', 'Gina NotIn 625', 'notin625@example.test', 'activ', 'activ'),
-  ('62500000-0000-0000-0000-000000000012', 'Horia Claimless 625', 'claimless625@example.test', 'activ', 'activ');
+  ('62500000-0000-0000-0000-000000000012', 'Horia Claimless 625', 'claimless625@example.test', 'activ', 'activ'),
+  -- Fix round 1 (controller review): A completes and is evaluated, the Task
+  -- is reopened AND reassigned to a different Executor, who completes it
+  -- again. A's net on the Task is exactly zero -- she must not still show
+  -- as having completed it.
+  ('62500000-0000-0000-0000-000000000013', 'Ionela ReassignedA 625', 'reassigneda625@example.test', 'activ', 'activ'),
+  ('62500000-0000-0000-0000-000000000014', 'Radu ReassignedB 625', 'reassignedb625@example.test', 'activ', 'activ');
 
 insert into public.departments (id, name, short, color) values
   ('625-dept', 'Departament 625', 'D625', '#654321'),
@@ -159,6 +167,14 @@ select is((select count(*) from public.campaigns where id = 6250001), 1::bigint,
 --                           campaign_id = null: 5 x rating 5 (x3) = 15,
 --                           credited to Gina (11), who must NEVER appear in
 --                           this Campaign's report or totals.
+--   T8 Reassigned AB     -- fix round 1: 2 x rating 5 (x3) = 6 credited to
+--                           Ionela (13), reversed (net 0), then reassigned
+--                           and re-credited to a DIFFERENT Executor, Radu
+--                           (14): 3 x rating 3 (x1) = 3. Ionela's net on
+--                           this Task is exactly 0 -- she still appears
+--                           (ruling 3, held the Assignment) but the
+--                           completed Task counts toward tasks_completed
+--                           for Radu only, never for her too.
 insert into public.tasks
   (title, dept_id, campaign_id, status, difficulty, rating,
    created_by, created_at, completed_at)
@@ -170,6 +186,8 @@ values
   ('T5 Completed E 625', '625-dept', 6250001, 'completed', 2, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
   ('T7 No-Campaign H 625', '625-dept', null, 'completed', 5, 5,
+   '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
+  ('T8 Reassigned AB 625', '625-dept', 6250001, 'completed', 2, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now());
 
 insert into public.tasks
@@ -213,7 +231,8 @@ select pg_temp.test_credit_task(task.id, credit.member_id,
     ('T3 Unfulfilled C 625',  '62500000-0000-0000-0000-000000000007'),
     ('T5 Completed E 625',    '62500000-0000-0000-0000-000000000005'),
     ('T6 Subtask F 625',      '62500000-0000-0000-0000-000000000010'),
-    ('T7 No-Campaign H 625',  '62500000-0000-0000-0000-000000000011')
+    ('T7 No-Campaign H 625',  '62500000-0000-0000-0000-000000000011'),
+    ('T8 Reassigned AB 625',  '62500000-0000-0000-0000-000000000013')
   ) as credit (title, member_id)
   join public.tasks as task on task.title = credit.title
  order by task.id;
@@ -253,6 +272,36 @@ select pg_temp.test_credit_task(task.id, '62500000-0000-0000-0000-000000000006',
                                 '62500000-0000-0000-0000-000000000001')
   from public.tasks as task where task.title = 'T2 Reopen source 625';
 
+-- Fix round 1: reopen T8 AND reassign it -- reverse Ionela's Evaluation,
+-- end her Assignment (she is no longer the Executor at all, not even a
+-- reopened one), bump the Task's own Difficulty/Rating to Radu's eventual
+-- Evaluation, give Radu a fresh Assignment, and credit him.
+update public.task_evaluations as evaluation
+   set reversed_at = now(), reversed_by = '62500000-0000-0000-0000-000000000001',
+       reversal_reason = 'fixture reassign 625'
+  from public.tasks as task
+ where task.id = evaluation.task_id and task.title = 'T8 Reassigned AB 625';
+
+insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id)
+select assignment.member_id, -evaluation.points, 'task_reversal',
+       evaluation.task_id, evaluation.id
+  from public.task_evaluations as evaluation
+  join public.task_assignments as assignment on assignment.id = evaluation.assignment_id
+ where evaluation.reversal_reason = 'fixture reassign 625';
+
+update public.task_assignments as assignment
+   set ended_at = now(), end_reason = 'replaced'
+  from public.tasks as task
+ where task.id = assignment.task_id
+   and task.title = 'T8 Reassigned AB 625'
+   and assignment.member_id = '62500000-0000-0000-0000-000000000013';
+
+update public.tasks set difficulty = 3, rating = 3 where title = 'T8 Reassigned AB 625';
+
+select pg_temp.test_credit_task(task.id, '62500000-0000-0000-0000-000000000014',
+                                '62500000-0000-0000-0000-000000000001')
+  from public.tasks as task where task.title = 'T8 Reassigned AB 625';
+
 -- Sanity pins: none of the quantitative assertions below can pass vacuously.
 select is((select count(*) from public.task_evaluations as evaluation
              join public.tasks as task on task.id = evaluation.task_id
@@ -266,6 +315,16 @@ select is((select count(*) from public.task_assignments as assignment
              join public.tasks as task on task.id = assignment.task_id
             where task.title = 'T5 Completed E 625'), 2::bigint,
   'T5 really carries two Assignments (the give-up and the credited one)');
+select is((select count(*) from public.task_assignments as assignment
+             join public.tasks as task on task.id = assignment.task_id
+            where task.title = 'T8 Reassigned AB 625'), 2::bigint,
+  'T8 really carries two Assignments (Ionela''s ended one and Radu''s credited one)');
+select is((select coalesce(sum(entry.delta), 0)::int
+             from public.points_ledger as entry
+             join public.tasks as task on task.id = entry.task_id
+            where task.title = 'T8 Reassigned AB 625'
+              and entry.member_id = '62500000-0000-0000-0000-000000000013'), 0,
+  'Ionela''s own net on T8 really is zero -- the credit and its reversal, nothing else');
 
 -- ==================== 3. The report, as a live Group manager ====================
 
@@ -314,23 +373,41 @@ select is((select count(*) from public.campaign_report(6250001)
             where member_id = '62500000-0000-0000-0000-000000000011'), 0::bigint,
   'Gina worked on the same Department''s Task but not one carrying this Campaign -- she never appears');
 
-select is((select count(*) from public.campaign_report(6250001)), 6::bigint,
-  'exactly six volunteers executed a Task of this Campaign -- Gina and the Umbrella itself are not among them');
+-- Fix round 1: Ionela's Task was reopened and handed to Radu. Her net on it
+-- is exactly zero, so she still appears (ruling 3) but the completion is
+-- not hers -- it must not be double-counted for both of them.
+select is((select points from public.campaign_report(6250001)
+            where member_id = '62500000-0000-0000-0000-000000000013'), 0,
+  'Ionela''s reopened-and-reassigned Task nets to zero (6 - 6)');
+select is((select tasks_completed from public.campaign_report(6250001)
+            where member_id = '62500000-0000-0000-0000-000000000013'), 0,
+  'and does not count as a completion for her -- her own net on it is not positive');
+select is((select points from public.campaign_report(6250001)
+            where member_id = '62500000-0000-0000-0000-000000000014'), 3,
+  'Radu, who was actually assigned and evaluated after the reassignment, carries the Task''s current net (3)');
+select is((select tasks_completed from public.campaign_report(6250001)
+            where member_id = '62500000-0000-0000-0000-000000000014'), 1,
+  'and it counts as his completion, not Ionela''s -- one Task, one completion, never both');
 
-select is((select sum(points)::int from public.campaign_report(6250001)), 31,
-  '15 + 12 + 0 + 0 + 0 + 4 -- the report''s own sum agrees with the totals read below');
+select is((select count(*) from public.campaign_report(6250001)), 8::bigint,
+  'exactly eight volunteers executed a Task of this Campaign -- Gina and the Umbrella itself are not among them');
+
+select is((select sum(points)::int from public.campaign_report(6250001)), 34,
+  '15 + 12 + 0 + 0 + 0 + 4 + 0 + 3 -- the report''s own sum agrees with the totals read below');
+select is((select sum(tasks_completed)::int from public.campaign_report(6250001)), 5,
+  '2 + 1 + 0 + 0 + 0 + 1 + 0 + 1 -- exactly five completions are attributed across all volunteers, never six');
 
 -- ==================== 4. The totals ====================
 
 select is(
-  (select tasks_total from public.campaign_totals(6250001)), 6,
-  'six Tasks carry this Campaign''s id directly -- the Umbrella and the no-Campaign Task are not among them');
+  (select tasks_total from public.campaign_totals(6250001)), 7,
+  'seven Tasks carry this Campaign''s id directly -- the Umbrella and the no-Campaign Task are not among them');
 select is(
-  (select tasks_completed from public.campaign_totals(6250001)), 4,
-  'four of them are completed (T1, T2, T5, T6) -- the unfulfilled and cancelled ones are not');
+  (select tasks_completed from public.campaign_totals(6250001)), 5,
+  'five of them are completed (T1, T2, T5, T6, T8) -- the unfulfilled and cancelled ones are not, and T8 counts once, whole-Campaign, regardless of how many members touched it');
 select is(
-  (select points_total from public.campaign_totals(6250001)), 31,
-  'points_total is the exact ledger sum for this Campaign''s Tasks (9 + [9-9+12] + 0 + 0 + 6 + 4), matching the report''s own total');
+  (select points_total from public.campaign_totals(6250001)), 34,
+  'points_total is the exact ledger sum for this Campaign''s Tasks (9 + [9-9+12] + 0 + 0 + 6 + 4 + [6-6+3]), matching the report''s own total');
 
 -- The totals are never recomputed from Difficulty x Rating -- they are the
 -- ledger sum, independently re-derived here without going through either
@@ -352,7 +429,7 @@ select pg_temp.test_login_leadership('62500000-0000-0000-0000-000000000002');
 select is((select points from public.campaign_report(6250001)
             where member_id = '62500000-0000-0000-0000-000000000005'), 15,
   'a BC sees the same report a Group manager does');
-select is((select points_total from public.campaign_totals(6250001)), 31,
+select is((select points_total from public.campaign_totals(6250001)), 34,
   'and the same totals');
 
 -- A live BCE of a DIFFERENT Department is an active member, but never a
