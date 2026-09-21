@@ -75,6 +75,22 @@ describe('route guards', () => {
     window.history.pushState({}, '', '/');
   });
 
+  it('preserves a deep link and restores it after the session arrives', async () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState({}, '', '/cereri?source=test#requests');
+    const view = render(<App />);
+    await screen.findByRole('heading', { name: 'Login screen' });
+    expect(new URLSearchParams(window.location.search).get('next')).toBe(
+      '/cereri?source=test#requests',
+    );
+    auth.useAuth.mockReturnValue(member);
+    view.rerender(<App />);
+    await screen.findByRole('heading', { name: 'Cereri screen' });
+    expect(
+      window.location.pathname + window.location.search + window.location.hash,
+    ).toBe('/cereri?source=test#requests');
+  });
+
   it('redirects a signed-out visitor from /no-profile to login', async () => {
     auth.useAuth.mockReturnValue(signedOut);
     window.history.pushState({}, '', '/no-profile');
