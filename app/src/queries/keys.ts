@@ -30,6 +30,8 @@ export const keys = {
     all: ['profile'] as const,
     me: (memberId: string | undefined) =>
       ['profile', 'me', { memberId }] as const,
+    groups: (memberId: string | undefined) =>
+      ['profile', 'groups', { memberId }] as const,
   },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare

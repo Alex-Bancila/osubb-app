@@ -86,6 +86,7 @@ app/
     │   │                   # calendar-presentation (+test)
     │   ├── notifications/  # NotificationsScreen (+test), notifications-presentation (+test)
     │   ├── login/          # LoginScreen.tsx, AuthCallback.tsx — magic-link request + landing
+    │   ├── profile/        # ProfileScreen.tsx (+test), EditProfileSheet.tsx (+test) (#108)
     │   └── no-profile/     # signed in, not a member (ADR-0003 gate 2)
     ├── theme/
     │   ├── tokens.css       # Brand Book palette; originated as a copy of mockup/css/tokens.css,

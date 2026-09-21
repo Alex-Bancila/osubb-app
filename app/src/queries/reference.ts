@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
@@ -47,11 +47,12 @@ export type Group = Pick<
   | 'is_organization'
   | 'legacy_dept_id'
 > & {
+  manager_title?: string | null;
   automatic_membership?: boolean;
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, automatic_membership, legacy_dept_id';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership, legacy_dept_id';
 
 /**
  * Every Group this member may read. RLS is the only filter — the browser asks
@@ -73,6 +74,121 @@ export function useGroups() {
       return new Map(data.map((group) => [group.id, group as Group]));
     },
   });
+}
+
+export type GroupMemberRow = {
+  group_id: number;
+  group_role: 'manager' | 'responsible' | 'member';
+  position_title: string | null;
+};
+
+export type MemberGroup = {
+  id: number;
+  name: string;
+  short: string | null;
+  color: string | null;
+  category: Group['category'];
+  group_role: 'manager' | 'responsible' | 'member';
+  position_title: string | null;
+  role_label: string;
+};
+
+/**
+ * Resolves the Group Role label for display:
+ * - Group Manager under the Group's `manager_title` (or fallback "Manager")
+ * - Group Responsible under `position_title` (or fallback "Responsabil")
+ * - Otherwise "Membru"
+ */
+export function resolveGroupRoleLabel(
+  groupRole: 'manager' | 'responsible' | 'member' | string,
+  managerTitle?: string | null,
+  positionTitle?: string | null,
+): string {
+  if (groupRole === 'manager') {
+    return managerTitle?.trim() || 'Manager';
+  }
+  if (groupRole === 'responsible') {
+    return positionTitle?.trim() || 'Responsabil';
+  }
+  return 'Membru';
+}
+
+/**
+ * Joins explicit `group_members` rows to `groups`, resolving the Group Role label,
+ * and filtering out inactive and Organization groups (#108).
+ */
+export function buildMemberGroups(
+  membershipRows: GroupMemberRow[] | undefined,
+  groupsMap: Map<number, Group> | undefined,
+): MemberGroup[] {
+  if (!membershipRows || !groupsMap) return [];
+
+  const result: MemberGroup[] = [];
+  for (const row of membershipRows) {
+    const group = groupsMap.get(row.group_id);
+    if (!group || group.status !== 'active') continue;
+    // The Organization Group is not listed (ruling R16)
+    if (group.is_organization || group.category === 'organization') continue;
+
+    const role_label = resolveGroupRoleLabel(
+      row.group_role,
+      group.manager_title,
+      row.position_title,
+    );
+
+    result.push({
+      id: group.id,
+      name: group.name,
+      short: group.short,
+      color: group.color,
+      category: group.category,
+      group_role: row.group_role,
+      position_title: row.position_title,
+      role_label,
+    });
+  }
+
+  return result.sort((a, b) => a.name.localeCompare(b.name, 'ro'));
+}
+
+/**
+ * Hook to fetch the signed-in member's own group memberships from `group_members`
+ * joined to `groups`. Memberships come from the tables, never from the `group_ids` claim.
+ */
+export function useMyGroups() {
+  const { session } = useAuth();
+  const id = session?.user.id;
+  const groupsQuery = useGroups();
+
+  const membershipQuery = useQuery({
+    queryKey: keys.profile.groups(id),
+    staleTime: 5 * 60_000,
+    queryFn: id
+      ? async (): Promise<GroupMemberRow[]> => {
+          const { data, error } = await supabase
+            .from('group_members')
+            .select('group_id, group_role, position_title')
+            .eq('member_id', id);
+          if (error) throw error;
+          return (data ?? []) as GroupMemberRow[];
+        }
+      : skipToken,
+  });
+
+  const data = useMemo(() => {
+    return buildMemberGroups(membershipQuery.data, groupsQuery.data);
+  }, [membershipQuery.data, groupsQuery.data]);
+
+  return {
+    data,
+    membershipRows: membershipQuery.data,
+    isPending: membershipQuery.isPending || groupsQuery.isPending,
+    isError: membershipQuery.isError || groupsQuery.isError,
+    error: membershipQuery.error ?? groupsQuery.error,
+    refetch: async () => {
+      await Promise.all([membershipQuery.refetch(), groupsQuery.refetch()]);
+    },
+  };
 }
 
 /**
@@ -119,31 +235,6 @@ export function resolveMemberGroups(
     if (catA !== catB) return catA - catB;
     return a.name.localeCompare(b.name, 'ro');
   });
-}
-
-/**
- * Membership-aware hook that resolves all Groups the authenticated member
- * belongs to (explicit memberships + automatic Organization & AG memberships).
- */
-export function useMyGroups(memberLevelOverride?: number) {
-  const { claims } = useAuth();
-  const groupsQuery = useGroups();
-  const memberLevel = memberLevelOverride ?? claims?.member_level ?? 0;
-  const explicitGroupIds = claims?.group_ids;
-
-  const data = useMemo(
-    () =>
-      resolveMemberGroups(groupsQuery.data, {
-        memberLevel,
-        explicitGroupIds,
-      }),
-    [groupsQuery.data, memberLevel, explicitGroupIds],
-  );
-
-  return {
-    ...groupsQuery,
-    data,
-  };
 }
 
 /**
