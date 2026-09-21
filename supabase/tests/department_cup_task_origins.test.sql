@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(45);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -41,16 +41,11 @@ select ok(not has_function_privilege('service_role', 'private.department_cup_row
 select ok(not has_table_privilege('service_role', 'public.dept_cup', 'SELECT'),
   'service_role holds no select on the Department Cup view -- it could never satisfy it without private schema usage');
 
--- ==================== 2. kind = 'department' IS the competing set ====================
--- The first draft of #259 wrote `department.id in ('edu','pr','youth','fin','hr')`
--- beside `kind = 'department'`. The two predicates say the same thing today and
--- the id list is gone; this assertion is what keeps that true. If OSUBB ever
--- creates a sixth real Department, or re-kinds a coordination structure, this
--- fails here -- loudly -- instead of the Cup quietly disagreeing with itself.
+-- ==================== 2. Group settings define the competing set ====================
 select set_eq(
-  $$ select id from public.departments where kind = 'department' $$,
-  $$ values ('edu'::text), ('pr'::text), ('youth'::text), ('fin'::text), ('hr'::text) $$,
-  'reference data pin, not a schema invariant: today''s seeded rows put kind = ''department'' on exactly these five ids -- a sixth real Department added later must update this pin and be re-read into the Cup, not be taken as a sign the Cup broke');
+  $$select legacy_dept_id from public.groups where competes_in_cup$$,
+  $$select unnest(array['edu','pr','youth','fin','hr']::text[])$$,
+  'seeded Group settings identify the five current competitors');
 
 -- ==================== 3. Fixtures ====================
 
@@ -190,6 +185,58 @@ select set_eq(
   $$ select dept_id, points, members from public.department_cup(null) $$,
   $$ select dept_id, points, members from public.dept_cup $$,
   'department_cup(null) is the view: one body, two entry points');
+
+-- #523: settings and deep paths, all changed only in this rolled-back fixture.
+reset role;
+update public.groups set counts_toward_parent_cup=false where legacy_team_id='259-dept-team';
+select is((select points from public.department_cup(2590002) where dept_id='edu'),0,
+  'a child link that does not count blocks its Task points');
+update public.groups set counts_toward_parent_cup=true where legacy_team_id='259-dept-team';
+update public.groups set competes_in_cup=false where legacy_dept_id='youth';
+select is((select count(*) from public.dept_cup where dept_id='youth'),0::bigint,
+  'disabling competition removes a Group row');
+update public.groups set competes_in_cup=true where legacy_dept_id='youth';
+
+-- Two native ancestors above a mapped leaf exercise arbitrary depth without
+-- bypassing #519's Task/Request legacy-Origin compatibility boundary.
+insert into public.groups(name,category,parent_id,path)
+select 'Cup native child 523','team',id,'{}' from public.groups where legacy_dept_id='edu';
+insert into public.groups(name,category,parent_id,path)
+select 'Cup native grandchild 523','project',id,'{}' from public.groups where name='Cup native child 523';
+update public.groups set parent_id=(select id from public.groups where name='Cup native grandchild 523')
+where legacy_team_id='259-dept-team';
+select is((select points from public.department_cup(2590002) where dept_id='edu'),15,
+  'two native levels and the mapped leaf all count toward the competing root');
+update public.groups set counts_toward_parent_cup=false where name='Cup native grandchild 523';
+select is((select points from public.department_cup(2590002) where dept_id='edu'),0,
+  'the deepest native link can block the Cup contribution');
+update public.groups set counts_toward_parent_cup=true where name='Cup native grandchild 523';
+update public.groups set counts_toward_parent_cup=false where name='Cup native child 523';
+select is((select points from public.department_cup(2590002) where dept_id='edu'),0,
+  'the upper native link can independently block the Cup contribution');
+select is((select points from public.leadership_leaderboard((select id from public.groups where legacy_dept_id='edu'),2590002)
+  where member_id='25900000-0000-0000-0000-000000000002'),15,
+  'Cup participation settings never remove work from a Group subtree Leaderboard');
+update public.groups set counts_toward_parent_cup=true where name='Cup native child 523';
+update public.groups set counts_toward_parent_cup=false where legacy_dept_id='edu';
+select is((select points from public.department_cup(2590002) where dept_id='edu'),15,
+  'the root flag is not a link below itself and does not discard descendant points');
+select is((select points from public.department_cup(2590001) where dept_id='edu'),12,
+  'a competing Group keeps its own direct work regardless of its parent flag');
+update public.groups set counts_toward_parent_cup=true where legacy_dept_id='edu';
+
+update public.groups set competes_in_cup=true where legacy_project_id=2590003;
+select is((select points from public.dept_cup where group_id=(select id from public.groups where legacy_project_id=2590003)),15,
+  'a Project presentation label never prevents a Group from competing');
+update public.groups set competes_in_cup=false where legacy_project_id=2590003;
+select ok(exists(select 1 from public.dept_cup cup join public.groups grp on grp.id=cup.group_id where grp.legacy_dept_id='edu'),
+  'unfiltered Cup includes the actual Group identifier');
+select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.legacy_dept_id='edu'),
+  'Campaign-filtered Cup includes the actual Group identifier');
+select is((select members from public.dept_cup where dept_id='edu'),
+  (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where legacy_dept_id='edu')),
+  'Cup roster counts active explicit members of the competitor itself');
+select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 
 -- ==================== 6. The BCE+ gate returns no rows, never an error ====================
 

@@ -49,16 +49,17 @@ insert into team_members (team_id, member_id)
 -- One event per (scope, Minimum Level) combination that matters: 0 spread
 -- across all three scopes (proving scope is no longer a visibility gate —
 -- the behaviour change this issue makes), then one gate per remaining rung
--- of the ladder (3/4/5/6). 'Recrutare grea' is type 'recrutare' at
--- min_level 4 specifically to prove the old "recruitment reaches everyone by
--- type" branch is gone too — a Recrut must NOT see it.
+-- of the ladder (3/5/6 -- level 4 is retired by #519/ADR-0009 Ranks).
+-- 'Recrutare grea' is type 'recrutare' at min_level 5 specifically to prove
+-- the old "recruitment reaches everyone by type" branch is gone too — a
+-- Recrut must NOT see it.
 insert into events (title, type, scope, dept_id, team_id, min_level, starts_at) values
   ('Everyone org',        'sedinta',   'org',  null,  null,   0, now() + interval '1 day'),
   ('Foreign dept open',   'sedinta',   'dept', 'pr',  null,   0, now() + interval '2 days'),
   ('Foreign team open',   'sedinta',   'team', 'pr',  't-pr', 0, now() + interval '3 days'),
   ('AG gated',            'sedinta',   'org',  null,  null,   3, now() + interval '4 days'),
-  ('Dept gated 4',        'sedinta',   'dept', 'edu', null,   4, now() + interval '5 days'),
-  ('Recrutare grea',      'recrutare', 'dept', 'hr',  null,   4, now() + interval '6 days'),
+  ('Dept gated 5',        'sedinta',   'dept', 'edu', null,   5, now() + interval '5 days'),
+  ('Recrutare grea',      'recrutare', 'dept', 'hr',  null,   5, now() + interval '6 days'),
   ('Team gated 5',        'sedinta',   'team', 'pr',  't-pr', 5, now() + interval '7 days'),
   ('Org gated 6',         'sedinta',   'org',  null,  null,   6, now() + interval '8 days');
 
@@ -111,8 +112,8 @@ select pg_temp.test_login('03000000-0000-0000-0000-000000000003', jsonb_build_ob
 
 select set_eq(
   $$ select title from events $$,
-  array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated', 'Dept gated 4', 'Recrutare grea'],
-  'level 4 adds both min_level = 4 rows — "Recrutare grea" included by level only, not by its recrutare type');
+  array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated'],
+  'level 4 (Responsabil) adds nothing new -- level 4 is retired (#519/ADR-0009 Ranks), so the min_level = 5 rows stay hidden');
 
 select lives_ok(
   $$ select public.create_event(
@@ -123,7 +124,7 @@ select lives_ok(
        p_dept_id := 'edu') $$,
   'level >= 4 creates events through the validated command');
 select throws_ok(
-  $$ update events set location = 'Sala 5' where title = 'Dept gated 4' $$,
+  $$ update events set location = 'Sala 5' where title = 'Dept gated 5' $$,
   '42501', null, 'direct event updates are disabled until the update command lands');
 
 reset role;
@@ -145,8 +146,8 @@ select pg_temp.test_login('04000000-0000-0000-0000-000000000004', jsonb_build_ob
 select set_eq(
   $$ select title from events $$,
   array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated',
-        'Dept gated 4', 'Recrutare grea', 'Team gated 5'],
-  'level 5 adds the min_level = 5 row — still missing the min_level = 6 one');
+        'Dept gated 5', 'Recrutare grea', 'Team gated 5'],
+  'level 5 adds every min_level = 5 row — still missing the min_level = 6 one');
 
 reset role;
 
@@ -161,7 +162,7 @@ select pg_temp.test_login('05000000-0000-0000-0000-000000000005', jsonb_build_ob
 select set_eq(
   $$ select title from events $$,
   array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated',
-        'Dept gated 4', 'Recrutare grea', 'Team gated 5', 'Org gated 6'],
+        'Dept gated 5', 'Recrutare grea', 'Team gated 5', 'Org gated 6'],
   'level 6 sees every Event, including min_level = 6');
 
 reset role;

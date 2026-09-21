@@ -56,8 +56,8 @@ select lives_ok(
 select throws_ok(
   $$ insert into public.tasks (title, difficulty)
      values ('Missing Origin 284', 1) $$,
-  '23514', null,
-  'a Task rejects a missing Origin');
+  '23514', 'task_group_required',
+  'a Task rejects a missing Origin -- private.sync_task_group_origin answers before tasks_exactly_one_origin_check can (#519)');
 select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, team_id)
      values ('Two Origins 284', 1, 'edu', 'team-origin-284') $$,
@@ -85,8 +85,8 @@ select throws_ok(
   $$ update public.tasks
         set dept_id = null
       where title = 'Department Origin 284' $$,
-  '23514', null,
-  'an existing Task cannot lose its Origin');
+  '23514', 'task_group_required',
+  'an existing Task cannot lose its Origin -- private.sync_task_group_origin answers before tasks_exactly_one_origin_check can (#519)');
 
 select * from finish();
 rollback;
