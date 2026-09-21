@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router';
 import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { supabase } from '../../lib/supabase';
+import { authDestination, loginDestination } from '../../lib/auth-destination';
 import { useAuth } from '../../lib/auth';
 import {
   SessionLoader,
@@ -90,7 +91,7 @@ export default function AuthCallback() {
         </p>
         <Link
           className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}
-          to="/login"
+          to={loginDestination(authDestination())}
         >
           Înapoi la conectare
         </Link>
@@ -99,9 +100,8 @@ export default function AuthCallback() {
   }
 
   /* Signed in. Where exactly they belong — the app or the "no profile" screen —
-     is the guards' decision, not this screen's; sending everyone to "/" lets
-     that one rule live in one place. */
-  if (!loading && session) return <Navigate to="/" replace />;
+     is the guards' decision, not this screen's; the restored internal route still passes through those guards. */
+  if (!loading && session) return <Navigate to={authDestination()} replace />;
 
   return (
     <SessionScreen centered>

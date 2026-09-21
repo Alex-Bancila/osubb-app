@@ -19,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(35);
 
 -- ==================== Fixtures ====================
 -- Scratch legacy rows, in the two Department kinds that map differently and
@@ -119,6 +119,20 @@ select is(
      from public.groups as grp where grp.legacy_dept_id = 'org'),
   'OSUBB|organization|true|0|false|-|-',
   'the org pseudo-department becomes the Organization Group: Automatic Membership at Minimum Level 0, no Applications, no Group Manager title');
+
+-- Wave 3 T1: and it is the one Group that carries the Organization marker.
+-- Two assertions, because they fail to different mutations: deleting the
+-- migration's `update … set is_organization = true` empties the first, while a
+-- marker set on the wrong row (or on more than one) breaks the second.
+select ok(
+  (select grp.is_organization from public.groups as grp where grp.legacy_dept_id = 'org'),
+  'the Organization Group carries is_organization — the native successor to the `legacy_dept_id = ''org''` test (ADR-0009 R1)');
+
+select is(
+  (select array_agg(coalesce(grp.legacy_dept_id, grp.name) order by grp.id)
+     from public.groups as grp where grp.is_organization),
+  array['org'],
+  'and it is the only Group in the database that does');
 
 -- ==================== 5-6. Team mapping ====================
 

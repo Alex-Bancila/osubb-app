@@ -325,7 +325,7 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #260: the leadership drill-down over one Member's Assignment history.
   ('leadership_member_tasks',        'p_member_id uuid',             false, true,  false, false),
   -- #258: the Task-Points Leaderboard, filterable by Origin and Campaign.
-  ('leadership_leaderboard',         'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',
+  ('leadership_leaderboard',         'p_group_id bigint, p_campaign_id bigint',
                                                                      false, true,  false, false),
   -- #499: a deliberately narrow batch read for the current Executor of Tasks
   -- the caller may already read. Assignment history remains behind its RLS.
@@ -437,8 +437,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
   -- #258: the Task-Points Leaderboard body behind
-  -- `public.leadership_leaderboard(department, team, project, campaign)`.
-  ('leadership_leaderboard_impl',                 'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',                                   'authenticated_only'),
+  -- `public.leadership_leaderboard(group, campaign)`.
+  ('leadership_leaderboard_impl',                 'p_group_id bigint, p_campaign_id bigint',                                   'authenticated_only'),
   ('leadership_member_tasks_impl',                'p_member_id uuid',                                                                                                  'impl'),
   ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
   -- #337: the second command over the shared evaluate_task core (#336) --
@@ -455,6 +455,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
   ('mirror_team_group',                           '',                                                                                                                   'trigger'),
   ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
+  -- #50: internal trigger function; no client execution.
+  ('guard_role_history', '', 'trigger'),
+  -- #69: scheduler-only job.
+  ('remind_deadlines', '', 'none'),
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
@@ -547,8 +551,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 122,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers');
+  (select count(*) from pinned_private_functions)::int, 124,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, and the #69 deadline job');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

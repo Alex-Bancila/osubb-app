@@ -361,16 +361,42 @@ select is((select count(*) from public.points_ledger where task_id = (select u1_
   'and no points_ledger row either -- a rollup, never an Evaluation');
 
 -- ==================== 3. The EMPTY-notify case ====================
--- Creator and actor are the same BCE, and 'edu' has no other local BCE in
--- this database. Every global BC/Moderator fallback candidate -- the seed's
--- two demo accounts AND this suite's own BC persona (#340...0001, already
--- used as an actor in section 2 and not needed again until section 6) -- is
--- the only thing standing between that and a literal empty set. All three
--- are deactivated here, for this one call, and restored immediately after
--- (this suite's own rolled-back transaction, so nothing outlives it).
+-- Creator and actor are the same BCE, so private.task_managers walks past its
+-- creator branch to the Origin branch ('edu' local BCE) and then to the global
+-- BC/Moderator fallback. To observe the literal empty set, both of those
+-- branches have to be empty of anyone other than the actor -- so this section
+-- ESTABLISHES that precondition by sweep rather than ASSUMING it of a
+-- hardcoded id list.
+--
+-- #614: the old list named three ids (the seed's two demo accounts and this
+-- suite's own BC #340...0001) and was correct only for a database holding
+-- nothing else. Seven Tracker suites commit dblink fixtures that include an
+-- activ BCE of 'edu' (#327, #332, #336, #338, #339, #344 and this one's own
+-- ...0051), each cleaned only at the very end of its own file. A run aborting
+-- in between orphans that persona, and the next run of THIS suite then
+-- resolves U2 through the Origin branch to that stranger -- test 19 failing
+-- `have: 1 / want: 0` while all 48 assertions still run. Re-running the suite
+-- that owns the orphan cleans it up, which is what made the failure look like
+-- it depended on suite order. A set-based sweep is immune to all of it.
+--
+-- Everyone swept is restored immediately after, inside this suite's own
+-- rolled-back transaction, so nothing outlives it either way. The actor is
+-- excluded on purpose: they are dropped from the recipient set by name, and
+-- the command still needs their own profile activ to authorize the call.
+create temp table f340_muted as
+select profile.id
+  from public.profiles as profile
+ where profile.status = 'activ'
+   and profile.id is distinct from '34000000-0000-0000-0000-000000000002'::uuid
+   and (profile.role in ('bc', 'moderator')
+        or (profile.role = 'bce'
+            and exists (select 1
+                          from public.member_departments as membership
+                         where membership.member_id = profile.id
+                           and membership.dept_id = 'edu')));
+
 update public.profiles set status = 'inactiv'
- where id in ('d0000000-0000-0000-0000-000000000007', 'd0000000-0000-0000-0000-000000000008',
-             '34000000-0000-0000-0000-000000000001');
+ where id in (select id from f340_muted);
 
 select pg_temp.test_login('34000000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -380,8 +406,7 @@ select lives_ok(format($$ select public.complete_umbrella_task(%s) $$,
 reset role;
 
 update public.profiles set status = 'activ'
- where id in ('d0000000-0000-0000-0000-000000000007', 'd0000000-0000-0000-0000-000000000008',
-             '34000000-0000-0000-0000-000000000001');
+ where id in (select id from f340_muted);
 
 select is((select count(*) from public.notifications where task_id = (select u2_id from f340)), 0::bigint,
   'the EMPTY case: nobody is notified -- private.task_managers'' own creator/origin/fallback chain drops the actor at every step, and no other manager exists');
@@ -714,6 +739,9 @@ select extensions.dblink_exec('cu_hold', 'rollback');
 select extensions.dblink_disconnect('cu_hold');
 select is(pg_temp.cu_complete_result(), 'completed',
   'and once HOLD lets go the command finishes normally, never with a 40P01 -- the weaker lock mode costs it nothing, and both Subtasks were already terminal');
+-- #596: cu_complete_result took the one result it came for; the rollback below
+-- is a synchronous command and needs the asynchronous queue emptied first.
+select pg_temp.test_drain('cu_complete');
 select extensions.dblink_exec('cu_complete', 'rollback');
 select extensions.dblink_disconnect('cu_complete');
 
