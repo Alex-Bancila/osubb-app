@@ -102,9 +102,9 @@ export default function ProfileScreen() {
     );
   }
 
-  const roleLabel =
-    rolesQuery.data?.get(profile.role)?.name ?? profile.role;
-  const isVotingMember = profile.role === 'vot' || claims?.member_role === 'vot';
+  const roleLabel = rolesQuery.data?.get(profile.role)?.name ?? profile.role;
+  const isVotingMember =
+    profile.role === 'vot' || claims?.member_role === 'vot';
 
   // Resolved groups
   const memberGroupIds = claims?.group_ids ?? [];
@@ -413,7 +413,10 @@ export default function ProfileScreen() {
                 <section className="card border-primary/20 bg-primary/5 p-6 dark:bg-primary/10">
                   <div className="card-head">
                     <h3 className="card-title flex items-center gap-2 text-foreground">
-                      <Shield className="size-5 text-primary" aria-hidden="true" />
+                      <Shield
+                        className="size-5 text-primary"
+                        aria-hidden="true"
+                      />
                       <span>Adunarea Generală (AG)</span>
                     </h3>
                   </div>
@@ -467,9 +470,10 @@ export default function ProfileScreen() {
                   </h3>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Ești sigur că vrei să soliciți retragerea calității de membru cu
-                  drept de vot? Această solicitare necesită aprobarea Biroului de
-                  Conducere (P3 — funcționalitate în curs de dezvoltare).
+                  Ești sigur că vrei să soliciți retragerea calității de membru
+                  cu drept de vot? Această solicitare necesită aprobarea
+                  Biroului de Conducere (P3 — funcționalitate în curs de
+                  dezvoltare).
                 </p>
                 <div className="mt-6 flex justify-end gap-3">
                   <Button

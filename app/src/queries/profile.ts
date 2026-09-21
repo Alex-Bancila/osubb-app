@@ -55,7 +55,9 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
   const [profileRes, contactRes] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, role, status, tier, avatar_color, joined_year, joined_at')
+      .select(
+        'id, full_name, role, status, tier, avatar_color, joined_year, joined_at',
+      )
       .eq('id', memberId)
       .single(),
     supabase
@@ -95,9 +97,12 @@ export function useUpdateMyProfile() {
       if (!id) throw new Error('Not authenticated');
 
       const updates: Database['public']['Tables']['profiles']['Update'] = {};
-      if (input.fullName !== undefined) updates.full_name = input.fullName.trim();
-      if (input.phone !== undefined) updates.phone = input.phone ? input.phone.trim() : null;
-      if (input.avatarColor !== undefined) updates.avatar_color = input.avatarColor;
+      if (input.fullName !== undefined)
+        updates.full_name = input.fullName.trim();
+      if (input.phone !== undefined)
+        updates.phone = input.phone ? input.phone.trim() : null;
+      if (input.avatarColor !== undefined)
+        updates.avatar_color = input.avatarColor;
 
       const { error } = await supabase
         .from('profiles')

@@ -1,6 +1,12 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyTheme, getTheme, toggleTheme, useTheme, THEME_STORAGE_KEY } from './theme';
+import {
+  applyTheme,
+  getTheme,
+  toggleTheme,
+  useTheme,
+  THEME_STORAGE_KEY,
+} from './theme';
 
 describe('theme management', () => {
   beforeEach(() => {

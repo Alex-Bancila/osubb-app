@@ -183,7 +183,9 @@ describe('ProfileScreen', () => {
   it('renders profile header, contact fields, and groups', () => {
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    expect(screen.getByRole('heading', { name: /maria enache/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /maria enache/i }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText('Voluntar').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Activ').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('maria@osubb.ro')).toBeInTheDocument();
@@ -214,7 +216,9 @@ describe('ProfileScreen', () => {
     // Ordinary volunteer (level 1)
     render(<ProfileScreen />, { wrapper: wrapper() });
     expect(
-      screen.getByText(/clasamentul și cupa departamentelor sunt vizibile pentru bce și bc/i),
+      screen.getByText(
+        /clasamentul și cupa departamentelor sunt vizibile pentru bce și bc/i,
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/din 12 membri/i)).not.toBeInTheDocument();
   });
@@ -266,13 +270,17 @@ describe('ProfileScreen', () => {
 
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    const resignButton = screen.getByRole('button', { name: /demisie din ag/i });
+    const resignButton = screen.getByRole('button', {
+      name: /demisie din ag/i,
+    });
     expect(resignButton).toBeInTheDocument();
 
     await user.click(resignButton);
 
     expect(
-      screen.getByText(/această solicitare necesită aprobarea biroului de conducere/i),
+      screen.getByText(
+        /această solicitare necesită aprobarea biroului de conducere/i,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -291,7 +299,9 @@ describe('ProfileScreen', () => {
 
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    expect(screen.getByText(/nu am putut încărca profilul/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/nu am putut încărca profilul/i),
+    ).toBeInTheDocument();
 
     const retryButton = screen.getByText(/încearcă din nou/i);
     await user.click(retryButton);
