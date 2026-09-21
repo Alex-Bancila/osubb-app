@@ -334,7 +334,12 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
                                                                      false, true,  false, false),
   -- #499: a deliberately narrow batch read for the current Executor of Tasks
   -- the caller may already read. Assignment history remains behind its RLS.
-  ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false);
+  ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false),
+  -- #626: the full-state Task edit and its read-only consequence preview.
+  ('update_task',            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean',
+                                                                     false, true,  false, false),
+  ('preview_task_update',    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text',
+                                                                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -537,6 +542,13 @@ insert into pinned_private_functions (proname, args, category) values
   -- queried and the claim command that was its last caller.
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
   ('update_campaign_impl',                        'p_campaign_id bigint, p_name text',                                                                                  'impl'),
+  -- #626: the full-state Task edit body, its preview body, and the two shared
+  -- helpers both bodies read (validation/diff and the one consequence
+  -- definition) -- callable only from inside those definer bodies.
+  ('update_task_impl',                            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean', 'impl'),
+  ('preview_task_update_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'impl'),
+  ('plan_task_update',                            'p_task tasks, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
+  ('task_update_consequences',                    'p_task_id bigint, p_assignment_mode text, p_audience text', 'none'),
   ('update_task_content_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',        'impl'),
   -- #507: the two Group invariant triggers — the hierarchy/path/Minimum Level
   -- rules on `groups`, and the immutable-identity rule on `group_members`.
@@ -561,8 +573,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 126,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, and #580''s two Member command bodies');
+  (select count(*) from pinned_private_functions)::int, 130,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, and #626''s update_task / preview_task_update bodies with their two shared helpers');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
