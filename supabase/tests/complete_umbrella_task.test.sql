@@ -739,6 +739,9 @@ select extensions.dblink_exec('cu_hold', 'rollback');
 select extensions.dblink_disconnect('cu_hold');
 select is(pg_temp.cu_complete_result(), 'completed',
   'and once HOLD lets go the command finishes normally, never with a 40P01 -- the weaker lock mode costs it nothing, and both Subtasks were already terminal');
+-- #596: cu_complete_result took the one result it came for; the rollback below
+-- is a synchronous command and needs the asynchronous queue emptied first.
+select pg_temp.test_drain('cu_complete');
 select extensions.dblink_exec('cu_complete', 'rollback');
 select extensions.dblink_disconnect('cu_complete');
 
