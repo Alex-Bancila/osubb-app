@@ -252,9 +252,9 @@ export default function ProfileScreen() {
                         </span>
                       )}
                     </dd>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Numărul de telefon este vizibil doar pentru tine și
-                      conducerea organizației (BCE și BC).
+                      membrii cu nivel ≥5.
                     </p>
                   </div>
                 </dl>

@@ -61,7 +61,7 @@ describe('EditProfileSheet', () => {
     expect(phoneInput).toHaveValue('0711223344');
     expect(
       screen.getByText(
-        /numărul de telefon este vizibil doar pentru tine și conducerea organizației/i,
+        /numărul de telefon este vizibil doar pentru tine și membrii cu nivel ≥5/i,
       ),
     ).toBeInTheDocument();
 

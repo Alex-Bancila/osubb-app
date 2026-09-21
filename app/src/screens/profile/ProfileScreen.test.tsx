@@ -271,7 +271,7 @@ describe('ProfileScreen', () => {
     expect(screen.getByText('0722334455')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /numărul de telefon este vizibil doar pentru tine și conducerea organizației/i,
+        /numărul de telefon este vizibil doar pentru tine și membrii cu nivel ≥5/i,
       ),
     ).toBeInTheDocument();
 
