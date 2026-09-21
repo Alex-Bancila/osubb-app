@@ -7,6 +7,7 @@ const auth = vi.hoisted(() => ({ useAuth: vi.fn(), signOut: vi.fn() }));
 const queries = vi.hoisted(() => ({
   useMyProfile: vi.fn(),
   useRoles: vi.fn(),
+  useUnreadNotificationCount: vi.fn(),
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
@@ -14,6 +15,9 @@ vi.mock('../../queries/profile', () => ({
   useMyProfile: queries.useMyProfile,
 }));
 vi.mock('../../queries/reference', () => ({ useRoles: queries.useRoles }));
+vi.mock('../../queries/notifications', () => ({
+  useUnreadNotificationCount: queries.useUnreadNotificationCount,
+}));
 
 import AppShell from './AppShell';
 
@@ -53,6 +57,7 @@ describe('AppShell', () => {
     queries.useRoles.mockReturnValue({
       data: new Map([['voluntar', { name: 'Voluntar' }]]),
     });
+    queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
   });
 
   it('keeps ordinary navigation gated and marks the current route in both menus', () => {
@@ -61,10 +66,13 @@ describe('AppShell', () => {
     const primary = screen.getByRole('navigation', {
       name: 'Navigare principală',
     });
-    expect(within(primary).getAllByRole('link')).toHaveLength(6);
+    expect(within(primary).getAllByRole('link')).toHaveLength(7);
     expect(
       within(primary).getByRole('link', { name: 'Cereri' }),
     ).toHaveAttribute('href', '/cereri');
+    expect(
+      within(primary).getByRole('link', { name: 'Notificări' }),
+    ).toHaveAttribute('href', '/notificari');
     expect(
       within(primary).queryByRole('link', { name: 'Voluntari' }),
     ).toBeNull();
@@ -80,6 +88,32 @@ describe('AppShell', () => {
     expect(
       within(quick).getByRole('link', { name: 'Calendar' }),
     ).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('badges the notification entry with the unread count, in words too', () => {
+    queries.useUnreadNotificationCount.mockReturnValue({ data: 3 });
+
+    renderShell();
+
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    const entry = within(primary).getByRole('link', { name: /Notificări/ });
+    expect(entry).toHaveTextContent('3');
+    expect(
+      within(entry).getByText('3 notificări necitite'),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the notification entry unbadged once everything is read', () => {
+    renderShell();
+
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', { name: 'Notificări' }),
+    ).toHaveTextContent(/^Notificări$/);
   });
 
   it('uses the compact official mark as decorative mobile branding', () => {

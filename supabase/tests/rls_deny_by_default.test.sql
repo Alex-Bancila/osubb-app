@@ -127,6 +127,9 @@ insert into announcement_reads (announcement_id, member_id)
    where title = 'rls-announce';
 insert into notifications (member_id, kind, title)
   values ('ffffffff-0000-0000-0000-000000000006', 'announce', 'rls-noti');
+insert into role_history (member_id, from_role, to_role, actor_kind, reason) values
+  ('eeeeeeee-0000-0000-0000-000000000156', 'recrut', 'voluntar', 'automatic', 'Claimless owner history fixture');
+
 insert into push_tokens (member_id, token, platform)
   values ('ffffffff-0000-0000-0000-000000000006', 'rls-token', 'web');
 

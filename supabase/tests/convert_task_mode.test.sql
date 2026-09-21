@@ -20,7 +20,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(48);
+select plan(52);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -442,11 +442,12 @@ select ok(coalesce((
 ), false), 'convert_task_mode holds the actor''s live profile row FOR SHARE');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
+    join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '32900000-0000-0000-0000-000000000021'
-     and membership.dept_id = 'edu'
-), false), 'convert_task_mode holds the Department membership row its authority rests on FOR SHARE');
+     and authority_group.legacy_dept_id = 'edu'
+), false), 'convert_task_mode holds the Group roster row its authority rests on FOR SHARE');
 
 select extensions.dblink_exec('ctm_lock', 'rollback');
 select extensions.dblink_disconnect('ctm_lock');
@@ -456,6 +457,31 @@ select extensions.dblink_exec('ctm_lock_setup', $$
   delete from auth.users where id = '32900000-0000-0000-0000-000000000021';
 $$);
 select extensions.dblink_disconnect('ctm_lock_setup');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.convert_task_mode((select id from g521_tasks where name='command0'),'public','org')$$,'convert_task_mode: Group persona 2 in project');
+reset role;
+select pg_temp.g521_task('command1','project',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select lives_ok($$select public.convert_task_mode((select id from g521_tasks where name='command1'),'public','org')$$,'convert_task_mode: Group persona 3 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.convert_task_mode((select id from g521_tasks where name='command2'),'public','org')$$,'convert_task_mode: Group persona 6 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.convert_task_mode((select id from g521_tasks where name='command3'),'public','org')$$,'42501','task_manage_forbidden','convert_task_mode: Group persona 8 in dt');
+reset role;
 
 select * from finish();
 rollback;

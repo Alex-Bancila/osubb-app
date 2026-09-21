@@ -1,40 +1,72 @@
 import { useQuery } from '@tanstack/react-query';
+import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
 /**
- * Reference data: the lookup tables seeded by migrations (`0001_core_schema`).
+ * Reference data: the lookup tables every screen reads to turn an id into
+ * something a member recognises.
  *
- * Two things make these different from every other query in the app:
+ * `roles` is the classic shape — it changes in a migration and a deploy, so
+ * `staleTime: Infinity` is the truth rather than an optimisation.
  *
- *  1. **They cannot change while the app is open.** A new department is a
- *     migration and a deploy, so `staleTime: Infinity` is the truth, not an
- *     optimisation — refetching them on window focus would be pure noise.
- *  2. **They are the source of a department's identity** — its name, its short
- *     tag and its brand colour all live in the row. Screens read the colour
- *     from here rather than from a hardcoded map, so adding the sixth
- *     department is an insert, not a pull request (mini-spec §6).
+ * `groups` is not. ADR-0009 makes one table — Departments, Teams, Projects and
+ * the Adunarea Generală all live in `public.groups` — and Wave 3's Administrare
+ * lets BC create, rename and archive them while the app is open. So it is
+ * cached generously but not forever, and it is the source of a Group's
+ * identity: its name, its short tag, its brand colour and its ancestor path all
+ * come from the row, never from a map in a component.
  */
 
-export type Department = {
-  id: string;
-  name: string;
-  short: string;
-  color: string;
-  kind: string;
-};
+type GroupRow = Database['public']['Tables']['groups']['Row'];
 
-export function useDepartments() {
+/**
+ * The Group columns any screen is allowed to need. `path` is root-first and
+ * ends in the Group's own id, so `path[path.length - 2]` is the parent and
+ * `path.length` is the depth — that is how a Child Group finds its Department
+ * without a second request.
+ *
+ * `legacy_dept_id` is a Wave 1/2 bridge, not part of the Group model: it is
+ * here only so `DeptCupCard` can join `dept_cup`'s legacy-keyed rows onto their
+ * Group until the view carries `group_id`. It goes with the column, in the
+ * Wave 3 task that drops `public.departments`.
+ */
+export type Group = Pick<
+  GroupRow,
+  | 'id'
+  | 'name'
+  | 'short'
+  | 'color'
+  | 'category'
+  | 'path'
+  | 'parent_id'
+  | 'min_level'
+  | 'status'
+  | 'is_organization'
+  | 'legacy_dept_id'
+>;
+
+const GROUP_FIELDS =
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, legacy_dept_id';
+
+/**
+ * Every Group this member may read. RLS is the only filter — the browser asks
+ * for no level or roster branch and receives exactly the Groups `groups_read`
+ * admits.
+ */
+export function useGroups() {
   return useQuery({
-    queryKey: keys.reference.departments(),
-    staleTime: Infinity,
-    queryFn: async (): Promise<Map<string, Department>> => {
+    queryKey: keys.reference.groups(),
+    // Groups are editable at runtime (Administrare), so not `Infinity`; five
+    // minutes is long enough that every card on a screen shares one request.
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Map<number, Group>> => {
       const { data, error } = await supabase
-        .from('departments')
-        .select('id, name, short, color, kind');
+        .from('groups')
+        .select(GROUP_FIELDS);
       if (error) throw error;
-      // A Map because every caller looks a department up by id.
-      return new Map(data.map((dept) => [dept.id, dept]));
+      // A Map because every caller looks a Group up by id.
+      return new Map(data.map((group) => [group.id, group]));
     },
   });
 }

@@ -201,7 +201,8 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
-          department_id: string
+          department_id: string | null
+          group_id: number
           id: number
           is_active: boolean
           name: string
@@ -210,7 +211,8 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
-          department_id: string
+          department_id?: string | null
+          group_id: number
           id?: never
           is_active?: boolean
           name: string
@@ -219,7 +221,8 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
-          department_id?: string
+          department_id?: string | null
+          group_id?: number
           id?: never
           is_active?: boolean
           name?: string
@@ -275,6 +278,13 @@ export type Database = {
             referencedRelation: "departments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "campaigns_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
         ]
       }
       completed_work_requests: {
@@ -285,6 +295,7 @@ export type Database = {
           decision_note: string | null
           dept_id: string | null
           description: string
+          group_id: number
           id: number
           project_id: number | null
           requester_id: string
@@ -299,6 +310,7 @@ export type Database = {
           decision_note?: string | null
           dept_id?: string | null
           description: string
+          group_id: number
           id?: never
           project_id?: number | null
           requester_id: string
@@ -313,6 +325,7 @@ export type Database = {
           decision_note?: string | null
           dept_id?: string | null
           description?: string
+          group_id?: number
           id?: never
           project_id?: number | null
           requester_id?: string
@@ -368,6 +381,13 @@ export type Database = {
             columns: ["dept_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "completed_work_requests_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
           {
@@ -569,6 +589,7 @@ export type Database = {
           dept_id: string | null
           description: string | null
           ends_at: string | null
+          group_id: number
           has_qr: boolean | null
           id: number
           location: string | null
@@ -589,6 +610,7 @@ export type Database = {
           dept_id?: string | null
           description?: string | null
           ends_at?: string | null
+          group_id: number
           has_qr?: boolean | null
           id?: never
           location?: string | null
@@ -609,6 +631,7 @@ export type Database = {
           dept_id?: string | null
           description?: string | null
           ends_at?: string | null
+          group_id?: number
           has_qr?: boolean | null
           id?: never
           location?: string | null
@@ -668,6 +691,13 @@ export type Database = {
             columns: ["dept_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
           {
@@ -772,6 +802,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: number
+          is_organization: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -796,6 +827,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -820,6 +852,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -1547,6 +1580,124 @@ export type Database = {
         }
         Relationships: []
       }
+      role_history: {
+        Row: {
+          actor_kind: string
+          changed_by: string | null
+          created_at: string
+          from_role: Database["public"]["Enums"]["member_role"]
+          id: number
+          member_id: string
+          reason: string
+          to_role: Database["public"]["Enums"]["member_role"]
+        }
+        Insert: {
+          actor_kind: string
+          changed_by?: string | null
+          created_at?: string
+          from_role: Database["public"]["Enums"]["member_role"]
+          id?: never
+          member_id: string
+          reason: string
+          to_role: Database["public"]["Enums"]["member_role"]
+        }
+        Update: {
+          actor_kind?: string
+          changed_by?: string | null
+          created_at?: string
+          from_role?: Database["public"]["Enums"]["member_role"]
+          id?: never
+          member_id?: string
+          reason?: string
+          to_role?: Database["public"]["Enums"]["member_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           id: Database["public"]["Enums"]["member_role"]
@@ -2148,6 +2299,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -2179,6 +2331,7 @@ export type Database = {
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
+          group_id: number
           id?: never
           kind?: string
           parent_task_id?: number | null
@@ -2210,6 +2363,7 @@ export type Database = {
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
+          group_id?: number
           id?: never
           kind?: string
           parent_task_id?: number | null
@@ -2303,6 +2457,13 @@ export type Database = {
             columns: ["duplicated_from_task_id"]
             isOneToOne: false
             referencedRelation: "tasks_with_overdue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
           {
@@ -2441,6 +2602,7 @@ export type Database = {
       dept_cup: {
         Row: {
           dept_id: string | null
+          group_id: number | null
           members: number | null
           name: string | null
           points: number | null
@@ -2558,6 +2720,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number | null
           id: number | null
           is_overdue: boolean | null
           kind: string | null
@@ -2590,6 +2753,7 @@ export type Database = {
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
+          group_id?: number | null
           id?: number | null
           is_overdue?: never
           kind?: string | null
@@ -2622,6 +2786,7 @@ export type Database = {
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
+          group_id?: number | null
           id?: number | null
           is_overdue?: never
           kind?: string | null
@@ -2719,6 +2884,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tasks_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tasks_parent_task_id_fkey"
             columns: ["parent_task_id"]
             isOneToOne: false
@@ -2812,6 +2984,7 @@ export type Database = {
           decision_note: string | null
           dept_id: string | null
           description: string
+          group_id: number
           id: number
           project_id: number | null
           requester_id: string
@@ -2860,6 +3033,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -2911,6 +3085,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -2956,6 +3131,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -2996,6 +3172,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3040,6 +3217,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3064,28 +3242,50 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_campaign: {
-        Args: { p_department_id: string; p_name: string }
-        Returns: {
-          created_at: string
-          created_by: string
-          department_id: string
-          id: number
-          is_active: boolean
-          name: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "campaigns"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      create_campaign:
+        | {
+            Args: { p_department_id: string; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { p_group_id: number; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       create_completed_work_request: {
         Args: {
           p_dept_id: string
           p_description: string
+          p_group_id?: number
           p_project_id: number
           p_team_id: string
         }
@@ -3096,6 +3296,7 @@ export type Database = {
           decision_note: string | null
           dept_id: string | null
           description: string
+          group_id: number
           id: number
           project_id: number | null
           requester_id: string
@@ -3132,6 +3333,7 @@ export type Database = {
           dept_id: string | null
           description: string | null
           ends_at: string | null
+          group_id: number
           has_qr: boolean | null
           id: number
           location: string | null
@@ -3177,6 +3379,7 @@ export type Database = {
           p_dept_id: string
           p_description: string
           p_executor_id?: string
+          p_group_id?: number
           p_kind?: string
           p_parent_task_id?: number
           p_project_id: number
@@ -3197,6 +3400,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3226,6 +3430,7 @@ export type Database = {
         Args: { p_campaign_id?: number }
         Returns: {
           dept_id: string
+          group_id: number
           members: number
           name: string
           points: number
@@ -3247,6 +3452,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3287,6 +3493,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3327,6 +3534,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3367,12 +3575,7 @@ export type Database = {
         }
       }
       leadership_leaderboard: {
-        Args: {
-          p_campaign_id?: number
-          p_department_id?: string
-          p_project_id?: number
-          p_team_id?: string
-        }
+        Args: { p_campaign_id?: number; p_group_id?: number }
         Returns: {
           full_name: string
           member_id: string
@@ -3402,6 +3605,8 @@ export type Database = {
           difficulty: number
           duplicated_from_task_id: number
           evaluation_history: Json
+          group_id: number
+          group_name: string
           is_overdue: boolean
           member_id: string
           origin_id: string
@@ -3447,6 +3652,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3499,6 +3705,7 @@ export type Database = {
           decision_note: string | null
           dept_id: string | null
           description: string
+          group_id: number
           id: number
           project_id: number | null
           requester_id: string
@@ -3541,6 +3748,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3581,6 +3789,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3640,6 +3849,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3669,7 +3879,8 @@ export type Database = {
         Returns: {
           created_at: string
           created_by: string
-          department_id: string
+          department_id: string | null
+          group_id: number
           id: number
           is_active: boolean
           name: string
@@ -3713,6 +3924,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3753,6 +3965,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3793,6 +4006,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3822,7 +4036,8 @@ export type Database = {
         Returns: {
           created_at: string
           created_by: string
-          department_id: string
+          department_id: string | null
+          group_id: number
           id: number
           is_active: boolean
           name: string
@@ -3857,6 +4072,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
@@ -3905,6 +4121,7 @@ export type Database = {
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
+          group_id: number
           id: number
           kind: string
           parent_task_id: number | null
