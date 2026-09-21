@@ -335,6 +335,11 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #499: a deliberately narrow batch read for the current Executor of Tasks
   -- the caller may already read. Assignment history remains behind its RLS.
   ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false),
+  -- #625: the Campaign reporting reads -- per-volunteer report and
+  -- whole-Campaign totals. Same grant shape as every read wrapper --
+  -- authenticated only, gated inside the function (private.can_manage_group_work).
+  ('campaign_report',                'p_campaign_id bigint',         false, true,  false, false),
+  ('campaign_totals',                'p_campaign_id bigint',         false, true,  false, false),
   -- #626: the full-state Task edit and its read-only consequence preview.
   ('update_task',            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean',
                                                                      false, true,  false, false),
@@ -397,6 +402,12 @@ insert into pinned_private_functions (proname, args, category) values
   -- #507: rewrites every descendant's ancestor prefix when a Group moves.
   ('cascade_group_path',                          '',                                                                                                                   'trigger'),
   ('caller_level',                                 '',                                                                                                                   'predicate'),
+  -- #625: the Campaign reporting reads -- points earned and volunteers who
+  -- worked on it. Same grant shape as every other read body ('impl'):
+  -- authenticated only, gated inside the function itself
+  -- (private.can_manage_group_work), never a silent empty result.
+  ('campaign_report_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
+  ('campaign_totals_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
   ('can_administer_team_structure',               'p_dept_id text',                                                                                                     'predicate'),
   -- #507: the Group roster predicate behind group_members_read. It walks
   -- groups.path, so a Group Manager or Responsible of an ancestor reads every
@@ -493,6 +504,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('request_deciders', 'p_request_id bigint', 'none'),
   ('can_decide_request', 'p_request_id bigint', 'predicate'),
   ('require_campaign_manager',                    'p_group_id bigint',                                                                                               'require'),
+  -- #625 fix round 1: the shared preamble both Campaign reporting bodies
+  -- call with `perform`, never an assignment (Sec4's unused-variable trap).
+  ('require_campaign_report_access',              'p_campaign_id bigint',                                                                                               'require'),
   ('require_department_team_membership_manager',  'p_team_id text',                                                                                                     'require'),
   ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
   ('require_origin_manager',                      'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'require'),
@@ -578,8 +592,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 131,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, and #626''s update_task / preview_task_update bodies with their two shared helpers');
+  (select count(*) from pinned_private_functions)::int, 134,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, and #625''s two Campaign reporting bodies plus their shared require_* preamble');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
