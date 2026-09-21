@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(28);
 
 select has_function('public', 'leadership_member_tasks', array['uuid'], 'leadership drill-down is a public RPC');
 select function_returns('public', 'leadership_member_tasks', array['uuid'], 'setof record', 'drill-down returns records');
@@ -39,8 +39,8 @@ select set_eq(
              where table_schema = 'public' and table_name = 'tasks_with_overdue'
                and column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
   $$ values ('id'::text), ('created_at'), ('created_by'), ('kind'),
-            ('dept_id'), ('team_id'), ('project_id'), ('type'), ('group_id') $$,
-  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row, the three the Origin triple replaces, the retired legacy `type`, and `group_id` (#523 exposes it -- removed again in Task 7)');
+            ('dept_id'), ('team_id'), ('project_id'), ('type') $$,
+  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row, the three the Origin triple replaces, the retired legacy `type`');
 
 insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000001', 'bce260@example.test'),
@@ -175,5 +175,12 @@ set local role anon;
 select throws_ok($$ select * from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002') $$,
   '42501', null, 'anon has no RPC grant');
 
+reset role;
+select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');
+select results_eq(
+  $$select distinct group_id,group_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002') where title='Historical Subtask 260'$$,
+  $$select id,name from public.groups where legacy_dept_id='edu'$$,
+  'the fixture Subtask carries its owning Group id and name');
+reset role;
 select * from finish();
 rollback;

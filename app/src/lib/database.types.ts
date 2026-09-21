@@ -2484,6 +2484,7 @@ export type Database = {
       dept_cup: {
         Row: {
           dept_id: string | null
+          group_id: number | null
           members: number | null
           name: string | null
           points: number | null
@@ -3311,6 +3312,7 @@ export type Database = {
         Args: { p_campaign_id?: number }
         Returns: {
           dept_id: string
+          group_id: number
           members: number
           name: string
           points: number
@@ -3455,12 +3457,7 @@ export type Database = {
         }
       }
       leadership_leaderboard: {
-        Args: {
-          p_campaign_id?: number
-          p_department_id?: string
-          p_project_id?: number
-          p_team_id?: string
-        }
+        Args: { p_campaign_id?: number; p_group_id?: number }
         Returns: {
           full_name: string
           member_id: string
@@ -3490,6 +3487,8 @@ export type Database = {
           difficulty: number
           duplicated_from_task_id: number
           evaluation_history: Json
+          group_id: number
+          group_name: string
           is_overdue: boolean
           member_id: string
           origin_id: string
