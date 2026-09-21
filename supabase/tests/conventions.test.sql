@@ -9,13 +9,14 @@
 -- owned schemas (graphql, auth, storage) are out of scope. This suite does
 -- not check the four-role revoke form, object naming, or error codes — those
 -- stay reviewed, not machine-checked. The written rules:
--- docs/backend/conventions.md.
+-- docs/backend/conventions.md. #520 also forbids presentation-category
+-- references in functions and policies, apart from the three named mirror writers.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(14);
 
 -- Postgres stores an empty search_path as the literal proconfig entry
 -- search_path="" (confirmed against add_project_member_impl on the live
@@ -102,6 +103,44 @@ select is(pg_temp.anon_executable_functions(), array['public.conventions_probe_d
 drop function public.conventions_probe_definer();
 select is(pg_temp.definers_without_empty_search_path() || pg_temp.anon_executable_functions(), '{}'::text[],
   'both sweeps are clean again once the probe is dropped');
+
+
+-- ADR-0009 Groups: no authority, visibility, membership, notification or Cup rule may branch
+-- on the Group's presentation label. The three Wave 1 mirror functions WRITE that column and
+-- are excluded by name.
+create function pg_temp.category_branching_functions() returns text[]
+language sql as $$
+  select coalesce(array_agg(n.nspname || '.' || p.proname order by n.nspname, p.proname), '{}')
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname in ('public', 'private')
+     and p.prokind = 'f'
+     and p.proname not in ('sync_department_groups', 'sync_team_groups', 'sync_project_groups')
+     and pg_get_functiondef(p.oid) ~ '\mcategory\M';
+$$;
+create function pg_temp.category_branching_policies() returns text[]
+language sql as $$
+  select coalesce(array_agg(pol.tablename || '.' || pol.policyname order by 1), '{}')
+    from pg_policies pol
+   where pol.schemaname in ('public', 'private')
+     and (coalesce(pol.qual, '') ~ '\mcategory\M' or coalesce(pol.with_check, '') ~ '\mcategory\M');
+$$;
+select is(pg_temp.category_branching_functions(), '{}'::text[],
+  'no function in public/private branches on groups.category (ADR-0009: a presentation label only)');
+select is(pg_temp.category_branching_policies(), '{}'::text[],
+  'no policy qual or with_check mentions groups.category');
+-- Non-hollow: a probe function and a probe policy that do branch must be named.
+create function public.conventions_probe_category(g bigint) returns boolean
+language sql security definer set search_path = '' as $$
+  select exists (select 1 from public.groups where id = g and category = 'team') $$;
+create policy conventions_probe_category on public.groups
+  for select to authenticated using (public.auth_is_member() and category = 'team');
+select is(pg_temp.category_branching_functions(), array['public.conventions_probe_category'],
+  'a function whose body reads category is reported by name');
+select is(pg_temp.category_branching_policies(), array['groups.conventions_probe_category'],
+  'a policy whose qual reads category is reported by name');
+drop policy conventions_probe_category on public.groups;
+drop function public.conventions_probe_category(bigint);
 
 select * from finish();
 rollback;

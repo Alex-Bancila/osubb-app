@@ -38,7 +38,7 @@ A named body of OSUBB people and work, created by BC or Moderator with its own n
 _Avoid_: Scope, structure, org unit, entity
 
 **Child Group**:
-A Group created inside a parent Group and overseen by the parent's Group Managers; a Child Group may have Child Groups of its own, to any depth. A Department Team is a Child Group of its Department; a Child Group's Task Points count toward the Department Cup of its nearest competing ancestor when every Group on the path is set to count.
+A Group created inside a parent Group and overseen by the parent's Group Managers; a Child Group may have Child Groups of its own, to any depth. Its parent is chosen at creation and never changes; a wrongly placed Group is archived and created again. A Department Team is a Child Group of its Department; a Child Group's Task Points count toward the Department Cup of its nearest competing ancestor when every Group on the path is set to count.
 _Avoid_: Sub-team, child team, nested team
 
 **Group Category**:
@@ -80,6 +80,10 @@ _Avoid_: Team visibility, open board, transparency mode
 **Automatic Membership**:
 A Group setting under which every active Member at or above the Group's Minimum Level belongs to it. The roster follows each Member's Role, is never edited by hand, and accepts no Applications; Group Roles are still appointed.
 _Avoid_: Derived roster, virtual group, implicit membership
+
+**Group Audience**:
+Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership. A Group's Announcements and the important changes to its Events reach its Group Audience, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
+_Avoid_: Recipients, subscribers, the roster when Automatic Membership is meant
 
 **Organization Group**:
 The root Group named OSUBB, with Automatic Membership at Minimum Level 0, so every active Member belongs to it. Organization-wide Events and Opportunities are its Events and Opportunities.
@@ -222,7 +226,7 @@ A future or past OSUBB activity owned by one Group.
 The Group that owns an Event. An organization-wide Event belongs to the Organization Group.
 
 **Relevant Event**:
-An Event of a Group the Member belongs to, which includes every Event of the Organization Group.
+An Event of a Group whose Group Audience includes the Member, which includes every Event of the Organization Group.
 
 **Other OSUBB Event**:
 A visible Event of a Group the Member does not belong to, presented separately until the Member answers “Vin”.
@@ -236,7 +240,12 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message that may have normal, important, or critical Priority and may link to an external form.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, and an optional link to an external form. An Announcement of the Organization Group may be posted by anyone holding a Group Role.
+_Avoid_: Post, news item, broadcast when the Audience is local
+
+**Announcement Audience**:
+Whether an Announcement reaches only the Group Audience of its Origin or every active Member of OSUBB. A Group may speak to the whole organization without ceasing to be the Origin.
+_Avoid_: Scope, visibility, org-wide flag
 
 **Notification**:
 A personal in-app alert delivered to one intended Member.
@@ -270,7 +279,8 @@ _Avoid_: Quorum, Top 25%
 The rule that only a person provisioned by OSUBB leadership becomes a Member of the application.
 
 **Magic Link**:
-The passwordless email link used by a provisioned Member to sign in.
+The passwordless email link used by a provisioned Member to sign in. The same email carries a six-digit Sign-in Code that completes the same sign-in where the link cannot reach the app, such as the installed app on iPhone or a second device.
+_Avoid_: OTP in user-facing copy; password
 
 **Provisioning**:
 Creating the organization membership information associated with an invited person, including their initial Department by Appointment.
