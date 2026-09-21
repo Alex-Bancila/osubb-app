@@ -3073,6 +3073,23 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
       }
+      campaign_report: {
+        Args: { p_campaign_id: number }
+        Returns: {
+          full_name: string
+          member_id: string
+          points: number
+          tasks_completed: number
+        }[]
+      }
+      campaign_totals: {
+        Args: { p_campaign_id: number }
+        Returns: {
+          points_total: number
+          tasks_completed: number
+          tasks_total: number
+        }[]
+      }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
       cancel_task: {

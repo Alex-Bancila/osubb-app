@@ -334,7 +334,12 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
                                                                      false, true,  false, false),
   -- #499: a deliberately narrow batch read for the current Executor of Tasks
   -- the caller may already read. Assignment history remains behind its RLS.
-  ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false);
+  ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false),
+  -- #625: the Campaign reporting reads -- per-volunteer report and
+  -- whole-Campaign totals. Same grant shape as every read wrapper --
+  -- authenticated only, gated inside the function (private.can_manage_group_work).
+  ('campaign_report',                'p_campaign_id bigint',         false, true,  false, false),
+  ('campaign_totals',                'p_campaign_id bigint',         false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -392,6 +397,12 @@ insert into pinned_private_functions (proname, args, category) values
   -- #507: rewrites every descendant's ancestor prefix when a Group moves.
   ('cascade_group_path',                          '',                                                                                                                   'trigger'),
   ('caller_level',                                 '',                                                                                                                   'predicate'),
+  -- #625: the Campaign reporting reads -- points earned and volunteers who
+  -- worked on it. Same grant shape as every other read body ('impl'):
+  -- authenticated only, gated inside the function itself
+  -- (private.can_manage_group_work), never a silent empty result.
+  ('campaign_report_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
+  ('campaign_totals_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
   ('can_administer_team_structure',               'p_dept_id text',                                                                                                     'predicate'),
   -- #507: the Group roster predicate behind group_members_read. It walks
   -- groups.path, so a Group Manager or Responsible of an ancestor reads every
@@ -566,8 +577,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 127,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, and #603''s session-revoke helper');
+  (select count(*) from pinned_private_functions)::int, 129,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, and #625''s two Campaign reporting bodies');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
