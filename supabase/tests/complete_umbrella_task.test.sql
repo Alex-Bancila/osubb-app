@@ -39,7 +39,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(52);
+select plan(54);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -818,6 +818,26 @@ select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fi
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select throws_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','complete_umbrella_task: Group persona 8 in dt');
+reset role;
+
+-- #521 (delta): the brief lists complete_umbrella_task among the recipient suites. The three
+-- rows above all have a live creator who is not the actor, so they only exercise the
+-- creator-first arm. This one makes the actor the creator, which is the only way to reach
+-- ruling D4: on a Manager-less chain private.task_managers returns the chain's live
+-- Responsibles PLUS every live BC/Moderator, minus the actor.
+select pg_temp.g521_task('command4','ind',null,'todo','direct','umbrella');
+update public.tasks set created_by=pg_temp.g521_uid(6) where id=(select id from g521_tasks where name='command4');
+insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command4');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command4'))$$,'complete_umbrella_task: the Manager-less peer completing their own Umbrella');
+reset role;
+select ok(
+  exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='command4') and member_id=pg_temp.g521_uid(7))
+  and exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='command4') and member_id=pg_temp.g521_uid(1))
+  and not exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='command4') and member_id=pg_temp.g521_uid(6)),
+  'the Umbrella rollup reaches the Manager-less chain''s peer Responsible and BC, never the actor (ruling D4)');
 reset role;
 
 select * from finish();
