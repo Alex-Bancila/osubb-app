@@ -12,6 +12,8 @@ import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
 import CalendarScreen from './screens/calendar/CalendarScreen';
 import CompletedWorkRequestScreen from './screens/requests/CompletedWorkRequestScreen';
+import AnnouncementsScreen from './screens/announcements/AnnouncementsScreen';
+import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
@@ -130,10 +132,8 @@ export default function App() {
             <Route path="/tracker" element={<TrackerScreen />} />
             <Route path="/calendar" element={<CalendarScreen />} />
             <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
-            <Route
-              path="/anunturi"
-              element={<Placeholder title="Anunțuri" issue="#99–#101" />}
-            />
+            <Route path="/anunturi" element={<AnnouncementsScreen />} />
+            <Route path="/notificari" element={<NotificationsScreen />} />
             <Route
               path="/voluntari"
               element={

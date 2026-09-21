@@ -38,7 +38,7 @@ select md5(string_agg(x, '|' order by x))
                             coalesce(assignment_mode, '-'), coalesce(audience, '-'))
                 from tasks
     union all select format('campaign:%s:%s:%s:%s',
-                            campaign.department_id, campaign.name,
+                            coalesce(campaign.department_id, '-'), campaign.name,
                             campaign.is_active, creator.full_name)
                 from campaigns campaign
                 join profiles creator on creator.id = campaign.created_by
