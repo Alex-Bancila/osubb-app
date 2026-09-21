@@ -3707,6 +3707,21 @@ export type Database = {
           task_id: number
         }[]
       }
+      preview_task_update: {
+        Args: {
+          p_assignment_mode: string
+          p_audience: string
+          p_campaign_id: number
+          p_deadline: string
+          p_description: string
+          p_task_id: number
+          p_title: string
+        }
+        Returns: {
+          consequence: string
+          member_id: string
+        }[]
+      }
       provision_profile: {
         Args: {
           p_dept_ids?: string[]
@@ -4119,6 +4134,56 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_task: {
+        Args: {
+          p_accept_consequences?: boolean
+          p_assignment_mode: string
+          p_audience: string
+          p_campaign_id: number
+          p_deadline: string
+          p_description: string
+          p_task_id: number
+          p_title: string
+        }
+        Returns: {
+          assignment_mode: string | null
+          audience: string | null
+          campaign_id: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          dept_id: string | null
+          description: string | null
+          difficulty: number | null
+          duplicated_from_task_id: number | null
+          group_id: number
+          id: number
+          kind: string
+          parent_task_id: number | null
+          project_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
+          rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
+          team_id: string | null
+          title: string
+          type: string | null
+          unfulfilled_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
           isOneToOne: true
           isSetofReturn: false
         }
