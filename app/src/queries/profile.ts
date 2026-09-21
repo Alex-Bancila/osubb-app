@@ -14,7 +14,6 @@ export type MyProfile = {
   full_name: string;
   role: Database['public']['Enums']['member_role'];
   status: Database['public']['Enums']['member_status'];
-  tier: string | null;
   avatar_color: string | null;
   joined_year: number | null;
   joined_at: string | null;
@@ -56,7 +55,7 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
     supabase
       .from('profiles')
       .select(
-        'id, full_name, role, status, tier, avatar_color, joined_year, joined_at',
+        'id, full_name, role, status, avatar_color, joined_year, joined_at',
       )
       .eq('id', memberId)
       .single(),

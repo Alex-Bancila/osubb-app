@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberClaims } from '../../lib/auth';
 import type { Database } from '../../lib/database.types';
@@ -30,8 +30,7 @@ const profileMocks = vi.hoisted(() => {
     full_name: 'Maria Enache',
     role: 'voluntar' as Database['public']['Enums']['member_role'],
     status: 'activ' as const,
-    tier: null,
-    avatar_color: '#ED2025',
+    avatar_color: '#ED2025' as string | null,
     joined_year: 2024,
     joined_at: '2024-10-01',
     email: 'maria@osubb.ro',
@@ -41,7 +40,7 @@ const profileMocks = vi.hoisted(() => {
   return {
     mockProfile,
     profileQueryMock: {
-      data: mockProfile,
+      data: mockProfile as typeof mockProfile | null | undefined,
       isPending: false,
       isError: false,
       error: null as Error | null,
@@ -52,6 +51,15 @@ const profileMocks = vi.hoisted(() => {
 
 const { mockProfile, profileQueryMock } = profileMocks;
 
+let activeProfileData = { ...mockProfile };
+const profileListeners = new Set<(profile: typeof mockProfile) => void>();
+
+function setTestProfile(updated: typeof mockProfile) {
+  activeProfileData = updated;
+  profileQueryMock.data = updated;
+  profileListeners.forEach((fn) => fn(updated));
+}
+
 const updateProfileMock = vi.hoisted(() => ({
   mutateAsync: vi.fn().mockResolvedValue(undefined),
   isPending: false,
@@ -59,8 +67,49 @@ const updateProfileMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../../queries/profile', () => ({
-  useMyProfile: () => profileMocks.profileQueryMock,
-  useUpdateMyProfile: () => updateProfileMock,
+  useMyProfile: () => {
+    const [profile, setProfile] = useState(
+      () => profileMocks.profileQueryMock.data ?? activeProfileData,
+    );
+    useEffect(() => {
+      profileListeners.add(setProfile);
+      return () => {
+        profileListeners.delete(setProfile);
+      };
+    }, []);
+
+    const data =
+      profileMocks.profileQueryMock.isPending ||
+      profileMocks.profileQueryMock.isError
+        ? undefined
+        : profile;
+
+    return {
+      ...profileMocks.profileQueryMock,
+      data,
+    };
+  },
+  useUpdateMyProfile: () => ({
+    ...updateProfileMock,
+    mutateAsync: vi.fn(
+      async (input: {
+        fullName?: string;
+        phone?: string | null;
+        avatarColor?: string | null;
+      }) => {
+        await updateProfileMock.mutateAsync(input);
+        const nextProfile = {
+          ...activeProfileData,
+          ...(input.fullName ? { full_name: input.fullName } : {}),
+          ...(input.phone !== undefined ? { phone: input.phone } : {}),
+          ...(input.avatarColor !== undefined
+            ? { avatar_color: input.avatarColor }
+            : {}),
+        };
+        setTestProfile(nextProfile);
+      },
+    ),
+  }),
 }));
 
 const pointsQueryMock = vi.hoisted(() => ({
@@ -174,7 +223,8 @@ describe('ProfileScreen', () => {
       group_ids: [10, 20, 30],
     };
 
-    profileQueryMock.data = { ...mockProfile };
+    profileListeners.clear();
+    setTestProfile({ ...mockProfile });
     profileQueryMock.isPending = false;
     profileQueryMock.isError = false;
     profileQueryMock.error = null;
@@ -279,10 +329,10 @@ describe('ProfileScreen', () => {
       team_ids: [],
       group_ids: [10],
     };
-    profileQueryMock.data = {
+    setTestProfile({
       ...mockProfile,
       role: 'vot',
-    };
+    });
 
     render(<ProfileScreen />, { wrapper: wrapper() });
     expect(screen.getByText('Adunarea Generală')).toBeInTheDocument();
@@ -300,10 +350,10 @@ describe('ProfileScreen', () => {
       team_ids: [],
       group_ids: [10],
     };
-    profileQueryMock.data = {
+    setTestProfile({
       ...mockProfile,
       role: 'bce',
-    };
+    });
 
     render(<ProfileScreen />, { wrapper: wrapper() });
 
@@ -326,10 +376,10 @@ describe('ProfileScreen', () => {
       team_ids: [],
       group_ids: [10],
     };
-    profileQueryMock.data = {
+    setTestProfile({
       ...mockProfile,
       role: 'bce',
-    };
+    });
 
     render(<ProfileScreen />, { wrapper: wrapper() });
 
@@ -377,6 +427,41 @@ describe('ProfileScreen', () => {
       phone: '0722334455',
       avatarColor: '#ED2025',
     });
+  });
+
+  it('after saving a profile edit, the header re-renders with the updated name', async () => {
+    const user = userEvent.setup();
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    // Initial name in header
+    expect(
+      screen.getByRole('heading', { name: /maria enache/i }),
+    ).toBeInTheDocument();
+
+    // Open edit sheet
+    const editButton = screen.getByRole('button', { name: /editează profil/i });
+    await user.click(editButton);
+
+    expect(
+      screen.getByRole('heading', { name: /editează profilul/i }),
+    ).toBeInTheDocument();
+
+    // Type updated name
+    const nameInput = screen.getByLabelText(/nume complet/i);
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Maria Ionescu');
+
+    // Save changes
+    const saveButton = screen.getByRole('button', { name: /salvează/i });
+    await user.click(saveButton);
+
+    // Header re-renders with updated name, old name is gone
+    expect(
+      await screen.findByRole('heading', { name: /maria ionescu/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /maria enache/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders loading state when profile is pending', () => {
@@ -449,10 +534,10 @@ describe('ProfileScreen', () => {
   });
 
   it('renders Necompletat placeholder when phone number is missing', () => {
-    profileQueryMock.data = {
+    setTestProfile({
       ...mockProfile,
       phone: null,
-    };
+    });
 
     render(<ProfileScreen />, { wrapper: wrapper() });
 

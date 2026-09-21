@@ -23,7 +23,6 @@ const sampleProfile: MyProfile = {
   full_name: 'Ana Popescu',
   role: 'voluntar',
   status: 'activ',
-  tier: null,
   avatar_color: '#284C93',
   joined_year: 2025,
   joined_at: '2025-01-01',
