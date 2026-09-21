@@ -1586,30 +1586,36 @@ export type Database = {
           changed_by: string | null
           created_at: string
           from_role: Database["public"]["Enums"]["member_role"]
+          from_status: Database["public"]["Enums"]["member_status"] | null
           id: number
           member_id: string
           reason: string
           to_role: Database["public"]["Enums"]["member_role"]
+          to_status: Database["public"]["Enums"]["member_status"] | null
         }
         Insert: {
           actor_kind: string
           changed_by?: string | null
           created_at?: string
           from_role: Database["public"]["Enums"]["member_role"]
+          from_status?: Database["public"]["Enums"]["member_status"] | null
           id?: never
           member_id: string
           reason: string
           to_role: Database["public"]["Enums"]["member_role"]
+          to_status?: Database["public"]["Enums"]["member_status"] | null
         }
         Update: {
           actor_kind?: string
           changed_by?: string | null
           created_at?: string
           from_role?: Database["public"]["Enums"]["member_role"]
+          from_status?: Database["public"]["Enums"]["member_status"] | null
           id?: never
           member_id?: string
           reason?: string
           to_role?: Database["public"]["Enums"]["member_role"]
+          to_status?: Database["public"]["Enums"]["member_status"] | null
         }
         Relationships: [
           {
@@ -3904,6 +3910,56 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "event_attendance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_member_role: {
+        Args: {
+          p_member_id: string
+          p_role: Database["public"]["Enums"]["member_role"]
+        }
+        Returns: {
+          avatar_color: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          joined_at: string | null
+          joined_year: number | null
+          phone: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          tier: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_member_status: {
+        Args: {
+          p_member_id: string
+          p_status: Database["public"]["Enums"]["member_status"]
+        }
+        Returns: {
+          avatar_color: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          joined_at: string | null
+          joined_year: number | null
+          phone: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          tier: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
           isOneToOne: true
           isSetofReturn: false
         }
