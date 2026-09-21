@@ -3123,29 +3123,50 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_campaign: {
-        Args: { p_department_id: string; p_name: string }
-        Returns: {
-          created_at: string
-          created_by: string
-          department_id: string | null
-          group_id: number
-          id: number
-          is_active: boolean
-          name: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "campaigns"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      create_campaign:
+        | {
+            Args: { p_department_id: string; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { p_group_id: number; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       create_completed_work_request: {
         Args: {
           p_dept_id: string
           p_description: string
+          p_group_id?: number
           p_project_id: number
           p_team_id: string
         }
@@ -3239,6 +3260,7 @@ export type Database = {
           p_dept_id: string
           p_description: string
           p_executor_id?: string
+          p_group_id?: number
           p_kind?: string
           p_parent_task_id?: number
           p_project_id: number
