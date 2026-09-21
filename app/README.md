@@ -19,7 +19,11 @@ verified on Node 24, matching GitHub Actions.
 [`docs/superpowers/specs/frontend-mini-spec.md`](../docs/superpowers/specs/frontend-mini-spec.md)** —
 folder layout, routes, query conventions and theming are decided there, so
 screen PRs look alike and nobody invents a second architecture. The mini-spec's
-component choices (Ionic, AG Grid) are superseded by ADR-0002.
+component choices (Ionic, AG Grid) are superseded by ADR-0002. The
+[Brand Book reference](../docs/brand/reference.md) governs visual identity;
+CONTEXT.md and accepted ADRs govern domain meaning and capabilities. The mockup
+is historical inspiration only. Design frequent Member actions for mobile and
+dense coordinator work for desktop, with accessible controls in both layouts.
 
 ## The main commands
 
