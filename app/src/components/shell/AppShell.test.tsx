@@ -116,7 +116,7 @@ describe('AppShell', () => {
     ).toHaveTextContent(/^Notificări$/);
   });
 
-  it('uses the compact official mark as decorative mobile branding', () => {
+  it('uses the complete official logo as decorative mobile branding', () => {
     const { container } = renderShell();
 
     const topbar = container.querySelector('header');
@@ -124,8 +124,8 @@ describe('AppShell', () => {
 
     expect(marks).toHaveLength(2);
     expect(marks.map((mark) => mark.getAttribute('src'))).toEqual([
-      expect.stringContaining('osubb-icon-on-light'),
-      expect.stringContaining('osubb-icon-on-dark'),
+      expect.stringContaining('osubb-logo-on-light'),
+      expect.stringContaining('osubb-logo-on-dark'),
     ]);
     marks.forEach((mark) => expect(mark).toHaveAttribute('alt', ''));
   });
