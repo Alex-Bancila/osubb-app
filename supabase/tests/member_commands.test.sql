@@ -2,6 +2,11 @@
 -- public.set_member_role and public.set_member_status, and the
 -- public.role_history row each one writes (#50's table).
 --
+-- #603 extends it with the session revoke that turns ADR-0003's bounded
+-- deactivation window from a sentence into code: every Status change away from
+-- `activ` deletes the Member's GoTrue session rows in the same transaction,
+-- and a change *to* `activ` deletes nothing.
+--
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 -- No pg_temp.test_race here on purpose: these commands take one target lock on
 -- public.profiles and the host defect in #596 makes the blocking path
@@ -12,7 +17,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(63);
+select plan(76);
 
 -- ==================== Structure ====================
 
@@ -42,16 +47,51 @@ select matches(
   '#584',
   'and names #584 as the owner of the pending-Application withdrawal it cannot do yet');
 
--- ADR-0003's deactivation window: the command cannot revoke Auth sessions, and
--- says whose job that is instead of letting a reader assume it happened.
+-- ADR-0003's deactivation window. #580 shipped this comment saying the command
+-- hands session revocation to a `revoke-sessions` Edge Function called by #105
+-- afterwards; #603's correction of 2026-09-21 retired that design (there is no
+-- sign-out-by-user-id in the v2 admin API to build it on) and moved the revoke
+-- into the command's own transaction. The comment is asserted, not assumed,
+-- because it is the only place a reader is told the access token still lives
+-- out its hour.
 select matches(
   obj_description('public.set_member_status(uuid, public.member_status)'::regprocedure, 'pg_proc'),
-  'revoke-sessions Edge Function',
-  'set_member_status''s comment hands session revocation to #105''s Edge Function (#603), not itself');
+  'revokes the Member''s Auth sessions in this same transaction',
+  'set_member_status''s comment states that a non-activ Status revokes sessions here, in this transaction (#603)');
+select matches(
+  obj_description('public.set_member_status(uuid, public.member_status)'::regprocedure, 'pg_proc'),
+  'at most jwt_expiry \(one hour\)',
+  'and still states the ADR-0003 window the revoke bounds but cannot close — the issued access token expires on its own');
 select matches(
   obj_description('public.set_member_status(uuid, public.member_status)'::regprocedure, 'pg_proc'),
   'never touches group_members',
   'and states that deactivation leaves every roster row and Group Role in place');
+
+-- ==================== #603: the revoke helper ====================
+
+select has_function('private', 'revoke_member_sessions', array['uuid'],
+  'the session-revoke helper exists with the signature #603 specifies');
+
+-- The comment is the durable record of *why* this is a database function and
+-- not the Edge Function ADR-0003 and #580 both describe. Without it the next
+-- reader sees a Postgres function reaching into `auth` and "fixes" it back.
+select matches(
+  obj_description('private.revoke_member_sessions(uuid)'::regprocedure, 'pg_proc'),
+  'takes a user''s JWT, not a user id',
+  'and its comment states why it is not an Edge Function — admin.signOut takes a JWT, not a user id (#603)');
+
+-- Executable by no client role at all. This is the `require_*`/trigger shape
+-- from conventions section 4: a client that could call this directly would
+-- hold an unauthenticated, unaudited sign-out for any Member in OSUBB, because
+-- the whole authority gate lives in set_member_status_impl, its only caller.
+select is(has_function_privilege('authenticated', 'private.revoke_member_sessions(uuid)', 'execute'), false,
+  'authenticated cannot execute private.revoke_member_sessions — the gate is in the command, not in this helper');
+select is(has_function_privilege('anon', 'private.revoke_member_sessions(uuid)', 'execute'), false,
+  'anon cannot execute private.revoke_member_sessions');
+select is(has_function_privilege('service_role', 'private.revoke_member_sessions(uuid)', 'execute'), false,
+  'service_role cannot execute private.revoke_member_sessions either — nothing in private is ever service_role''s');
+select is(has_function_privilege('public', 'private.revoke_member_sessions(uuid)', 'execute'), false,
+  'and the default PUBLIC execute grant Postgres hands every new function was revoked');
 
 -- Deliberately NOT asserted here: that `authenticated` has lost
 -- `update (role, status)` on `profiles`. #580 leaves that grant in place, so
@@ -119,6 +159,32 @@ insert into group_members (group_id, member_id, group_role)
          case when grp.name = 'Grup 580 Părinte' then 'manager' else 'member' end
     from groups as grp
    where grp.name in ('Grup 580 Părinte', 'Grup 580 Copil', 'Grup 580 Separat');
+
+-- #603 fixtures: live GoTrue sessions, written directly because nothing in the
+-- database can mint one — GoTrue does that over HTTP, and the live
+-- refresh-token rejection is verified by hand against the local stack once, as
+-- the issue requires, not from here.
+--
+-- Four Members hold one each: `…05` is deactivated below, `…0b` is moved to
+-- alumni, `…08` is *re*activated, and `…04` is never touched at all and is the
+-- bystander that proves the delete is targeted rather than a truncate.
+insert into auth.sessions (id, user_id) values
+  ('58000000-5e55-0000-0000-000000000004', '58000000-0000-0000-0000-000000000004'),
+  ('58000000-5e55-0000-0000-000000000005', '58000000-0000-0000-0000-000000000005'),
+  ('58000000-5e55-0000-0000-000000000008', '58000000-0000-0000-0000-000000000008'),
+  ('58000000-5e55-0000-0000-00000000000b', '58000000-0000-0000-0000-00000000000b');
+
+-- Refresh tokens: one per session, plus one deliberately session-less row for
+-- `…05`. `auth.refresh_tokens.session_id` is nullable, so a row like that
+-- survives the `on delete cascade` from `auth.sessions` — it is exactly what
+-- the helper's second delete exists for, and what a "the FK handles it"
+-- simplification would leave usable.
+insert into auth.refresh_tokens (token, user_id, session_id, revoked) values
+  ('rt-580-04', '58000000-0000-0000-0000-000000000004', '58000000-5e55-0000-0000-000000000004', false),
+  ('rt-580-05', '58000000-0000-0000-0000-000000000005', '58000000-5e55-0000-0000-000000000005', false),
+  ('rt-580-05-orphan', '58000000-0000-0000-0000-000000000005', null, false),
+  ('rt-580-08', '58000000-0000-0000-0000-000000000008', '58000000-5e55-0000-0000-000000000008', false),
+  ('rt-580-0b', '58000000-0000-0000-0000-00000000000b', '58000000-5e55-0000-0000-00000000000b', false);
 
 -- ==================== set_member_role: who may not ====================
 
@@ -430,6 +496,28 @@ select is(
     where member_id = '58000000-0000-0000-0000-000000000005'),
   0::bigint, 'Membership Status changes never write Notifications');
 
+-- #603. The whole point of the issue: the deactivated Member's GoTrue sessions
+-- are gone in the same transaction as the Status change, so no refresh token
+-- they hold can mint another access token. Read as postgres — `authenticated`
+-- has no business reading `auth.sessions` and cannot.
+select is(
+  (select count(*) from auth.sessions
+    where user_id = '58000000-0000-0000-0000-000000000005'),
+  0::bigint, 'deactivation deletes every auth.sessions row the Member held (#603)');
+select is(
+  (select count(*) from auth.refresh_tokens
+    where user_id = '58000000-0000-0000-0000-000000000005'),
+  0::bigint, 'and every refresh token with it, including the session-less row the FK cascade does not reach');
+
+-- …and nobody else's. A revoke that took the whole table would satisfy the two
+-- assertions above and lock the organization out.
+select is(
+  (select count(*) from auth.sessions
+    where user_id = '58000000-0000-0000-0000-000000000004')
+  + (select count(*) from auth.refresh_tokens
+      where user_id = '58000000-0000-0000-0000-000000000004'),
+  2::bigint, 'a bystander Member''s session and refresh token are untouched — the revoke is by member id');
+
 -- The Minimum-Level cleanup belongs to the Role command alone. Deactivation is
 -- not a demotion: the Wave 2 helpers already refuse an inactive actor, so the
 -- roster row and its Group Role stay put and a reactivated Member resumes the
@@ -472,12 +560,21 @@ select lives_ok(
   'a Member with voting rights can be moved to alumni — #50''s voting guard is satisfied by the named BC actor');
 reset role;
 
--- ==================== what deactivation actually achieves today ====================
--- There is no session-revoke path in the database (ADR-0003 assigns it to the
--- role-management UI via the Auth admin API, issue #105). What the command
--- does guarantee is the ADR-0003 gate: the live authority lookups answer
--- "nobody" the instant the Status lands, so every command gate and policy
--- predicate denies, and the next token refresh carries no claims at all.
+-- #603's condition is on the destination Status, not on `inactiv` by name:
+-- `alumni` ends a Member's access exactly as thoroughly, and `member_status`
+-- has no third non-activ value to miss.
+select is(
+  (select count(*) from auth.sessions
+    where user_id = '58000000-0000-0000-0000-00000000000b'),
+  0::bigint, 'moving a Member to alumni revokes their sessions too — every Status that is not activ does');
+
+-- ==================== what deactivation actually achieves ====================
+-- Two halves, and both are needed. The ADR-0003 gate below is immediate: the
+-- live authority lookups answer "nobody" the instant the Status lands, so
+-- every command gate and policy predicate denies. #603's revoke is what closes
+-- the other end — with no session row left, the token that still carries stale
+-- claims cannot be renewed, so the window is bounded by jwt_expiry instead of
+-- running until the Member chooses to sign out.
 
 select is(
   (select private.actor_level('58000000-0000-0000-0000-000000000005')),
@@ -490,7 +587,22 @@ select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000001');
 select is(
   (select status::text from public.set_member_status('58000000-0000-0000-0000-00000000000c', 'inactiv')),
   'inactiv', 'the Moderator may deactivate a sitting BC');
+
+-- #603's other direction, and the one a careless `if p_status is distinct from
+-- v_from` would break: reactivation revokes nothing. `…08` is the deactivated
+-- BC from the fixtures, holding a session row throughout; the Moderator brings
+-- them back, and the session they were already holding is still theirs. There
+-- is no security reason to sign a returning Member out.
+select is(
+  (select status::text from public.set_member_status('58000000-0000-0000-0000-000000000008', 'activ')),
+  'activ', 'the Moderator reactivates the deactivated BC');
 reset role;
+select is(
+  (select count(*) from auth.sessions
+    where user_id = '58000000-0000-0000-0000-000000000008')
+  + (select count(*) from auth.refresh_tokens
+      where user_id = '58000000-0000-0000-0000-000000000008'),
+  2::bigint, 'a Status change to activ revokes nothing — the reactivated Member keeps the session and refresh token they held (#603)');
 
 -- ==================== the widened audit row admits exactly one dimension ====================
 -- #580 added from_status/to_status to #50's table and replaced its
