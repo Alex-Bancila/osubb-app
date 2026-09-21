@@ -92,7 +92,7 @@ select is((
    where namespace.nspname = 'public'
      and procedure.proname in ('create_campaign', 'update_campaign', 'set_campaign_active')
      and has_function_privilege('authenticated', procedure.oid, 'execute')
-), 3::bigint, 'authenticated can execute all three public commands');
+), 4::bigint, 'authenticated can execute commands including the Group overload');
 select is((
   select count(*)
     from pg_proc as procedure
@@ -110,7 +110,7 @@ select is((
      and has_function_privilege('authenticated', procedure.oid, 'execute')
 ), 3::bigint, 'authenticated can execute the three private implementations');
 select ok(not has_function_privilege('authenticated',
-  'private.require_campaign_manager(text)'::regprocedure, 'execute'),
+  'private.require_campaign_manager(bigint)'::regprocedure, 'execute'),
   'authenticated cannot execute require_campaign_manager directly');
 select is((
   select count(*)
@@ -205,11 +205,10 @@ reset role;
 -- ==================== Department validation ====================
 select pg_temp.test_login('34300000-0000-0000-0000-000000000003', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('org', 'Org Campaign')$$,
-  'PT400', 'invalid_campaign_department',
-  'the org pseudo-department cannot own a Campaign, even for BC');
+select lives_ok($$select public.create_campaign('org', 'Org Campaign')$$,
+  'BC creates an Organization Group Campaign through the compatibility wrapper');
 select throws_ok($$select public.create_campaign('does-not-exist-343', 'X')$$,
-  'PT404', 'department_not_found', 'an unknown department is rejected, even for BC');
+  '42501', 'campaign_manage_forbidden', 'an unknown department is nondisclosing, even for BC');
 create temp table diverse_campaign as
 select * from public.create_campaign('diverse', 'Diverse Campaign');
 reset role;
@@ -274,8 +273,8 @@ select pg_temp.test_login('34300000-0000-0000-0000-000000000006', jsonb_build_ob
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.update_campaign(
   (select missing_id from cids), 'X')$$,
-  '42501', 'campaign_manage_forbidden',
-  'a Voluntar is denied by the pre-lock gate before an unknown Campaign is even looked up');
+  'PT404', 'campaign_not_found',
+  'an active member can discover that a Campaign is missing after the membership gate');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -454,8 +453,8 @@ select pg_temp.test_login('34300000-0000-0000-0000-000000000006', jsonb_build_ob
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.set_campaign_active(
   (select missing_id from cids), true)$$,
-  '42501', 'campaign_manage_forbidden',
-  'a Voluntar is denied by the pre-lock gate before an unknown Campaign is even looked up');
+  'PT404', 'campaign_not_found',
+  'an active member can discover that a Campaign is missing after the membership gate');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -565,11 +564,11 @@ select ok(coalesce((
 ), false), 'a BCE no-op holds their own live profile row FOR SHARE');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '34300000-0000-0000-0000-000000000021'
-     and membership.dept_id = 'edu'
-), false), 'a BCE no-op holds their Department membership row FOR SHARE');
+     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+), false), 'a BCE no-op holds their Group membership row FOR SHARE');
 
 select extensions.dblink_exec('campaign_lock', 'rollback');
 select extensions.dblink_disconnect('campaign_lock');

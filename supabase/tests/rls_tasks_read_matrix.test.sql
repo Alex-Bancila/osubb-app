@@ -6,12 +6,11 @@
 -- 20260911211100_tasks_read_policy.sql:
 --   R1 global readers: live role level >= 5 (BCE, BC, Moderator)
 --   R2 own work: any Assignment (current or ended) or Candidature (any status)
---   R3 Origin managers (private.can_manage_task) — admitted by R1/R4/R5;
---      the sweep at the end proves "manage implies read" everywhere
---   R4 Team members: every Task of their Team
---   R5 Project lead / Responsibles: every Task of the Project, archived too
+--   R3 Group Managers and Responsibles on the ancestor path (archived history too)
+--   R4 Shared Work Visibility of any Group on the path the caller belongs to
 --   R6 eligible Opportunities: ordinary, public, queue open, unfinished;
---      Audience org -> every active Member, local -> members of the Origin
+--      Audience org -> Members meeting the Group Minimum Level, local -> own Group members
+--      R3 authority overrides Minimum Level; ordinary R4/R6 reads must meet it
 --   R7 a Subtask whenever its Umbrella is readable by the same caller
 -- and nothing else: plain Department and Project members read only R2 + R6.
 begin;
@@ -20,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(64);
+select plan(70);
 
 -- ==================== Shape of the read surface ====================
 select policies_are('public', 'tasks',
@@ -724,5 +723,43 @@ select is(cardinality(pg_temp.helper_triples(true)), 113,
   'the sweep is not vacuous: 113 persona/Task/helper triples hold, all readable');
 
 reset role;
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+select pg_temp.g521_task('private','project',5);
+select pg_temp.g521_task('archived','archived',5);
+select pg_temp.g521_task('dtprivate','dt',10);
+select pg_temp.g521_task('dtorg','dt',null,'todo','public');
+select pg_temp.g521_task('dtlocal','dt',null,'todo','public');
+update public.tasks set audience='local' where id=(select id from g521_tasks where name='dtlocal');
+select pg_temp.g521_task('dtown','dt',8);
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is(private.can_read_task((select id from g521_tasks where name='dtlocal')),false,'plain Department membership cannot read a Child local Opportunity');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select ok(private.can_read_task((select id from g521_tasks where name='private')) and private.can_read_task((select id from g521_tasks where name='archived')),'low-rank Group Manager reads active work and archived history');
+reset role;
+-- OD9 rolled-back settings fixture; no production Group write.
+update public.groups set min_level=3,application_level=3 where legacy_team_id='dt521';
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select results_eq($$select t.name from g521_tasks t where t.name like 'dt%' and private.can_read_task(t.id) order by 1$$,$$values ('dtown'::text)$$,'below-Minimum-Level Member reads only their Assignment, not shared or org Opportunities');
+reset role;
+update public.groups set min_level=3,application_level=3 where name='Project #521';
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select is(private.can_read_task((select id from g521_tasks where name='private')),true,'inherited or direct Group Role overrides discovery Minimum Level');
+reset role;
+update public.groups set min_level=0,application_level=0 where name='Project #521';
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+reset role;
+delete from public.project_members where project_id=(select id from public.projects where name='Project #521') and member_id=pg_temp.g521_uid(3);
+set local role authenticated;
+select is(private.can_read_task((select id from g521_tasks where name='private')),false,'removed Group role loses private reads despite stale token');
+select is(private.can_read_task((select id from g521_tasks where name='dtorg')),false,'stale Group role does not bypass another Group Minimum Level');
+reset role;
+
 select * from finish();
 rollback;
