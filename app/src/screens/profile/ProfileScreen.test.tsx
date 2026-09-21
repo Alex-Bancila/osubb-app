@@ -35,7 +35,7 @@ const profileMocks = vi.hoisted(() => {
     joined_year: 2024,
     joined_at: '2024-10-01',
     email: 'maria@osubb.ro',
-    phone: '0722334455',
+    phone: '0722334455' as string | null,
   };
 
   return {
@@ -61,7 +61,11 @@ const pointsQueryMock = vi.hoisted(() => ({
 }));
 
 const standingQueryMock = vi.hoisted(() => ({
-  data: { rank: 3, total: 12, next: { rank: 2, gap: 5 } },
+  data: {
+    rank: 3,
+    total: 12,
+    next: { rank: 2, gap: 5 } as { rank: number; gap: number } | null,
+  },
   isPending: false,
   isError: false,
   error: null,
@@ -303,5 +307,55 @@ describe('ProfileScreen', () => {
     await user.click(retryButton);
 
     expect(profileQueryMock.refetch).toHaveBeenCalled();
+  });
+
+  it('renders empty state when member has no assigned groups', () => {
+    authMock.claims = {
+      member_role: 'voluntar',
+      member_level: 1,
+      dept_ids: [],
+      team_ids: [],
+      group_ids: [],
+    };
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    expect(
+      screen.getByText(/nu faci parte din nicio echipă încă/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders Necompletat placeholder when phone number is missing', () => {
+    profileQueryMock.data = {
+      ...mockProfile,
+      phone: null,
+    };
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    expect(screen.getByText('Necompletat')).toBeInTheDocument();
+  });
+
+  it('renders Locul 1 trophy when leader is in first place', () => {
+    authMock.claims = {
+      member_role: 'bc',
+      member_level: 6,
+      dept_ids: ['edu'],
+      team_ids: [],
+      group_ids: [10],
+    };
+    profileQueryMock.data = {
+      ...mockProfile,
+      role: 'bc',
+    };
+    standingQueryMock.data = {
+      rank: 1,
+      total: 10,
+      next: null,
+    };
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    expect(screen.getByText(/locul 1 🏆/i)).toBeInTheDocument();
   });
 });

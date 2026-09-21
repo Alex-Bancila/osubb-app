@@ -133,6 +133,56 @@ describe('EditProfileSheet', () => {
     ).toBeInTheDocument();
   });
 
+  it('submits null phone when phone input is cleared', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+
+    render(
+      <EditProfileSheet
+        open={true}
+        onClose={onClose}
+        profile={sampleProfile}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    const phoneInput = screen.getByLabelText(/număr de telefon/i);
+    await user.clear(phoneInput);
+
+    const saveButton = screen.getByRole('button', {
+      name: /salvează modificările/i,
+    });
+    await user.click(saveButton);
+
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      fullName: 'Ana Popescu',
+      phone: null,
+      avatarColor: '#284C93',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('renders an error alert when the profile update fails', async () => {
+    const user = userEvent.setup();
+    updateProfileMock.mockRejectedValueOnce(new Error('Eroare la conexiune'));
+
+    render(
+      <EditProfileSheet
+        open={true}
+        onClose={vi.fn()}
+        profile={sampleProfile}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    const saveButton = screen.getByRole('button', {
+      name: /salvează modificările/i,
+    });
+    await user.click(saveButton);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Eroare la conexiune');
+  });
+
   it('calls onClose when close button is clicked', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
