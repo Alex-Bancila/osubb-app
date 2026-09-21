@@ -72,6 +72,36 @@ as $$
   select set_config('request.jwt.claims', '', true)::void;
 $$;
 
+-- #596: libpq only puts an asynchronous connection back into the idle state
+-- once PQgetResult has answered NULL, and dblink surfaces that terminal read
+-- as one more result set that yields no row. Whether the single read a caller
+-- actually wants happens to leave the connection idle depends on how much of
+-- the server's answer libpq had already buffered -- which is why the same file
+-- is green in CI and red on a busier local stack, with the next dblink_exec on
+-- that connection dying with "another command is already in progress".
+--
+-- pg_temp.test_race drains its own connection B inline. Every OTHER section
+-- that sends its own dblink_send_query calls this between the result it cares
+-- about and the rollback/commit that follows. It never raises: cleanup must
+-- not be able to replace the failure a suite is actually reporting.
+create or replace function pg_temp.test_drain(p_connection text)
+returns void
+language plpgsql
+as $function$
+declare
+  v_discard text;
+begin
+  for attempt in 1..1000 loop
+    select remote_result
+      into v_discard
+      from extensions.dblink_get_result(p_connection, false)
+        as remote(remote_result text);
+    exit when not found;
+  end loop;
+exception when others then null;
+end;
+$function$;
+
 create or replace function pg_temp.test_race(
   p_sql_a text,
   p_sql_b text
@@ -296,7 +326,7 @@ $function$;
 
 \if :{?osubb_test_suite}
 \else
-select plan(20);
+select plan(24);
 
 insert into auth.users (id, email)
 values ('e3670000-0000-0000-0000-000000000001', 'helpers.bce@test.local');
@@ -378,6 +408,27 @@ select ok(not exists (
 ), 'test_race disconnects both sessions after an asynchronous query B failure');
 
 reset role;
+
+-- test_drain: the same libpq contract, for the sections that send their own
+-- asynchronous query instead of going through test_race. Two result sets are
+-- queued on purpose, only the first is taken, and the synchronous command that
+-- follows is what fails with "another command is already in progress" if the
+-- rest is left unread.
+select extensions.dblink_connect('helpers_drain', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres application_name=helpers_drain',
+  current_database()));
+select is(extensions.dblink_send_query('helpers_drain',
+  $$ select 'first'::text; select 'queued'::text $$), 1,
+  'test_drain fixture: two result sets are queued on one connection');
+select is((select status from extensions.dblink_get_result('helpers_drain')
+            as remote(status text)), 'first',
+  'the caller takes only the result it came for');
+select lives_ok($$ select pg_temp.test_drain('helpers_drain') $$,
+  'test_drain reads the rest of the queue without raising');
+select lives_ok(
+  $$ select extensions.dblink_exec('helpers_drain', 'set statement_timeout = ''5s''') $$,
+  'and the connection accepts a synchronous command again afterwards');
+select extensions.dblink_disconnect('helpers_drain');
 
 -- test_credit_task: the trigger-free replacement for "set a rating and let
 -- the points engine do the rest".

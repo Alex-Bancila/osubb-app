@@ -1016,6 +1016,7 @@ declare
   v_jwt text := current_setting('request.jwt.claims', true);
   v_busy integer;
   v_saw_state boolean := false;
+  v_drain text;
 begin
   if coalesce(v_jwt, '') = '' then
     raise exception 'race_capture requires test_login first';
@@ -1077,16 +1078,33 @@ begin
 
   -- The one difference from pg_temp.test_race: B's remote error is caught HERE
   -- and reported as text, so a losing B is observable alongside b_waited.
+  -- Only the read is caught -- B losing the race is an outcome, everything
+  -- after it is harness plumbing and must not be mistaken for one.
   begin
     select remote_result into strict result_b
       from extensions.dblink_get_result(v_connection_b) as remote(remote_result text);
-    begin
-      perform extensions.dblink_exec(v_connection_b, 'commit');
-    exception when others then null;
-    end;
   exception when others then
     result_b := sqlstate || ' ' || sqlerrm;
   end;
+
+  -- #618: same libpq contract as pg_temp.test_race -- the connection stays
+  -- busy until PQgetResult has answered NULL -- drained inline because this
+  -- copy is security definer with an empty search_path. Draining is cleanup,
+  -- so it is swallowed; the commit that follows is NOT. A commit that cannot
+  -- run means every write this session made is about to be thrown away by the
+  -- disconnect below, and a race harness that reports a winner it never
+  -- committed is measuring nothing -- so it is left to reach the handler at
+  -- the bottom, which rolls back, disconnects and re-raises.
+  begin
+    loop
+      select remote_result into v_drain
+        from extensions.dblink_get_result(v_connection_b) as remote(remote_result text);
+      exit when not found;
+    end loop;
+  exception when others then null;
+  end;
+
+  perform extensions.dblink_exec(v_connection_b, 'commit');
 
   begin
     perform extensions.dblink_disconnect(v_connection_a);
