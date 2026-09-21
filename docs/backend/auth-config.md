@@ -56,6 +56,12 @@ docker inspect supabase_auth_osubb-app --format '{{range .Config.Env}}{{println 
 
 Supabase sends a magic link and a six-digit code as **one** OTP: same secret, same expiry, same single use. Our templates (`supabase/templates/magic-link.html` and `supabase/templates/invite.html`) print both, and the login screen offers the code as a second step — _"Apasă linkul din email sau introdu codul de 6 cifre"_ — calling `verifyOtp({ email, token, type: 'email' })`. The reason is storage, not convenience: an installed PWA on iOS has its own storage, separate from Safari, so a member who installs the app and taps the link in Mail is signed into **Safari** while the app they installed keeps showing the login screen; Android shares storage, so the failure is invisible until the first iPhone. A link opened on a different device than the one that typed the address breaks the same way. This adds no authentication path and does not touch invite-only access — an address with no `profiles` row still comes back with no organization claims, exactly as the link would.
 
+## What an emailed sign-in costs
+
+Every way into the app is an email: an invitation, and every sign-in on a new device, after a sign-out, or after the refresh token lapses. The code does not add a send — the link and the code arrive in the same message. The cost is therefore one email per sign-in, and the limit that matters is the provider's, not Supabase's: hosted projects send through the custom SMTP provider from **#146**, because Supabase's built-in sender is throttled and documented as unsuitable for production.
+
+Plan around the provider's **daily** cap, not the monthly one. At the time of writing the free tiers are roughly Resend 100/day (3,000/month) and Brevo 300/day — check the provider's pricing page before relying on either. A recruitment batch of ~200 invitations through the CSV import (#107), or a room of members signing in on their phones before an event, can exceed a 100/day cap in one afternoon, and the failure is silent: the email never arrives and the member sees no error. Before a batch that large, either split it across days or move to the provider's paid tier, and raise **Authentication → Rate Limits → emails per hour** to match. Record the chosen provider and its cap here when #146 lands.
+
 ## Verifying the whole thing works
 
 Two commands, both of which must behave as written:
