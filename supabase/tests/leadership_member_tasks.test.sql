@@ -7,10 +7,20 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(32);
 
 select has_function('public', 'leadership_member_tasks', array['uuid'], 'leadership drill-down is a public RPC');
 select function_returns('public', 'leadership_member_tasks', array['uuid'], 'setof record', 'drill-down returns records');
+-- #523: the wrapper/body split itself. The gate lives in the private body,
+-- which is the only thing allowed to read Assignment history past RLS; the
+-- public entry point must stay invoker so it cannot become a second, wider
+-- door. Both directions of that mutation -- a `security definer` wrapper, or a
+-- `security invoker` body -- leave every behavioural assertion below green,
+-- which is why the split is pinned here rather than inferred from them.
+select is((select prosecdef from pg_proc where oid = 'public.leadership_member_tasks(uuid)'::regprocedure),
+  false, 'the public drill-down wrapper is security invoker');
+select is((select prosecdef from pg_proc where oid = 'private.leadership_member_tasks_impl(uuid)'::regprocedure),
+  true, 'the private drill-down body is security definer -- it reads past RLS and gates itself');
 select ok(has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid)', 'EXECUTE'), 'authenticated may call the gated RPC');
 select ok(not has_function_privilege('anon', 'public.leadership_member_tasks(uuid)', 'EXECUTE'), 'anon cannot call the RPC');
 select ok(not has_function_privilege('service_role', 'public.leadership_member_tasks(uuid)', 'EXECUTE'), 'server role has no BCE+ bypass');
@@ -181,6 +191,27 @@ select results_eq(
   $$select distinct group_id,group_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002') where title='Historical Subtask 260'$$,
   $$select id,name from public.groups where legacy_dept_id='edu'$$,
   'the fixture Subtask carries its owning Group id and name');
+
+-- #523: `group_name` has to come from the Group, not from the legacy Origin
+-- name sitting two columns to its left. Every Wave 1 Group is mirrored from its
+-- legacy structure and therefore *carries that structure's own name*, so the
+-- assertion above reads the same whether `group_name` is wired to
+-- `origin_group.name` or to `coalesce(origin_department.name, …)`. Renaming the
+-- Group alone -- inside this rolled-back transaction, leaving
+-- `public.departments` untouched -- is what separates the two columns.
+reset role;
+update public.groups set name = 'Grup Redenumit 523' where legacy_dept_id = 'edu';
+select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');
+select is(
+  (select distinct group_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')
+    where title = 'Historical Subtask 260'),
+  'Grup Redenumit 523',
+  'group_name follows the Group''s own name, not the legacy Origin name beside it');
+select is(
+  (select distinct origin_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')
+    where title = 'Historical Subtask 260'),
+  (select name from public.departments where id = 'edu'),
+  'and origin_name still reports the legacy Department name -- ADR-0009 keeps the Origin triple beside the Group identity until Wave 3');
 reset role;
 select * from finish();
 rollback;
