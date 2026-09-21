@@ -18,6 +18,13 @@ drop trigger tasks_validate_campaign on public.tasks;
 -- #315: tasks_validate_hierarchy also fires "of ... project_id" (a
 -- Subtask's origin includes project_id); same treatment.
 drop trigger tasks_validate_hierarchy on public.tasks;
+-- #519: tasks_sync_group_origin also fires "of ... project_id", registering the same
+-- kind of dependency on the column as the two triggers above.
+drop trigger tasks_sync_group_origin on public.tasks;
+-- With its populating trigger gone, group_id would otherwise block this harness's own
+-- Origin-only fixture inserts below (NOT NULL, #519). Irrelevant to what this harness
+-- tests; relaxed for the scratch transaction only, restored by the rollback.
+alter table public.tasks alter column group_id drop not null;
 alter table public.tasks drop constraint tasks_exactly_one_origin_check;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
@@ -131,6 +138,13 @@ set local client_min_messages = warning;
 drop view public.tasks_with_overdue;
 drop trigger tasks_validate_campaign on public.tasks;
 drop trigger tasks_validate_hierarchy on public.tasks;
+-- #519: tasks_sync_group_origin also fires "of ... project_id", registering the same
+-- kind of dependency on the column as the two triggers above.
+drop trigger tasks_sync_group_origin on public.tasks;
+-- With its populating trigger gone, group_id would otherwise block this harness's own
+-- Origin-only fixture inserts below (NOT NULL, #519). Irrelevant to what this harness
+-- tests; relaxed for the scratch transaction only, restored by the rollback.
+alter table public.tasks alter column group_id drop not null;
 alter table public.tasks drop constraint tasks_exactly_one_origin_check;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
