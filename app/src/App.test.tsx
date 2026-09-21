@@ -42,6 +42,9 @@ vi.mock('./screens/announcements/AnnouncementsScreen', () => ({
 vi.mock('./screens/notifications/NotificationsScreen', () => ({
   default: () => <h1>Notificări screen</h1>,
 }));
+vi.mock('./screens/profile/ProfileScreen', () => ({
+  default: () => <h1>Profil screen</h1>,
+}));
 
 import App from './App';
 
@@ -254,6 +257,17 @@ describe('route guards', () => {
 
     expect(
       screen.getByRole('heading', { name: 'Anunțuri screen' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the profile screen for an active member at /profil', () => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', '/profil');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Profil screen' }),
     ).toBeInTheDocument();
   });
 });
