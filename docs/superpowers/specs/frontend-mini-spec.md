@@ -4,13 +4,22 @@
 >
 > Kept for provenance; where it conflicts with `CLAUDE.md`, `CONTEXT.md`, or the ADRs, those win.
 
-**Status:** proposed (issue #79) · **Stack fixed by:** ADR-0002 · **UX source:** `mockup/`
+**Status:** proposed (issue #79) · **Stack fixed by:** ADR-0002 · **Visual authority:** OSUBB Brand Book 2025 ([app reference](../../brand/reference.md))
 
 > **Partly superseded (2026-09-07/10):** ADR-0002 now fixes Tailwind + shadcn/ui (Base UI, Nova) + TanStack Table in a browser-first PWA. The Ionic and AG Grid guidance in §2 (`DataGrid.tsx`) and §7, and the PWA timing in §9, are historical. Folder layout, routes, auth, data layer and theming rules still apply.
 
 ADR-0002 chose the stack. This fixes _how we use it_, so that every screen PR looks the same, two volunteers don't invent two architectures, and an Epic-9 issue can say "per §4 of the mini-spec" instead of re-deciding.
 
 Before frontend work, read the [OSUBB brand reference](../../brand/reference.md).
+
+### Source hierarchy
+
+1. The official **OSUBB Brand Book 2025** decides visual identity; the [brand reference](../../brand/reference.md) translates it into app guidance.
+2. `CONTEXT.md`, accepted ADRs, and the server's capability model decide domain meaning, permissions, and behavior. Colour or a prototype never grants authority. ADR-0009 makes Task management a Group Role decision; the historical level-4 example in §4 is not current guidance.
+3. This mini-spec supplies folder, route, and query conventions where they agree with those sources.
+4. `mockup/` is historical inspiration for exploring layouts and flows, never a requirement to copy its tokens, assets, or screens.
+
+Design frequent Member actions for mobile: readable cards, concise labels, and reachable controls. Give coordinators a desktop layout for comparing and managing many rows, with TanStack Table and shadcn controls under ADR-0002. Both layouts must preserve the same server-authorized actions, keyboard access, and accessible feedback; neither device changes permissions.
 
 Read this once before your first frontend issue. It is deliberately short; where it doesn't say, copy the nearest existing screen.
 
@@ -48,7 +57,7 @@ app/
 │   ├── screens/                 # one folder per route (§3)
 │   │   └── tracker/ dashboard/ calendar/ announcements/ volunteers/ bcpanel/ profile/
 │   └── theme/
-│       ├── tokens.css           # lifted from mockup/css/tokens.css (§6)
+│       ├── tokens.css           # app tokens verified against the Brand Book (§6)
 │       └── global.css
 └── package.json
 ```
@@ -72,7 +81,7 @@ Rules: a component used by one screen lives in that screen's folder. It moves to
 
 Paths are Romanian because members read them; code identifiers stay English (`CONTEXT.md` rule).
 
-**Navigation order**, from the mockup: sidebar `dashboard · tracker · calendar · anunturi · voluntari · profil · bc`; mobile tab bar shows five — `dashboard · calendar · tracker · anunturi · profil`.
+**Navigation order** (route convention, independent of the historical mockup): sidebar `dashboard · tracker · calendar · anunturi · voluntari · profil · bc`; mobile tab bar shows five — `dashboard · calendar · tracker · anunturi · profil`.
 
 **Three session states**, and every one of them is a real screen (#85):
 signed out → `/login` · signed in **without claims** → `/no-profile` · signed in with claims → the app. The middle one is not an error; it's ADR-0003 working, and it must look intentional.
@@ -128,14 +137,13 @@ if (!data?.length) return <Empty text="Niciun task deschis acum" />;
 
 ## 6. Theming
 
-Copy `mockup/css/tokens.css` into `src/theme/tokens.css` as-is. It is the OSUBB Brand Book 2025 palette and it already covers light and dark:
+Maintain `src/theme/tokens.css` against the [brand reference](../../brand/reference.md) and the official Brand Book. The existing tokens originated in the prototype, but copying `mockup/css/tokens.css` is not a validation step: verify each identity value against the authoritative source.
 
-- brand `--red: #ED2025`, a neutral ink ramp, semantic `--success / --warning / --danger / --info`
-- department accents — EDU `#284C93`, HR `#F2A700`, FIN `#007F33`, PR `#7500A0`, Tineret `#FF3B3B`
-- Montserrat, a type scale, radii, spacing, shadows, `--sidebar-w`, `--topbar-h`
-- dark theme via `:root[data-theme="dark"]`, which keeps the red and inverts the neutrals
-
-Use the tokens; do not introduce raw hex in a component. Department colours come from the `departments` table (`color`), so a new department needs no code change — `<DeptChip deptId="edu" />` looks it up.
+- OSUBB red, black, and white define the brand; the reference lists the approved Department accents.
+- Montserrat and approved logo variants follow the Brand Book; verify provenance before reusing a prototype asset.
+- Spacing, radii, shadows, semantic feedback, and light/dark interaction states are app decisions constrained by accessibility, rather than Brand Book claims.
+- Pair Department colours and semantic states with labels; colour never communicates a Role or permission.
+  Use the tokens; do not introduce raw hex in a component. Department colours come from the `departments` table (`color`), so a new department needs no code change — `<DeptChip deptId="edu" />` looks it up.
 
 Dark mode is a client-side toggle on `data-theme`, persisted in `localStorage`, defaulting to the system preference.
 
@@ -155,7 +163,7 @@ Dark mode is a client-side toggle on `data-theme`, persisted in `localStorage`, 
 - no permission logic beyond nav gating (§1)
 - verified by logging in as **at least two** demo roles and seeing different data
 - `npm run typecheck && npm run lint && npm run build` clean — CI runs these (#81)
-- matches the mockup closely enough that BC recognises it
+- follows the Brand Book/reference, domain vocabulary, and server capabilities; checks mobile Member and desktop coordinator layouts without requiring mockup fidelity
 
 ## 9. Open, deliberately
 

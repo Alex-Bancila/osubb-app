@@ -455,6 +455,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
   ('mirror_team_group',                           '',                                                                                                                   'trigger'),
   ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
+  -- #50: internal trigger function; no client execution.
+  ('guard_role_history', '', 'trigger'),
+  -- #69: scheduler-only job.
+  ('remind_deadlines', '', 'none'),
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
@@ -547,8 +551,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 122,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers');
+  (select count(*) from pinned_private_functions)::int, 124,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, and the #69 deadline job');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

@@ -156,11 +156,12 @@
   color: var(--text-muted);
 }
 
-.event-scope-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--event-accent);
+/* The Group's category, drawn in the Group's own colour. It replaced a plain
+   dot when Events started naming a Group instead of a scope enum: the dot could
+   only carry the colour, the icon carries the kind of Group as well. */
+.event-scope-icon {
+  font-size: 14px;
+  color: var(--event-accent);
 }
 
 .event-title {

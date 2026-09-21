@@ -20,6 +20,7 @@ function renderCallback() {
       <Routes>
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/" element={<h1>Aplicație</h1>} />
+        <Route path="/cereri" element={<h1>Cereri</h1>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -71,6 +72,16 @@ describe('AuthCallback', () => {
       await screen.findByRole('heading', { name: 'Linkul nu a funcționat' }),
     ).toBeVisible();
     expect(screen.queryByText(/private exchange details/i)).toBeNull();
+  });
+
+  it('restores a validated destination after callback establishes the session', () => {
+    window.history.replaceState({}, '', '/auth/callback?next=%2Fcereri');
+    mocks.useAuth.mockReturnValue({
+      loading: false,
+      session: { user: { id: 'member' } },
+    });
+    renderCallback();
+    expect(screen.getByRole('heading', { name: 'Cereri' })).toBeVisible();
   });
 
   it('hands an established session back to the route guards', () => {
