@@ -39,7 +39,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(98);
+select plan(102);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1161,6 +1161,31 @@ select is((select count(*) from public.profiles
                          '33900000-0000-0000-0000-000000000052',
                          '33900000-0000-0000-0000-000000000053')), 0::bigint,
   'including the personas they ran as');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',5,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.cancel_task((select id from g521_tasks where name='command0'),'Reason #521')$$,'cancel_task: Group persona 2 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command1','project',4,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.cancel_task((select id from g521_tasks where name='command1'),'Reason #521')$$,'42501','task_manage_forbidden','cancel_task: Group persona 3 on executor 4 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',7,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.cancel_task((select id from g521_tasks where name='command2'),'Reason #521')$$,'cancel_task: Group persona 6 on executor 7 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',5,'todo','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.cancel_task((select id from g521_tasks where name='command3'),'Reason #521')$$,'42501','task_manage_forbidden','cancel_task: Group persona 8 on executor 5 in dt');
+reset role;
 
 select * from finish();
 rollback;
