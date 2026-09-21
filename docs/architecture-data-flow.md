@@ -20,7 +20,7 @@ sequenceDiagram
     Hook->>Hook: Read active profile and memberships
     Hook-->>Auth: Organization claims, or no membership claims
     Auth-->>Browser: Session / signed JWT at allowed callback
-    Browser->>Browser: Decode claims once; route to app or /no-profile
+    Browser->>Browser: Decode claims once and route to app or /no-profile
 ```
 
 The token is a signed snapshot, not a live roster. The accepted read-access window after deactivation is bounded by its lifetime; sensitive commands additionally check the live actor. See [ADR-0003](adr/0003-invite-only-auth.md) and [auth configuration](backend/auth-config.md) for the exact guarantees and session-revocation requirement. Groups Wave 1 adds membership claims but does not itself replace every legacy authority helper.
