@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(29);
+select plan(30);
 
 insert into auth.users (id, email) values
   ('31500000-0000-0000-0000-000000000001', 'umbrella-actor-315@test.local');
@@ -243,5 +243,6 @@ select is(
   (select id from public.tasks where title = 'Umbrella 315'),
   'parent_task_id is visible through tasks_with_overdue');
 
+select throws_ok($$update public.tasks set group_id=(select id from public.groups where legacy_dept_id='pr') where title='Subtask 315'$$,'23514','subtask_origin_immutable','Group-only Subtask Origin edits are rejected');
 select * from finish();
 rollback;
