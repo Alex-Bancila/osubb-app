@@ -1,16 +1,21 @@
 # Routing browser verification — #193
 
-Verified 2026-09-19 against the configured production build of #545, commit
-`34b14d9`. This PR stacks on #545 because the original browser check found that
-signed-out deep links discarded their destination; #537 records that defect.
-The fix belongs to #545, while this PR contains verification evidence only.
+Updated 2026-09-21 against the production build of the review fixes at
+`0aa7371`. The deep-link fix from #545 is now on `main`.
+
+The review corrections replace the clipped simplified mobile mark with the
+complete approved principal logo in both themes. The Request form now says
+**Grup** and explains it as the department, team, or project the Member worked
+for; the selector references that explanation for assistive technology. The
+query and submission behavior are unchanged.
 
 ## Method
 
 Chromium headless with Playwright, at 1280×900 and 390×900 CSS pixels. The real
 application, guards, React Router, navigation components and Supabase client ran.
 Deterministic browser storage supplied signed-out, authenticated/no-profile,
-Voluntar and BC sessions; network interception supplied public fixture data.
+Voluntar and BC sessions; network interception supplied public fixture data, including an Educațional
+Department membership so the Request Group selector has an available option.
 The OTP request was intercepted rather than sending an email. Service workers
 were blocked to isolate routing from PWA caching and preserve network fixtures.
 This verifies browser navigation, not the email provider or backend RLS.
@@ -47,5 +52,23 @@ Normal resource cancellations caused by navigating away were observed as
 - [Mobile Voluntar requests screen](390-voluntar.png)
 - [Mobile login confirmation](390-signed-out.png)
 
-The associated fix also passes 34 focused route/login/callback tests and the
-full frontend suite and coverage gates in GitHub CI.
+## Visual review checks
+
+`visual-checks.json` records checks at 320, 390, and 1280 CSS pixels in light
+and dark themes. Each visible logo uses the complete 889×459 principal asset,
+preserves its aspect ratio, and fits inside its container. The Group explanation
+is visible, and the fixture Department can be selected.
+
+- [Narrow mobile, light](320-light-requests.png)
+- [Narrow mobile, dark](320-dark-requests.png)
+- [Mobile drawer, light](390-light-menu.png)
+- [Mobile drawer, dark](390-dark-menu.png)
+
+The existing shell and Request component tests were updated before the fix:
+three assertions failed on the old asset and wording, then all 12 focused tests
+passed with the fix. The Request test also checks the selector's accessible
+description.
+
+Local validation: typecheck, lint, formatting, all 61 test files / 407 tests,
+and the production build passed. All 16 routing checks passed without console
+errors or router warnings; all six viewport/theme visual checks passed.
