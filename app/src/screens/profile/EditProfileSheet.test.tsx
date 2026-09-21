@@ -6,21 +6,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyProfile } from '../../queries/profile';
 import EditProfileSheet from './EditProfileSheet';
 
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+
 const updateProfileMock = vi.fn();
 
-vi.mock('../../queries/profile', async () => {
-  const actual = await vi.importActual<typeof import('../../queries/profile')>(
-    '../../queries/profile',
-  );
-  return {
-    ...actual,
-    useUpdateMyProfile: () => ({
-      mutateAsync: updateProfileMock,
-      isPending: false,
-      error: null,
-    }),
-  };
-});
+vi.mock('../../queries/profile', () => ({
+  useUpdateMyProfile: () => ({
+    mutateAsync: updateProfileMock,
+    isPending: false,
+    error: null,
+  }),
+}));
 
 const sampleProfile: MyProfile = {
   id: 'p1',

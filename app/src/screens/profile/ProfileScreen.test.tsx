@@ -8,6 +8,8 @@ import type { Database } from '../../lib/database.types';
 import type { Group } from '../../queries/reference';
 import ProfileScreen from './ProfileScreen';
 
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+
 const authMock = vi.hoisted(() => ({
   claims: null as MemberClaims | null,
   session: { user: { id: 'p1' } },
@@ -110,20 +112,14 @@ const groupsMap = new Map<number, Group>([
   ],
 ]);
 
-vi.mock('../../queries/profile', async () => {
-  const actual = await vi.importActual<typeof import('../../queries/profile')>(
-    '../../queries/profile',
-  );
-  return {
-    ...actual,
-    useMyProfile: () => profileQueryMock,
-    useUpdateMyProfile: () => ({
-      mutateAsync: vi.fn().mockResolvedValue(undefined),
-      isPending: false,
-      error: null,
-    }),
-  };
-});
+vi.mock('../../queries/profile', () => ({
+  useMyProfile: () => profileMocks.profileQueryMock,
+  useUpdateMyProfile: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+    error: null,
+  }),
+}));
 
 vi.mock('../../queries/points', () => ({
   useMyPoints: () => pointsQueryMock,
