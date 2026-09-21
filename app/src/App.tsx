@@ -21,6 +21,7 @@ import CalendarScreen from './screens/calendar/CalendarScreen';
 import CompletedWorkRequestScreen from './screens/requests/CompletedWorkRequestScreen';
 import AnnouncementsScreen from './screens/announcements/AnnouncementsScreen';
 import NotificationsScreen from './screens/notifications/NotificationsScreen';
+import ProfileScreen from './screens/profile/ProfileScreen';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
@@ -167,10 +168,7 @@ export default function App() {
                 </RequireCapability>
               }
             />
-            <Route
-              path="/profil"
-              element={<Placeholder title="Profil" issue="#108" />}
-            />
+            <Route path="/profil" element={<ProfileScreen />} />
             <Route
               path="/bc"
               element={

@@ -1,4 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { skipToken, useQuery } from '@tanstack/react-query';
+import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
@@ -44,10 +46,13 @@ export type Group = Pick<
   | 'status'
   | 'is_organization'
   | 'legacy_dept_id'
->;
+> & {
+  manager_title?: string | null;
+  automatic_membership?: boolean;
+};
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, legacy_dept_id';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership, legacy_dept_id';
 
 /**
  * Every Group this member may read. RLS is the only filter — the browser asks
@@ -66,8 +71,169 @@ export function useGroups() {
         .select(GROUP_FIELDS);
       if (error) throw error;
       // A Map because every caller looks a Group up by id.
-      return new Map(data.map((group) => [group.id, group]));
+      return new Map(data.map((group) => [group.id, group as Group]));
     },
+  });
+}
+
+export type GroupMemberRow = {
+  group_id: number;
+  group_role: 'manager' | 'responsible' | 'member';
+  position_title: string | null;
+};
+
+export type MemberGroup = {
+  id: number;
+  name: string;
+  short: string | null;
+  color: string | null;
+  category: Group['category'];
+  group_role: 'manager' | 'responsible' | 'member';
+  position_title: string | null;
+  role_label: string;
+};
+
+/**
+ * Resolves the Group Role label for display:
+ * - Group Manager under the Group's `manager_title` (or fallback "Manager")
+ * - Group Responsible under `position_title` (or fallback "Responsabil")
+ * - Otherwise "Membru"
+ */
+export function resolveGroupRoleLabel(
+  groupRole: 'manager' | 'responsible' | 'member' | string,
+  managerTitle?: string | null,
+  positionTitle?: string | null,
+): string {
+  if (groupRole === 'manager') {
+    return managerTitle?.trim() || 'Manager';
+  }
+  if (groupRole === 'responsible') {
+    return positionTitle?.trim() || 'Responsabil';
+  }
+  return 'Membru';
+}
+
+/**
+ * Joins explicit `group_members` rows to `groups`, resolving the Group Role label,
+ * and filtering out inactive and Organization groups (#108).
+ */
+export function buildMemberGroups(
+  membershipRows: GroupMemberRow[] | undefined,
+  groupsMap: Map<number, Group> | undefined,
+): MemberGroup[] {
+  if (!membershipRows || !groupsMap) return [];
+
+  const result: MemberGroup[] = [];
+  for (const row of membershipRows) {
+    const group = groupsMap.get(row.group_id);
+    if (!group || group.status !== 'active') continue;
+    // The Organization Group is not listed (ruling R16)
+    if (group.is_organization || group.category === 'organization') continue;
+
+    const role_label = resolveGroupRoleLabel(
+      row.group_role,
+      group.manager_title,
+      row.position_title,
+    );
+
+    result.push({
+      id: group.id,
+      name: group.name,
+      short: group.short,
+      color: group.color,
+      category: group.category,
+      group_role: row.group_role,
+      position_title: row.position_title,
+      role_label,
+    });
+  }
+
+  return result.sort((a, b) => a.name.localeCompare(b.name, 'ro'));
+}
+
+/**
+ * Hook to fetch the signed-in member's own group memberships from `group_members`
+ * joined to `groups`. Memberships come from the tables, never from the `group_ids` claim.
+ */
+export function useMyGroups() {
+  const { session } = useAuth();
+  const id = session?.user.id;
+  const groupsQuery = useGroups();
+
+  const membershipQuery = useQuery({
+    queryKey: keys.profile.groups(id),
+    staleTime: 5 * 60_000,
+    queryFn: id
+      ? async (): Promise<GroupMemberRow[]> => {
+          const { data, error } = await supabase
+            .from('group_members')
+            .select('group_id, group_role, position_title')
+            .eq('member_id', id);
+          if (error) throw error;
+          return (data ?? []) as GroupMemberRow[];
+        }
+      : skipToken,
+  });
+
+  const data = useMemo(() => {
+    return buildMemberGroups(membershipQuery.data, groupsQuery.data);
+  }, [membershipQuery.data, groupsQuery.data]);
+
+  return {
+    data,
+    membershipRows: membershipQuery.data,
+    isPending: membershipQuery.isPending || groupsQuery.isPending,
+    isError: membershipQuery.isError || groupsQuery.isError,
+    error: membershipQuery.error ?? groupsQuery.error,
+    refetch: async () => {
+      await Promise.all([membershipQuery.refetch(), groupsQuery.refetch()]);
+    },
+  };
+}
+
+/**
+ * Resolves the active Groups a member belongs to, accounting for both:
+ * 1. Explicit roster rows recorded in `claims.group_ids`
+ * 2. Automatic Membership (ADR-0009):
+ *    - Organization Group (`automatic_membership = true`, `min_level = 0`) for every active member
+ *    - Adunarea Generală (`automatic_membership = true`, `min_level = 3`) for voting members (level >= 3)
+ */
+export function resolveMemberGroups(
+  groups: Map<number, Group> | undefined,
+  options: {
+    memberLevel?: number;
+    explicitGroupIds?: number[];
+  } = {},
+): Group[] {
+  if (!groups) return [];
+  const explicit = new Set(options.explicitGroupIds ?? []);
+  const level = options.memberLevel ?? 0;
+
+  const result: Group[] = [];
+  for (const group of groups.values()) {
+    if (group.status !== 'active') continue;
+    const isExplicit = explicit.has(group.id);
+    const isAutomatic =
+      Boolean(group.automatic_membership) && level >= group.min_level;
+    if (isExplicit || isAutomatic) {
+      result.push(group);
+    }
+  }
+
+  return result.sort((a, b) => {
+    if (a.is_organization !== b.is_organization) {
+      return a.is_organization ? -1 : 1;
+    }
+    const categoryOrder: Record<string, number> = {
+      organization: 0,
+      department: 1,
+      team: 2,
+      project: 3,
+    };
+    const catA = categoryOrder[a.category] ?? 99;
+    const catB = categoryOrder[b.category] ?? 99;
+    if (catA !== catB) return catA - catB;
+    return a.name.localeCompare(b.name, 'ro');
   });
 }
 
