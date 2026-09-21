@@ -6,13 +6,16 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(12);
+select plan(13);
 
 
 -- Remove the demo members and every dependent row inside this rolled-back
 -- transaction. Reference departments stay untouched: those five rows are the
 -- production configuration this view must always return.
 truncate public.profiles cascade;
+-- TRUNCATE also empties the Group mirror; restore every reference competitor,
+-- including Groups with no fixture memberships.
+select private.sync_department_groups();
 
 insert into auth.users (id, email) values
   ('c1000000-0000-0000-0000-000000000001', 'cup.active@test.local'),
@@ -99,5 +102,8 @@ select is((select count(*) from public.dept_cup), 0::bigint,
   'a claimless authenticated session still sees no standings');
 reset role;
 
+select results_eq($$select column_name::text collate "C" from information_schema.columns where table_schema='public' and table_name='dept_cup' order by ordinal_position$$,
+  $$select unnest(array['dept_id','name','points','members','group_id']::text[]) collate "C"$$,
+  'Cup preserves the four existing columns and appends Group id');
 select * from finish();
 rollback;

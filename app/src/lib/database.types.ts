@@ -802,6 +802,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: number
+          is_organization: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -826,6 +827,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -850,6 +852,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -2599,6 +2602,7 @@ export type Database = {
       dept_cup: {
         Row: {
           dept_id: string | null
+          group_id: number | null
           members: number | null
           name: string | null
           points: number | null
@@ -3238,29 +3242,50 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_campaign: {
-        Args: { p_department_id: string; p_name: string }
-        Returns: {
-          created_at: string
-          created_by: string
-          department_id: string | null
-          group_id: number
-          id: number
-          is_active: boolean
-          name: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "campaigns"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      create_campaign:
+        | {
+            Args: { p_department_id: string; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { p_group_id: number; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       create_completed_work_request: {
         Args: {
           p_dept_id: string
           p_description: string
+          p_group_id?: number
           p_project_id: number
           p_team_id: string
         }
@@ -3354,6 +3379,7 @@ export type Database = {
           p_dept_id: string
           p_description: string
           p_executor_id?: string
+          p_group_id?: number
           p_kind?: string
           p_parent_task_id?: number
           p_project_id: number
@@ -3404,6 +3430,7 @@ export type Database = {
         Args: { p_campaign_id?: number }
         Returns: {
           dept_id: string
+          group_id: number
           members: number
           name: string
           points: number
@@ -3548,12 +3575,7 @@ export type Database = {
         }
       }
       leadership_leaderboard: {
-        Args: {
-          p_campaign_id?: number
-          p_department_id?: string
-          p_project_id?: number
-          p_team_id?: string
-        }
+        Args: { p_campaign_id?: number; p_group_id?: number }
         Returns: {
           full_name: string
           member_id: string
@@ -3583,6 +3605,8 @@ export type Database = {
           difficulty: number
           duplicated_from_task_id: number
           evaluation_history: Json
+          group_id: number
+          group_name: string
           is_overdue: boolean
           member_id: string
           origin_id: string

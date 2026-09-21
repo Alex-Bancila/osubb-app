@@ -34,7 +34,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(61);
+select plan(63);
 
 -- ==================== Shape ====================
 select policies_are('public', 'task_assignments', array['task_assignments_read'],
@@ -592,5 +592,19 @@ select throws_ok($$ select count(*) from public.task_queue_summary $$, '42501', 
   'anon: no privilege on task_queue_summary at all');
 
 reset role;
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+select pg_temp.g521_task('private','project',5);
+select pg_temp.g521_task('team','dt',10);
+insert into public.task_activity(task_id,kind,actor_id) select id,'created',pg_temp.g521_uid(1) from g521_tasks;
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='private')),0::bigint,'ordinary Project Executor does not gain unrelated full activity with shared visibility off');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='team')),1::bigint,'Child Group membership retains complete shared Task activity');
+reset role;
+
 select * from finish();
 rollback;

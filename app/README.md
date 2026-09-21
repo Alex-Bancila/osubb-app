@@ -70,6 +70,7 @@ app/
     │   ├── tasks.ts        # useMyTasks, useOpenTasks
     │   ├── events.ts       # calendar reads (+ events.test.ts)
     │   ├── event-rsvp.ts   # the RSVP mutation (+ event-rsvp.test.tsx)
+    │   ├── notifications.ts # my notifications, unread count, mark read / all read (+ test)
     │   ├── profile.ts      # the signed-in member's own profile row
     │   └── reference.ts    # departments/roles lookups for display
     ├── components/
@@ -83,6 +84,7 @@ app/
     │   │                   # in CLAUDE.md's queue, not here
     │   ├── calendar/       # CalendarScreen (+test), EventCard, EventRsvpControls (+test),
     │   │                   # calendar-presentation (+test)
+    │   ├── notifications/  # NotificationsScreen (+test), notifications-presentation (+test)
     │   ├── login/          # LoginScreen.tsx, AuthCallback.tsx — magic-link request + landing
     │   └── no-profile/     # signed in, not a member (ADR-0003 gate 2)
     ├── theme/
@@ -124,18 +126,19 @@ copy of that rule in TypeScript is a weaker one.
 
 ## Routes
 
-| Path             | Who reaches it                                                                    | Screen                   |
-| ---------------- | --------------------------------------------------------------------------------- | ------------------------ |
-| `/login`         | signed out                                                                        | magic-link request       |
-| `/auth/callback` | anyone — its job is turning a link into a session, so it runs before there is one | —                        |
-| `/no-profile`    | signed in without org claims                                                      | ADR-0003 gate 2          |
-| `/`              | members                                                                           | dashboard (#93–#95)      |
-| `/tracker`       | members                                                                           | task tracker (#88–#92)   |
-| `/calendar`      | members                                                                           | calendar (#96–#98)       |
-| `/anunturi`      | members                                                                           | announcements (#99–#101) |
-| `/voluntari`     | level >= 5                                                                        | directory (#102–#103)    |
-| `/profil`        | members                                                                           | profile (#108)           |
-| `/bc`            | level >= 6                                                                        | BC panel (#104–#107)     |
+| Path             | Who reaches it                                                                    | Screen                     |
+| ---------------- | --------------------------------------------------------------------------------- | -------------------------- |
+| `/login`         | signed out                                                                        | magic-link request         |
+| `/auth/callback` | anyone — its job is turning a link into a session, so it runs before there is one | —                          |
+| `/no-profile`    | signed in without org claims                                                      | ADR-0003 gate 2            |
+| `/`              | members                                                                           | dashboard (#93–#95)        |
+| `/tracker`       | members                                                                           | task tracker (#88–#92)     |
+| `/calendar`      | members                                                                           | calendar (#96–#98)         |
+| `/anunturi`      | members                                                                           | announcements (#99–#101)   |
+| `/notificari`    | members                                                                           | notification centre (#101) |
+| `/voluntari`     | level >= 5                                                                        | directory (#102–#103)      |
+| `/profil`        | members                                                                           | profile (#108)             |
+| `/bc`            | level >= 6                                                                        | BC panel (#104–#107)       |
 
 Everything unknown redirects to `/`, where the guard decides.
 
