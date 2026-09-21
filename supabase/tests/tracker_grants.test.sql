@@ -506,6 +506,11 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_task_manager',                        'p_task_id bigint',                                                                                                   'require'),
   ('require_task_visible',                        'p_task_id bigint',                                                                                                   'require'),
   ('return_task_to_progress_impl',                'p_task_id bigint, p_note text',                                                                                      'impl'),
+  -- #603: deletes a deactivated Member's GoTrue session rows. `none`, the
+  -- strictest category: private.set_member_status_impl is its only caller and
+  -- runs it as the function owner, and a client that could reach it directly
+  -- would hold an unaudited sign-out for any Member in OSUBB.
+  ('revoke_member_sessions',                      'p_member_id uuid',                                                                                                   'none'),
   ('revoke_project_responsible_impl',             'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('select_task_candidate_impl',                  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',                                                 'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
@@ -573,8 +578,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 130,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, and #626''s update_task / preview_task_update bodies with their two shared helpers');
+  (select count(*) from pinned_private_functions)::int, 131,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, and #626''s update_task / preview_task_update bodies with their two shared helpers');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
