@@ -71,7 +71,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(84);
+select plan(88);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1149,6 +1149,35 @@ select is((select count(*) from public.notifications
               ) as committed_task_ids
             )), 0::bigint,
   'no notification survives with a nulled task_id after the committed Tasks are deleted -- checked by link, which ON DELETE SET NULL cannot erase');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',5,'todo','public');
+insert into public.task_candidates(task_id,member_id,status) values((select id from g521_tasks where name='command0'),pg_temp.g521_uid(10),'pending');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.select_task_candidate((select id from g521_tasks where name='command0'),(select id from public.task_candidates where task_id=(select id from g521_tasks where name='command0') and member_id=pg_temp.g521_uid(10)),false)$$,'select_task_candidate: Group persona 2 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command1','project',4,'todo','public');
+insert into public.task_candidates(task_id,member_id,status) values((select id from g521_tasks where name='command1'),pg_temp.g521_uid(10),'pending');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.select_task_candidate((select id from g521_tasks where name='command1'),(select id from public.task_candidates where task_id=(select id from g521_tasks where name='command1') and member_id=pg_temp.g521_uid(10)),false)$$,'42501','task_manage_forbidden','select_task_candidate: Group persona 3 on executor 4 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',7,'todo','public');
+insert into public.task_candidates(task_id,member_id,status) values((select id from g521_tasks where name='command2'),pg_temp.g521_uid(10),'pending');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.select_task_candidate((select id from g521_tasks where name='command2'),(select id from public.task_candidates where task_id=(select id from g521_tasks where name='command2') and member_id=pg_temp.g521_uid(10)),false)$$,'select_task_candidate: Group persona 6 on executor 7 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',5,'todo','public');
+insert into public.task_candidates(task_id,member_id,status) values((select id from g521_tasks where name='command3'),pg_temp.g521_uid(10),'pending');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.select_task_candidate((select id from g521_tasks where name='command3'),(select id from public.task_candidates where task_id=(select id from g521_tasks where name='command3') and member_id=pg_temp.g521_uid(10)),false)$$,'42501','task_manage_forbidden','select_task_candidate: Group persona 8 on executor 5 in dt');
+reset role;
 
 select * from finish();
 rollback;

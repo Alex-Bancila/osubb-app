@@ -6,16 +6,9 @@
 -- Three things this suite exists to pin, beyond the usual gate/authority/state
 -- matrix:
 --
---   1. THE DECIDER SET IS NARROWER THAN private.task_managers AND NARROWER
---      THAN private.can_manage_origin. A Project Responsible and an
---      Independent-Team member both MANAGE (and READ) their Origin's Requests
---      and must not DECIDE them. The decider predicate is written twice on
---      purpose -- once as a recipient set in create_completed_work_request_impl
---      and once as an `exists` in private.require_request_decider -- so this
---      suite's job is to make drift between the two impossible to miss: for
---      every Origin shape it asserts the EXACT notified set with set_eq AND
---      then has every member of that set actually approve a Request. If the
---      two predicates ever disagree, one of those two halves goes red.
+--   1. ONE DECIDER SET drives both notifications and decisions. Group Responsibles
+--      decide ordinary members Requests; Managers and BC decide protected members.
+--      The requester is always excluded, including Managers and BC.
 --
 --   2. THE VISIBILITY BOUNDARY IS THE READ POLICY, NOT THE DECIDER SET.
 --      A caller who cannot even read the Request (completed_work_requests_read:
@@ -341,8 +334,9 @@ select set_eq(format($$
   select member_id::text from public.notifications where dedupe_key = 'request:%s'
 $$, (select project_request_id from p344)),
   array['34400000-0000-0000-0000-000000000001',
-        '34400000-0000-0000-0000-000000000006'],
-  'a Project Request notifies the lead and the BC only -- the Responsible manages and reads the Request but never decides it (ADR-0007)');
+        '34400000-0000-0000-0000-000000000006',
+        '34400000-0000-0000-0000-000000000007'],
+  'a Project Request by an ordinary member notifies its Manager, Responsible and BC');
 
 -- ==================== 4. Create on an Independent Team: nobody local decides ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000009', jsonb_build_object(
@@ -549,10 +543,11 @@ reset role;
 
 select pg_temp.test_login('34400000-0000-0000-0000-000000000007', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok(format($$ select public.approve_completed_work_request(%s, 3, 4, 'Responsabil') $$,
+savepoint responsible_twin;
+select lives_ok(format($$ select public.approve_completed_work_request(%s, 3, 4, 'Responsabil') $$,
   (select project_request_id from p344)),
-  '42501', 'request_decide_forbidden',
-  'a Project Responsible reads the Request (private.can_manage_origin admits them) but must not approve it -- the decider rule is narrower than the manager rule');
+  'a Group Responsible may approve an ordinary member Request');
+rollback to responsible_twin;
 reset role;
 
 select pg_temp.test_login('34400000-0000-0000-0000-000000000016', jsonb_build_object(
@@ -732,46 +727,20 @@ select is((select count(*) from public.task_evaluations as evaluation
                                             and requester_id::text like '34400000-%')), 9::bigint,
   'and each approved Request carries exactly one Evaluation -- nine approvals so far in this suite, nine Evaluations');
 
--- ==================== 8b. A decider may decide their OWN Request ====================
--- Deliberate, and consistent with private.can_evaluate_task, which already
--- lets a Project lead evaluate their own active Assignment: ADR-0007 names no
--- `requester_id <> decider` exclusion, so the decider predicate does not
--- invent one. The consequence worth pinning is that such an approval is
--- SILENT -- private.notify drops the actor, and all three notifications an
--- approval sends (Task nou, Task evaluat, Cerere aprobată) address the
--- requester, who here IS the actor. The audit trail is therefore not an inbox
--- but the Request's own decided_by/decided_at and the Task's activity rows,
--- and those are what this section asserts. Run on the ACTIVE Project, so it
--- says nothing about section 7b-bis's archived one and cannot collide with it.
+-- ==================== 8b. No requester decides their own Request (#522) ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok(format($$ select public.approve_completed_work_request(%s, 2, 4, 'Imi aprob propria cerere pe proiectul activ.') $$,
-  (select self_decider_request_id from f344)),
-  'the lead of an ACTIVE Project may decide a Request they filed themselves -- self-decision is allowed, exactly as private.can_evaluate_task lets a lead evaluate their own Assignment');
+select throws_ok(format($$ select public.approve_completed_work_request(%s, 2, 4, 'Self') $$,
+  (select self_decider_request_id from f344)), '42501', 'request_decide_forbidden',
+  'even a Group Manager cannot approve their own Request');
 reset role;
-
-select is((select count(*) from public.notifications as notification
-            where notification.task_id = (select request.task_id
-                                            from public.completed_work_requests as request
-                                           where request.id = (select self_decider_request_id from f344))),
-  0::bigint,
-  'and that approval sends ZERO notifications -- a deliberate consequence of private.notify dropping the actor, since every notification an approval sends is addressed to the requester and the requester is the actor here');
-
-select is((select format('%s|%s|%s|%s', request.status,
-                         (request.decided_by = request.requester_id)::text,
-                         (request.decided_at is not null)::text,
-                         (request.task_id is not null)::text)
-             from public.completed_work_requests as request
-            where request.id = (select self_decider_request_id from f344)),
-  'approved|true|true|true',
-  'the audit trail lives on the Request instead: decided_by is the requester themselves, stamped with the moment and naming the Task the approval created');
-
-select set_eq(format($$
-  select kind from public.task_activity where task_id =
-    (select task_id from public.completed_work_requests where id = %s)
-$$, (select self_decider_request_id from f344)),
-  array['created', 'executor_assigned', 'evaluated'],
-  'and on the Task''s activity rows, which record the whole self-approved chain even though nobody was notified about it');
+select is((select count(*) from public.notifications where task_id =
+  (select task_id from public.completed_work_requests where id=(select self_decider_request_id from f344))),
+  0::bigint, 'failed self-approval sends no Task notification');
+select is((select status from public.completed_work_requests where id=(select self_decider_request_id from f344)),
+  'pending', 'failed self-approval leaves the Request pending');
+select is((select task_id from public.completed_work_requests where id=(select self_decider_request_id from f344)),
+  null::bigint, 'failed self-approval creates no Task');
 
 -- ==================== 9. Reject ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000014', jsonb_build_object(
@@ -984,11 +953,11 @@ select ok(coalesce((
 ), false), 'it holds the decider''s own live profile row FOR SHARE, so a concurrent deactivation serializes behind the decision (private.require_origin_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '34400000-0000-0000-0000-000000000051'
-     and membership.dept_id = 'edu'
-), false), 'and the Department membership the BCE''s decider authority rests on FOR SHARE too');
+     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+), false), 'and the Group membership the BCE''s decider authority rests on FOR SHARE too');
 
 select extensions.dblink_exec('cwr_lock', 'rollback');
 select extensions.dblink_disconnect('cwr_lock');
@@ -1016,6 +985,7 @@ declare
   v_jwt text := current_setting('request.jwt.claims', true);
   v_busy integer;
   v_saw_state boolean := false;
+  v_drain text;
 begin
   if coalesce(v_jwt, '') = '' then
     raise exception 'race_capture requires test_login first';
@@ -1077,16 +1047,33 @@ begin
 
   -- The one difference from pg_temp.test_race: B's remote error is caught HERE
   -- and reported as text, so a losing B is observable alongside b_waited.
+  -- Only the read is caught -- B losing the race is an outcome, everything
+  -- after it is harness plumbing and must not be mistaken for one.
   begin
     select remote_result into strict result_b
       from extensions.dblink_get_result(v_connection_b) as remote(remote_result text);
-    begin
-      perform extensions.dblink_exec(v_connection_b, 'commit');
-    exception when others then null;
-    end;
   exception when others then
     result_b := sqlstate || ' ' || sqlerrm;
   end;
+
+  -- #618: same libpq contract as pg_temp.test_race -- the connection stays
+  -- busy until PQgetResult has answered NULL -- drained inline because this
+  -- copy is security definer with an empty search_path. Draining is cleanup,
+  -- so it is swallowed; the commit that follows is NOT. A commit that cannot
+  -- run means every write this session made is about to be thrown away by the
+  -- disconnect below, and a race harness that reports a winner it never
+  -- committed is measuring nothing -- so it is left to reach the handler at
+  -- the bottom, which rolls back, disconnects and re-raises.
+  begin
+    loop
+      select remote_result into v_drain
+        from extensions.dblink_get_result(v_connection_b) as remote(remote_result text);
+      exit when not found;
+    end loop;
+  exception when others then null;
+  end;
+
+  perform extensions.dblink_exec(v_connection_b, 'commit');
 
   begin
     perform extensions.dblink_disconnect(v_connection_a);
