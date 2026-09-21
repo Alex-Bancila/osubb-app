@@ -532,11 +532,20 @@ insert into pinned_private_functions (proname, args, category) values
   -- #499: the body behind public.visible_task_executors(bigint[]). It reveals
   -- only the current Executor for Tasks private.can_read_task authorizes.
   ('visible_task_executors',                      'p_task_ids bigint[]',                                                                                                'authenticated_only'),
+  -- #520: shared Group authority, three policy predicates and five internal helpers.
+  ('group_role_of', 'p_group_id bigint, p_member uuid', 'none'),
+  ('is_group_member', 'p_group_id bigint, p_member uuid', 'none'),
+  ('has_group_manager', 'p_group_id bigint', 'none'),
+  ('is_group_manager', 'p_group_id bigint', 'predicate'),
+  ('is_group_responsible', 'p_group_id bigint', 'predicate'),
+  ('can_manage_group_work', 'p_group_id bigint', 'predicate'),
+  ('require_group_work_manager', 'p_group_id bigint', 'require'),
+  ('group_managers', 'p_group_id bigint', 'none'),
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 112,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers)');
+  (select count(*) from pinned_private_functions)::int, 120,
+  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
