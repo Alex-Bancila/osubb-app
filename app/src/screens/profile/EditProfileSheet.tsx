@@ -134,7 +134,8 @@ function EditProfileForm({
             className="flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
           <FieldDescription>
-            Numărul tău este vizibil doar membrilor organizației.
+            Numărul de telefon este vizibil doar pentru tine și conducerea
+            organizației (BCE și BC).
           </FieldDescription>
         </Field>
 

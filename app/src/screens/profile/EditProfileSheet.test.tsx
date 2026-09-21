@@ -60,6 +60,11 @@ describe('EditProfileSheet', () => {
 
     const phoneInput = screen.getByLabelText(/număr de telefon/i);
     expect(phoneInput).toHaveValue('0711223344');
+    expect(
+      screen.getByText(
+        /numărul de telefon este vizibil doar pentru tine și conducerea organizației/i,
+      ),
+    ).toBeInTheDocument();
 
     const emailInput = screen.getByLabelText(/adresă de email/i);
     expect(emailInput).toHaveValue('ana@osubb.ro');

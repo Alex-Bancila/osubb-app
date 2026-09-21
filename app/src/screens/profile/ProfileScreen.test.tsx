@@ -72,49 +72,106 @@ const standingQueryMock = vi.hoisted(() => ({
   refetch: vi.fn(),
 }));
 
-const rolesMap = new Map([
-  ['recrut', { name: 'Recrut', level: 0 }],
-  ['voluntar', { name: 'Voluntar', level: 1 }],
-  ['activ', { name: 'Voluntar Activ', level: 2 }],
-  ['vot', { name: 'Membru cu Drept de Vot', level: 3 }],
-  ['bce', { name: 'BCE', level: 5 }],
-  ['bc', { name: 'BC', level: 6 }],
-]);
+const referenceMocks = vi.hoisted(() => {
+  const rolesMap = new Map([
+    ['recrut', { name: 'Recrut', level: 0 }],
+    ['voluntar', { name: 'Voluntar', level: 1 }],
+    ['activ', { name: 'Voluntar Activ', level: 2 }],
+    ['vot', { name: 'Membru cu Drept de Vot', level: 3 }],
+    ['bce', { name: 'BCE', level: 5 }],
+    ['bc', { name: 'BC', level: 6 }],
+  ]);
 
-const groupsMap = new Map<number, Group>([
-  [
-    10,
-    {
-      id: 10,
-      name: 'Educațional',
-      short: 'EDU',
-      color: '#284C93',
-      category: 'department',
-      path: [10],
-      parent_id: null,
-      min_level: 0,
-      status: 'active',
-      is_organization: false,
-      legacy_dept_id: 'edu',
+  const groupsMap = new Map<number, Group>([
+    [
+      1,
+      {
+        id: 1,
+        name: 'Organizația Studenților din UBB',
+        short: 'OSUBB',
+        color: '#ED2025',
+        category: 'organization',
+        path: [1],
+        parent_id: null,
+        min_level: 0,
+        status: 'active',
+        is_organization: true,
+        automatic_membership: true,
+        legacy_dept_id: null,
+      },
+    ],
+    [
+      2,
+      {
+        id: 2,
+        name: 'Adunarea Generală',
+        short: 'AG',
+        color: '#1B365D',
+        category: 'organization',
+        path: [2],
+        parent_id: null,
+        min_level: 3,
+        status: 'active',
+        is_organization: false,
+        automatic_membership: true,
+        legacy_dept_id: null,
+      },
+    ],
+    [
+      10,
+      {
+        id: 10,
+        name: 'Educațional',
+        short: 'EDU',
+        color: '#284C93',
+        category: 'department',
+        path: [10],
+        parent_id: null,
+        min_level: 0,
+        status: 'active',
+        is_organization: false,
+        legacy_dept_id: 'edu',
+      },
+    ],
+    [
+      20,
+      {
+        id: 20,
+        name: 'Echipa IT',
+        short: 'IT',
+        color: '#007F33',
+        category: 'team',
+        path: [15, 20],
+        parent_id: 15,
+        min_level: 0,
+        status: 'active',
+        is_organization: false,
+        legacy_dept_id: null,
+      },
+    ],
+  ]);
+
+  return {
+    rolesMap,
+    groupsMap,
+    rolesQueryMock: {
+      data: rolesMap,
+      isPending: false,
+      isError: false,
+      error: null as Error | null,
+      refetch: vi.fn(),
     },
-  ],
-  [
-    20,
-    {
-      id: 20,
-      name: 'Echipa IT',
-      short: 'IT',
-      color: '#007F33',
-      category: 'team',
-      path: [15, 20],
-      parent_id: 15,
-      min_level: 0,
-      status: 'active',
-      is_organization: false,
-      legacy_dept_id: null,
+    groupsQueryMock: {
+      data: groupsMap,
+      isPending: false,
+      isError: false,
+      error: null as Error | null,
+      refetch: vi.fn(),
     },
-  ],
-]);
+  };
+});
+
+const { rolesMap, groupsMap, rolesQueryMock, groupsQueryMock } = referenceMocks;
 
 vi.mock('../../queries/profile', () => ({
   useMyProfile: () => profileMocks.profileQueryMock,
@@ -130,20 +187,15 @@ vi.mock('../../queries/points', () => ({
   useMyStanding: () => standingQueryMock,
 }));
 
-vi.mock('../../queries/reference', () => ({
-  useRoles: () => ({
-    data: rolesMap,
-    isPending: false,
-    isError: false,
-    refetch: vi.fn(),
-  }),
-  useGroups: () => ({
-    data: groupsMap,
-    isPending: false,
-    isError: false,
-    refetch: vi.fn(),
-  }),
-}));
+vi.mock('../../queries/reference', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../queries/reference')>();
+  return {
+    ...actual,
+    useRoles: () => referenceMocks.rolesQueryMock,
+    useGroups: () => referenceMocks.groupsQueryMock,
+  };
+});
 
 function wrapper(queryClient = new QueryClient()) {
   return function QueryWrapper({ children }: { children: ReactNode }) {
@@ -170,14 +222,29 @@ describe('ProfileScreen', () => {
     profileQueryMock.data = { ...mockProfile };
     profileQueryMock.isPending = false;
     profileQueryMock.isError = false;
+    profileQueryMock.error = null;
 
     pointsQueryMock.data = 42;
     pointsQueryMock.isPending = false;
     pointsQueryMock.isError = false;
+    pointsQueryMock.error = null;
 
     standingQueryMock.data = { rank: 3, total: 12, next: { rank: 2, gap: 5 } };
     standingQueryMock.isPending = false;
     standingQueryMock.isError = false;
+    standingQueryMock.error = null;
+
+    rolesQueryMock.data = rolesMap;
+    rolesQueryMock.isPending = false;
+    rolesQueryMock.isError = false;
+    rolesQueryMock.error = null;
+    rolesQueryMock.refetch.mockClear();
+
+    groupsQueryMock.data = groupsMap;
+    groupsQueryMock.isPending = false;
+    groupsQueryMock.isError = false;
+    groupsQueryMock.error = null;
+    groupsQueryMock.refetch.mockClear();
   });
 
   it('renders profile header, contact fields, and groups', () => {
@@ -192,9 +259,14 @@ describe('ProfileScreen', () => {
     expect(screen.getByText('0722334455')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
 
-    // Groups rendered
+    // Groups rendered (automatic Organization group + explicit roster groups)
+    expect(
+      screen.getByText('Organizația Studenților din UBB'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('OSUBB')).toBeInTheDocument();
     expect(screen.getByText('Educațional')).toBeInTheDocument();
     expect(screen.getByText('Echipa IT')).toBeInTheDocument();
+    expect(screen.queryByText('Adunarea Generală')).not.toBeInTheDocument();
   });
 
   it('toggles theme between light and dark', async () => {
@@ -310,6 +382,7 @@ describe('ProfileScreen', () => {
   });
 
   it('renders empty state when member has no assigned groups', () => {
+    groupsQueryMock.data = new Map();
     authMock.claims = {
       member_role: 'voluntar',
       member_level: 1,
@@ -323,6 +396,91 @@ describe('ProfileScreen', () => {
     expect(
       screen.getByText(/nu faci parte din nicio echipă încă/i),
     ).toBeInTheDocument();
+  });
+
+  it('automatically includes organization group for volunteer without AG', () => {
+    authMock.claims = {
+      member_role: 'voluntar',
+      member_level: 1,
+      dept_ids: [],
+      team_ids: [],
+      group_ids: [], // No explicit roster memberships in JWT claims
+    };
+    profileQueryMock.data = {
+      ...mockProfile,
+      role: 'voluntar',
+    };
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    // Organization group (min_level 0, automatic) is present
+    expect(
+      screen.getByText('Organizația Studenților din UBB'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('OSUBB')).toBeInTheDocument();
+    // Adunarea Generală (min_level 3, automatic) is absent for level 1
+    expect(screen.queryByText('Adunarea Generală')).not.toBeInTheDocument();
+    // No explicit groups rendered
+    expect(screen.queryByText('Educațional')).not.toBeInTheDocument();
+    expect(screen.queryByText('Echipa IT')).not.toBeInTheDocument();
+  });
+
+  it('automatically includes both organization group and Adunarea Generală for eligible voting members', () => {
+    authMock.claims = {
+      member_role: 'vot',
+      member_level: 3,
+      dept_ids: [],
+      team_ids: [],
+      group_ids: [], // No explicit roster memberships in JWT claims
+    };
+    profileQueryMock.data = {
+      ...mockProfile,
+      role: 'vot',
+    };
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    // Both automatic groups are present for level 3
+    expect(
+      screen.getByText('Organizația Studenților din UBB'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('OSUBB')).toBeInTheDocument();
+    expect(screen.getByText('Adunarea Generală')).toBeInTheDocument();
+    expect(screen.getByText('AG')).toBeInTheDocument();
+  });
+
+  it('renders error state and retries on roles query failure', async () => {
+    const user = userEvent.setup();
+    rolesQueryMock.isError = true;
+    rolesQueryMock.error = new Error('Eroare la încărcarea rolurilor');
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    expect(
+      screen.getByText(/nu am putut încărca profilul/i),
+    ).toBeInTheDocument();
+
+    const retryButton = screen.getByText(/încearcă din nou/i);
+    await user.click(retryButton);
+
+    expect(rolesQueryMock.refetch).toHaveBeenCalled();
+  });
+
+  it('renders error state and retries on groups query failure', async () => {
+    const user = userEvent.setup();
+    groupsQueryMock.isError = true;
+    groupsQueryMock.error = new Error('Eroare la încărcarea grupurilor');
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    expect(
+      screen.getByText(/nu am putut încărca profilul/i),
+    ).toBeInTheDocument();
+
+    const retryButton = screen.getByText(/încearcă din nou/i);
+    await user.click(retryButton);
+
+    expect(groupsQueryMock.refetch).toHaveBeenCalled();
   });
 
   it('renders Necompletat placeholder when phone number is missing', () => {

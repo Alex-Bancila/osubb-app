@@ -23,7 +23,11 @@ import { formatLongDate, formatPoints, initials } from '../../lib/format';
 import { useTheme } from '../../lib/theme';
 import { useMyPoints, useMyStanding } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
-import { useGroups, useRoles } from '../../queries/reference';
+import {
+  resolveMemberGroups,
+  useGroups,
+  useRoles,
+} from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
 
 export default function ProfileScreen() {
@@ -50,6 +54,8 @@ export default function ProfileScreen() {
 
   const isError =
     profileQuery.isError ||
+    rolesQuery.isError ||
+    groupsQuery.isError ||
     pointsQuery.isError ||
     (leader && standingQuery.isError);
 
@@ -61,14 +67,18 @@ export default function ProfileScreen() {
             <ErrorState
               text="Nu am putut încărca profilul."
               error={
-                profileQuery.error ?? pointsQuery.error ?? standingQuery.error
+                profileQuery.error ??
+                rolesQuery.error ??
+                groupsQuery.error ??
+                pointsQuery.error ??
+                standingQuery.error
               }
               onRetry={() => {
                 void profileQuery.refetch?.();
-                void pointsQuery.refetch?.();
-                if (leader) void standingQuery.refetch?.();
                 void rolesQuery.refetch?.();
                 void groupsQuery.refetch?.();
+                void pointsQuery.refetch?.();
+                if (leader) void standingQuery.refetch?.();
               }}
             />
           </div>
@@ -106,11 +116,13 @@ export default function ProfileScreen() {
   const isVotingMember =
     profile.role === 'vot' || claims?.member_role === 'vot';
 
-  // Resolved groups
-  const memberGroupIds = claims?.group_ids ?? [];
-  const memberGroups = memberGroupIds
-    .map((id) => groupsQuery.data?.get(id))
-    .filter((g) => g !== undefined);
+  // Membership-aware groups (explicit roster rows + automatic Organization & AG memberships)
+  const memberLevel =
+    claims?.member_level ?? rolesQuery.data?.get(profile.role)?.level ?? 0;
+  const memberGroups = resolveMemberGroups(groupsQuery.data, {
+    memberLevel,
+    explicitGroupIds: claims?.group_ids,
+  });
 
   const memberSinceLabel = profile.joined_at
     ? `Membru din ${formatLongDate(new Date(profile.joined_at))}`
