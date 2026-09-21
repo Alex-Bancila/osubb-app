@@ -1,0 +1,68 @@
+<!--
+  Invitation email (ADR-0003: this is how an account comes into existence). The
+  link and the six-digit token below are the SAME one-time password with the
+  same expiry (GoTrue renders Go template actions everywhere in this file,
+  comments included, so do not write one here) —
+  the code is not a second way in, it is the same way in for a browser the link
+  cannot reach (an installed PWA on iOS has its own storage, separate from
+  Safari; a link opened on a second device lands in the wrong place). Keep both.
+  Wired locally by supabase/config.toml; staging and production need the same
+  body pasted in the dashboard (#54, #77).
+-->
+<div
+  style="
+    font-family: Montserrat, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #16181d;
+  "
+>
+  <h1 style="font-size: 20px; margin: 0 0 16px">
+    Ai fost invitat în aplicația OSUBB
+  </h1>
+
+  <p style="margin: 0 0 16px">
+    Contul tău a fost creat pentru <strong>{{ .Email }}</strong>. Nu ai nevoie
+    de parolă. Apasă butonul de mai jos pe dispozitivul de pe care vrei să
+    folosești aplicația:
+  </p>
+
+  <p style="margin: 0 0 24px">
+    <a
+      href="{{ .ConfirmationURL }}"
+      style="
+        display: inline-block;
+        padding: 12px 20px;
+        border-radius: 8px;
+        background: #0b3d91;
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 700;
+      "
+      >Intră în aplicație</a
+    >
+  </p>
+
+  <p style="margin: 0 0 8px">
+    Dacă ai instalat aplicația pe telefon, sau citești emailul pe alt
+    dispozitiv, linkul te-ar conecta în locul greșit. Scrie atunci acest cod în
+    aplicație, la pasul „Apasă linkul din email sau introdu codul de 6 cifre”:
+  </p>
+
+  <p
+    style="
+      margin: 0 0 24px;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 6px;
+    "
+  >
+    {{ .Token }}
+  </p>
+
+  <p style="margin: 0 0 16px; color: #5a6072; font-size: 14px">
+    Linkul și codul sunt una și aceeași parolă de unică folosință: expiră
+    repede și pot fi folosite o singură dată. Dacă nu știi de ce ai primit acest
+    email, ignoră-l.
+  </p>
+</div>
