@@ -4,6 +4,7 @@
 - **Date:** 2026-09-07
 - **Amended:** 2026-09-10 — `unfulfilled` outcome, Feedback-pending sub-state, Campaigns, Umbrella Tasks, any-active-member direct assignment and self-selection, evaluation-time Difficulty, notification recipients, Leaderboard filters, coordination departments, BC/Moderator Project roster override
 - **Amended:** 2026-09-18 — ADR-0009: Origins are Groups; the Work origins, Campaigns, and Authorization sections are read through ADR-0009's settings and Group Roles
+- **Amended:** 2026-09-21 — the edit window: every Task field is editable until review, Group changes with accepted consequences, Public → Direct closes the queue; Campaigns report points and contributors
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -33,7 +34,7 @@ The five departments are joined by two **coordination structures**, `diverse` (h
 
 ## Campaigns
 
-A **Campaign** is a Department-owned label, not an Origin. Local BCE, BC, or Moderator create, rename, and activate or deactivate a Department's Campaigns. A Task may carry at most one Campaign, and only when its Origin is that Department or one of that Department's Department Teams. Campaigns have no members. They exist to filter the Tracker, the leadership Leaderboard, and the Department Cup and to create planned Tasks under a shared initiative; they never change authority, eligibility, or Cup rules.
+A **Campaign** is a Department-owned label, not an Origin. Local BCE, BC, or Moderator create, rename, and activate or deactivate a Department's Campaigns. A Task may carry at most one Campaign, and only when its Origin is that Department or one of that Department's Department Teams. Campaigns have no members. They exist to filter the Tracker, the leadership Leaderboard, and the Department Cup and to create planned Tasks under a shared initiative; they never change authority, eligibility, or Cup rules. A Campaign is a label for reporting — the points it earned and the volunteers who worked on it — and never filters who may execute a Task. _(Amended 2026-09-21.)_
 
 ## Task identity
 
@@ -47,7 +48,7 @@ In addition to its Origin, each Task has:
 
 **Overdue** is derived from the deadline and an unfinished status. It is not stored. Completed-but-overdue is derived as `completed_at > deadline`. **Feedback pending** is a derived sub-state of `in_progress`, entered when a Reviewer returns work (`review_round > 0`); it is never a stored status. **Open** means a public Task has an open queue and no Executor; it is not a lifecycle status.
 
-Origin, Audience, and Assignment Mode become immutable after the first Assignment or Candidature. Content, deadline, and Campaign remain editable with audit until final Evaluation. Difficulty is not set at creation; Evaluation sets Difficulty and Rating together.
+A Task Manager may edit a Task's content, deadline, Campaign, Origin Group, Audience, and Assignment Mode while it is `todo` or `in_progress` — Feedback pending included, since returned work may reveal the manager's own mistake. A Task `in_review` or in a terminal status is not editable. Every edit is audited and notifies the Executor. Changing the Group adds an Executor who may attend the new Group to it and removes from the Task an Executor or Candidate below its Minimum Level; switching Public to Direct closes the queue and notifies the pending Candidates. The server computes these consequences, and the manager accepts them before the edit applies. Difficulty is not set at creation; Evaluation sets Difficulty and Rating together. _(Amended 2026-09-21; previously Origin, Audience, and Assignment Mode froze at the first Assignment or Candidature, and content, deadline, and Campaign stayed editable until final Evaluation.)_
 
 ## Umbrella Tasks and Subtasks
 

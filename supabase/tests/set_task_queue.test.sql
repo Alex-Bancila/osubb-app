@@ -26,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(51);
+select plan(55);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -459,11 +459,12 @@ select ok(coalesce((
 ), false), 'set_task_queue holds the manager''s own live profile row FOR SHARE');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
+    join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33100000-0000-0000-0000-000000000021'
-     and membership.dept_id = 'edu'
-), false), 'set_task_queue holds the manager''s Origin membership row FOR SHARE too (require_origin_manager''s discipline)');
+     and authority_group.legacy_dept_id = 'edu'
+), false), 'set_task_queue holds the manager''s Group roster row FOR SHARE too (require_origin_manager''s discipline)');
 
 select extensions.dblink_exec('stq_lock', 'rollback');
 select extensions.dblink_disconnect('stq_lock');
@@ -500,6 +501,31 @@ select is((select count(*) from auth.users
 select is((select count(*) from public.notifications
             where link = format('/tracker/%s', (select probe_task_id from r331))), 0::bigint,
   'no notification survives with a nulled task_id after the committed Task is deleted');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',5,'todo','public');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.set_task_queue((select id from g521_tasks where name='command0'),false)$$,'set_task_queue: Group persona 2 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command1','project',4,'todo','public');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.set_task_queue((select id from g521_tasks where name='command1'),false)$$,'42501','task_manage_forbidden','set_task_queue: Group persona 3 on executor 4 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',7,'todo','public');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.set_task_queue((select id from g521_tasks where name='command2'),false)$$,'set_task_queue: Group persona 6 on executor 7 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',5,'todo','public');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.set_task_queue((select id from g521_tasks where name='command3'),false)$$,'42501','task_manage_forbidden','set_task_queue: Group persona 8 on executor 5 in dt');
+reset role;
 
 select * from finish();
 rollback;
