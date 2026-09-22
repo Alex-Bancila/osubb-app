@@ -12,6 +12,7 @@ export type PendingTaskCandidate = {
   id: number;
   memberId: string;
   memberName: string;
+  avatarColor: string | null;
   joinedAt: string;
 };
 
@@ -57,7 +58,7 @@ export async function fetchPendingTaskCandidates(
   const { data, error } = await supabase
     .from('task_candidates')
     .select(
-      'id, member_id, joined_at, member:profiles_directory!task_candidates_member_id_fkey(full_name)',
+      'id, member_id, joined_at, member:profiles_directory!task_candidates_member_id_fkey(full_name, avatar_color)',
     )
     .eq('task_id', taskId)
     .eq('status', 'pending')
@@ -69,17 +70,20 @@ export async function fetchPendingTaskCandidates(
     id: candidate.id,
     memberId: candidate.member_id,
     memberName: candidate.member?.full_name ?? 'Membru OSUBB',
+    avatarColor: candidate.member?.avatar_color ?? null,
     joinedAt: candidate.joined_at,
   }));
 }
 
-export async function selectTaskCandidate(taskId: number, candidateId: number) {
+export async function selectTaskCandidate(
+  taskId: number,
+  candidateId: number,
+  closeRemaining = false,
+) {
   const { data, error } = await supabase.rpc('select_task_candidate', {
     p_task_id: taskId,
     p_candidate_id: candidateId,
-    // #178 adds the explicit keep/close decision. Until then selection keeps
-    // the remaining candidates available instead of discarding them silently.
-    p_close_remaining: false,
+    p_close_remaining: closeRemaining,
   });
   if (error) throw taskCandidateSelectionError(error.code);
   return data;
@@ -99,10 +103,12 @@ export function useSelectTaskCandidate() {
     mutationFn: ({
       taskId,
       candidateId,
+      closeRemaining,
     }: {
       taskId: number;
       candidateId: number;
-    }) => selectTaskCandidate(taskId, candidateId),
+      closeRemaining?: boolean;
+    }) => selectTaskCandidate(taskId, candidateId, closeRemaining),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.tasks.all }),
   });
 }
