@@ -36,6 +36,16 @@ describe('Bucharest calendar time', () => {
     expect(bucharestWallTimeToIso('2026-03-29T03:30')).toBeNull();
   });
 
+  it('shows the actual Bucharest hour at the spring transition', () => {
+    expect(formatBucharestTime('2026-03-29T00:30:00.000Z')).toBe('02:30');
+    expect(isoToBucharestWallTime('2026-03-29T00:30:00.000Z')).toBe(
+      '2026-03-29T02:30',
+    );
+    expect(bucharestWallTimeToIso('2026-03-29T04:30')).toBe(
+      '2026-03-29T01:30:00.000Z',
+    );
+  });
+
   it('round-trips an instant into a form wall-time value', () => {
     expect(isoToBucharestWallTime('2026-07-15T07:30:00.000Z')).toBe(
       '2026-07-15T10:30',
