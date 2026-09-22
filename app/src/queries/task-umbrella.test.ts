@@ -33,6 +33,9 @@ describe('Umbrella commands', () => {
       p_description: null,
       p_deadline: '2026-10-01T09:00:00Z',
       p_group_id: 3,
+      p_dept_id: null,
+      p_team_id: null,
+      p_project_id: null,
       p_audience: 'org',
       p_assignment_mode: 'public',
       p_executor_id: null,
@@ -56,6 +59,9 @@ describe('Umbrella commands', () => {
       p_description: null,
       p_deadline: '2026-10-01T09:00:00Z',
       p_group_id: 3,
+      p_dept_id: null,
+      p_team_id: null,
+      p_project_id: null,
       p_audience: 'local',
       p_assignment_mode: 'direct',
       p_executor_id: 'executor-1',
@@ -78,18 +84,21 @@ describe('Umbrella commands', () => {
     expect(args).toMatchObject({
       p_kind: 'umbrella',
       p_group_id: 3,
+      p_dept_id: null,
+      p_team_id: null,
+      p_project_id: null,
       p_audience: null,
       p_assignment_mode: null,
       p_parent_task_id: null,
     });
   });
-  it('never sends the retired Origin arguments', async () => {
+  it('sends the retired Origin arguments as null until #579 drops them', async () => {
     rpc.mockResolvedValue({ data: { id: 30 }, error: null });
     await createTask({ ...draft, parentTaskId: null });
     const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
-    expect(args).not.toHaveProperty('p_dept_id');
-    expect(args).not.toHaveProperty('p_team_id');
-    expect(args).not.toHaveProperty('p_project_id');
+    expect(args).toHaveProperty('p_dept_id', null);
+    expect(args).toHaveProperty('p_team_id', null);
+    expect(args).toHaveProperty('p_project_id', null);
   });
   it('does not send an Umbrella draft with a parent to the command', async () => {
     await expect(createTask({ ...draft, kind: 'umbrella' })).rejects.toThrow(

@@ -144,6 +144,9 @@ describe('Task nou', () => {
     expect(state.rpc).toHaveBeenCalledTimes(1);
     expect(state.rpc).toHaveBeenCalledWith('create_task', {
       p_group_id: 3,
+      p_dept_id: null,
+      p_team_id: null,
+      p_project_id: null,
       p_kind: 'task',
       p_parent_task_id: null,
       p_executor_id: 'executor-1',
@@ -173,6 +176,9 @@ describe('Task nou', () => {
     expect(state.rpc).toHaveBeenCalledTimes(1);
     expect(state.rpc.mock.calls[0]?.[1]).toMatchObject({
       p_group_id: 3,
+      p_dept_id: null,
+      p_team_id: null,
+      p_project_id: null,
       p_kind: 'task',
       p_assignment_mode: 'public',
       p_audience: 'org',
@@ -192,6 +198,9 @@ describe('Task nou', () => {
     expect(state.rpc).toHaveBeenCalledTimes(1);
     expect(state.rpc.mock.calls[0]?.[1]).toEqual({
       p_group_id: 3,
+      p_dept_id: null,
+      p_team_id: null,
+      p_project_id: null,
       p_kind: 'umbrella',
       p_parent_task_id: null,
       p_executor_id: null,

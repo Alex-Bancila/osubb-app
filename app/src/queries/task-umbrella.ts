@@ -11,12 +11,16 @@ import type { TaskDraft } from '../screens/tracker/task-form-model';
 /**
  * The one `create_task` caller: a top-level Task, an Umbrella, or a Subtask
  * (a draft with `parentTaskId`). Named arguments only; the Origin is the
- * Group, and the retired dept/team/project arguments are never sent.
+ * Group; the retired dept/team/project arguments are sent as null.
  */
 export async function createTask(draft: TaskDraft) {
   if (draft.kind === 'umbrella' && draft.parentTaskId !== null)
     throw new Error('An Umbrella cannot be a Subtask');
   const args = {
+    // #579 drops these three parameters; that PR removes them from this call.
+    p_dept_id: null,
+    p_team_id: null,
+    p_project_id: null,
     p_group_id: draft.groupId,
     p_kind: draft.kind,
     p_parent_task_id: draft.parentTaskId,
