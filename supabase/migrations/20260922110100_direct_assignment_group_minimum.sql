@@ -1,4 +1,7 @@
 -- #350: enforce direct Executor eligibility at the command boundary.
+-- Dated after main's newest migration so staging (db push --include-all) and a
+-- local reset apply it in the same order. The body starts from main's latest
+-- definition (20260914041225_assign_task_executor.sql, unchanged since).
 -- CREATE OR REPLACE preserves the audited signature and grants.
 create or replace function private.assign_task_executor_impl(p_task_id bigint, p_member_id uuid)
 returns public.tasks
