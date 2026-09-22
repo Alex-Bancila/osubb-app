@@ -11,6 +11,7 @@ export function EvaluationFields({
   onEvaluate,
   isPending,
   request = false,
+  outcome = 'completed',
 }: {
   executorName: string | null;
   onCancel: () => void;
@@ -22,6 +23,8 @@ export function EvaluationFields({
   }) => Promise<unknown>;
   isPending: boolean;
   request?: boolean;
+  /** "unfulfilled" scores an overdue Task as Nerealizat instead of closing it as completed. */
+  outcome?: 'completed' | 'unfulfilled';
 }) {
   const id = useId();
   const scale = useEvaluationScale();
@@ -68,13 +71,21 @@ export function EvaluationFields({
       aria-label="Evaluare finală"
       noValidate
     >
-      <h3 className="font-semibold">Evaluare finală</h3>
+      <h3 className="font-semibold">
+        {outcome === 'unfulfilled' ? 'Nerealizat' : 'Evaluare finală'}
+      </h3>
       <p className="text-sm">
         {request ? 'Solicitant' : 'Executor'}: {executorName ?? 'Membrul'}.{' '}
         {request
           ? 'Aprobarea înregistrează activitatea realizată și acordă punctele solicitantului.'
           : 'Evaluarea încheie taskul și acordă punctele acestei persoane.'}
       </p>
+      {outcome === 'unfulfilled' && (
+        <p>
+          Confirmarea marchează taskul Nerealizat și păstrează încercarea în
+          istoric. Evaluarea poate acorda zero puncte sau poate scădea puncte.
+        </p>
+      )}
       <RatingGuideDialog />
       {scale.isPending && (
         <p role="status" className="text-sm">

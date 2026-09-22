@@ -49,6 +49,9 @@ vi.mock('./screens/profile/ProfileScreen', () => ({
   default: () => <h1>Profil screen</h1>,
 }));
 
+vi.mock('./screens/campaigns/CampaignsScreen', () => ({
+  default: () => <h1>Campanii screen</h1>,
+}));
 vi.mock('./screens/leadership/LeadershipScreen', () => ({
   default: () => <h1>Clasament screen</h1>,
 }));

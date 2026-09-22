@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { IonApp } from '@ionic/react';
 import {
   BrowserRouter,
+  Link,
   Navigate,
   Route,
   Routes,
@@ -17,6 +18,7 @@ import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
+import CampaignsScreen from './screens/campaigns/CampaignsScreen';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
@@ -170,6 +172,14 @@ export default function App() {
             <Route path="/" element={<DashboardScreen />} />
             <Route path="/tracker" element={<TrackerScreen />} />
             <Route
+              path="/administrare/campanii"
+              element={<CampaignsScreen />}
+            />
+            <Route
+              path="/administrare/grupuri/:groupId/campanii"
+              element={<CampaignsScreen />}
+            />
+            <Route
               path="/clasament"
               element={
                 <RequireCapability capability="seeLeadership">
@@ -202,7 +212,15 @@ export default function App() {
               path="/bc"
               element={
                 <RequireCapability capability="manageRoles">
-                  <Placeholder title="Panou BC" issue="#104–#107" />
+                  <section>
+                    <Placeholder title="Panou BC" issue="#104–#107" />
+                    <Link
+                      className="inline-flex min-h-11 items-center p-4 underline"
+                      to="/administrare/campanii"
+                    >
+                      Gestionează campaniile grupurilor
+                    </Link>
+                  </section>
                 </RequireCapability>
               }
             />

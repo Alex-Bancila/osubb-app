@@ -59,6 +59,8 @@ export const keys = {
   },
   tasks: {
     all: ['tasks'] as const,
+    formOptions: (memberId: string | undefined) =>
+      ['tasks', 'form-options', { memberId }] as const,
     directExecutors: (memberId: string | undefined) =>
       ['tasks', 'direct-executors', { memberId }] as const,
     memberHistory: (memberId: string | undefined, targetId: string) =>
@@ -87,6 +89,11 @@ export const keys = {
     leadership: (memberId: string | undefined) =>
       ['tasks', 'all', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
+  },
+  campaigns: {
+    all: ['campaigns'] as const,
+    list: (memberId: string | undefined, groupId?: number) =>
+      ['campaigns', { memberId, groupId }] as const,
   },
   requests: {
     decisions: (memberId: string | undefined) =>
