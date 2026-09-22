@@ -59,14 +59,15 @@ insert into member_departments (member_id, dept_id) values
 
 -- ADR-0008/#372: scope no longer gates visibility, Minimum Level does — a
 -- dept-scoped Event is otherwise readable org-wide at min_level 0 now. So
--- 'RSVP imagine' carries min_level 4 specifically to stay the one Event
--- hidden from a level-1 Voluntar below (the fixture this file needs for
--- "a member cannot RSVP to an event hidden by event RLS"); it is still
--- level >= 4 (Corina, min_level 0/0/4) that reads every attendance row.
+-- 'RSVP imagine' carries min_level 3 (#519 retires min_level 4) specifically
+-- to stay the one Event hidden from a level-1 Voluntar below (the fixture
+-- this file needs for "a member cannot RSVP to an event hidden by event
+-- RLS"); it is still level >= 4 (Corina, min_level 0/0/4) that reads every
+-- attendance row.
 insert into events (title, type, scope, dept_id, min_level, starts_at) values
   ('RSVP organizație', 'sedinta', 'org', null, 0, now() + interval '1 day'),
   ('RSVP educațional', 'sedinta', 'dept', 'edu', 0, now() + interval '2 days'),
-  ('RSVP imagine', 'sedinta', 'dept', 'pr', 4, now() + interval '3 days');
+  ('RSVP imagine', 'sedinta', 'dept', 'pr', 3, now() + interval '3 days');
 
 insert into event_attendance (event_id, member_id, status)
 select id, 'a1000000-0000-0000-0000-000000000063'::uuid, 'going'

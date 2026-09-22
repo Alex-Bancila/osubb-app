@@ -16,7 +16,23 @@ import {
   upcomingEventsQueryOptions,
 } from './events';
 
-type EventRow = Database['public']['Tables']['events']['Row'];
+type EventTableRow = Database['public']['Tables']['events']['Row'];
+type GroupTableRow = Database['public']['Tables']['groups']['Row'];
+type EventRow = EventTableRow & {
+  group: Pick<
+    GroupTableRow,
+    'name' | 'short' | 'color' | 'category' | 'path' | 'is_organization'
+  > | null;
+};
+
+const eduGroup = {
+  name: 'Educațional',
+  short: 'EDU',
+  color: '#284C93',
+  category: 'department',
+  path: [7],
+  is_organization: false,
+};
 
 function eventRow(overrides: Partial<EventRow> = {}): EventRow {
   return {
@@ -32,12 +48,15 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     capacity: 30,
     description: 'Planificarea semestrului',
     created_at: '2026-08-20T10:00:00.000Z',
+    updated_at: '2026-08-20T10:00:00.000Z',
     created_by: null,
     has_qr: false,
     project_id: null,
     min_level: 0,
     cancelled_at: null,
     cancel_reason: null,
+    group_id: 7,
+    group: eduGroup,
     ...overrides,
   };
 }
@@ -48,9 +67,8 @@ describe('event presentation', () => {
       id: 42,
       title: 'Ședință Educațional',
       type: 'sedinta',
-      scope: 'dept',
-      departmentId: 'edu',
-      teamId: null,
+      groupId: 7,
+      group: eduGroup,
       startsAt: '2026-08-29T21:30:00.000Z',
       endsAt: '2026-08-29T23:00:00.000Z',
       dayKey: '2026-08-30',
@@ -61,6 +79,10 @@ describe('event presentation', () => {
       capacity: 30,
       description: 'Planificarea semestrului',
     });
+  });
+
+  it('keeps a Group this member may not read as null rather than inventing one', () => {
+    expect(toEventPresentation(eventRow({ group: null }))?.group).toBeNull();
   });
 });
 
@@ -77,18 +99,28 @@ describe('upcoming-events query', () => {
 
     expect(supabaseMock.from).toHaveBeenCalledWith('events');
     expect(supabaseMock.select).toHaveBeenCalledWith(
-      'id, title, type, scope, dept_id, team_id, starts_at, ends_at, location, capacity, description',
+      'id, title, type, group_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)',
     );
     expect(supabaseMock.gte).toHaveBeenCalledWith(
       'starts_at',
       now.toISOString(),
     );
-    expect(supabaseMock.neq).toHaveBeenCalledWith('scope', 'project');
     expect(supabaseMock.order).toHaveBeenCalledWith('starts_at', {
       ascending: true,
     });
     expect(result).toHaveLength(1);
     expect(result[0]?.dayKey).toBe('2026-08-30');
+  });
+
+  // R13: `events_read` (Minimum Level) is the whole visibility rule, so the
+  // calendar no longer second-guesses it. Mutation this catches: putting the
+  // `.neq('scope', 'project')` filter back.
+  it('asks for every visible Event, Project Events included', async () => {
+    supabaseMock.order.mockResolvedValue({ data: [eventRow()], error: null });
+
+    await fetchUpcomingEvents(new Date('2026-08-29T18:00:00.000Z'));
+
+    expect(supabaseMock.neq).not.toHaveBeenCalled();
   });
 
   it('surfaces the Supabase error to React Query', async () => {

@@ -51,7 +51,12 @@ describe('CompletedWorkRequestScreen', () => {
 
     expect(
       screen.getAllByRole('option').map((option) => option.textContent),
-    ).toEqual(['Alege structura', 'Educațional', 'Echipa Media', 'OSUBB Fest']);
+    ).toEqual(['Alege grupul', 'Educațional', 'Echipa Media', 'OSUBB Fest']);
+    expect(
+      screen.getByRole('combobox', { name: 'Grup' }),
+    ).toHaveAccessibleDescription(
+      'Alege grupul pentru care ai lucrat: departamentul, echipa sau proiectul.',
+    );
     expect(screen.queryByText('Financiar')).not.toBeInTheDocument();
   });
 
@@ -59,7 +64,7 @@ describe('CompletedWorkRequestScreen', () => {
     const user = userEvent.setup();
     render(<CompletedWorkRequestScreen />);
 
-    await user.selectOptions(screen.getByLabelText('Structură'), 'project:7');
+    await user.selectOptions(screen.getByLabelText('Grup'), 'project:7');
     await user.type(
       screen.getByLabelText('Descriere'),
       '  Am coordonat voluntarii.  ',

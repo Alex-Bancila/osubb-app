@@ -1,0 +1,56 @@
+-- #521: reusable rolled-back Group fixtures for the existing command matrices.
+-- Included explicitly; .psql keeps the CLI from discovering it as a standalone suite.
+reset role;
+create function pg_temp.g521_uid(n integer) returns uuid language sql immutable as $$
+  select ('52100000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid
+$$;
+insert into auth.users(id,email)
+select pg_temp.g521_uid(n),'member.'||n||'.521@test.local' from generate_series(1,12) n;
+insert into public.profiles(id,full_name,email,role,status)
+select pg_temp.g521_uid(n),'Member #521 '||n,'member.'||n||'.521@test.local',
+(case when n=1 then 'bc' when n=9 then 'bce' when n=12 then 'vot' else 'voluntar' end)::public.member_role,'activ'
+from generate_series(1,12) n;
+insert into public.departments(id,name,short,color,kind) values ('d521','Department #521','D521','#123456','department');
+insert into public.member_departments(member_id,dept_id) values
+(pg_temp.g521_uid(5),'d521'),(pg_temp.g521_uid(9),'d521');
+insert into public.teams(id,name,dept_id) values ('dt521','Child #521','d521'),('ind521','Independent #521',null);
+insert into public.team_members(team_id,member_id) values
+('dt521',pg_temp.g521_uid(8)),('ind521',pg_temp.g521_uid(6)),('ind521',pg_temp.g521_uid(7));
+insert into public.projects(name,leader_id,created_by) values
+('Project #521',pg_temp.g521_uid(2),pg_temp.g521_uid(1)),
+('Archived #521',pg_temp.g521_uid(2),pg_temp.g521_uid(1));
+insert into public.project_members(project_id,member_id,project_role)
+select p.id,pg_temp.g521_uid(n),case when n in (3,4) then 'responsible' else 'member' end
+from public.projects p cross join generate_series(3,5) n where p.name='Project #521';
+update public.projects set status='archived' where name='Archived #521';
+create temp table g521_tasks(name text primary key,id bigint);
+grant select on g521_tasks to authenticated;
+create function pg_temp.g521_task(p_name text,p_origin text,p_executor integer default null,
+ p_status text default 'todo',p_mode text default 'direct',p_kind text default 'task')
+returns bigint language plpgsql as $$
+declare v_id bigint; v_saved text := current_setting('request.jwt.claims',true);
+begin
+  insert into public.tasks(title,dept_id,team_id,project_id,created_by,deadline,status,audience,assignment_mode,kind,started_at,submitted_at,created_at,queue_opened_at)
+  values ('Group #521 '||p_name,
+    case when p_origin='dept' then 'd521' end,
+    case when p_origin in ('dt','ind') then p_origin||'521' end,
+    case when p_origin in ('project','archived') then (select id from public.projects where name=case when p_origin='project' then 'Project #521' else 'Archived #521' end) end,
+    pg_temp.g521_uid(1),now()-interval '1 day',
+    (case when p_status='completed' then 'in_review' else p_status end)::public.task_status,
+    case when p_kind='task' then 'org' end,case when p_kind='task' then p_mode end,p_kind,
+    case when p_status in ('in_progress','in_review','completed') then now()-interval '3 days' end,
+    case when p_status in ('in_review','completed') then now()-interval '2 days' end,now()-interval '4 days',case when p_mode='public' and p_kind='task' then now()-interval '4 days' end) returning id into v_id;
+  if p_executor is not null then
+    insert into public.task_assignments(task_id,member_id,assigned_by,assigned_at)
+    values(v_id,pg_temp.g521_uid(p_executor),pg_temp.g521_uid(1),now()-interval '3 days');
+  end if;
+  if p_status='completed' then
+    perform set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.g521_uid(1),'role','authenticated',
+      'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,true);
+    perform public.complete_task_review(v_id,3,3,'Fixture evaluation #521');
+    perform set_config('request.jwt.claims',coalesce(v_saved,''),true);
+  end if;
+  insert into g521_tasks values(p_name,v_id);
+  return v_id;
+end;
+$$;

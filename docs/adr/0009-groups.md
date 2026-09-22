@@ -2,14 +2,25 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-18
-- **Deciders:** Alex Băncilă (grilling session of 2026-09-18)
+- **Amended:** 2026-09-20 — Wave 2 as built: `create_event`'s Group signature, `update_event` / `cancel_event`, Campaign ownership by any Group, and the retirement of the level-4 Calendar gate
+- **Amended:** 2026-09-20 — Wave 3 grilling: Group Audience; Announcements carry an Origin Group and an Announcement Audience; Membership Status never edits rosters; a Member below a Group's Minimum Level leaves it; archiving refuses on open work; a Group's parent is fixed at creation; colour and short name are settings; `my_groups()` reports effective Group Roles
+- **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18 and 2026-09-20)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
 - **Related:** ADR-0003, ADR-0004, ADR-0007, ADR-0008, `CONTEXT.md`, `docs/backend/conventions.md`
 
+> **Amended 2026-09-20 — what Wave 2 actually landed.** The decision below stands; these are the shapes it took, recorded so the ADR can be read against the schema.
+>
+> - **`create_event` takes the owning Group, not a scope.** `create_event(p_title, p_type, p_group_id, p_starts_at, p_ends_at, p_location, p_capacity, p_description, p_min_level)` — the Group is the third argument and is required; everything after `p_starts_at` defaults. An unknown, archived, or unauthorized Group is refused as `42501 calendar_manage_forbidden`, so an id no one may use is indistinguishable from an id that does not exist; naming no Group at all is the caller's mistake, not a refusal, and answers `PT400 event_group_required` ahead of every gate (#370).
+> - **Two new commands complete the Calendar triple.** `update_event(p_event_id, p_title, p_type, p_group_id, p_starts_at, p_ends_at, p_location, p_capacity, p_description, p_min_level)` replaces an Event's whole content state and demands authority over both the old and the new Group when it moves one; `cancel_event(p_event_id, p_reason)` keeps the row and requires a reason. Both keep the Organization Group's creator-only rule, with BC and Moderator overriding it.
+> - **Moving an Event onto the Organization Group takes `create_event`'s rule, not the Group-Manager rule.** `update_event` normally re-runs `require_group_work_manager` on the target Group, but an Organization-Group **target** is admitted by level ≥ 6 or by holding any live Group Role anywhere — the same rule that lets a Department Coordonator raise an organization-wide Event (#370). It has to be: the Organization Group is _a_ root with no ancestor of its own, like every Department, Independent Team, and Project Group, so nobody could ever reach it through an ancestor role. This is a deliberate widening — any Group Responsible may pull an Event they already manage onto the organization calendar. `created_by` is not rewritten by a move, so a Responsible who moves someone else's Event there loses the right to edit it again the moment they do (the Organization **source** rule is creator or level ≥ 6), while the original creator keeps it. The target's `status = 'active'` requirement belongs to the move alone: an edit that leaves an Event in its own, since-archived Group is decided by the source rule by itself, so such an Event stays correctable by whoever may still manage it instead of being cancel-only (#248).
+> - **The level-4 Calendar gate is gone.** No Calendar command reads `member_level >= 4`; Event authority is the Group Role on the owning Group's path, and `events.min_level` now admits only `{0, 3, 5, 6}` (`events_min_level_ck`), with staging rows at 4 moved up to 5 rather than down.
+> - **A Campaign belongs to any Group.** `campaigns.group_id` is the owner and `create_campaign(p_group_id, p_name)` is the Group-side command; the Department-only `create_campaign(p_department_id, p_name)` survives Wave 2 only as a compatibility overload, disambiguated by parameter name, and goes in Wave 3.
+> - **`tasks`, `events`, `campaigns`, and `completed_work_requests` each carry `group_id`** with a `*_sync_group_origin` `before` trigger bridging it to the legacy columns in both directions. `events.scope` is derived, never written by a command. `docs/backend/conventions.md` §10 is the working rulebook for all of this, including the trigger-ordering rule the bridge depends on.
+
 ## Context
 
-The Tracker backend is complete, and every authority rule in it is written three times. Departments, Teams, and Projects are three tables with three roster tables, and each of the ninety `private` helpers that decides who may read, manage, or evaluate a Task carries a `dept_id / team_id / project_id` branch; 53 of the 105 migrations and nearly every pgTAP suite repeat the shape. Adding the Adunarea Generală, Project teams, or any body OSUBB invents next means new tables and new branches in every helper.
+Before this decision, the completed Tracker backend repeated authority rules across three structures. Departments, Teams, and Projects are three tables with three roster tables, and the `private` helpers deciding who may read, manage, or evaluate a Task carried a `dept_id / team_id / project_id` branch; migrations and pgTAP suites repeated the shape. Adding the Adunarea Generală, Project teams, or any body OSUBB invents next means new tables and new branches in every helper.
 
 The vocabulary is also split. `responsabil` is a global rank at level 4 in `member_role`, and `responsible` is a per-Project role in `project_members`; Events gate "Responsible+" on the rank while the Tracker gates on the Project role. The Department Cup depends on `departments.kind`, Campaigns are Department-only, and organization-wide Events hang off an `org` pseudo-department row.
 
@@ -23,17 +34,17 @@ A **Group** is one entity. BC or Moderator creates a top-level Group with a cust
 
 A Group carries **settings, not a kind**:
 
-| Setting                        | Meaning                                                                                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parent Group                   | Optional, to any depth: a Child Group may have Child Groups of its own; cycles are impossible.                                                        |
-| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.                         |
-| Counts toward the parent's Cup | Child only, default on. A Group's Task Points reach the Cup of its nearest competing ancestor only when this setting is on at every link of the path. |
-| Minimum Level                  | Join and visibility gate (below).                                                                                                                     |
-| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                                                   |
-| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                                        |
-| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.                                   |
-| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal") and each Group Responsible ("Responsabil Logistică").                        |
-| Lifecycle                      | Active or archived; archiving keeps history.                                                                                                          |
+| Setting                        | Meaning                                                                                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parent Group                   | Optional, to any depth: a Child Group may have Child Groups of its own; cycles are impossible. Chosen at creation and never changed (amended 2026-09-20). |
+| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.                             |
+| Counts toward the parent's Cup | Child only, default on. A Group's Task Points reach the Cup of its nearest competing ancestor only when this setting is on at every link of the path.     |
+| Minimum Level                  | Join and visibility gate (below).                                                                                                                         |
+| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                                                       |
+| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                                            |
+| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.                                       |
+| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal") and each Group Responsible ("Responsabil Logistică").                            |
+| Lifecycle                      | Active or archived; archiving keeps history.                                                                                                              |
 
 **Department**, **Project**, and **Team** are presentation categories chosen at creation. They pre-fill settings and label the interface. No authority, visibility, membership, notification, or Cup rule may branch on the category, and a conventions test enforces it.
 
@@ -84,7 +95,7 @@ A Campaign is a label owned by one Group, any Group. It tags Tasks whose Origin 
 
 ### Calendar
 
-An Event is owned by one Group; the four-value scope enum disappears. A Group's Managers and Responsibles, and those of its ancestors, create, edit, and cancel its Events. Anyone holding a Group Role may create an Event in the Organization Group; only its creator or BC/Moderator edits it. Relevance, RSVP, capacity, and important-change notifications keep ADR-0008's rules with "the member's Departments, Teams, and Projects" read as "the member's Groups".
+An Event is owned by one Group. Wave 2 stores `events.group_id`; the origin-sync trigger maintains the legacy scope and foreign keys until Wave 3 removes them. A Group's Managers and Responsibles, and those of its ancestors, create, edit, and cancel its Events. Anyone holding a Group Role may create an Event in the Organization Group; only its creator or BC/Moderator edits or cancels it. `create_event` accepts the owning Group directly; `update_event` replaces the full content state, requires authority over both source and target when moving an Event, and `cancel_event` preserves the Event with a required reason. Important changes notify the relevant roster and going attendees through the shared notification helper with a `/calendar` link; text and capacity-only edits do not fan out. Relevance, RSVP, capacity, and important-change notifications keep ADR-0008's rules with "the member's Departments, Teams, and Projects" read as "the member's Groups".
 
 ### Promotion hooks
 
@@ -105,8 +116,8 @@ One "Administrare" area, scoped by authority. BC and Moderator see the whole Gro
 A strangler in three waves, every PR merged green, each wave its own plan:
 
 1. **Wave 1 — schema.** Add `groups`, `group_members` with the Group Role, the settings above, and the Organization Group; backfill from `departments`, `teams`, `projects`, `member_departments`, `team_members`, and `project_members`; keep those tables as the write master, mirrored one way into `groups`/`group_members` by triggers (no compatibility views); add `group_ids` to the organization claims. Wave 1's `groups_read` publishes every active Group to every Member at or above its Minimum Level, which for the backfilled rows is 0 — so Team and Project names become organization-visible before Wave 2 re-expresses `teams_read`/`projects_read`, and Team/Project rosters become visible to rank BCE. Accepted: it is ADR-0009's end state and the shadow carries no personal data beyond membership.
-2. **Wave 2 — authority and commands.** Rewrite the `private` authority helpers and the 21 commands to read Groups only; give `tasks` and `events` one `group_id` beside the legacy columns, kept in sync by the commands; move Campaign ownership to any Group (`campaigns.group_id` replacing `department_id`); add the no-category-branch check to `conventions.test.sql`. Tracker frontend and Calendar work resume on top of this wave.
-3. **Wave 3 — frontend and cleanup.** Move the 18 `app/src` files and the generated types to Groups, ship the Administrare screen, drop the legacy columns and tables, the mirror triggers and `groups.legacy_*`, the `event_scope` enum values, and level 4.
+2. **Wave 2 — authority and commands (implemented by #519–#524, #370, and #248).** Tracker authority and command decisions read Group Roles, paths, and settings; legacy Origin signatures remain compatibility inputs. `tasks`, `events`, `campaigns`, and `completed_work_requests` carry `group_id` with two-way Origin-sync triggers. Campaigns are owned by any Group, leadership filters include descendants, Department Cup follows settings at every ancestor link, and Calendar creation/update/cancellation use Group authority. `conventions.test.sql` enforces the category-word boundary; the 23-step smoke test exercises allowed and refused Group behavior. This closeout branch contains the implementation; consult the PR graph before treating the entire stack as merged to `main`.
+3. **Wave 3 — Group administration and cleanup (next).** Ship Group settings/roster/appointment/application commands and the Administrare surface, finish moving frontend consumers to Groups, then remove compatibility signatures, legacy structure/Origin columns and tables, mirror and bridge triggers, `groups.legacy_*`, the `event_scope` enum, and the retired level-4 rank. Regenerate database types from the resulting schema.
 
 ## Consequences
 
@@ -114,7 +125,29 @@ A strangler in three waves, every PR merged green, each wave its own plan:
 - Groups nest to any depth, so authority, visibility, Campaign tagging, and Cup attribution walk the ancestor chain. Wave 1 stores each Group's ancestor path and forbids cycles; the helpers read that path rather than recursing per row.
 - Until Wave 3 dedupes legacy names, the sibling-name rule binds native Groups only.
 - ADR-0007, ADR-0008, and ADR-0004 are amended by reference in their headers; `CONTEXT.md` is updated in the same change; house rule 13 in `CLAUDE.md` names this ADR.
-- The pinned `private` roster, the claimless sweep, the points authorization matrix (#262), and the actor-helper suites are rewritten in Wave 2; the Tracker smoke script follows.
+- The pinned `private` roster, the claimless sweep, the points authorization matrix (#262), and the actor-helper suites now prove the Wave 2 matrix; the Tracker smoke script exercises four additional Group scenarios.
 - `capabilities.ts` loses `manageTasks: 4`; management controls render from server capability rows, as the 2026-09-18 Tracker plan already requires.
 - Issues to reframe: #47, #48, #49–#52 on Evaluation Periods; #66 on the Adunarea Generală roster; #103, #105, #107 into Administrare; #354 filters by Group; #248 and #370 by Group Role; #160 becomes a Wave 1 prerequisite. New issues are filed per wave.
 - Until Wave 3 lands, code still speaks `dept_id / team_id / project_id`; new authority written in the meantime must read Groups, never add a fourth branch.
+
+## Amendment (2026-09-20) — rulings from the Wave 3 grilling
+
+Each ruling below closes a gap the Wave 3 issue graph exposed. None changes the model above; each says what the model already implied and the code would otherwise have guessed.
+
+**Group Audience.** Every active Member of a Group or of any Group below it, whether by roster row or by Automatic Membership. A Group's announcements and the important changes to its Events reach its Group Audience; a Member's Relevant Events are those of the Groups whose Audience they are in. Automatic Membership is never materialized, so one server helper resolves it by live Level against each Group's Minimum Level; nothing that fans out may join the roster table directly. Task notifications are unaffected.
+
+**Announcements.** An Announcement is posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles (or their ancestors'); an Announcement of the Organization Group may be posted by anyone holding a Group Role. It carries an **Announcement Audience**: local (the Origin's Group Audience) or organization-wide (every active Member). A Group may speak to the whole organization without ceasing to be the Origin, and any composer may choose that Audience. Rank alone composes nothing, consistent with the Authority matrix: a BCE-rank Member with no Group Role cannot post.
+
+**Membership Status never edits rosters.** Deactivating a Member leaves every roster row and Group Role in place; authority is already derived live from active Members only, so an inactive Manager cannot act, and a reactivated Member resumes exactly the positions they held. Rosters change only through the roster commands, by hand. Administrare shows a Member's status beside their Group Role so a Manager removes or keeps them deliberately.
+
+**Falling below a Group's Minimum Level ends membership of that Group.** The gate binds joining and seeing, and it stays true afterwards: when a Role change puts a Member below a Group's Minimum Level, they leave that Group entirely, roster row and any Group Role held on it alike, at the moment the Role changes; a Group Role held on an ancestor with a lower Minimum Level is untouched and still flows down. When a Group's Minimum Level is raised above current members, the same removal happens, but only behind an explicit confirmation from the actor, after the interface has shown who will leave, so a stale form can never remove anyone by accident. In both directions the removed Members are notified. The invariant "no roster row below its Group's Minimum Level" is therefore total.
+
+**Archiving refuses on open work.** A Group cannot be archived while it or any Group below it has a Task that is not completed, unfulfilled or cancelled, or a pending Completed-work Request; the Manager finishes or cancels that work first, with the reasons the Tracker already requires. Archiving never cancels a Task. It does settle what has no executor: pending Applications on the subtree are declined with the archiving actor and reason, and future Events are cancelled with the same reason, both preserving history.
+
+**A Group's parent is fixed at creation.** There is no move command and there will be none: a wrongly placed Group is archived and created again. This keeps Department Cup attribution simple, since standings walk each Task's current Group path and no path ever changes.
+
+**Colour and short name are Group settings** (structural, BC/Moderator), already present on `groups` since Wave 1; the interface reads them from the Group, never from a category.
+
+**`my_groups()` reports effective Group Roles.** Because authority flows down, a Member's Groups include every Group below one they manage, with the Group Role they effectively hold there and a flag saying whether it comes from their own roster row. It lists only Groups the Member may read, so no picker ever offers a Group the Member is below.
+
+**Provisioning and the first accounts.** Provisioning appoints a new Member's initial Groups through the same Appointment core the roster commands use, attributed to the inviting BC or Moderator; the CSV names a Group by its short name or its display name. The first accounts on a fresh production database, the Moderator's among them, are created once by a service-role bootstrap script; every later account comes through Administrare.
