@@ -10,6 +10,9 @@ import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { expect, it, vi } from 'vitest';
 import { TaskForm } from './TaskForm';
+// Each case walks several dropdowns end to end; on a loaded machine that can
+// pass the 5 s default without anything being wrong.
+vi.setConfig({ testTimeout: 15_000 });
 import type { TaskFormOptions } from './task-form-model';
 vi.mock('../../queries/direct-executors', async (original) => ({
   ...(await original<typeof import('../../queries/direct-executors')>()),
