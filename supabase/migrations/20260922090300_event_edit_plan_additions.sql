@@ -1,13 +1,13 @@
 -- #248: the plan-required additions to Event editing and cancellation.
 --
--- 20260919203755_group_event_update_cancel.sql already lands the pair, the
+-- 20260922090200_group_event_update_cancel.sql already lands the pair, the
 -- recipient set, private.notify's trailing p_link and events.updated_at. This
 -- migration adds only what the ADR-0009 Wave 2 plan asks for and that file does
 -- not do. A merged migration is never edited (conventions §1), so each body is
 -- restated in full through `create or replace`, which has no partial form.
 --
 -- 1. The malformed-input block gains `event_group_required`. #370's
---    20260920015609_create_event_group_required.sql made a null Group a PT400
+--    20260922090100_create_event_group_required.sql made a null Group a PT400
 --    on create_event; sibling commands over one core must agree (conventions
 --    §3), and a null Group on update otherwise fell out of the Group lookup as
 --    42501 calendar_manage_forbidden -- "you may not" for what is in fact "you
