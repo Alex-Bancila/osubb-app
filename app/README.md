@@ -63,7 +63,7 @@ app/
     │   ├── supabase.ts             # the one shared client, env-driven
     │   ├── auth.tsx                # session + decoded claims, useAuth() (+ auth.test.tsx)
     │   ├── auth-error-message.ts   # maps GoTrue errors to Romanian copy
-    │   ├── capabilities.ts         # level thresholds, named as the database names them
+    │   ├── capabilities.ts         # useCapabilities(): the server capability row (my_capabilities())
     │   ├── calendar-time.ts        # Bucharest wall-clock time conversions (+ calendar-time.test.ts)
     │   ├── database.types.ts       # generated — `npm run gen:types`, never hand-edited
     │   └── format.ts               # dates, points, initials — Romanian locale
@@ -141,15 +141,15 @@ copy of that rule in TypeScript is a weaker one.
 | `/calendar`      | members                                                                           | calendar (#96–#98)         |
 | `/anunturi`      | members                                                                           | announcements (#99–#101)   |
 | `/notificari`    | members                                                                           | notification centre (#101) |
-| `/voluntari`     | level >= 5                                                                        | directory (#102–#103)      |
+| `/voluntari`     | capability `seeDirectory` (rank BCE+)                                             | directory (#102–#103)      |
 | `/profil`        | members                                                                           | profile (#108)             |
-| `/bc`            | level >= 6                                                                        | BC panel (#104–#107)       |
+| `/administrare`  | capability `administer` (a Group Role anywhere, or BC+)                           | Administrare (#588)        |
 
 Everything unknown redirects to `/`, where the guard decides.
 
 The guards, and the nav items a role does not see, are **navigation, not
 security**: the database returns nothing to a session that may not see it,
-whatever the URL says. Someone who types `/bc` by hand gets the screen and no
+whatever the URL says. Someone who types `/administrare` by hand gets the screen and no
 data. What the guards buy is that a member sees an explanation, or a tab they
 can actually use, instead of an app that is silently empty.
 

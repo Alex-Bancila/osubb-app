@@ -5,7 +5,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap;
-select plan(17);
+select plan(21);
 
 -- search_path pinned on every JWT helper (auth_role was fixed in #237).
 select is(
@@ -32,6 +32,12 @@ select is(has_function_privilege('authenticated', 'public.auth_in_group(bigint)'
 -- authenticated keeps execute (policies and the generated points column need it).
 select is(has_function_privilege('authenticated', 'public.auth_level()', 'execute'), true, 'authenticated: auth_level allowed');
 select is(has_function_privilege('authenticated', 'public.rating_mult(integer)', 'execute'), true, 'authenticated: rating_mult allowed');
+
+-- #576: the capability row and the caller's Groups are member reads, never anon RPC surface.
+select is(has_function_privilege('anon', 'public.my_capabilities()', 'execute'), false, 'anon: my_capabilities denied');
+select is(has_function_privilege('anon', 'public.my_groups()', 'execute'), false, 'anon: my_groups denied');
+select is(has_function_privilege('authenticated', 'public.my_capabilities()', 'execute'), true, 'authenticated: my_capabilities allowed');
+select is(has_function_privilege('authenticated', 'public.my_groups()', 'execute'), true, 'authenticated: my_groups allowed');
 
 -- views: select only.
 select is(has_table_privilege('authenticated', 'public.profiles_directory', 'insert'), false, 'profiles_directory: no insert');

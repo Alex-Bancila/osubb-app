@@ -1,5 +1,6 @@
 import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
+import { useCapability } from '../lib/capabilities';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { TASK_PRESENTATION_FIELDS } from './tasks';
@@ -31,18 +32,13 @@ export async function fetchManagedTasks(): Promise<TaskPresentationRow[]> {
   }
   return attachVisibleTaskExecutors(rows);
 }
+/**
+ * `manage_tasks` from the one capability row (`my_capabilities()`, which is
+ * exactly `can_manage_tasks()`), so the Tracker, the nav and the Campaigns
+ * guard share one cached request instead of each asking the server.
+ */
 export function useTaskManagement() {
-  const memberId = useAuth().session?.user.id;
-  return useQuery({
-    queryKey: keys.tasks.management(memberId),
-    queryFn: memberId
-      ? async () => {
-          const { data, error } = await supabase.rpc('can_manage_tasks');
-          if (error) throw error;
-          return data;
-        }
-      : skipToken,
-  });
+  return useCapability('manageTasks');
 }
 export async function fetchTaskLeadership() {
   const { data, error } = await supabase.rpc('can_read_all_tasks');

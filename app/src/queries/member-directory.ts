@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { groupOptionLabel } from '../components/ui/combobox';
 import { useAuth } from '../lib/auth';
-import { can } from '../lib/capabilities';
+import { useCapability } from '../lib/capabilities';
 import { supabase } from '../lib/supabase';
 
 /** One Group a member belongs to, labelled `Name · Parent`. */
@@ -138,11 +138,12 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
 }
 
 export function useMemberDirectory() {
-  const { session, claims } = useAuth();
+  const { session } = useAuth();
+  const seeDirectory = useCapability('seeDirectory').data === true;
   return useQuery({
     // Evaluation invalidations of ['points'] also refresh these point totals.
     queryKey: ['points', 'member-directory', { memberId: session?.user.id }],
-    enabled: Boolean(session) && can(claims, 'seeDirectory'),
+    enabled: Boolean(session) && seeDirectory,
     queryFn: fetchMemberDirectory,
   });
 }

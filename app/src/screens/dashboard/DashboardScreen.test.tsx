@@ -3,6 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
+/* `see_leadership` from the server capability row (`my_capabilities()`). */
+const leadership = vi.hoisted(() => ({
+  capability: vi.fn(),
+  result: { data: false } as { data?: boolean; isPending?: boolean },
+}));
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: (name: string) => {
+    leadership.capability(name);
+    return leadership.result;
+  },
+}));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: () => ({
     data: { full_name: 'Ioana Popescu', role: 'voluntar' },
@@ -81,8 +92,9 @@ describe('DashboardScreen leadership gate', () => {
     vi.useRealTimers();
   });
 
-  it('hides leaderboard, cup and rank for a level-1 member', () => {
+  it('hides leaderboard, cup and rank without the see_leadership capability', () => {
     auth.useAuth.mockReturnValue(claims(1));
+    leadership.result = { data: false };
     const { container } = render(<DashboardScreen />);
     // Scoped to the hero points value and anchored to "puncte" so it cannot
     // collide with the page date (or any date) even without the freeze
@@ -97,25 +109,24 @@ describe('DashboardScreen leadership gate', () => {
     expect(
       screen.getByText(/Cupa Departamentelor sunt vizibile pentru BCE și BC/i),
     ).toBeInTheDocument();
+    expect(leadership.capability).toHaveBeenCalledWith('seeLeadership');
   });
 
-  it('hides leaderboard, cup and rank for a level-4 member', () => {
-    // Pins the threshold: seeLeadership is 5, not 4. A level-4 Responsabil
-    // must see exactly what a level-1 member sees. Without this case,
-    // LEVEL.seeLeadership could drift from 5 to 4 in capabilities.ts and
-    // both other tests here would keep passing.
-    auth.useAuth.mockReturnValue(claims(4));
+  it('hides leaderboard, cup and rank while the capability row is loading', () => {
+    // The threshold lives on the server now (see_leadership = level >= 5,
+    // pinned by my_capabilities.test.sql); the screen must not guess from the
+    // token's level while the row is on its way.
+    auth.useAuth.mockReturnValue(claims(5));
+    leadership.result = { isPending: true, data: undefined };
     const { container } = render(<DashboardScreen />);
     expect(heroPointsValue(container)).toMatch(/^12$/);
     expect(screen.queryByRole('heading', { name: /clasament/i })).toBeNull();
     expect(screen.queryByText(/din 8 membri/)).toBeNull();
-    expect(
-      screen.getByText(/Cupa Departamentelor sunt vizibile pentru BCE și BC/i),
-    ).toBeInTheDocument();
   });
 
-  it('shows everything for a level-5 member', () => {
+  it('shows everything with the see_leadership capability', () => {
     auth.useAuth.mockReturnValue(claims(5));
+    leadership.result = { data: true };
     render(<DashboardScreen />);
     expect(screen.getByText(/din 8 membri/)).toBeInTheDocument();
     expect(

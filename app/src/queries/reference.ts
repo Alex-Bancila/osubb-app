@@ -243,7 +243,8 @@ export function resolveMemberGroups(
  * The database already keeps the Romanian label for every role ("Membru cu
  * Drept de Vot"), so the UI reads it instead of carrying a second copy that
  * drifts. The level is here too, but note it is *not* the authority for
- * anything: permissions come from the claims in the token (`capabilities.ts`).
+ * anything: what the UI offers comes from the server capability row
+ * (`useCapabilities()` in `capabilities.ts`), and the database decides.
  */
 export function useRoles() {
   return useQuery({

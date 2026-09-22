@@ -17,6 +17,9 @@
  *     provider also clears the cache when the member changes.
  */
 export const keys = {
+  /* The live capability row (`my_capabilities()`): "mine", so keyed by member. */
+  capabilities: (memberId: string | undefined) =>
+    ['capabilities', { memberId }] as const,
   points: {
     all: ['points'] as const,
     leadership: (
@@ -82,8 +85,6 @@ export const keys = {
       ['tasks', 'detail', { taskId, memberId }] as const,
     managed: (memberId: string | undefined) =>
       ['tasks', 'managed', { memberId }] as const,
-    management: (memberId: string | undefined) =>
-      ['tasks', 'management', { memberId }] as const,
     leadershipCapability: (memberId: string | undefined) =>
       ['tasks', 'leadership-capability', { memberId }] as const,
     leadership: (memberId: string | undefined) =>

@@ -107,7 +107,9 @@ select is(pg_temp.definers_without_empty_search_path() || pg_temp.anon_executabl
 
 -- ADR-0009 Groups: no authority, visibility, membership, notification or Cup rule may branch
 -- on the Group's presentation label. The three Wave 1 mirror functions WRITE that column and
--- are excluded by name.
+-- are excluded by name. #576's public.my_groups() only PROJECTS it for the pickers (R14): a
+-- security-invoker read whose every row decision lives in private.my_groups_impl, which stays
+-- under this sweep.
 create function pg_temp.category_branching_functions() returns text[]
 language sql as $$
   select coalesce(array_agg(n.nspname || '.' || p.proname order by n.nspname, p.proname), '{}')
@@ -116,6 +118,7 @@ language sql as $$
    where n.nspname in ('public', 'private')
      and p.prokind = 'f'
      and p.proname not in ('sync_department_groups', 'sync_team_groups', 'sync_project_groups')
+     and not (n.nspname = 'public' and p.proname = 'my_groups')
      and pg_get_functiondef(p.oid) ~ '\mcategory\M';
 $$;
 create function pg_temp.category_branching_policies() returns text[]

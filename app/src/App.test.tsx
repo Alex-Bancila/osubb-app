@@ -3,8 +3,31 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
-const management = vi.hoisted(() => ({ useTaskManagement: vi.fn() }));
-vi.mock('./queries/task-tabs', () => management);
+/* The server capability row (`my_capabilities()`), per test: `granted` lists
+   the capabilities that are true; `pending` holds the row back. */
+const capabilities = vi.hoisted(() => ({
+  granted: new Set<string>(),
+  pending: false,
+}));
+vi.mock('./lib/capabilities', () => ({
+  useCapability: (name: string) =>
+    capabilities.pending
+      ? { isPending: true, data: undefined }
+      : { isPending: false, data: capabilities.granted.has(name) },
+}));
+const EVERY_CAPABILITY = [
+  'managesAnyGroup',
+  'manageTasks',
+  'seeDirectory',
+  'seeLeadership',
+  'manageRoles',
+  'provisionMembers',
+  'createTopLevelGroups',
+  'administer',
+];
+function grant(...names: string[]) {
+  capabilities.granted = new Set(names);
+}
 vi.mock('./lib/auth', () => ({ useAuth: auth.useAuth }));
 vi.mock('@ionic/react', () => ({
   IonApp: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -105,12 +128,14 @@ const ordinaryMember = {
 describe('route guards', () => {
   beforeEach(() => {
     auth.useAuth.mockReset();
-    management.useTaskManagement.mockReturnValue({ data: false });
+    grant(...EVERY_CAPABILITY);
+    capabilities.pending = false;
     window.history.pushState({}, '', '/');
   });
 
   it('opens Campaigns only for members who manage work in some Group', async () => {
     auth.useAuth.mockReturnValue(ordinaryMember);
+    grant();
     window.history.pushState({}, '', '/administrare/campanii');
     const view = render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
@@ -119,12 +144,46 @@ describe('route guards', () => {
     ).toBeNull();
     view.unmount();
 
-    management.useTaskManagement.mockReturnValue({ data: true });
+    grant('manageTasks');
     window.history.pushState({}, '', '/administrare/grupuri/2/campanii');
     render(<App />);
     expect(
       await screen.findByRole('heading', { name: 'Campanii screen' }),
     ).toBeVisible();
+  });
+
+  it('opens Administrare behind the administer capability, and /bc is gone', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    grant('administer');
+    window.history.pushState({}, '', '/administrare');
+    const view = render(<App />);
+    expect(
+      screen.getByRole('heading', { name: 'Administrare' }),
+    ).toBeInTheDocument();
+    view.unmount();
+
+    // A level-1 Group Manager has it; a BCE without a Group Role does not.
+    grant('seeDirectory', 'seeLeadership');
+    window.history.pushState({}, '', '/administrare');
+    const denied = render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(screen.queryByRole('heading', { name: 'Administrare' })).toBeNull();
+    denied.unmount();
+
+    grant(...EVERY_CAPABILITY);
+    window.history.pushState({}, '', '/bc');
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('decides nothing while the capability row is still loading', () => {
+    auth.useAuth.mockReturnValue(member);
+    capabilities.pending = true;
+    window.history.pushState({}, '', '/administrare');
+    render(<App />);
+    expect(window.location.pathname).toBe('/administrare');
+    expect(screen.queryByRole('heading', { name: 'Administrare' })).toBeNull();
   });
 
   it('preserves a deep link and restores it after the session arrives', async () => {
@@ -232,6 +291,7 @@ describe('route guards', () => {
 
   it('redirects a member who lacks a route capability to the dashboard', async () => {
     auth.useAuth.mockReturnValue(ordinaryMember);
+    grant();
     window.history.pushState({}, '', '/voluntari');
 
     render(<App />);
@@ -342,7 +402,7 @@ describe('"Task nou" in the Tracker', () => {
     auth.useAuth.mockReset();
     window.history.pushState({}, '', '/tracker');
   });
-  // Visibility follows the live can_manage_tasks() read, never the claims.
+  // Visibility follows the live manage_tasks capability, never the claims.
   it.each([
     ['a Group Manager', 'voluntar', 3, true],
     ['a Responsible', 'voluntar', 2, true],
@@ -353,7 +413,7 @@ describe('"Task nou" in the Tracker', () => {
       ...member,
       claims: { ...member.claims, member_role: role, member_level: level },
     });
-    management.useTaskManagement.mockReturnValue({ data: manages });
+    grant(...(manages ? ['manageTasks'] : []));
     render(
       <QueryClientProvider client={new QueryClient()}>
         <App />
@@ -370,6 +430,7 @@ it.each(['/clasament', '/tracker/membru/35400000-0000-0000-0000-000000000001'])(
   'protects leadership route %s with an explanation',
   async (path) => {
     auth.useAuth.mockReturnValue(ordinaryMember);
+    grant('manageTasks', 'managesAnyGroup', 'administer');
     window.history.pushState({}, '', path);
     render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
@@ -381,6 +442,7 @@ it('opens the leadership page for BCE', () => {
     ...member,
     claims: { ...member.claims, member_level: 5 },
   });
+  grant('seeDirectory', 'seeLeadership');
   window.history.pushState({}, '', '/clasament');
   render(<App />);
   expect(

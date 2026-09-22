@@ -4,14 +4,13 @@ import { NavLink, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
-import { can } from '../../lib/capabilities';
+import { useCapabilities } from '../../lib/capabilities';
 import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
-import { useTaskManagement } from '../../queries/task-tabs';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -86,7 +85,7 @@ function SidebarContent({
               key={item.path}
               ref={index === 0 ? firstLinkRef : undefined}
               to={item.path}
-              end={item.path === '/'}
+              end={item.path === '/' || item.exact}
               className={({ isActive }) =>
                 cn(
                   'relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
@@ -166,18 +165,16 @@ export default function AppShell() {
   const profile = useMyProfile();
   const roles = useRoles();
   const unreadNotifications = useUnreadNotificationCount();
-  // The same cached can_manage_tasks() read the Tracker uses; a Group Role is
-  // not in the claims, so the level capabilities cannot answer this.
-  const workManagement = useTaskManagement();
+  // The one cached my_capabilities() row the route guards and the Tracker
+  // share: live rank and Group Roles, which the token cannot carry.
+  const capabilities = useCapabilities();
   const roleLabel =
     (claims && roles.data?.get(claims.member_role)?.name) ??
     claims?.member_role ??
     '';
 
   const visible = NAV_ITEMS.filter(
-    (item) =>
-      (!item.capability || can(claims, item.capability)) &&
-      (!item.requiresWorkManagement || workManagement.data === true),
+    (item) => !item.capability || capabilities.data?.[item.capability] === true,
   );
   const tabs = TAB_ORDER.map((path) =>
     visible.find((item) => item.path === path),
@@ -295,7 +292,7 @@ export default function AppShell() {
             <NavLink
               key={item.path}
               to={item.path}
-              end={item.path === '/'}
+              end={item.path === '/' || item.exact}
               className={({ isActive }) =>
                 cn(
                   'flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10.5px] font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
