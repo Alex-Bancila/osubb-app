@@ -32,14 +32,14 @@ select ok(
   and not has_table_privilege('anon', 'public.points_ledger', 'select'),
   'anonymous clients have neither points read grant'
 );
-select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(text,text,bigint,bigint)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint,bigint)', 'execute'),
   'authenticated may reach the gated leadership Leaderboard');
 select ok(has_function_privilege('authenticated', 'public.department_cup(bigint)', 'execute'),
   'authenticated may reach the gated Department Cup');
 select ok(has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid)', 'execute'),
   'authenticated may reach the gated member drill-down');
 select ok(
-  not has_function_privilege('service_role', 'public.leadership_leaderboard(text,text,bigint,bigint)', 'execute')
+  not has_function_privilege('service_role', 'public.leadership_leaderboard(bigint,bigint)', 'execute')
   and not has_function_privilege('service_role', 'public.department_cup(bigint)', 'execute')
   and not has_function_privilege('service_role', 'public.leadership_member_tasks(uuid)', 'execute'),
   'service_role has no accidental leadership-wrapper bypass'
