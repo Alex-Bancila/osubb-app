@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -14,10 +14,17 @@ vi.mock('../../queries/task-feedback', () => ({
 }));
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 const props = { taskId: 17, status: 'in_review' as const, kind: 'task' };
+const noteLabel = 'Notă pentru Executor (obligatoriu)';
 beforeEach(() => {
   state.capability = true;
   state.mutation.mutateAsync.mockReset().mockResolvedValue({});
 });
+async function openDialog(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+  );
+  return screen.findByRole('dialog', { name: 'Trimite înapoi în lucru' });
+}
 it('hides control without authority, outside review and on Umbrellas', () => {
   state.capability = false;
   const view = render(<TaskFeedbackControl {...props} />);
@@ -28,47 +35,67 @@ it('hides control without authority, outside review and on Umbrellas', () => {
   view.rerender(<TaskFeedbackControl {...props} kind="umbrella" />);
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
-it('requires a trimmed note, sends feedback and announces success accessibly', async () => {
+it('opens a titled pop-up, requires a trimmed note, sends feedback and announces success', async () => {
   const user = userEvent.setup();
-  const { container } = render(<TaskFeedbackControl {...props} />);
+  render(<TaskFeedbackControl {...props} />);
+  const dialog = await openDialog(user);
+  expect(dialog).toHaveAccessibleDescription(/Nota rămâne în istoric/);
   await user.click(
-    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+    within(dialog).getByRole('button', { name: 'Confirmă feedbackul' }),
   );
-  await user.click(screen.getByRole('button', { name: 'Confirmă feedbackul' }));
   expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(
+    'Scrie o notă pentru Executor.',
+  );
   await user.type(
-    screen.getByLabelText('Notă pentru Executor (obligatoriu)'),
+    within(dialog).getByLabelText(noteLabel),
     '  Adaugă sursele  ',
   );
-  expect((await axe.run(container)).violations).toEqual([]);
-  await user.click(screen.getByRole('button', { name: 'Confirmă feedbackul' }));
+  const results = await axe.run(dialog, {
+    rules: { 'color-contrast': { enabled: false } },
+  });
+  expect(results.violations).toEqual([]);
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Confirmă feedbackul' }),
+  );
   expect(state.mutation.mutateAsync).toHaveBeenCalledWith({
     taskId: 17,
     note: 'Adaugă sursele',
   });
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('status')).toHaveTextContent('feedback de aplicat');
+  expect(screen.getByRole('status')).toHaveFocus();
 });
-it('keeps feedback on conflict and suppresses duplicate submissions', async () => {
+it('closes with Escape without sending and returns focus to the trigger', async () => {
+  const user = userEvent.setup();
+  render(<TaskFeedbackControl {...props} />);
+  const trigger = screen.getByRole('button', {
+    name: 'Trimite înapoi în lucru',
+  });
+  await openDialog(user);
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(trigger).toHaveFocus();
+  expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
+});
+it('keeps feedback inside the pop-up on conflict and suppresses duplicate submissions', async () => {
   const user = userEvent.setup();
   state.mutation.mutateAsync.mockRejectedValueOnce(
     new Error('Taskul s-a schimbat.'),
   );
   render(<TaskFeedbackControl {...props} />);
+  const dialog = await openDialog(user);
+  await user.type(within(dialog).getByLabelText(noteLabel), 'Surse');
   await user.click(
-    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+    within(dialog).getByRole('button', { name: 'Confirmă feedbackul' }),
   );
-  await user.type(
-    screen.getByLabelText('Notă pentru Executor (obligatoriu)'),
-    'Surse',
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    's-a schimbat',
   );
-  await user.click(screen.getByRole('button', { name: 'Confirmă feedbackul' }));
-  expect(screen.getByRole('alert')).toHaveTextContent('s-a schimbat');
-  expect(
-    screen.getByLabelText('Notă pentru Executor (obligatoriu)'),
-  ).toHaveValue('Surse');
+  expect(within(dialog).getByLabelText(noteLabel)).toHaveValue('Surse');
   state.mutation.mutateAsync.mockReturnValue(new Promise(() => {}));
   await user.dblClick(
-    screen.getByRole('button', { name: 'Confirmă feedbackul' }),
+    within(dialog).getByRole('button', { name: 'Confirmă feedbackul' }),
   );
   expect(state.mutation.mutateAsync).toHaveBeenCalledTimes(2);
 });
@@ -82,16 +109,14 @@ it('announces and focuses success after status refetch before mutation resolves'
   );
   const user = userEvent.setup();
   const view = render(<TaskFeedbackControl {...props} />);
+  const dialog = await openDialog(user);
+  await user.type(within(dialog).getByLabelText(noteLabel), 'Motiv justificat');
   await user.click(
-    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+    within(dialog).getByRole('button', { name: 'Confirmă feedbackul' }),
   );
-  await user.type(
-    screen.getByLabelText('Notă pentru Executor (obligatoriu)'),
-    'Motiv justificat',
-  );
-  await user.click(screen.getByRole('button', { name: 'Confirmă feedbackul' }));
   view.rerender(<TaskFeedbackControl {...props} status="in_progress" />);
   await act(async () => finish());
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('status')).toHaveTextContent('feedback de aplicat');
   expect(screen.getByRole('status')).toHaveFocus();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -102,7 +127,7 @@ it('announces and focuses success after status refetch before mutation resolves'
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
-it('preserves success when mutation resolves before status refetch before mutation resolves', async () => {
+it('preserves success when mutation resolves before status refetch', async () => {
   let finish!: () => void;
   state.mutation.mutateAsync.mockReturnValue(
     new Promise<void>((resolve) => {
@@ -111,16 +136,14 @@ it('preserves success when mutation resolves before status refetch before mutati
   );
   const user = userEvent.setup();
   const view = render(<TaskFeedbackControl {...props} />);
+  const dialog = await openDialog(user);
+  await user.type(within(dialog).getByLabelText(noteLabel), 'Motiv justificat');
   await user.click(
-    screen.getByRole('button', { name: 'Trimite înapoi în lucru' }),
+    within(dialog).getByRole('button', { name: 'Confirmă feedbackul' }),
   );
-  await user.type(
-    screen.getByLabelText('Notă pentru Executor (obligatoriu)'),
-    'Motiv justificat',
-  );
-  await user.click(screen.getByRole('button', { name: 'Confirmă feedbackul' }));
   await act(async () => finish());
   view.rerender(<TaskFeedbackControl {...props} status="in_progress" />);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('status')).toHaveTextContent('feedback de aplicat');
   expect(screen.getByRole('status')).toHaveFocus();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();

@@ -50,6 +50,9 @@ it('hides evaluation without server authority and outside review', () => {
   view.rerender(<TaskEvaluationControl {...props} status="todo" />);
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
+// No race here: every assertion follows an awaited event and the mocked
+// command resolves at once. The test is only slow — typing the note character
+// by character exceeded vitest's 5 s default once under full-suite load.
 it('requires all fields, previews live guide values and submits one Executor evaluation', async () => {
   const user = userEvent.setup();
   render(<TaskEvaluationControl {...props} />);
@@ -64,7 +67,7 @@ it('requires all fields, previews live guide values and submits one Executor eva
     screen.getByLabelText('Calificativ (obligatoriu)'),
     '1',
   );
-  expect(screen.getByRole('status')).toHaveTextContent('-4 puncte');
+  expect(screen.getByRole('status')).toHaveTextContent('−4 puncte');
   await user.type(
     screen.getByLabelText('Notă (obligatoriu)'),
     '  De îmbunătățit  ',
@@ -76,7 +79,7 @@ it('requires all fields, previews live guide values and submits one Executor eva
     rating: 1,
     note: 'De îmbunătățit',
   });
-});
+}, 15_000);
 it('retains entered values on conflict and is accessible', async () => {
   state.mutation.mutateAsync.mockRejectedValue(
     new Error('Taskul s-a schimbat.'),
