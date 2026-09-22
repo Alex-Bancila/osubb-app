@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -35,10 +41,11 @@ describe('Duplicate task', () => {
     );
     const navigate = vi.fn();
     const user = userEvent.setup();
-    const { container } = render(
-      <TaskDuplicateControl taskId={1} onDuplicated={navigate} />,
-    );
+    render(<TaskDuplicateControl taskId={1} onDuplicated={navigate} />);
     await user.click(screen.getByRole('button', { name: 'Duplică' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Duplică taskul',
+    });
     const date = screen.getByLabelText('Termen nou (ora Bucureștiului)');
     fireEvent.change(date, { target: { value: '2026-12-20T12:30' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Duplică taskul' }));
@@ -60,7 +67,7 @@ describe('Duplicate task', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(
       (
-        await axe.run(container, {
+        await axe.run(dialog, {
           rules: { 'color-contrast': { enabled: false } },
         })
       ).violations,
@@ -68,5 +75,6 @@ describe('Duplicate task', () => {
     duplicate.mockResolvedValueOnce({ id: 8 });
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));
     expect(navigate).toHaveBeenCalledWith(8);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
