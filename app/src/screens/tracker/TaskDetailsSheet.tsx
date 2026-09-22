@@ -127,12 +127,6 @@ function TaskDetails({
           )}
         </section>
       )}
-      {canManage &&
-        task.kind === 'task' &&
-        task.assignmentMode === 'public' &&
-        !['completed', 'unfulfilled', 'cancelled'].includes(task.status) && (
-          <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
-        )}
       {canManage && task.kind === 'task' && (
         <section
           aria-labelledby={`task-${taskId}-candidate-heading`}
@@ -149,6 +143,10 @@ function TaskDetails({
               Poți înlocui executorul numai cu o persoană înscrisă în coadă.
             </p>
           </div>
+          {task.assignmentMode === 'public' &&
+            !['completed', 'unfulfilled', 'cancelled'].includes(
+              task.status,
+            ) && <TaskQueueControl taskId={taskId} closed={task.queueClosed} />}
           <TaskCandidateSelector taskId={taskId} />
         </section>
       )}
