@@ -591,6 +591,8 @@ insert into pinned_private_functions (proname, args, category) values
   -- #601: the Event visibility rule, one definition read by the events_read
   -- policy (for the caller) and by event_notification_recipients (per recipient).
   ('can_read_event', 'p_min_level integer, p_member uuid', 'predicate'),
+  -- #581: the live announcement visibility predicate called by announcements_read.
+  ('can_read_announcement', 'p_group_id bigint, p_audience text', 'predicate'),
   -- #582: the Manager tier of the Group authority kit (ruling R19) -- a
   -- require_* helper, so nobody may execute it directly -- and the four Group
   -- structure command bodies behind public.create_group / update_group /
