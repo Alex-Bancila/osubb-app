@@ -61,3 +61,14 @@ also required in PR CI.
 - [Mobile light login with keyboard focus](390-light-signed-out.png)
 - [Desktop dark Requests](1280-dark-voluntar.png)
 - [Mobile dark Requests and focused menu trigger](390-dark-voluntar.png)
+
+## Follow-up after merging `main` (2026-09-22)
+
+`main` gained surfaces after this audit ran. The same rules were applied to
+them in code (not re-run in the browser audit above):
+
+- Dialog backdrop and pop-up, and the Combobox pop-up, drop their fade/scale
+  transition under reduced motion (`motion-reduce:transition-none`), like the
+  drawer. Unit tests pin the Button and Dialog classes.
+- The Profile screen's avatar colour swatches were 36×36 CSS pixels; they are
+  now 44×44, and their selection scale respects reduced motion.
