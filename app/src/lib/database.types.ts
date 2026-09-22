@@ -2871,6 +2871,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      archive_group: {
+        Args: { p_group_id: number }
+        Returns: {
+          accepts_applications: boolean
+          application_level: number | null
+          automatic_membership: boolean
+          category: string
+          color: string | null
+          competes_in_cup: boolean
+          counts_toward_parent_cup: boolean
+          created_at: string
+          created_by: string | null
+          id: number
+          is_organization: boolean
+          legacy_dept_id: string | null
+          legacy_project_id: number | null
+          legacy_team_id: string | null
+          manager_title: string | null
+          min_level: number
+          name: string
+          parent_id: number | null
+          path: number[]
+          shared_work_visibility: boolean
+          short: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "groups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       archive_project: {
         Args: { p_project_id: number }
         Returns: {
@@ -3216,6 +3250,48 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_group: {
+        Args: {
+          p_category: string
+          p_color?: string
+          p_manager_id?: string
+          p_min_level?: number
+          p_name: string
+          p_parent_id?: number
+          p_short?: string
+        }
+        Returns: {
+          accepts_applications: boolean
+          application_level: number | null
+          automatic_membership: boolean
+          category: string
+          color: string | null
+          competes_in_cup: boolean
+          counts_toward_parent_cup: boolean
+          created_at: string
+          created_by: string | null
+          id: number
+          is_organization: boolean
+          legacy_dept_id: string | null
+          legacy_project_id: number | null
+          legacy_team_id: string | null
+          manager_title: string | null
+          min_level: number
+          name: string
+          parent_id: number | null
+          path: number[]
+          shared_work_visibility: boolean
+          short: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "groups"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4023,6 +4099,94 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_group: {
+        Args: {
+          p_accepts_applications: boolean
+          p_application_level: number
+          p_confirm_removals?: boolean
+          p_group_id: number
+          p_manager_title: string
+          p_min_level: number
+          p_name: string
+          p_shared_work_visibility: boolean
+        }
+        Returns: {
+          accepts_applications: boolean
+          application_level: number | null
+          automatic_membership: boolean
+          category: string
+          color: string | null
+          competes_in_cup: boolean
+          counts_toward_parent_cup: boolean
+          created_at: string
+          created_by: string | null
+          id: number
+          is_organization: boolean
+          legacy_dept_id: string | null
+          legacy_project_id: number | null
+          legacy_team_id: string | null
+          manager_title: string | null
+          min_level: number
+          name: string
+          parent_id: number | null
+          path: number[]
+          shared_work_visibility: boolean
+          short: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "groups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_group_structure: {
+        Args: {
+          p_automatic_membership: boolean
+          p_category: string
+          p_color: string
+          p_competes_in_cup: boolean
+          p_confirm_removals?: boolean
+          p_counts_toward_parent_cup: boolean
+          p_group_id: number
+          p_is_organization: boolean
+          p_min_level: number
+          p_short: string
+        }
+        Returns: {
+          accepts_applications: boolean
+          application_level: number | null
+          automatic_membership: boolean
+          category: string
+          color: string | null
+          competes_in_cup: boolean
+          counts_toward_parent_cup: boolean
+          created_at: string
+          created_by: string | null
+          id: number
+          is_organization: boolean
+          legacy_dept_id: string | null
+          legacy_project_id: number | null
+          legacy_team_id: string | null
+          manager_title: string | null
+          min_level: number
+          name: string
+          parent_id: number | null
+          path: number[]
+          shared_work_visibility: boolean
+          short: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "groups"
           isOneToOne: true
           isSetofReturn: false
         }
