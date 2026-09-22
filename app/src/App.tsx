@@ -11,12 +11,15 @@ import {
 import { useAuth } from './lib/auth';
 import { authDestination, loginDestination } from './lib/auth-destination';
 import { can, type Capability } from './lib/capabilities';
+import LeadershipScreen from './screens/leadership/LeadershipScreen';
+import MemberTrackerScreen from './screens/leadership/MemberTrackerScreen';
 import AppShell from './components/shell/AppShell';
 import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
 import CampaignsScreen from './screens/campaigns/CampaignsScreen';
+import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
 import CalendarScreen from './screens/calendar/CalendarScreen';
@@ -90,7 +93,17 @@ function RequireNamedCapability({
   children: ReactElement;
 }) {
   const { claims } = useAuth();
-  return can(claims, capability) ? children : <Navigate to="/" replace />;
+  return can(claims, capability) ? (
+    children
+  ) : (
+    <Navigate
+      to="/"
+      replace
+      state={
+        capability === 'seeLeadership' ? { leadershipDenied: true } : undefined
+      }
+    />
+  );
 }
 
 /** Same idea one level in: a route the navigation never offers you. */
@@ -166,6 +179,22 @@ export default function App() {
               path="/administrare/grupuri/:groupId/campanii"
               element={<CampaignsScreen />}
             />
+            <Route
+              path="/clasament"
+              element={
+                <RequireCapability capability="seeLeadership">
+                  <LeadershipScreen />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="/tracker/membru/:id"
+              element={
+                <RequireCapability capability="seeLeadership">
+                  <MemberTrackerScreen />
+                </RequireCapability>
+              }
+            />
             <Route path="/calendar" element={<CalendarScreen />} />
             <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
             <Route path="/anunturi" element={<AnnouncementsScreen />} />
@@ -174,7 +203,7 @@ export default function App() {
               path="/voluntari"
               element={
                 <RequireCapability capability="seeDirectory">
-                  <Placeholder title="Voluntari" issue="#102–#103" />
+                  <VolunteersScreen />
                 </RequireCapability>
               }
             />

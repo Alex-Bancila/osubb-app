@@ -1,6 +1,7 @@
 import {
   Bell,
   CalendarDays,
+  Trophy,
   LayoutDashboard,
   ListTodo,
   Megaphone,
@@ -41,6 +42,12 @@ export const NOTIFICATIONS_PATH = '/notificari';
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Acasă', icon: LayoutDashboard, onTabBar: true },
   { path: '/tracker', label: 'Taskuri', icon: ListTodo, onTabBar: true },
+  {
+    path: '/clasament',
+    label: 'Clasament',
+    icon: Trophy,
+    capability: 'seeLeadership',
+  },
   { path: '/cereri', label: 'Cereri', icon: ClipboardPlus },
   { path: '/administrare/campanii', label: 'Campanii', icon: Tag },
   {
