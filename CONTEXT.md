@@ -305,7 +305,7 @@ Two different columns share this identifier. `profiles.role = 'activ'` is the Ro
 `public.profiles` is the Member table; there is no separate `members` table. Every `member_id` column elsewhere is a foreign key to `profiles (id)`, not to an identity table of its own — see `points_ledger.member_id`, `notifications.member_id`, `project_members.member_id`, and the rest.
 
 **`event_scope` ↔ Event Origin**:
-The legacy enum backing an Event's Origin: `org`, `dept`, `team`, or `project`. The Group model replaces the four values with the owning Group, the Organization Group standing in for `org`.
+The legacy enum backing an Event's Origin: `org`, `dept`, `team`, or `project`. The Group model replaces the four values with the owning Group, the Organization Group standing in for `org`. From Wave 2 the enum is derived by trigger from `events.group_id` — no command writes `scope` any more — and it is dropped, with the enum itself, in Wave 3.
 
 **`noti_kind` ↔ Notification kind**:
 The enum distinguishing what a Notification is about: `announce`, `deadline`, `event`, `task`, or `system`.
@@ -314,10 +314,16 @@ The enum distinguishing what a Notification is about: `announce`, `deadline`, `e
 `recrut` → Recrut · `voluntar` → Voluntar · `activ` → Voluntar Activ · `vot` → Voluntar cu Drept de Vot · `responsabil` → retired: level 4 is no longer a rank, and Responsabil de Proiect is a Group Role · `bce` → BCE · `bc` → BC · `moderator` → Moderator.
 
 **Group → `groups`; Group Role → `group_members.group_role`**:
-`group_members.group_role` spells the three Group Roles as `manager` → Group Manager, `responsible` → Group Responsible, and `member` → ordinary membership. `groups.category` is the Group Category (Department, Project, Team, or the one Organization root); `groups.path` is the root-first ancestor chain, ending in the row's own id. `legacy_dept_id` / `legacy_team_id` / `legacy_project_id` name the legacy `departments` / `teams` / `projects` row that still masters a Wave 1 Group — Wave 1 is a read-only shadow of those six tables, mirrored by trigger — and are dropped in Wave 3.
+`group_members.group_role` spells the three Group Roles as `manager` → Group Manager, `responsible` → Group Responsible, and `member` → ordinary membership. `groups.category` is the Group Category (Department, Project, Team, or the one Organization root); `groups.path` is the root-first ancestor chain, ending in the row's own id. `legacy_dept_id` / `legacy_team_id` / `legacy_project_id` name the legacy `departments` / `teams` / `projects` row that still masters a Wave 1 Group — the six legacy tables remain the structure write master, mirrored by trigger, while Wave 2 authority reads Groups — and are dropped in Wave 3.
 
 **Organization Group → the `groups` row with `legacy_dept_id = 'org'`**:
-The root Group named OSUBB, with `automatic_membership = true` so every active Member belongs to it. Never the `departments` row itself, which is the legacy row this Group mirrors, not the Group.
+The root Group named OSUBB, with `automatic_membership = true` so every active Member belongs to it. Never the `departments` row itself, which is the legacy row this Group mirrors, not the Group. It is also `create_event`'s organization rule: an organization-wide Event is one created with this row's id as `p_group_id`, which any holder of a Group Role anywhere may do, and which only its creator or BC/Moderator may then `update_event` or `cancel_event`.
+
+**Group settings → `groups` columns**:
+Minimum Level → `groups.min_level` · Application Level → `groups.application_level` · Shared Work Visibility → `groups.shared_work_visibility` · Automatic Membership → `groups.automatic_membership` · the Group Manager's display name → `groups.manager_title` · the two Department Cup settings → `groups.competes_in_cup` and `groups.counts_toward_parent_cup`. Wave 2 reads all of them; until Wave 3 ships the Group commands, only a migration, a mirror, or a rolled-back test fixture writes one.
 
 **`group_ids` claim**:
 The organization claim listing the Groups a Member explicitly belongs to, via `group_members` rows only, memberships of archived Groups included — Automatic Membership is derived from Role and Minimum Level and is never in the token, the same rule `dept_ids`/`team_ids` already follow.
+
+**Work ownership → `group_id`**:
+`tasks.group_id`, `events.group_id`, `campaigns.group_id`, and `completed_work_requests.group_id` name one owning Group. Wave 2's two-way Origin triggers keep the legacy columns consistent until Wave 3 removes them. Organization-wide Events belong to the Organization Group (`groups.legacy_dept_id = 'org'`); an organization-wide Task Audience opens an Opportunity beyond its owning Group and does not move its Origin.

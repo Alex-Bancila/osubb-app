@@ -600,6 +600,7 @@ export type Database = {
           team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
         }
         Insert: {
           cancel_reason?: string | null
@@ -621,6 +622,7 @@ export type Database = {
           team_id?: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
+          updated_at?: string
         }
         Update: {
           cancel_reason?: string | null
@@ -642,6 +644,7 @@ export type Database = {
           team_id?: string | null
           title?: string
           type?: Database["public"]["Enums"]["event_type"]
+          updated_at?: string
         }
         Relationships: [
           {
@@ -3093,6 +3096,37 @@ export type Database = {
       can_evaluate_task: { Args: { p_task_id: number }; Returns: boolean }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
+      cancel_event: {
+        Args: { p_event_id: number; p_reason: string }
+        Returns: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          capacity: number | null
+          created_at: string
+          created_by: string | null
+          dept_id: string | null
+          description: string | null
+          ends_at: string | null
+          group_id: number
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          min_level: number
+          project_id: number | null
+          scope: Database["public"]["Enums"]["event_scope"]
+          starts_at: string
+          team_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancel_task: {
         Args: { p_reason: string; p_task_id: number }
         Returns: {
@@ -3338,13 +3372,12 @@ export type Database = {
       create_event: {
         Args: {
           p_capacity?: number
-          p_dept_id?: string
           p_description?: string
           p_ends_at?: string
+          p_group_id: number
           p_location?: string
-          p_scope: string
+          p_min_level?: number
           p_starts_at: string
-          p_team_id?: string
           p_title: string
           p_type: string
         }
@@ -3368,6 +3401,7 @@ export type Database = {
           team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -4147,6 +4181,48 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_event: {
+        Args: {
+          p_capacity: number
+          p_description: string
+          p_ends_at: string
+          p_event_id: number
+          p_group_id: number
+          p_location: string
+          p_min_level: number
+          p_starts_at: string
+          p_title: string
+          p_type: string
+        }
+        Returns: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          capacity: number | null
+          created_at: string
+          created_by: string | null
+          dept_id: string | null
+          description: string | null
+          ends_at: string | null
+          group_id: number
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          min_level: number
+          project_id: number | null
+          scope: Database["public"]["Enums"]["event_scope"]
+          starts_at: string
+          team_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
           isOneToOne: true
           isSetofReturn: false
         }
