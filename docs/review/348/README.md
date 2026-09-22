@@ -7,11 +7,10 @@ Managers can create a Subtask using the shared form with parent and Group Origin
 - [Desktop progress](progress-desktop.png)
 - [Mobile progress and disabled completion](progress-mobile.png)
 - [Live terminal state](ready-mobile.png)
-- [Subtask form](subtask-mobile.png)
 
-The browser captures render the production sheet with a fixture session, seeded query data and intercepted reads. A fixture cache update changes the final child's status; the capture verifies the completion button changes from disabled to enabled. No write command is executed for screenshots. Tests separately exercise command payloads, pagination and safe Executor enrichment, progress eligibility, member/terminal visibility, completion races and conflicts, creation/navigation and axe accessibility.
+The browser captures render the production sheet with a fixture session, seeded query data and intercepted reads. A fixture cache update changes the final child's status; the capture verifies the completion button changes from disabled to enabled. No write command is executed for screenshots. The earlier Subtask form screenshot showed the previous native-select form and was removed; the form itself is covered by the #180 tests. Tests separately exercise command payloads, pagination and safe Executor enrichment, progress eligibility, member/terminal visibility, completion races and conflicts, creation/navigation and axe accessibility.
 
-The backend guard in `20260919195158_create_task_executor_minimum.sql` keeps creation eligibility aligned with the Group Minimum Level. It checks a live active target Profile under `FOR SHARE`, uses the existing Group model, and preserves the atomic command and audit behavior. There is no new client authority rule.
+The backend guard in `20260922110200_create_task_executor_minimum.sql` (dated after main's newest migration, its body main's latest `create_task_impl` plus the guard) keeps creation eligibility aligned with the Group Minimum Level. It checks a live active target Profile under `FOR SHARE`, uses the existing Group model, and preserves the atomic command and audit behavior. There is no new client authority rule.
 
 ```mermaid
 flowchart LR

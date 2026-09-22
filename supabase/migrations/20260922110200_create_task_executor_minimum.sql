@@ -1,4 +1,7 @@
 -- #348: direct Executor eligibility also applies when creating a Subtask.
+-- Dated after main's newest migration so staging (db push --include-all) and a
+-- local reset apply it in the same order. The body is main's latest definition
+-- (20260919185516_commands_write_group_id.sql, unchanged since) plus the guard.
 -- CREATE OR REPLACE retains the command signature and audited ACL.
 create or replace function private.create_task_impl(
   p_title text, p_description text, p_deadline timestamptz,
