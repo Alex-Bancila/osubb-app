@@ -643,6 +643,58 @@ begin
 end;
 $$;
 
+-- ==================== 4b · the Event cancellation EFFECT, shared by two callers ====================
+-- One definition, two readers. `private.cancel_event_impl` is a command: it
+-- decides whether THIS actor may cancel THIS Event, which includes whether the
+-- actor can see it at all (below its Minimum Level, the answer is PT404
+-- event_not_found -- hidden is never distinguishable from missing).
+-- `private.archive_group_impl` is not asking that question. The authority for
+-- cancelling a subtree's future Events is the GROUP, which the archiver has
+-- already passed `require_group_manager` on, and archiving cancels every future
+-- Event below it whatever the archiver's own rank: a Group Manager at level 1
+-- archiving a Group that holds an Event a BC raised to Minimum Level 6 is not a
+-- visibility problem, and answering them `event_not_found` would abort the whole
+-- archive with a reason that names neither the Group nor the real cause.
+--
+-- So the EFFECT -- the write and the fan-out -- lives here with no gate of its
+-- own, and each caller brings its own authority. The actor is a parameter
+-- rather than auth.uid() because the effect is attributed to whoever decided
+-- it, and `private.notify` uses it to keep the decision from echoing back to
+-- its author. The Event row and every event_attendance row survive (ADR-0008:
+-- cancellation preserves RSVP history).
+create function private.cancel_event_effect(
+  p_event_id bigint,
+  p_reason   text,
+  p_actor    uuid
+)
+returns public.events
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_updated    public.events%rowtype;
+  v_recipients uuid[];
+begin
+  update public.events
+     set cancelled_at = clock_timestamp(),
+         cancel_reason = btrim(p_reason)
+   where id = p_event_id
+  returning * into v_updated;
+  if not found then
+    return null;
+  end if;
+  select array_agg(recipient) into v_recipients
+    from private.event_notification_recipients(p_event_id) as recipient;
+  perform private.notify(v_recipients, 'event', 'Eveniment anulat: ' || v_updated.title,
+    v_updated.cancel_reason, null, 'event:' || p_event_id::text || ':cancelled', p_actor, '/calendar');
+  return v_updated;
+end;
+$$;
+
+comment on function private.cancel_event_effect(bigint, text, uuid) is
+  'The effect of cancelling an Event with no gate of its own (#582): the write (cancelled_at + the trimmed reason, which events_cancel_reason_ck requires together) and the fan-out to private.event_notification_recipients under dedupe key event:<id>:cancelled with link /calendar. Two callers bring their own authority -- private.cancel_event_impl, which decides whether this actor may cancel this Event and therefore also whether they can see it, and private.archive_group_impl, which does not ask that question at all: the authority there is the Group the archiver already passed require_group_manager on, so archiving cancels every future Event of the subtree whatever the archiver''s own Level. Executable by no client role.';
+
 -- ==================== 5 · archive_group ====================
 
 create function private.archive_group_impl(p_group_id bigint)
@@ -723,16 +775,25 @@ begin
     raise sqlstate 'PT409' using message = 'group_has_open_work';
   end if;
 
-  -- 5. What has no executor is settled here, in the same transaction. Future
-  --    Events of the subtree are cancelled with the archive as their reason
+  -- 5. What has no executor is settled here, in the same transaction. Every
+  --    future Event of the subtree is cancelled with the archive as its reason
   --    (ADR-0008 cancellation semantics: the row and its RSVP history
-  --    survive); past Events stay as history. This goes through the
-  --    implementation rather than public.cancel_event, whose Organization-Group
-  --    arm would refuse a Group Manager who did not create the Event — the
-  --    archiver is already authorized for the whole subtree, and no new error
-  --    code is minted for the difference. It runs BEFORE the cascade below,
-  --    because can_manage_group_work gates a non-level-6 actor on the Group
-  --    being active.
+  --    survive); past Events stay as history.
+  --
+  --    This calls the EFFECT (section 4b), never private.cancel_event_impl.
+  --    That implementation is a command and re-decides authority per Event
+  --    from the ACTOR: it would refuse a Group Manager who did not create an
+  --    Organization Event, and — worse — answer PT404 event_not_found for any
+  --    Event raised above the archiver's own Minimum Level, aborting the whole
+  --    archive with a reason that names neither the Group nor the real cause.
+  --    The authority here is the GROUP, which this actor passed
+  --    require_group_manager on at step 2, so no Event-visibility rule applies
+  --    inside the cascade and no new error code is minted for the difference.
+  --
+  --    The rows are locked `for no key update` — the Event lock mode every
+  --    Calendar command takes — in ascending id, so a concurrent cancel cannot
+  --    commit underneath the loop and have its reason overwritten. Only the
+  --    Events are locked; the joined `groups` rows are read.
   for v_event_id in
     select event.id
       from public.events as event
@@ -741,8 +802,9 @@ begin
        and event.cancelled_at is null
        and event.starts_at > now()
      order by event.id
+     for no key update of event
   loop
-    perform private.cancel_event_impl(v_event_id, 'Grup arhivat');
+    perform private.cancel_event_effect(v_event_id, 'Grup arhivat', v_actor);
   end loop;
 
   -- 6. One statement for the whole subtree (ruling R19). can_manage_group_work
@@ -1085,8 +1147,6 @@ declare
   v_actor uuid;
   v_level integer;
   v_event public.events%rowtype;
-  v_updated public.events%rowtype;
-  v_recipients uuid[];
 begin
   if p_reason is null or p_reason !~ '[^[:space:]]' then
     raise sqlstate 'PT400' using message = 'reason_required';
@@ -1125,13 +1185,10 @@ begin
     raise sqlstate 'PT409' using message = 'event_cancelled';
   end if;
 
-  update public.events set cancelled_at = clock_timestamp(), cancel_reason = btrim(p_reason)
-   where id = p_event_id returning * into v_updated;
-  select array_agg(recipient) into v_recipients
-    from private.event_notification_recipients(p_event_id) as recipient;
-  perform private.notify(v_recipients, 'event', 'Eveniment anulat: ' || v_updated.title, v_updated.cancel_reason,
-    null, 'event:' || p_event_id::text || ':cancelled', v_actor, '/calendar');
-  return v_updated;
+  -- Every gate above is this command's; the write and the fan-out are the
+  -- shared effect (#582, section 4b), which archive_group calls with the
+  -- Group's authority instead of an actor's.
+  return private.cancel_event_effect(p_event_id, p_reason, v_actor);
 end;
 $$;
 
@@ -1147,7 +1204,7 @@ comment on function public.update_group_structure(bigint, text, boolean, boolean
   'Replaces a Group''s STRUCTURAL settings (#582, ADR-0009 Decision 5): the presentation label, both Department Cup flags, Automatic Membership, colour and short name, the Organization marker, and a TOP-LEVEL Group''s Minimum Level. BC and the Moderator only (live level >= 6); every refusal is the one non-disclosing 42501 group_manage_forbidden, an unknown id included. Full-state REPLACE (conventions OD5). Malformed input first: PT400 invalid_group_category / invalid_group_min_level / invalid_group_color. A CHILD Group''s Minimum Level belongs to its Managers, so changing it here is 42501 — the mirror image of update_group. Then PT409 group_archived; PT409 cup_not_top_level (only a root competes, groups_competes_top_level_ck), organization_group_exists (groups_one_organization_uidx allows one marked Group: clear the old one first), automatic_group_has_roster_members (turning Automatic Membership on while ordinary members are on the roster), automatic_group_accepts_no_applications (turning it on while the Group accepts Applications); PT400 group_min_level_below_parent / group_min_level_above_children / group_min_level_above_actor; PT409 nothing_to_update. The Minimum-Level raise behaves exactly as in update_group: PT409 group_has_members_below_level with the count in DETAIL unless p_confirm_removals is true, then the rows below the new level go and everyone affected is notified. The Application withdrawal half is owed to #584 (ruling R30). This is one of the two commands allowed to write groups.category — it and private.create_group_impl are the only writers beside the three Wave 1 mirror functions, and conventions.test.sql''s sweep names them (ruling R16). It never writes groups.parent_id: a Group''s parent is fixed at creation (ruling R20).';
 
 comment on function public.archive_group(bigint) is
-  'Archives a Group and every Group below it (#582, ADR-0009). A top-level Group is BC''s and the Moderator''s; a Child Group belongs to its Managers through private.require_group_manager. Unknown and unauthorized are the same 42501 group_manage_forbidden; an already-archived Group is PT409 group_already_archived. ARCHIVING NEVER CANCELS A TASK (ruling R21): while the Group or any descendant holds a Task that is not completed, unfulfilled or cancelled, or a Completed-work Request still pending, the command refuses with PT409 group_has_open_work and the Manager finishes or cancels that work first, with the reasons the Tracker already demands. What has no executor it settles itself, in the same transaction: every future Event of the subtree is cancelled with the reason "Grup arhivat" through private.cancel_event_impl (past Events stay as history, and the implementation is called rather than the wrapper because the Organization-Group arm of the public command would refuse a Group Manager who did not create the Event), and then the status cascades to the whole subtree in ONE statement — can_manage_group_work reads the target Group''s status alone, so a live Child Group under an archived parent would otherwise stay manageable (ruling R19). Not yet done here: declining the subtree''s pending Applications with the archiver as the decider. public.group_applications does not exist until #584, whose implementer replaces this body to add it (ruling R30) — deferred, not forgotten. One consequence worth knowing: private.cancel_event_impl answers PT404 event_not_found to an actor below an Event''s own Minimum Level, so a low-ranked Group Manager archiving a Group that holds a future Event raised above their Level sees that reason rather than a Group one; BC and the Moderator never do.';
+  'Archives a Group and every Group below it (#582, ADR-0009). A top-level Group is BC''s and the Moderator''s; a Child Group belongs to its Managers through private.require_group_manager. Unknown and unauthorized are the same 42501 group_manage_forbidden; an already-archived Group is PT409 group_already_archived. ARCHIVING NEVER CANCELS A TASK (ruling R21): while the Group or any descendant holds a Task that is not completed, unfulfilled or cancelled, or a Completed-work Request still pending, the command refuses with PT409 group_has_open_work and the Manager finishes or cancels that work first, with the reasons the Tracker already demands. What has no executor it settles itself, in the same transaction: EVERY future Event of the subtree is cancelled with the reason "Grup arhivat" through private.cancel_event_effect -- the shared write-and-fan-out that carries no gate of its own -- while past Events stay as history; then the status cascades to the whole subtree in ONE statement, because can_manage_group_work reads the target Group''s status alone and a live Child Group under an archived parent would otherwise stay manageable (ruling R19). It deliberately does NOT go through private.cancel_event_impl: that command re-decides authority per Event from the actor, so it would refuse a Group Manager who did not create an Organization Event and answer PT404 event_not_found for any Event raised above the archiver''s own Minimum Level, aborting the whole archive with a reason that names neither the Group nor the cause. The authority for these cancellations is the GROUP, which the archiver already passed require_group_manager on, so no Event-visibility rule applies inside the cascade and the archiver''s own Level is irrelevant to it. Not yet done here: declining the subtree''s pending Applications with the archiver as the decider. public.group_applications does not exist until #584, whose implementer replaces this body to add it (ruling R30) — deferred, not forgotten.';
 
 comment on function private.create_group_impl(text, text, bigint, integer, uuid, text, text) is
   'Body behind public.create_group (#582): input validation, the root/parent authority split, Minimum Level against the parent and the actor, the appointed Manager''s eligibility, the sibling-name check and the Group Manager''s roster row. Writes groups.category and is named in conventions.test.sql''s sweep exclusion for it (ruling R16). Never writes groups.parent_id after the insert.';
@@ -1156,7 +1213,7 @@ comment on function private.update_group_impl(bigint, text, text, boolean, integ
 comment on function private.update_group_structure_impl(bigint, text, boolean, boolean, boolean, integer, text, text, boolean, boolean) is
   'Body behind public.update_group_structure (#582): the structural full-state replace under the level-6 gate. Writes groups.category and is named in conventions.test.sql''s sweep exclusion for it (ruling R16).';
 comment on function private.archive_group_impl(bigint) is
-  'Body behind public.archive_group (#582): the open-work refusal, the future-Event cancellations through private.cancel_event_impl, and the one-statement status cascade over groups.path.';
+  'Body behind public.archive_group (#582): the open-work refusal, the future-Event cancellations through private.cancel_event_effect (the ungated shared effect -- the Group is the authority here, not the archiver''s own visibility), and the one-statement status cascade over groups.path.';
 
 comment on function private.create_event_impl(text, text, bigint, timestamptz, timestamptz, text, integer, text, integer) is
   'Creates an Event on a Group, authorized by Group Role (ADR-0009 Wave 2, #370). Malformed input is judged first, for everyone, so a caller without organization claims learns what is wrong with the call: PT400 invalid_event_title / invalid_event_type / invalid_event_interval / invalid_event_capacity / invalid_event_min_level / event_group_required. The Organization Group — since #582 the Group carrying groups.is_organization, not the row mirroring the legacy org pseudo-department — is open to any live Member holding any Group Role anywhere, which is how a Department''s leadership gets an organization-wide Event, or to level >= 6; every other Group goes through private.require_group_work_manager, so a Group Manager or Group Responsible on the path, an ancestor''s included, qualifies and an ordinary member does not. Every refusal is the single non-disclosing 42501 calendar_manage_forbidden, so a missing, archived or forbidden Group are indistinguishable. Minimum Level is then judged against the loaded rows: PT400 event_min_level_below_group (an Event may not be more open than its Group) and PT400 event_min_level_above_actor (nobody raises an Event above their own live level), the latter with Moderator exempt.';
@@ -1165,11 +1222,15 @@ comment on function private.update_event_impl(bigint, text, text, bigint, timest
   'Replaces an Event''s whole editable state, authorized by Group Role (ADR-0009 Wave 2, #248). This is a full-state REPLACE, not a patch: every editable column is written from its argument, so a null clears a nullable column (ends_at, location, capacity, description) rather than leaving the old value -- a client that wants to keep a field must send it back. Malformed input is judged first, for everyone, with the same reasons as create_event including event_group_required. A caller who cannot see the Event (below its min_level) is answered PT404 event_not_found, the same as an id that does not exist: hidden is never distinguishable from missing. Authority on the SOURCE: an Organization Group Event (since #582 the Group carrying groups.is_organization) belongs to its creator or to level >= 6; every other Event goes through private.require_group_work_manager, so a Group Manager or Group Responsible of the Group or any ancestor on its path qualifies. Moving the Event re-runs the rule on the TARGET Group, where an Organization target takes create_event''s rule -- level >= 6 or any live Group Role anywhere -- because the Organization Group is a root Group with no ancestors of its own (one root among several: every Department, Independent Team and Project Group is a root too, and most Group paths never contain it), so nobody could reach it through an ancestor role. A MOVE''s target must be active. An edit that leaves the Event in its own Group is NOT refused when that Group has since been archived: this is a full-state replace, so every call names a Group, and an ungated check would leave such an Event uncorrectable while cancel_event -- same authority rule -- still cancelled it. Who may still edit it is decided by the source rule above alone: BC/Moderator always, a Group Role only while the Group is active, which is can_manage_group_work''s own status gate. Minimum Level is then judged against the target Group and the live actor (PT400 event_min_level_below_group / event_min_level_above_actor), and a cancelled Event is PT409 event_cancelled. Important changes -- schedule, location, Group, Minimum Level -- notify the current going attendees and the new Group''s Group Audience (private.group_audience, #601), plus the old Group''s Group Audience when the Event moved, every recipient filtered through private.can_read_event at the new Minimum Level, under dedupe key event:<id>:<field> and link /calendar; title, type, description and capacity notify nobody.';
 
 comment on function private.cancel_event_impl(bigint, text) is
-  'Cancels an Event, authorized exactly as private.update_event_impl authorizes an edit (ADR-0009 Wave 2, #248), with the Organization Group recognised since #582 by groups.is_organization. The reason is malformed input -- blank or null is PT400 reason_required, raised before the gate -- and it is preserved, trimmed, on the row beside cancelled_at, which events_cancel_reason_ck requires to be set together. Cancellation is terminal: a second call is PT409 event_cancelled, and so is any later edit. The Event row and every event_attendance row survive (ADR-0008: cancellation preserves RSVP history) and the Event stays readable to everyone at or above its min_level. Recipients -- the current going attendees and the Group''s Group Audience, filtered by private.can_read_event -- are notified under dedupe key event:<id>:cancelled with the reason as the body and link /calendar. private.archive_group_impl (#582) calls this implementation directly to cancel a subtree''s future Events: the archiver is already authorized for the whole subtree, and the public wrapper''s Organization-Group arm would refuse a Group Manager who did not create the Event.';
+  'Cancels an Event, authorized exactly as private.update_event_impl authorizes an edit (ADR-0009 Wave 2, #248), with the Organization Group recognised since #582 by groups.is_organization. The reason is malformed input -- blank or null is PT400 reason_required, raised before the gate -- and it is preserved, trimmed, on the row beside cancelled_at, which events_cancel_reason_ck requires to be set together. Cancellation is terminal: a second call is PT409 event_cancelled, and so is any later edit. The Event row and every event_attendance row survive (ADR-0008: cancellation preserves RSVP history) and the Event stays readable to everyone at or above its min_level. The write and the fan-out are private.cancel_event_effect (#582): recipients -- the current going attendees and the Group''s Group Audience, filtered by private.can_read_event -- are notified under dedupe key event:<id>:cancelled with the reason as the body and link /calendar. Everything above the effect is this command''s authority, and it is exactly what private.archive_group_impl must NOT re-run: archiving cancels every future Event of the subtree on the Group''s authority, whatever the archiver''s own Level, so it calls the effect directly.';
 
 -- ==================== 9 · grants (conventions section 4, four-role revoke) ====================
 
 revoke execute on function private.require_group_manager(bigint)
+  from public, anon, authenticated, service_role;
+-- The shared Event cancellation effect carries no gate of its own, so nothing
+-- outside the two definer callers may reach it -- no grant back at all.
+revoke execute on function private.cancel_event_effect(bigint, text, uuid)
   from public, anon, authenticated, service_role;
 
 revoke execute on function private.create_group_impl(text, text, bigint, integer, uuid, text, text)

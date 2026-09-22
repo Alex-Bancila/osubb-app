@@ -21,7 +21,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(81);
+select plan(83);
 
 -- ==================== Fixtures ====================
 
@@ -412,7 +412,11 @@ values ('Sub-arhivat #582', 'team', pg_temp.g582_group('De arhivat #582'), 0, pg
 insert into public.group_members (group_id, member_id, group_role)
 values (pg_temp.g582_group('De arhivat #582'),  pg_temp.g582_uid(3), 'manager'),
        (pg_temp.g582_group('Părinte viu #582'), pg_temp.g582_uid(3), 'manager'),
-       (pg_temp.g582_group('Părinte viu #582'), pg_temp.g582_uid(4), 'responsible');
+       (pg_temp.g582_group('Părinte viu #582'), pg_temp.g582_uid(4), 'responsible'),
+       -- Member 8 (Drept de Vot, level 3) is the audience of the restricted
+       -- Event below: the archiver, member 3, is a Voluntar at level 1 and
+       -- could not read that Event at all.
+       (pg_temp.g582_group('Copil de arhivat #582'), pg_temp.g582_uid(8), 'member');
 
 insert into public.tasks (title, group_id, created_by, status, audience, assignment_mode, kind)
 values ('Muncă deschisă #582', pg_temp.g582_group('Sub-arhivat #582'), pg_temp.g582_uid(1),
@@ -498,13 +502,31 @@ select throws_ok(
   '42501', 'group_manage_forbidden',
   'archive_group: a Group Responsible cannot archive a Child Group either (R19)');
 
+-- The archiver is a Voluntar at level 1; the Event below sits at Minimum Level
+-- 3, so private.cancel_event_impl would answer them PT404 event_not_found and
+-- abort the archive. The authority for these cancellations is the Group, not
+-- the archiver's own visibility, so the cascade uses the ungated effect.
 reset role;
+insert into public.events (title, type, group_id, starts_at, min_level, created_by)
+values ('Eveniment restricționat #582', 'sedinta', pg_temp.g582_group('Copil de arhivat #582'),
+        now() + interval '5 days', 3, pg_temp.g582_uid(1));
+
 select pg_temp.g582_as(3);
 select lives_ok(
   format($$select public.archive_group(%s)$$, pg_temp.g582_group('Copil de arhivat #582')),
-  'archive_group: the parent''s Group Manager archives a Child Group');
+  'archive_group: the parent''s Group Manager archives a Child Group -- even holding a future Event above their own Level');
 
 reset role;
+select is(
+  (select cancel_reason from public.events where title = 'Eveniment restricționat #582'),
+  'Grup arhivat',
+  'archive_group cancels an Event the archiver cannot even read: the Group is the authority, not the actor''s visibility');
+select ok(
+  exists (select 1 from public.notifications
+           where member_id = pg_temp.g582_uid(8)
+             and title = 'Eveniment anulat: Eveniment restricționat #582'
+             and link = '/calendar'),
+  'and its audience is still notified through the shared cancellation effect');
 select is((select status from public.groups where name = 'Părinte viu #582'), 'active',
   'and archiving a child leaves its parent active');
 
