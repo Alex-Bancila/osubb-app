@@ -256,6 +256,8 @@ create temporary table expected_function_privs (
 ) on commit drop;
 
 insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) values
+  ('update_event', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', false, true, false, false),
+  ('cancel_event', 'p_event_id bigint, p_reason text', false, true, false, false),
   -- #345 dropped public.claim_open_task; its row went with it.
   ('create_event', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', false, true, false, false),
   ('rating_mult',        'r integer',                                false, true,  true,  false),
@@ -481,7 +483,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('guard_role_history', '', 'trigger'),
   -- #69: scheduler-only job.
   ('remind_deadlines', '', 'none'),
-  ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
+  ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid, p_link text', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
   ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
@@ -590,12 +592,15 @@ insert into pinned_private_functions (proname, args, category) values
   ('can_manage_group_work', 'p_group_id bigint', 'predicate'),
   ('require_group_work_manager', 'p_group_id bigint', 'require'),
   ('group_managers', 'p_group_id bigint', 'none'),
+  ('cancel_event_impl', 'p_event_id bigint, p_reason text', 'impl'),
+  ('update_event_impl', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', 'impl'),
+  ('event_notification_recipients', 'p_event_id bigint', 'none'),
   ('create_event_impl', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', 'impl'),
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 135,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, and #370''s Event creation implementation');
+  (select count(*) from pinned_private_functions)::int, 138,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, and #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
