@@ -5,12 +5,12 @@ const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: () => ({
-    data: { full_name: 'Ioana Popescu', role: 'voluntar', tier: null },
+    data: { full_name: 'Ioana Popescu', role: 'voluntar' },
   }),
 }));
 vi.mock('../../queries/reference', () => ({
   useRoles: () => ({ data: new Map() }),
-  useDepartments: () => ({ data: new Map() }),
+  useGroups: () => ({ data: new Map() }),
 }));
 vi.mock('../../queries/points', () => ({
   useMyPoints: () => ({ isPending: false, isError: false, data: 12 }),

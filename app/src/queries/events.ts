@@ -10,32 +10,46 @@ import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
+/**
+ * An Event names its owning Group (ADR-0009), and the Group carries everything
+ * the calendar needs to describe it — so the row is embedded rather than looked
+ * up: one request, and the Group a member may not read simply arrives as null
+ * instead of as a dangling id.
+ */
+// One string literal, not a concatenation: supabase-js parses this at the type
+// level to give `data` its shape, and a `+` defeats that.
 const EVENT_FIELDS =
-  'id, title, type, scope, dept_id, team_id, starts_at, ends_at, location, capacity, description';
+  'id, title, type, group_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)';
 
 type EventTableRow = Database['public']['Tables']['events']['Row'];
+type GroupRow = Database['public']['Tables']['groups']['Row'];
+
+/** The owning Group as the calendar sees it. */
+export type EventGroup = Pick<
+  GroupRow,
+  'name' | 'short' | 'color' | 'category' | 'path' | 'is_organization'
+>;
+
 type EventRow = Pick<
   EventTableRow,
   | 'id'
   | 'title'
   | 'type'
-  | 'scope'
-  | 'dept_id'
-  | 'team_id'
+  | 'group_id'
   | 'starts_at'
   | 'ends_at'
   | 'location'
   | 'capacity'
   | 'description'
->;
+> & { group: EventGroup | null };
 
 export type EventPresentation = {
   id: number;
   title: string;
   type: EventRow['type'];
-  scope: EventRow['scope'];
-  departmentId: string | null;
-  teamId: string | null;
+  groupId: number | null;
+  /** Null when the Event names no Group, or names one RLS keeps from this member. */
+  group: EventGroup | null;
   startsAt: string;
   endsAt: string | null;
   dayKey: string;
@@ -58,9 +72,8 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
     id: row.id,
     title: row.title,
     type: row.type,
-    scope: row.scope,
-    departmentId: row.dept_id,
-    teamId: row.team_id,
+    groupId: row.group_id,
+    group: row.group,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     dayKey,
@@ -77,6 +90,12 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
  * Upcoming means the start instant has not passed—not "today in Bucharest".
  * RLS remains the only visibility filter; the browser asks for no role/dept
  * branches and receives only the events this member may see.
+ *
+ * Project Events are no longer filtered out here. `events_read` is the whole
+ * visibility rule (Minimum Level, ADR-0008 as amended by ADR-0009): a member
+ * who may read a Project Event is a member the calendar should show it to, and
+ * the old `scope <> 'project'` filter hid it from them for no reason — it was a
+ * stand-in from before `scope` stopped being the visibility model.
  */
 export async function fetchUpcomingEvents(
   now: Date = new Date(),
@@ -85,7 +104,6 @@ export async function fetchUpcomingEvents(
     .from('events')
     .select(EVENT_FIELDS)
     .gte('starts_at', now.toISOString())
-    .neq('scope', 'project')
     .order('starts_at', { ascending: true });
   if (error) throw error;
 

@@ -1,4 +1,5 @@
 import {
+  Bell,
   CalendarDays,
   LayoutDashboard,
   ListTodo,
@@ -23,6 +24,13 @@ export type NavItem = {
 };
 
 /**
+ * The Notification centre, named once: the shell needs the path to decide
+ * which entry carries the unread badge, and hard-coding it twice is how the
+ * badge ends up on nothing after a rename.
+ */
+export const NOTIFICATIONS_PATH = '/notificari';
+
+/**
  * One list drives the sidebar, the mobile tab bar and the page title, so those
  * three can never disagree about what exists or what it is called.
  *
@@ -45,6 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Megaphone,
     onTabBar: true,
   },
+  { path: NOTIFICATIONS_PATH, label: 'Notificări', icon: Bell },
   {
     path: '/voluntari',
     label: 'Voluntari',
