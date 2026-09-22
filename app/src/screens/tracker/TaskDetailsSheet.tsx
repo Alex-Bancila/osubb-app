@@ -164,34 +164,39 @@ function TaskDetails({
           onNavigate={onNavigate}
         />
       )}
-      {canManage && task.kind === 'task' && !isTerminalTask(task.status) && (
-        <section
-          aria-labelledby={`task-${taskId}-candidate-heading`}
-          className="space-y-3 rounded-lg border border-border p-4"
-        >
-          <div className="space-y-1">
-            <h3
-              id={`task-${taskId}-candidate-heading`}
-              className="font-semibold"
-            >
-              Coada taskului
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Poți înlocui executorul numai cu o persoană înscrisă în coadă.
-            </p>
-          </div>
-          {task.assignmentMode === 'public' && (
-            <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
-          )}
-          {/* private.select_task_candidate_impl refuses in_review with
+      {canManage &&
+        task.kind === 'task' &&
+        !isTerminalTask(task.status) &&
+        // In review there is no Candidate to select; a direct Task has no queue
+        // toggle either, so the section would be empty.
+        !(task.status === 'in_review' && task.assignmentMode !== 'public') && (
+          <section
+            aria-labelledby={`task-${taskId}-candidate-heading`}
+            className="space-y-3 rounded-lg border border-border p-4"
+          >
+            <div className="space-y-1">
+              <h3
+                id={`task-${taskId}-candidate-heading`}
+                className="font-semibold"
+              >
+                Coada taskului
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Poți înlocui executorul numai cu o persoană înscrisă în coadă.
+              </p>
+            </div>
+            {task.assignmentMode === 'public' && (
+              <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
+            )}
+            {/* private.select_task_candidate_impl refuses in_review with
               PT409 task_in_review — a Task returned/evaluated mid-review is
               never handed to someone else, so the selector has nothing to
               offer here (#646). */}
-          {task.status !== 'in_review' && (
-            <TaskCandidateSelector taskId={taskId} />
-          )}
-        </section>
-      )}
+            {task.status !== 'in_review' && (
+              <TaskCandidateSelector taskId={taskId} />
+            )}
+          </section>
+        )}
       <details>
         <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">
           Istoricul taskului

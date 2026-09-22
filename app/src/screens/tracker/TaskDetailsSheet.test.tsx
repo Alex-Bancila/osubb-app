@@ -52,7 +52,9 @@ vi.mock('../../queries/task-queue-control', () => ({
 vi.mock('../../queries/task-progress', () => ({
   useTaskProgress: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
-vi.mock('../../queries/task-queue', () => ({ useTaskQueue: vi.fn() }));
+vi.mock('../../queries/task-queue', () => ({
+  useTaskQueue: vi.fn(() => ({ isPending: false, data: [] })),
+}));
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: 'member' } } }),
 }));
@@ -156,7 +158,7 @@ describe('Task details sheet', () => {
   it('hides the Candidate selector on an in_review Task, where the server refuses selection (#646)', async () => {
     useTaskDetails.mockReturnValue({
       data: {
-        task: taskRow({ status: 'in_review' }),
+        task: taskRow({ status: 'in_review', assignment_mode: 'public' }),
         executorName: 'Executor actual',
         subtasks: [],
       },
@@ -170,6 +172,25 @@ describe('Task details sheet', () => {
     );
     expect(await screen.findByText('Coada taskului')).toBeVisible();
     expect(screen.queryByText('Alege din coadă')).not.toBeInTheDocument();
+  });
+
+  it('shows no empty queue section on a direct Task in review (#646)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ status: 'in_review' }),
+        executorName: 'Executor actual',
+        subtasks: [],
+      },
+    });
+    render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByText('Istoricul taskului');
+    expect(screen.queryByText('Coada taskului')).not.toBeInTheDocument();
   });
 
   it.each(['completed', 'unfulfilled', 'cancelled'] as const)(
