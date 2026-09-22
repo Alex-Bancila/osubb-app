@@ -1,3 +1,4 @@
+import { validateTaskDraft } from './task-draft-validation';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 
 export type ManagedWorkGroup = {
@@ -94,33 +95,30 @@ export function taskDraft(
   values: TaskFormValues,
   options: TaskFormOptions,
 ): TaskDraft | string {
-  if (!values.title.trim()) return 'Scrie titlul taskului.';
   if (
     values.kind === 'subtask' &&
     !options.umbrellas.some((parent) => parent.id === values.parentTaskId)
   )
     return 'Alege un task-umbrelă disponibil.';
   const origin = originFor(values, options);
-  if (!origin) return 'Alege un grup pe care îl poți administra.';
   const deadline = values.deadline
     ? bucharestWallTimeToIso(values.deadline)
     : null;
-  if ((values.kind !== 'umbrella' || values.deadline) && !deadline)
+  if (values.deadline && !deadline)
     return 'Alege un termen valid, în ora României.';
   const umbrella = values.kind === 'umbrella';
-  if (
-    !umbrella &&
-    values.campaignId !== null &&
-    !campaignsFor(origin, options).some(
-      (campaign) => campaign.id === values.campaignId,
-    )
+  // Send what the form shows: a Campaign that is no longer offered for this
+  // Origin (the options were refreshed) is displayed as none, so it is none.
+  const campaignId = campaignsFor(origin, options).some(
+    (campaign) => campaign.id === values.campaignId,
   )
-    return 'Campania nu mai este disponibilă pentru acest grup.';
-  return {
+    ? values.campaignId
+    : null;
+  const draft: TaskDraft = {
     title: values.title.trim(),
     description: values.description.trim() || null,
     deadline,
-    groupId: origin.id,
+    groupId: origin?.id ?? 0,
     kind: umbrella ? 'umbrella' : 'task',
     parentTaskId: values.kind === 'subtask' ? values.parentTaskId : null,
     audience: umbrella ? null : values.audience,
@@ -129,6 +127,7 @@ export function taskDraft(
       !umbrella && values.assignmentMode === 'direct'
         ? values.executorId
         : null,
-    campaignId: umbrella ? null : values.campaignId,
+    campaignId: umbrella ? null : campaignId,
   };
+  return validateTaskDraft(draft, options) ?? draft;
 }

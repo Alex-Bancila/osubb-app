@@ -289,3 +289,24 @@ it('explains when the caller has no managed Groups', () => {
   ).toBeInTheDocument();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
+it('drops a Campaign that a refreshed read no longer offers, instead of refusing the draft', async () => {
+  const onDraft = vi.fn();
+  const view = render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = await content();
+  await pick(user, groupBox(), /^Echipa afișe/);
+  await user.selectOptions(screen.getByLabelText('Campanie (opțional)'), '11');
+  view.rerender(
+    <TaskForm
+      options={{
+        ...options,
+        campaigns: options.campaigns.filter((campaign) => campaign.id !== 11),
+      }}
+      onDraft={onDraft}
+    />,
+  );
+  expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ groupId: 3, campaignId: null }),
+  );
+});
