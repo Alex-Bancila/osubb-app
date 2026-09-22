@@ -11,6 +11,8 @@ export type TaskFormOptions = {
   groups: ManagedWorkGroup[];
   campaigns: { id: number; name: string; group_id: number }[];
   umbrellas: { id: number; title: string; group_id: number }[];
+  /** Names of readable Groups, so a Child Group can be shown with its parent. */
+  groupNames?: { id: number; name: string }[];
 };
 export type TaskDraft = {
   title: string;
@@ -37,23 +39,41 @@ export type TaskFormValues = {
   campaignId: number | null;
 };
 
+/** Managed Groups in tree order: parents first, siblings alphabetically. */
 export function groupOptions(groups: ManagedWorkGroup[]) {
   const byId = new Map(groups.map((group) => [group.id, group]));
-  return groups
-    .map((group) => ({
-      ...group,
-      label: group.path
-        .map((id) => byId.get(id)?.name)
-        .filter(Boolean)
-        .join(' › '),
-      depth: group.path.filter((id) => byId.has(id)).length - 1,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'ro') || a.id - b.id);
+  const key = (group: ManagedWorkGroup) =>
+    group.path.map((id) => byId.get(id)?.name ?? '');
+  return [...groups].sort((a, b) => {
+    const left = key(a);
+    const right = key(b);
+    for (let i = 0; i < Math.min(left.length, right.length); i += 1) {
+      const order = (left[i] ?? '').localeCompare(right[i] ?? '', 'ro');
+      if (order) return order;
+    }
+    return left.length - right.length || a.id - b.id;
+  });
 }
 
+/** Every Group name the form can show: managed Groups plus readable parents. */
+export function groupLookup(options: TaskFormOptions) {
+  const names = new Map<number, { name: string }>();
+  for (const group of options.groupNames ?? []) names.set(group.id, group);
+  for (const group of options.groups) names.set(group.id, group);
+  return names;
+}
+
+/** Umbrellas a Subtask may join: only those whose Origin is the chosen Group. */
+export function umbrellasFor(groupId: number | null, options: TaskFormOptions) {
+  return groupId === null
+    ? options.umbrellas
+    : options.umbrellas.filter((parent) => parent.group_id === groupId);
+}
+
+/** A Subtask's Origin is its parent's Group; before a parent is chosen it is the Group picked so far. */
 export function originFor(values: TaskFormValues, options: TaskFormOptions) {
   const id =
-    values.kind === 'subtask'
+    values.kind === 'subtask' && values.parentTaskId !== null
       ? options.umbrellas.find((parent) => parent.id === values.parentTaskId)
           ?.group_id
       : values.groupId;
@@ -87,6 +107,13 @@ export function taskDraft(
   if (values.deadline && !deadline)
     return 'Alege un termen valid, în ora României.';
   const umbrella = values.kind === 'umbrella';
+  // Send what the form shows: a Campaign that is no longer offered for this
+  // Origin (the options were refreshed) is displayed as none, so it is none.
+  const campaignId = campaignsFor(origin, options).some(
+    (campaign) => campaign.id === values.campaignId,
+  )
+    ? values.campaignId
+    : null;
   const draft: TaskDraft = {
     title: values.title.trim(),
     description: values.description.trim() || null,
@@ -100,7 +127,7 @@ export function taskDraft(
       !umbrella && values.assignmentMode === 'direct'
         ? values.executorId
         : null,
-    campaignId: umbrella ? null : values.campaignId,
+    campaignId: umbrella ? null : campaignId,
   };
   return validateTaskDraft(draft, options) ?? draft;
 }

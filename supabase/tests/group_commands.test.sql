@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 \ir _group_task_fixtures.psql
 set local search_path = public, extensions;
-select plan(68);
+select plan(80);
 create function pg_temp.g522_group(origin text) returns bigint language sql stable as $$
  select id from public.groups where name = origin
 $$;
@@ -145,6 +145,86 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
 select throws_ok($q$select public.create_completed_work_request('Native request',null,null,null,p_group_id=>pg_temp.g522_group('Native #522'))$q$,'23514','request_group_origin_unmapped','unmapped Request Group remains rejected until Wave 3');
 reset role;
+
+-- ==================== #522 plan delta: the rulings the matrix above does not yet separate ====================
+--
+-- Everything in this section exists because a mutation of the shipped body left every
+-- assertion above green. Each one is written against the rule it pins, not against the
+-- shape of the code that happens to satisfy it today.
+
+-- Ruling D2: Request membership is PER GROUP. Manager and Responsible flow down the path
+-- (private.group_role_of), plain membership never does -- in either direction. Replacing
+-- create_completed_work_request_impl's `group_role_of(v_group, v_actor) is not null` with a
+-- path walk over group_members leaves the whole matrix above green; these two do not.
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select throws_ok($q$select public.create_completed_work_request('Down the path #522',null,null,null,p_group_id=>pg_temp.g522_group('Child #521'))$q$,
+  '42501','request_origin_forbidden','a Department member cannot file into the Department Team below it -- membership does not walk down the path');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($q$select public.create_completed_work_request('Up the path #522',null,null,null,p_group_id=>pg_temp.g522_group('Department #521'))$q$,
+  '42501','request_origin_forbidden','a Department-Team member cannot file into the Department above it -- membership does not walk up the path either');
+reset role;
+
+-- private.can_decide_request gates on claims and liveness before it consults the decider set.
+-- Every command that reaches it gates first, so only a direct call can tell the two apart.
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select is(private.can_decide_request((select id from g522_ids where name='request-5')), true,
+  'can_decide_request admits a Group Manager of the Request Group with organization claims');
+reset role;
+select pg_temp.test_login(pg_temp.g521_uid(2), '{}'::jsonb);
+select is(private.can_decide_request((select id from g522_ids where name='request-5')), false,
+  'and refuses the same decider on a claimless session -- auth_is_member() is the gate, not the roster');
+reset role;
+
+-- ruling OD8: the Organization Group may own a Campaign, and only level >= 6 manages it.
+-- A Department BCE is Automatic-Membership `member` there, never a manager.
+select pg_temp.test_login_leadership(pg_temp.g521_uid(9));
+select throws_ok($q$select public.create_campaign((select grp.id from public.groups as grp where grp.legacy_dept_id='org'),'BCE org 522')$q$,
+  '42501','campaign_manage_forbidden','a Department BCE cannot own an Organization Campaign -- only level >= 6 manages the Organization Group');
+reset role;
+
+-- A Group-only create_task leaves the legacy triple to the #519 bridge.
+select is((select format('%s|%s|%s',coalesce(task.dept_id,'-'),coalesce(task.team_id,'-'),coalesce(task.project_id::text,'-'))
+             from public.tasks as task where task.id=(select id from g522_ids where name='task')),
+  format('-|-|%s',(select project.id from public.projects as project where project.name='Project #521')),
+  'a Group-only create_task derives dept_id/team_id/project_id instead of the caller supplying them');
+
+-- The four writes below are `group_id = <the Group the command decided on>` in bodies whose
+-- legacy triple is written beside it. While every Group still has a legacy master the bridge
+-- derives the identical Group from that triple, so DELETING the group_id write changes
+-- nothing observable -- the assertions above only catch a WRONG value. Turning the bridge off
+-- inside this transaction removes the derivation and leaves the command's own write as the
+-- only thing that can satisfy tasks.group_id NOT NULL. That is also the Wave 3 shape, where
+-- the legacy columns are gone and these writes are the only ones left.
+alter table public.tasks disable trigger tasks_sync_group_origin;
+
+select throws_ok($q$update public.tasks set group_id=pg_temp.g522_group('Department #521') where id=(select id from g522_ids where name='child')$q$,
+  '23514','subtask_origin_immutable','validate_task_hierarchy refuses a Subtask Group change on group_id alone, with no legacy edit to answer for it');
+-- The legacy triple here is the Umbrella's own, so the three legacy comparisons all agree and
+-- only `new.group_id is distinct from v_parent_group` is left to refuse the Subtask.
+select throws_ok($q$insert into public.tasks(title,deadline,group_id,project_id,parent_task_id,audience,assignment_mode,status,kind)
+  values('Mismatch #522',now(),pg_temp.g522_group('Department #521'),
+         (select project.id from public.projects as project where project.name='Project #521'),
+         (select id from g522_ids where name='umbrella'),'local','direct','todo','task')$q$,
+  '23514','subtask_origin_mismatch','and refuses a Subtask whose group_id alone differs from its Umbrella''s');
+
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($q$insert into g522_ids select 'clone-nobridge',(public.duplicate_task((select id from g522_ids where name='task'),now()+interval '3 days')).id$q$,
+  'duplicate_task writes group_id itself: the clone still lands with the bridge off');
+reset role;
+select is((select task.group_id from public.tasks as task where task.id=(select id from g522_ids where name='clone-nobridge')),
+  pg_temp.g522_group('Project #521'),'and it is the source Group, written by the command rather than derived');
+
+select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
+select lives_ok($q$select public.approve_completed_work_request((select id from g522_ids where name='request-5'),3,3,'Bridge off #522')$q$,
+  'approve_completed_work_request writes the new Task''s group_id itself: it still lands with the bridge off');
+reset role;
+select is((select task.group_id from public.completed_work_requests as request
+             join public.tasks as task on task.id=request.task_id
+            where request.id=(select id from g522_ids where name='request-5')),
+  pg_temp.g522_group('Project #521'),'and it is the Request''s Group, written by the command rather than derived');
+
+alter table public.tasks enable trigger tasks_sync_group_origin;
 
 -- An archived Group has no local deciders. With no other active BC/Moderator,
 -- a BC requester must remain pending and must not receive their own notice.

@@ -1092,6 +1092,9 @@ select extensions.dblink_exec('ct_hold', 'rollback');
 select extensions.dblink_disconnect('ct_hold');
 select is(pg_temp.ct_cancel_result(), 'cancelled',
   'and once HOLD lets go the cancellation finishes normally, never with a 40P01 -- the weaker lock mode costs this command nothing');
+-- #596: ct_cancel_result took the one result it came for; the rollback below
+-- is a synchronous command and needs the asynchronous queue emptied first.
+select pg_temp.test_drain('ct_cancel');
 select extensions.dblink_exec('ct_cancel', 'rollback');
 select extensions.dblink_disconnect('ct_cancel');
 

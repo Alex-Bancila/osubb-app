@@ -4,7 +4,7 @@ vi.mock('../lib/supabase', () => ({ supabase: api }));
 import { fetchDirectExecutors } from './direct-executors';
 
 beforeEach(() => vi.clearAllMocks());
-it('paginates every read and reads only directory basics with no legacy membership restriction', async () => {
+it('paginates every read, reads only directory basics, and reads no Campaign data', async () => {
   const selects: string[] = [];
   const ranges: [string, number, number][] = [];
   api.from.mockImplementation((table: string) => {
@@ -37,18 +37,13 @@ it('paginates every read and reads only directory basics with no legacy membersh
   expect(result.members).toHaveLength(501);
   expect(ranges).toContainEqual(['profiles_directory', 500, 999]);
   expect(new Set(ranges.map(([table]) => table))).toEqual(
-    new Set([
-      'profiles_directory',
-      'roles',
-      'groups',
-      'group_members',
-      'campaigns',
-      'task_assignments',
-    ]),
+    new Set(['profiles_directory', 'roles', 'groups', 'group_members']),
   );
   expect(selects.join(' ')).not.toMatch(
-    /email|phone|dept_id|team_id|project_id|category/,
+    /email|phone|dept_id|team_id|project_id|category|campaign/,
   );
+  expect(selects).toContain('id, full_name, role, status, avatar_color');
+  expect(result.members[0]).toHaveProperty('avatarColor');
 });
 
 it('fails closed when a paged read fails instead of returning a partial directory', async () => {
