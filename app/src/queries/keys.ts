@@ -55,6 +55,7 @@ export const keys = {
     all: ['reference'] as const,
     groups: () => ['reference', 'groups'] as const,
     roles: () => ['reference', 'roles'] as const,
+    evaluationScale: () => ['reference', 'evaluation-scale'] as const,
   },
   tasks: {
     all: ['tasks'] as const,
@@ -88,6 +89,8 @@ export const keys = {
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
   requests: {
+    decisions: (memberId: string | undefined) =>
+      ['requests', 'decisions', { memberId }] as const,
     all: ['requests'] as const,
     origins: (memberId: string | undefined) =>
       ['requests', 'origins', { memberId }] as const,
