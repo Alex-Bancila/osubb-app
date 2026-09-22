@@ -158,7 +158,7 @@ function EditProfileForm({
                   aria-pressed={isSelected}
                   style={{ backgroundColor: swatch.color }}
                   className={cn(
-                    'grid size-9 place-items-center rounded-full text-white transition-transform focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    'grid size-11 place-items-center rounded-full text-white transition-transform motion-reduce:transition-none focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2',
                     isSelected
                       ? 'scale-110 ring-2 ring-foreground ring-offset-2'
                       : 'hover:scale-105',
