@@ -3742,6 +3742,18 @@ export type Database = {
           task_id: number
         }[]
       }
+      pending_request_decisions: {
+        Args: never
+        Returns: {
+          created_at: string
+          description: string
+          group_id: number
+          group_name: string
+          id: number
+          requester_id: string
+          requester_name: string
+        }[]
+      }
       preview_task_update: {
         Args: {
           p_assignment_mode: string

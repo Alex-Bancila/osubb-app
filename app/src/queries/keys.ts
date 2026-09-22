@@ -19,6 +19,12 @@
 export const keys = {
   points: {
     all: ['points'] as const,
+    leadership: (
+      memberId: string | undefined,
+      filters: { groupId?: number; campaignId?: number },
+    ) => ['points', 'leadership', memberId, filters] as const,
+    leadershipCup: (memberId: string | undefined, campaignId?: number) =>
+      ['points', 'leadership-cup', memberId, campaignId] as const,
     board: (memberId: string | undefined) =>
       ['points', 'board', { memberId }] as const,
     me: (memberId: string | undefined) =>
@@ -53,6 +59,8 @@ export const keys = {
   },
   tasks: {
     all: ['tasks'] as const,
+    memberHistory: (memberId: string | undefined, targetId: string) =>
+      ['tasks', 'member-history', memberId, targetId] as const,
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
@@ -79,6 +87,8 @@ export const keys = {
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
   requests: {
+    decisions: (memberId: string | undefined) =>
+      ['requests', 'decisions', { memberId }] as const,
     all: ['requests'] as const,
     origins: (memberId: string | undefined) =>
       ['requests', 'origins', { memberId }] as const,
@@ -96,6 +106,15 @@ export const keys = {
     all: ['announcements'] as const,
     feed: (memberId?: string) =>
       ['announcements', 'feed', { memberId }] as const,
+  },
+  /* Leadership page support reads (the metrics themselves live under points
+     and tasks, so evaluations refresh them). */
+  leadership: {
+    all: ['leadership'] as const,
+    filters: (memberId: string | undefined) =>
+      ['leadership', 'filters', { memberId }] as const,
+    memberName: (memberId: string | undefined, targetId: string) =>
+      ['leadership', 'member-name', { memberId, targetId }] as const,
   },
   notifications: {
     all: ['notifications'] as const,

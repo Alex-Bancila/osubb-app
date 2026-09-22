@@ -1,9 +1,9 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
-import { useId, useRef, useState, type FormEvent } from 'react';
-import { Button } from '../../components/ui/button';
+import { useState } from 'react';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
 import { useReopenTask } from '../../queries/task-reopen';
 import type { TaskStatus } from './task-presentation';
+import { TaskReasonDialog } from './TaskReasonDialog';
 
 export function TaskReopenControl({
   taskId,
@@ -15,7 +15,6 @@ export function TaskReopenControl({
   kind: string;
 }) {
   const capability = useTaskEvaluationCapability(taskId);
-  const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
   const [previousStatus, setPreviousStatus] = useState(status);
   if (previousStatus !== status) {
@@ -34,112 +33,29 @@ export function TaskReopenControl({
     kind !== 'task'
   )
     return null;
-  return (
-    <section aria-label="Redeschide taskul">
-      {open ? (
-        <TaskReopenForm
-          taskId={taskId}
-          onCancel={() => setOpen(false)}
-          onSuccess={() => {
-            setOpen(false);
-            setDone(true);
-          }}
-        />
-      ) : (
-        <Button
-          variant="outline"
-          className="min-h-11"
-          onClick={() => {
-            setOpen(true);
-            setDone(false);
-          }}
-        >
-          Redeschide taskul
-        </Button>
-      )}
-    </section>
-  );
+  return <ReopenDialog taskId={taskId} onSuccess={() => setDone(true)} />;
 }
-export function TaskReopenForm({
+
+function ReopenDialog({
   taskId,
-  onCancel,
   onSuccess,
 }: {
   taskId: number;
-  onCancel: () => void;
   onSuccess: () => void;
 }) {
-  const id = useId();
   const mutation = useReopenTask();
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const submitting = useRef(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (submitting.current) return;
-    if (!note.trim()) {
-      setError('Scrie motivul redeschiderii.');
-      return;
-    }
-    submitting.current = true;
-    setError(null);
-    try {
-      await mutation.mutateAsync({ taskId, reason: note.trim() });
-      onSuccess();
-    } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'Nu am putut redeschide taskul.',
-      );
-    } finally {
-      submitting.current = false;
-    }
-  }
   return (
-    <form
-      onSubmit={submit}
-      noValidate
-      aria-label="Redeschide taskul"
-      className="space-y-4 rounded-lg border border-border p-4"
-    >
-      <h3 className="font-semibold">Redeschide taskul</h3>
-      <p className="text-sm">
-        Taskul revine în lucru pentru același Executor. Punctele evaluării sunt
-        inversate în aceeași operațiune: un premiu se scade, iar o penalizare se
-        restituie. Istoricul rămâne păstrat.
-      </p>
-      <label className="block font-medium" htmlFor={id}>
-        Motiv (obligatoriu)
-      </label>
-      <textarea
-        id={id}
-        required
-        rows={4}
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        disabled={mutation.isPending}
-        className="w-full rounded-md border border-input bg-background p-3"
-      />
-      {error && <p role="alert">{error}</p>}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="submit"
-          className="min-h-11"
-          disabled={mutation.isPending}
-        >
-          {mutation.isPending ? 'Se trimite…' : 'Confirmă redeschiderea'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-11"
-          disabled={mutation.isPending}
-          onClick={onCancel}
-        >
-          Înapoi
-        </Button>
-      </div>
-    </form>
+    <TaskReasonDialog
+      triggerLabel="Redeschide taskul"
+      title="Redeschide taskul"
+      description="Taskul revine în lucru pentru același Executor. Punctele evaluării sunt inversate în aceeași operațiune: un premiu se scade, iar o penalizare se restituie. Istoricul rămâne păstrat."
+      fieldLabel="Motiv (obligatoriu)"
+      requiredMessage="Scrie motivul redeschiderii."
+      confirmLabel="Confirmă redeschiderea"
+      failureMessage="Nu am putut redeschide taskul."
+      isPending={mutation.isPending}
+      onConfirm={(reason) => mutation.mutateAsync({ taskId, reason })}
+      onSuccess={onSuccess}
+    />
   );
 }
