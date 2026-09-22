@@ -1,0 +1,97 @@
+{
+  "rows": [
+    {
+      "width": 1280,
+      "role": "signed-out",
+      "deepLink": "/login"
+    },
+    {
+      "width": 1280,
+      "role": "no-profile",
+      "deepLink": "/no-profile"
+    },
+    {
+      "width": 1280,
+      "role": "voluntar",
+      "deepLink": "/cereri"
+    },
+    {
+      "width": 1280,
+      "role": "voluntar",
+      "capabilityGuard": true,
+      "history": true,
+      "refresh": true,
+      "navigation": true
+    },
+    {
+      "width": 1280,
+      "role": "voluntar",
+      "callback": true
+    },
+    {
+      "width": 1280,
+      "role": "bc",
+      "deepLink": "/cereri"
+    },
+    {
+      "width": 1280,
+      "role": "bc",
+      "capabilityGuard": true,
+      "history": true,
+      "refresh": true,
+      "navigation": true
+    },
+    {
+      "width": 1280,
+      "role": "bc",
+      "callback": true
+    },
+    {
+      "width": 390,
+      "role": "signed-out",
+      "deepLink": "/login"
+    },
+    {
+      "width": 390,
+      "role": "no-profile",
+      "deepLink": "/no-profile"
+    },
+    {
+      "width": 390,
+      "role": "voluntar",
+      "deepLink": "/cereri"
+    },
+    {
+      "width": 390,
+      "role": "voluntar",
+      "capabilityGuard": true,
+      "history": true,
+      "refresh": true,
+      "navigation": true
+    },
+    {
+      "width": 390,
+      "role": "voluntar",
+      "callback": true
+    },
+    {
+      "width": 390,
+      "role": "bc",
+      "deepLink": "/cereri"
+    },
+    {
+      "width": 390,
+      "role": "bc",
+      "capabilityGuard": true,
+      "history": true,
+      "refresh": true,
+      "navigation": true
+    },
+    {
+      "width": 390,
+      "role": "bc",
+      "callback": true
+    }
+  ],
+  "errors": []
+}

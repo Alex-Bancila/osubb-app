@@ -1,12 +1,12 @@
--- can_manage_origin.test.sql — #321: the one origin-authority predicate every
--- later Task command and read policy reuses (#318, #319, #320, #343).
+-- #521: the legacy Origin shim and Task management/evaluation now share
+-- Group authority, including peer restrictions and archived Groups.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(56);
+select plan(95);
 
 -- ==================== Definition and privileges ====================
 select is(
@@ -434,22 +434,13 @@ select is(private.can_manage_origin(null, null, (select project_id from fx)), fa
   'demoted BC: a stale bc/level-6 JWT does not survive a live voluntar profile, for a Project origin (can_manage_project_work reads the live role too)');
 reset role;
 
--- BC's level>=6 override does not depend on the Project actually existing
--- (num_nonnulls only requires the argument to be non-null), so this uses the
--- lead persona instead: they qualify only through can_manage_project_work,
--- which does look the Project up and must fail closed when it is missing.
+-- The shim resolves the Group first: unknown Origins fail closed for every actor.
 select pg_temp.test_login_leadership('32100000-0000-0000-0000-000000000009');
 select is(private.can_manage_origin(null, null, (select missing_project_id from fx)), false,
   'project lead: a missing Project fails closed');
 reset role;
 
--- Pin the level>=6 short-circuit's own boundary: it is unconditional once
--- num_nonnulls passes, so it does not notice an archived Project either —
--- unlike the lead/Responsible path just above, which routes entirely
--- through private.can_manage_project_work and its `project.status =
--- 'active'` requirement. The lead and every Responsible lose management
--- authority the moment a Project archives; BC/Moderator's global override
--- does not.
+-- BC may manage an existing archived Group; local Group Roles may not.
 select pg_temp.test_login_leadership('32100000-0000-0000-0000-000000000001');
 select is(private.can_manage_origin(null, null, (select archived_project_id from fx)), true,
   'BC: the level>=6 override reaches an archived Project too (unlike the lead/Responsible path, which requires an active Project)');
@@ -471,6 +462,101 @@ select throws_ok(
   $$ select private.can_manage_origin('edu', null, null) $$,
   '42501', null,
   'anon cannot execute can_manage_origin');
+reset role;
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+select pg_temp.g521_task('ordinary','project',5);
+select pg_temp.g521_task('peer','project',4);
+select pg_temp.g521_task('manager','project',2);
+select pg_temp.g521_task('own','project',3);
+select pg_temp.g521_task('outsider','project',10);
+select pg_temp.g521_task('empty','project',null);
+select pg_temp.g521_task('ind','ind',7);
+select pg_temp.g521_task('dt','dt',8);
+select pg_temp.g521_task('archived','archived',5);
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select is(private.can_manage_task((select id from g521_tasks where name='ordinary')),true,'can_manage_task: persona 2, ordinary');
+select is(private.can_evaluate_task((select id from g521_tasks where name='ordinary')),true,'can_evaluate_task: persona 2, ordinary');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is(private.can_manage_task((select id from g521_tasks where name='ordinary')),true,'can_manage_task: persona 3, ordinary');
+select is(private.can_evaluate_task((select id from g521_tasks where name='ordinary')),true,'can_evaluate_task: persona 3, ordinary');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is(private.can_manage_task((select id from g521_tasks where name='ordinary')),false,'can_manage_task: persona 5, ordinary');
+select is(private.can_evaluate_task((select id from g521_tasks where name='ordinary')),false,'can_evaluate_task: persona 5, ordinary');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is(private.can_manage_task((select id from g521_tasks where name='peer')),false,'can_manage_task: persona 3, peer');
+select is(private.can_evaluate_task((select id from g521_tasks where name='peer')),false,'can_evaluate_task: persona 3, peer');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is(private.can_manage_task((select id from g521_tasks where name='own')),false,'can_manage_task: persona 3, own');
+select is(private.can_evaluate_task((select id from g521_tasks where name='own')),false,'can_evaluate_task: persona 3, own');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is(private.can_manage_task((select id from g521_tasks where name='manager')),false,'can_manage_task: persona 3, manager');
+select is(private.can_evaluate_task((select id from g521_tasks where name='manager')),false,'can_evaluate_task: persona 3, manager');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select is(private.can_manage_task((select id from g521_tasks where name='manager')),true,'can_manage_task: persona 2, manager');
+select is(private.can_evaluate_task((select id from g521_tasks where name='manager')),true,'can_evaluate_task: persona 2, manager');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is(private.can_manage_task((select id from g521_tasks where name='outsider')),true,'can_manage_task: persona 3, outsider');
+select is(private.can_evaluate_task((select id from g521_tasks where name='outsider')),true,'can_evaluate_task: persona 3, outsider');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is(private.can_manage_task((select id from g521_tasks where name='empty')),true,'can_manage_task: persona 3, empty');
+select is(private.can_evaluate_task((select id from g521_tasks where name='empty')),true,'can_evaluate_task: persona 3, empty');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select is(private.can_manage_task((select id from g521_tasks where name='ind')),true,'can_manage_task: persona 6, ind');
+select is(private.can_evaluate_task((select id from g521_tasks where name='ind')),false,'can_evaluate_task: persona 6, ind');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(7));
+select is(private.can_manage_task((select id from g521_tasks where name='ind')),true,'can_manage_task: persona 7, ind');
+select is(private.can_evaluate_task((select id from g521_tasks where name='ind')),false,'can_evaluate_task: persona 7, ind');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
+select is(private.can_manage_task((select id from g521_tasks where name='ind')),true,'can_manage_task: persona 1, ind');
+select is(private.can_evaluate_task((select id from g521_tasks where name='ind')),true,'can_evaluate_task: persona 1, ind');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(9));
+select is(private.can_manage_task((select id from g521_tasks where name='dt')),true,'can_manage_task: persona 9, dt');
+select is(private.can_evaluate_task((select id from g521_tasks where name='dt')),true,'can_evaluate_task: persona 9, dt');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select is(private.can_manage_task((select id from g521_tasks where name='dt')),false,'can_manage_task: persona 8, dt');
+select is(private.can_evaluate_task((select id from g521_tasks where name='dt')),false,'can_evaluate_task: persona 8, dt');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is(private.can_manage_task((select id from g521_tasks where name='dt')),false,'can_manage_task: persona 5, dt');
+select is(private.can_evaluate_task((select id from g521_tasks where name='dt')),false,'can_evaluate_task: persona 5, dt');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select is(private.can_manage_task((select id from g521_tasks where name='archived')),false,'can_manage_task: persona 2, archived');
+select is(private.can_evaluate_task((select id from g521_tasks where name='archived')),false,'can_evaluate_task: persona 2, archived');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
+select is(private.can_manage_task((select id from g521_tasks where name='archived')),true,'can_manage_task: persona 1, archived');
+select is(private.can_evaluate_task((select id from g521_tasks where name='archived')),true,'can_evaluate_task: persona 1, archived');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(11));
+select pg_temp.test_login(pg_temp.g521_uid(11),'{"provider":"email"}');
+select is(private.can_manage_task((select id from g521_tasks where name='ordinary')),false,'claimless Task management denied');
+select is(private.can_evaluate_task((select id from g521_tasks where name='ordinary')),false,'claimless Task evaluation denied');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
+select is(private.can_manage_origin(null,null,-521),false,'Group shim refuses missing Origin even to BC');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+reset role;
+select is(private.require_origin_manager(null,null,(select id from public.projects where name='Project #521')),pg_temp.g521_uid(2),'Group Manager passes the legacy shim');
+select throws_ok($$select private.require_origin_manager(null,null,(select id from public.projects where name='Archived #521'))$$,'42501','task_manage_forbidden','archived Group denial is remapped');
 reset role;
 
 select * from finish();

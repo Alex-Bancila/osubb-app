@@ -22,9 +22,9 @@ function safeSubmitError(error: unknown) {
       : '';
   if (message === 'description_required') return 'Descrierea este obligatorie.';
   if (message === 'invalid_origin')
-    return 'Alege o structură pentru această activitate.';
+    return 'Alege un grup pentru această activitate.';
   if (message === 'request_origin_forbidden')
-    return 'Nu mai faci parte din structura aleasă.';
+    return 'Nu mai faci parte din grupul ales.';
   return 'Cererea nu a putut fi trimisă. Încearcă din nou.';
 }
 
@@ -60,25 +60,26 @@ export default function CompletedWorkRequestScreen() {
             Cerere pentru activitate realizată
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Descrie contribuția, iar coordonatorii structurii o vor evalua.
+            Descrie contribuția, iar coordonatorii grupului o vor evalua.
           </p>
         </header>
         <Card>
           <CardHeader>
             <CardTitle>Activitatea ta</CardTitle>
-            <CardDescription>
-              Alege structura în care ai realizat activitatea.
+            <CardDescription id="request-origin-help">
+              Alege grupul pentru care ai lucrat: departamentul, echipa sau
+              proiectul.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {origins.isPending ? (
               <p role="status" className="text-sm text-muted-foreground">
-                Se încarcă structurile…
+                Se încarcă grupurile…
               </p>
             ) : origins.isError ? (
               <div role="alert" className="space-y-2">
                 <p className="text-sm text-destructive">
-                  Nu am putut încărca structurile.
+                  Nu am putut încărca grupurile.
                 </p>
                 <Button
                   variant="outline"
@@ -97,10 +98,11 @@ export default function CompletedWorkRequestScreen() {
                     className="text-sm font-medium"
                     htmlFor="request-origin"
                   >
-                    Structură
+                    Grup
                   </label>
                   <select
                     id="request-origin"
+                    aria-describedby="request-origin-help"
                     className="min-h-11 w-full rounded-lg border border-input bg-background px-3"
                     value={originKey}
                     onChange={(event) => {
@@ -110,7 +112,7 @@ export default function CompletedWorkRequestScreen() {
                     required
                     disabled={!origins.data?.length}
                   >
-                    <option value="">Alege structura</option>
+                    <option value="">Alege grupul</option>
                     {origins.data?.map((origin) => (
                       <option key={origin.key} value={origin.key}>
                         {origin.name}
@@ -119,7 +121,7 @@ export default function CompletedWorkRequestScreen() {
                   </select>
                   {!origins.data?.length && (
                     <p className="text-sm text-muted-foreground">
-                      Nu ai nicio structură activă disponibilă pentru cereri.
+                      Nu ai niciun grup activ disponibil pentru cereri.
                     </p>
                   )}
                 </div>
