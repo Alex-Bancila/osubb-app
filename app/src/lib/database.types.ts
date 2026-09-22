@@ -3093,6 +3093,7 @@ export type Database = {
           tasks_total: number
         }[]
       }
+      can_evaluate_task: { Args: { p_task_id: number }; Returns: boolean }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
       cancel_event: {
@@ -3739,6 +3740,18 @@ export type Database = {
         Args: never
         Returns: {
           task_id: number
+        }[]
+      }
+      pending_request_decisions: {
+        Args: never
+        Returns: {
+          created_at: string
+          description: string
+          group_id: number
+          group_name: string
+          id: number
+          requester_id: string
+          requester_name: string
         }[]
       }
       preview_task_update: {
