@@ -4,11 +4,11 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(20);
 
 -- #314: tasks.campaign_id with origin consistency (ADR-0007 Campaigns). A
 -- Task may carry at most one Campaign, and only when its Origin is that
--- Department or one of that Department's Department Teams. Fixtures reuse
+-- Group or any descendant Group (ADR-0009). Fixtures reuse
 -- reference-data Teams already in the seeded schema: t-recruti (Department
 -- Team of edu) and t-logistica (Independent Team, dept_id is null).
 
@@ -66,7 +66,7 @@ select throws_ok(
               from public.projects where name = 'Origin Project 314' $$,
     (select id from public.campaigns where name = 'Campaign Edu 314')),
   '23514', 'task_campaign_origin_mismatch',
-  'a Project Task rejects any Campaign');
+  'a Project Task rejects an unrelated Department Campaign');
 
 select throws_ok(
   format($$ insert into public.tasks (title, difficulty, team_id, campaign_id)
@@ -136,5 +136,10 @@ select is(
   (select id from public.campaigns where name = 'Campaign Edu 314'),
   'campaign_id is visible through tasks_with_overdue');
 
+insert into public.campaigns(group_id,name,created_by) select id,'Project Campaign 522','31400000-0000-0000-0000-000000000001'::uuid from public.groups where name='Origin Project 314';
+select lives_ok($$insert into public.tasks(title,group_id,campaign_id) select 'Project own campaign 522',group_id,id from public.campaigns where name='Project Campaign 522'$$,'Project Task accepts its own Group Campaign');
+insert into public.campaigns(group_id,name,created_by) select id,'Independent Campaign 522','31400000-0000-0000-0000-000000000001'::uuid from public.groups where legacy_team_id='t-logistica';
+select lives_ok($$insert into public.tasks(title,group_id,campaign_id) select 'Independent own campaign 522',group_id,id from public.campaigns where name='Independent Campaign 522'$$,'Independent Team accepts its own Group Campaign');
+select throws_ok($$update public.tasks set group_id=(select id from public.groups where legacy_dept_id='pr') where title='Dept campaign task 314'$$,'23514','task_campaign_origin_mismatch','Group-only updates revalidate Campaign ownership');
 select * from finish();
 rollback;

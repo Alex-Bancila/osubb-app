@@ -2,7 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-18
-- **Deciders:** Alex Băncilă (grilling session of 2026-09-18)
+- **Amended:** 2026-09-20 — Wave 3 grilling: Group Audience; Announcements carry an Origin Group and an Announcement Audience; Membership Status never edits rosters; a Member below a Group's Minimum Level leaves it; archiving refuses on open work; a Group's parent is fixed at creation; colour and short name are settings; `my_groups()` reports effective Group Roles
+- **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18 and 2026-09-20)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
 - **Related:** ADR-0003, ADR-0004, ADR-0007, ADR-0008, `CONTEXT.md`, `docs/backend/conventions.md`
@@ -23,17 +24,17 @@ A **Group** is one entity. BC or Moderator creates a top-level Group with a cust
 
 A Group carries **settings, not a kind**:
 
-| Setting                        | Meaning                                                                                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parent Group                   | Optional, to any depth: a Child Group may have Child Groups of its own; cycles are impossible.                                                        |
-| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.                         |
-| Counts toward the parent's Cup | Child only, default on. A Group's Task Points reach the Cup of its nearest competing ancestor only when this setting is on at every link of the path. |
-| Minimum Level                  | Join and visibility gate (below).                                                                                                                     |
-| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                                                   |
-| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                                        |
-| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.                                   |
-| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal") and each Group Responsible ("Responsabil Logistică").                        |
-| Lifecycle                      | Active or archived; archiving keeps history.                                                                                                          |
+| Setting                        | Meaning                                                                                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parent Group                   | Optional, to any depth: a Child Group may have Child Groups of its own; cycles are impossible. Chosen at creation and never changed (amended 2026-09-20). |
+| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.                             |
+| Counts toward the parent's Cup | Child only, default on. A Group's Task Points reach the Cup of its nearest competing ancestor only when this setting is on at every link of the path.     |
+| Minimum Level                  | Join and visibility gate (below).                                                                                                                         |
+| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                                                       |
+| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                                            |
+| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.                                       |
+| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal") and each Group Responsible ("Responsabil Logistică").                            |
+| Lifecycle                      | Active or archived; archiving keeps history.                                                                                                              |
 
 **Department**, **Project**, and **Team** are presentation categories chosen at creation. They pre-fill settings and label the interface. No authority, visibility, membership, notification, or Cup rule may branch on the category, and a conventions test enforces it.
 
@@ -118,3 +119,25 @@ A strangler in three waves, every PR merged green, each wave its own plan:
 - `capabilities.ts` loses `manageTasks: 4`; management controls render from server capability rows, as the 2026-09-18 Tracker plan already requires.
 - Issues to reframe: #47, #48, #49–#52 on Evaluation Periods; #66 on the Adunarea Generală roster; #103, #105, #107 into Administrare; #354 filters by Group; #248 and #370 by Group Role; #160 becomes a Wave 1 prerequisite. New issues are filed per wave.
 - Until Wave 3 lands, code still speaks `dept_id / team_id / project_id`; new authority written in the meantime must read Groups, never add a fourth branch.
+
+## Amendment (2026-09-20) — rulings from the Wave 3 grilling
+
+Each ruling below closes a gap the Wave 3 issue graph exposed. None changes the model above; each says what the model already implied and the code would otherwise have guessed.
+
+**Group Audience.** Every active Member of a Group or of any Group below it, whether by roster row or by Automatic Membership. A Group's announcements and the important changes to its Events reach its Group Audience; a Member's Relevant Events are those of the Groups whose Audience they are in. Automatic Membership is never materialized, so one server helper resolves it by live Level against each Group's Minimum Level; nothing that fans out may join the roster table directly. Task notifications are unaffected.
+
+**Announcements.** An Announcement is posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles (or their ancestors'); an Announcement of the Organization Group may be posted by anyone holding a Group Role. It carries an **Announcement Audience**: local (the Origin's Group Audience) or organization-wide (every active Member). A Group may speak to the whole organization without ceasing to be the Origin, and any composer may choose that Audience. Rank alone composes nothing, consistent with the Authority matrix: a BCE-rank Member with no Group Role cannot post.
+
+**Membership Status never edits rosters.** Deactivating a Member leaves every roster row and Group Role in place; authority is already derived live from active Members only, so an inactive Manager cannot act, and a reactivated Member resumes exactly the positions they held. Rosters change only through the roster commands, by hand. Administrare shows a Member's status beside their Group Role so a Manager removes or keeps them deliberately.
+
+**Falling below a Group's Minimum Level ends membership of that Group.** The gate binds joining and seeing, and it stays true afterwards: when a Role change puts a Member below a Group's Minimum Level, they leave that Group entirely, roster row and any Group Role held on it alike, at the moment the Role changes; a Group Role held on an ancestor with a lower Minimum Level is untouched and still flows down. When a Group's Minimum Level is raised above current members, the same removal happens, but only behind an explicit confirmation from the actor, after the interface has shown who will leave, so a stale form can never remove anyone by accident. In both directions the removed Members are notified. The invariant "no roster row below its Group's Minimum Level" is therefore total.
+
+**Archiving refuses on open work.** A Group cannot be archived while it or any Group below it has a Task that is not completed, unfulfilled or cancelled, or a pending Completed-work Request; the Manager finishes or cancels that work first, with the reasons the Tracker already requires. Archiving never cancels a Task. It does settle what has no executor: pending Applications on the subtree are declined with the archiving actor and reason, and future Events are cancelled with the same reason, both preserving history.
+
+**A Group's parent is fixed at creation.** There is no move command and there will be none: a wrongly placed Group is archived and created again. This keeps Department Cup attribution simple, since standings walk each Task's current Group path and no path ever changes.
+
+**Colour and short name are Group settings** (structural, BC/Moderator), already present on `groups` since Wave 1; the interface reads them from the Group, never from a category.
+
+**`my_groups()` reports effective Group Roles.** Because authority flows down, a Member's Groups include every Group below one they manage, with the Group Role they effectively hold there and a flag saying whether it comes from their own roster row. It lists only Groups the Member may read, so no picker ever offers a Group the Member is below.
+
+**Provisioning and the first accounts.** Provisioning appoints a new Member's initial Groups through the same Appointment core the roster commands use, attributed to the inviting BC or Moderator; the CSV names a Group by its short name or its display name. The first accounts on a fresh production database, the Moderator's among them, are created once by a service-role bootstrap script; every later account comes through Administrare.
