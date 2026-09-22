@@ -14,10 +14,10 @@ select has_function('public', 'guard_profile_privileged_columns',
   'the privileged-column guard exists');
 select has_trigger('public', 'profiles', 'profiles_guard_privileged',
   'and it is wired to profiles');
--- auth_admin_read_profiles is the dormant policy the claims hook reads through
+-- profiles_read_auth_admin is the dormant policy the claims hook reads through
 -- as supabase_auth_admin; without it, enabling RLS here would break every login.
 select policies_are('public', 'profiles',
-  array['profiles_read', 'profiles_self_update', 'auth_admin_read_profiles'],
+  array['profiles_read', 'profiles_update_self', 'profiles_read_auth_admin'],
   'profiles carries the read policy, the self-update policy, and the hook''s');
 
 -- The two columns no client writes, ever — not even BC (they are not a level

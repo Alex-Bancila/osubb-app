@@ -187,7 +187,7 @@ select ok(
 
 -- project_id is cleared in the same statement on purpose: the row is Project-origin at this
 -- point, and leaving it set would make the written triple name two Origins, which
--- tasks_exactly_one_origin_check answers first (review round 3, item 5). This has to be a
+-- tasks_exactly_one_origin_ck answers first (review round 3, item 5). This has to be a
 -- well-formed triple so that what it pins is the both-sides-disagree branch.
 select throws_ok(
   format($$ update public.tasks set group_id = %s, dept_id = 'edu', project_id = null
@@ -206,7 +206,7 @@ select throws_ok(
 select throws_ok(
   $$ insert into public.tasks (title, difficulty) values ('GOS Task No Origin 519', 1) $$,
   '23514', 'task_group_required',
-  'a Task naming no Origin at all is rejected by the trigger, before tasks_exactly_one_origin_check can');
+  'a Task naming no Origin at all is rejected by the trigger, before tasks_exactly_one_origin_ck can');
 
 -- ==================== 25: a native Group with no legacy master ====================
 
@@ -458,8 +458,8 @@ select throws_ok(
   format($$ insert into public.tasks (title, difficulty, dept_id, project_id, group_id)
      values ('GOS Task TwoOrigins 519', 1, 'edu', %s, %s) $$,
     (select project_id from fx), (select project_group_id from fx)),
-  '23514', 'new row for relation "tasks" violates check constraint "tasks_exactly_one_origin_check"',
-  'tasks: a row naming a Group and two legacy Origins is answered by tasks_exactly_one_origin_check, not by the mismatch branch (review round 3, item 5)');
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_exactly_one_origin_ck"',
+  'tasks: a row naming a Group and two legacy Origins is answered by tasks_exactly_one_origin_ck, not by the mismatch branch (review round 3, item 5)');
 
 select throws_ok(
   format($$ insert into public.completed_work_requests (requester_id, dept_id, project_id, group_id, description)

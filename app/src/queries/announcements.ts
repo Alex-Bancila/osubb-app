@@ -37,7 +37,7 @@ export type MarkAnnouncementReadInput = {
  * Fetch all announcements visible to the current member through RLS.
  * Pinned announcements appear first, followed by newest published_at.
  * Embedded announcement_reads rows reflect only the current member's reads
- * thanks to the announcement_reads_self RLS policy.
+ * thanks to the announcement_reads_manage_self RLS policy.
  */
 export async function fetchAnnouncementsFeed(): Promise<RawAnnouncementRow[]> {
   const { data, error } = await supabase

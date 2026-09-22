@@ -77,10 +77,10 @@ insert into notifications (member_id, kind, title, body, critical, link) values
   ('a0650000-0000-0000-0000-000000000004', 'task', 'Claimless own Task', null, false, null);
 
 select policies_are('public', 'notifications',
-  array['notifications_mark_read_self', 'notifications_read_self'],
+  array['notifications_update_self', 'notifications_read_self'],
   'notifications exposes only self-read and self-mark-read policies');
 select is((select cmd from pg_policies where schemaname = 'public'
-  and tablename = 'notifications' and policyname = 'notifications_mark_read_self'),
+  and tablename = 'notifications' and policyname = 'notifications_update_self'),
   'UPDATE', 'the mark-read policy applies only to UPDATE');
 select ok(has_table_privilege('authenticated', 'notifications', 'select'),
   'authenticated receives notification SELECT');

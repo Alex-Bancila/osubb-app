@@ -937,7 +937,7 @@ select throws_ok(format($$ insert into public.points_ledger (member_id, delta, r
   values ('33600000-0000-0000-0000-000000000019', 99, 'task', %s, %s) $$,
   (select direct_write_task_id from f336), (select happy_evaluation_id from e336)),
   '42501', null,
-  'and cannot credit points directly either -- ledger_sanction is the only insert policy and it demands reason = sanction');
+  'and cannot credit points directly either -- points_ledger_create_sanction is the only insert policy and it demands reason = sanction');
 reset role;
 
 select pg_temp.test_login('33600000-0000-0000-0000-000000000001', jsonb_build_object(

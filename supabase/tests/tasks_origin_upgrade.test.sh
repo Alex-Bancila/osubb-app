@@ -25,7 +25,7 @@ drop trigger tasks_sync_group_origin on public.tasks;
 -- Origin-only fixture inserts below (NOT NULL, #519). Irrelevant to what this harness
 -- tests; relaxed for the scratch transaction only, restored by the rollback.
 alter table public.tasks alter column group_id drop not null;
-alter table public.tasks drop constraint tasks_exactly_one_origin_check;
+alter table public.tasks drop constraint tasks_exactly_one_origin_ck;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
 truncate public.tasks cascade;
@@ -145,7 +145,7 @@ drop trigger tasks_sync_group_origin on public.tasks;
 -- Origin-only fixture inserts below (NOT NULL, #519). Irrelevant to what this harness
 -- tests; relaxed for the scratch transaction only, restored by the rollback.
 alter table public.tasks alter column group_id drop not null;
-alter table public.tasks drop constraint tasks_exactly_one_origin_check;
+alter table public.tasks drop constraint tasks_exactly_one_origin_ck;
 drop index public.tasks_project_idx;
 alter table public.tasks drop column project_id;
 truncate public.tasks cascade;

@@ -19,10 +19,10 @@ select is(
   (select count(*) from pg_constraint
     where conrelid = 'public.tasks'::regclass
       and conname in (
-        'tasks_started_at_state_check', 'tasks_submitted_at_state_check',
-        'tasks_completed_at_state_check', 'tasks_unfulfilled_at_state_check',
-        'tasks_cancelled_at_state_check', 'tasks_review_return_check',
-        'tasks_lifecycle_timestamp_order_check', 'tasks_queue_timestamp_state_check')),
+        'tasks_started_at_state_ck', 'tasks_submitted_at_state_ck',
+        'tasks_completed_at_state_ck', 'tasks_unfulfilled_at_state_ck',
+        'tasks_cancelled_at_state_ck', 'tasks_review_return_ck',
+        'tasks_lifecycle_timestamp_order_ck', 'tasks_queue_timestamp_state_ck')),
   8::bigint, 'all lifecycle and queue cross-column checks exist');
 select ok(
   (select count(*) = 9 from information_schema.columns
@@ -123,13 +123,13 @@ select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
      values ('Missing unfulfilled 293', 1, 'edu', 'unfulfilled', 2) $$,
   '23514', null, 'unfulfilled requires unfulfilled_at');
--- #339: the reason is supplied so that tasks_cancelled_at_state_check is the
+-- #339: the reason is supplied so that tasks_cancelled_at_state_ck is the
 -- constraint that fires -- without it tasks_cancel_reason_ck would raise the
 -- same 23514 first and this assertion would pass for the wrong reason.
 select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, status, cancel_reason)
      values ('Missing cancellation 293', 1, 'edu', 'cancelled', 'Anulat #293') $$,
-  '23514', 'new row for relation "tasks" violates check constraint "tasks_cancelled_at_state_check"',
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_cancelled_at_state_ck"',
   'cancelled requires cancelled_at');
 
 -- #339: tasks_cancel_reason_ck itself, both halves of the biconditional.

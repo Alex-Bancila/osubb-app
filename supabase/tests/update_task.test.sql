@@ -353,7 +353,7 @@ select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('p2d'
 reset role;
 select is((select format('%s|%s|%s', task.assignment_mode, task.queue_opened_at is null, task.queue_closed_at is null)
              from public.tasks as task where task.id = pg_temp.t('p2d')),
-  'direct|t|t', 'the Task is direct with the queue timestamps cleared (tasks_queue_timestamp_state_check)');
+  'direct|t|t', 'the Task is direct with the queue timestamps cleared (tasks_queue_timestamp_state_ck)');
 select is((select string_agg(c.status || ':' || (c.decided_by = pg_temp.u(1)) || ':' || (c.decided_at is not null), ',' order by c.joined_at)
              from public.task_candidates as c where c.task_id = pg_temp.t('p2d')),
   'closed:true:true,closed:true:true,closed:true:true', 'every pending Candidature ended closed, decided by the manager');

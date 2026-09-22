@@ -181,7 +181,7 @@ insert into public.task_candidates (task_id, member_id, status, joined_at)
 select id, '33300000-0000-0000-0000-000000000003'::uuid, 'pending', now() - interval '1 hour'
   from public.tasks where title = 'In verificare #333';
 
--- ---- T5: a cancelled public Task. tasks_queue_timestamp_state_check forces
+-- ---- T5: a cancelled public Task. tasks_queue_timestamp_state_ck forces
 -- queue_closed_at on a terminal public Task, but nothing stops a Candidature
 -- row from still reading 'pending' -- hand-fixtured, so the terminal check is
 -- proven to fire BEFORE the Candidature is even looked at.

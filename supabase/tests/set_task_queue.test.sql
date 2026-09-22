@@ -81,7 +81,7 @@ values
   ('Gate #331', 'Poarta', '2027-03-06 09:00:00+00', 'edu', 'org', 'public', 'todo',
    now(), '33100000-0000-0000-0000-000000000001');
 
--- Direct-mode Task: no queue timestamps at all (tasks_queue_timestamp_state_check).
+-- Direct-mode Task: no queue timestamps at all (tasks_queue_timestamp_state_ck).
 insert into public.tasks
   (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
 values
@@ -92,7 +92,7 @@ update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
  where title = 'Already closed #331';
 
 -- Terminal public Task: a completed public Task always has its queue closed
--- (tasks_queue_timestamp_state_check) and both evaluation inputs set
+-- (tasks_queue_timestamp_state_ck) and both evaluation inputs set
 -- (tasks_evaluation_inputs_ck).
 insert into public.tasks
   (title, description, deadline, dept_id, audience, assignment_mode, difficulty, rating,

@@ -393,7 +393,7 @@ select is((select format('%s|%s|%s', task.status, (task.submitted_at is null)::t
   'the second return advances review_round to 2');
 -- Both returns happen inside this suite's single transaction, and this
 -- command deliberately uses now() (a lifecycle marker compared against other
--- lifecycle columns by tasks_lifecycle_timestamp_order_check), which is
+-- lifecycle columns by tasks_lifecycle_timestamp_order_ck), which is
 -- frozen for the whole transaction -- so the two stamps are typically equal,
 -- never earlier. >= is the honest assertion; a real second HTTP call, in its
 -- own transaction, would see now() advance for real.

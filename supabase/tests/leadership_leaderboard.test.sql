@@ -160,7 +160,7 @@ select fixture.title, 'Fixture', now() - interval '2 days',
        'completed', fixture.difficulty, fixture.rating,
        '25800000-0000-0000-0000-000000000001',
        -- completed_at is `now()`: test_credit_task ends the Assignment at
-       -- completed_at, and task_assignments_end_chronology_check refuses an end
+       -- completed_at, and task_assignments_end_chronology_ck refuses an end
        -- before the Assignment's own start.
        now() - interval '3 days', now()
   from (values

@@ -11,7 +11,7 @@ select plan(25);
 
 -- ==================== Structure and grants ====================
 select policies_are('public', 'event_attendance',
-  array['attendance_insert_self', 'attendance_read', 'attendance_update_self'],
+  array['event_attendance_create_self', 'event_attendance_read', 'event_attendance_update_self'],
   'attendance exposes only read, self-insert, and self-update policies');
 
 select ok(not has_table_privilege('authenticated', 'event_attendance', 'insert'),
