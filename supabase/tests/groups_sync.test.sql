@@ -700,7 +700,7 @@ select is(
   0::bigint,
   'promoting a member whose only Department is `org` still writes no Organization roster row');
 
--- The same promotion through the client path: `profiles_self_update` lets a
+-- The same promotion through the client path: `profiles_update_self` lets a
 -- live BC change anyone's role as `authenticated`. Mutation this catches:
 -- drop `security definer` from private.rederive_department_group_roles().
 select pg_temp.test_login_leadership('50900000-0000-0000-0000-000000000001');
@@ -714,7 +714,7 @@ select is(
     where grp.legacy_dept_id = 'secretariat'
       and membership.member_id = '50900000-0000-0000-0000-000000000008'),
   'manager',
-  'a BC promoting someone through profiles_self_update re-derives the Group Role too — the mirror never depends on who held the session');
+  'a BC promoting someone through profiles_update_self re-derives the Group Role too — the mirror never depends on who held the session');
 
 -- ==================== 9. Fixpoint ====================
 -- The one assertion that holds #508 and #509 to the same mapping: after every

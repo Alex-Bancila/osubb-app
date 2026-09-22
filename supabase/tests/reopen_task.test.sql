@@ -41,7 +41,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(108);
+select plan(120);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -677,7 +677,7 @@ select is((select format('%s|%s|%s|%s', task.status, (task.unfulfilled_at is nul
                          (task.started_at is not null)::text, (task.started_at >= task.created_at)::text)
              from public.tasks as task where task.id = (select unfulfilled_task_id from f338)),
   'in_progress|true|true|true',
-  'unfulfilled_at is cleared and started_at is set -- an unfulfilled Task may never have been started (tasks_started_at_state_check)');
+  'unfulfilled_at is cleared and started_at is set -- an unfulfilled Task may never have been started (tasks_started_at_state_ck)');
 select set_eq(
   format($$ select format('%%s|%%s', ledger.reason, ledger.delta)
               from public.points_ledger as ledger where ledger.task_id = %s $$,
@@ -954,7 +954,7 @@ select is(
 -- than a policy denial, and pinning its message is what stops a future
 -- migration that grants `update` back from passing this test by swapping one
 -- 42501 for another. The two points_ledger inserts do exercise RLS: the table
--- is insertable by `authenticated` and ledger_sanction, its only insert
+-- is insertable by `authenticated` and points_ledger_create_sanction, its only insert
 -- policy, demands reason = 'sanction' -- so they fail the policy, with the
 -- policy's own message.
 
@@ -970,7 +970,7 @@ select throws_ok(format($$ insert into public.points_ledger (member_id, delta, r
   values ('33800000-0000-0000-0000-000000000016', 99, 'task_reversal', %s, %s) $$,
   (select direct_write_task_id from f338), (select direct_write_evaluation_id from e338)),
   '42501', 'new row violates row-level security policy for table "points_ledger"',
-  'and cannot hand-write a reversal ledger row either -- the RLS POLICY rejects it: ledger_sanction is the only insert policy and it demands reason = sanction');
+  'and cannot hand-write a reversal ledger row either -- the RLS POLICY rejects it: points_ledger_create_sanction is the only insert policy and it demands reason = sanction');
 reset role;
 select pg_temp.test_login('33800000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -1183,11 +1183,12 @@ select ok(coalesce((
 ), false), 'it holds the evaluator''s own live profile row FOR SHARE (private.require_origin_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
+    join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33800000-0000-0000-0000-000000000051'
-     and membership.dept_id = 'edu'
-), false), 'and the Department membership their evaluator authority rests on FOR SHARE too');
+     and authority_group.legacy_dept_id = 'edu'
+), false), 'and the Group roster row their evaluator authority rests on FOR SHARE too');
 select ok(coalesce((
   select bool_or(row_lock.modes && array['For Update', 'Update', 'No Key Update'])
     from extensions.pgrowlocks('public.task_evaluations') as row_lock
@@ -1360,6 +1361,9 @@ select lives_ok(format($outer$ select extensions.dblink_exec('rt_dl_a', %L) $out
 select extensions.dblink_exec('rt_dl_a', 'rollback');
 select is(pg_temp.dl_reopen_result(), 'in_progress',
   'and the reopen itself comes back with a status, never a 40P01 -- once A lets the Subtask go it finishes normally, so the weaker parent lock costs this command nothing');
+-- #596: dl_reopen_result took the one result it came for; the rollback below
+-- is a synchronous command and needs the asynchronous queue emptied first.
+select pg_temp.test_drain('rt_dl_b');
 select extensions.dblink_exec('rt_dl_b', 'rollback');
 select extensions.dblink_disconnect('rt_dl_a');
 select extensions.dblink_disconnect('rt_dl_b');
@@ -1400,6 +1404,78 @@ select is((select count(*) from public.points_ledger
             where member_id in ('33800000-0000-0000-0000-000000000053',
                                 '33800000-0000-0000-0000-000000000054')), 0::bigint,
   'including every point the probe and the race actually moved');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',5,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.reopen_task((select id from g521_tasks where name='command0'),'Reopen #521')$$,'reopen_task: Group persona 2 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command1','project',4,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.reopen_task((select id from g521_tasks where name='command1'),'Reopen #521')$$,'42501','task_evaluate_forbidden','reopen_task: Group persona 3 on executor 4 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',7,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select throws_ok($$select public.reopen_task((select id from g521_tasks where name='command2'),'Reopen #521')$$,'42501','task_evaluate_forbidden','reopen_task: Group persona 6 on executor 7 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',5,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.reopen_task((select id from g521_tasks where name='command3'),'Reopen #521')$$,'42501','task_evaluate_forbidden','reopen_task: Group persona 8 on executor 5 in dt');
+reset role;
+select pg_temp.g521_task('command4','project',5,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select lives_ok($$select public.reopen_task((select id from g521_tasks where name='command4'),'Reopen #521')$$,'reopen_task: Group persona 3 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command5','project',3,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.reopen_task((select id from g521_tasks where name='command5'),'Reopen #521')$$,'42501','task_evaluate_forbidden','reopen_task: Group persona 3 on executor 3 in project');
+reset role;
+select pg_temp.g521_task('command6','project',2,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.reopen_task((select id from g521_tasks where name='command6'),'Reopen #521')$$,'42501','task_evaluate_forbidden','reopen_task: Group persona 3 on executor 2 in project');
+reset role;
+select pg_temp.g521_task('command7','project',2,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.reopen_task((select id from g521_tasks where name='command7'),'Reopen #521')$$,'reopen_task: Group persona 2 on executor 2 in project');
+reset role;
+select pg_temp.g521_task('command8','ind',7,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
+select lives_ok($$select public.reopen_task((select id from g521_tasks where name='command8'),'Reopen #521')$$,'reopen_task: Group persona 1 on executor 7 in ind');
+reset role;
+
+-- #524: the evaluate-authority refinement at step 7 now reads Groups, not the
+-- legacy Origin (wave-review M2). Two behavioural rows for the rule as the
+-- Group model states it -- a Project's Coordonator is a Group Manager at
+-- whatever rank, an ordinary Project member is nobody -- and one catalog row
+-- for what actually changed. The catalog row is the load-bearing one: under
+-- the Wave 2 gate at step 4 the legacy shape and the Group shape agree on
+-- every input a caller can reach (the Executor can_evaluate_task judges IS
+-- the Assignment this command reverses), so only the catalog tells a reader
+-- whether the decision still depends on a table Wave 3 drops.
+select pg_temp.g521_task('command9','project',3,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.reopen_task((select id from g521_tasks where name='command9'),'Reopen #524')$$,'reopen_task: a Project Coordonator -- Group Manager at level 1 -- reverses a Responsible''s award');
+reset role;
+select pg_temp.g521_task('command10','project',5,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select throws_ok($$select public.reopen_task((select id from g521_tasks where name='command10'),'Reopen #524')$$,'42501','task_evaluate_forbidden','reopen_task: an ordinary Project member cannot reopen, not even their own Task');
+reset role;
+select ok((select pg_get_functiondef('private.reopen_task_impl(bigint,text)'::regprocedure)) !~ 'is_project_lead|public\.projects|project_id',
+  'reopen_task''s body reads no legacy Origin: its evaluate-authority refinement is decided by the Group predicates alone');
 
 select * from finish();
 rollback;

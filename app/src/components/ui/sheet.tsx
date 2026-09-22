@@ -21,7 +21,7 @@ function SheetBackdrop({
   return (
     <Dialog.Backdrop
       className={cn(
-        'fixed inset-0 z-60 bg-black/40 data-ending-style:opacity-0 data-starting-style:opacity-0 transition-opacity',
+        'fixed inset-0 z-60 bg-black/40 data-ending-style:opacity-0 data-starting-style:opacity-0 transition-opacity motion-reduce:transition-none',
         className,
       )}
       {...props}
@@ -36,7 +36,7 @@ function SheetPopup({
   return (
     <Dialog.Popup
       className={cn(
-        'fixed inset-y-0 left-0 z-70 flex w-[min(280px,calc(100%-2rem))] flex-col bg-card shadow-xl outline-none transition-transform data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
+        'fixed inset-y-0 left-0 z-70 flex w-[min(280px,calc(100%-2rem))] flex-col bg-card shadow-xl outline-none transition-transform motion-reduce:transition-none data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
         className,
       )}
       {...props}

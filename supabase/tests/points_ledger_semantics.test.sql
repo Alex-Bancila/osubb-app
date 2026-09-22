@@ -162,7 +162,7 @@ select throws_ok(
 -- evaluated before table CHECK constraints for a non-owner role (proven by
 -- the "BC may still sanction" case below, which passes RLS then fails the
 -- shape CHECK when malformed — see rls_tasks_points.test.sql), and
--- ledger_sanction admits only reason = 'sanction'. So an active BC now hits
+-- points_ledger_create_sanction admits only reason = 'sanction'. So an active BC now hits
 -- RLS (42501) before the constraint is ever reached; only a session that
 -- bypasses RLS (e.g. the owner-run inserts above) surfaces the CHECK's
 -- 23514 directly.
@@ -185,7 +185,7 @@ select lives_ok(
 reset role;
 
 -- ==================== an inactive BC is denied both paths ====================
--- ledger_sanction's WITH CHECK requires the caller's profile.status = 'activ',
+-- points_ledger_create_sanction's WITH CHECK requires the caller's profile.status = 'activ',
 -- checked live against the database (not the JWT) — a stale claim from
 -- before deactivation cannot smuggle a row through. No policy admits
 -- manual_award for anyone, active or not.

@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from 'react';
+import { RequestDecisionQueue } from './RequestDecisionQueue';
 import { CheckCircle2 } from 'lucide-react';
+import { TaskDetailsSheet } from '../tracker/TaskDetailsSheet';
+import { RequestStatusBadge } from './RequestStatusBadge';
 import { Button } from '../../components/ui/button';
 import {
   Card,
@@ -21,9 +24,9 @@ function safeSubmitError(error: unknown) {
       : '';
   if (message === 'description_required') return 'Descrierea este obligatorie.';
   if (message === 'invalid_origin')
-    return 'Alege o structură pentru această activitate.';
+    return 'Alege un grup pentru această activitate.';
   if (message === 'request_origin_forbidden')
-    return 'Nu mai faci parte din structura aleasă.';
+    return 'Nu mai faci parte din grupul ales.';
   return 'Cererea nu a putut fi trimisă. Încearcă din nou.';
 }
 
@@ -33,6 +36,7 @@ export default function CompletedWorkRequestScreen() {
   const submit = useSubmitCompletedWork();
   const [originKey, setOriginKey] = useState('');
   const [description, setDescription] = useState('');
+  const [taskId, setTaskId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   async function onSubmit(event: FormEvent) {
@@ -58,25 +62,27 @@ export default function CompletedWorkRequestScreen() {
             Cerere pentru activitate realizată
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Descrie contribuția, iar coordonatorii structurii o vor evalua.
+            Descrie contribuția, iar coordonatorii grupului o vor evalua.
           </p>
         </header>
+        <RequestDecisionQueue />
         <Card>
           <CardHeader>
             <CardTitle>Activitatea ta</CardTitle>
-            <CardDescription>
-              Alege structura în care ai realizat activitatea.
+            <CardDescription id="request-origin-help">
+              Alege grupul pentru care ai lucrat: departamentul, echipa sau
+              proiectul.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {origins.isPending ? (
               <p role="status" className="text-sm text-muted-foreground">
-                Se încarcă structurile…
+                Se încarcă grupurile…
               </p>
             ) : origins.isError ? (
               <div role="alert" className="space-y-2">
                 <p className="text-sm text-destructive">
-                  Nu am putut încărca structurile.
+                  Nu am putut încărca grupurile.
                 </p>
                 <Button
                   variant="outline"
@@ -95,10 +101,11 @@ export default function CompletedWorkRequestScreen() {
                     className="text-sm font-medium"
                     htmlFor="request-origin"
                   >
-                    Structură
+                    Grup
                   </label>
                   <select
                     id="request-origin"
+                    aria-describedby="request-origin-help"
                     className="min-h-11 w-full rounded-lg border border-input bg-background px-3"
                     value={originKey}
                     onChange={(event) => {
@@ -108,7 +115,7 @@ export default function CompletedWorkRequestScreen() {
                     required
                     disabled={!origins.data?.length}
                   >
-                    <option value="">Alege structura</option>
+                    <option value="">Alege grupul</option>
                     {origins.data?.map((origin) => (
                       <option key={origin.key} value={origin.key}>
                         {origin.name}
@@ -117,7 +124,7 @@ export default function CompletedWorkRequestScreen() {
                   </select>
                   {!origins.data?.length && (
                     <p className="text-sm text-muted-foreground">
-                      Nu ai nicio structură activă disponibilă pentru cereri.
+                      Nu ai niciun grup activ disponibil pentru cereri.
                     </p>
                   )}
                 </div>
@@ -191,14 +198,32 @@ export default function CompletedWorkRequestScreen() {
             <ul className="space-y-2">
               {myRequests.data.map((request) => (
                 <li key={request.id} className="rounded-lg border bg-card p-4">
-                  <p className="wrap-anywhere">{request.description}</p>
-                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                    {request.status === 'pending'
-                      ? 'În așteptare'
-                      : request.status === 'approved'
-                        ? 'Aprobată'
-                        : 'Respinsă'}
-                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1 wrap-anywhere">
+                      {request.description}
+                    </p>
+                    <RequestStatusBadge status={request.status} />
+                  </div>
+                  {request.decision_note && (
+                    <p className="mt-2 text-sm wrap-anywhere">
+                      <span className="font-semibold">
+                        {request.status === 'rejected'
+                          ? 'Motivul respingerii: '
+                          : 'Notă: '}
+                      </span>
+                      {request.decision_note}
+                    </p>
+                  )}
+                  {request.status === 'approved' &&
+                    request.task_id !== null && (
+                      <Button
+                        variant="link"
+                        className="min-h-11 min-w-11 px-0"
+                        onClick={() => setTaskId(request.task_id)}
+                      >
+                        Deschide taskul #{request.task_id}
+                      </Button>
+                    )}
                 </li>
               ))}
             </ul>
@@ -208,6 +233,7 @@ export default function CompletedWorkRequestScreen() {
             </p>
           )}
         </section>
+        <TaskDetailsSheet taskId={taskId} onClose={() => setTaskId(null)} />
       </div>
     </div>
   );

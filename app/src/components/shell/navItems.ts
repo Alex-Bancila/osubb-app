@@ -1,11 +1,13 @@
 import {
   Bell,
   CalendarDays,
+  Trophy,
   LayoutDashboard,
   ListTodo,
   Megaphone,
   ClipboardPlus,
   ShieldCheck,
+  Tag,
   UserRound,
   Users,
   type LucideIcon,
@@ -19,6 +21,9 @@ export type NavItem = {
   icon: LucideIcon;
   /** Shown to everyone when absent; otherwise gated on this level threshold. */
   capability?: Capability;
+  /** Shown only to members who may manage work in some Group (a Group
+   *  Manager or Responsible, or BC): Group Roles are not in the level claims. */
+  requiresWorkManagement?: boolean;
   /** Mobile shows five of these; the rest live in the drawer. */
   onTabBar?: boolean;
 };
@@ -40,7 +45,19 @@ export const NOTIFICATIONS_PATH = '/notificari';
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Acasă', icon: LayoutDashboard, onTabBar: true },
   { path: '/tracker', label: 'Taskuri', icon: ListTodo, onTabBar: true },
+  {
+    path: '/clasament',
+    label: 'Clasament',
+    icon: Trophy,
+    capability: 'seeLeadership',
+  },
   { path: '/cereri', label: 'Cereri', icon: ClipboardPlus },
+  {
+    path: '/administrare/campanii',
+    label: 'Campanii',
+    icon: Tag,
+    requiresWorkManagement: true,
+  },
   {
     path: '/calendar',
     label: 'Calendar',

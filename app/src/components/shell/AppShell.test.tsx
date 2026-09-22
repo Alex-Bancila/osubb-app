@@ -8,6 +8,7 @@ const queries = vi.hoisted(() => ({
   useMyProfile: vi.fn(),
   useRoles: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
+  useTaskManagement: vi.fn(),
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
@@ -17,6 +18,10 @@ vi.mock('../../queries/profile', () => ({
 vi.mock('../../queries/reference', () => ({ useRoles: queries.useRoles }));
 vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
+}));
+
+vi.mock('../../queries/task-tabs', () => ({
+  useTaskManagement: queries.useTaskManagement,
 }));
 
 import AppShell from './AppShell';
@@ -58,6 +63,7 @@ describe('AppShell', () => {
       data: new Map([['voluntar', { name: 'Voluntar' }]]),
     });
     queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+    queries.useTaskManagement.mockReturnValue({ data: false });
   });
 
   it('keeps ordinary navigation gated and marks the current route in both menus', () => {
@@ -90,6 +96,30 @@ describe('AppShell', () => {
     ).toHaveAttribute('aria-current', 'page');
   });
 
+  it('offers Campaigns only to members who manage work in some Group', () => {
+    queries.useTaskManagement.mockReturnValue({ isPending: true });
+    const view = renderShell();
+    const primary = () =>
+      screen.getByRole('navigation', { name: 'Navigare principală' });
+    expect(
+      within(primary()).queryByRole('link', { name: 'Campanii' }),
+    ).toBeNull();
+
+    queries.useTaskManagement.mockReturnValue({ data: true });
+    view.rerender(
+      <MemoryRouter initialEntries={['/calendar']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="*" element={<h1>Conținut</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(
+      within(primary()).getByRole('link', { name: 'Campanii' }),
+    ).toHaveAttribute('href', '/administrare/campanii');
+  });
+
   it('badges the notification entry with the unread count, in words too', () => {
     queries.useUnreadNotificationCount.mockReturnValue({ data: 3 });
 
@@ -116,7 +146,7 @@ describe('AppShell', () => {
     ).toHaveTextContent(/^Notificări$/);
   });
 
-  it('uses the compact official mark as decorative mobile branding', () => {
+  it('uses the complete official logo as decorative mobile branding', () => {
     const { container } = renderShell();
 
     const topbar = container.querySelector('header');
@@ -124,8 +154,8 @@ describe('AppShell', () => {
 
     expect(marks).toHaveLength(2);
     expect(marks.map((mark) => mark.getAttribute('src'))).toEqual([
-      expect.stringContaining('osubb-icon-on-light'),
-      expect.stringContaining('osubb-icon-on-dark'),
+      expect.stringContaining('osubb-logo-on-light'),
+      expect.stringContaining('osubb-logo-on-dark'),
     ]);
     marks.forEach((mark) => expect(mark).toHaveAttribute('alt', ''));
   });

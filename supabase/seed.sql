@@ -428,7 +428,7 @@ select fixture.requester_id, fixture.dept_id, fixture.team_id, project.id,
 -- Difficulty, no Rating, `queue_opened_at` set exactly when the mode is
 -- public. Stage 2 moves each one to its final state in a single UPDATE, so no
 -- row ever sits in a shape `tasks_evaluation_inputs_ck`,
--- `tasks_queue_timestamp_state_check` or `tasks_cancel_reason_ck` forbids.
+-- `tasks_queue_timestamp_state_ck` or `tasks_cancel_reason_ck` forbids.
 --
 -- Origins and creators are not decorative. `private.require_origin_manager`
 -- would have had to accept each `created_by` below: BC/Moderator for a

@@ -1,3 +1,4 @@
+vi.mock('./RequestDecisionQueue', () => ({ RequestDecisionQueue: () => null }));
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,10 @@ const hooks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../queries/completed-work-requests', () => hooks);
+vi.mock('../tracker/TaskDetailsSheet', () => ({
+  TaskDetailsSheet: ({ taskId }: { taskId: number | null }) =>
+    taskId === null ? null : <p>Detalii task #{taskId}</p>,
+}));
 
 import CompletedWorkRequestScreen from './CompletedWorkRequestScreen';
 
@@ -46,12 +51,67 @@ describe('CompletedWorkRequestScreen', () => {
     });
   });
 
+  it('shows pending, approved and rejected requests, notes and the created Task', async () => {
+    hooks.useMyCompletedWorkRequests.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          description: 'Activitate în așteptare',
+          status: 'pending',
+          decision_note: null,
+          task_id: null,
+        },
+        {
+          id: 2,
+          description: 'Activitate aprobată',
+          status: 'approved',
+          decision_note: 'Mulțumim pentru contribuție.',
+          task_id: 42,
+        },
+        {
+          id: 3,
+          description: 'Activitate respinsă',
+          status: 'rejected',
+          decision_note: 'Adaugă detalii despre rezultat.',
+          task_id: null,
+        },
+      ],
+    });
+    render(<CompletedWorkRequestScreen />);
+    expect(screen.getByText('În așteptare')).toBeVisible();
+    expect(screen.getByText('Aprobată')).toBeVisible();
+    expect(screen.getByText('Respinsă')).toBeVisible();
+    expect(screen.getByText('Adaugă detalii despre rezultat.')).toBeVisible();
+    expect(screen.getByText('Motivul respingerii:')).toBeVisible();
+    expect(screen.getByText('Mulțumim pentru contribuție.')).toBeVisible();
+    expect(screen.getByText('Notă:')).toBeVisible();
+    // Each state is told by an icon and its word, not by colour alone.
+    for (const [label, status] of [
+      ['În așteptare', 'pending'],
+      ['Aprobată', 'approved'],
+      ['Respinsă', 'rejected'],
+    ] as const) {
+      const badge = screen.getByText(label);
+      expect(badge).toHaveAttribute('data-status', status);
+      expect(badge.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Deschide taskul #42' }),
+    );
+    expect(screen.getByText('Detalii task #42')).toBeVisible();
+  });
+
   it('offers only the membership Origins supplied by the query', () => {
     render(<CompletedWorkRequestScreen />);
 
     expect(
       screen.getAllByRole('option').map((option) => option.textContent),
-    ).toEqual(['Alege structura', 'Educațional', 'Echipa Media', 'OSUBB Fest']);
+    ).toEqual(['Alege grupul', 'Educațional', 'Echipa Media', 'OSUBB Fest']);
+    expect(
+      screen.getByRole('combobox', { name: 'Grup' }),
+    ).toHaveAccessibleDescription(
+      'Alege grupul pentru care ai lucrat: departamentul, echipa sau proiectul.',
+    );
     expect(screen.queryByText('Financiar')).not.toBeInTheDocument();
   });
 
@@ -59,7 +119,7 @@ describe('CompletedWorkRequestScreen', () => {
     const user = userEvent.setup();
     render(<CompletedWorkRequestScreen />);
 
-    await user.selectOptions(screen.getByLabelText('Structură'), 'project:7');
+    await user.selectOptions(screen.getByLabelText('Grup'), 'project:7');
     await user.type(
       screen.getByLabelText('Descriere'),
       '  Am coordonat voluntarii.  ',

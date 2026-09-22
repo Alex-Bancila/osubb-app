@@ -18,7 +18,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(117);
+select plan(126);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -937,7 +937,7 @@ select throws_ok(format($$ insert into public.points_ledger (member_id, delta, r
   values ('33600000-0000-0000-0000-000000000019', 99, 'task', %s, %s) $$,
   (select direct_write_task_id from f336), (select happy_evaluation_id from e336)),
   '42501', null,
-  'and cannot credit points directly either -- ledger_sanction is the only insert policy and it demands reason = sanction');
+  'and cannot credit points directly either -- points_ledger_create_sanction is the only insert policy and it demands reason = sanction');
 reset role;
 
 select pg_temp.test_login('33600000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -1136,11 +1136,12 @@ select ok(coalesce((
 ), false), 'it holds the evaluator''s own live profile row FOR SHARE (private.require_origin_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
+    join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33600000-0000-0000-0000-000000000051'
-     and membership.dept_id = 'edu'
-), false), 'and the Department membership their evaluator authority rests on FOR SHARE too, since a BCE reaches that branch');
+     and authority_group.legacy_dept_id = 'edu'
+), false), 'and the Group roster row their evaluator authority rests on FOR SHARE too, since a BCE reaches that branch');
 select ok(coalesce((
   select bool_or(row_lock.modes && array['For Update', 'Update', 'No Key Update'])
     from extensions.pgrowlocks('public.task_assignments') as row_lock
@@ -1294,6 +1295,56 @@ select is((select count(*) from public.points_ledger
                                 '33600000-0000-0000-0000-000000000054',
                                 '33600000-0000-0000-0000-000000000055')), 0::bigint,
   'including every point the committed races actually credited');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',5,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.complete_task_review((select id from g521_tasks where name='command0'),3,3,'Evaluation #521')$$,'complete_task_review: Group persona 2 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command1','project',4,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.complete_task_review((select id from g521_tasks where name='command1'),3,3,'Evaluation #521')$$,'42501','task_evaluate_forbidden','complete_task_review: Group persona 3 on executor 4 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',7,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select throws_ok($$select public.complete_task_review((select id from g521_tasks where name='command2'),3,3,'Evaluation #521')$$,'42501','task_evaluate_forbidden','complete_task_review: Group persona 6 on executor 7 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',5,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.complete_task_review((select id from g521_tasks where name='command3'),3,3,'Evaluation #521')$$,'42501','task_evaluate_forbidden','complete_task_review: Group persona 8 on executor 5 in dt');
+reset role;
+select pg_temp.g521_task('command4','project',5,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select lives_ok($$select public.complete_task_review((select id from g521_tasks where name='command4'),3,3,'Evaluation #521')$$,'complete_task_review: Group persona 3 on executor 5 in project');
+reset role;
+select pg_temp.g521_task('command5','project',3,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.complete_task_review((select id from g521_tasks where name='command5'),3,3,'Evaluation #521')$$,'42501','task_evaluate_forbidden','complete_task_review: Group persona 3 on executor 3 in project');
+reset role;
+select pg_temp.g521_task('command6','project',2,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select throws_ok($$select public.complete_task_review((select id from g521_tasks where name='command6'),3,3,'Evaluation #521')$$,'42501','task_evaluate_forbidden','complete_task_review: Group persona 3 on executor 2 in project');
+reset role;
+select pg_temp.g521_task('command7','project',2,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.complete_task_review((select id from g521_tasks where name='command7'),3,3,'Evaluation #521')$$,'complete_task_review: Group persona 2 on executor 2 in project');
+reset role;
+select pg_temp.g521_task('command8','ind',7,'in_review','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
+select lives_ok($$select public.complete_task_review((select id from g521_tasks where name='command8'),3,3,'Evaluation #521')$$,'complete_task_review: Group persona 1 on executor 7 in ind');
+reset role;
 
 select * from finish();
 rollback;
