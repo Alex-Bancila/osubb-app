@@ -1,5 +1,39 @@
 -- #521: reusable rolled-back Group fixtures for the existing command matrices.
 -- Included explicitly; .psql keeps the CLI from discovering it as a standalone suite.
+--
+-- #578: groups/group_members are asserted directly below, field-for-field the shape
+-- private.sync_department_groups/_team_groups/_project_groups produce today, instead of
+-- waiting on the legacy inserts + the forward mirror to derive them. The legacy
+-- departments/teams/projects rows (and their own member_departments/team_members/
+-- project_members roster tables) stay, unchanged, as compatibility anchors: several of
+-- the including suites manipulate them directly, later in their OWN file, and depend on
+-- the still-live mirror to propagate that edit into group_members --
+-- rls_tasks_read_matrix.test.sql deletes a project_members row for persona 3 and asserts
+-- the matching group_members row (and the read access it carried) is gone; group_commands
+-- .test.sql inserts persona 1 into member_departments('d521') after this fixture runs and
+-- expects the ordinary mirror to add them to Department #521's roster; group_commands
+-- .test.sql also calls the legacy create_campaign('d521', ...) overload, which resolves a
+-- Group through groups.legacy_dept_id, and reads task.project_id back against
+-- `public.projects` by name. None of that is reachable while the origin bridge (#519)
+-- still requires every Task-bearing Group to carry a real legacy_* mapping
+-- (task_group_origin_unmapped) whose value satisfies tasks.dept_id/team_id/project_id's
+-- own foreign keys -- dropping the legacy tables here is not possible until #579 removes
+-- the bridge itself, which is why this fixture keeps them and instead makes the
+-- resulting groups/group_members rows the ones OUR OWN inserts assert, so every legacy
+-- insert below now lands on its `on conflict ... where (...) is distinct from (...)`
+-- guard already satisfied and writes nothing observable.
+--
+-- One entanglement is left to the legacy pipeline on purpose: private.mirror_project_group
+-- re-syncs a Project Group's WHOLE roster the moment the `projects` row itself is
+-- inserted (the Project leader lives on that row, not on a separate roster row), before
+-- this file's own `project_members` insert has run -- so a group_members row for a
+-- non-leader Project member, if asserted here ahead of that moment, would be deleted by
+-- that same-statement resync and only reappear once `project_members` is inserted
+-- afterwards. Rather than rely on that transient delete-then-reinsert cycle, personas 3,
+-- 4 and 5's Project #521 roster rows are left to the legacy `project_members` insert
+-- below exactly as before; the Group Manager row (the Project leader, persona 2, matched
+-- by `projects.leader_id` rather than by a roster row) carries no such risk and is
+-- asserted directly with everything else.
 reset role;
 create function pg_temp.g521_uid(n integer) returns uuid language sql immutable as $$
   select ('52100000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid
@@ -10,15 +44,47 @@ insert into public.profiles(id,full_name,email,role,status)
 select pg_temp.g521_uid(n),'Member #521 '||n,'member.'||n||'.521@test.local',
 (case when n=1 then 'bc' when n=9 then 'bce' when n=12 then 'vot' else 'voluntar' end)::public.member_role,'activ'
 from generate_series(1,12) n;
+
+-- ==================== #578: groups/group_members, asserted directly ====================
+-- Field values below mirror private.sync_department_groups/_team_groups/_project_groups
+-- exactly (as of the Wave 1 migrations) so the legacy mirror's own upserts, still fired by
+-- the legacy inserts further down, always find their guard already satisfied.
+insert into public.groups(name,category,competes_in_cup,application_level,manager_title,short,color,legacy_dept_id)
+values ('Department #521','department',true,1,'BCE','D521','#123456','d521');
+insert into public.groups(name,category,parent_id,application_level,shared_work_visibility,manager_title,legacy_team_id)
+values ('Child #521','team',(select id from public.groups where name='Department #521'),0,true,'Coordonator','dt521');
+insert into public.groups(name,category,application_level,shared_work_visibility,legacy_team_id)
+values ('Independent #521','team',0,true,'ind521');
+-- Sentinel project ids (never produced by the identity sequence in practice): assigned up
+-- front so the Group can name them via legacy_project_id before the `projects` rows exist.
+insert into public.groups(name,category,application_level,manager_title,legacy_project_id,created_by)
+values
+  ('Project #521','project',0,'Coordonator Principal',521000000001,pg_temp.g521_uid(1)),
+  ('Archived #521','project',0,'Coordonator Principal',521000000002,pg_temp.g521_uid(1));
+
+insert into public.group_members(group_id,member_id,group_role)
+select id,pg_temp.g521_uid(5),'member' from public.groups where name='Department #521'
+union all
+select id,pg_temp.g521_uid(9),'manager' from public.groups where name='Department #521'
+union all
+select id,pg_temp.g521_uid(8),'member' from public.groups where name='Child #521'
+union all
+select id,pg_temp.g521_uid(6),'responsible' from public.groups where name='Independent #521'
+union all
+select id,pg_temp.g521_uid(7),'responsible' from public.groups where name='Independent #521'
+union all
+select id,pg_temp.g521_uid(2),'manager' from public.groups where name in ('Project #521','Archived #521');
+
+-- ==================== Legacy compatibility rows (unchanged shape) ====================
 insert into public.departments(id,name,short,color,kind) values ('d521','Department #521','D521','#123456','department');
 insert into public.member_departments(member_id,dept_id) values
 (pg_temp.g521_uid(5),'d521'),(pg_temp.g521_uid(9),'d521');
 insert into public.teams(id,name,dept_id) values ('dt521','Child #521','d521'),('ind521','Independent #521',null);
 insert into public.team_members(team_id,member_id) values
 ('dt521',pg_temp.g521_uid(8)),('ind521',pg_temp.g521_uid(6)),('ind521',pg_temp.g521_uid(7));
-insert into public.projects(name,leader_id,created_by) values
-('Project #521',pg_temp.g521_uid(2),pg_temp.g521_uid(1)),
-('Archived #521',pg_temp.g521_uid(2),pg_temp.g521_uid(1));
+insert into public.projects(id,name,leader_id,created_by) overriding system value values
+(521000000001,'Project #521',pg_temp.g521_uid(2),pg_temp.g521_uid(1)),
+(521000000002,'Archived #521',pg_temp.g521_uid(2),pg_temp.g521_uid(1));
 insert into public.project_members(project_id,member_id,project_role)
 select p.id,pg_temp.g521_uid(n),case when n in (3,4) then 'responsible' else 'member' end
 from public.projects p cross join generate_series(3,5) n where p.name='Project #521';
