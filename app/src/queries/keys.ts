@@ -33,6 +33,13 @@ export const keys = {
     groups: (memberId: string | undefined) =>
       ['profile', 'groups', { memberId }] as const,
   },
+  /* Other members as the viewer may see them. Keyed by viewer too: what a
+     profile shows depends on who is looking (contact details, rosters). */
+  members: {
+    all: ['members'] as const,
+    profile: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'profile', { memberId, viewerId }] as const,
+  },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare
      changes a Group, is the whole cache-busting story (see `reference.ts`). */
