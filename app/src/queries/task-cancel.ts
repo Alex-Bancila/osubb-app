@@ -9,7 +9,11 @@ export async function cancelTask(input: { taskId: number; reason: string }) {
     p_task_id: input.taskId,
     p_reason: reason,
   });
-  if (error) throw reviewError(error.code);
+  if (error)
+    throw reviewError(error.code, {
+      forbidden: 'Nu mai ai permisiunea de a anula acest task.',
+      failed: 'Nu am putut anula taskul. Încearcă din nou.',
+    });
   return data;
 }
 export function useCancelTask() {

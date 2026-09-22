@@ -21,4 +21,12 @@ it('does not send blank reason and translates conflicts', async () => {
   await expect(cancelTask({ taskId: 17, reason: 'Surse' })).rejects.toThrow(
     's-a schimbat',
   );
+  rpc.mockResolvedValue({ error: { code: '42501' } });
+  await expect(cancelTask({ taskId: 17, reason: 'Surse' })).rejects.toThrow(
+    'permisiunea de a anula',
+  );
+  rpc.mockResolvedValue({ error: { code: 'XX000' } });
+  await expect(cancelTask({ taskId: 17, reason: 'Surse' })).rejects.toThrow(
+    'Nu am putut anula taskul',
+  );
 });
