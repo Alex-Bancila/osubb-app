@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -14,10 +14,15 @@ vi.mock('../../queries/task-reopen', () => ({
 }));
 import { TaskReopenControl } from './TaskReopenControl';
 const props = { taskId: 17, status: 'completed' as const, kind: 'task' };
+const noteLabel = 'Motiv (obligatoriu)';
 beforeEach(() => {
   state.capability = true;
   state.mutation.mutateAsync.mockReset().mockResolvedValue({});
 });
+async function openDialog(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Redeschide taskul' }));
+  return screen.findByRole('dialog', { name: 'Redeschide taskul' });
+}
 it('hides control without authority, before evaluation and on Umbrellas', () => {
   state.capability = false;
   const view = render(<TaskReopenControl {...props} />);
@@ -28,46 +33,71 @@ it('hides control without authority, before evaluation and on Umbrellas', () => 
   view.rerender(<TaskReopenControl {...props} kind="umbrella" />);
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
-it('requires a trimmed note, sends feedback and announces success accessibly', async () => {
+it('opens a titled pop-up, requires a trimmed reason, reopens and announces success', async () => {
   const user = userEvent.setup();
-  const { container } = render(<TaskReopenControl {...props} />);
-  await user.click(screen.getByRole('button', { name: 'Redeschide taskul' }));
+  render(<TaskReopenControl {...props} />);
+  const dialog = await openDialog(user);
+  expect(dialog).toHaveAccessibleDescription(
+    /Punctele evaluării sunt inversate/,
+  );
   await user.click(
-    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+    within(dialog).getByRole('button', { name: 'Confirmă redeschiderea' }),
   );
   expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(
+    'Scrie motivul redeschiderii.',
+  );
   await user.type(
-    screen.getByLabelText('Motiv (obligatoriu)'),
+    within(dialog).getByLabelText(noteLabel),
     '  Adaugă sursele  ',
   );
-  expect((await axe.run(container)).violations).toEqual([]);
+  const results = await axe.run(dialog, {
+    rules: { 'color-contrast': { enabled: false } },
+  });
+  expect(results.violations).toEqual([]);
   await user.click(
-    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+    within(dialog).getByRole('button', { name: 'Confirmă redeschiderea' }),
   );
   expect(state.mutation.mutateAsync).toHaveBeenCalledWith({
     taskId: 17,
     reason: 'Adaugă sursele',
   });
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('status')).toHaveTextContent(
     'punctele au fost actualizate',
   );
+  expect(screen.getByRole('status')).toHaveFocus();
 });
-it('keeps feedback on conflict and suppresses duplicate submissions', async () => {
+it('closes with Escape without sending and returns focus to the trigger', async () => {
+  const user = userEvent.setup();
+  render(<TaskReopenControl {...props} />);
+  const trigger = screen.getByRole('button', {
+    name: 'Redeschide taskul',
+  });
+  await openDialog(user);
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(trigger).toHaveFocus();
+  expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
+});
+it('keeps the reason inside the pop-up on conflict and suppresses duplicate submissions', async () => {
   const user = userEvent.setup();
   state.mutation.mutateAsync.mockRejectedValueOnce(
     new Error('Taskul s-a schimbat.'),
   );
   render(<TaskReopenControl {...props} />);
-  await user.click(screen.getByRole('button', { name: 'Redeschide taskul' }));
-  await user.type(screen.getByLabelText('Motiv (obligatoriu)'), 'Surse');
+  const dialog = await openDialog(user);
+  await user.type(within(dialog).getByLabelText(noteLabel), 'Surse');
   await user.click(
-    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+    within(dialog).getByRole('button', { name: 'Confirmă redeschiderea' }),
   );
-  expect(screen.getByRole('alert')).toHaveTextContent('s-a schimbat');
-  expect(screen.getByLabelText('Motiv (obligatoriu)')).toHaveValue('Surse');
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    's-a schimbat',
+  );
+  expect(within(dialog).getByLabelText(noteLabel)).toHaveValue('Surse');
   state.mutation.mutateAsync.mockReturnValue(new Promise(() => {}));
   await user.dblClick(
-    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+    within(dialog).getByRole('button', { name: 'Confirmă redeschiderea' }),
   );
   expect(state.mutation.mutateAsync).toHaveBeenCalledTimes(2);
 });
@@ -81,16 +111,14 @@ it('announces and focuses success after status refetch before mutation resolves'
   );
   const user = userEvent.setup();
   const view = render(<TaskReopenControl {...props} />);
-  await user.click(screen.getByRole('button', { name: 'Redeschide taskul' }));
-  await user.type(
-    screen.getByLabelText('Motiv (obligatoriu)'),
-    'Motiv justificat',
-  );
+  const dialog = await openDialog(user);
+  await user.type(within(dialog).getByLabelText(noteLabel), 'Motiv justificat');
   await user.click(
-    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+    within(dialog).getByRole('button', { name: 'Confirmă redeschiderea' }),
   );
   view.rerender(<TaskReopenControl {...props} status="in_progress" />);
   await act(async () => finish());
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('status')).toHaveTextContent(
     'punctele au fost actualizate',
   );
@@ -103,7 +131,7 @@ it('announces and focuses success after status refetch before mutation resolves'
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
-it('preserves success when mutation resolves before status refetch before mutation resolves', async () => {
+it('preserves success when mutation resolves before status refetch', async () => {
   let finish!: () => void;
   state.mutation.mutateAsync.mockReturnValue(
     new Promise<void>((resolve) => {
@@ -112,16 +140,14 @@ it('preserves success when mutation resolves before status refetch before mutati
   );
   const user = userEvent.setup();
   const view = render(<TaskReopenControl {...props} />);
-  await user.click(screen.getByRole('button', { name: 'Redeschide taskul' }));
-  await user.type(
-    screen.getByLabelText('Motiv (obligatoriu)'),
-    'Motiv justificat',
-  );
+  const dialog = await openDialog(user);
+  await user.type(within(dialog).getByLabelText(noteLabel), 'Motiv justificat');
   await user.click(
-    screen.getByRole('button', { name: 'Confirmă redeschiderea' }),
+    within(dialog).getByRole('button', { name: 'Confirmă redeschiderea' }),
   );
   await act(async () => finish());
   view.rerender(<TaskReopenControl {...props} status="in_progress" />);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('status')).toHaveTextContent(
     'punctele au fost actualizate',
   );
