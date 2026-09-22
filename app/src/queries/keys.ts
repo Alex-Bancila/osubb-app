@@ -90,6 +90,11 @@ export const keys = {
       ['tasks', 'all', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
+  campaigns: {
+    all: ['campaigns'] as const,
+    list: (memberId: string | undefined, groupId?: number) =>
+      ['campaigns', { memberId, groupId }] as const,
+  },
   requests: {
     decisions: (memberId: string | undefined) =>
       ['requests', 'decisions', { memberId }] as const,
