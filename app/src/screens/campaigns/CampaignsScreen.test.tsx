@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -23,7 +23,11 @@ beforeEach(() => {
   api.options.mockReturnValue({
     isSuccess: true,
     data: {
-      groups: [{ id: 2, name: 'Echipa', path: [1, 2], min_level: 1 }],
+      groups: [
+        { id: 2, name: 'Echipa', path: [1, 2], min_level: 1 },
+        { id: 4, name: 'Tineret', path: [4], min_level: 0 },
+      ],
+      groupNames: [{ id: 1, name: 'Educațional' }],
       campaigns: [],
       umbrellas: [],
     },
@@ -39,31 +43,48 @@ function show(path = '/administrare/grupuri/2/campanii') {
           path="/administrare/grupuri/:groupId/campanii"
           element={<CampaignsScreen />}
         />
+        <Route
+          path="/administrare/grupuri/4/campanii"
+          element={<h1>Grupul Tineret</h1>}
+        />
       </Routes>
     </MemoryRouter>,
   );
 }
-it('creates, renames and toggles using the owning Group and command IDs', async () => {
+it('creates and renames in small pop-ups, and toggles, using the owning Group and command IDs', async () => {
   const user = userEvent.setup();
   const { container } = show();
-  await user.type(screen.getByLabelText('Campanie nouă'), '  Iarnă  ');
-  await user.click(screen.getByRole('button', { name: 'Creează' }));
+  await user.click(screen.getByRole('button', { name: 'Campanie nouă' }));
+  const create = await screen.findByRole('dialog', { name: 'Campanie nouă' });
+  await user.type(
+    within(create).getByLabelText('Numele campaniei'),
+    '  Iarnă  ',
+  );
+  await user.click(within(create).getByRole('button', { name: 'Creează' }));
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'create',
     groupId: 2,
     name: '  Iarnă  ',
   });
-  await waitFor(() =>
-    expect(screen.getByLabelText('Campanie nouă')).toHaveValue(''),
-  );
-  await user.clear(screen.getByLabelText('Numele campaniei'));
-  await user.type(screen.getByLabelText('Numele campaniei'), 'Toamnă nouă');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await user.click(screen.getByRole('button', { name: 'Redenumește' }));
+  const rename = await screen.findByRole('dialog', {
+    name: 'Redenumește campania',
+  });
+  const field = within(rename).getByLabelText('Numele campaniei');
+  expect(field).toHaveValue('Toamnă');
+  expect(
+    within(rename).getByRole('button', { name: 'Salvează' }),
+  ).toBeDisabled();
+  await user.clear(field);
+  await user.type(field, 'Toamnă nouă');
+  await user.click(within(rename).getByRole('button', { name: 'Salvează' }));
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'rename',
     id: 10,
     name: 'Toamnă nouă',
   });
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'active',
@@ -80,6 +101,17 @@ it('creates, renames and toggles using the owning Group and command IDs', async 
       })
     ).violations,
   ).toEqual([]);
+});
+it('explains that a Campaign is a reporting label and picks the Group from a searchable list', async () => {
+  const user = userEvent.setup();
+  show();
+  expect(screen.getByText(/etichetă pentru taskurile unui grup/)).toBeVisible();
+  const box = screen.getByRole('combobox', { name: 'Grup' });
+  expect(box).toHaveTextContent('Echipa');
+  expect(box).toHaveTextContent('Educațional');
+  await user.click(box);
+  await user.click(await screen.findByRole('option', { name: /^Tineret/ }));
+  expect(await screen.findByText('Grupul Tineret')).toBeVisible();
 });
 it('denies a typed URL outside live managed Groups and offers no mutation', () => {
   show('/administrare/grupuri/9/campanii');
@@ -99,14 +131,19 @@ it('offers activation for inactive Campaigns', async () => {
     active: true,
   });
 });
-it('keeps input for retry and hides unexpected server details', async () => {
+it('keeps the pop-up and its input for retry and hides unexpected server details', async () => {
+  const user = userEvent.setup();
   api.mutate.mockRejectedValue(new Error('private SQL detail'));
   show();
-  await userEvent.type(screen.getByLabelText('Campanie nouă'), 'Iarnă');
-  await userEvent.click(screen.getByRole('button', { name: 'Creează' }));
+  await user.click(screen.getByRole('button', { name: 'Campanie nouă' }));
+  const create = await screen.findByRole('dialog', { name: 'Campanie nouă' });
+  await user.type(within(create).getByLabelText('Numele campaniei'), 'Iarnă');
+  await user.click(within(create).getByRole('button', { name: 'Creează' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Nu am putut salva',
   );
   expect(screen.queryByText(/private SQL/)).not.toBeInTheDocument();
-  expect(screen.getByLabelText('Campanie nouă')).toHaveValue('Iarnă');
+  expect(within(create).getByLabelText('Numele campaniei')).toHaveValue(
+    'Iarnă',
+  );
 });

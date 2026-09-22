@@ -1,6 +1,25 @@
-import { useRef, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+  GroupOption,
+  groupOptionLabel,
+} from '../../components/ui/combobox';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
 import { useTaskFormOptions } from '../../queries/task-form-options';
 import {
   CampaignError,
@@ -9,48 +28,145 @@ import {
   type Campaign,
   type CampaignChange,
 } from '../../queries/campaigns';
-import { groupOptions } from '../tracker/task-form-model';
+import {
+  groupLookup,
+  groupOptions,
+  type ManagedWorkGroup,
+} from '../tracker/task-form-model';
+
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
-function CampaignEditor({
+
+/** A small pop-up that asks for one Campaign name: used to create and to rename. */
+function CampaignNameDialog({
+  title,
+  label,
+  submitLabel,
+  initialName,
+  trigger,
+  disabled,
+  error,
+  onSave,
+}: {
+  title: string;
+  label: string;
+  submitLabel: string;
+  initialName: string;
+  trigger: string;
+  disabled: boolean;
+  /** The last save's refusal, shown inside the pop-up while it is open. */
+  error: string | null;
+  onSave: (name: string) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(initialName);
+  // Show only a refusal of a save made from this pop-up since it opened.
+  const [attempted, setAttempted] = useState(false);
+  const unchanged = name.trim() === initialName.trim();
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim() || unchanged) return;
+    setAttempted(true);
+    // A rejected save keeps the pop-up and the typed name for a retry.
+    if (await onSave(name)) setOpen(false);
+  }
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (disabled) return;
+        setOpen(next);
+        if (next) {
+          setName(initialName);
+          setAttempted(false);
+        }
+      }}
+    >
+      <Button
+        type="button"
+        variant={initialName ? 'outline' : 'default'}
+        disabled={disabled}
+        onClick={() => {
+          setName(initialName);
+          setAttempted(false);
+          setOpen(true);
+        }}
+      >
+        {trigger}
+      </Button>
+      <DialogContent>
+        <form onSubmit={submit} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium">{label}</span>
+            <input
+              className={control}
+              value={name}
+              required
+              maxLength={200}
+              disabled={disabled}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          {attempted && error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled}
+              onClick={() => setOpen(false)}
+            >
+              Renunță
+            </Button>
+            <Button
+              type="submit"
+              disabled={disabled || !name.trim() || unchanged}
+            >
+              {submitLabel}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CampaignRow({
   campaign,
   onChange,
   disabled,
+  error,
 }: {
   campaign: Campaign;
   onChange: (change: CampaignChange) => Promise<boolean>;
   disabled: boolean;
+  error: string | null;
 }) {
-  const [name, setName] = useState(campaign.name);
   return (
-    <li className="space-y-3 rounded-lg border p-4">
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void onChange({ kind: 'rename', id: campaign.id, name });
-        }}
-      >
-        <label className="min-w-0 flex-1 space-y-1">
-          <span>Numele campaniei</span>
-          <input
-            className={control}
-            value={name}
-            required
-            maxLength={200}
-            disabled={disabled}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <Button
-          type="submit"
-          disabled={disabled || !name.trim() || name.trim() === campaign.name}
-        >
-          Redenumește
-        </Button>
-      </form>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span>{campaign.is_active ? 'Activă' : 'Inactivă'}</span>
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+      <span className="grid min-w-0 gap-0.5">
+        <span className="font-medium break-words">{campaign.name}</span>
+        <span className="text-sm text-muted-foreground">
+          {campaign.is_active ? 'Activă' : 'Inactivă'}
+        </span>
+      </span>
+      <span className="flex flex-wrap gap-2">
+        <CampaignNameDialog
+          title="Redenumește campania"
+          label="Numele campaniei"
+          submitLabel="Salvează"
+          trigger="Redenumește"
+          initialName={campaign.name}
+          disabled={disabled}
+          error={error}
+          onSave={(name) => onChange({ kind: 'rename', id: campaign.id, name })}
+        />
         <Button
           type="button"
           variant="outline"
@@ -65,22 +181,33 @@ function CampaignEditor({
         >
           {campaign.is_active ? 'Dezactivează' : 'Activează'}
         </Button>
-      </div>
+      </span>
     </li>
   );
 }
+
 export default function CampaignsScreen() {
   const { groupId: routeGroupId } = useParams();
+  const navigate = useNavigate();
   const options = useTaskFormOptions();
   const campaigns = useCampaigns(
     routeGroupId ? Number(routeGroupId) : undefined,
   );
   const mutation = useCampaignChange();
-  const [name, setName] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
-  const groups = groupOptions(options.data?.groups ?? []);
+  const groups = useMemo(
+    () => groupOptions(options.data?.groups ?? []),
+    [options.data],
+  );
+  const groupsById = useMemo(
+    () =>
+      options.data
+        ? groupLookup(options.data)
+        : new Map<number, { name: string }>(),
+    [options.data],
+  );
   const group = groups.find((row) => String(row.id) === routeGroupId);
   async function save(change: CampaignChange) {
     if (submitting.current || !group) return false;
@@ -110,22 +237,16 @@ export default function CampaignsScreen() {
       submitting.current = false;
     }
   }
-  async function create(event: FormEvent) {
-    event.preventDefault();
-    if (
-      group &&
-      name.trim() &&
-      (await save({ kind: 'create', groupId: group.id, name }))
-    )
-      setName('');
-  }
+  const own = campaigns.data?.filter((row) => row.group_id === group?.id);
   return (
     <section className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Campanii</h1>
         <p>
-          Gestionează campaniile grupurilor pe care le coordonezi. Campaniile
-          inactive rămân în istoricul taskurilor și în filtre.
+          O campanie este o etichetă pentru taskurile unui grup și ale
+          subgrupurilor lui. Raportul campaniei arată punctele obținute și cine
+          a lucrat. Campaniile inactive nu mai pot fi alese pentru taskuri noi,
+          dar rămân pe taskurile existente.
         </p>
       </header>
       {options.isPending ? (
@@ -140,18 +261,47 @@ export default function CampaignsScreen() {
       ) : !groups.length ? (
         <p>Nu ai grupuri pentru care poți gestiona campanii.</p>
       ) : (
-        <nav aria-label="Grupuri administrate" className="flex flex-wrap gap-2">
-          {groups.map((item) => (
-            <Link
-              key={item.id}
-              aria-current={item.id === group?.id ? 'page' : undefined}
-              className="inline-flex min-h-11 items-center rounded-md border px-3 py-2 underline"
-              to={`/administrare/grupuri/${item.id}/campanii`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="grid gap-1.5">
+          <span id="campaign-group" className="text-sm font-medium">
+            Grup
+          </span>
+          <Combobox<ManagedWorkGroup>
+            items={groups}
+            value={group ?? null}
+            onValueChange={(next) => {
+              if (next)
+                void navigate(`/administrare/grupuri/${next.id}/campanii`);
+            }}
+            itemToStringLabel={(item) => groupOptionLabel(item, groupsById)}
+            isItemEqualToValue={(a, b) => a.id === b.id}
+          >
+            <ComboboxTrigger aria-labelledby="campaign-group">
+              <ComboboxValue placeholder="Alege un grup">
+                {(item: ManagedWorkGroup | null) =>
+                  item ? (
+                    <GroupOption group={item} groupsById={groupsById} />
+                  ) : (
+                    'Alege un grup'
+                  )
+                }
+              </ComboboxValue>
+            </ComboboxTrigger>
+            <ComboboxContent>
+              <ComboboxInput
+                aria-label="Caută un grup"
+                placeholder="Caută un grup"
+              />
+              <ComboboxEmpty />
+              <ComboboxList>
+                {(item: ManagedWorkGroup) => (
+                  <ComboboxItem key={item.id} value={item}>
+                    <GroupOption group={item} groupsById={groupsById} />
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
+        </div>
       )}
       {routeGroupId && options.isSuccess && !group && (
         <p role="alert">
@@ -166,23 +316,23 @@ export default function CampaignsScreen() {
       )}
       {group && (
         <>
-          <h2 className="text-xl font-semibold">{group.label}</h2>
-          <form onSubmit={create} className="flex flex-wrap items-end gap-3">
-            <label className="min-w-0 flex-1 space-y-1">
-              <span>Campanie nouă</span>
-              <input
-                className={control}
-                required
-                maxLength={200}
-                disabled={mutation.isPending}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-            <Button type="submit" disabled={mutation.isPending || !name.trim()}>
-              Creează
-            </Button>
-          </form>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">
+              {groupOptionLabel(group, groupsById)}
+            </h2>
+            <CampaignNameDialog
+              title="Campanie nouă"
+              label="Numele campaniei"
+              submitLabel="Creează"
+              trigger="Campanie nouă"
+              initialName=""
+              disabled={mutation.isPending}
+              error={error}
+              onSave={(name) =>
+                save({ kind: 'create', groupId: group.id, name })
+              }
+            />
+          </div>
           {campaigns.isPending ? (
             <p role="status">Se încarcă campaniile…</p>
           ) : campaigns.isError ? (
@@ -196,20 +346,17 @@ export default function CampaignsScreen() {
               </Button>
             </div>
           ) : (
-            <ul className="space-y-4" aria-label="Campaniile grupului">
-              {campaigns.data
-                ?.filter((row) => row.group_id === group.id)
-                .map((campaign) => (
-                  <CampaignEditor
-                    key={`${campaign.id}:${campaign.name}`}
-                    campaign={campaign}
-                    onChange={save}
-                    disabled={mutation.isPending}
-                  />
-                ))}
-              {!campaigns.data?.some((row) => row.group_id === group.id) && (
-                <li>Grupul nu are încă nicio campanie.</li>
-              )}
+            <ul className="space-y-3" aria-label="Campaniile grupului">
+              {own?.map((campaign) => (
+                <CampaignRow
+                  key={`${campaign.id}:${campaign.name}`}
+                  campaign={campaign}
+                  onChange={save}
+                  disabled={mutation.isPending}
+                  error={error}
+                />
+              ))}
+              {!own?.length && <li>Grupul nu are încă nicio campanie.</li>}
             </ul>
           )}
         </>
