@@ -87,6 +87,8 @@ export const keys = {
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
   requests: {
+    decisions: (memberId: string | undefined) =>
+      ['requests', 'decisions', { memberId }] as const,
     all: ['requests'] as const,
     origins: (memberId: string | undefined) =>
       ['requests', 'origins', { memberId }] as const,
