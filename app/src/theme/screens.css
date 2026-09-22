@@ -81,6 +81,15 @@
   color: var(--text-faint);
 }
 
+/* The Profile screen's points total (main, after #376 was written). */
+.bignum {
+  margin: 0;
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- query states ---------- */
 .state {
   display: flex;
