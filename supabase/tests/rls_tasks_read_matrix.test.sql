@@ -19,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(70);
+select plan(71);
 
 -- ==================== Shape of the read surface ====================
 select policies_are('public', 'tasks',
@@ -759,6 +759,15 @@ delete from public.project_members where project_id=(select id from public.proje
 set local role authenticated;
 select is(private.can_read_task((select id from g521_tasks where name='private')),false,'removed Group role loses private reads despite stale token');
 select is(private.can_read_task((select id from g521_tasks where name='dtorg')),false,'stale Group role does not bypass another Group Minimum Level');
+reset role;
+-- #521 (delta): the brief's stale_role persona "reads only R6". The two negatives above pin
+-- the "only"; this pins the "R6" -- losing the Group Role must not cost them the org-audience
+-- Opportunity their rank alone earns on the very Group they were removed from.
+select pg_temp.g521_task('projorg','project',null,'todo','public');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select is(private.can_read_task((select id from g521_tasks where name='projorg')),true,
+  'a removed Group Role still reads that Group''s open org-audience Opportunity: R6 survives R3''s loss');
 reset role;
 
 select * from finish();

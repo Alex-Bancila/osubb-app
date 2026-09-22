@@ -11,6 +11,8 @@ export function createSupabaseMock() {
     neq: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),
+    range: vi.fn(),
+    update: vi.fn(),
     maybeSingle: vi.fn(),
   };
   const client = { from: mocks.from, rpc: mocks.rpc };
@@ -26,6 +28,8 @@ export function createSupabaseMock() {
     mocks.neq.mockReturnValue(mocks);
     mocks.order.mockReturnValue(mocks);
     mocks.limit.mockReturnValue(mocks);
+    mocks.range.mockReturnValue(mocks);
+    mocks.update.mockReturnValue(mocks);
   }
 
   reset();

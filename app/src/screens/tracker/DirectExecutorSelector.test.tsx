@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -14,8 +14,8 @@ import { DirectExecutorSelector } from './DirectExecutorSelector';
 
 const data: DirectExecutorData = {
   members: [
-    { id: 'ana', name: 'Ana Șerban', level: 1 },
-    { id: 'mihai', name: 'Mihai Pop', level: 3 },
+    { id: 'ana', name: 'Ana Șerban', level: 1, avatarColor: '#123456' },
+    { id: 'mihai', name: 'Mihai Pop', level: 3, avatarColor: null },
   ],
   groups: [
     {
@@ -44,8 +44,6 @@ const data: DirectExecutorData = {
     },
   ],
   memberships: [{ group_id: 2, member_id: 'ana' }],
-  campaigns: [{ id: 10, name: 'Campania de toamnă' }],
-  assignments: [{ id: 1, member_id: 'mihai', task: { campaign_id: 10 } }],
 };
 beforeEach(() =>
   hook.mockReturnValue({
@@ -57,21 +55,38 @@ beforeEach(() =>
   }),
 );
 
-it('returns one member ID and searches Romanian names without diacritics', async () => {
+const executorBox = () => screen.getByRole('combobox', { name: 'Executor' });
+const groupBox = () =>
+  screen.getByRole('combobox', { name: 'Arată doar membrii din grupul' });
+const optionNames = () =>
+  screen.getAllByRole('option').map((option) => option.textContent);
+
+async function pickGroup(
+  user: ReturnType<typeof userEvent.setup>,
+  text: string,
+) {
+  await user.click(groupBox());
+  await user.click(await screen.findByRole('option', { name: text }));
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+}
+
+it('searches names inside the Executor dropdown, ignoring diacritics, and returns one member ID', async () => {
   const user = userEvent.setup();
   const change = vi.fn();
   render(
     <DirectExecutorSelector originGroupId={1} value={null} onChange={change} />,
   );
-  await user.type(screen.getByRole('searchbox'), 'serban');
-  expect(
-    screen.queryByRole('option', { name: 'Mihai Pop' }),
-  ).not.toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText('Executor'), 'ana');
+  await user.click(executorBox());
+  await user.type(
+    await screen.findByRole('combobox', { name: 'Caută un membru' }),
+    'serban',
+  );
+  await waitFor(() => expect(optionNames()).toEqual(['AȘAna Șerban']));
+  await user.keyboard('{ArrowDown}{Enter}');
   expect(change).toHaveBeenLastCalledWith('ana');
 });
 
-it('includes descendants, supports Campaign history, and restores all eligible members when cleared', async () => {
+it('shows a small initials avatar on the member colour, never a full image', async () => {
   const user = userEvent.setup();
   render(
     <DirectExecutorSelector
@@ -80,48 +95,79 @@ it('includes descendants, supports Campaign history, and restores all eligible m
       onChange={vi.fn()}
     />,
   );
-  await user.selectOptions(
-    screen.getByLabelText('Grup (include subgrupurile)'),
-    '1',
-  );
-  expect(
-    screen.getByRole('option', { name: 'Ana Șerban' }),
-  ).toBeInTheDocument();
-  expect(
-    screen.queryByRole('option', { name: 'Mihai Pop' }),
-  ).not.toBeInTheDocument();
-  await user.selectOptions(
-    screen.getByLabelText('Grup (include subgrupurile)'),
-    '',
-  );
-  await user.selectOptions(screen.getByLabelText('Campanie'), '10');
-  expect(
-    screen.queryByRole('option', { name: 'Ana Șerban' }),
-  ).not.toBeInTheDocument();
-  expect(screen.getByRole('option', { name: 'Mihai Pop' })).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText('Campanie'), '');
-  expect(
-    screen.getByRole('option', { name: 'Ana Șerban' }),
-  ).toBeInTheDocument();
+  await user.click(executorBox());
+  const option = await screen.findByRole('option', { name: 'Ana Șerban' });
+  const avatar = option.querySelector('[data-slot="member-avatar"]');
+  expect(avatar).toHaveTextContent('AȘ');
+  expect(avatar).toHaveStyle({ background: '#123456' });
+  expect(screen.getByRole('listbox').querySelector('img')).toBeNull();
 });
 
-it('preserves filtered-out selections but clears them when Origin minimum increases', async () => {
+it('offers no Campaign filter: Campaigns have no members', () => {
+  render(
+    <DirectExecutorSelector
+      originGroupId={1}
+      value={null}
+      onChange={vi.fn()}
+    />,
+  );
+  expect(screen.queryByText(/campani/i)).not.toBeInTheDocument();
+  expect(screen.getAllByRole('combobox')).toHaveLength(2);
+});
+
+it('searches Groups by name or parent, and a Group includes every Group below it', async () => {
+  const user = userEvent.setup();
+  render(
+    <DirectExecutorSelector
+      originGroupId={1}
+      value={null}
+      onChange={vi.fn()}
+    />,
+  );
+  await user.click(groupBox());
+  await user.type(
+    await screen.findByRole('combobox', { name: 'Caută un grup' }),
+    'educ',
+  );
+  await waitFor(() =>
+    expect(optionNames()).toEqual(['Educațional', 'Echipa· Educațional']),
+  );
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+
+  await pickGroup(user, 'Educațional');
+  expect(groupBox()).toHaveTextContent('Educațional');
+  await user.click(executorBox());
+  await waitFor(() => expect(optionNames()).toEqual(['AȘAna Șerban']));
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+
+  await user.click(
+    screen.getByRole('button', { name: 'Arată toate grupurile' }),
+  );
+  await user.click(executorBox());
+  await waitFor(() =>
+    expect(optionNames()).toEqual(['AȘAna Șerban', 'MPMihai Pop']),
+  );
+});
+
+it('keeps a filtered-out selection, but clears it when the Origin minimum rises', async () => {
   const user = userEvent.setup();
   const change = vi.fn();
   const { rerender } = render(
     <DirectExecutorSelector originGroupId={1} value="ana" onChange={change} />,
   );
-  await user.type(screen.getByRole('searchbox'), 'mihai');
-  expect(screen.getByLabelText('Executor')).toHaveValue('ana');
+  expect(executorBox()).toHaveTextContent('Ana Șerban');
+  await pickGroup(user, 'Adunarea Generală');
+  expect(executorBox()).toHaveTextContent('Ana Șerban');
   expect(change).not.toHaveBeenCalled();
   rerender(
     <DirectExecutorSelector originGroupId={3} value="ana" onChange={change} />,
   );
   expect(change).toHaveBeenCalledWith(null);
-  expect(screen.queryByRole('option', { name: /Ana/ })).not.toBeInTheDocument();
 });
 
-it('clears deactivated selections after refreshed data, but not during loading or errors', () => {
+it('clears a deactivated selection after refreshed data, but not while loading', () => {
   const change = vi.fn();
   hook.mockReturnValue({ data: undefined, isSuccess: false, isPending: true });
   const { rerender } = render(
@@ -139,7 +185,7 @@ it('clears deactivated selections after refreshed data, but not during loading o
   expect(change).toHaveBeenCalledWith(null);
 });
 
-it('offers retry and announces no matches', async () => {
+it('offers a retry, and says so when a search finds nobody', async () => {
   const user = userEvent.setup();
   const refetch = vi.fn();
   hook.mockReturnValue({ isError: true, refetch });
@@ -160,8 +206,30 @@ it('offers retry and announces no matches', async () => {
       onChange={vi.fn()}
     />,
   );
-  await user.type(screen.getByRole('searchbox'), 'Nobody');
-  expect(screen.getByRole('status')).toHaveTextContent('Niciun membru');
+  await user.click(executorBox());
+  await user.type(
+    await screen.findByRole('combobox', { name: 'Caută un membru' }),
+    'Nobody',
+  );
+  expect(await screen.findByText('Niciun membru găsit.')).toBeVisible();
+});
+
+it('says when nobody meets the Origin minimum', () => {
+  hook.mockReturnValue({
+    data: { ...data, members: [data.members[0]] },
+    isSuccess: true,
+  });
+  render(
+    <DirectExecutorSelector
+      originGroupId={3}
+      value={null}
+      onChange={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Niciun membru nu are nivelul cerut',
+  );
+  expect(executorBox()).toBeDisabled();
 });
 
 it('has no automated accessibility violations', async () => {
@@ -175,11 +243,13 @@ it('has no automated accessibility violations', async () => {
   expect((await axe.run(container)).violations).toEqual([]);
 });
 
-it('derives Automatic Membership by level and permits a readable archived Origin', async () => {
+it('derives Automatic Membership by level and accepts a readable archived Origin', async () => {
   hook.mockReturnValue({
     data: {
       ...data,
-      groups: data.groups.map((group) => ({ ...group, status: 'archived' })),
+      groups: data.groups.map((group) =>
+        group.id === 1 ? { ...group, status: 'archived' } : group,
+      ),
     },
     isSuccess: true,
   });
@@ -191,15 +261,12 @@ it('derives Automatic Membership by level and permits a readable archived Origin
       onChange={vi.fn()}
     />,
   );
+  await pickGroup(user, 'Adunarea Generală');
+  await user.click(executorBox());
+  const list = await screen.findByRole('listbox');
   expect(
-    screen.getByRole('option', { name: 'Ana Șerban' }),
-  ).toBeInTheDocument();
-  await user.selectOptions(
-    screen.getByLabelText('Grup (include subgrupurile)'),
-    '3',
-  );
-  expect(
-    screen.queryByRole('option', { name: 'Ana Șerban' }),
-  ).not.toBeInTheDocument();
-  expect(screen.getByRole('option', { name: 'Mihai Pop' })).toBeInTheDocument();
+    within(list)
+      .getAllByRole('option')
+      .map((o) => o.textContent),
+  ).toEqual(['MPMihai Pop']);
 });
