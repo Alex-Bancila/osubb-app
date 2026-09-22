@@ -1,0 +1,488 @@
+[
+  {
+    "width": 1280,
+    "theme": "light",
+    "path": "/login",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "INPUT",
+      "label": "",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "path": "/auth/callback?error_code=otp_expired",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [],
+    "focus": {
+      "element": "A",
+      "label": "Înapoi la conectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "path": "/no-profile",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "Deconectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "path": "/cereri",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "A",
+      "label": "Acasă",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "path": "/tracker",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      }
+    ],
+    "focus": {
+      "element": "A",
+      "label": "Acasă",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "path": "/login",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "INPUT",
+      "label": "",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "path": "/auth/callback?error_code=otp_expired",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [],
+    "focus": {
+      "element": "A",
+      "label": "Înapoi la conectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "path": "/no-profile",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "Deconectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "path": "/cereri",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "A",
+      "label": "Acasă",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "path": "/tracker",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      }
+    ],
+    "focus": {
+      "element": "A",
+      "label": "Acasă",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "path": "/login",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "INPUT",
+      "label": "",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "path": "/auth/callback?error_code=otp_expired",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [],
+    "focus": {
+      "element": "A",
+      "label": "Înapoi la conectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "path": "/no-profile",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "Deconectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "path": "/cereri",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    },
+    "drawer": {
+      "duration": "0.15s",
+      "property": "none",
+      "focusInside": true
+    }
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "path": "/tracker",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "path": "/login",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "INPUT",
+      "label": "",
+      "outline": "oklab(0.604848 0.207267 0.106338 / 0.5) none 1px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "path": "/auth/callback?error_code=otp_expired",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [],
+    "focus": {
+      "element": "A",
+      "label": "Înapoi la conectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "path": "/no-profile",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "Deconectare",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "path": "/cereri",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    },
+    "drawer": {
+      "duration": "0.15s",
+      "property": "none",
+      "focusInside": true
+    }
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "path": "/tracker",
+    "violations": [],
+    "targets": [],
+    "motion": true,
+    "buttonTransitions": [
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0.15s",
+        "property": "none"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      },
+      {
+        "duration": "0s",
+        "property": "all"
+      }
+    ],
+    "focus": {
+      "element": "BUTTON",
+      "label": "",
+      "outline": "rgb(237, 32, 37) solid 3px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.604848 0.207267 0.106338 / 0.5) 0px 0px 0px 3px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+    }
+  }
+]

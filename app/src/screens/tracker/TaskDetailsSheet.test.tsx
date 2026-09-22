@@ -28,6 +28,9 @@ vi.mock('../../queries/task-candidate-selection', () => ({
   usePendingTaskCandidates: candidateHooks.candidates,
   useSelectTaskCandidate: () => candidateHooks.selection,
 }));
+vi.mock('../../queries/task-queue-control', () => ({
+  useSetTaskQueue: () => ({ isPending: false, mutate: vi.fn() }),
+}));
 vi.mock('../../queries/task-progress', () => ({
   useTaskProgress: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
