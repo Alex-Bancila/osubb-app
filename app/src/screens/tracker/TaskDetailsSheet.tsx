@@ -1,3 +1,4 @@
+import { TaskCancelControl } from './TaskCancelControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
@@ -56,6 +57,12 @@ function TaskDetails({
         onProgress={(selectedId, action) =>
           progress.mutateAsync({ taskId: selectedId, action })
         }
+      />
+      <TaskCancelControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
+        canManage={canManage}
       />
       <TaskReopenControl
         taskId={taskId}
@@ -150,29 +157,30 @@ function TaskDetails({
           )}
         </section>
       )}
-      {canManage && task.kind === 'task' && (
-        <section
-          aria-labelledby={`task-${taskId}-candidate-heading`}
-          className="space-y-3 rounded-lg border border-border p-4"
-        >
-          <div className="space-y-1">
-            <h3
-              id={`task-${taskId}-candidate-heading`}
-              className="font-semibold"
-            >
-              Coada taskului
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Poți înlocui executorul numai cu o persoană înscrisă în coadă.
-            </p>
-          </div>
-          {task.assignmentMode === 'public' &&
-            !['completed', 'unfulfilled', 'cancelled'].includes(
-              task.status,
-            ) && <TaskQueueControl taskId={taskId} closed={task.queueClosed} />}
-          <TaskCandidateSelector taskId={taskId} />
-        </section>
-      )}
+      {canManage &&
+        task.kind === 'task' &&
+        !['completed', 'unfulfilled', 'cancelled'].includes(task.status) && (
+          <section
+            aria-labelledby={`task-${taskId}-candidate-heading`}
+            className="space-y-3 rounded-lg border border-border p-4"
+          >
+            <div className="space-y-1">
+              <h3
+                id={`task-${taskId}-candidate-heading`}
+                className="font-semibold"
+              >
+                Coada taskului
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Poți înlocui executorul numai cu o persoană înscrisă în coadă.
+              </p>
+            </div>
+            {task.assignmentMode === 'public' && (
+              <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
+            )}
+            <TaskCandidateSelector taskId={taskId} />
+          </section>
+        )}
       <details>
         <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">
           Istoricul taskului
