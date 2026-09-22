@@ -11,6 +11,7 @@ import { cn } from '../../lib/utils';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
+import { useTaskManagement } from '../../queries/task-tabs';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -165,13 +166,18 @@ export default function AppShell() {
   const profile = useMyProfile();
   const roles = useRoles();
   const unreadNotifications = useUnreadNotificationCount();
+  // The same cached can_manage_tasks() read the Tracker uses; a Group Role is
+  // not in the claims, so the level capabilities cannot answer this.
+  const workManagement = useTaskManagement();
   const roleLabel =
     (claims && roles.data?.get(claims.member_role)?.name) ??
     claims?.member_role ??
     '';
 
   const visible = NAV_ITEMS.filter(
-    (item) => !item.capability || can(claims, item.capability),
+    (item) =>
+      (!item.capability || can(claims, item.capability)) &&
+      (!item.requiresWorkManagement || workManagement.data === true),
   );
   const tabs = TAB_ORDER.map((path) =>
     visible.find((item) => item.path === path),

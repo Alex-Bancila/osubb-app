@@ -36,6 +36,9 @@ vi.mock('../../queries/task-review', () => ({
   useTaskEvaluationCapability: () => ({ data: false }),
 }));
 vi.mock('../../queries/task-details', () => ({ useTaskDetails }));
+vi.mock('../../queries/task-cancel', () => ({
+  useCancelTask: () => ({ isPending: false, mutateAsync: vi.fn() }),
+}));
 vi.mock('../../queries/task-candidate-selection', () => ({
   usePendingTaskCandidates: candidateHooks.candidates,
   useSelectTaskCandidate: () => candidateHooks.selection,

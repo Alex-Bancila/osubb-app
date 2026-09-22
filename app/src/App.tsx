@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { IonApp } from '@ionic/react';
 import {
   BrowserRouter,
+  Link,
   Navigate,
   Route,
   Routes,
@@ -17,6 +18,8 @@ import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
+import CampaignsScreen from './screens/campaigns/CampaignsScreen';
+import { useTaskManagement } from './queries/task-tabs';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
@@ -104,6 +107,17 @@ function RequireNamedCapability({
   );
 }
 
+/**
+ * Cosmetic, like the capabilities: Campaign commands authorize on the server.
+ * A member who manages work in no Group is sent home instead of to a panel
+ * with nothing to manage.
+ */
+function RequireWorkManagement({ children }: { children: ReactElement }) {
+  const management = useTaskManagement();
+  if (management.isPending) return null;
+  return management.data === true ? children : <Navigate to="/" replace />;
+}
+
 /** Same idea one level in: a route the navigation never offers you. */
 function RequireCapability({
   capability,
@@ -170,6 +184,22 @@ export default function App() {
             <Route path="/" element={<DashboardScreen />} />
             <Route path="/tracker" element={<TrackerScreen />} />
             <Route
+              path="/administrare/campanii"
+              element={
+                <RequireWorkManagement>
+                  <CampaignsScreen />
+                </RequireWorkManagement>
+              }
+            />
+            <Route
+              path="/administrare/grupuri/:groupId/campanii"
+              element={
+                <RequireWorkManagement>
+                  <CampaignsScreen />
+                </RequireWorkManagement>
+              }
+            />
+            <Route
               path="/clasament"
               element={
                 <RequireCapability capability="seeLeadership">
@@ -202,7 +232,15 @@ export default function App() {
               path="/bc"
               element={
                 <RequireCapability capability="manageRoles">
-                  <Placeholder title="Panou BC" issue="#104–#107" />
+                  <section>
+                    <Placeholder title="Panou BC" issue="#104–#107" />
+                    <Link
+                      className="inline-flex min-h-11 items-center p-4 underline"
+                      to="/administrare/campanii"
+                    >
+                      Gestionează campaniile grupurilor
+                    </Link>
+                  </section>
                 </RequireCapability>
               }
             />
