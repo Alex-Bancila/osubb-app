@@ -62,7 +62,7 @@ select is(
 -- Comparing *unique* indexes by prefix alone is deliberately excluded: a
 -- composite unique index whose columns are a prefix-superset of the
 -- primary key is commonly the required target of a composite foreign key
--- (e.g. teams_id_dept_unique over teams_pkey, task_assignments_id_task_id_key
+-- (e.g. teams_id_dept_key over teams_pkey, task_assignments_id_task_id_key
 -- over task_assignments_pkey) and is not a redundant duplicate.
 select is_empty($$
   with idx as (

@@ -373,7 +373,7 @@ reset role;
 
 -- ==================== Read matrix: deactivated requester ====================
 -- Live status, not just a live JWT, gates even a requester's read of their
--- own Request (house rule 12; ledger_read precedent). The claims below are
+-- own Request (house rule 12; points_ledger_read precedent). The claims below are
 -- exactly what this member held while still active.
 select pg_temp.test_login('32105000-0000-0000-0000-000000000011', jsonb_build_object(
     'member_role', 'voluntar', 'member_level', 1,

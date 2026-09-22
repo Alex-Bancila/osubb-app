@@ -1,19 +1,33 @@
 import type { ReactElement } from 'react';
 import { IonApp } from '@ionic/react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router';
 import { useAuth } from './lib/auth';
+import { authDestination, loginDestination } from './lib/auth-destination';
 import { can, type Capability } from './lib/capabilities';
+import LeadershipScreen from './screens/leadership/LeadershipScreen';
+import MemberTrackerScreen from './screens/leadership/MemberTrackerScreen';
 import AppShell from './components/shell/AppShell';
 import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
+import CampaignsScreen from './screens/campaigns/CampaignsScreen';
+import { useTaskManagement } from './queries/task-tabs';
+import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
 import CalendarScreen from './screens/calendar/CalendarScreen';
 import CompletedWorkRequestScreen from './screens/requests/CompletedWorkRequestScreen';
 import AnnouncementsScreen from './screens/announcements/AnnouncementsScreen';
 import NotificationsScreen from './screens/notifications/NotificationsScreen';
+import ProfileScreen from './screens/profile/ProfileScreen';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
 /* Shown while the stored session is being read — a beat, not a screen. It
@@ -39,17 +53,35 @@ function Splash() {
  */
 function RequireSession({ children }: { children: ReactElement }) {
   const { session, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <Splash />;
-  if (!session) return <Navigate to="/login" replace />;
+  if (!session)
+    return (
+      <Navigate
+        to={loginDestination(
+          location.pathname + location.search + location.hash,
+        )}
+        replace
+      />
+    );
   return children;
 }
 
 function RequireMember({ children }: { children: ReactElement }) {
   const { session, claims, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) return <Splash />;
-  if (!session) return <Navigate to="/login" replace />;
+  if (!session)
+    return (
+      <Navigate
+        to={loginDestination(
+          location.pathname + location.search + location.hash,
+        )}
+        replace
+      />
+    );
   if (!claims) return <Navigate to="/no-profile" replace />;
   return children;
 }
@@ -62,7 +94,28 @@ function RequireNamedCapability({
   children: ReactElement;
 }) {
   const { claims } = useAuth();
-  return can(claims, capability) ? children : <Navigate to="/" replace />;
+  return can(claims, capability) ? (
+    children
+  ) : (
+    <Navigate
+      to="/"
+      replace
+      state={
+        capability === 'seeLeadership' ? { leadershipDenied: true } : undefined
+      }
+    />
+  );
+}
+
+/**
+ * Cosmetic, like the capabilities: Campaign commands authorize on the server.
+ * A member who manages work in no Group is sent home instead of to a panel
+ * with nothing to manage.
+ */
+function RequireWorkManagement({ children }: { children: ReactElement }) {
+  const management = useTaskManagement();
+  if (management.isPending) return null;
+  return management.data === true ? children : <Navigate to="/" replace />;
 }
 
 /** Same idea one level in: a route the navigation never offers you. */
@@ -87,7 +140,7 @@ function FrontDoor({ children }: { children: ReactElement }) {
   const { session, claims, loading } = useAuth();
 
   if (loading) return <Splash />;
-  if (session && claims) return <Navigate to="/" replace />;
+  if (session && claims) return <Navigate to={authDestination()} replace />;
   // Signed in without claims: /no-profile explains it and offers a way out.
   if (session) return <Navigate to="/no-profile" replace />;
   return children;
@@ -130,6 +183,38 @@ export default function App() {
           >
             <Route path="/" element={<DashboardScreen />} />
             <Route path="/tracker" element={<TrackerScreen />} />
+            <Route
+              path="/administrare/campanii"
+              element={
+                <RequireWorkManagement>
+                  <CampaignsScreen />
+                </RequireWorkManagement>
+              }
+            />
+            <Route
+              path="/administrare/grupuri/:groupId/campanii"
+              element={
+                <RequireWorkManagement>
+                  <CampaignsScreen />
+                </RequireWorkManagement>
+              }
+            />
+            <Route
+              path="/clasament"
+              element={
+                <RequireCapability capability="seeLeadership">
+                  <LeadershipScreen />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="/tracker/membru/:id"
+              element={
+                <RequireCapability capability="seeLeadership">
+                  <MemberTrackerScreen />
+                </RequireCapability>
+              }
+            />
             <Route path="/calendar" element={<CalendarScreen />} />
             <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
             <Route path="/anunturi" element={<AnnouncementsScreen />} />
@@ -138,30 +223,30 @@ export default function App() {
               path="/voluntari"
               element={
                 <RequireCapability capability="seeDirectory">
-                  <Placeholder title="Voluntari" issue="#102–#103" />
+                  <VolunteersScreen />
                 </RequireCapability>
               }
             />
-            <Route
-              path="/profil"
-              element={<Placeholder title="Profil" issue="#108" />}
-            />
+            <Route path="/profil" element={<ProfileScreen />} />
             <Route
               path="/bc"
               element={
                 <RequireCapability capability="manageRoles">
-                  <Placeholder title="Panou BC" issue="#104–#107" />
+                  <section>
+                    <Placeholder title="Panou BC" issue="#104–#107" />
+                    <Link
+                      className="inline-flex min-h-11 items-center p-4 underline"
+                      to="/administrare/campanii"
+                    >
+                      Gestionează campaniile grupurilor
+                    </Link>
+                  </section>
                 </RequireCapability>
               }
             />
           </Route>
 
-          {/* Anything unknown goes home and lets the guard sort it out. Note
-              there is no "return to the page you wanted" here, on purpose: a
-              magic link leaves the app entirely and comes back in a new tab, so
-              the intent would not survive the trip anyway — and carrying no
-              destination in the URL means this app has no redirect target for
-              anyone to aim somewhere else. */}
+          {/* Unknown routes still return through the member guard. */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

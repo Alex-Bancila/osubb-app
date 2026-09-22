@@ -28,7 +28,7 @@ select ok(
   exists (
     select 1 from pg_catalog.pg_constraint
      where conrelid = 'public.tasks'::regclass
-       and conname = 'tasks_exactly_one_origin_check'
+       and conname = 'tasks_exactly_one_origin_ck'
        and contype = 'c'
   ),
   'Tasks enforce exactly one Origin');
@@ -57,7 +57,7 @@ select throws_ok(
   $$ insert into public.tasks (title, difficulty)
      values ('Missing Origin 284', 1) $$,
   '23514', 'task_group_required',
-  'a Task rejects a missing Origin -- private.sync_task_group_origin answers before tasks_exactly_one_origin_check can (#519)');
+  'a Task rejects a missing Origin -- private.sync_task_group_origin answers before tasks_exactly_one_origin_ck can (#519)');
 select throws_ok(
   $$ insert into public.tasks (title, difficulty, dept_id, team_id)
      values ('Two Origins 284', 1, 'edu', 'team-origin-284') $$,
@@ -86,7 +86,7 @@ select throws_ok(
         set dept_id = null
       where title = 'Department Origin 284' $$,
   '23514', 'task_group_required',
-  'an existing Task cannot lose its Origin -- private.sync_task_group_origin answers before tasks_exactly_one_origin_check can (#519)');
+  'an existing Task cannot lose its Origin -- private.sync_task_group_origin answers before tasks_exactly_one_origin_ck can (#519)');
 
 select * from finish();
 rollback;

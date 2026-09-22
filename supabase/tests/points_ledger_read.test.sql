@@ -1,4 +1,4 @@
--- points_ledger_read.test.sql — #256: ordinary members read only their rows.
+-- points_points_ledger_read.test.sql — #256: ordinary members read only their rows.
 -- Runs in one transaction and rolls back, leaving demo data untouched.
 begin;
 \set osubb_test_suite true

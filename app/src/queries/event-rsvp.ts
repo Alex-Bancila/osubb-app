@@ -5,12 +5,13 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 
+import { queryErrorCode } from '../lib/query-error';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
-const RSVP_FIELDS = 'event_id, member_id, status, checked_in';
+export const RSVP_FIELDS = 'event_id, member_id, status, checked_in';
 
 type EventAttendanceRow =
   Database['public']['Tables']['event_attendance']['Row'];
@@ -74,7 +75,7 @@ function toEventRsvp(row: EventRsvpRow): EventRsvp {
 }
 
 function classifyMutationError(error: unknown): EventRsvpMutationError {
-  const code = (error as { code?: unknown } | null)?.code;
+  const code = queryErrorCode(error);
 
   if (code === 'PT400') {
     return new EventRsvpMutationError('invalid-status', error);

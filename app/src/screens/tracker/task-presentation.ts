@@ -18,6 +18,7 @@ export type TaskPresentationRow = Pick<
   | 'deadline'
   | 'completed_at'
   | 'review_round'
+  | 'group_id'
   | 'dept_id'
   | 'team_id'
   | 'project_id'

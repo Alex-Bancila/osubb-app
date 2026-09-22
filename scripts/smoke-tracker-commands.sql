@@ -22,8 +22,8 @@
 --   pg_temp.test_login_leadership and switches back with `reset role`.
 --
 -- The whole script runs inside ONE transaction and ends in ROLLBACK, so it
--- leaves the seeded database byte-identical. It never touches a row except
--- through the public wrappers.
+-- leaves the seeded database byte-identical. Work changes use public wrappers;
+-- step 23 alone prepares a rolled-back Group setting fixture under OD9.
 --
 -- It is deliberately NOT a pgTAP suite: every check is a `raise exception` via
 -- pg_temp.smoke_assert, so the FIRST wrong step aborts with a named message
@@ -39,6 +39,15 @@
 --   duplicates -> Umbrella with two Subtasks, one completed one cancelled ->
 --   Umbrella completes -> a Completed-work Request is approved ->
 --   `authenticated` cannot write any Task table directly.
+--
+-- Steps 20-23 add ADR-0009 Wave 2's Group authority to that list: a Group
+-- Manager (Coordonator) runs a Project Task end to end and creates one by
+-- Group id alone; a Group Responsible is refused on the Manager's Task and
+-- allowed on an ordinary member's; Independent-Team peers manage each other's
+-- Tasks while only BC evaluates them; and a Group's Minimum Level hides an
+-- organization-wide Opportunity from a member of that very Group. The
+-- refusals in those steps pin the reason string, not just 42501 -- see
+-- pg_temp.smoke_refused.
 --
 -- One deviation from the plan's sentence, and it is forced by the model:
 -- "Reviewer reopens -> total back -> Reviewer completes again" cannot be two
@@ -121,6 +130,33 @@ begin
     return;
   end;
   raise exception 'SMOKE FAILED: % -- the write SUCCEEDED, it must not', p_what;
+end;
+$$;
+
+-- Same contract as smoke_denied, but it also pins the REASON. 42501 alone
+-- cannot tell "the Group Role refused this" apart from "some other authority
+-- rule fired first", and the Group scenarios below are only worth running if
+-- they refuse for the rule they claim to exercise (conventions.md §3: the
+-- reason names what the thing is, not which command took it).
+create function pg_temp.smoke_refused(p_sql text, p_state text, p_reason text, p_what text)
+returns void
+language plpgsql
+as $$
+declare
+  v_state text;
+  v_msg   text;
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_msg = message_text;
+    if v_state <> p_state or v_msg <> p_reason then
+      raise exception 'SMOKE FAILED: % -- expected % %, got % (%)', p_what, p_state, p_reason, v_state, v_msg;
+    end if;
+    raise notice 'ok: % -- refused with % %', p_what, v_state, v_msg;
+    return;
+  end;
+  raise exception 'SMOKE FAILED: % -- the call SUCCEEDED, it must not', p_what;
 end;
 $$;
 
@@ -695,18 +731,319 @@ select pg_temp.smoke_denied(
      values ('edu', 'SMOKE campanie', 'd0000000-0000-0000-0000-000000000002') $$,
   'step 19: direct INSERT into public.campaigns');
 
+select pg_temp.smoke_denied(
+  $$ insert into public.groups (name, category) values ('SMOKE forged Group', 'team') $$,
+  'step 19: direct INSERT into public.groups');
+select pg_temp.smoke_denied(
+  $$ update public.groups set name = 'SMOKE forged rename' where legacy_dept_id = 'edu' $$,
+  'step 19: direct UPDATE of public.groups');
+select pg_temp.smoke_denied(
+  $$ delete from public.groups where legacy_dept_id = 'edu' $$,
+  'step 19: direct DELETE from public.groups');
+select pg_temp.smoke_denied(
+  $$ insert into public.group_members (group_id, member_id, group_role)
+     select id, 'd0000000-0000-0000-0000-000000000002', 'manager'
+     from public.groups where legacy_dept_id = 'edu' $$,
+  'step 19: direct INSERT into public.group_members');
+select pg_temp.smoke_denied(
+  $$ update public.group_members set group_role = 'manager'
+     where member_id = 'd0000000-0000-0000-0000-000000000002' $$,
+  'step 19: direct UPDATE of public.group_members');
+select pg_temp.smoke_denied(
+  $$ delete from public.group_members where member_id = 'd0000000-0000-0000-0000-000000000002' $$,
+  'step 19: direct DELETE from public.group_members');
+
 -- points_ledger is the deliberate exception: `authenticated` KEEPS insert for
--- the BC sanction path (ledger_sanction), so #345 did not revoke it. A forged
+-- the BC sanction path (points_ledger_create_sanction), so #345 did not revoke it. A forged
 -- credit must therefore be refused by RLS rather than by the ACL -- same 42501,
 -- different mechanism. A `sanction`-shaped row is used because it satisfies
 -- points_ledger's own shape constraint (only `task`/`task_reversal` rows need a
 -- task_id and an evaluation_id), so the ONLY thing left to reject it is the
--- ledger_sanction policy, which this voluntar cannot satisfy.
+-- points_ledger_create_sanction policy, which this voluntar cannot satisfy.
 select pg_temp.smoke_denied(
   $$ insert into public.points_ledger (member_id, delta, reason)
      values ('d0000000-0000-0000-0000-000000000002', 99, 'sanction') $$,
   'step 19: forged sanction row in public.points_ledger (refused by RLS, not by the ACL)');
 
+reset role;
+
+-- ==================== step 20: a Coordonator manages a Project Task end to end ====================
+select id as project_group, legacy_project_id as project_id from public.groups
+where name = 'Festivalul Studențesc 2026' \gset
+select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
+select id as ordinary from public.profiles where email = 'voluntar@demo.osubb' \gset
+select pg_temp.smoke_points(:'ordinary') as project_points_before \gset
+select pg_temp.test_login_leadership(:'coordinator');
+select public.create_task('SMOKE Group manager delivery', 'Group authority round trip', now() + interval '5 days',
+  null, null, :project_id, 'local', 'direct', :'ordinary');
+reset role;
+select id as project_task from public.tasks where title = 'SMOKE Group manager delivery' \gset
+select pg_temp.test_login_leadership(:'ordinary');
+select pg_temp.smoke_denied(
+  format($sql$select public.update_task_content(%s, %L, null, now() + interval '5 days', null)$sql$, :project_task, 'Unauthorized edit'),
+  'step 20: ordinary Project member cannot manage their Task');
+select public.start_task(:project_task);
+select public.submit_task_for_review(:project_task);
+reset role;
+select pg_temp.test_login_leadership(:'coordinator');
+select public.complete_task_review(:project_task, 2, 3, 'Coordonator confirmed delivery.');
+reset role;
+select pg_temp.smoke_assert(
+  (select status = 'completed' and group_id = :project_group from public.tasks where id = :project_task),
+  'step 20: Coordonator completes the Group-owned Project Task');
+select pg_temp.smoke_eq(pg_temp.smoke_points(:'ordinary'), :project_points_before + 2,
+  'step 20: ordinary Executor receives the exact Evaluation points');
+
+-- ---- step 20, continued: the Group-side create, and the manage commands ----
+-- Everything above reaches the Project through its LEGACY id, which the bridge
+-- turns into a Group. This half drives the other direction -- the one a Wave 3
+-- client will use -- by passing p_group_id with all three legacy Origin
+-- arguments null, and pins the legacy triple the trigger derives from it.
+-- It also runs the Coordonator's *manage* commands (update content, assign,
+-- close the queue); complete_task_review above only proves the evaluator side.
+select pg_temp.test_login_leadership(:'coordinator');
+select public.create_task(
+  p_title => 'SMOKE Group-side Origin',
+  p_description => 'Created by Group id alone',
+  p_deadline => now() + interval '6 days',
+  p_dept_id => null, p_team_id => null, p_project_id => null,
+  p_audience => 'local', p_assignment_mode => 'direct',
+  p_group_id => :project_group);
+reset role;
+select id as group_side_task from public.tasks where title = 'SMOKE Group-side Origin' \gset
+select pg_temp.smoke_assert(
+  (select group_id = :project_group and project_id = :project_id
+      and dept_id is null and team_id is null
+     from public.tasks where id = :group_side_task),
+  'step 20: a Group-only create derives the legacy Origin triple');
+select pg_temp.test_login_leadership(:'coordinator');
+select public.update_task_content(:group_side_task, 'SMOKE Group-side Origin',
+  'Managed through the Group Role', now() + interval '6 days', null);
+select public.assign_task_executor(:group_side_task, :'ordinary');
+reset role;
+select pg_temp.smoke_assert(
+  (select description = 'Managed through the Group Role' from public.tasks where id = :group_side_task)
+  and exists (select 1 from public.task_assignments
+               where task_id = :group_side_task and member_id = :'ordinary' and ended_at is null),
+  'step 20: the Coordonator edits and assigns a Task they do not execute');
+select pg_temp.test_login_leadership(:'coordinator');
+select public.create_task(
+  p_title => 'SMOKE Group-side queue',
+  p_description => 'Queue managed through the Group Role',
+  p_deadline => now() + interval '6 days',
+  p_dept_id => null, p_team_id => null, p_project_id => null,
+  p_audience => 'local', p_assignment_mode => 'public',
+  p_group_id => :project_group);
+reset role;
+select id as group_side_queue from public.tasks where title = 'SMOKE Group-side queue' \gset
+select pg_temp.test_login_leadership(:'coordinator');
+select public.set_task_queue(:group_side_queue, false);
+reset role;
+select pg_temp.smoke_assert(
+  (select queue_closed_at is not null and project_id = :project_id
+     from public.tasks where id = :group_side_queue),
+  'step 20: the Coordonator closes the Candidate Queue of a Group-side Task');
+
+-- ==================== step 21: a Responsible evaluates ordinary members, never the Manager ====================
+select id as project_group, legacy_project_id as project_id from public.groups
+where name = 'Festivalul Studențesc 2026' \gset
+select id as responsible from public.profiles where email = 'activ@demo.osubb' \gset
+select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
+select id as ordinary from public.profiles where email = 'voluntar@demo.osubb' \gset
+select pg_temp.test_login_leadership(:'coordinator');
+select public.create_task('SMOKE Manager protected', 'Manager work', now() + interval '5 days',
+  null, null, :project_id, 'local', 'direct', :'coordinator');
+select public.create_task('SMOKE Ordinary review', 'Ordinary member work', now() + interval '5 days',
+  null, null, :project_id, 'local', 'direct', :'ordinary');
+reset role;
+select id as manager_task from public.tasks where title = 'SMOKE Manager protected' \gset
+select id as ordinary_task from public.tasks where title = 'SMOKE Ordinary review' \gset
+select pg_temp.test_login_leadership(:'coordinator');
+select public.start_task(:manager_task);
+select public.submit_task_for_review(:manager_task);
+reset role;
+select pg_temp.test_login_leadership(:'ordinary');
+select public.start_task(:ordinary_task);
+select public.submit_task_for_review(:ordinary_task);
+reset role;
+select pg_temp.test_login_leadership(:'responsible');
+select pg_temp.smoke_denied(format($sql$select public.update_task_content(%s, %L, null, now() + interval '5 days', null)$sql$, :manager_task, 'Forbidden'),
+  'step 21: Responsible cannot edit the Group Manager''s Task');
+select pg_temp.smoke_denied(format('select public.complete_task_review(%s, 2, 3, %L)', :manager_task, 'Forbidden'),
+  'step 21: Responsible cannot evaluate the Group Manager''s Task');
+select public.update_task_content(:ordinary_task, 'SMOKE Ordinary review', 'Responsible prepared review', now() + interval '5 days', null);
+select public.complete_task_review(:ordinary_task, 2, 3, 'Responsible confirmed ordinary member work.');
+reset role;
+select pg_temp.smoke_assert(
+  (select status = 'completed' and description = 'Responsible prepared review' from public.tasks where id = :ordinary_task),
+  'step 21: Responsible manages and evaluates ordinary member work');
+select pg_temp.smoke_assert(
+  (select status = 'in_review' from public.tasks where id = :manager_task)
+  and not exists (select 1 from public.task_evaluations where task_id = :manager_task),
+  'step 21: denied Manager evaluation leaves status and Evaluation history untouched');
+
+-- ---- step 21, continued: the refusals name the Group rule, not just 42501 ----
+-- smoke_denied above proves only that something refused. These three pin the
+-- reason string, so a refusal arriving from an unrelated rule (a gate, a
+-- visibility miss, a wrong Origin) fails the step instead of passing it.
+select pg_temp.test_login_leadership(:'responsible');
+select pg_temp.smoke_refused(
+  format('select public.cancel_task(%s, %L)', :manager_task, 'Responsible overreach'),
+  '42501', 'task_manage_forbidden',
+  'step 21: cancelling the Group Manager''s Task is refused as task_manage_forbidden');
+select pg_temp.smoke_refused(
+  format($sql$select public.update_task_content(%s, %L, null, now() + interval '5 days', null)$sql$, :manager_task, 'Forbidden'),
+  '42501', 'task_manage_forbidden',
+  'step 21: editing the Group Manager''s Task is refused as task_manage_forbidden');
+select pg_temp.smoke_refused(
+  format('select public.complete_task_review(%s, 2, 3, %L)', :manager_task, 'Forbidden'),
+  '42501', 'task_evaluate_forbidden',
+  'step 21: evaluating the Group Manager''s Task is refused as task_evaluate_forbidden');
+reset role;
+select pg_temp.smoke_assert(
+  (select status = 'in_review' from public.tasks where id = :manager_task),
+  'step 21: three refused commands leave the Group Manager''s Task in review');
+
+-- ==================== step 22: Independent-Team peers manage, BC evaluates ====================
+select id as team_group, legacy_team_id as team_id from public.groups where name = 'Echipa Logistică' \gset
+select id as peer from public.profiles where email = 'vot@demo.osubb' \gset
+select id as bc_peer from public.profiles where email = 'bc@demo.osubb' \gset
+select pg_temp.test_login_leadership(:'peer');
+select public.create_task('SMOKE Independent peers', 'Peer planned work', now() + interval '5 days',
+  null, :'team_id', null, 'local', 'direct', :'bc_peer');
+reset role;
+select id as peer_task from public.tasks where title = 'SMOKE Independent peers' \gset
+select pg_temp.test_login_leadership(:'bc_peer');
+select public.start_task(:peer_task);
+select public.submit_task_for_review(:peer_task);
+reset role;
+select pg_temp.test_login_leadership(:'peer');
+select public.update_task_content(:peer_task, 'SMOKE Independent peers', 'Peer manages teammate work', now() + interval '5 days', null);
+select pg_temp.smoke_denied(format('select public.complete_task_review(%s, 1, 3, %L)', :peer_task, 'Peer cannot evaluate'),
+  'step 22: an Independent-Team Responsible cannot evaluate a teammate');
+reset role;
+select pg_temp.smoke_assert(
+  (select group_id = :team_group and status = 'in_review' and description = 'Peer manages teammate work'
+    from public.tasks where id = :peer_task),
+  'step 22: peer management succeeds while refused evaluation leaves the Task in review');
+select pg_temp.test_login_leadership(:'bc_peer');
+select public.complete_task_review(:peer_task, 1, 3, 'BC evaluation of Independent-Team work.');
+reset role;
+select pg_temp.smoke_eq((select status::text from public.tasks where id = :peer_task), 'completed',
+  'step 22: BC can perform the required evaluation');
+
+-- ---- step 22, continued: a peer who is NOT BC, and the refusal's reason ----
+-- Above, the teammate whose Task the peer manages is bc@ (level 6), so the
+-- management half could in principle be answered by something about BC rather
+-- than by the Independent-Team peer rule. Add a third teammate through the
+-- public roster command -- private.sync_team_groups makes every Independent-Team
+-- member a Group Responsible, so there is no "ordinary" teammate to use instead
+-- -- and drive the same pair against them.
+select id as third_peer from public.profiles where email = 'activ@demo.osubb' \gset
+select pg_temp.test_login_leadership(:'bc_peer');
+select public.add_independent_team_member(:'team_id', :'third_peer');
+reset role;
+select pg_temp.smoke_assert(
+  (select group_role = 'responsible' from public.group_members
+    where group_id = :team_group and member_id = :'third_peer'),
+  'step 22: the roster command mirrors the new teammate as a Group Responsible');
+select pg_temp.test_login_leadership(:'peer');
+select public.create_task(
+  p_title => 'SMOKE Independent peer pair',
+  p_description => 'Peer planned work for a non-BC teammate',
+  p_deadline => now() + interval '5 days',
+  p_dept_id => null, p_team_id => null, p_project_id => null,
+  p_audience => 'local', p_assignment_mode => 'direct',
+  p_executor_id => :'third_peer',
+  p_group_id => :team_group);
+reset role;
+select id as pair_task from public.tasks where title = 'SMOKE Independent peer pair' \gset
+select pg_temp.test_login_leadership(:'third_peer');
+select public.start_task(:pair_task);
+select public.submit_task_for_review(:pair_task);
+reset role;
+select pg_temp.test_login_leadership(:'peer');
+select public.update_task_content(:pair_task, 'SMOKE Independent peer pair',
+  'Peer manages a non-BC teammate', now() + interval '5 days', null);
+select pg_temp.smoke_refused(
+  format('select public.complete_task_review(%s, 1, 3, %L)', :pair_task, 'Peer cannot evaluate'),
+  '42501', 'task_evaluate_forbidden',
+  'step 22: evaluating a fellow Responsible is refused as task_evaluate_forbidden');
+reset role;
+select pg_temp.smoke_assert(
+  (select group_id = :team_group and team_id = :'team_id' and dept_id is null
+      and status = 'in_review' and description = 'Peer manages a non-BC teammate'
+     from public.tasks where id = :pair_task),
+  'step 22: the peer manages a non-BC teammate on a Group-side Independent-Team Task');
+
+-- ==================== step 23: Group Minimum Level hides and closes an org Opportunity ====================
+select id as gated_group, legacy_project_id as gated_project from public.groups
+where name = 'Festivalul Studențesc 2026' \gset
+select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
+select id as below_minimum from public.profiles where email = 'voluntar@demo.osubb' \gset
+select id as eligible from public.profiles where email = 'vot@demo.osubb' \gset
+-- OD9: only fixture setup changes a Group setting directly, as owner, inside this rollback.
+-- Wave 3 owns the public Group settings commands; all work below uses existing public commands.
+update public.groups set min_level = 3, application_level = 3 where id = :gated_group;
+select pg_temp.test_login_leadership(:'coordinator');
+select public.create_task('SMOKE Gated org Opportunity', 'Minimum Level proof', now() + interval '5 days',
+  null, null, :gated_project, 'org', 'public');
+reset role;
+select id as gated_task from public.tasks where title = 'SMOKE Gated org Opportunity' \gset
+create function pg_temp.smoke_hidden_interest(p_task bigint) returns void language plpgsql as $$
+begin
+  begin
+    perform public.express_task_interest(p_task);
+  exception when sqlstate 'PT404' then
+    if sqlerrm <> 'task_not_found' then raise; end if;
+    raise notice 'ok: step 23: below-Minimum-Level interest refused as task_not_found';
+    return;
+  end;
+  raise exception 'SMOKE FAILED: step 23 below-Minimum-Level interest succeeded';
+end;
+$$;
+select pg_temp.test_login_leadership(:'below_minimum');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 0,
+  'step 23: below-Minimum-Level member cannot discover the org Opportunity');
+-- A hidden Task must answer the same as an unknown Task, rather than leak its audience.
+select pg_temp.smoke_hidden_interest(:gated_task);
+reset role;
+select pg_temp.smoke_assert(
+  not exists (select 1 from public.task_assignments where task_id = :gated_task)
+  and not exists (select 1 from public.task_candidates where task_id = :gated_task),
+  'step 23: refused interest writes neither Assignment nor Candidature');
+select pg_temp.test_login_leadership(:'eligible');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 1,
+  'step 23: eligible outsider can discover the org Opportunity');
+select public.express_task_interest(:gated_task);
+reset role;
+select pg_temp.smoke_assert(
+  (select count(*) = 1 from public.task_assignments
+   where task_id = :gated_task and member_id = :'eligible' and ended_at is null),
+  'step 23: eligible outsider becomes Executor through the public command');
+
+-- ---- step 23, continued: it really is the Minimum Level doing the hiding ----
+-- Two facts turn "one member saw nothing" into a proof about the setting:
+-- the member who sees nothing is an explicit member of the owning Group (so
+-- membership is not what is missing), and the member who sees it is NOT
+-- (so it is the org Audience, at or above the Minimum Level, that opens it).
+select pg_temp.smoke_assert(
+  exists (select 1 from public.group_members
+           where group_id = :gated_group and member_id = :'below_minimum'),
+  'step 23: the member who cannot see the Opportunity belongs to the owning Group');
+select pg_temp.smoke_assert(
+  not exists (select 1 from public.group_members
+               where group_id = :gated_group and member_id = :'eligible'),
+  'step 23: the member who can see it belongs to the Group only through the org Audience');
+-- The brief's own persona: a Recrut, level 0, four levels under the fixture.
+select id as recruit from public.profiles where email = 'recrut@demo.osubb' \gset
+select pg_temp.test_login_leadership(:'recruit');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 0,
+  'step 23: a Recrut cannot discover the gated org Opportunity either');
+select pg_temp.smoke_refused(
+  format('select public.express_task_interest(%s)', :gated_task),
+  'PT404', 'task_not_found',
+  'step 23: a Recrut''s interest is refused as task_not_found, not as a denial');
 reset role;
 
 -- ==================== done ====================
@@ -715,8 +1052,9 @@ do $$
 begin
   raise notice '';
   raise notice '================ SMOKE TEST PASSED ================';
-  raise notice 'Every step ran through the public wrappers only, and';
-  raise notice 'authenticated could not write a single Task table.';
+  raise notice 'All 23 work scenarios ran through public wrappers;';
+  raise notice 'authenticated could not write Task or Group tables directly.';
+  raise notice 'Only the step 23 OD9 fixture used an owner-written Group setting.';
   raise notice 'Rolling back -- the database is unchanged.';
 end;
 $$;

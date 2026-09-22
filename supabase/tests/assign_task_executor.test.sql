@@ -22,7 +22,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(53);
+select plan(61);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -473,14 +473,47 @@ select ok(coalesce((
 ), false), 'assign_task_executor holds the manager''s own live profile row FOR SHARE');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
+    join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '34200000-0000-0000-0000-000000000021'
-     and membership.dept_id = 'edu'
-), false), 'assign_task_executor holds the manager''s Origin membership row FOR SHARE too (require_origin_manager''s discipline)');
+     and authority_group.legacy_dept_id = 'edu'
+), false), 'assign_task_executor holds the manager''s Group roster row FOR SHARE too (require_origin_manager''s discipline)');
+
+select ok(coalesce((
+  select 'For Share' = any(row_lock.modes)
+    from extensions.pgrowlocks('public.profiles') row_lock
+    join public.profiles candidate on candidate.ctid=row_lock.locked_row
+    where candidate.id='34200000-0000-0000-0000-000000000022'
+),false),'direct assignment holds target profile FOR SHARE, not just the FK key lock');
 
 select extensions.dblink_exec('ate_lock', 'rollback');
 select extensions.dblink_disconnect('ate_lock');
+
+-- The remote helper is fixture-only and hard-coded to the committed target.
+-- A status UPDATE is compatible with an FK key lock, but must wait for the
+-- eligibility FOR SHARE. This race fails if only that new lock is removed.
+select extensions.dblink_exec('ate_setup', $remote$
+  create function public.assignment_target_change_350() returns text
+  language plpgsql security definer set search_path='' as $body$
+  begin
+    update public.profiles set status='inactiv'
+      where id='34200000-0000-0000-0000-000000000022';
+    return 'inactiv';
+  end;
+  $body$;
+  revoke execute on function public.assignment_target_change_350() from public,anon,authenticated,service_role;
+  grant execute on function public.assignment_target_change_350() to authenticated;
+$remote$);
+select pg_temp.test_login_leadership('34200000-0000-0000-0000-000000000021');
+create temp table race350 as select * from pg_temp.test_race(
+  format($$select (public.assign_task_executor(%s,'34200000-0000-0000-0000-000000000022')).status::text$$,(select probe_task_id from r342)),
+  'select public.assignment_target_change_350()');
+select is((select result_a from race350),'todo','assignment commits with an eligible target');
+select ok((select b_waited from race350),'concurrent target deactivation waits for eligibility lock');
+select is((select result_b from race350),'inactiv','deactivation proceeds only after assignment commits');
+reset role;
+select extensions.dblink_exec('ate_setup','drop function public.assignment_target_change_350()');
 
 -- ---- cleanup: this suite leaves no committed trace ----
 select extensions.dblink_exec('ate_setup', $$
@@ -512,6 +545,31 @@ select is((select count(*) from auth.users
 select is((select count(*) from public.notifications
             where link = format('/tracker/%s', (select probe_task_id from r342))), 0::bigint,
   'no notification survives with a nulled task_id after the committed Task is deleted');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('command0','project',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.assign_task_executor((select id from g521_tasks where name='command0'),pg_temp.g521_uid(10))$$,'assign_task_executor: Group persona 2 in project');
+reset role;
+select pg_temp.g521_task('command1','project',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select lives_ok($$select public.assign_task_executor((select id from g521_tasks where name='command1'),pg_temp.g521_uid(10))$$,'assign_task_executor: Group persona 3 in project');
+reset role;
+select pg_temp.g521_task('command2','ind',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select lives_ok($$select public.assign_task_executor((select id from g521_tasks where name='command2'),pg_temp.g521_uid(10))$$,'assign_task_executor: Group persona 6 in ind');
+reset role;
+select pg_temp.g521_task('command3','dt',null,'todo','direct','task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select throws_ok($$select public.assign_task_executor((select id from g521_tasks where name='command3'),pg_temp.g521_uid(10))$$,'42501','task_manage_forbidden','assign_task_executor: Group persona 8 in dt');
+reset role;
 
 select * from finish();
 rollback;

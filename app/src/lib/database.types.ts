@@ -600,6 +600,7 @@ export type Database = {
           team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
         }
         Insert: {
           cancel_reason?: string | null
@@ -621,6 +622,7 @@ export type Database = {
           team_id?: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
+          updated_at?: string
         }
         Update: {
           cancel_reason?: string | null
@@ -642,6 +644,7 @@ export type Database = {
           team_id?: string | null
           title?: string
           type?: Database["public"]["Enums"]["event_type"]
+          updated_at?: string
         }
         Relationships: [
           {
@@ -1580,6 +1583,130 @@ export type Database = {
         }
         Relationships: []
       }
+      role_history: {
+        Row: {
+          actor_kind: string
+          changed_by: string | null
+          created_at: string
+          from_role: Database["public"]["Enums"]["member_role"]
+          from_status: Database["public"]["Enums"]["member_status"] | null
+          id: number
+          member_id: string
+          reason: string
+          to_role: Database["public"]["Enums"]["member_role"]
+          to_status: Database["public"]["Enums"]["member_status"] | null
+        }
+        Insert: {
+          actor_kind: string
+          changed_by?: string | null
+          created_at?: string
+          from_role: Database["public"]["Enums"]["member_role"]
+          from_status?: Database["public"]["Enums"]["member_status"] | null
+          id?: never
+          member_id: string
+          reason: string
+          to_role: Database["public"]["Enums"]["member_role"]
+          to_status?: Database["public"]["Enums"]["member_status"] | null
+        }
+        Update: {
+          actor_kind?: string
+          changed_by?: string | null
+          created_at?: string
+          from_role?: Database["public"]["Enums"]["member_role"]
+          from_status?: Database["public"]["Enums"]["member_status"] | null
+          id?: never
+          member_id?: string
+          reason?: string
+          to_role?: Database["public"]["Enums"]["member_role"]
+          to_status?: Database["public"]["Enums"]["member_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           id: Database["public"]["Enums"]["member_role"]
@@ -2484,6 +2611,7 @@ export type Database = {
       dept_cup: {
         Row: {
           dept_id: string | null
+          group_id: number | null
           members: number | null
           name: string | null
           points: number | null
@@ -2948,8 +3076,57 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
       }
+      campaign_report: {
+        Args: { p_campaign_id: number }
+        Returns: {
+          full_name: string
+          member_id: string
+          points: number
+          tasks_completed: number
+        }[]
+      }
+      campaign_totals: {
+        Args: { p_campaign_id: number }
+        Returns: {
+          points_total: number
+          tasks_completed: number
+          tasks_total: number
+        }[]
+      }
+      can_evaluate_task: { Args: { p_task_id: number }; Returns: boolean }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
+      cancel_event: {
+        Args: { p_event_id: number; p_reason: string }
+        Returns: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          capacity: number | null
+          created_at: string
+          created_by: string | null
+          dept_id: string | null
+          description: string | null
+          ends_at: string | null
+          group_id: number
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          min_level: number
+          project_id: number | null
+          scope: Database["public"]["Enums"]["event_scope"]
+          starts_at: string
+          team_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cancel_task: {
         Args: { p_reason: string; p_task_id: number }
         Returns: {
@@ -3123,29 +3300,50 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_campaign: {
-        Args: { p_department_id: string; p_name: string }
-        Returns: {
-          created_at: string
-          created_by: string
-          department_id: string | null
-          group_id: number
-          id: number
-          is_active: boolean
-          name: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "campaigns"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      create_campaign:
+        | {
+            Args: { p_department_id: string; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: { p_group_id: number; p_name: string }
+            Returns: {
+              created_at: string
+              created_by: string
+              department_id: string | null
+              group_id: number
+              id: number
+              is_active: boolean
+              name: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "campaigns"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       create_completed_work_request: {
         Args: {
           p_dept_id: string
           p_description: string
+          p_group_id?: number
           p_project_id: number
           p_team_id: string
         }
@@ -3174,13 +3372,12 @@ export type Database = {
       create_event: {
         Args: {
           p_capacity?: number
-          p_dept_id?: string
           p_description?: string
           p_ends_at?: string
+          p_group_id: number
           p_location?: string
-          p_scope: string
+          p_min_level?: number
           p_starts_at: string
-          p_team_id?: string
           p_title: string
           p_type: string
         }
@@ -3204,6 +3401,7 @@ export type Database = {
           team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3239,6 +3437,7 @@ export type Database = {
           p_dept_id: string
           p_description: string
           p_executor_id?: string
+          p_group_id?: number
           p_kind?: string
           p_parent_task_id?: number
           p_project_id: number
@@ -3289,6 +3488,7 @@ export type Database = {
         Args: { p_campaign_id?: number }
         Returns: {
           dept_id: string
+          group_id: number
           members: number
           name: string
           points: number
@@ -3433,12 +3633,7 @@ export type Database = {
         }
       }
       leadership_leaderboard: {
-        Args: {
-          p_campaign_id?: number
-          p_department_id?: string
-          p_project_id?: number
-          p_team_id?: string
-        }
+        Args: { p_campaign_id?: number; p_group_id?: number }
         Returns: {
           full_name: string
           member_id: string
@@ -3468,6 +3663,8 @@ export type Database = {
           difficulty: number
           duplicated_from_task_id: number
           evaluation_history: Json
+          group_id: number
+          group_name: string
           is_overdue: boolean
           member_id: string
           origin_id: string
@@ -3490,6 +3687,15 @@ export type Database = {
           task_kind: string
           title: string
           unfulfilled_at: string
+        }[]
+      }
+      managed_work_groups: {
+        Args: never
+        Returns: {
+          id: number
+          min_level: number
+          name: string
+          path: number[]
         }[]
       }
       mark_task_unfulfilled: {
@@ -3543,6 +3749,33 @@ export type Database = {
         Args: never
         Returns: {
           task_id: number
+        }[]
+      }
+      pending_request_decisions: {
+        Args: never
+        Returns: {
+          created_at: string
+          description: string
+          group_id: number
+          group_name: string
+          id: number
+          requester_id: string
+          requester_name: string
+        }[]
+      }
+      preview_task_update: {
+        Args: {
+          p_assignment_mode: string
+          p_audience: string
+          p_campaign_id: number
+          p_deadline: string
+          p_description: string
+          p_task_id: number
+          p_title: string
+        }
+        Returns: {
+          consequence: string
+          member_id: string
         }[]
       }
       provision_profile: {
@@ -3769,6 +4002,56 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_member_role: {
+        Args: {
+          p_member_id: string
+          p_role: Database["public"]["Enums"]["member_role"]
+        }
+        Returns: {
+          avatar_color: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          joined_at: string | null
+          joined_year: number | null
+          phone: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          tier: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_member_status: {
+        Args: {
+          p_member_id: string
+          p_status: Database["public"]["Enums"]["member_status"]
+        }
+        Returns: {
+          avatar_color: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          joined_at: string | null
+          joined_year: number | null
+          phone: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          tier: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_task_queue: {
         Args: { p_open: boolean; p_task_id: number }
         Returns: {
@@ -3907,6 +4190,98 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_event: {
+        Args: {
+          p_capacity: number
+          p_description: string
+          p_ends_at: string
+          p_event_id: number
+          p_group_id: number
+          p_location: string
+          p_min_level: number
+          p_starts_at: string
+          p_title: string
+          p_type: string
+        }
+        Returns: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          capacity: number | null
+          created_at: string
+          created_by: string | null
+          dept_id: string | null
+          description: string | null
+          ends_at: string | null
+          group_id: number
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          min_level: number
+          project_id: number | null
+          scope: Database["public"]["Enums"]["event_scope"]
+          starts_at: string
+          team_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_task: {
+        Args: {
+          p_accept_consequences?: boolean
+          p_assignment_mode: string
+          p_audience: string
+          p_campaign_id: number
+          p_deadline: string
+          p_description: string
+          p_task_id: number
+          p_title: string
+        }
+        Returns: {
+          assignment_mode: string | null
+          audience: string | null
+          campaign_id: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          dept_id: string | null
+          description: string | null
+          difficulty: number | null
+          duplicated_from_task_id: number | null
+          group_id: number
+          id: number
+          kind: string
+          parent_task_id: number | null
+          project_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
+          rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
+          team_id: string | null
+          title: string
+          type: string | null
+          unfulfilled_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
           isOneToOne: true
           isSetofReturn: false
         }

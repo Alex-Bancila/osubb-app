@@ -19,7 +19,7 @@
 -- submission -- #335 (evaluate_task) and #337 own those writes. Section 4
 -- hand-fixtures a Task already in that returned shape (review_round = 1,
 -- returned_to_progress_at set, status in_progress, submitted_at null per
--- tasks_submitted_at_state_check) and asserts both survive a resubmit
+-- tasks_submitted_at_state_ck) and asserts both survive a resubmit
 -- byte-for-byte.
 --
 -- The Umbrella case (section 6): an Umbrella never has an Executor -- no
@@ -43,7 +43,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(59);
+select plan(65);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -673,6 +673,40 @@ select extensions.dblink_exec('tp_setup', $$
     '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
 $$);
 select extensions.dblink_disconnect('tp_setup');
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+reset role;
+select pg_temp.g521_task('executor0','project',2,'in_progress','direct');
+update public.tasks set created_by=pg_temp.g521_uid(2) where id=(select id from g521_tasks where name='executor0');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.submit_task_for_review((select id from g521_tasks where name='executor0'))$$,'task_progress_commands: Executor persona 2 remains authorized');
+reset role;
+reset role;
+select pg_temp.g521_task('executor1','project',4,'in_progress','direct');
+update public.tasks set created_by=pg_temp.g521_uid(4) where id=(select id from g521_tasks where name='executor1');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(4));
+select lives_ok($$select public.submit_task_for_review((select id from g521_tasks where name='executor1'))$$,'task_progress_commands: Executor persona 4 remains authorized');
+reset role;
+select results_eq($$select distinct member_id from public.notifications where task_id=(select id from g521_tasks where name='executor1') order by 1$$,$$select pg_temp.g521_uid(2)$$,'Group Manager alone receives fallback work notifications');
+reset role;
+select pg_temp.g521_task('executor2','ind',7,'in_progress','direct');
+update public.tasks set created_by=pg_temp.g521_uid(7) where id=(select id from g521_tasks where name='executor2');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(7));
+select lives_ok($$select public.submit_task_for_review((select id from g521_tasks where name='executor2'))$$,'task_progress_commands: Executor persona 7 remains authorized');
+reset role;
+select ok(exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(6)) and exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(1)),'Manager-less peers and BC receive fallback work notifications');
+reset role;
+select pg_temp.g521_task('executor3','dt',8,'in_progress','direct');
+update public.tasks set created_by=pg_temp.g521_uid(8) where id=(select id from g521_tasks where name='executor3');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select lives_ok($$select public.submit_task_for_review((select id from g521_tasks where name='executor3'))$$,'task_progress_commands: Executor persona 8 remains authorized');
+reset role;
 
 select * from finish();
 rollback;

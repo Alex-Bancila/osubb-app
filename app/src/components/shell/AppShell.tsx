@@ -1,8 +1,6 @@
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import iconDark from '../../assets/brand/osubb-icon-on-dark.png';
-import iconLight from '../../assets/brand/osubb-icon-on-light.png';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
@@ -13,6 +11,7 @@ import { cn } from '../../lib/utils';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
+import { useTaskManagement } from '../../queries/task-tabs';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -167,13 +166,18 @@ export default function AppShell() {
   const profile = useMyProfile();
   const roles = useRoles();
   const unreadNotifications = useUnreadNotificationCount();
+  // The same cached can_manage_tasks() read the Tracker uses; a Group Role is
+  // not in the claims, so the level capabilities cannot answer this.
+  const workManagement = useTaskManagement();
   const roleLabel =
     (claims && roles.data?.get(claims.member_role)?.name) ??
     claims?.member_role ??
     '';
 
   const visible = NAV_ITEMS.filter(
-    (item) => !item.capability || can(claims, item.capability),
+    (item) =>
+      (!item.capability || can(claims, item.capability)) &&
+      (!item.requiresWorkManagement || workManagement.data === true),
   );
   const tabs = TAB_ORDER.map((path) =>
     visible.find((item) => item.path === path),
@@ -251,12 +255,12 @@ export default function AppShell() {
           <span className="shrink-0 lg:hidden" aria-hidden="true">
             <img
               className="h-8 w-auto object-contain dark:hidden"
-              src={iconLight}
+              src={logoLight}
               alt=""
             />
             <img
               className="hidden h-8 w-auto object-contain dark:block"
-              src={iconDark}
+              src={logoDark}
               alt=""
             />
           </span>
@@ -267,7 +271,18 @@ export default function AppShell() {
       </Sheet>
 
       <main className="relative min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain [grid-area:main] [scrollbar-gutter:stable]">
-        <Outlet />
+        <>
+          {location.state?.leadershipDenied === true && (
+            <p
+              role="alert"
+              className="m-4 rounded-lg border border-border bg-card p-4"
+            >
+              Clasamentul și istoricul membrilor sunt disponibile doar
+              conducerii OSUBB.
+            </p>
+          )}
+          <Outlet />
+        </>
       </main>
 
       <nav
@@ -284,7 +299,7 @@ export default function AppShell() {
               className={({ isActive }) =>
                 cn(
                   'flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10.5px] font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-                  isActive && 'text-primary',
+                  isActive && 'text-red-700',
                 )
               }
             >
