@@ -24,9 +24,14 @@ const tasks = [
       id: 2,
       title: 'A viitor',
       deadline: '2026-09-20T10:00:00Z',
-      dept_id: null,
-      project_id: 1,
-      project: { name: 'Gala' },
+      group_id: 30,
+      group: {
+        name: 'Gala',
+        short: null,
+        color: null,
+        category: 'project',
+        path: [30],
+      },
     }),
     now,
   ),
@@ -54,7 +59,7 @@ describe('Manager Task filters', () => {
     await user.selectOptions(screen.getByLabelText('Stare'), 'feedback');
     await user.type(screen.getByRole('searchbox'), 'urgent');
     expect(titles()).toEqual(['Z urgent']);
-    await user.selectOptions(screen.getByLabelText('Origine'), 'project:1');
+    await user.selectOptions(screen.getByLabelText('Origine'), '30');
     expect(
       screen.getByText('Niciun task nu corespunde filtrelor.'),
     ).toBeVisible();

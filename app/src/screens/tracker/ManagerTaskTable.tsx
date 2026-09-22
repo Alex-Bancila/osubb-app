@@ -6,8 +6,7 @@ import {
 import { Button } from '../../components/ui/button';
 import type { TaskPresentation } from './task-presentation';
 
-const originKey = (task: TaskPresentation) =>
-  `${task.origin.kind}:${task.origin.id}`;
+const originKey = (task: TaskPresentation) => String(task.origin.id);
 
 function taskColumns(
   onOpenTask?: (id: number) => void,

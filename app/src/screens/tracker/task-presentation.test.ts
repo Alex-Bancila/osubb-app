@@ -1,36 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
+  taskOrigin,
   toTaskPresentation,
   type TaskPresentationRow,
   type TaskStatus,
 } from './task-presentation';
+import { taskRow as sharedTaskRow } from '../../test/task-fixtures';
 
 const now = new Date('2026-09-15T12:00:00Z');
 function taskRow(
   overrides: Partial<TaskPresentationRow> = {},
 ): TaskPresentationRow {
-  return {
-    id: 1,
-    group_id: 1,
-    title: 'Pregătește materialele',
-    description: null,
-    status: 'todo',
+  return sharedTaskRow({
     deadline: '2026-09-15T10:00:00Z',
-    completed_at: null,
-    review_round: 0,
-    dept_id: 'edu',
-    team_id: null,
-    project_id: null,
-    assignment_mode: 'direct',
-    audience: 'local',
-    kind: 'task',
-    parent_task_id: null,
-    campaign_id: null,
-    duplicated_from_task_id: null,
-    queue_closed_at: null,
-    department: { name: 'Educațional', color: 'var(--dept-edu)' },
+    assignments: undefined,
     ...overrides,
-  };
+  });
 }
 
 describe('TaskPresentation', () => {
@@ -131,43 +116,68 @@ describe('TaskPresentation', () => {
     ).toBe(false);
   });
 
-  it('names every Origin without inferring authority or leaking hidden names', () => {
-    expect(toTaskPresentation(taskRow(), now).origin).toMatchObject({
-      kind: 'department',
-      id: 'edu',
+  it('labels the Origin from the Task’s Group embed', () => {
+    expect(toTaskPresentation(taskRow(), now).origin).toEqual({
+      id: 1,
       label: 'Departament · Educațional',
+      color: 'var(--dept-edu)',
     });
     expect(
-      toTaskPresentation(
-        taskRow({
-          dept_id: null,
-          team_id: 'it',
-          team: { name: 'IT', dept_id: 'diverse' },
-        }),
-        now,
-      ).origin,
-    ).toMatchObject({ kind: 'team', id: 'it', label: 'Echipă · IT' });
+      taskOrigin({
+        group_id: 21,
+        group: {
+          name: 'IT',
+          short: null,
+          color: null,
+          category: 'team',
+          path: [4, 21],
+        },
+      }),
+    ).toEqual({ id: 21, label: 'Echipă · IT', color: null });
     expect(
-      toTaskPresentation(
-        taskRow({
-          dept_id: null,
-          team_id: 'independent',
-          team: { name: 'Independentă', dept_id: null },
-        }),
-        now,
-      ).origin.kind,
-    ).toBe('team');
-    expect(
-      toTaskPresentation(
-        taskRow({ dept_id: null, project_id: 2, project: { name: 'Gala' } }),
-        now,
-      ).origin.label,
+      taskOrigin({
+        group_id: 30,
+        group: {
+          name: 'Gala',
+          short: null,
+          color: null,
+          category: 'project',
+          path: [30],
+        },
+      }).label,
     ).toBe('Proiect · Gala');
+    // A category the app has no noun for shows the Group's own name.
     expect(
-      toTaskPresentation(taskRow({ department: null }), now).origin.label,
-    ).toBe('Departament · Nume indisponibil');
+      taskOrigin({
+        group_id: 5,
+        group: {
+          name: 'OSUBB',
+          short: 'OSUBB',
+          color: '#c8102e',
+          category: 'organization',
+          path: [5],
+        },
+      }),
+    ).toEqual({ id: 5, label: 'OSUBB', color: '#c8102e' });
+  });
+
+  it('never leaks an id when RLS withholds the Origin Group', () => {
+    expect(toTaskPresentation(taskRow({ group: null }), now).origin).toEqual({
+      id: 1,
+      label: 'Origine indisponibilă',
+      color: null,
+    });
     expect(
-      toTaskPresentation(taskRow({ dept_id: null }), now).origin.label,
+      taskOrigin({
+        group_id: 9,
+        group: {
+          name: '  ',
+          short: null,
+          color: '#000000',
+          category: 'team',
+          path: [9],
+        },
+      }).label,
     ).toBe('Origine indisponibilă');
   });
 

@@ -32,25 +32,13 @@ export default function DeptCupCard() {
   const cup = useDeptCup();
   const groups = useGroups();
 
-  // Wave 2 stack: switches to group_id. `public.dept_cup` still keys its rows
-  // by `dept_id` on `main`, so the Group is reached through the Wave 1 bridge
-  // column `groups.legacy_dept_id`; the moment the view carries `group_id`,
-  // this index, the `legacy_dept_id` in `useGroups()`'s select and the lookup
-  // below all go away together.
-  const groupByDeptId = new Map(
-    [...(groups.data?.values() ?? [])]
-      .filter((group) => group.legacy_dept_id !== null)
-      .map((group) => [group.legacy_dept_id as string, group]),
-  );
-
   const max = Math.max(1, ...(cup.data ?? []).map((row) => row.points ?? 0));
 
   // #200 — a row exists the instant `dept_cup` resolves, but its Group may
   // not: `groups` is a second, independent query. Rendering rows as soon as
-  // `cup` settles, while `groupByDeptId` is still empty because `groups` is
-  // still in flight, is exactly how `row.dept_id` ('edu', 'pr', …) used to
-  // flash on screen before its Group's name and colour arrived. Waiting on
-  // both — the same shape `MyPointsCard` already uses for its own two
+  // `cup` settles, while `groups` is still in flight, is exactly how a raw
+  // legacy id ('edu', 'pr', …) used to flash on screen before its Group's
+  // name and colour arrived. Waiting on both — the same shape `MyPointsCard` already uses for its own two
   // queries — means no row is ever painted before its Group lookup can
   // answer, so there is no frame in which a raw id is the fallback.
   const isPending = cup.isPending || groups.isPending;
@@ -73,15 +61,16 @@ export default function DeptCupCard() {
       ) : (
         <ul className="cup-list">
           {cup.data.map((row) => {
-            const group = row.dept_id
-              ? groupByDeptId.get(row.dept_id)
-              : undefined;
+            const group =
+              row.group_id === null
+                ? undefined
+                : groups.data?.get(row.group_id);
             const points = row.points ?? 0;
             const width = `${Math.round((Math.max(0, points) / max) * 100)}%`;
 
             return (
               <li
-                key={row.dept_id}
+                key={row.group_id}
                 /* The Group's colour reaches CSS as a variable so the tag's
                    tint can be mixed from it there, instead of hardcoding an
                    alpha value into an inline style. */
@@ -91,11 +80,10 @@ export default function DeptCupCard() {
                   } as CSSProperties
                 }
               >
-                {/* An id genuinely matching no Group (RLS withheld it, or the
-                    bridge is stale) is not a name — '—' is the same neutral
-                    ink-coloured fallback the row's colour already takes,
-                    never the raw legacy id and never a second, hard-coded
-                    department map. */}
+                {/* A Group id matching no readable Group (RLS withheld it) is
+                    not a name — '—' is the same neutral ink-coloured fallback
+                    the row's colour already takes, never a raw id and never a
+                    second, hard-coded department map. */}
                 <span className="cup-tag">{group?.short ?? '—'}</span>
                 <div className="cup-body">
                   <div className="cup-line">
