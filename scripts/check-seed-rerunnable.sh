@@ -202,9 +202,15 @@ values ('Festivalul Studențesc 2026', 'active',
         'e2750000-0000-0000-0000-000000000001');
 SQL
 
+broadcasts_before=$(run_sql -c "select count(*) from notifications where member_id='e2750000-0000-0000-0000-000000000001' and title like 'Anunț nou:%'")
 before=$(run_sql -f scripts/seed-fingerprint.sql)
 run_sql -1 -f supabase/seed.sql
 after=$(run_sql -f scripts/seed-fingerprint.sql)
+broadcasts_after=$(run_sql -c "select count(*) from notifications where member_id='e2750000-0000-0000-0000-000000000001' and title like 'Anunț nou:%'")
+if [ "$broadcasts_after" != "$broadcasts_before" ]; then
+  echo "::error::Re-seeding broadcast demo Announcements to a real Member." >&2
+  exit 1
+fi
 
 if [ "$before" != "$after" ]; then
   echo "::error::Applying supabase/seed.sql twice changed the data. Staging applies this file to a live database; it must be safe to run again."
