@@ -81,6 +81,7 @@
   color: var(--text-faint);
 }
 
+/* The Profile screen's points total (main, after #376 was written). */
 .bignum {
   margin: 0;
   font-size: var(--fs-3xl);
@@ -220,6 +221,10 @@
   background: var(--surface-3);
   color: var(--text-muted);
   white-space: nowrap;
+}
+.chip--todo {
+  background: var(--surface);
+  color: var(--ink-700);
 }
 .chip--completed {
   background: var(--success-050);

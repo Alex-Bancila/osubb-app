@@ -19,6 +19,8 @@
 export const keys = {
   points: {
     all: ['points'] as const,
+    board: (memberId: string | undefined) =>
+      ['points', 'board', { memberId }] as const,
     me: (memberId: string | undefined) =>
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
@@ -32,6 +34,13 @@ export const keys = {
       ['profile', 'me', { memberId }] as const,
     groups: (memberId: string | undefined) =>
       ['profile', 'groups', { memberId }] as const,
+  },
+  /* Other members as the viewer may see them. Keyed by viewer too: what a
+     profile shows depends on who is looking (contact details, rosters). */
+  members: {
+    all: ['members'] as const,
+    profile: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'profile', { memberId, viewerId }] as const,
   },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare

@@ -18,7 +18,7 @@ it('loads only pending candidates for one Task in queue order', async () => {
         id: 31,
         member_id: 'member-1',
         joined_at: '2026-09-18T08:00:00Z',
-        member: { full_name: 'Ana Pop' },
+        member: { full_name: 'Ana Pop', avatar_color: '#0055aa' },
       },
       {
         id: 32,
@@ -40,12 +40,14 @@ it('loads only pending candidates for one Task in queue order', async () => {
       id: 31,
       memberId: 'member-1',
       memberName: 'Ana Pop',
+      avatarColor: '#0055aa',
       joinedAt: '2026-09-18T08:00:00Z',
     },
     {
       id: 32,
       memberId: 'member-2',
       memberName: 'Mihai Ionescu',
+      avatarColor: null,
       joinedAt: '2026-09-18T08:00:00Z',
     },
   ]);
