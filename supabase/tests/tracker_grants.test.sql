@@ -555,7 +555,7 @@ insert into pinned_private_functions (proname, args, category) values
 
 select is(
   (select count(*) from pinned_private_functions)::int, 126,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers and #370''s Event creation implementation');
+  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers, #370''s Event creation implementation, and #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
