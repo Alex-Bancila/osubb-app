@@ -29,15 +29,21 @@ export type EvaluationInput = {
   rating: number;
   note: string;
 };
-export function reviewError(code?: string) {
+/** Per-action copy for the two refusals that name what was being attempted. */
+export type ReviewErrorCopy = { forbidden: string; failed: string };
+const evaluationCopy: ReviewErrorCopy = {
+  forbidden: 'Nu mai ai permisiunea de a evalua acest task.',
+  failed: 'Nu am putut salva evaluarea. Încearcă din nou.',
+};
+export function reviewError(code?: string, copy = evaluationCopy) {
   return new Error(
     code === 'PT409'
       ? 'Taskul s-a schimbat. Verifică starea actuală înainte de a încerca din nou.'
       : code === '42501'
-        ? 'Nu mai ai permisiunea de a evalua acest task.'
+        ? copy.forbidden
         : code === 'PT404'
           ? 'Taskul nu mai este disponibil.'
-          : 'Nu am putut salva evaluarea. Încearcă din nou.',
+          : copy.failed,
   );
 }
 export async function evaluateTask(
