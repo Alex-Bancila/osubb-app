@@ -1,5 +1,11 @@
 import * as axe from 'axe-core';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ query: vi.fn(), refetch: vi.fn() }));
@@ -8,6 +14,13 @@ vi.mock('../../queries/task-form-options', () => ({
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { ManagedTaskForm } from './ManagedTaskForm';
+async function pickOrigin(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    screen.getByRole('combobox', { name: 'Grup de origine (obligatoriu)' }),
+  );
+  await user.click(await screen.findByRole('option', { name: 'Origin' }));
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+}
 it('distinguishes loading, safe retryable failures, and no managed origins', async () => {
   state.query.mockReturnValue({ isPending: true });
   const view = render(<ManagedTaskForm onDraft={vi.fn()} />);
@@ -52,10 +65,7 @@ it('rechecks current origins before releasing a draft and preserves entered cont
     target: { value: '2026-10-01T12:30' },
   });
   await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
-  await user.selectOptions(
-    screen.getByLabelText('Grup de origine (obligatoriu)'),
-    '3',
-  );
+  await pickOrigin(user);
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).not.toHaveBeenCalled();
   expect(screen.getByRole('alert')).toHaveTextContent('Nu mai poți pregăti');
@@ -90,10 +100,7 @@ it('maps authoritative submission errors and prevents duplicate commands while r
     target: { value: '2026-10-01T12:30' },
   });
   await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
-  await user.selectOptions(
-    screen.getByLabelText('Grup de origine (obligatoriu)'),
-    '3',
-  );
+  await pickOrigin(user);
   await user.dblClick(screen.getByRole('button', { name: 'Continuă' }));
   expect(state.refetch).toHaveBeenCalledOnce();
   expect(screen.getByRole('button', { name: 'Continuă' })).toBeDisabled();

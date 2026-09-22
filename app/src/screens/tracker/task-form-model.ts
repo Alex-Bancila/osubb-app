@@ -107,6 +107,13 @@ export function taskDraft(
   if (values.deadline && !deadline)
     return 'Alege un termen valid, în ora României.';
   const umbrella = values.kind === 'umbrella';
+  // Send what the form shows: a Campaign that is no longer offered for this
+  // Origin (the options were refreshed) is displayed as none, so it is none.
+  const campaignId = campaignsFor(origin, options).some(
+    (campaign) => campaign.id === values.campaignId,
+  )
+    ? values.campaignId
+    : null;
   const draft: TaskDraft = {
     title: values.title.trim(),
     description: values.description.trim() || null,
@@ -120,7 +127,7 @@ export function taskDraft(
       !umbrella && values.assignmentMode === 'direct'
         ? values.executorId
         : null,
-    campaignId: umbrella ? null : values.campaignId,
+    campaignId: umbrella ? null : campaignId,
   };
   return validateTaskDraft(draft, options) ?? draft;
 }
