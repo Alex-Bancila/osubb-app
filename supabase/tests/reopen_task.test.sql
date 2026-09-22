@@ -1361,6 +1361,9 @@ select lives_ok(format($outer$ select extensions.dblink_exec('rt_dl_a', %L) $out
 select extensions.dblink_exec('rt_dl_a', 'rollback');
 select is(pg_temp.dl_reopen_result(), 'in_progress',
   'and the reopen itself comes back with a status, never a 40P01 -- once A lets the Subtask go it finishes normally, so the weaker parent lock costs this command nothing');
+-- #596: dl_reopen_result took the one result it came for; the rollback below
+-- is a synchronous command and needs the asynchronous queue emptied first.
+select pg_temp.test_drain('rt_dl_b');
 select extensions.dblink_exec('rt_dl_b', 'rollback');
 select extensions.dblink_disconnect('rt_dl_a');
 select extensions.dblink_disconnect('rt_dl_b');

@@ -2,12 +2,12 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { EventPresentation } from '../../queries/events';
-import type { Department } from '../../queries/reference';
+import type { EventGroup, EventPresentation } from '../../queries/events';
+import type { Group } from '../../queries/reference';
 
 const hooks = vi.hoisted(() => ({
   useUpcomingEvents: vi.fn(),
-  useDepartments: vi.fn(),
+  useGroups: vi.fn(),
   useEventRsvp: vi.fn(),
   useSetEventRsvp: vi.fn(),
 }));
@@ -17,7 +17,7 @@ vi.mock('../../queries/events', () => ({
 }));
 
 vi.mock('../../queries/reference', () => ({
-  useDepartments: hooks.useDepartments,
+  useGroups: hooks.useGroups,
 }));
 
 vi.mock('../../queries/event-rsvp', () => ({
@@ -28,15 +28,39 @@ vi.mock('../../queries/event-rsvp', () => ({
 
 import CalendarScreen from './CalendarScreen';
 
-const departments = new Map<string, Department>([
+const eduGroup: EventGroup = {
+  name: 'Educațional',
+  short: 'EDU',
+  color: '#284C93',
+  category: 'department',
+  path: [7],
+  is_organization: false,
+};
+
+const socialMediaGroup: EventGroup = {
+  name: 'Social Media',
+  short: null,
+  color: null,
+  category: 'team',
+  path: [7, 12],
+  is_organization: false,
+};
+
+const groups = new Map<number, Group>([
   [
-    'edu',
+    7,
     {
-      id: 'edu',
+      id: 7,
       name: 'Educațional',
       short: 'EDU',
       color: '#284C93',
-      kind: 'department',
+      category: 'department',
+      path: [7],
+      parent_id: null,
+      min_level: 0,
+      status: 'active',
+      is_organization: false,
+      legacy_dept_id: 'edu',
     },
   ],
 ]);
@@ -46,9 +70,8 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     id: 1,
     title: 'Ședință Educațional',
     type: 'sedinta',
-    scope: 'dept',
-    departmentId: 'edu',
-    teamId: null,
+    groupId: 7,
+    group: eduGroup,
     startsAt: '2026-08-30T07:00:00.000Z',
     endsAt: '2026-08-30T09:00:00.000Z',
     dayKey: '2026-08-30',
@@ -79,7 +102,7 @@ function setEventsQuery(overrides: Record<string, unknown> = {}): {
 
 describe('CalendarScreen', () => {
   beforeEach(() => {
-    hooks.useDepartments.mockReturnValue({ data: departments });
+    hooks.useGroups.mockReturnValue({ data: groups });
     hooks.useEventRsvp.mockReturnValue({
       data: null,
       error: null,
@@ -141,8 +164,15 @@ describe('CalendarScreen', () => {
           id: 2,
           title: 'Adunarea Generală',
           type: 'eveniment',
-          scope: 'org',
-          departmentId: null,
+          groupId: 5,
+          group: {
+            name: 'OSUBB',
+            short: 'ORG',
+            color: '#ED2025',
+            category: 'organization',
+            path: [5],
+            is_organization: true,
+          },
           startsAt: '2026-08-31T15:00:00.000Z',
           endsAt: null,
           dayKey: '2026-08-31',
@@ -176,7 +206,7 @@ describe('CalendarScreen', () => {
     expect(screen.getAllByRole('article')).toHaveLength(2);
   });
 
-  it('shows department identity, time, place, and informational capacity', () => {
+  it('shows Group identity, time, place, and informational capacity', () => {
     setEventsQuery({ data: [event()] });
 
     render(<CalendarScreen />);
@@ -193,6 +223,49 @@ describe('CalendarScreen', () => {
       within(card).getByText('Capacitate: 30 de persoane'),
     ).toBeInTheDocument();
     expect(screen.queryByText('edu')).not.toBeInTheDocument();
+  });
+
+  // A Department Team's Group carries no colour of its own — `groups.color` is
+  // mirrored from `departments.color` and `teams` has no such column — so the
+  // card takes its Department's. Mutation this catches: delete the ancestor
+  // walk in eventAccentColor and this card goes flat `var(--ink-400)`, taking
+  // the category icon with it.
+  it("gives a Child Group's card its Department's colour", () => {
+    setEventsQuery({
+      data: [
+        event({
+          title: 'Ședință Social Media',
+          groupId: 12,
+          group: socialMediaGroup,
+        }),
+      ],
+    });
+
+    render(<CalendarScreen />);
+
+    expect(
+      screen.getByRole('article', { name: 'Ședință Social Media' }),
+    ).toHaveStyle({ '--event-accent': '#284C93' });
+  });
+
+  // The Event's own Group rides with the Event; the Groups the member may read
+  // are what name its parent. Mutation this catches: stop passing
+  // `groups.data` into EventCard and the Child Group loses its Department.
+  it('names a Child Group by the Department above it', () => {
+    setEventsQuery({
+      data: [
+        event({
+          title: 'Ședință Social Media',
+          groupId: 12,
+          group: socialMediaGroup,
+        }),
+      ],
+    });
+
+    render(<CalendarScreen />);
+
+    const card = screen.getByRole('article', { name: 'Ședință Social Media' });
+    expect(within(card).getByText('Echipă · Educațional')).toBeInTheDocument();
   });
 
   it('offers an RSVP choice on every visible event card', () => {

@@ -77,9 +77,6 @@ export default function MyPointsCard({
               {roleLabel}
             </span>
           )}
-          {profile.data?.tier && (
-            <span className="chip">{profile.data.tier}</span>
-          )}
         </div>
       </div>
 
