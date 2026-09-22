@@ -17,6 +17,7 @@ import { useAuth } from '../../lib/auth';
 import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskDuplicateControl } from './TaskDuplicateControl';
+import { TaskActionSuccess } from './TaskActionSuccess';
 import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { UmbrellaTaskSection } from './UmbrellaTaskSection';
@@ -199,10 +200,13 @@ function TaskDetails({
 export function TaskDetailsSheet({
   taskId,
   managedTaskIds = new Set<number>(),
+  notice = null,
   onClose,
 }: {
   taskId: number | null;
   managedTaskIds?: ReadonlySet<number>;
+  /** A confirmation for the opened Task, e.g. after it was just created. */
+  notice?: string | null;
   onClose: () => void;
 }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -235,6 +239,11 @@ export function TaskDetailsSheet({
               Închide
             </SheetClose>
           </div>
+          {taskId !== null && notice && relatedId === null && (
+            <div className="mb-5">
+              <TaskActionSuccess>{notice}</TaskActionSuccess>
+            </div>
+          )}
           {taskId !== null && (
             <TaskDetails
               key={relatedId ?? taskId}

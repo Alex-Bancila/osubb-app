@@ -80,6 +80,7 @@ const commandErrors: Record<string, string> = {
   title_required: 'Scrie titlul taskului.',
   deadline_required: 'Alege termenul taskului.',
   invalid_origin: 'Alege un grup de origine disponibil.',
+  task_group_required: 'Alege exact un grup de origine.',
   invalid_audience: 'Alege o audiență validă pentru task.',
   invalid_assignment_mode: 'Alege atribuirea directă sau publică.',
   invalid_task_kind: 'Alege un tip de task valid.',

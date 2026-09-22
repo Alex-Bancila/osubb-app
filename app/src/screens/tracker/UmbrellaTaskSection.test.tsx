@@ -12,7 +12,7 @@ vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/task-umbrella', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/task-umbrella')>()),
   useCompleteUmbrella: () => ({ mutateAsync: complete }),
-  useCreateSubtask: () => ({ mutateAsync: create, isPending: false }),
+  useCreateTask: () => ({ mutateAsync: create, isPending: false }),
 }));
 vi.mock('./ManagedTaskForm', () => ({
   ManagedTaskForm: ({
