@@ -81,4 +81,15 @@ describe('Dialog', () => {
     await screen.findByRole('dialog', { name: 'Confirmare' });
     expect(screen.queryByRole('button', { name: 'Închide' })).toBeNull();
   });
+
+  it('opens without its scale and fade under reduced motion (#219)', async () => {
+    const user = userEvent.setup();
+    render(<RenameDialog />);
+    await user.click(screen.getByRole('button', { name: 'Redenumește' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.className).toContain('motion-reduce:transition-none');
+    expect(
+      document.querySelector('[data-slot="dialog-overlay"]')?.className,
+    ).toContain('motion-reduce:transition-none');
+  });
 });
