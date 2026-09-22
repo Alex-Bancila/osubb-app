@@ -16,6 +16,11 @@ vi.mock('../../queries/task-candidate-selection', () => ({
   useSelectTaskCandidate: () => hooks.selection,
 }));
 
+const profileHook = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/member-profile', () => ({
+  useMemberProfile: profileHook,
+}));
+
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 
 describe('Task candidate selector', () => {
@@ -50,16 +55,55 @@ describe('Task candidate selector', () => {
     const submit = screen.getByRole('button', { name: 'Alege executorul' });
     expect(submit).toBeDisabled();
     await user.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    expect(submit).toBeDisabled();
+    await user.click(
+      screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
+    );
     await user.click(submit);
 
     expect(hooks.selection.mutateAsync).toHaveBeenCalledWith({
       taskId: 17,
       candidateId: 31,
+      closeRemaining: false,
     });
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Ana Pop este acum executorul taskului.',
     );
-    expect(screen.getByText(/coada rămâne deschisă/i)).toBeVisible();
+  });
+
+  it('closes the remaining candidatures only after an explicit decision', async () => {
+    render(<TaskCandidateSelector taskId={17} />);
+    await userEvent.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'Închide candidaturile rămase' }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Alege executorul' }),
+    );
+    expect(hooks.selection.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      taskId: 17,
+      candidateId: 31,
+      closeRemaining: true,
+    });
+  });
+
+  it('omits the decision when no candidates remain', async () => {
+    hooks.candidates.mockReturnValue({
+      ...hooks.candidates(),
+      data: hooks.candidates().data.slice(0, 1),
+    });
+    render(<TaskCandidateSelector taskId={17} />);
+    expect(
+      screen.queryByText('Ce se întâmplă cu celelalte candidaturi?'),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Alege executorul' }),
+    );
+    expect(hooks.selection.mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      taskId: 17,
+      candidateId: 31,
+    });
   });
 
   it('preserves the selection and refreshes the queue after a race conflict', async () => {
@@ -81,6 +125,9 @@ describe('Task candidate selector', () => {
 
     const ana = screen.getByRole('radio', { name: /Ana Pop/ });
     await user.click(ana);
+    await user.click(
+      screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
+    );
     await user.click(screen.getByRole('button', { name: 'Alege executorul' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -98,6 +145,9 @@ describe('Task candidate selector', () => {
     render(<TaskCandidateSelector taskId={17} />);
 
     await user.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await user.click(
+      screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
+    );
     await user.click(screen.getByRole('button', { name: 'Alege executorul' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -139,9 +189,47 @@ describe('Task candidate selector', () => {
     expect(screen.getByText('Nu există persoane în coadă.')).toBeVisible();
   });
 
+  it('moves between candidates with the arrow keys', async () => {
+    const user = userEvent.setup();
+    render(<TaskCandidateSelector taskId={17} />);
+    await user.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('radio', { name: /Mihai Ionescu/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Ana Pop/ })).not.toBeChecked();
+  });
+
+  it('opens a candidate’s profile without selecting them', async () => {
+    profileHook.mockReturnValue({
+      data: {
+        id: 'member-2',
+        fullName: 'Mihai Ionescu',
+        avatarColor: null,
+        roleLabel: 'Voluntar',
+        joinedYear: 2025,
+        groups: [],
+        email: null,
+        phone: null,
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<TaskCandidateSelector taskId={17} />);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Profilul membrului Mihai Ionescu' }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Mihai Ionescu' }),
+    ).toHaveTextContent('Voluntar');
+    expect(profileHook).toHaveBeenCalledWith('member-2');
+    expect(
+      screen.getByRole('radio', { name: /Mihai Ionescu/, hidden: true }),
+    ).not.toBeChecked();
+  });
+
   it('uses semantic controls with no accessibility violations', async () => {
     const { container } = render(<TaskCandidateSelector taskId={17} />);
-    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
     expect((await axe.run(container)).violations).toEqual([]);
   });
 });
