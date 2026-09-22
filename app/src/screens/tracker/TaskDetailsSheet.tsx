@@ -1,3 +1,4 @@
+import { TaskAssignControl } from './TaskAssignControl';
 import { TaskCancelControl } from './TaskCancelControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
@@ -66,6 +67,15 @@ function TaskDetails({
         <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
       )}
       <TaskEditControl task={query.data.task} canManage={canManage} />
+      <TaskAssignControl
+        taskId={taskId}
+        groupId={query.data.task.group_id}
+        status={task.status}
+        kind={task.kind}
+        assignmentMode={task.assignmentMode}
+        hasExecutor={task.executor !== null}
+        canManage={canManage}
+      />
       <TaskCancelControl
         taskId={taskId}
         status={task.status}
