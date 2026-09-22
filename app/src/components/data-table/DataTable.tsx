@@ -53,6 +53,7 @@ type DataTableProps<TData extends RowData> = {
   initialSorting?: SortingState;
   prioritySort?: SortingState[number];
   rowClassName?: (row: TData) => string;
+  onRowClick?: (row: TData) => void;
 };
 
 function columnLabel<TData extends RowData>(
@@ -99,6 +100,7 @@ function DataTable<TData extends RowData>({
   initialSorting = [],
   prioritySort,
   rowClassName,
+  onRowClick,
 }: DataTableProps<TData>) {
   const filterId = useId();
   const [sorting, setSorting] = useState<SortingState>(() =>
@@ -195,7 +197,22 @@ function DataTable<TData extends RowData>({
         <TableBody>
           {table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className={rowClassName?.(row.original)}>
+              <TableRow
+                key={row.id}
+                className={rowClassName?.(row.original)}
+                onClick={
+                  onRowClick
+                    ? (event) => {
+                        if (
+                          event.target instanceof Element &&
+                          event.target.closest('a,button,input,select,textarea')
+                        )
+                          return;
+                        onRowClick(row.original);
+                      }
+                    : undefined
+                }
+              >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>
                     <table.FlexRender cell={cell} />
