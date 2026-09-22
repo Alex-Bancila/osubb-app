@@ -1,8 +1,6 @@
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import iconDark from '../../assets/brand/osubb-icon-on-dark.png';
-import iconLight from '../../assets/brand/osubb-icon-on-light.png';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
@@ -10,8 +8,10 @@ import { can } from '../../lib/capabilities';
 import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
+import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
+import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import {
@@ -23,12 +23,18 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '../ui/sheet';
-import { NAV_ITEMS, TAB_ORDER, type NavItem } from './navItems';
+import {
+  NAV_ITEMS,
+  NOTIFICATIONS_PATH,
+  TAB_ORDER,
+  type NavItem,
+} from './navItems';
 
 type SidebarContentProps = {
   items: NavItem[];
   label: string;
   firstLinkRef?: Ref<HTMLAnchorElement>;
+  unreadNotifications: number;
   memberName: string | undefined;
   memberEmail: string | undefined;
   avatarColor: string | null | undefined;
@@ -55,6 +61,7 @@ function SidebarContent({
   items,
   label,
   firstLinkRef,
+  unreadNotifications,
   memberName,
   memberEmail,
   avatarColor,
@@ -90,6 +97,14 @@ function SidebarContent({
             >
               <Icon className="size-5 shrink-0" aria-hidden="true" />
               {item.label}
+              {item.path === NOTIFICATIONS_PATH && unreadNotifications > 0 && (
+                <Badge variant="destructive" className="ml-auto">
+                  <span aria-hidden="true">{unreadNotifications}</span>
+                  <span className="sr-only">
+                    {unreadBadgeLabel(unreadNotifications)}
+                  </span>
+                </Badge>
+              )}
             </NavLink>
           );
         })}
@@ -149,6 +164,7 @@ export default function AppShell() {
   const signOutAction = useSignOutAction(signOut);
   const profile = useMyProfile();
   const roles = useRoles();
+  const unreadNotifications = useUnreadNotificationCount();
   const roleLabel =
     (claims && roles.data?.get(claims.member_role)?.name) ??
     claims?.member_role ??
@@ -187,6 +203,7 @@ export default function AppShell() {
     roleLabel,
     level: claims?.member_level,
     signOutAction,
+    unreadNotifications: unreadNotifications.data ?? 0,
   };
 
   return (
@@ -232,12 +249,12 @@ export default function AppShell() {
           <span className="shrink-0 lg:hidden" aria-hidden="true">
             <img
               className="h-8 w-auto object-contain dark:hidden"
-              src={iconLight}
+              src={logoLight}
               alt=""
             />
             <img
               className="hidden h-8 w-auto object-contain dark:block"
-              src={iconDark}
+              src={logoDark}
               alt=""
             />
           </span>

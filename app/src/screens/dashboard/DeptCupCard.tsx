@@ -3,16 +3,17 @@ import { IonIcon } from '@ionic/react';
 import type { CSSProperties } from 'react';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { useDeptCup } from '../../queries/points';
-import { useDepartments } from '../../queries/reference';
+import { useGroups } from '../../queries/reference';
 import { formatPoints } from '../../lib/format';
 
 /**
  * #95 — Cupa Departamentelor: the standings, each department in its own brand
  * colour.
  *
- * The colour is a column on `departments` (Brand Book 2025), not a map in this
- * file, so a sixth department is an insert and this card already knows what it
- * looks like.
+ * The name, the short tag and the colour come from the competing Department's
+ * **Group** (Brand Book 2025 values, carried on `public.groups`), not from a
+ * map in this file, so a sixth department is an insert and this card already
+ * knows what it looks like.
  *
  * Bars are scaled against the leader, which is the comparison the cup is
  * about — a department on 24 points next to one on 26 should look like a race.
@@ -29,7 +30,18 @@ import { formatPoints } from '../../lib/format';
  */
 export default function DeptCupCard() {
   const cup = useDeptCup();
-  const departments = useDepartments();
+  const groups = useGroups();
+
+  // Wave 2 stack: switches to group_id. `public.dept_cup` still keys its rows
+  // by `dept_id` on `main`, so the Group is reached through the Wave 1 bridge
+  // column `groups.legacy_dept_id`; the moment the view carries `group_id`,
+  // this index, the `legacy_dept_id` in `useGroups()`'s select and the lookup
+  // below all go away together.
+  const groupByDeptId = new Map(
+    [...(groups.data?.values() ?? [])]
+      .filter((group) => group.legacy_dept_id !== null)
+      .map((group) => [group.legacy_dept_id as string, group]),
+  );
 
   const max = Math.max(1, ...(cup.data ?? []).map((row) => row.points ?? 0));
 
@@ -51,8 +63,8 @@ export default function DeptCupCard() {
       ) : (
         <ul className="cup-list">
           {cup.data.map((row) => {
-            const dept = row.dept_id
-              ? departments.data?.get(row.dept_id)
+            const group = row.dept_id
+              ? groupByDeptId.get(row.dept_id)
               : undefined;
             const points = row.points ?? 0;
             const width = `${Math.round((Math.max(0, points) / max) * 100)}%`;
@@ -60,17 +72,19 @@ export default function DeptCupCard() {
             return (
               <li
                 key={row.dept_id}
-                /* The department's colour reaches CSS as a variable so the
-                   tag's tint can be mixed from it there, instead of hardcoding
-                   an alpha value into an inline style. */
+                /* The Group's colour reaches CSS as a variable so the tag's
+                   tint can be mixed from it there, instead of hardcoding an
+                   alpha value into an inline style. */
                 style={
-                  { '--dept': dept?.color ?? 'var(--ink-400)' } as CSSProperties
+                  {
+                    '--dept': group?.color ?? 'var(--ink-400)',
+                  } as CSSProperties
                 }
               >
-                <span className="cup-tag">{dept?.short ?? row.dept_id}</span>
+                <span className="cup-tag">{group?.short ?? row.dept_id}</span>
                 <div className="cup-body">
                   <div className="cup-line">
-                    <span className="cup-name">{dept?.name ?? row.name}</span>
+                    <span className="cup-name">{group?.name ?? row.name}</span>
                     <span className="cup-points">{formatPoints(points)}</span>
                   </div>
                   <div className="cup-track">
