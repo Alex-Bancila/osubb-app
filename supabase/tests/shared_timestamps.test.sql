@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(12);
 
 select has_function('private', 'set_updated_at', array[]::text[],
   'the shared timestamp trigger function exists');
@@ -29,6 +29,17 @@ select ok(
        and not tgisinternal
   ),
   'campaigns use the shared timestamp trigger');
+-- #248 joined events to this list: update_event edits an Event row in place, so
+-- conventions §7 requires the column and the shared trigger rather than a
+-- command that sets the timestamp itself.
+select ok(
+  exists (
+    select 1 from pg_trigger
+     where tgrelid = 'public.events'::regclass
+       and tgname = 'events_set_updated_at'
+       and not tgisinternal
+  ),
+  'events use the shared timestamp trigger');
 
 insert into auth.users (id, email) values
   ('a3680000-0000-0000-0000-000000000001', 'lead.368@test.local'),
@@ -74,6 +85,14 @@ values ('Timestamp fixture', 'eveniment', 'org', now());
 select ok(
   (select created_at is not null from public.events where title = 'Timestamp fixture'),
   'new events receive created_at automatically');
+
+update public.events
+   set location = 'Sala fixture',
+       updated_at = '2000-01-01 00:00:00+00'
+ where title = 'Timestamp fixture';
+select ok(
+  (select updated_at > now() - interval '1 minute' from public.events where title = 'Timestamp fixture'),
+  'an arbitrary event update refreshes updated_at');
 
 select ok(
   (select created_at is not null
