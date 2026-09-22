@@ -54,8 +54,11 @@ vi.mock('./screens/no-profile/NoProfileScreen', () => ({
 vi.mock('./screens/volunteers/VolunteersScreen', () => ({
   default: () => <h1>Voluntari</h1>,
 }));
-vi.mock('./screens/Placeholder', () => ({
-  default: ({ title }: { title: string }) => <h1>{title}</h1>,
+vi.mock('./screens/administrare/AdministrareScreen', () => ({
+  default: () => <h1>Administrare</h1>,
+}));
+vi.mock('./screens/administrare/GroupScreen', () => ({
+  default: () => <h1>Grup screen</h1>,
 }));
 vi.mock('./screens/dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
@@ -175,6 +178,25 @@ describe('route guards', () => {
     render(<App />);
     await screen.findByRole('heading', { name: 'Dashboard' });
     expect(window.location.pathname).toBe('/');
+  });
+
+  it('opens a Group screen behind the same capability as the panel', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    // A Group Manager reaches their own Group's screen …
+    grant('administer');
+    window.history.pushState({}, '', '/administrare/grupuri/2');
+    const view = render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Grup screen' }),
+    ).toBeVisible();
+    view.unmount();
+
+    // … and a member with no Group Role anywhere never does.
+    grant('seeDirectory', 'seeLeadership');
+    window.history.pushState({}, '', '/administrare/grupuri/2');
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(screen.queryByRole('heading', { name: 'Grup screen' })).toBeNull();
   });
 
   it('decides nothing while the capability row is still loading', () => {

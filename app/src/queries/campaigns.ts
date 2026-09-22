@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
+import { commandErrorMessage } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 export type Campaign = {
@@ -40,19 +41,6 @@ export type CampaignChange =
   | { kind: 'create'; groupId: number; name: string }
   | { kind: 'rename'; id: number; name: string }
   | { kind: 'active'; id: number; active: boolean };
-const commandErrors = new Map<string, string>([
-  [
-    'campaign_manage_forbidden',
-    'Nu mai ai permisiunea de a modifica această campanie.',
-  ],
-  ['invalid_campaign_name', 'Verifică numele campaniei.'],
-  [
-    'campaign_name_taken',
-    'Există deja o campanie cu acest nume în grup. Alege alt nume.',
-  ],
-  ['campaign_not_found', 'Campania nu mai este disponibilă.'],
-  ['invalid_campaign_active', 'Verifică starea campaniei.'],
-]);
 export class CampaignError extends Error {}
 export async function changeCampaign(change: CampaignChange) {
   const result =
@@ -72,8 +60,11 @@ export async function changeCampaign(change: CampaignChange) {
           });
   if (result.error)
     throw new CampaignError(
-      commandErrors.get(result.error.message) ??
+      // One reason-to-copy table for the whole app (`command-reasons.ts`).
+      commandErrorMessage(
+        result.error,
         'Nu am putut salva campania. Reîncearcă.',
+      ),
     );
   return result.data;
 }
@@ -86,5 +77,55 @@ export function useCampaignChange() {
         client.invalidateQueries({ queryKey: keys.campaigns.all }),
         client.invalidateQueries({ queryKey: keys.tasks.all }),
       ]),
+  });
+}
+
+/**
+ * A Campaign's report (#625): what the Campaign's Tasks are worth in total and
+ * which volunteers earned those points. A Campaign is a reporting label — this
+ * is the report, and it is never a roster: nobody is "in" a Campaign.
+ */
+export type CampaignReport = {
+  totals: { points: number; tasksCompleted: number; tasksTotal: number };
+  members: {
+    memberId: string;
+    name: string;
+    points: number;
+    tasksCompleted: number;
+  }[];
+};
+
+export async function fetchCampaignReport(
+  campaignId: number,
+): Promise<CampaignReport> {
+  const [totals, members] = await Promise.all([
+    supabase.rpc('campaign_totals', { p_campaign_id: campaignId }),
+    supabase.rpc('campaign_report', { p_campaign_id: campaignId }),
+  ]);
+  if (totals.error) throw totals.error;
+  if (members.error) throw members.error;
+  const total = totals.data?.[0];
+  return {
+    totals: {
+      points: total?.points_total ?? 0,
+      tasksCompleted: total?.tasks_completed ?? 0,
+      tasksTotal: total?.tasks_total ?? 0,
+    },
+    members: (members.data ?? []).map((row) => ({
+      memberId: row.member_id,
+      name: row.full_name ?? 'Membru',
+      points: row.points,
+      tasksCompleted: row.tasks_completed,
+    })),
+  };
+}
+
+/** Read only while a report is open: a panel of ten Campaigns is not ten reads. */
+export function useCampaignReport(campaignId: number | null) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.campaigns.report(memberId, campaignId ?? 0),
+    queryFn:
+      campaignId === null ? skipToken : () => fetchCampaignReport(campaignId),
   });
 }
