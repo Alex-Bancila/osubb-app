@@ -3,13 +3,16 @@
 - **Status:** Accepted
 - **Date:** 2026-09-07
 - **Amended:** 2026-09-18 — ADR-0009: an Event is owned by one Group; the `org`/`dept`/`team`/`project` scope and the per-scope management table are read through Group Roles; Minimum Level choices become 0, 3, 5, 6
+- **Amended:** 2026-09-20 — ADR-0009 Wave 2 as built: `create_event` takes the owning Group, `update_event` and `cancel_event` join it, and the level-4 Calendar gate is gone (see the ADR-0009 header for the exact signatures)
 - **Amended:** 2026-09-20 — the relevant audience of an Event is its Group's Group Audience (Automatic Membership resolved, every Group below included); archiving a Group cancels its future Events
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
 - **Related:** ADR-0001, ADR-0003, ADR-0007, `CONTEXT.md`
 
-> **Amended 2026-09-18 by ADR-0009.** Event Scope is the owning Group; organization-wide Events belong to the Organization Group. Read the Event management table as: a Group's Managers and Responsibles, and its ancestors', manage its Events; anyone holding a Group Role may create an Organization Group Event, which only its creator or BC/Moderator edits. "Responsible+" (level 4) is retired as a Minimum Level choice. Visibility, relevance, RSVP, capacity, and notification rules stand, with "the member's Departments, Teams, and Projects" read as "the member's Groups".
+> **Amended 2026-09-18 by ADR-0009.** Event Scope is the owning Group; organization-wide Events belong to the Organization Group. Read the Event management table as: a Group's Managers and Responsibles, and its ancestors', manage its Events; anyone holding a Group Role may create an Organization Group Event, which only its creator or BC/Moderator edits. `create_event`, `update_event`, and `cancel_event` enforce these Group rules; update and cancellation preserve the creator-only Organization Event rule with BC/Moderator override. "Responsible+" (level 4) is retired as a Minimum Level choice. Visibility, relevance, RSVP, capacity, and notification rules stand, with "the member's Departments, Teams, and Projects" read as "the member's Groups".
+
+> **Amended 2026-09-20 — the enforced shape.** `events_min_level_ck` now admits only `{0, 3, 5, 6}`, and the rows that stood at 4 were moved **up** to 5, never down. An Event's Minimum Level may not fall below its Group's, and a creator may not set one above their own Level. No Calendar command reads a level-4 rank any more; `events` carries a read policy and no client write policy at all, so `create_event`, `update_event`, and `cancel_event` are the only ways in. The `event_scope` enum and the legacy scope columns survive only as trigger-derived values until ADR-0009 Wave 3 drops them.
 
 ## Context
 
