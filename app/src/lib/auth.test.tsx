@@ -1,12 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Listener = (event: string, session: unknown) => void;
 // Shape of a stored Supabase session, as returned by getSession() and built
 // by sessionFor() below — named here so getSession's mock can be typed to
 // accept either a real stored session or null, not just null.
-type StoredSession = { user: { id: string }; access_token: string };
+type StoredSession = {
+  user: { id: string };
+  access_token: string;
+  expires_in?: number;
+  expires_at?: number;
+};
 const auth = vi.hoisted(() => {
   let listener: Listener | null = null;
   return {
@@ -23,6 +28,12 @@ const auth = vi.hoisted(() => {
     signOut: vi.fn(async (): Promise<{ error: Error | null }> => ({
       error: null,
     })),
+    refreshSession: vi.fn(
+      async (): Promise<{ data: { session: null }; error: Error | null }> => ({
+        data: { session: null },
+        error: null,
+      }),
+    ),
   };
 });
 vi.mock('./supabase', () => ({
@@ -31,14 +42,40 @@ vi.mock('./supabase', () => ({
       getSession: auth.getSession,
       onAuthStateChange: auth.onAuthStateChange,
       signOut: auth.signOut,
+      refreshSession: auth.refreshSession,
     },
   },
 }));
 
 import { AuthProvider, useAuth } from './auth';
 
-function sessionFor(id: string): StoredSession {
-  return { user: { id }, access_token: 'x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y' };
+// Builds a stored session. Passing `issuedAtMs` also stamps `expires_at` /
+// `expires_in` the way the real client does (a fixed one-hour lifetime), so
+// the focus-refresh tests below can control how stale the token looks
+// without existing tests — which never fire a focus/visibility event —
+// having to care.
+function sessionFor(
+  id: string,
+  options?: { issuedAtMs?: number },
+): StoredSession {
+  const base: StoredSession = {
+    user: { id },
+    access_token: 'x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y',
+  };
+  if (options?.issuedAtMs == null) return base;
+  return {
+    ...base,
+    expires_in: 3600,
+    expires_at: Math.floor(options.issuedAtMs / 1000) + 3600,
+  };
+}
+
+// Renders the session's member id so a test can wait for a notified session
+// to have actually committed (including the ref the focus-refresh effect
+// reads) before firing a focus/visibility event at it.
+function SessionProbe() {
+  const { session } = useAuth();
+  return <div data-testid="session-user">{session?.user.id ?? ''}</div>;
 }
 
 // Builds a fake access token whose payload segment decodes to the given
@@ -270,5 +307,92 @@ describe('decodeClaims', () => {
     await waitFor(() =>
       expect(screen.getByTestId('group-ids').textContent).toBe('[3,9]'),
     );
+  });
+});
+
+describe('refresh a stale session on window focus (#598)', () => {
+  beforeEach(() => {
+    // Only Date is faked: setTimeout stays real, so Testing Library's
+    // waitFor() keeps polling normally while the test still controls what
+    // `Date.now()` reports for the token-age check.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-22T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function renderSignedIn(issuedAtMs: number) {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <SessionProbe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    notifyListener()('SIGNED_IN', sessionFor('a', { issuedAtMs }));
+    await waitFor(() =>
+      expect(screen.getByTestId('session-user').textContent).toBe('a'),
+    );
+  }
+
+  it('refreshes exactly once when a stale token regains focus', async () => {
+    await renderSignedIn(Date.now() - 20 * 60 * 1000);
+
+    fireEvent(window, new Event('focus'));
+
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not refresh a fresh token on focus', async () => {
+    await renderSignedIn(Date.now() - 5 * 60 * 1000);
+
+    fireEvent(window, new Event('focus'));
+
+    expect(auth.refreshSession).not.toHaveBeenCalled();
+  });
+
+  it('never refreshes more than once per minute', async () => {
+    await renderSignedIn(Date.now() - 20 * 60 * 1000);
+
+    fireEvent(window, new Event('focus'));
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1));
+
+    // 30s later: token is even more stale, but inside the one-minute
+    // cooldown from the first refresh — must be skipped.
+    vi.setSystemTime(new Date(Date.now() + 30 * 1000));
+    fireEvent(window, new Event('focus'));
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+
+    // Just past the one-minute cooldown: a focus refreshes again.
+    vi.setSystemTime(new Date(Date.now() + 31 * 1000));
+    fireEvent(window, new Event('focus'));
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(2));
+  });
+
+  it('leaves the current session and claims untouched when the refresh fails', async () => {
+    auth.refreshSession.mockRejectedValueOnce(new Error('network down'));
+    await renderSignedIn(Date.now() - 20 * 60 * 1000);
+
+    fireEvent(window, new Event('focus'));
+
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1));
+    // No TOKEN_REFRESHED ever arrived (the mock never calls the listener on
+    // refreshSession), so the session held here is exactly the one that was
+    // signed in — nothing was cleared or replaced by the failed attempt.
+    expect(screen.getByTestId('session-user').textContent).toBe('a');
+  });
+
+  it('ignores focus while the tab is not visible', async () => {
+    await renderSignedIn(Date.now() - 20 * 60 * 1000);
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+    fireEvent(window, new Event('focus'));
+
+    expect(auth.refreshSession).not.toHaveBeenCalled();
   });
 });
