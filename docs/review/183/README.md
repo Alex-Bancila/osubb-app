@@ -1,11 +1,11 @@
 # Direct Executor selector (#183)
 
-A manager can search for one active member and choose them as Executor. The Origin Group's Minimum Level decides who is eligible. Group (including descendants) and Campaign filters make the list easier to browse; removing them brings everyone eligible back. A chosen member stays selected when a filter hides them, but is cleared if their eligibility changes.
+A manager picks one Executor from a searchable dropdown: typing a name narrows the list (diacritics optional), and each row shows the member's small initials avatar on their colour. Only active Members at or above the Origin Group's Minimum Level are offered.
 
-The screenshots use a synthetic two-member browser fixture, not production member data. The reusable component is wired into the assignment flow by #350.
+A second, optional dropdown narrows the list to one Group and everything below it. Groups are searchable too, and a Child Group is shown with its parent (`Echipa · Educațional`) so two teams with the same name stay distinguishable. There is no Campaign filter: a Campaign is a reporting label and has no members. A chosen member stays selected when the Group filter hides them, but is cleared if they stop being eligible.
 
-- [Desktop](executor-desktop.png)
-- [Mobile](executor-mobile.png)
-- [Selection retained after searching for another member](executor-preserved-desktop.png)
+The component is compact so it fits in the assignment pop-up (#350) and the Task form (#180).
 
-Validation: focused query/component tests cover paging beyond 500 rows, failed reads, descendant and Automatic Membership filters, Campaign Assignment history, Origin Minimum Level, refreshed eligibility, search, selection preservation, loading/retry, and axe accessibility. Typecheck, lint, formatting, and production build are run against the issue branch.
+The earlier screenshots showed the previous full-page layout and were removed; the component is covered by the focused tests below.
+
+Validation: focused tests cover paging beyond 500 rows, failed reads, reading no Campaign data, in-dropdown name search without diacritics, the initials avatar without images, Group search by parent, descendant and Automatic Membership filtering, Origin Minimum Level, refreshed eligibility, selection preservation, loading/retry, and axe accessibility.
