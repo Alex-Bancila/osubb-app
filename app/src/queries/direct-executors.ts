@@ -21,51 +21,34 @@ async function allPages<T>(
 }
 
 export async function fetchDirectExecutors() {
-  const [profiles, roles, groups, memberships, campaigns, assignments] =
-    await Promise.all([
-      allPages((from, to) =>
-        supabase
-          .from('profiles_directory')
-          .select('id, full_name, role, status')
-          .eq('status', 'activ')
-          .order('id')
-          .range(from, to),
-      ),
-      allPages((from, to) =>
-        supabase.from('roles').select('id, level').order('id').range(from, to),
-      ),
-      allPages((from, to) =>
-        supabase
-          .from('groups')
-          .select('id, name, path, min_level, automatic_membership, status')
-          .order('id')
-          .range(from, to),
-      ),
-      allPages((from, to) =>
-        supabase
-          .from('group_members')
-          .select('group_id, member_id')
-          .order('group_id')
-          .order('member_id')
-          .range(from, to),
-      ),
-      allPages((from, to) =>
-        supabase
-          .from('campaigns')
-          .select('id, name')
-          .order('id')
-          .range(from, to),
-      ),
-      allPages((from, to) =>
-        supabase
-          .from('task_assignments')
-          .select(
-            'id, member_id, task:tasks!task_assignments_task_id_fkey(campaign_id)',
-          )
-          .order('id')
-          .range(from, to),
-      ),
-    ]);
+  const [profiles, roles, groups, memberships] = await Promise.all([
+    allPages((from, to) =>
+      supabase
+        .from('profiles_directory')
+        .select('id, full_name, role, status, avatar_color')
+        .eq('status', 'activ')
+        .order('id')
+        .range(from, to),
+    ),
+    allPages((from, to) =>
+      supabase.from('roles').select('id, level').order('id').range(from, to),
+    ),
+    allPages((from, to) =>
+      supabase
+        .from('groups')
+        .select('id, name, path, min_level, automatic_membership, status')
+        .order('id')
+        .range(from, to),
+    ),
+    allPages((from, to) =>
+      supabase
+        .from('group_members')
+        .select('group_id, member_id')
+        .order('group_id')
+        .order('member_id')
+        .range(from, to),
+    ),
+  ]);
   const levels = new Map(roles.map((role) => [role.id, role.level]));
   return {
     members: profiles
@@ -77,6 +60,7 @@ export async function fetchDirectExecutors() {
                 id: profile.id,
                 name: profile.full_name ?? 'Membru OSUBB',
                 level,
+                avatarColor: profile.avatar_color,
               },
             ]
           : [];
@@ -87,14 +71,14 @@ export async function fetchDirectExecutors() {
       ),
     groups,
     memberships,
-    campaigns,
-    assignments,
   };
 }
 
 export type DirectExecutorData = Awaited<
   ReturnType<typeof fetchDirectExecutors>
 >;
+export type DirectExecutor = DirectExecutorData['members'][number];
+export type DirectExecutorGroup = DirectExecutorData['groups'][number];
 
 export function useDirectExecutors() {
   const memberId = useAuth().session?.user.id;
@@ -104,6 +88,7 @@ export function useDirectExecutors() {
   });
 }
 
+/** Active Members at or above the Origin Group's Minimum Level (ADR-0009). */
 export function eligibleExecutors(
   data: DirectExecutorData,
   originGroupId: number,
@@ -114,39 +99,30 @@ export function eligibleExecutors(
     : [];
 }
 
+/**
+ * The eligible Members who belong to `groupId` or to any Group below it. The
+ * Group filter narrows the list; it never makes anyone eligible.
+ */
 export function filterExecutors(
   data: DirectExecutorData,
   originGroupId: number,
-  search: string,
   groupId: number | null,
-  campaignId: number | null,
 ) {
-  const descendants = data.groups.filter(
-    (group) => groupId !== null && group.path.includes(groupId),
+  const eligible = eligibleExecutors(data, originGroupId);
+  if (groupId === null) return eligible;
+  const branch = data.groups.filter((group) => group.path.includes(groupId));
+  const branchIds = new Set(branch.map((group) => group.id));
+  const listed = new Set(
+    data.memberships
+      .filter((membership) => branchIds.has(membership.group_id))
+      .map((membership) => membership.member_id),
   );
-  const normalize = (text: string) =>
-    text
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLocaleLowerCase('ro');
-  return eligibleExecutors(data, originGroupId).filter(
-    (member) =>
-      normalize(member.name).includes(normalize(search.trim())) &&
-      (groupId === null ||
-        descendants.some(
-          (group) =>
-            (group.automatic_membership && member.level >= group.min_level) ||
-            data.memberships.some(
-              (membership) =>
-                membership.group_id === group.id &&
-                membership.member_id === member.id,
-            ),
-        )) &&
-      (campaignId === null ||
-        data.assignments.some(
-          (assignment) =>
-            assignment.member_id === member.id &&
-            assignment.task?.campaign_id === campaignId,
-        )),
+  const automaticMinimum = Math.min(
+    ...branch
+      .filter((group) => group.automatic_membership)
+      .map((group) => group.min_level),
+  );
+  return eligible.filter(
+    (member) => listed.has(member.id) || member.level >= automaticMinimum,
   );
 }

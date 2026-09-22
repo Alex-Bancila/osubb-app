@@ -1,0 +1,64 @@
+-- #66: device ownership remains private at every organizational level.
+begin;
+\set osubb_test_suite true
+\ir _helpers.sql
+set local search_path = public, extensions;
+create extension if not exists pgtap with schema extensions;
+select plan(24);
+truncate public.push_tokens;
+insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000001', 'push66-1@test.local');
+insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000001', 'Device Member 1', 'push66-1@test.local', 'recrut', 'activ');
+insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000002', 'push66-2@test.local');
+insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000002', 'Device Member 2', 'push66-2@test.local', 'voluntar', 'activ');
+insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000003', 'push66-3@test.local');
+insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000003', 'Device Member 3', 'push66-3@test.local', 'bce', 'activ');
+insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000004', 'push66-4@test.local');
+insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000004', 'Device Member 4', 'push66-4@test.local', 'bc', 'activ');
+insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000005', 'push66-5@test.local');
+insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000005', 'Device Member 5', 'push66-5@test.local', 'moderator', 'activ');
+insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000006', 'push66-6@test.local');
+insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000006', 'Device Member 6', 'push66-6@test.local', 'voluntar', 'inactiv');
+insert into push_tokens (member_id, token, platform) values
+  ('06600000-0000-0000-0000-000000000002', 'other-device', 'web'),
+  ('06600000-0000-0000-0000-000000000006', 'inactive-device', 'web');
+select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000001');
+select lives_ok($$insert into push_tokens (member_id, token, platform) values (auth.uid(), 'own-device', 'web')$$, 'Member registers own device');
+select is((select count(*) from push_tokens), 1::bigint, 'Member sees only own device');
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000002', 'forged-device', 'web')$$, '42501', null, 'Cannot register another Member device');
+with deleted as (delete from push_tokens where token = 'other-device' returning id) select is(count(*), 0::bigint, 'Cannot delete another Member device') from deleted;
+select throws_ok($$update push_tokens set token = 'replacement'$$, '42501', null, 'Devices have no update path');
+with deleted as (delete from push_tokens where token = 'own-device' returning id) select is(count(*), 1::bigint, 'Member removes own device') from deleted;
+reset role;
+select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000003');
+select is((select count(*) from push_tokens), 0::bigint, 'BCE reads no device rows');
+with deleted as (delete from push_tokens returning id) select is(count(*), 0::bigint, 'BCE deletes no device rows') from deleted;
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000002', 'forged-3', 'web')$$, '42501', null, 'BCE cannot register forbidden device');
+reset role;
+select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000004');
+select is((select count(*) from push_tokens), 0::bigint, 'BC reads no device rows');
+with deleted as (delete from push_tokens returning id) select is(count(*), 0::bigint, 'BC deletes no device rows') from deleted;
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000002', 'forged-4', 'web')$$, '42501', null, 'BC cannot register forbidden device');
+reset role;
+select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000005');
+select is((select count(*) from push_tokens), 0::bigint, 'Moderator reads no device rows');
+with deleted as (delete from push_tokens returning id) select is(count(*), 0::bigint, 'Moderator deletes no device rows') from deleted;
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000002', 'forged-5', 'web')$$, '42501', null, 'Moderator cannot register forbidden device');
+reset role;
+select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000006');
+select is((select count(*) from push_tokens), 0::bigint, 'Inactive Member with stale claims reads no device rows');
+with deleted as (delete from push_tokens returning id) select is(count(*), 0::bigint, 'Inactive Member with stale claims deletes no device rows') from deleted;
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000006', 'forged-6', 'web')$$, '42501', null, 'Inactive Member with stale claims cannot register forbidden device');
+reset role;
+select pg_temp.test_login('06600000-0000-0000-0000-000000000002', '{}'::jsonb);
+select is((select count(*) from push_tokens), 0::bigint, 'Claimless owner reads nothing');
+with deleted as (delete from push_tokens returning id) select is(count(*), 0::bigint, 'Claimless owner deletes nothing') from deleted;
+select throws_ok($$insert into push_tokens (member_id, token, platform) values (auth.uid(), 'claimless', 'web')$$, '42501', null, 'Claimless owner cannot register');
+reset role;
+select pg_temp.test_clear_jwt();
+set local role anon;
+select throws_ok($$select * from push_tokens$$, '42501', null, 'Anonymous cannot read devices');
+select throws_ok($$delete from push_tokens$$, '42501', null, 'Anonymous cannot delete devices');
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000001', 'anon', 'web')$$, '42501', null, 'Anonymous cannot register');
+reset role;
+select * from finish();
+rollback;

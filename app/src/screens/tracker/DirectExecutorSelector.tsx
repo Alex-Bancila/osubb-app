@@ -1,11 +1,49 @@
-import { useEffect, useId, useState } from 'react';
+import { XIcon } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '../../components/ui/button';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+  GroupOption,
+  MemberOption,
+  groupOptionLabel,
+} from '../../components/ui/combobox';
 import {
   eligibleExecutors,
   filterExecutors,
   useDirectExecutors,
+  type DirectExecutor,
+  type DirectExecutorGroup,
 } from '../../queries/direct-executors';
 
+/** Parents before their children, siblings alphabetically. */
+function compareInTreeOrder(
+  a: DirectExecutorGroup,
+  b: DirectExecutorGroup,
+  groupsById: ReadonlyMap<number, DirectExecutorGroup>,
+) {
+  const names = (group: DirectExecutorGroup) =>
+    group.path.map((id) => groupsById.get(id)?.name ?? '');
+  const left = names(a);
+  const right = names(b);
+  for (let i = 0; i < Math.min(left.length, right.length); i += 1) {
+    const order = (left[i] ?? '').localeCompare(right[i] ?? '', 'ro');
+    if (order) return order;
+  }
+  return left.length - right.length || a.id - b.id;
+}
+
+/**
+ * Picks one Executor for a direct Task: a searchable member dropdown plus an
+ * optional Group filter. Only Members at or above the Origin Group's Minimum
+ * Level are offered; the Group filter narrows the list and never widens it.
+ */
 export function DirectExecutorSelector({
   originGroupId,
   value,
@@ -19,18 +57,30 @@ export function DirectExecutorSelector({
 }) {
   const query = useDirectExecutors();
   const id = useId();
-  const [search, setSearch] = useState('');
   const [groupId, setGroupId] = useState<number | null>(null);
-  const [campaignId, setCampaignId] = useState<number | null>(null);
   const data = query.data;
-  const eligible = data ? eligibleExecutors(data, originGroupId) : [];
+  const eligible = useMemo(
+    () => (data ? eligibleExecutors(data, originGroupId) : []),
+    [data, originGroupId],
+  );
   const valid =
     value === null || eligible.some((member) => member.id === value);
   useEffect(() => {
-    // Convenience filters never invalidate the selected Executor. Wait for a
+    // The Group filter never invalidates the selected Executor. Wait for a
     // successful authoritative read before clearing a now-ineligible member.
     if (query.isSuccess && !valid) onChange(null);
   }, [query.isSuccess, valid, onChange]);
+  const groupsById = useMemo(
+    () => new Map((data?.groups ?? []).map((group) => [group.id, group])),
+    [data],
+  );
+  const groupChoices = useMemo(
+    () =>
+      (data?.groups ?? [])
+        .filter((group) => group.status === 'active')
+        .sort((a, b) => compareInTreeOrder(a, b, groupsById)),
+    [data, groupsById],
+  );
 
   if (query.isPending) return <p role="status">Se încarcă membrii…</p>;
   if (query.isError || !data)
@@ -42,117 +92,127 @@ export function DirectExecutorSelector({
         </Button>
       </div>
     );
-  const filtered = filterExecutors(
-    data,
-    originGroupId,
-    search,
-    groupId,
-    campaignId,
-  );
-  const selected = eligible.find((member) => member.id === value);
-  // Keep a chosen member visible in the native single-select even when search
-  // hides them, so its value and the submitted ID cannot disagree.
+
+  const filtered = filterExecutors(data, originGroupId, groupId);
+  const selected = eligible.find((member) => member.id === value) ?? null;
+  // A chosen member stays in the list when the Group filter hides them, so
+  // the dropdown and the submitted ID never disagree.
   const options =
     selected && !filtered.includes(selected)
       ? [selected, ...filtered]
       : filtered;
-  const control =
-    'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+  const filterGroup = groupId === null ? null : groupsById.get(groupId);
+
   return (
-    <fieldset disabled={disabled} className="min-w-0 space-y-3">
-      <legend className="text-sm font-semibold">Alege executorul</legend>
-      <p className="text-sm text-muted-foreground">
-        Poți alege orice membru activ care îndeplinește nivelul minim al
-        grupului de origine.
-      </p>
-      <div>
-        <label htmlFor={`${id}-search`} className="text-sm">
-          Caută după nume
-        </label>
-        <input
-          id={`${id}-search`}
-          type="search"
-          className={control}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor={`${id}-group`} className="text-sm">
-            Grup (include subgrupurile)
-          </label>
-          <select
-            id={`${id}-group`}
-            className={control}
-            value={groupId ?? ''}
-            onChange={(event) =>
-              setGroupId(event.target.value ? Number(event.target.value) : null)
-            }
-          >
-            <option value="">Toate grupurile</option>
-            {data.groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={`${id}-campaign`} className="text-sm">
-            Campanie
-          </label>
-          <select
-            id={`${id}-campaign`}
-            className={control}
-            value={campaignId ?? ''}
-            onChange={(event) =>
-              setCampaignId(
-                event.target.value ? Number(event.target.value) : null,
-              )
-            }
-          >
-            <option value="">Toate campaniile</option>
-            {data.campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Filtrele folosesc apartenențele și istoricul de lucru pe care le poți
-        vedea. Elimină filtrele pentru lista completă.
-      </p>
-      <div>
-        <label htmlFor={`${id}-member`} className="text-sm">
+    <fieldset disabled={disabled} className="grid min-w-0 gap-3">
+      <div className="grid gap-1.5">
+        <label id={`${id}-member`} className="text-sm font-medium">
           Executor
         </label>
-        <select
-          id={`${id}-member`}
-          className={control}
-          value={valid ? (value ?? '') : ''}
-          onChange={(event) => onChange(event.target.value || null)}
+        <Combobox<DirectExecutor>
+          items={options}
+          value={selected}
+          onValueChange={(member) => onChange(member?.id ?? null)}
+          itemToStringLabel={(member) => member.name}
+          isItemEqualToValue={(a, b) => a.id === b.id}
+          disabled={disabled || !eligible.length}
         >
-          <option value="">Alege un membru</option>
-          {options.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.name}
-              {selected === member && !filtered.includes(member)
-                ? ' (selecție păstrată)'
-                : ''}
-            </option>
-          ))}
-        </select>
+          <ComboboxTrigger aria-labelledby={`${id}-member`}>
+            <ComboboxValue placeholder="Alege un membru">
+              {(member: DirectExecutor | null) =>
+                member ? (
+                  <MemberOption
+                    name={member.name}
+                    avatarColor={member.avatarColor}
+                  />
+                ) : (
+                  'Alege un membru'
+                )
+              }
+            </ComboboxValue>
+          </ComboboxTrigger>
+          <ComboboxContent>
+            <ComboboxInput
+              aria-label="Caută un membru"
+              placeholder="Caută după nume"
+            />
+            <ComboboxEmpty>
+              {filterGroup
+                ? 'Niciun membru eligibil în acest grup.'
+                : 'Niciun membru găsit.'}
+            </ComboboxEmpty>
+            <ComboboxList>
+              {(member: DirectExecutor) => (
+                <ComboboxItem key={member.id} value={member}>
+                  <MemberOption
+                    name={member.name}
+                    avatarColor={member.avatarColor}
+                  />
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+        {!eligible.length && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Niciun membru nu are nivelul cerut de acest grup.
+          </p>
+        )}
       </div>
-      <p role="status" className="text-sm text-muted-foreground">
-        {!eligible.length
-          ? 'Nu există membri eligibili pentru acest grup.'
-          : !filtered.length
-            ? 'Niciun membru nu corespunde filtrelor.'
-            : `${filtered.length} membri corespund filtrelor.`}
-      </p>
+      {eligible.length > 0 && (
+        <div className="grid gap-1.5">
+          <label id={`${id}-group`} className="text-sm font-medium">
+            Arată doar membrii din grupul
+          </label>
+          <div className="flex min-w-0 gap-2">
+            <Combobox<DirectExecutorGroup>
+              items={groupChoices}
+              value={filterGroup ?? null}
+              onValueChange={(group) => setGroupId(group?.id ?? null)}
+              itemToStringLabel={(group) => groupOptionLabel(group, groupsById)}
+              isItemEqualToValue={(a, b) => a.id === b.id}
+              disabled={disabled}
+            >
+              <ComboboxTrigger aria-labelledby={`${id}-group`}>
+                <ComboboxValue placeholder="Toate grupurile">
+                  {(group: DirectExecutorGroup | null) =>
+                    group ? (
+                      <GroupOption group={group} groupsById={groupsById} />
+                    ) : (
+                      'Toate grupurile'
+                    )
+                  }
+                </ComboboxValue>
+              </ComboboxTrigger>
+              <ComboboxContent>
+                <ComboboxInput
+                  aria-label="Caută un grup"
+                  placeholder="Caută un grup"
+                />
+                <ComboboxEmpty />
+                <ComboboxList>
+                  {(group: DirectExecutorGroup) => (
+                    <ComboboxItem key={group.id} value={group}>
+                      <GroupOption group={group} groupsById={groupsById} />
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+            {filterGroup && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setGroupId(null)}
+              >
+                <XIcon aria-hidden="true" />
+                <span className="sr-only">Arată toate grupurile</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </fieldset>
   );
 }
