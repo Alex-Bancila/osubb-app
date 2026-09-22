@@ -696,12 +696,12 @@ select pg_temp.smoke_denied(
   'step 19: direct INSERT into public.campaigns');
 
 -- points_ledger is the deliberate exception: `authenticated` KEEPS insert for
--- the BC sanction path (ledger_sanction), so #345 did not revoke it. A forged
+-- the BC sanction path (points_ledger_create_sanction), so #345 did not revoke it. A forged
 -- credit must therefore be refused by RLS rather than by the ACL -- same 42501,
 -- different mechanism. A `sanction`-shaped row is used because it satisfies
 -- points_ledger's own shape constraint (only `task`/`task_reversal` rows need a
 -- task_id and an evaluation_id), so the ONLY thing left to reject it is the
--- ledger_sanction policy, which this voluntar cannot satisfy.
+-- points_ledger_create_sanction policy, which this voluntar cannot satisfy.
 select pg_temp.smoke_denied(
   $$ insert into public.points_ledger (member_id, delta, reason)
      values ('d0000000-0000-0000-0000-000000000002', 99, 'sanction') $$,
