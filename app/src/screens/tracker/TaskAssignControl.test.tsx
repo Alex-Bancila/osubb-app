@@ -55,6 +55,10 @@ it('requires selection and sends a single command, keeps confirmation after refe
   );
   const view = render(<TaskAssignControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Atribuie' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Atribuie taskul' });
+  expect(dialog).toContainElement(
+    screen.getByRole('button', { name: 'Alege Ana' }),
+  );
   expect(
     screen.getByRole('button', { name: 'Confirmă atribuirea' }),
   ).toBeDisabled();
@@ -73,14 +77,25 @@ it('requires selection and sends a single command, keeps confirmation after refe
       'Executorul a fost atribuit.',
     ),
   );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(screen.getByRole('status')).toHaveFocus();
   view.rerender(<TaskAssignControl {...props} />);
   expect(screen.getByRole('button', { name: 'Atribuie' })).toBeVisible();
 });
+it('closes on Renunță without sending anything', async () => {
+  const user = userEvent.setup();
+  render(<TaskAssignControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Atribuie' }));
+  await user.click(screen.getByRole('button', { name: 'Alege Ana' }));
+  await user.click(screen.getByRole('button', { name: 'Renunță' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(mutation.mutateAsync).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Atribuie' })).toHaveFocus();
+});
 it('keeps a safe retry after command failure and passes axe', async () => {
   const user = userEvent.setup();
   mutation.mutateAsync.mockRejectedValue(new Error('private backend trace'));
-  const { container } = render(<TaskAssignControl {...props} />);
+  render(<TaskAssignControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Atribuie' }));
   await user.click(screen.getByRole('button', { name: 'Alege Ana' }));
   await user.click(screen.getByRole('button', { name: 'Confirmă atribuirea' }));
@@ -92,7 +107,7 @@ it('keeps a safe retry after command failure and passes axe', async () => {
   ).toBeEnabled();
   expect(
     (
-      await axe.run(container, {
+      await axe.run(screen.getByRole('dialog'), {
         rules: { 'color-contrast': { enabled: false } },
       })
     ).violations,

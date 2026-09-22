@@ -1,6 +1,6 @@
 # Direct assignment (#350)
 
-When a direct Task has no Executor, its manager can now pick someone and press **Atribuie**. The picker shows active Members who meet the Origin Group's Minimum Level, while the server checks that rule again before saving. A successful assignment keeps its confirmation visible when the Task refreshes, and a later give-up allows another assignment. Errors use safe Romanian messages and refresh the Task so stale information does not linger.
+When a direct Task has no Executor, its manager presses **Atribuie**, picks someone in a small pop-up and confirms. The pop-up's searchable member dropdown (#183) shows active Members who meet the Origin Group's Minimum Level, while the server checks that rule again before saving. A successful assignment keeps its confirmation visible when the Task refreshes, and a later give-up allows another assignment. Errors use safe Romanian messages and refresh the Task so stale information does not linger.
 
 ```mermaid
 sequenceDiagram
@@ -20,11 +20,7 @@ sequenceDiagram
 
 ## Screenshot evidence
 
-These screenshots render the production assignment control and executor selector in a small review fixture, with the real application theme and synthetic query data. The assignment RPC is intercepted; these images demonstrate the UI and the refetch-before-response confirmation behavior, not a live database transaction. Database command behavior is covered separately by pgTAP and concurrency tests.
-
-- [Desktop](assignment-desktop.png)
-- [Mobile](assignment-mobile.png)
-- [Mobile confirmation](assignment-success-mobile.png)
+The earlier screenshots showed the previous inline form and were removed when assignment moved into a pop-up. The component tests cover the pop-up, its payload, cancel, retry and the retained confirmation.
 
 ## Regression coverage
 

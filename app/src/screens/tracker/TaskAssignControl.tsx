@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import {
   TaskAssignmentError,
   useTaskAssignment,
 } from '../../queries/task-assignment';
@@ -68,49 +76,67 @@ export function TaskAssignControl({
           Executorul a fost atribuit.
         </p>
       )}
-      {canAssign &&
-        (open ? (
-          <form onSubmit={submit} className="space-y-3">
-            <DirectExecutorSelector
-              originGroupId={groupId}
-              value={memberId}
-              onChange={setMemberId}
-              disabled={mutation.isPending}
-            />
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={!memberId || mutation.isPending}>
-                {mutation.isPending ? 'Se atribuie…' : 'Confirmă atribuirea'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={mutation.isPending}
-                onClick={() => setOpen(false)}
-              >
-                Înapoi
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-sm">Taskul direct nu are un executor.</p>
-            <Button
-              type="button"
-              onClick={() => {
-                setOpen(true);
+      {canAssign && (
+        <div className="space-y-2">
+          <p className="text-sm">Taskul nu are un executor.</p>
+          <Dialog
+            open={open}
+            onOpenChange={(next) => {
+              if (mutation.isPending) return;
+              setOpen(next);
+              if (next) {
                 setSuccess(false);
                 setError(null);
-              }}
-            >
+              }
+            }}
+          >
+            <Button type="button" onClick={() => setOpen(true)}>
               Atribuie
             </Button>
-          </div>
-        ))}
+            {/* After a save, focus lands on the confirmation: the Atribuie
+                button disappears once the Task has an Executor. */}
+            <DialogContent finalFocus={() => receipt.current ?? true}>
+              <form onSubmit={submit} className="grid gap-4">
+                <DialogHeader>
+                  <DialogTitle>Atribuie taskul</DialogTitle>
+                  <DialogDescription>
+                    Alege membrul care va lucra la acest task.
+                  </DialogDescription>
+                </DialogHeader>
+                <DirectExecutorSelector
+                  originGroupId={groupId}
+                  value={memberId}
+                  onChange={setMemberId}
+                  disabled={mutation.isPending}
+                />
+                {error && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={mutation.isPending}
+                    onClick={() => setOpen(false)}
+                  >
+                    Renunță
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={!memberId || mutation.isPending}
+                  >
+                    {mutation.isPending
+                      ? 'Se atribuie…'
+                      : 'Confirmă atribuirea'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
     </section>
   );
 }
