@@ -59,6 +59,8 @@ export const keys = {
   },
   tasks: {
     all: ['tasks'] as const,
+    directExecutors: (memberId: string | undefined) =>
+      ['tasks', 'direct-executors', { memberId }] as const,
     memberHistory: (memberId: string | undefined, targetId: string) =>
       ['tasks', 'member-history', memberId, targetId] as const,
     mine: (memberId: string | undefined) =>
