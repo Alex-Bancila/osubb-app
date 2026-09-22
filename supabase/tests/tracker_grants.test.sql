@@ -606,11 +606,16 @@ insert into pinned_private_functions (proname, args, category) values
   -- public.my_capabilities() / public.my_groups().
   ('holds_any_group_role', '', 'predicate'),
   ('my_capabilities_impl', '', 'impl'),
-  ('my_groups_impl',       '', 'impl');
+  ('my_groups_impl',       '', 'impl'),
+  -- #601: the Group Audience (roster rows below the Group plus Automatic
+  -- Membership) behind Event and announcement fan-out. Internal only: no
+  -- client role executes it, event_notification_recipients and the
+  -- announcement fan-out call it as definer.
+  ('group_audience', 'p_group_id bigint', 'none');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 141,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies');
+  (select count(*) from pinned_private_functions)::int, 142,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
