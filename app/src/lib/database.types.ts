@@ -805,6 +805,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: number
+          is_organization: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -829,6 +830,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -853,6 +855,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: never
+          is_organization?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -1579,6 +1582,130 @@ export type Database = {
           rating?: number
         }
         Relationships: []
+      }
+      role_history: {
+        Row: {
+          actor_kind: string
+          changed_by: string | null
+          created_at: string
+          from_role: Database["public"]["Enums"]["member_role"]
+          from_status: Database["public"]["Enums"]["member_status"] | null
+          id: number
+          member_id: string
+          reason: string
+          to_role: Database["public"]["Enums"]["member_role"]
+          to_status: Database["public"]["Enums"]["member_status"] | null
+        }
+        Insert: {
+          actor_kind: string
+          changed_by?: string | null
+          created_at?: string
+          from_role: Database["public"]["Enums"]["member_role"]
+          from_status?: Database["public"]["Enums"]["member_status"] | null
+          id?: never
+          member_id: string
+          reason: string
+          to_role: Database["public"]["Enums"]["member_role"]
+          to_status?: Database["public"]["Enums"]["member_status"] | null
+        }
+        Update: {
+          actor_kind?: string
+          changed_by?: string | null
+          created_at?: string
+          from_role?: Database["public"]["Enums"]["member_role"]
+          from_status?: Database["public"]["Enums"]["member_status"] | null
+          id?: never
+          member_id?: string
+          reason?: string
+          to_role?: Database["public"]["Enums"]["member_role"]
+          to_status?: Database["public"]["Enums"]["member_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_history_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       roles: {
         Row: {
@@ -2949,6 +3076,23 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
       }
+      campaign_report: {
+        Args: { p_campaign_id: number }
+        Returns: {
+          full_name: string
+          member_id: string
+          points: number
+          tasks_completed: number
+        }[]
+      }
+      campaign_totals: {
+        Args: { p_campaign_id: number }
+        Returns: {
+          points_total: number
+          tasks_completed: number
+          tasks_total: number
+        }[]
+      }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
       cancel_event: {
@@ -3597,6 +3741,21 @@ export type Database = {
           task_id: number
         }[]
       }
+      preview_task_update: {
+        Args: {
+          p_assignment_mode: string
+          p_audience: string
+          p_campaign_id: number
+          p_deadline: string
+          p_description: string
+          p_task_id: number
+          p_title: string
+        }
+        Returns: {
+          consequence: string
+          member_id: string
+        }[]
+      }
       provision_profile: {
         Args: {
           p_dept_ids?: string[]
@@ -3821,6 +3980,56 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_member_role: {
+        Args: {
+          p_member_id: string
+          p_role: Database["public"]["Enums"]["member_role"]
+        }
+        Returns: {
+          avatar_color: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          joined_at: string | null
+          joined_year: number | null
+          phone: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          tier: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_member_status: {
+        Args: {
+          p_member_id: string
+          p_status: Database["public"]["Enums"]["member_status"]
+        }
+        Returns: {
+          avatar_color: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          joined_at: string | null
+          joined_year: number | null
+          phone: string | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
+          tier: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_task_queue: {
         Args: { p_open: boolean; p_task_id: number }
         Returns: {
@@ -4001,6 +4210,56 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_task: {
+        Args: {
+          p_accept_consequences?: boolean
+          p_assignment_mode: string
+          p_audience: string
+          p_campaign_id: number
+          p_deadline: string
+          p_description: string
+          p_task_id: number
+          p_title: string
+        }
+        Returns: {
+          assignment_mode: string | null
+          audience: string | null
+          campaign_id: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          dept_id: string | null
+          description: string | null
+          difficulty: number | null
+          duplicated_from_task_id: number | null
+          group_id: number
+          id: number
+          kind: string
+          parent_task_id: number | null
+          project_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
+          rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
+          team_id: string | null
+          title: string
+          type: string | null
+          unfulfilled_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
           isOneToOne: true
           isSetofReturn: false
         }

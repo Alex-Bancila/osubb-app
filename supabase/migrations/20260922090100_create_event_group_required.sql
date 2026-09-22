@@ -1,6 +1,6 @@
 -- #370: name the missing Group as malformed input, before any authority gate.
 --
--- 20260919203659_group_event_creation.sql left `p_group_id => null` to fall out of the Group
+-- 20260922090000_group_event_creation.sql left `p_group_id => null` to fall out of the Group
 -- lookup as `42501 calendar_manage_forbidden`, which reads as "you may not" for what is in
 -- fact "you did not say where". The Wave 2 plan's step order puts every malformed-input check
 -- ahead of the gate so a claimless caller is told what is wrong with the call rather than
