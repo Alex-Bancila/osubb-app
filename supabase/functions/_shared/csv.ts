@@ -1,16 +1,18 @@
 import { parse } from "@std/csv";
+import type { GroupLookup } from "./groups.ts";
 
-export interface RecruitCsvReferences {
-  departmentIds: ReadonlySet<string>;
-  teamIds: ReadonlySet<string>;
-}
+/**
+ * What a row's `dept` and `team` values are resolved against (#602). The header
+ * is unchanged; only what the two columns MEAN moved from legacy ids to Groups.
+ */
+export type RecruitCsvReferences = GroupLookup;
 
 export interface RecruitCsvRow {
   row: number;
   fullName: string;
   email: string;
-  deptIds: string[];
-  teamIds: string[];
+  /** The Groups this recruit is appointed into, in file order, deduplicated. */
+  groupIds: number[];
 }
 
 export interface RecruitCsvError {
@@ -101,31 +103,67 @@ export function parseRecruitsCsv(
         message: "Email invalid.",
       });
     }
-    if (dept && !references.departmentIds.has(dept)) {
-      errors.push({
-        row,
-        field: "dept",
-        code: "unknown_department",
-        message: `Departament inexistent: ${dept}.`,
-      });
+    // A `dept` value names one active Group by short or display name. Two
+    // Groups answering to the same spelling is reported rather than guessed:
+    // picking one would put a recruit in the wrong Department silently, and
+    // the row-level codes stay the ones the panel already renders.
+    let deptId: number | null = null;
+    if (dept) {
+      const candidates = references.resolve(dept);
+      if (candidates.length === 0) {
+        errors.push({
+          row,
+          field: "dept",
+          code: "unknown_department",
+          message: `Departament inexistent: ${dept}.`,
+        });
+      } else if (candidates.length > 1) {
+        errors.push({
+          row,
+          field: "dept",
+          code: "unknown_department",
+          message: `Departament ambiguu: ${dept}.`,
+        });
+      } else {
+        deptId = candidates[0];
+      }
     }
-    if (team && !references.teamIds.has(team)) {
-      errors.push({
-        row,
-        field: "team",
-        code: "unknown_team",
-        message: `Echipă inexistentă: ${team}.`,
-      });
+
+    // A `team` value is resolved INSIDE its row's Department: the same Team
+    // name under two Departments is ordinary, and a Team that is not below the
+    // Department named on the row is not that row's Team at all — it is
+    // reported with the same `unknown_team` code, because from the
+    // spreadsheet's point of view there is no such Team in that Department.
+    let teamId: number | null = null;
+    if (team) {
+      const resolved = references.resolve(team);
+      const candidates = deptId === null
+        ? resolved
+        : resolved.filter((id) => references.isBelow(id, deptId as number));
+      if (candidates.length === 0) {
+        errors.push({
+          row,
+          field: "team",
+          code: "unknown_team",
+          message: `Echipă inexistentă: ${team}.`,
+        });
+      } else if (candidates.length > 1) {
+        errors.push({
+          row,
+          field: "team",
+          code: "unknown_team",
+          message: `Echipă ambiguă: ${team}.`,
+        });
+      } else {
+        teamId = candidates[0];
+      }
     }
 
     if (errors.length === firstError) {
-      valid.push({
-        row,
-        fullName,
-        email,
-        deptIds: dept ? [dept] : [],
-        teamIds: team ? [team] : [],
-      });
+      const groupIds = [...new Set([deptId, teamId])].filter(
+        (id): id is number => id !== null,
+      );
+      valid.push({ row, fullName, email, groupIds });
     }
   }
 

@@ -3,11 +3,17 @@
 // magic-link invite, and the member is provisioned in the same request.
 // Spec §5.1. The CSV import (#72) reuses this path, one row at a time.
 //
-// POST { email, full_name, role?, dept_ids?, team_ids? }
+// POST { email, full_name, role?, group_ids? }
 //   201 { user_id }        invited and provisioned
 //   400                    bad input
 //   401 / 403              not signed in / not BC (level < 6)
 //   409                    that email already has an account
+//
+// Since #602 the initial placement is a list of GROUP ids, appointed through
+// the roster path with the caller as the Appointment's actor. `dept_ids` and
+// `team_ids` are gone and are refused loudly rather than ignored: a silently
+// dropped field would create a member placed nowhere, which is worse than an
+// error a BC can read.
 //
 // The ORDER of the steps below is the security-relevant part, and each step
 // is there because of a bug this function actually shipped with — see the
@@ -23,8 +29,7 @@ interface InviteRequest {
   email?: string;
   full_name?: string;
   role?: string;
-  dept_ids?: string[];
-  team_ids?: string[];
+  group_ids?: unknown;
 }
 
 export async function handleInvite(
@@ -82,6 +87,20 @@ export async function handleInvite(
     return json({ error: "Corp de cerere invalid (JSON)." }, 400, origin);
   }
 
+  if (
+    typeof body !== "object" || body === null ||
+    "dept_ids" in body || "team_ids" in body
+  ) {
+    return json(
+      {
+        error:
+          "Câmpurile dept_ids și team_ids nu mai există. Trimite group_ids.",
+      },
+      400,
+      origin,
+    );
+  }
+
   const email = body.email?.trim().toLowerCase();
   const fullName = body.full_name?.trim();
   if (!email || !email.includes("@")) {
@@ -91,13 +110,26 @@ export async function handleInvite(
     return json({ error: "Numele este obligatoriu." }, 400, origin);
   }
 
+  const rawGroupIds = body.group_ids ?? [];
+  if (
+    !Array.isArray(rawGroupIds) ||
+    rawGroupIds.some((id) => !Number.isSafeInteger(id))
+  ) {
+    return json(
+      { error: "group_ids trebuie să fie o listă de id-uri de grup." },
+      400,
+      origin,
+    );
+  }
+  const groupIds = rawGroupIds as number[];
+
   try {
     const result = await inviteMember({
       fullName,
       email,
       role: body.role ?? "recrut",
-      deptIds: body.dept_ids ?? [],
-      teamIds: body.team_ids ?? [],
+      groupIds,
+      appointedBy: callerId,
     }, deps);
 
     switch (result.kind) {
@@ -123,7 +155,7 @@ export async function handleInvite(
         return json(
           {
             error:
-              "Datele membrului nu sunt valide (departament sau echipă inexistentă).",
+              "Datele membrului nu sunt valide (un grup inexistent, arhivat, automat sau peste nivelul membrului).",
             details: result.details,
           },
           400,
