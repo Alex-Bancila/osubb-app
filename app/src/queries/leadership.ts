@@ -94,7 +94,7 @@ export function useLeadershipCup(campaignId?: number) {
 export function useLeadershipFilters() {
   const memberId = useAuth().session?.user.id;
   return useQuery({
-    queryKey: ['leadership', 'filters', memberId],
+    queryKey: keys.leadership.filters(memberId),
     queryFn: memberId ? fetchLeadershipFilters : skipToken,
   });
 }
@@ -109,7 +109,7 @@ export function useLeadershipMemberTasks(targetId: string) {
 export function useLeadershipMemberName(targetId: string) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
-    queryKey: ['leadership', 'member-name', memberId, targetId],
+    queryKey: keys.leadership.memberName(memberId, targetId),
     queryFn: memberId
       ? async () => {
           const { data, error } = await supabase

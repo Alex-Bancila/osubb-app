@@ -95,6 +95,15 @@ export const keys = {
     feed: (memberId?: string) =>
       ['announcements', 'feed', { memberId }] as const,
   },
+  /* Leadership page support reads (the metrics themselves live under points
+     and tasks, so evaluations refresh them). */
+  leadership: {
+    all: ['leadership'] as const,
+    filters: (memberId: string | undefined) =>
+      ['leadership', 'filters', { memberId }] as const,
+    memberName: (memberId: string | undefined, targetId: string) =>
+      ['leadership', 'member-name', { memberId, targetId }] as const,
+  },
   notifications: {
     all: ['notifications'] as const,
     /* The Notification centre and its badge are both "mine", so both carry the

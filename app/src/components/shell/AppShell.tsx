@@ -272,7 +272,7 @@ export default function AppShell() {
               className="m-4 rounded-lg border border-border bg-card p-4"
             >
               Clasamentul și istoricul membrilor sunt disponibile doar
-              conducerii active (nivel 5 sau mai mare).
+              conducerii OSUBB.
             </p>
           )}
           <Outlet />

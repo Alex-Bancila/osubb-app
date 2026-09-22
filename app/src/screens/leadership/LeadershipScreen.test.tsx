@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -47,7 +47,10 @@ beforeEach(() => {
   });
   state.options.mockReturnValue({
     data: {
-      groups: [{ id: 7, name: 'Educație', path: [7], status: 'active' }],
+      groups: [
+        { id: 7, name: 'Educație', path: [7], status: 'active' },
+        { id: 9, name: 'Mentorat', path: [7, 9], status: 'active' },
+      ],
       campaigns: [{ id: 3, name: 'Bun venit', group_id: 7 }],
     },
   });
@@ -56,7 +59,8 @@ it('changes authoritative filters, displays returned totals and removes chips', 
   const user = userEvent.setup();
   renderPage();
   expect(screen.getByText('−1.234')).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText('Grup'), '7');
+  await user.click(screen.getByRole('combobox', { name: 'Grup' }));
+  await user.click(await screen.findByRole('option', { name: 'Educație' }));
   expect(state.board).toHaveBeenLastCalledWith({
     groupId: 7,
     campaignId: undefined,
@@ -66,7 +70,7 @@ it('changes authoritative filters, displays returned totals and removes chips', 
   expect(state.board).toHaveBeenLastCalledWith({ groupId: 7, campaignId: 3 });
   expect(state.cup).toHaveBeenLastCalledWith(3);
   await user.click(
-    screen.getByRole('button', { name: 'Grup: Educație · Elimină' }),
+    screen.getByRole('button', { name: 'Elimină filtrul Grup: Educație' }),
   );
   expect(state.board).toHaveBeenLastCalledWith({
     groupId: undefined,
@@ -158,4 +162,24 @@ it('does not mount protected reads while live access is loading or failed', asyn
   );
   expect(retry).toHaveBeenCalled();
   expect(state.board).not.toHaveBeenCalled();
+});
+
+it('searches Groups by name or parent and labels a Child Group with its parent', async () => {
+  const user = userEvent.setup();
+  renderPage();
+  await user.click(screen.getByRole('combobox', { name: 'Grup' }));
+  await user.type(await screen.findByPlaceholderText('Caută un grup'), 'educ');
+  // "Mentorat · Educație" matches through its parent's name.
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole('listbox'))
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Educație', 'Mentorat· Educație']),
+  );
+  await user.click(screen.getByRole('option', { name: /Mentorat/ }));
+  expect(state.board).toHaveBeenLastCalledWith({
+    groupId: 9,
+    campaignId: undefined,
+  });
 });

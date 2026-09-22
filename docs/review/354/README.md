@@ -6,9 +6,13 @@ The page uses the existing leadership RPCs and the live leadership capability. R
 
 Screenshots use synthetic local browser responses and a public fixture key, without real member data. Mobile evidence includes the lower Cup section separately because the application scrolls inside its shell.
 
-| Desktop                                       | Mobile                                                       |
-| --------------------------------------------- | ------------------------------------------------------------ |
-| [Leaderboard and Cup](leadership-desktop.png) | [Leaderboard](leadership-mobile.png) · [Cup](cup-mobile.png) |
-| [Member history](member-history-desktop.png)  | [Member history](member-history-mobile.png)                  |
+| Desktop                                      | Mobile                                      |
+| -------------------------------------------- | ------------------------------------------- |
+| —                                            | [Cup](cup-mobile.png)                       |
+| [Member history](member-history-desktop.png) | [Member history](member-history-mobile.png) |
+
+The leaderboard screenshots were removed on 2026-09-22: the Group filter is
+now a searchable Group picker (`Name · Parent`) and the filter chips carry a
+remove icon, so they no longer matched the page.
 
 Tests cover Group and Campaign parameters, changing returned totals, filter chips, stable pagination and partial failures, row/link navigation, live and route access gates, empty/loading/error/retry states, ended assignments and reversed evaluations. Both new screens are checked with axe. The final Chromium checks inside the real application shell report zero violations, including color contrast; jsdom checks exclude color contrast.

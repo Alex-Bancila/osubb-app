@@ -1,12 +1,24 @@
 import { formatPoints } from '../../lib/format';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Trophy } from 'lucide-react';
+import { Trophy, XIcon } from 'lucide-react';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
 import { Button } from '../../components/ui/button';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+  GroupOption,
+  groupOptionLabel,
+} from '../../components/ui/combobox';
 import {
   useLeadershipLeaderboard,
   useLeadershipCup,
@@ -38,6 +50,62 @@ const columns: DataTableColumn<LeaderboardRow>[] = [
     ),
   },
 ];
+type FilterGroup = {
+  id: number;
+  name: string;
+  path: number[];
+  status: string;
+};
+
+// A searchable Group picker: `Name · Parent` tells two same-named teams apart,
+// and choosing a parent Group counts every Group below it.
+function GroupFilter({
+  groups,
+  value,
+  onChange,
+}: {
+  groups: FilterGroup[];
+  value: FilterGroup | null;
+  onChange: (group: FilterGroup | null) => void;
+}) {
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
+  const label = (group: FilterGroup) =>
+    groupOptionLabel(group, groupsById) +
+    (group.status === 'archived' ? ' (arhivat)' : '');
+  return (
+    <div className="grid gap-1 text-sm font-medium">
+      <span id="leadership-group-label">Grup</span>
+      <Combobox
+        items={groups}
+        value={value}
+        onValueChange={(group: FilterGroup | null) => onChange(group)}
+        itemToStringLabel={label}
+      >
+        <ComboboxTrigger aria-labelledby="leadership-group-label">
+          <ComboboxValue placeholder="Toate grupurile" />
+        </ComboboxTrigger>
+        <ComboboxContent>
+          <ComboboxInput
+            placeholder="Caută un grup"
+            aria-label="Caută un grup"
+          />
+          <ComboboxEmpty />
+          <ComboboxList>
+            {(group: FilterGroup) => (
+              <ComboboxItem key={group.id} value={group}>
+                <GroupOption group={group} groupsById={groupsById} />
+                {group.status === 'archived' && (
+                  <span className="text-xs text-muted-foreground">arhivat</span>
+                )}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
+    </div>
+  );
+}
+
 const selectStyle =
   'min-h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring';
 function LeadershipContent() {
@@ -80,27 +148,11 @@ function LeadershipContent() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-medium">
-              Grup
-              <select
-                className={selectStyle}
-                value={groupId ?? ''}
-                onChange={(event) =>
-                  setGroupId(
-                    event.target.value ? Number(event.target.value) : undefined,
-                  )
-                }
-              >
-                <option value="">Toate grupurile</option>
-                {options.data.groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {'— '.repeat(Math.max(0, group.path.length - 1))}
-                    {group.name}
-                    {group.status === 'archived' ? ' (arhivat)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <GroupFilter
+              groups={options.data.groups}
+              value={selectedGroup ?? null}
+              onChange={(group) => setGroupId(group?.id)}
+            />
             <label className="grid gap-1 text-sm font-medium">
               Campanie
               <select
@@ -127,18 +179,29 @@ function LeadershipContent() {
           membrilor. Campania filtrează și Cupa.
         </p>
         {(groupId || campaignId) && (
-          <div className="flex flex-wrap gap-2" aria-label="Filtre active">
+          <div
+            role="group"
+            className="flex flex-wrap gap-2"
+            aria-label="Filtre active"
+          >
             {groupId && (
-              <Button variant="secondary" onClick={() => setGroupId(undefined)}>
-                Grup: {selectedGroup?.name ?? `#${groupId}`} · Elimină
+              <Button
+                variant="secondary"
+                aria-label={`Elimină filtrul Grup: ${selectedGroup?.name ?? groupId}`}
+                onClick={() => setGroupId(undefined)}
+              >
+                Grup: {selectedGroup?.name ?? `#${groupId}`}
+                <XIcon aria-hidden="true" />
               </Button>
             )}
             {campaignId && (
               <Button
                 variant="secondary"
+                aria-label={`Elimină filtrul Campanie: ${selectedCampaign?.name ?? campaignId}`}
                 onClick={() => setCampaignId(undefined)}
               >
-                Campanie: {selectedCampaign?.name ?? `#${campaignId}`} · Elimină
+                Campanie: {selectedCampaign?.name ?? `#${campaignId}`}
+                <XIcon aria-hidden="true" />
               </Button>
             )}
           </div>
