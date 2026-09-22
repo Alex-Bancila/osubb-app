@@ -3,7 +3,7 @@ import { TaskCancelControl } from './TaskCancelControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import {
   Sheet,
@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../lib/auth';
 import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
+import { TaskDuplicateControl } from './TaskDuplicateControl';
 import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { TaskQueueControl } from './TaskQueueControl';
@@ -52,14 +53,19 @@ function TaskDetails({
   const sourceId = task.duplicatedFromTaskId;
   return (
     <div className="space-y-5">
-      <TaskCard
-        task={task}
-        memberId={memberId}
-        pending={progress.isPending}
-        onProgress={(selectedId, action) =>
-          progress.mutateAsync({ taskId: selectedId, action })
-        }
-      />
+      <div className="[&>article]:h-auto [&_[data-slot=card]]:h-auto">
+        <TaskCard
+          task={task}
+          memberId={memberId}
+          pending={progress.isPending}
+          onProgress={(selectedId, action) =>
+            progress.mutateAsync({ taskId: selectedId, action })
+          }
+        />
+      </div>
+      {canManage && task.kind === 'task' && (
+        <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
+      )}
       <TaskEditControl task={query.data.task} canManage={canManage} />
       <TaskAssignControl
         taskId={taskId}
@@ -211,6 +217,7 @@ export function TaskDetailsSheet({
   managedTaskIds?: ReadonlySet<number>;
   onClose: () => void;
 }) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const [relatedId, setRelatedId] = useState<number | null>(null);
   return (
     <Sheet
@@ -229,7 +236,11 @@ export function TaskDetailsSheet({
           aria-describedby={undefined}
         >
           <div className="mb-5 flex items-center justify-between gap-3">
-            <SheetTitle className="text-xl font-semibold">
+            <SheetTitle
+              ref={titleRef}
+              tabIndex={-1}
+              className="text-xl font-semibold"
+            >
               Detalii task
             </SheetTitle>
             <SheetClose className="min-h-11 min-w-11 rounded-md border border-input px-3 focus-visible:outline-2 focus-visible:outline-ring">
@@ -241,7 +252,10 @@ export function TaskDetailsSheet({
               key={relatedId ?? taskId}
               taskId={relatedId ?? taskId}
               canManage={managedTaskIds.has(relatedId ?? taskId)}
-              onNavigate={setRelatedId}
+              onNavigate={(id) => {
+                setRelatedId(id);
+                titleRef.current?.focus();
+              }}
             />
           )}
         </SheetPopup>
