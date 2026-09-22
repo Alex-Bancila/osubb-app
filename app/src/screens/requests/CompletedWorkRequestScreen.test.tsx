@@ -81,7 +81,19 @@ describe('CompletedWorkRequestScreen', () => {
     expect(screen.getByText('Aprobată')).toBeVisible();
     expect(screen.getByText('Respinsă')).toBeVisible();
     expect(screen.getByText('Adaugă detalii despre rezultat.')).toBeVisible();
+    expect(screen.getByText('Motivul respingerii:')).toBeVisible();
     expect(screen.getByText('Mulțumim pentru contribuție.')).toBeVisible();
+    expect(screen.getByText('Notă:')).toBeVisible();
+    // Each state is told by an icon and its word, not by colour alone.
+    for (const [label, status] of [
+      ['În așteptare', 'pending'],
+      ['Aprobată', 'approved'],
+      ['Respinsă', 'rejected'],
+    ] as const) {
+      const badge = screen.getByText(label);
+      expect(badge).toHaveAttribute('data-status', status);
+      expect(badge.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
     await userEvent.click(
       screen.getByRole('button', { name: 'Deschide taskul #42' }),
     );
