@@ -350,7 +350,20 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #576: the capability row and the caller's effective Groups. Read-only
   -- wrappers with the same grant shape as every other wrapper.
   ('my_capabilities',        '',                                     false, true,  false, false),
-  ('my_groups',              '',                                     false, true,  false, false);
+  ('my_groups',              '',                                     false, true,  false, false),
+  -- #582: the four Group structure command wrappers. Same grant shape as
+  -- every other wrapper -- authenticated only -- even though only BC, the
+  -- Moderator and a Group's own Managers get past their gates.
+  ('create_group',
+   'p_name text, p_category text, p_parent_id bigint, p_min_level integer, p_manager_id uuid, p_color text, p_short text',
+                                                                     false, true,  false, false),
+  ('update_group',
+   'p_group_id bigint, p_name text, p_manager_title text, p_accepts_applications boolean, p_application_level integer, p_shared_work_visibility boolean, p_min_level integer, p_confirm_removals boolean',
+                                                                     false, true,  false, false),
+  ('update_group_structure',
+   'p_group_id bigint, p_category text, p_competes_in_cup boolean, p_counts_toward_parent_cup boolean, p_automatic_membership boolean, p_min_level integer, p_color text, p_short text, p_is_organization boolean, p_confirm_removals boolean',
+                                                                     false, true,  false, false),
+  ('archive_group',          'p_group_id bigint',                    false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -606,11 +619,30 @@ insert into pinned_private_functions (proname, args, category) values
   ('group_audience', 'p_group_id bigint', 'none'),
   -- #601: the Event visibility rule, one definition read by the events_read
   -- policy (for the caller) and by event_notification_recipients (per recipient).
-  ('can_read_event', 'p_min_level integer, p_member uuid', 'predicate');
+  ('can_read_event', 'p_min_level integer, p_member uuid', 'predicate'),
+  -- #582: the Manager tier of the Group authority kit (ruling R19) -- a
+  -- require_* helper, so nobody may execute it directly -- and the four Group
+  -- structure command bodies behind public.create_group / update_group /
+  -- update_group_structure / archive_group.
+  ('require_group_manager', 'p_group_id bigint', 'require'),
+  ('create_group_impl',
+   'p_name text, p_category text, p_parent_id bigint, p_min_level integer, p_manager_id uuid, p_color text, p_short text',
+   'impl'),
+  ('update_group_impl',
+   'p_group_id bigint, p_name text, p_manager_title text, p_accepts_applications boolean, p_application_level integer, p_shared_work_visibility boolean, p_min_level integer, p_confirm_removals boolean',
+   'impl'),
+  ('update_group_structure_impl',
+   'p_group_id bigint, p_category text, p_competes_in_cup boolean, p_counts_toward_parent_cup boolean, p_automatic_membership boolean, p_min_level integer, p_color text, p_short text, p_is_organization boolean, p_confirm_removals boolean',
+   'impl'),
+  ('archive_group_impl', 'p_group_id bigint', 'impl'),
+  -- #582: the Event cancellation EFFECT, with no gate of its own. Two definer
+  -- callers bring their own authority (cancel_event_impl the actor's,
+  -- archive_group_impl the Group's), so no client role may execute it.
+  ('cancel_event_effect', 'p_event_id bigint, p_reason text, p_actor uuid', 'none');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 136,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
+  (select count(*) from pinned_private_functions)::int, 142,
+  'the audited roster includes #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
