@@ -19,6 +19,7 @@ import { useTaskProgress } from '../../queries/task-progress';
 import { TaskDuplicateControl } from './TaskDuplicateControl';
 import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
+import { UmbrellaTaskSection } from './UmbrellaTaskSection';
 import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { TaskEditControl } from './TaskEditControl';
@@ -154,26 +155,13 @@ function TaskDetails({
         </p>
       )}
       {task.kind === 'umbrella' && (
-        <section aria-label="Subtaskuri">
-          <h3 className="font-semibold">Subtaskuri vizibile</h3>
-          {query.data.subtasks.length ? (
-            <ul>
-              {query.data.subtasks.map((child) => (
-                <li key={child.id}>
-                  <Button
-                    variant="link"
-                    className="min-h-11 min-w-11 whitespace-normal text-foreground"
-                    onClick={() => onNavigate(child.id)}
-                  >
-                    {child.title}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>Niciun subtask vizibil.</p>
-          )}
-        </section>
+        <UmbrellaTaskSection
+          taskId={taskId}
+          status={task.status}
+          subtasks={query.data.subtasks}
+          canManage={canManage}
+          onNavigate={onNavigate}
+        />
       )}
       {canManage &&
         task.kind === 'task' &&
