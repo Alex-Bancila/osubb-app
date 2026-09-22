@@ -20,3 +20,7 @@ e06dbb65641bbcf31c25cf883a3914517afeeea5:app/.env.example:jwt:15
 # The identical fixture string, copied verbatim into a planning document's
 # code excerpt of the same test.
 96a87dc490254b6db0555e68d1bc77fd5753ef1d:docs/superpowers/plans/2026-09-10-alex-assigned-issues.md:generic-api-key:687
+
+# #598: the same synthetic fixture ('x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y', explained
+# above) inside the new `sessionFor` test helper — moved, not new.
+39464332f458a9b5b12780b06a168177c9473605:app/src/lib/auth.test.tsx:generic-api-key:63
