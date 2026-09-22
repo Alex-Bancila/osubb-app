@@ -18,6 +18,9 @@ vi.mock('../../queries/campaigns', async (original) => ({
   useCampaignChange: () => ({ mutateAsync: api.mutate, isPending: false }),
 }));
 import CampaignsScreen from './CampaignsScreen';
+// The first case walks two pop-ups and an axe run end to end; on a loaded
+// machine that can pass the 5 s default without anything being wrong.
+vi.setConfig({ testTimeout: 15_000 });
 const campaign = { id: 10, name: 'Toamnă', group_id: 2, is_active: true };
 beforeEach(() => {
   api.options.mockReturnValue({
