@@ -7,18 +7,8 @@ import {
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
 import { Button } from '../../components/ui/button';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-  ComboboxValue,
-  GroupOption,
-  groupOptionLabel,
-} from '../../components/ui/combobox';
+import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
+import { GroupOption, groupOptionLabel } from '../../components/ui/combobox';
 import {
   useLeadershipLeaderboard,
   useLeadershipCup,
@@ -75,33 +65,23 @@ function GroupFilter({
   return (
     <div className="grid gap-1 text-sm font-medium">
       <span id="leadership-group-label">Grup</span>
-      <Combobox
-        items={groups}
+      <GroupFilterCombobox
+        ariaLabelledBy="leadership-group-label"
+        groups={groups}
+        groupsById={groupsById}
         value={value}
-        onValueChange={(group: FilterGroup | null) => onChange(group)}
+        onValueChange={onChange}
+        placeholder="Toate grupurile"
         itemToStringLabel={label}
-      >
-        <ComboboxTrigger aria-labelledby="leadership-group-label">
-          <ComboboxValue placeholder="Toate grupurile" />
-        </ComboboxTrigger>
-        <ComboboxContent>
-          <ComboboxInput
-            placeholder="Caută un grup"
-            aria-label="Caută un grup"
-          />
-          <ComboboxEmpty />
-          <ComboboxList>
-            {(group: FilterGroup) => (
-              <ComboboxItem key={group.id} value={group}>
-                <GroupOption group={group} groupsById={groupsById} />
-                {group.status === 'archived' && (
-                  <span className="text-xs text-muted-foreground">arhivat</span>
-                )}
-              </ComboboxItem>
+        renderItem={(group) => (
+          <>
+            <GroupOption group={group} groupsById={groupsById} />
+            {group.status === 'archived' && (
+              <span className="text-xs text-muted-foreground">arhivat</span>
             )}
-          </ComboboxList>
-        </ComboboxContent>
-      </Combobox>
+          </>
+        )}
+      />
     </div>
   );
 }

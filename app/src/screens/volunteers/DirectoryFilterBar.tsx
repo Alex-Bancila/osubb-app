@@ -2,18 +2,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { CheckIcon, ListFilter, Search, XIcon } from 'lucide-react';
 import { cn } from 'cn';
 import { Button } from '../../components/ui/button';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-  ComboboxValue,
-  GroupOption,
-  groupOptionLabel,
-} from '../../components/ui/combobox';
+import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
+import { groupOptionLabel } from '../../components/ui/combobox';
 import {
   Dialog,
   DialogClose,
@@ -202,10 +192,12 @@ export function DirectoryFilterBar({
                 Nu am putut încărca grupurile.
               </p>
             ) : (
-              <Combobox
-                items={groupOptions.filter(
+              <GroupFilterCombobox
+                ariaLabelledBy="directory-filter-group"
+                groups={groupOptions.filter(
                   (group) => !filters.groupIds.includes(group.id),
                 )}
+                groupsById={groupsById}
                 value={null}
                 onValueChange={(group: Group | null) => {
                   if (group)
@@ -214,28 +206,8 @@ export function DirectoryFilterBar({
                       groupIds: [...filters.groupIds, group.id],
                     });
                 }}
-                itemToStringLabel={(group: Group) =>
-                  groupOptionLabel(group, groupsById)
-                }
-              >
-                <ComboboxTrigger aria-labelledby="directory-filter-group">
-                  <ComboboxValue placeholder="Adaugă un grup" />
-                </ComboboxTrigger>
-                <ComboboxContent>
-                  <ComboboxInput
-                    placeholder="Caută un grup"
-                    aria-label="Caută un grup"
-                  />
-                  <ComboboxEmpty />
-                  <ComboboxList>
-                    {(group: Group) => (
-                      <ComboboxItem key={group.id} value={group}>
-                        <GroupOption group={group} groupsById={groupsById} />
-                      </ComboboxItem>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
-              </Combobox>
+                placeholder="Adaugă un grup"
+              />
             )}
             <p className="text-muted-foreground">
               Un grup îi include și pe membrii grupurilor din el.
