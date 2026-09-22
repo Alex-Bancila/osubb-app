@@ -82,6 +82,44 @@ describe('Authorized Task timeline', () => {
     expect(screen.getByText('Atribuire: Publică')).toBeVisible();
     expect(screen.getByText('Campanie: #7')).toBeVisible();
   });
+  it('labels a task_updated row with the changed fields and its consequences (#626, #646)', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              changed: ['title', 'deadline'],
+              before: { title: 'Vechi', deadline: '2026-09-10T10:00:00Z' },
+              after: { title: 'Nou', deadline: '2026-09-20T10:00:00Z' },
+              consequences: [
+                { consequence: 'executor_removed', member_id: 'exec-1' },
+                { consequence: 'candidate_removed', member_id: 'cand-1' },
+                { consequence: 'candidate_removed', member_id: 'cand-2' },
+                { consequence: 'candidate_promoted', member_id: 'cand-3' },
+              ],
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('Task actualizat: titlu, termen')).toBeVisible();
+    expect(screen.getByText('executorul a fost eliminat')).toBeVisible();
+    expect(screen.getByText('2 candidaturi au fost închise')).toBeVisible();
+    expect(screen.getByText('un candidat a fost promovat')).toBeVisible();
+    // The generic before/after diff still renders underneath the sentence.
+    expect(screen.getByText('Titlu: Vechi')).toBeVisible();
+    expect(screen.getByText('Titlu: Nou')).toBeVisible();
+  });
+  it('falls back to the bare task_updated label when there is nothing to list', () => {
+    render(
+      <TaskTimeline
+        activity={[activity({ kind: 'task_updated', note: null, details: {} })]}
+      />,
+    );
+    expect(screen.getByText('Task actualizat')).toBeVisible();
+  });
   it('explains empty or partial legacy history', () => {
     render(<TaskTimeline activity={[]} />);
     expect(

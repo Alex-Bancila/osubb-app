@@ -42,6 +42,30 @@ export type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+/**
+ * How stale an access token may get before a regained focus refreshes it
+ * (#598). Organization Claims are stamped once at token issue
+ * (`jwt_expiry = 3600`), so without this a promotion, a confirmed Drept de
+ * Vot, or a raised Minimum Level would not reach the Member's claims until
+ * the token's hour ran out.
+ */
+const STALE_SESSION_THRESHOLD_MS = 15 * 60 * 1000;
+
+/** Never attempt a refresh more often than this, even if focus/visibility
+ * events fire in a burst. */
+const REFRESH_COOLDOWN_MS = 60 * 1000;
+
+/**
+ * Unix ms the current access token was issued, derived from the pair the
+ * real client always sets together (`expires_at` the timestamp it expires,
+ * `expires_in` the lifetime in seconds counted from issue). `null` when
+ * either is missing, so a caller skips the refresh instead of guessing.
+ */
+function tokenIssuedAtMs(session: Session): number | null {
+  if (session.expires_at == null) return null;
+  return (session.expires_at - session.expires_in) * 1000;
+}
+
 /* ⚠️ The claims are NOT on `session.user.app_metadata`.
    That object comes from the user record and holds only provider info —
    reading `session.user.app_metadata.member_role` returns undefined, silently,
@@ -101,6 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // member's stored session loading in) never wipes a legitimately warm cache.
   const lastUserId = useRef<string | null>(null);
 
+  // Read by the focus/visibility refresh effect below, which registers its
+  // listeners once (empty deps) and so cannot close over `session` directly.
+  const sessionRef = useRef<Session | null>(null);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
   useEffect(() => {
     let active = true;
 
@@ -143,6 +174,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, [queryClient]);
+
+  // Bounded refresh on regained focus (#598): closes the gap where a member
+  // just promoted, granted Drept de Vot, or raised past a Minimum Level
+  // reads their own change as if it never happened, without a Realtime
+  // dependency or a server change. `refreshSession()` failing leaves the
+  // current session exactly as it was — `onAuthStateChange` above only ever
+  // hears about a refresh that actually succeeded.
+  useEffect(() => {
+    let lastRefreshAt = 0;
+
+    function refreshIfStale() {
+      if (document.visibilityState !== 'visible') return;
+
+      const current = sessionRef.current;
+      if (!current) return;
+
+      const issuedAt = tokenIssuedAtMs(current);
+      if (issuedAt == null) return;
+
+      const now = Date.now();
+      if (now - issuedAt < STALE_SESSION_THRESHOLD_MS) return;
+      if (now - lastRefreshAt < REFRESH_COOLDOWN_MS) return;
+
+      lastRefreshAt = now;
+      void supabase.auth.refreshSession().catch(() => undefined);
+    }
+
+    document.addEventListener('visibilitychange', refreshIfStale);
+    window.addEventListener('focus', refreshIfStale);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfStale);
+      window.removeEventListener('focus', refreshIfStale);
+    };
+  }, []);
 
   // Decoded once per session object, not once per render or per query.
   const claims = useMemo(

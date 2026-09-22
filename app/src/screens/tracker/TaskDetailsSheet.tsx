@@ -25,7 +25,7 @@ import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { TaskEditControl } from './TaskEditControl';
 import { TaskEvaluationControl } from './TaskEvaluationControl';
-import { toTaskPresentation } from './task-presentation';
+import { isTerminalTask, toTaskPresentation } from './task-presentation';
 
 function TaskDetails({
   taskId,
@@ -166,7 +166,10 @@ function TaskDetails({
       )}
       {canManage &&
         task.kind === 'task' &&
-        !['completed', 'unfulfilled', 'cancelled'].includes(task.status) && (
+        !isTerminalTask(task.status) &&
+        // In review there is no Candidate to select; a direct Task has no queue
+        // toggle either, so the section would be empty.
+        !(task.status === 'in_review' && task.assignmentMode !== 'public') && (
           <section
             aria-labelledby={`task-${taskId}-candidate-heading`}
             className="space-y-3 rounded-lg border border-border p-4"
@@ -185,7 +188,13 @@ function TaskDetails({
             {task.assignmentMode === 'public' && (
               <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
             )}
-            <TaskCandidateSelector taskId={taskId} />
+            {/* private.select_task_candidate_impl refuses in_review with
+              PT409 task_in_review — a Task returned/evaluated mid-review is
+              never handed to someone else, so the selector has nothing to
+              offer here (#646). */}
+            {task.status !== 'in_review' && (
+              <TaskCandidateSelector taskId={taskId} />
+            )}
           </section>
         )}
       <details>
