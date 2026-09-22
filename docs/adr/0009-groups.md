@@ -2,10 +2,20 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-18
+- **Amended:** 2026-09-20 — Wave 2 as built: `create_event`'s Group signature, `update_event` / `cancel_event`, Campaign ownership by any Group, and the retirement of the level-4 Calendar gate
 - **Deciders:** Alex Băncilă (grilling session of 2026-09-18)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
 - **Related:** ADR-0003, ADR-0004, ADR-0007, ADR-0008, `CONTEXT.md`, `docs/backend/conventions.md`
+
+> **Amended 2026-09-20 — what Wave 2 actually landed.** The decision below stands; these are the shapes it took, recorded so the ADR can be read against the schema.
+>
+> - **`create_event` takes the owning Group, not a scope.** `create_event(p_title, p_type, p_group_id, p_starts_at, p_ends_at, p_location, p_capacity, p_description, p_min_level)` — the Group is the third argument and is required; everything after `p_starts_at` defaults. An unknown, archived, or unauthorized Group is refused as `42501 calendar_manage_forbidden`, so an id no one may use is indistinguishable from an id that does not exist; naming no Group at all is the caller's mistake, not a refusal, and answers `PT400 event_group_required` ahead of every gate (#370).
+> - **Two new commands complete the Calendar triple.** `update_event(p_event_id, p_title, p_type, p_group_id, p_starts_at, p_ends_at, p_location, p_capacity, p_description, p_min_level)` replaces an Event's whole content state and demands authority over both the old and the new Group when it moves one; `cancel_event(p_event_id, p_reason)` keeps the row and requires a reason. Both keep the Organization Group's creator-only rule, with BC and Moderator overriding it.
+> - **Moving an Event onto the Organization Group takes `create_event`'s rule, not the Group-Manager rule.** `update_event` normally re-runs `require_group_work_manager` on the target Group, but an Organization-Group **target** is admitted by level ≥ 6 or by holding any live Group Role anywhere — the same rule that lets a Department Coordonator raise an organization-wide Event (#370). It has to be: the Organization Group is _a_ root with no ancestor of its own, like every Department, Independent Team, and Project Group, so nobody could ever reach it through an ancestor role. This is a deliberate widening — any Group Responsible may pull an Event they already manage onto the organization calendar. `created_by` is not rewritten by a move, so a Responsible who moves someone else's Event there loses the right to edit it again the moment they do (the Organization **source** rule is creator or level ≥ 6), while the original creator keeps it. The target's `status = 'active'` requirement belongs to the move alone: an edit that leaves an Event in its own, since-archived Group is decided by the source rule by itself, so such an Event stays correctable by whoever may still manage it instead of being cancel-only (#248).
+> - **The level-4 Calendar gate is gone.** No Calendar command reads `member_level >= 4`; Event authority is the Group Role on the owning Group's path, and `events.min_level` now admits only `{0, 3, 5, 6}` (`events_min_level_ck`), with staging rows at 4 moved up to 5 rather than down.
+> - **A Campaign belongs to any Group.** `campaigns.group_id` is the owner and `create_campaign(p_group_id, p_name)` is the Group-side command; the Department-only `create_campaign(p_department_id, p_name)` survives Wave 2 only as a compatibility overload, disambiguated by parameter name, and goes in Wave 3.
+> - **`tasks`, `events`, `campaigns`, and `completed_work_requests` each carry `group_id`** with a `*_sync_group_origin` `before` trigger bridging it to the legacy columns in both directions. `events.scope` is derived, never written by a command. `docs/backend/conventions.md` §10 is the working rulebook for all of this, including the trigger-ordering rule the bridge depends on.
 
 ## Context
 

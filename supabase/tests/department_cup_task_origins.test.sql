@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(45);
+select plan(51);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -40,6 +40,17 @@ select ok(not has_function_privilege('service_role', 'private.department_cup_row
 -- restoring it.
 select ok(not has_table_privilege('service_role', 'public.dept_cup', 'SELECT'),
   'service_role holds no select on the Department Cup view -- it could never satisfy it without private schema usage');
+
+-- #523: the wrapper/body split itself. Only the private body may read the whole
+-- ledger past RLS, and only because it gates itself; the public entry point
+-- stays invoker so it cannot quietly become a second, wider door. Neither
+-- direction of that mutation -- a `security definer` wrapper, or a
+-- `security invoker` body -- moves a single figure in this file, so the split
+-- is pinned here instead of being inferred from the standings below.
+select is((select prosecdef from pg_proc where oid = 'public.department_cup(bigint)'::regprocedure),
+  false, 'the public Department Cup wrapper is security invoker');
+select is((select prosecdef from pg_proc where oid = 'private.department_cup_rows(bigint)'::regprocedure),
+  true, 'the private Department Cup body is security definer -- it reads the whole ledger past RLS and gates itself');
 
 -- ==================== 2. Group settings define the competing set ====================
 select set_eq(
@@ -236,6 +247,36 @@ select ok(exists(select 1 from public.department_cup(2590001) cup join public.gr
 select is((select members from public.dept_cup where dept_id='edu'),
   (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where legacy_dept_id='edu')),
   'Cup roster counts active explicit members of the competitor itself');
+
+-- #523: the attribution rule is the *nearest* competing ancestor-or-self, not
+-- the furthest. `groups_competes_top_level_ck` currently allows at most one
+-- competing Group on any path, so `order by depth desc` and `order by depth
+-- asc` pick the same row and no fixture built on today's schema can tell them
+-- apart. Pin the constraint that makes that true, then lift it inside this
+-- rolled-back transaction so the rule is exercised rather than assumed: if
+-- ADR-0009 Wave 3 ever lets a Child Group compete, this is the assertion that
+-- already says which ancestor wins.
+select ok(
+  exists (select 1 from pg_constraint
+           where conrelid = 'public.groups'::regclass
+             and conname = 'groups_competes_top_level_ck'),
+  'a competing Group is top-level by constraint -- the premise that puts at most one competitor on any Group path');
+-- The chain built above is edu -> Cup native child 523 -> Cup native grandchild
+-- 523 -> the 259-dept-team Group, which owns Campania B's only Task (15), and
+-- every link counts toward its parent again by this point.
+select is((select points from public.department_cup(2590002) where dept_id = 'edu'), 15,
+  'with only the root competing, Campania B''s Task credits the root -- the "before" this mutation moves');
+alter table public.groups drop constraint groups_competes_top_level_ck;
+update public.groups set competes_in_cup = true where name = 'Cup native child 523';
+select is((select points from public.department_cup(2590002)
+            where group_id = (select id from public.groups where name = 'Cup native child 523')), 15,
+  'with two competitors on one path the Task credits the nearest competing ancestor');
+select is((select points from public.department_cup(2590002) where dept_id = 'edu'), 0,
+  'and not the furthest -- the root keeps none of the points its nearer competing descendant took');
+update public.groups set competes_in_cup = false where name = 'Cup native child 523';
+alter table public.groups add constraint groups_competes_top_level_ck
+  check (not competes_in_cup or parent_id is null);
+
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 
 -- ==================== 6. The BCE+ gate returns no rows, never an error ====================
