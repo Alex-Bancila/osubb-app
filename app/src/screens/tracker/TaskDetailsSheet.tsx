@@ -1,3 +1,4 @@
+import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
 import { useState } from 'react';
@@ -55,6 +56,11 @@ function TaskDetails({
         onProgress={(selectedId, action) =>
           progress.mutateAsync({ taskId: selectedId, action })
         }
+      />
+      <TaskReopenControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
       />
       <TaskFeedbackControl
         taskId={taskId}
