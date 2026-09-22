@@ -7,6 +7,7 @@ import {
   Megaphone,
   ClipboardPlus,
   ShieldCheck,
+  Tag,
   UserRound,
   Users,
   type LucideIcon,
@@ -48,6 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
     capability: 'seeLeadership',
   },
   { path: '/cereri', label: 'Cereri', icon: ClipboardPlus },
+  { path: '/administrare/campanii', label: 'Campanii', icon: Tag },
   {
     path: '/calendar',
     label: 'Calendar',
