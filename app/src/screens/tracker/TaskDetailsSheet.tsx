@@ -15,6 +15,7 @@ import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
+import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { TaskEvaluationControl } from './TaskEvaluationControl';
 import { toTaskPresentation } from './task-presentation';
@@ -159,6 +160,10 @@ function TaskDetails({
               Poți înlocui executorul numai cu o persoană înscrisă în coadă.
             </p>
           </div>
+          {task.assignmentMode === 'public' &&
+            !['completed', 'unfulfilled', 'cancelled'].includes(
+              task.status,
+            ) && <TaskQueueControl taskId={taskId} closed={task.queueClosed} />}
           <TaskCandidateSelector taskId={taskId} />
         </section>
       )}
