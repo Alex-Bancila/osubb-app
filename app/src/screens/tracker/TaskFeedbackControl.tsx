@@ -15,7 +15,6 @@ export function TaskFeedbackControl({
   kind: string;
 }) {
   const capability = useTaskEvaluationCapability(taskId);
-  const mutation = useReturnTaskToProgress();
   const [done, setDone] = useState(false);
   const [previousStatus, setPreviousStatus] = useState(status);
   if (previousStatus !== status) {
@@ -30,6 +29,17 @@ export function TaskFeedbackControl({
     );
   if (capability.data !== true || status !== 'in_review' || kind !== 'task')
     return null;
+  return <FeedbackDialog taskId={taskId} onSuccess={() => setDone(true)} />;
+}
+
+function FeedbackDialog({
+  taskId,
+  onSuccess,
+}: {
+  taskId: number;
+  onSuccess: () => void;
+}) {
+  const mutation = useReturnTaskToProgress();
   return (
     <TaskReasonDialog
       triggerLabel="Trimite înapoi în lucru"
@@ -41,7 +51,7 @@ export function TaskFeedbackControl({
       failureMessage="Nu am putut trimite feedbackul."
       isPending={mutation.isPending}
       onConfirm={(note) => mutation.mutateAsync({ taskId, note })}
-      onSuccess={() => setDone(true)}
+      onSuccess={onSuccess}
     />
   );
 }
