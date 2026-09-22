@@ -7,7 +7,7 @@ import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
 /** Tasks from this Member's current and historical Assignments, through RLS. */
 export const TASK_PRESENTATION_FIELDS = `
-  id, title, description, status, deadline, completed_at, review_round,
+  id, group_id, title, description, status, deadline, completed_at, review_round,
   dept_id, team_id, project_id, assignment_mode, audience, kind,
   parent_task_id, campaign_id, duplicated_from_task_id, queue_closed_at,
   department:departments!tasks_dept_id_fkey(name, color),

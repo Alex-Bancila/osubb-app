@@ -1,3 +1,4 @@
+import { TaskAssignControl } from './TaskAssignControl';
 import { TaskCancelControl } from './TaskCancelControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
@@ -57,6 +58,15 @@ function TaskDetails({
         onProgress={(selectedId, action) =>
           progress.mutateAsync({ taskId: selectedId, action })
         }
+      />
+      <TaskAssignControl
+        taskId={taskId}
+        groupId={query.data.task.group_id}
+        status={task.status}
+        kind={task.kind}
+        assignmentMode={task.assignmentMode}
+        hasExecutor={task.executor !== null}
+        canManage={canManage}
       />
       <TaskCancelControl
         taskId={taskId}
