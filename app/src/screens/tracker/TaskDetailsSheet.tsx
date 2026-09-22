@@ -15,7 +15,6 @@ import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { TaskHistory } from './TaskHistory';
-import { ScoringGuide } from './ScoringGuide';
 import { TaskEvaluationControl } from './TaskEvaluationControl';
 import { toTaskPresentation } from './task-presentation';
 
@@ -154,14 +153,6 @@ function TaskDetails({
           </div>
           <TaskCandidateSelector taskId={taskId} />
         </section>
-      )}
-      {task.kind === 'task' && (
-        <details>
-          <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">
-            Ghid de punctaj
-          </summary>
-          <ScoringGuide />
-        </details>
       )}
       <details>
         <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">

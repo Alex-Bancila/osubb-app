@@ -18,8 +18,8 @@ flowchart TD
 
 ## UI evidence
 
-[Approval desktop](approval-desktop.png) · [Approval mobile](approval-mobile.png) · [Rejection mobile](rejection-mobile.png)
+[Rejection mobile](rejection-mobile.png). The approval captures were removed when the on-page scoring guide they showed was replaced by the rating-guide pop-up (#188); they no longer match the form.
 
-The screenshots use the production queue and shared evaluation fields, with the application theme and synthetic cached Request/scoring-guide data. They demonstrate the input flows, not a live approval transaction. Query/component tests cover command payloads, mandatory inputs, safe errors, duplicate-submit protection and confirmation surviving an empty queue refetch; database tests cover live queue authority.
+The screenshot uses the production queue and shared evaluation fields, with the application theme and synthetic cached Request data. It demonstrates the input flows, not a live approval transaction. Query/component tests cover command payloads, mandatory inputs, safe errors, duplicate-submit protection and confirmation surviving an empty queue refetch; database tests cover live queue authority.
 
 The read endpoint is necessary because Request visibility is broader than decision permission: seeing a Request must not imply permission to approve it. It is security-invoker, retains RLS, excludes self-decisions through the established authority helper, and adds no write path. The client pages all queue rows in creation-time/ID order and refuses partial results on a failed page.

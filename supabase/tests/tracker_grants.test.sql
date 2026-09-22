@@ -269,6 +269,11 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('create_campaign',    'p_department_id text, p_name text',        false, true,  false, false),
   ('update_campaign',    'p_campaign_id bigint, p_name text',        false, true,  false, false),
   ('set_campaign_active','p_campaign_id bigint, p_active boolean',   false, true,  false, false),
+  -- #580: the two Member command wrappers. Same grant shape as every other
+  -- wrapper -- authenticated only, never anon, service_role or PUBLIC -- even
+  -- though only BC and the Moderator can get past their gate.
+  ('set_member_role',    'p_member_id uuid, p_role member_role',     false, true,  false, false),
+  ('set_member_status',  'p_member_id uuid, p_status member_status', false, true,  false, false),
   -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
   -- adds its own row here the same way.
   ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
@@ -325,11 +330,21 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #260: the leadership drill-down over one Member's Assignment history.
   ('leadership_member_tasks',        'p_member_id uuid',             false, true,  false, false),
   -- #258: the Task-Points Leaderboard, filterable by Origin and Campaign.
-  ('leadership_leaderboard',         'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',
+  ('leadership_leaderboard',         'p_group_id bigint, p_campaign_id bigint',
                                                                      false, true,  false, false),
   -- #499: a deliberately narrow batch read for the current Executor of Tasks
   -- the caller may already read. Assignment history remains behind its RLS.
-  ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false);
+  ('visible_task_executors',          'p_task_ids bigint[]',          false, true,  false, false),
+  -- #625: the Campaign reporting reads -- per-volunteer report and
+  -- whole-Campaign totals. Same grant shape as every read wrapper --
+  -- authenticated only, gated inside the function (private.can_manage_group_work).
+  ('campaign_report',                'p_campaign_id bigint',         false, true,  false, false),
+  ('campaign_totals',                'p_campaign_id bigint',         false, true,  false, false),
+  -- #626: the full-state Task edit and its read-only consequence preview.
+  ('update_task',            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean',
+                                                                     false, true,  false, false),
+  ('preview_task_update',    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text',
+                                                                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -387,6 +402,12 @@ insert into pinned_private_functions (proname, args, category) values
   -- #507: rewrites every descendant's ancestor prefix when a Group moves.
   ('cascade_group_path',                          '',                                                                                                                   'trigger'),
   ('caller_level',                                 '',                                                                                                                   'predicate'),
+  -- #625: the Campaign reporting reads -- points earned and volunteers who
+  -- worked on it. Same grant shape as every other read body ('impl'):
+  -- authenticated only, gated inside the function itself
+  -- (private.can_manage_group_work), never a silent empty result.
+  ('campaign_report_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
+  ('campaign_totals_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
   ('can_administer_team_structure',               'p_dept_id text',                                                                                                     'predicate'),
   -- #507: the Group roster predicate behind group_members_read. It walks
   -- groups.path, so a Group Manager or Responsible of an ancestor reads every
@@ -437,8 +458,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
   -- #258: the Task-Points Leaderboard body behind
-  -- `public.leadership_leaderboard(department, team, project, campaign)`.
-  ('leadership_leaderboard_impl',                 'p_department_id text, p_team_id text, p_project_id bigint, p_campaign_id bigint',                                   'authenticated_only'),
+  -- `public.leadership_leaderboard(group, campaign)`.
+  ('leadership_leaderboard_impl',                 'p_group_id bigint, p_campaign_id bigint',                                   'authenticated_only'),
   ('leadership_member_tasks_impl',                'p_member_id uuid',                                                                                                  'impl'),
   ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
   -- #337: the second command over the shared evaluate_task core (#336) --
@@ -455,6 +476,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
   ('mirror_team_group',                           '',                                                                                                                   'trigger'),
   ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
+  -- #50: internal trigger function; no client execution.
+  ('guard_role_history', '', 'trigger'),
+  -- #69: scheduler-only job.
+  ('remind_deadlines', '', 'none'),
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
@@ -479,6 +504,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('request_deciders', 'p_request_id bigint', 'none'),
   ('can_decide_request', 'p_request_id bigint', 'predicate'),
   ('require_campaign_manager',                    'p_group_id bigint',                                                                                               'require'),
+  -- #625 fix round 1: the shared preamble both Campaign reporting bodies
+  -- call with `perform`, never an assignment (Sec4's unused-variable trap).
+  ('require_campaign_report_access',              'p_campaign_id bigint',                                                                                               'require'),
   ('require_department_team_membership_manager',  'p_team_id text',                                                                                                     'require'),
   ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
   ('require_origin_manager',                      'p_dept_id text, p_team_id text, p_project_id bigint',                                                                'require'),
@@ -492,9 +520,19 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_task_manager',                        'p_task_id bigint',                                                                                                   'require'),
   ('require_task_visible',                        'p_task_id bigint',                                                                                                   'require'),
   ('return_task_to_progress_impl',                'p_task_id bigint, p_note text',                                                                                      'impl'),
+  -- #603: deletes a deactivated Member's GoTrue session rows. `none`, the
+  -- strictest category: private.set_member_status_impl is its only caller and
+  -- runs it as the function owner, and a client that could reach it directly
+  -- would hold an unaudited sign-out for any Member in OSUBB.
+  ('revoke_member_sessions',                      'p_member_id uuid',                                                                                                   'none'),
   ('revoke_project_responsible_impl',             'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('select_task_candidate_impl',                  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',                                                 'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
+  -- #580: the two audited Member commands. `impl` like every other command
+  -- body -- the level-6 gate, the Moderator-only branch and the self-target
+  -- refusal live inside the function, not in the grant.
+  ('set_member_role_impl',                        'p_member_id uuid, p_role member_role',                                                                               'impl'),
+  ('set_member_status_impl',                      'p_member_id uuid, p_status member_status',                                                                           'impl'),
   ('set_task_queue_impl',                         'p_task_id bigint, p_open boolean',                                                                                   'impl'),
   ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
@@ -523,6 +561,13 @@ insert into pinned_private_functions (proname, args, category) values
   -- queried and the claim command that was its last caller.
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
   ('update_campaign_impl',                        'p_campaign_id bigint, p_name text',                                                                                  'impl'),
+  -- #626: the full-state Task edit body, its preview body, and the two shared
+  -- helpers both bodies read (validation/diff and the one consequence
+  -- definition) -- callable only from inside those definer bodies.
+  ('update_task_impl',                            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean', 'impl'),
+  ('preview_task_update_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'impl'),
+  ('plan_task_update',                            'p_task tasks, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
+  ('task_update_consequences',                    'p_task_id bigint, p_assignment_mode text, p_audience text', 'none'),
   ('update_task_content_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',        'impl'),
   -- #507: the two Group invariant triggers — the hierarchy/path/Minimum Level
   -- rules on `groups`, and the immutable-identity rule on `group_members`.
@@ -547,8 +592,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 122,
-  'the audited roster contains the 89 pre-#507 functions, the four Group invariant/predicate helpers (#507), the seven Group mirror syncs (#508), the seven mirror trigger functions (#509), and #519''s five group_id/legacy-Origin bridge functions (the resolver plus the four two-way sync triggers), plus #520''s eight Group authority helpers');
+  (select count(*) from pinned_private_functions)::int, 134,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, and #625''s two Campaign reporting bodies plus their shared require_* preamble');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

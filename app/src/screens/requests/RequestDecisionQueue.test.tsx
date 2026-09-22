@@ -6,11 +6,13 @@ vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const state = vi.hoisted(() => ({
   queue: vi.fn(),
   mutate: vi.fn(),
-  guide: {
+  scale: {
     isPending: false,
     isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
     data: {
-      ratings: [{ rating: 5, multiplier: 4, label: 'Excelent', note: null }],
+      ratings: [{ rating: 5, multiplier: 4, label: 'Excelent' }],
       difficulties: [{ stars: 2, note: 'Ușor' }],
     },
   },
@@ -20,8 +22,8 @@ vi.mock('../../queries/request-decisions', async (original) => ({
   usePendingDecisions: state.queue,
   useRequestDecision: () => ({ mutateAsync: state.mutate, isPending: false }),
 }));
-vi.mock('../../queries/scoring-guide', () => ({
-  useScoringGuide: () => state.guide,
+vi.mock('../../queries/reference', () => ({
+  useEvaluationScale: () => state.scale,
 }));
 import { RequestDecisionQueue } from './RequestDecisionQueue';
 const request = {
@@ -102,11 +104,23 @@ it('requires a rejection note, calls rejection only, and has no axe violations',
   });
   expect(await screen.findByRole('status')).toHaveTextContent('respinsă');
 });
-it('has no decision actions when the live server queue is empty', () => {
+it('stays hidden for a member with nothing to decide, including while it loads', () => {
   state.queue.mockReturnValue({ data: [] });
+  const view = render(<RequestDecisionQueue />);
+  expect(view.container).toBeEmptyDOMElement();
+  state.queue.mockReturnValue({ isPending: true });
+  view.rerender(<RequestDecisionQueue />);
+  expect(view.container).toBeEmptyDOMElement();
+});
+it('offers a retry when the decision queue cannot be read', async () => {
+  const refetch = vi.fn();
+  state.queue.mockReturnValue({ isError: true, refetch });
   render(<RequestDecisionQueue />);
-  expect(screen.queryByRole('button')).not.toBeInTheDocument();
-  expect(screen.getByText(/Nu ai cereri în așteptare/)).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Nu am putut încărca cererile de evaluat.',
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Reîncearcă' }));
+  expect(refetch).toHaveBeenCalled();
 });
 it('keeps the request and note on unexpected failure without leaking details', async () => {
   state.mutate.mockRejectedValue(new Error('private SQL'));

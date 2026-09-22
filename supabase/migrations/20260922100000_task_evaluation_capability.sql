@@ -1,5 +1,5 @@
 -- #189: expose the existing command evaluator capability through Task RLS.
--- No new authority rules: Wave 2 can replace the private helper without a UI rewrite.
+-- No new authority rule: private.can_evaluate_task (Group Roles since Wave 2) stays the only gate.
 create function public.can_evaluate_task(p_task_id bigint)
 returns boolean language sql stable security invoker set search_path = '' as $$
   select coalesce(public.auth_is_member(), false) and exists (

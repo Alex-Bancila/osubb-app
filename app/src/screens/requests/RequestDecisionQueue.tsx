@@ -61,6 +61,11 @@ export function RequestDecisionQueue() {
       /* Safe feedback is retained above the form. */
     }
   }
+  // Most members never decide a Request: until the server returns something
+  // for them to decide, the section stays out of their way entirely.
+  const nothingToDecide =
+    queue.isPending || (!queue.isError && !queue.data?.length);
+  if (nothingToDecide && !receipt && !selected) return null;
   return (
     <section aria-labelledby="request-decisions-title" className="space-y-4">
       <h2 id="request-decisions-title" className="text-lg font-bold">
@@ -129,18 +134,14 @@ export function RequestDecisionQueue() {
           )}
         </div>
       ) : null}
-      {queue.isPending ? (
-        <p role="status">Se încarcă cererile de evaluat…</p>
-      ) : queue.isError ? (
+      {queue.isPending ? null : queue.isError ? (
         <div role="alert">
           <p>Nu am putut încărca cererile de evaluat.</p>
           <Button variant="outline" onClick={() => void queue.refetch()}>
             Reîncearcă
           </Button>
         </div>
-      ) : !queue.data?.length ? (
-        <p>Nu ai cereri în așteptare pentru care poți lua o decizie.</p>
-      ) : (
+      ) : !queue.data?.length ? null : (
         <ul className="space-y-3">
           {queue.data.map((request) => (
             <li

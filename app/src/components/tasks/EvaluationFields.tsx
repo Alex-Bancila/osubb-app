@@ -1,8 +1,8 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../ui/button';
-import { useScoringGuide } from '../../queries/scoring-guide';
+import { useEvaluationScale } from '../../queries/reference';
 import { formatPoints } from '../../lib/format';
-import { ScoringGuide } from './ScoringGuide';
+import { RatingGuideDialog } from '../../screens/tracker/RatingGuideDialog';
 
 export function EvaluationFields({
   executorName,
@@ -24,13 +24,13 @@ export function EvaluationFields({
   request?: boolean;
 }) {
   const id = useId();
-  const guide = useScoringGuide();
+  const scale = useEvaluationScale();
   const [difficulty, setDifficulty] = useState('');
   const [rating, setRating] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
-  const chosen = guide.data?.ratings.find(
+  const chosen = scale.data?.ratings.find(
     (row) => row.rating === Number(rating),
   );
   const points =
@@ -75,8 +75,27 @@ export function EvaluationFields({
           ? 'Aprobarea înregistrează activitatea realizată și acordă punctele solicitantului.'
           : 'Evaluarea încheie taskul și acordă punctele acestei persoane.'}
       </p>
-      <ScoringGuide />
-      <fieldset disabled={isPending || !guide.data} className="space-y-3">
+      <RatingGuideDialog />
+      {scale.isPending && (
+        <p role="status" className="text-sm">
+          Se încarcă dificultățile și calificativele…
+        </p>
+      )}
+      {scale.isError && (
+        <div role="alert" className="space-y-2 text-sm">
+          <p>Nu am putut încărca dificultățile și calificativele.</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            disabled={scale.isFetching}
+            onClick={() => void scale.refetch()}
+          >
+            Reîncarcă
+          </Button>
+        </div>
+      )}
+      <fieldset disabled={isPending || !scale.data} className="space-y-3">
         <legend className="sr-only">
           Dificultate, calificativ și notă obligatorii
         </legend>
@@ -94,7 +113,7 @@ export function EvaluationFields({
           className="min-h-11 w-full rounded-md border border-input bg-background px-3"
         >
           <option value="">Alege dificultatea</option>
-          {guide.data?.difficulties.map((row) => (
+          {scale.data?.difficulties.map((row) => (
             <option key={row.stars} value={row.stars}>
               {row.stars} — {row.note}
             </option>
@@ -111,7 +130,7 @@ export function EvaluationFields({
           className="min-h-11 w-full rounded-md border border-input bg-background px-3"
         >
           <option value="">Alege calificativul</option>
-          {guide.data?.ratings.map((row) => (
+          {scale.data?.ratings.map((row) => (
             <option key={row.rating} value={row.rating}>
               {row.rating} — {row.label}
             </option>
@@ -143,7 +162,7 @@ export function EvaluationFields({
         <Button
           type="submit"
           className="min-h-11"
-          disabled={isPending || !guide.data}
+          disabled={isPending || !scale.data}
         >
           {isPending
             ? 'Se salvează…'

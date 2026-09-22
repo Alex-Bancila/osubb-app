@@ -1,17 +1,19 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   capability: true,
   mutation: { isPending: false, mutateAsync: vi.fn() },
-  guide: {
+  scale: {
     isPending: false,
     isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
     data: {
       ratings: [
-        { rating: 1, multiplier: -2, label: 'Slab', note: null },
-        { rating: 5, multiplier: 4, label: 'Excelent', note: null },
+        { rating: 1, multiplier: -2, label: 'Slab' },
+        { rating: 5, multiplier: 4, label: 'Excelent' },
       ],
       difficulties: [{ stars: 2, note: 'Ușor' }],
     },
@@ -21,13 +23,16 @@ vi.mock('../../queries/task-review', () => ({
   useTaskEvaluationCapability: () => ({ data: state.capability }),
   useEvaluateTask: () => state.mutation,
 }));
-vi.mock('../../queries/scoring-guide', () => ({
-  useScoringGuide: () => state.guide,
+vi.mock('../../queries/reference', () => ({
+  useEvaluationScale: () => state.scale,
 }));
 import { TaskEvaluationControl } from './TaskEvaluationControl';
 beforeEach(() => {
   state.capability = true;
   state.mutation.isPending = false;
+  state.scale.isPending = false;
+  state.scale.isError = false;
+  state.scale.refetch.mockReset();
   state.mutation.mutateAsync.mockReset().mockResolvedValue({ id: 17 });
 });
 const props = {
@@ -180,4 +185,42 @@ it('preserves success when mutation resolves before the refetch changes status b
     screen.getByRole('button', { name: 'Evaluează taskul' }),
   ).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+
+it('opens the rating guide beside the rating controls without losing the entered values', async () => {
+  const user = userEvent.setup();
+  render(<TaskEvaluationControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
+  await user.selectOptions(
+    screen.getByLabelText('Calificativ (obligatoriu)'),
+    '5',
+  );
+  const trigger = screen.getByRole('button', { name: 'Ghid de evaluare' });
+  await user.click(trigger);
+  expect(
+    await screen.findByRole('dialog', { name: 'Ghid de evaluare' }),
+  ).toBeVisible();
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(trigger).toHaveFocus();
+  expect(screen.getByLabelText('Calificativ (obligatoriu)')).toHaveValue('5');
+});
+
+it('offers a retry when the rating scale cannot be read', async () => {
+  const loaded = state.scale.data;
+  Object.assign(state.scale, { isError: true, data: undefined });
+  onTestFinished(() => {
+    state.scale.data = loaded;
+  });
+  const user = userEvent.setup();
+  render(<TaskEvaluationControl {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Nu am putut încărca dificultățile și calificativele.',
+  );
+  expect(
+    screen.getByRole('button', { name: 'Confirmă evaluarea' }),
+  ).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Reîncarcă' }));
+  expect(state.scale.refetch).toHaveBeenCalled();
 });
