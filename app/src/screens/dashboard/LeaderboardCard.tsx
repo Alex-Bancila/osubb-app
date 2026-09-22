@@ -1,11 +1,7 @@
 import { trophyOutline } from 'ionicons/icons';
 import { IonIcon } from '@ionic/react';
 import { Empty, ErrorState, Loading } from '../../components/states';
-import {
-  useLeaderboard,
-  useMyPoints,
-  useMyStanding,
-} from '../../queries/points';
+import { useLeaderboard, useMyStanding } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useAuth } from '../../lib/auth';
 import { formatPoints, initials } from '../../lib/format';
@@ -73,21 +69,12 @@ function RankRow({
 export default function LeaderboardCard() {
   const board = useLeaderboard(10);
   const standing = useMyStanding();
-  const points = useMyPoints();
   const profile = useMyProfile();
   const { session } = useAuth();
   const myId = session?.user.id ?? null;
 
   const inTopTen = board.data?.some((row) => row.member_id === myId) ?? false;
-  const pinned: Row | null =
-    !inTopTen && standing.data?.rank
-      ? {
-          member_id: myId,
-          full_name: profile.data?.full_name ?? null,
-          points: points.data ?? 0,
-          rank: standing.data.rank,
-        }
-      : null;
+  const pinned = !inTopTen ? (standing.data?.mine ?? null) : null;
 
   return (
     <section className="card">

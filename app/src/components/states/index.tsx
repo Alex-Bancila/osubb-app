@@ -1,3 +1,4 @@
+import { queryErrorMessage } from '../../lib/query-error';
 import { IonButton, IonSpinner } from '@ionic/react';
 
 /**
@@ -37,7 +38,7 @@ export function Empty({ text }: { text: string }) {
 export function ErrorState({
   onRetry,
   error,
-  text = 'Nu am putut încărca datele.',
+  text,
 }: {
   onRetry?: () => void;
   error?: unknown;
@@ -47,7 +48,7 @@ export function ErrorState({
 
   return (
     <div className="state" role="alert">
-      <p className="state-text">{text}</p>
+      <p className="state-text">{text ?? queryErrorMessage(error)}</p>
       {onRetry && (
         <IonButton size="small" fill="outline" onClick={onRetry}>
           Încearcă din nou
