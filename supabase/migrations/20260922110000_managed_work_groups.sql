@@ -1,4 +1,6 @@
 -- #180: read-only task-form origins, using the same live authority as commands.
+-- Dated after main's newest migration so staging (db push --include-all) and a
+-- local reset apply it in the same order. It only creates a new function.
 create function public.managed_work_groups()
 returns table (id bigint, name text, path bigint[], min_level integer)
 language sql stable security invoker set search_path = ''
