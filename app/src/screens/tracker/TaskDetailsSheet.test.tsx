@@ -1,5 +1,5 @@
 vi.mock('../../queries/task-umbrella', () => ({
-  useCreateSubtask: () => ({ mutateAsync: vi.fn() }),
+  useCreateTask: () => ({ mutateAsync: vi.fn() }),
   useCompleteUmbrella: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('./TaskEditControl', () => ({ TaskEditControl: () => null }));
@@ -105,6 +105,21 @@ describe('Task details sheet', () => {
     useTaskDetails.mockReturnValue({ data: null });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
     expect(await screen.findByText('Taskul nu este disponibil.')).toBeVisible();
+  });
+  it('confirms a just-created Task above its details', async () => {
+    useTaskDetails.mockReturnValue({
+      data: { task: taskRow(), executorName: null, subtasks: [] },
+    });
+    render(
+      <TaskDetailsSheet
+        taskId={1}
+        notice="Taskul a fost creat."
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      await screen.findByText('Taskul a fost creat.', { selector: 'p' }),
+    ).toHaveAttribute('role', 'status');
   });
 
   it('shows candidate selection only for a Task authorized by the live management query', async () => {

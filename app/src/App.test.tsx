@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -59,7 +60,22 @@ vi.mock('./screens/Placeholder', () => ({
 vi.mock('./screens/dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
 }));
-vi.mock('./screens/tracker/TrackerScreen', () => ({ default: () => null }));
+vi.mock('./lib/supabase', () => ({ supabase: {} }));
+// The Tracker route renders only its "Task nou" entry point here, so the
+// per-persona check exercises the real control behind the live capability.
+vi.mock('./screens/tracker/TrackerScreen', async () => {
+  const { NewTaskControl } = await vi.importActual<
+    typeof import('./screens/tracker/NewTaskControl')
+  >('./screens/tracker/NewTaskControl');
+  return {
+    default: () => (
+      <>
+        <h1>Tracker screen</h1>
+        <NewTaskControl onCreated={() => undefined} />
+      </>
+    ),
+  };
+});
 vi.mock('./screens/calendar/CalendarScreen', () => ({ default: () => null }));
 vi.mock('./screens/requests/CompletedWorkRequestScreen', () => ({
   default: () => <h1>Cereri screen</h1>,
@@ -378,6 +394,35 @@ describe('route guards', () => {
     expect(
       screen.getByRole('heading', { name: 'Profil screen' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('"Task nou" in the Tracker', () => {
+  beforeEach(() => {
+    auth.useAuth.mockReset();
+    window.history.pushState({}, '', '/tracker');
+  });
+  // Visibility follows the live can_manage_tasks() read, never the claims.
+  it.each([
+    ['a Group Manager', 'voluntar', 3, true],
+    ['a Responsible', 'voluntar', 2, true],
+    ['BC', 'bc', 6, true],
+    ['an ordinary member', 'voluntar', 1, false],
+  ] as const)('for %s: shown = %s', async (_persona, role, level, manages) => {
+    auth.useAuth.mockReturnValue({
+      ...member,
+      claims: { ...member.claims, member_role: role, member_level: level },
+    });
+    management.useTaskManagement.mockReturnValue({ data: manages });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <App />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: 'Tracker screen' });
+    expect(screen.queryByRole('button', { name: 'Task nou' }) !== null).toBe(
+      manages,
+    );
   });
 });
 

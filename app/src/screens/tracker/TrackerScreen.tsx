@@ -15,6 +15,7 @@ import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskTable } from './ManagerTaskTable';
+import { NewTaskControl } from './NewTaskControl';
 import { TaskCard } from './TaskCard';
 import {
   toTaskPresentation,
@@ -99,6 +100,7 @@ export default function TrackerScreen() {
   const leadership = useTaskLeadership();
   const all = useAllTasks(leadership.data === true);
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [createdId, setCreatedId] = useState<number | null>(null);
   const [tab, setTab] = useState('mine');
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -116,13 +118,21 @@ export default function TrackerScreen() {
   return (
     <section className="w-full" aria-labelledby="tracker-title">
       <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-        <header className="space-y-2">
-          <h1 id="tracker-title" className="text-2xl font-semibold">
-            Taskuri
-          </h1>
-          <p className="text-muted-foreground">
-            Lucrul tău și oportunitățile din OSUBB.
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-2">
+            <h1 id="tracker-title" className="text-2xl font-semibold">
+              Taskuri
+            </h1>
+            <p className="text-muted-foreground">
+              Lucrul tău și oportunitățile din OSUBB.
+            </p>
+          </div>
+          <NewTaskControl
+            onCreated={(id) => {
+              setCreatedId(id);
+              setDetailId(id);
+            }}
+          />
         </header>
         {management.isError && (
           <div role="alert" className="text-sm">
@@ -224,7 +234,15 @@ export default function TrackerScreen() {
           key={detailId}
           taskId={detailId}
           managedTaskIds={managedTaskIds}
-          onClose={() => setDetailId(null)}
+          notice={
+            detailId !== null && detailId === createdId
+              ? 'Taskul a fost creat.'
+              : null
+          }
+          onClose={() => {
+            setDetailId(null);
+            setCreatedId(null);
+          }}
         />
       </div>
     </section>
