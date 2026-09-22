@@ -32,6 +32,9 @@ select ok(
   'dept_cup remains a security-invoker view');
 
 truncate public.profiles cascade;
+-- TRUNCATE also empties the Group mirror; restore every reference competitor,
+-- including Groups with no fixture memberships.
+select private.sync_department_groups();
 
 insert into auth.users (id, email) values
   ('f1000000-0000-0000-0000-0000000000f1', 'flor.vol@test.local'),

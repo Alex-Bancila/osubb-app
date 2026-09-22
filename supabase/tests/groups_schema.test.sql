@@ -16,7 +16,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(60);
+select plan(63);
 
 -- ==================== 1. Shape ====================
 
@@ -30,6 +30,8 @@ select has_index('public', 'groups', 'groups_path_idx',
   'the path is GIN-indexed — subtree lookups are containment queries, not recursion');
 select has_index('public', 'group_members', 'group_members_member_idx',
   'a Member''s own Groups are indexed (member_id, group_id)');
+select has_index('public', 'groups', 'groups_one_organization_uidx',
+  'the Organization marker is indexed — "exactly one" is a table-level fact no CHECK can state');
 
 -- ==================== Profiles used by every later section ====================
 
@@ -133,6 +135,23 @@ select lives_ok($$ insert into public.groups (name, category, legacy_team_id) va
     ('Echipa Y #507', 'team', 't-507-a'),
     ('echipa y #507', 'team', 't-507-b') $$,
   'the sibling-name rule binds native Groups only: two mirrored rows may still share a legacy name');
+
+-- The Organization marker (Wave 3 T1, ADR-0009 R1). The reference Organization
+-- Group — the one the backfill marked — is already in this database, so the row
+-- below is the *second* marker and the index is what refuses it. Mutation this
+-- catches: drop groups_one_organization_uidx and the insert succeeds.
+select throws_ok($$ insert into public.groups (name, category, is_organization)
+    values ('A Doua Organizatie #507', 'organization', true) $$,
+  '23505', 'duplicate key value violates unique constraint "groups_one_organization_uidx"',
+  'at most one Group is the Organization — a second marked Group is refused');
+
+-- The index is PARTIAL, and the column defaults to false. Mutation this catches:
+-- drop the `where is_organization` clause and these two unmarked Groups collide
+-- with each other and with every other Group in the table.
+select lives_ok($$ insert into public.groups (name, category) values
+    ('Fara Marcaj A #507', 'team'),
+    ('Fara Marcaj B #507', 'team') $$,
+  'while unmarked Groups are unconstrained: the marker defaults to false and the index covers only the true row');
 
 -- ==================== 3. Path and hierarchy ====================
 

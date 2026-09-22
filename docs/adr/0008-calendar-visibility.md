@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-07
 - **Amended:** 2026-09-18 — ADR-0009: an Event is owned by one Group; the `org`/`dept`/`team`/`project` scope and the per-scope management table are read through Group Roles; Minimum Level choices become 0, 3, 5, 6
+- **Amended:** 2026-09-20 — the relevant audience of an Event is its Group's Group Audience (Automatic Membership resolved, every Group below included); archiving a Group cancels its future Events
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -88,3 +89,9 @@ Member Web Push delivery is a later architecture decision. Calendar commands wri
 - Existing RSVP behavior must be revalidated because cross-scope visibility is broader than membership.
 - The frontend must calculate relevance from authorized membership plus the current member's RSVP and must not hide gray Events through client-only filtering.
 - The last Ionic Calendar components are removed only after the equivalent shadcn screen, forms, and tests are complete.
+
+## Amendment (2026-09-20) — audience and archiving
+
+**The relevant audience is the Group Audience.** "The Event's relevant audience" in §Important-change notifications, and "the member's Groups" in §Relevance ordering, mean the Event's Group's **Group Audience** as ADR-0009 (amended 2026-09-20) and `CONTEXT.md` define it: every active Member of that Group or of any Group below it, by roster row or by Automatic Membership. An organization-wide Event therefore reaches every active Member on an important change, and a Department Event reaches its Department Teams' members even when they are not on the Department's own roster. No fan-out joins the roster table directly; one server helper resolves the audience. Attendees who answered "Vin" remain part of the audience regardless of membership, as before.
+
+**Archiving a Group cancels its future Events.** When a Group is archived (which ADR-0009 permits only once its work is finished), its future Events and those of every Group below it are cancelled by the same command with the archiving reason, preserving Event and audit history exactly as a manual cancellation does. Past Events stay readable as history.
