@@ -2804,19 +2804,6 @@ export type Database = {
       }
     }
     Functions: {
-      add_department_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: {
-          member_id: string
-          team_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "team_members"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       add_group_member: {
         Args: { p_group_id: number; p_member_id: string }
         Returns: {
@@ -2829,34 +2816,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "group_members"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      add_independent_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: {
-          member_id: string
-          team_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "team_members"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      add_project_member: {
-        Args: { p_member_id: string; p_project_id: number }
-        Returns: {
-          created_at: string
-          member_id: string
-          project_id: number
-          project_role: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_members"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2917,24 +2876,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "groups"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      archive_project: {
-        Args: { p_project_id: number }
-        Returns: {
-          created_at: string
-          created_by: string
-          id: number
-          leader_id: string
-          name: string
-          status: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "projects"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3312,24 +3253,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_project: {
-        Args: { p_leader_id: string; p_name: string }
-        Returns: {
-          created_at: string
-          created_by: string
-          id: number
-          leader_id: string
-          name: string
-          status: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "projects"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       create_task: {
         Args: {
           p_assignment_mode: string
@@ -3499,21 +3422,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "tasks"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      grant_project_responsible: {
-        Args: { p_member_id: string; p_project_id: number }
-        Returns: {
-          created_at: string
-          member_id: string
-          project_id: number
-          project_role: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_members"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3721,10 +3629,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      remove_department_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: boolean
-      }
       remove_group_member: {
         Args: { p_group_id: number; p_member_id: string }
         Returns: {
@@ -3740,14 +3644,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      remove_independent_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: boolean
-      }
-      remove_project_member: {
-        Args: { p_member_id: string; p_project_id: number }
-        Returns: boolean
       }
       reopen_task: {
         Args: { p_reason: string; p_task_id: number }
@@ -3821,21 +3717,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "tasks"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      revoke_project_responsible: {
-        Args: { p_member_id: string; p_project_id: number }
-        Returns: {
-          created_at: string
-          member_id: string
-          project_id: number
-          project_role: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_members"
           isOneToOne: true
           isSetofReturn: false
         }

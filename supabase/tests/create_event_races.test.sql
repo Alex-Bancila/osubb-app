@@ -39,8 +39,9 @@ select extensions.dblink_exec('commands_370_setup', $setup$
   language plpgsql security definer set search_path = '' as $$
   begin
     perform set_config('request.jwt.claims', '{"sub":"37000000-0000-0000-0000-000000000092","role":"authenticated","app_metadata":{"member_role":"bc","member_level":6}}', true);
-    return public.remove_project_member((select id from public.projects where name='Race #370'),
-      '37000000-0000-0000-0000-000000000091')::text;
+    perform public.set_group_role((select id from public.groups where name='Race #370'),
+      '37000000-0000-0000-0000-000000000091', 'member');
+    return 'true';
   end;
   $$;
   revoke execute on function public.test_370_event(), public.test_370_revoke() from public,anon,authenticated,service_role;

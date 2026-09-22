@@ -24,7 +24,8 @@ select extensions.dblink_exec('events_248_setup',$setup$
  insert into public.projects(name,leader_id,created_by) values
  ('Race #248','24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000092');
  insert into public.project_members(project_id,member_id,project_role)
- select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248';
+ select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
+  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
  insert into public.events(title,type,group_id,starts_at,created_by)
  select 'Race #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000090' from public.groups where name='Race #248';
  create or replace function public.test_248_edit() returns text language plpgsql security definer set search_path='' as $$
@@ -40,7 +41,9 @@ select extensions.dblink_exec('events_248_setup',$setup$
  create or replace function public.test_248_revoke() returns text language plpgsql security definer set search_path='' as $$
  begin
  perform set_config('request.jwt.claims','{"sub":"24800000-0000-0000-0000-000000000092","role":"authenticated","app_metadata":{"member_role":"bc","member_level":6}}',true);
- return public.remove_project_member((select id from public.projects where name='Race #248'),'24800000-0000-0000-0000-000000000091')::text;
+ perform public.set_group_role((select id from public.groups where name='Race #248'),
+      '24800000-0000-0000-0000-000000000091', 'member');
+    return 'true';
  end; $$;
  revoke execute on function public.test_248_edit(),public.test_248_cancel(),public.test_248_revoke() from public,anon,authenticated,service_role;
  grant execute on function public.test_248_edit(),public.test_248_cancel(),public.test_248_revoke() to authenticated;
@@ -53,7 +56,8 @@ select ok((select b_waited from edit_race),'revocation waits for edit authority 
 select is((select result_b from edit_race),'true','revocation completes after edit');
 select extensions.dblink_exec('events_248_setup',$setup$
  insert into public.project_members(project_id,member_id,project_role)
- select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248';
+ select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
+  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
 $setup$);
 create temp table cancel_race as select * from pg_temp.test_race('select public.test_248_cancel()','select public.test_248_revoke()');
 select is((select result_a from cancel_race),'Race reason','authorized cancellation succeeds');
@@ -61,7 +65,8 @@ select ok((select b_waited from cancel_race),'revocation waits for cancellation 
 select extensions.dblink_exec('events_248_setup',$setup$
  update public.events set cancelled_at=null,cancel_reason=null where title='Race #248';
  insert into public.project_members(project_id,member_id,project_role)
- select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248';
+ select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
+  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
 $setup$);
 create temp table terminal_race as select * from pg_temp.test_race('select public.test_248_cancel()','select public.test_248_edit()');
 select is((select result_a from terminal_race),'Race reason','cancellation wins before concurrent edit');

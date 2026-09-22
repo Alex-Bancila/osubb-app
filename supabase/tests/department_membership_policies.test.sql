@@ -54,16 +54,18 @@ delete from public.member_departments
 select ok(exists(select 1 from public.member_departments
   where member_id = '27910000-0000-0000-0000-000000000005' and dept_id = 'edu'),
   'BCE cannot delete a Department membership');
-select is((select membership.member_id from public.add_department_team_member(
-  'department-team-279-policy', '27910000-0000-0000-0000-000000000005') membership),
+select is((select membership.member_id from public.add_group_member(
+  (select id from public.groups where legacy_team_id = 'department-team-279-policy'),
+  '27910000-0000-0000-0000-000000000005') membership),
   '27910000-0000-0000-0000-000000000005'::uuid,
   'local BCE can still add a Member to a Department Team');
 reset role;
 select pg_temp.test_login_leadership('27910000-0000-0000-0000-000000000002');
 select throws_ok($$
-  select public.add_department_team_member(
-    'department-team-279-policy', '27910000-0000-0000-0000-000000000005')
-$$, '42501', 'department_team_membership_forbidden',
+  select public.add_group_member(
+    (select id from public.groups where legacy_team_id = 'department-team-279-policy'),
+    '27910000-0000-0000-0000-000000000005')
+$$, '42501', 'group_manage_forbidden',
   'a foreign Department BCE remains denied by the command');
 reset role;
 
