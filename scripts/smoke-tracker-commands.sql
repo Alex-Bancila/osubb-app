@@ -188,6 +188,9 @@ select pg_temp.smoke_assert(
   'step 0: both interested members belong to edu (the local-Audience eligibility rule)');
 
 select pg_temp.smoke_points('d0000000-0000-0000-0000-000000000002') as base_02 \gset
+-- #579: the Group is the only Origin a command takes. edu's Group is the one the
+-- forward mirror derived for the edu Department.
+select id as edu_group from public.groups where legacy_dept_id = 'edu' \gset
 
 -- ==================== step 1: manager creates a public Task ====================
 
@@ -197,9 +200,7 @@ select public.create_task(
   p_title           => 'SMOKE Oportunitate publica',
   p_description     => 'Task public creat de smoke-test.sql',
   p_deadline        => now() + interval '30 days',
-  p_dept_id         => 'edu',
-  p_team_id         => null,
-  p_project_id      => null,
+  p_group_id        => :edu_group,
   p_audience        => 'local',
   p_assignment_mode => 'public');
 
@@ -474,7 +475,7 @@ select pg_temp.smoke_assert(
   (select status = 'todo' and difficulty is null and rating is null
       and completed_at is null and cancel_reason is null
       and parent_task_id is null
-      and dept_id = 'edu' and audience = 'local' and assignment_mode = 'public'
+      and group_id = :edu_group and audience = 'local' and assignment_mode = 'public'
       and queue_opened_at is not null
       and created_by = 'd0000000-0000-0000-0000-000000000007'
      from public.tasks where id = :t_clone),
@@ -497,9 +498,7 @@ select public.create_task(
   p_title           => 'SMOKE Umbrela',
   p_description     => 'Umbrela creata de smoke-test.sql',
   p_deadline        => null,
-  p_dept_id         => 'edu',
-  p_team_id         => null,
-  p_project_id      => null,
+  p_group_id        => :edu_group,
   p_audience        => null,
   p_assignment_mode => null,
   p_kind            => 'umbrella');
@@ -515,15 +514,12 @@ select pg_temp.smoke_assert(
 
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
 
--- Subtask A: origin inherited (all three Origin parameters null), direct, with
+-- Subtask A: origin inherited (no p_group_id), direct, with
 -- an Executor -- this one gets completed.
 select public.create_task(
   p_title           => 'SMOKE Subtask A',
   p_description     => 'Subtaskul care se finalizeaza',
   p_deadline        => now() + interval '20 days',
-  p_dept_id         => null,
-  p_team_id         => null,
-  p_project_id      => null,
   p_audience        => 'local',
   p_assignment_mode => 'direct',
   p_executor_id     => 'd0000000-0000-0000-0000-000000000002',
@@ -534,9 +530,6 @@ select public.create_task(
   p_title           => 'SMOKE Subtask B',
   p_description     => 'Subtaskul care se anuleaza',
   p_deadline        => now() + interval '20 days',
-  p_dept_id         => null,
-  p_team_id         => null,
-  p_project_id      => null,
   p_audience        => 'local',
   p_assignment_mode => 'direct',
   p_executor_id     => 'd0000000-0000-0000-0000-000000000005',
@@ -548,7 +541,7 @@ select id as t_sub_b from public.tasks where title = 'SMOKE Subtask B' \gset
 
 select pg_temp.smoke_assert(
   (select count(*) = 2 from public.tasks
-    where parent_task_id = :t_umb and dept_id = 'edu'),
+    where parent_task_id = :t_umb and group_id = :edu_group),
   'step 16: both Subtasks inherited the Umbrella''s Origin without it being passed');
 
 -- ---- Subtask A: worked and completed.
@@ -627,14 +620,14 @@ select pg_temp.smoke_assert(
 
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
 select public.create_completed_work_request(
-  'SMOKE am facut afisele pentru standul de la deschidere', 'edu', null, null);
+  'SMOKE am facut afisele pentru standul de la deschidere', :edu_group);
 reset role;
 
 select id as r_id from public.completed_work_requests
  where description = 'SMOKE am facut afisele pentru standul de la deschidere' \gset
 
 select pg_temp.smoke_assert(
-  (select status = 'pending' and dept_id = 'edu'
+  (select status = 'pending' and group_id = :edu_group
       and requester_id = 'd0000000-0000-0000-0000-000000000002'
       and task_id is null
      from public.completed_work_requests where id = :r_id),
@@ -656,7 +649,7 @@ select pg_temp.smoke_assert(
 
 select pg_temp.smoke_assert(
   (select status = 'completed' and completed_at is not null
-      and assignment_mode = 'direct' and audience = 'local' and dept_id = 'edu'
+      and assignment_mode = 'direct' and audience = 'local' and group_id = :edu_group
       and difficulty = 1 and rating = 3
      from public.tasks where id = :t_req),
   'step 18: the Task was born already finished, direct and local, on the Request''s Origin');
@@ -683,8 +676,9 @@ select pg_temp.smoke_eq(
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
 
 select pg_temp.smoke_denied(
-  $$ insert into public.tasks (title, dept_id, audience, assignment_mode, status)
-     values ('SMOKE direct insert', 'edu', 'local', 'direct', 'todo') $$,
+  $$ insert into public.tasks (title, group_id, audience, assignment_mode, status)
+     select 'SMOKE direct insert', id, 'local', 'direct', 'todo'::public.task_status
+       from public.groups where legacy_dept_id = 'edu' $$,
   'step 19: direct INSERT into public.tasks');
 
 select pg_temp.smoke_denied(
@@ -727,8 +721,9 @@ select pg_temp.smoke_denied(
   'step 19: direct UPDATE of public.completed_work_requests');
 
 select pg_temp.smoke_denied(
-  $$ insert into public.campaigns (department_id, name, created_by)
-     values ('edu', 'SMOKE campanie', 'd0000000-0000-0000-0000-000000000002') $$,
+  $$ insert into public.campaigns (group_id, name, created_by)
+     select id, 'SMOKE campanie', 'd0000000-0000-0000-0000-000000000002'::uuid
+       from public.groups where legacy_dept_id = 'edu' $$,
   'step 19: direct INSERT into public.campaigns');
 
 select pg_temp.smoke_denied(
@@ -775,7 +770,7 @@ select id as ordinary from public.profiles where email = 'voluntar@demo.osubb' \
 select pg_temp.smoke_points(:'ordinary') as project_points_before \gset
 select pg_temp.test_login_leadership(:'coordinator');
 select public.create_task('SMOKE Group manager delivery', 'Group authority round trip', now() + interval '5 days',
-  null, null, :project_id, 'local', 'direct', :'ordinary');
+  'local', 'direct', :'ordinary', p_group_id => :project_group);
 reset role;
 select id as project_task from public.tasks where title = 'SMOKE Group manager delivery' \gset
 select pg_temp.test_login_leadership(:'ordinary');
@@ -795,10 +790,9 @@ select pg_temp.smoke_eq(pg_temp.smoke_points(:'ordinary'), :project_points_befor
   'step 20: ordinary Executor receives the exact Evaluation points');
 
 -- ---- step 20, continued: the Group-side create, and the manage commands ----
--- Everything above reaches the Project through its LEGACY id, which the bridge
--- turns into a Group. This half drives the other direction -- the one a Wave 3
--- client will use -- by passing p_group_id with all three legacy Origin
--- arguments null, and pins the legacy triple the trigger derives from it.
+-- Since #579 every create names its Group by id (p_group_id) -- the legacy
+-- Origin arguments and the bridge that translated them are gone. This half
+-- creates with named arguments, the shape the Wave 3 client uses.
 -- It also runs the Coordonator's *manage* commands (update content, assign,
 -- close the queue); complete_task_review above only proves the evaluator side.
 select pg_temp.test_login_leadership(:'coordinator');
@@ -806,16 +800,14 @@ select public.create_task(
   p_title => 'SMOKE Group-side Origin',
   p_description => 'Created by Group id alone',
   p_deadline => now() + interval '6 days',
-  p_dept_id => null, p_team_id => null, p_project_id => null,
   p_audience => 'local', p_assignment_mode => 'direct',
   p_group_id => :project_group);
 reset role;
 select id as group_side_task from public.tasks where title = 'SMOKE Group-side Origin' \gset
 select pg_temp.smoke_assert(
-  (select group_id = :project_group and project_id = :project_id
-      and dept_id is null and team_id is null
+  (select group_id = :project_group
      from public.tasks where id = :group_side_task),
-  'step 20: a Group-only create derives the legacy Origin triple');
+  'step 20: a create by Group id alone lands on that Group');
 select pg_temp.test_login_leadership(:'coordinator');
 select public.update_task_content(:group_side_task, 'SMOKE Group-side Origin',
   'Managed through the Group Role', now() + interval '6 days', null);
@@ -831,7 +823,6 @@ select public.create_task(
   p_title => 'SMOKE Group-side queue',
   p_description => 'Queue managed through the Group Role',
   p_deadline => now() + interval '6 days',
-  p_dept_id => null, p_team_id => null, p_project_id => null,
   p_audience => 'local', p_assignment_mode => 'public',
   p_group_id => :project_group);
 reset role;
@@ -840,7 +831,7 @@ select pg_temp.test_login_leadership(:'coordinator');
 select public.set_task_queue(:group_side_queue, false);
 reset role;
 select pg_temp.smoke_assert(
-  (select queue_closed_at is not null and project_id = :project_id
+  (select queue_closed_at is not null and group_id = :project_group
      from public.tasks where id = :group_side_queue),
   'step 20: the Coordonator closes the Candidate Queue of a Group-side Task');
 
@@ -852,9 +843,9 @@ select id as coordinator from public.profiles where email = 'responsabil@demo.os
 select id as ordinary from public.profiles where email = 'voluntar@demo.osubb' \gset
 select pg_temp.test_login_leadership(:'coordinator');
 select public.create_task('SMOKE Manager protected', 'Manager work', now() + interval '5 days',
-  null, null, :project_id, 'local', 'direct', :'coordinator');
+  'local', 'direct', :'coordinator', p_group_id => :project_group);
 select public.create_task('SMOKE Ordinary review', 'Ordinary member work', now() + interval '5 days',
-  null, null, :project_id, 'local', 'direct', :'ordinary');
+  'local', 'direct', :'ordinary', p_group_id => :project_group);
 reset role;
 select id as manager_task from public.tasks where title = 'SMOKE Manager protected' \gset
 select id as ordinary_task from public.tasks where title = 'SMOKE Ordinary review' \gset
@@ -910,7 +901,7 @@ select id as peer from public.profiles where email = 'vot@demo.osubb' \gset
 select id as bc_peer from public.profiles where email = 'bc@demo.osubb' \gset
 select pg_temp.test_login_leadership(:'peer');
 select public.create_task('SMOKE Independent peers', 'Peer planned work', now() + interval '5 days',
-  null, :'team_id', null, 'local', 'direct', :'bc_peer');
+  'local', 'direct', :'bc_peer', p_group_id => :team_group);
 reset role;
 select id as peer_task from public.tasks where title = 'SMOKE Independent peers' \gset
 select pg_temp.test_login_leadership(:'bc_peer');
@@ -952,7 +943,6 @@ select public.create_task(
   p_title => 'SMOKE Independent peer pair',
   p_description => 'Peer planned work for a non-BC teammate',
   p_deadline => now() + interval '5 days',
-  p_dept_id => null, p_team_id => null, p_project_id => null,
   p_audience => 'local', p_assignment_mode => 'direct',
   p_executor_id => :'third_peer',
   p_group_id => :team_group);
@@ -971,7 +961,7 @@ select pg_temp.smoke_refused(
   'step 22: evaluating a fellow Responsible is refused as task_evaluate_forbidden');
 reset role;
 select pg_temp.smoke_assert(
-  (select group_id = :team_group and team_id = :'team_id' and dept_id is null
+  (select group_id = :team_group
       and status = 'in_review' and description = 'Peer manages a non-BC teammate'
      from public.tasks where id = :pair_task),
   'step 22: the peer manages a non-BC teammate on a Group-side Independent-Team Task');
@@ -987,7 +977,7 @@ select id as eligible from public.profiles where email = 'vot@demo.osubb' \gset
 update public.groups set min_level = 3, application_level = 3 where id = :gated_group;
 select pg_temp.test_login_leadership(:'coordinator');
 select public.create_task('SMOKE Gated org Opportunity', 'Minimum Level proof', now() + interval '5 days',
-  null, null, :gated_project, 'org', 'public');
+  'org', 'public', p_group_id => :gated_group);
 reset role;
 select id as gated_task from public.tasks where title = 'SMOKE Gated org Opportunity' \gset
 create function pg_temp.smoke_hidden_interest(p_task bigint) returns void language plpgsql as $$

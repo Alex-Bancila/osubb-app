@@ -15,8 +15,8 @@ update public.profiles set role='bc' where id='16800000-0000-0000-0000-000000000
 insert into public.member_departments(member_id,dept_id) values('16800000-0000-0000-0000-000000000001','edu');
 insert into public.teams(id,name,dept_id) values('m168-independent','M168 Independent',null);
 insert into public.team_members(team_id,member_id) values('m168-independent','16800000-0000-0000-0000-000000000002');
-insert into public.tasks(title,dept_id,team_id,assignment_mode,audience) values
-('m168:edu','edu',null,'direct','local'),('m168:fin','fin',null,'direct','local'),('m168:team',null,'m168-independent','direct','local');
+insert into public.tasks(title,group_id,assignment_mode,audience) values
+('m168:edu',pg_temp.dept_group('edu'),'direct','local'),('m168:fin',pg_temp.dept_group('fin'),'direct','local'),('m168:team',pg_temp.team_group('m168-independent'),'direct','local');
 
 select ok(not (select prosecdef from pg_proc where oid='public.my_managed_task_ids()'::regprocedure),'management reads are invoker-rights');
 select ok(not has_function_privilege('anon','public.can_manage_tasks()','execute'),'anon has no capability RPC grant');

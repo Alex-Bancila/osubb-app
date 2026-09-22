@@ -32,9 +32,9 @@ select pg_temp.u(n), 'Membru 626 ' || n, 'member.' || n || '.626@test.local',
 insert into public.member_departments (member_id, dept_id) values
   (pg_temp.u(1), 'edu'), (pg_temp.u(2), 'edu'), (pg_temp.u(4), 'edu'), (pg_temp.u(7), 'edu');
 
-insert into public.campaigns (department_id, name, is_active, created_by) values
-  ('edu', 'Campanie #626', true, pg_temp.u(1)),
-  ('pr', 'Campanie PR #626', true, pg_temp.u(1));
+insert into public.campaigns (group_id, name, is_active, created_by) values
+  (pg_temp.dept_group('edu'), 'Campanie #626', true, pg_temp.u(1)),
+  (pg_temp.dept_group('pr'), 'Campanie PR #626', true, pg_temp.u(1));
 
 create temp table f626 as
 select (select id from public.campaigns where name = 'Campanie #626') as edu_campaign,
@@ -50,13 +50,13 @@ returns bigint language plpgsql as $$
 declare
   v_id bigint;
 begin
-  insert into public.tasks (title, description, deadline, dept_id, status, audience, assignment_mode, kind,
+  insert into public.tasks (title, description, deadline, group_id, status, audience, assignment_mode, kind,
                             created_by, created_at, started_at, submitted_at, review_round,
                             returned_to_progress_at, queue_opened_at, difficulty, rating, completed_at,
                             cancelled_at, cancel_reason)
   values ('T626 ' || p_name, 'Descriere ' || p_name,
           case when p_kind = 'task' then '2027-03-01 09:00:00+00'::timestamptz end,
-          'edu', p_status::public.task_status,
+          pg_temp.dept_group('edu'), p_status::public.task_status,
           case when p_kind = 'task' then p_audience end,
           case when p_kind = 'task' then p_mode end,
           p_kind, pg_temp.u(1), now() - interval '4 days',

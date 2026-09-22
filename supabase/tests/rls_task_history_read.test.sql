@@ -170,7 +170,7 @@ select 'm319-dt', persona.id from fx_persona_319 as persona where persona.code =
 -- manager_bce_local, executed by executor, evaluated by manager_bce_local.
 -- One task_activity row per actor, so "own row" (actor_id) and
 -- "can_manage_task"/"is_global_task_reader" are distinguishable.
-insert into public.tasks (title, dept_id, difficulty) values ('m319:M', 'edu', 3);
+insert into public.tasks (title, group_id, difficulty) values ('m319:M', pg_temp.dept_group('edu'), 3);
 update public.tasks set status = 'completed', completed_at = now(), rating = 4
  where title = 'm319:M';
 
@@ -262,8 +262,8 @@ select task.id, persona.id
 
 -- Task Q — Department 'edu' origin, public, org-wide, open queue: the
 -- candidate-privacy demo. Two pending Candidates in join order.
-insert into public.tasks (title, dept_id, audience, assignment_mode, queue_opened_at)
-values ('m319:Q', 'edu', 'org', 'public', now());
+insert into public.tasks (title, group_id, audience, assignment_mode, queue_opened_at)
+values ('m319:Q', pg_temp.dept_group('edu'), 'org', 'public', now());
 insert into public.task_candidates (task_id, member_id, joined_at)
 select task.id, persona.id, now() - interval '2 minutes'
   from public.tasks as task, fx_persona_319 as persona
@@ -275,14 +275,14 @@ select task.id, persona.id, now() - interval '1 minute'
 
 -- Hidden — Department 'fin' origin, local audience, direct: unreadable to
 -- the 'edu' candidates and to the plain stranger.
-insert into public.tasks (title, dept_id, audience, assignment_mode)
-values ('m319:Hidden', 'fin', 'local', 'direct');
+insert into public.tasks (title, group_id, audience, assignment_mode)
+values ('m319:Hidden', pg_temp.dept_group('fin'), 'local', 'direct');
 
 -- Task T — Department-Team 'm319-dt' origin (parent dept 'edu'), direct,
 -- in progress: bystander is the Executor; team_member is a Team member but
 -- neither the actor nor the manager nor a global reader.
-insert into public.tasks (title, team_id, status)
-values ('m319:T', 'm319-dt', 'in_progress');
+insert into public.tasks (title, group_id, status)
+values ('m319:T', pg_temp.team_group('m319-dt'), 'in_progress');
 insert into public.task_assignments (task_id, member_id, assigned_at, assigned_by)
 select task.id, persona.id, now() - interval '1 hour',
        (select id from fx_persona_319 where code = 'manager_bce_local')
@@ -299,7 +299,7 @@ select task.id, 'started', persona.id, 'todo', 'in_progress', now() - interval '
 -- their own (now reversed) Evaluation via private.is_own_assignment, since
 -- that matches the Assignment row itself, not "the currently active one" —
 -- but not their successor's, whose assignment_id names a different row.
-insert into public.tasks (title, dept_id, difficulty) values ('m319:R', 'edu', 2);
+insert into public.tasks (title, group_id, difficulty) values ('m319:R', pg_temp.dept_group('edu'), 2);
 update public.tasks set status = 'completed', completed_at = now(), rating = 5
  where title = 'm319:R';
 

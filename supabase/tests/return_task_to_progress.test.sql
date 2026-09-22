@@ -82,10 +82,10 @@ insert into public.project_members (project_id, member_id, project_role) values
 
 -- ---- T1: happy path / round trip. Department Task, in_review, one Executor.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Retur fericit #335', 'Gata de feedback', '2027-11-01 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Retur fericit #335', 'Gata de feedback', '2027-11-01 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
    '33500000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -94,27 +94,27 @@ select id, '33500000-0000-0000-0000-000000000004', '33500000-0000-0000-0000-0000
 
 -- ---- T2/T3/T4: wrong-state rejections -- no Assignment needed, the state
 -- check (step 6) fires before any Assignment is ever read.
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
-values ('Inca netrimis #335', 'Inca todo', '2027-11-02 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
+values ('Inca netrimis #335', 'Inca todo', '2027-11-02 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
         '33500000-0000-0000-0000-000000000001');
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, created_by)
-values ('In lucru #335', 'In desfasurare', '2027-11-03 09:00:00+00', 'edu', 'local', 'direct', 'in_progress',
+insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, started_at, created_by)
+values ('In lucru #335', 'In desfasurare', '2027-11-03 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
         now(), '33500000-0000-0000-0000-000000000001');
 -- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
-values ('Anulat #335', 'Anulat deja', '2027-11-04 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
+insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
+values ('Anulat #335', 'Anulat deja', '2027-11-04 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled',
         now(), 'Anulat inainte de revenirea in lucru #335', '33500000-0000-0000-0000-000000000001');
 
 -- ---- T5: note validation target -- in_review, with an Executor so the shape
 -- is realistic, though every note-validation call fails before step 7 ever
 -- reads it.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Nota lipsa #335', 'Verificare nota', '2027-11-05 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Nota lipsa #335', 'Verificare nota', '2027-11-05 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
    '33500000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -123,10 +123,10 @@ select id, '33500000-0000-0000-0000-000000000004', '33500000-0000-0000-0000-0000
 
 -- ---- T6: local BCE of the Task's own Department -- allowed.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('BCE departament #335', 'Verificare BCE', '2027-11-06 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('BCE departament #335', 'Verificare BCE', '2027-11-06 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
    '33500000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -137,10 +137,10 @@ select id, '33500000-0000-0000-0000-000000000005', '33500000-0000-0000-0000-0000
 -- team-parent branch of can_evaluate_task, exercised by the same BCE persona
 -- as T6 to prove it is a distinct code path, not the same one twice.
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('BCE echipa departamentala #335', 'Verificare BCE echipa', '2027-11-07 09:00:00+00', 't-335-dt', 'local', 'direct', 'in_review',
+  ('BCE echipa departamentala #335', 'Verificare BCE echipa', '2027-11-07 09:00:00+00', pg_temp.team_group('t-335-dt'), 'local', 'direct', 'in_review',
    now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
    '33500000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -151,10 +151,10 @@ select id, '33500000-0000-0000-0000-000000000006', '33500000-0000-0000-0000-0000
 -- may not return it (denied), but the lead may, including their own work
 -- (allowed). Same fixture proves both: the denied attempt never mutates it.
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 select 'Proiect lead executant #335', 'Lead isi verifica propria munca', '2027-11-08 09:00:00+00',
-       project.id, 'local', 'direct', 'in_review',
+       pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
        '33500000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #335';
@@ -165,10 +165,10 @@ select task.id, '33500000-0000-0000-0000-000000000009', '33500000-0000-0000-0000
 -- ---- T9: a Project Task the RESPONSIBLE is executing themselves -- denied
 -- even for the Responsible's own work.
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 select 'Proiect responsabil executant #335', 'Responsabilul isi verifica propria munca', '2027-11-09 09:00:00+00',
-       project.id, 'local', 'direct', 'in_review',
+       pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
        '33500000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #335';
@@ -179,10 +179,10 @@ select task.id, '33500000-0000-0000-0000-000000000010', '33500000-0000-0000-0000
 -- ---- T10: a Project Task an ORDINARY member is executing -- the positive
 -- case proving the Responsible branch is not simply dead.
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 select 'Proiect membru executant #335', 'Membru obisnuit executa', '2027-11-10 09:00:00+00',
-       project.id, 'local', 'direct', 'in_review',
+       pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
        '33500000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #335';
@@ -193,10 +193,10 @@ select task.id, '33500000-0000-0000-0000-000000000011', '33500000-0000-0000-0000
 -- ---- T11: a Task on an ARCHIVED Project -- can_evaluate_task requires
 -- projects.status = 'active', so even the lead is denied.
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 select 'Proiect arhivat #335', 'Proiect inactiv', '2027-11-11 09:00:00+00',
-       project.id, 'local', 'direct', 'in_review',
+       pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
        '33500000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect arhivat #335';
@@ -209,10 +209,10 @@ select task.id, '33500000-0000-0000-0000-000000000009', '33500000-0000-0000-0000
 -- no member branch there at all: only BC/Moderator evaluate an Independent
 -- Team's work. This is the one place manage and evaluate diverge.
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Echipa independenta #335', 'Munca echipei', '2027-11-12 09:00:00+00', 't-335-ind', 'local', 'direct', 'in_review',
+  ('Echipa independenta #335', 'Munca echipei', '2027-11-12 09:00:00+00', pg_temp.team_group('t-335-ind'), 'local', 'direct', 'in_review',
    now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
    '33500000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -222,10 +222,10 @@ select id, '33500000-0000-0000-0000-000000000008', '33500000-0000-0000-0000-0000
 -- ---- T13: shared denial target for the standard gate/authority personas --
 -- none of the following attempts on it succeed, so it can be reused freely.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Poarta comuna #335', 'Tinta refuzurilor', '2027-11-13 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Poarta comuna #335', 'Tinta refuzurilor', '2027-11-13 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
    '33500000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -234,10 +234,10 @@ select id, '33500000-0000-0000-0000-000000000007', '33500000-0000-0000-0000-0000
 
 -- ---- T14: direct-write-denial target -- in_review with an Executor.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Scriere directa #335', 'Tinta interzisa', '2027-11-14 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Scriere directa #335', 'Tinta interzisa', '2027-11-14 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
    '33500000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -651,7 +651,7 @@ reset role;
 -- before authority is even checked, the evaluator's own live profile row FOR
 -- SHARE, and (since a BCE reaches the membership branch, unlike BC/Moderator)
 -- their member_departments row FOR SHARE too --
--- private.require_origin_manager''s discipline (#343 / #390).
+-- private.require_group_work_manager''s discipline (#343 / #390).
 --
 -- Works on COMMITTED fixtures, created and removed through their own dblink
 -- connection: pg_temp test sessions commit for real, so nothing this suite's
@@ -688,10 +688,10 @@ select extensions.dblink_exec('rtp_setup', $$
     ('33500000-0000-0000-0000-000000000052', 'edu');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status,
+    (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, submitted_at, created_by)
   values
-    ('Sonda blocaj retur #335 committed', 'Sonda', '2027-12-01 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+    ('Sonda blocaj retur #335 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
      now() - interval '3 days', now() - interval '2 days', now() - interval '1 day',
      '33500000-0000-0000-0000-000000000051');
 
@@ -736,7 +736,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.profiles') as row_lock
     join public.profiles as profile on profile.ctid = row_lock.locked_row
    where profile.id = '33500000-0000-0000-0000-000000000051'
-), false), 'return_task_to_progress holds the evaluator''s own live profile row FOR SHARE (private.require_origin_manager''s discipline)');
+), false), 'return_task_to_progress holds the evaluator''s own live profile row FOR SHARE (private.require_group_work_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
     from extensions.pgrowlocks('public.group_members') as row_lock

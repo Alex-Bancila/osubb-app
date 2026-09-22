@@ -57,9 +57,9 @@ insert into public.projects (
   now() - interval '2 days', now() - interval '1 day'
 );
 insert into public.campaigns (
-  id, department_id, name, created_by, created_at, updated_at
+  id, group_id, name, created_by, created_at, updated_at
 ) overriding system value values (
-  368001, 'edu', 'Campaign timestamp fixture',
+  368001, pg_temp.dept_group('edu'), 'Campaign timestamp fixture',
   'a3680000-0000-0000-0000-000000000002',
   now() - interval '2 days', now() - interval '1 day'
 );
@@ -80,8 +80,8 @@ select ok(
   (select updated_at > now() - interval '1 minute' from public.campaigns where id = 368001),
   'an arbitrary campaign update refreshes updated_at');
 
-insert into public.events (title, type, scope, starts_at)
-values ('Timestamp fixture', 'eveniment', 'org', now());
+insert into public.events (title, type, group_id, starts_at)
+values ('Timestamp fixture', 'eveniment', pg_temp.dept_group('org'), now());
 select ok(
   (select created_at is not null from public.events where title = 'Timestamp fixture'),
   'new events receive created_at automatically');

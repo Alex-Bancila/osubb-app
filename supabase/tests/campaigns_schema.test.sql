@@ -9,15 +9,15 @@ select plan(29);
 select has_table('public', 'campaigns', 'Campaigns table exists');
 select columns_are(
   'public', 'campaigns',
-  array['id', 'department_id', 'name', 'is_active', 'created_by',
+  array['id', 'name', 'is_active', 'created_by',
         'created_at', 'updated_at', 'group_id'],
-  'Campaigns expose exactly the requested fields');
+  'Campaigns expose exactly the requested fields -- department_id went with the bridge (#579)');
 select col_is_pk('public', 'campaigns', 'id', 'Campaign id is the primary key');
 select col_type_is('public', 'campaigns', 'id', 'bigint', 'Campaign id is bigint');
-select col_is_null('public', 'campaigns', 'department_id',
-  'Department went nullable in #519 -- a Team or Project Group Campaign carries none (Wave 2 bridge)');
-select fk_ok('public', 'campaigns', 'department_id', 'public', 'departments', 'id',
-  'Campaign Department references the official list');
+select col_not_null('public', 'campaigns', 'group_id',
+  'a Campaign always names its owning Group (#579: the only Origin)');
+select hasnt_column('public', 'campaigns', 'department_id',
+  'the legacy Department column is gone (#579)');
 select fk_ok('public', 'campaigns', 'group_id', 'public', 'groups', 'id',
   'Campaign Group references the Group model (#519)');
 select col_not_null('public', 'campaigns', 'name', 'Campaign name is required');
@@ -45,9 +45,9 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('a3130000-0000-0000-0000-000000000002', 'Inactive Recruit',
    'inactive.campaign@test.local', 'recrut', 'inactiv');
 
-insert into public.campaigns (department_id, name, is_active, created_by) values
-  ('edu', 'Admitere', true, 'a3130000-0000-0000-0000-000000000001'),
-  ('pr', 'Admitere', false, 'a3130000-0000-0000-0000-000000000001');
+insert into public.campaigns (group_id, name, is_active, created_by) values
+  (pg_temp.dept_group('edu'), 'Admitere', true, 'a3130000-0000-0000-0000-000000000001'),
+  (pg_temp.dept_group('pr'), 'Admitere', false, 'a3130000-0000-0000-0000-000000000001');
 
 -- Scoped to this suite's own fixtures: #296 gave the demo seed one active
 -- Campaign per real Department, so a bare count(*) over public.campaigns is no
@@ -57,8 +57,8 @@ select is(
     where created_by = 'a3130000-0000-0000-0000-000000000001'), 2::bigint,
   'same Campaign name is accepted in different Departments');
 select throws_ok(
-  $$ insert into public.campaigns (department_id, name, created_by)
-     values ('edu', 'aDmItErE', 'a3130000-0000-0000-0000-000000000001') $$,
+  $$ insert into public.campaigns (group_id, name, created_by)
+     values (pg_temp.dept_group('edu'), 'aDmItErE', 'a3130000-0000-0000-0000-000000000001') $$,
   '23505', 'duplicate key value violates unique constraint "campaigns_group_name_uidx"',
   'Campaign names are unique case-insensitively within a Department (enforced via campaigns_group_name_uidx since #519)');
 
@@ -96,8 +96,8 @@ select is(
     where created_by = 'a3130000-0000-0000-0000-000000000001'), 2::bigint,
   'an active level-zero Member reads active and inactive Campaigns');
 select throws_ok(
-  $$ insert into public.campaigns (department_id, name, created_by)
-     values ('edu', 'Client write', 'a3130000-0000-0000-0000-000000000001') $$,
+  $$ insert into public.campaigns (group_id, name, created_by)
+     values (pg_temp.dept_group('edu'), 'Client write', 'a3130000-0000-0000-0000-000000000001') $$,
   '42501', null,
   'an active Member cannot write Campaigns directly');
 reset role;

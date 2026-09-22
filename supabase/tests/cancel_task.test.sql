@@ -126,10 +126,10 @@ insert into public.project_members (project_id, member_id, project_role) values
 -- and two pending Candidates -- so one cancellation has to end an Assignment,
 -- close a queue and decide two Candidatures at once.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, queue_opened_at, started_at, created_by)
 values
-  ('Anulare fericita #339', 'Se anuleaza', now() + interval '10 days', 'edu', 'org', 'public', 'in_progress',
+  ('Anulare fericita #339', 'Se anuleaza', now() + interval '10 days', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now() - interval '10 days', now() - interval '10 days', now() - interval '9 days',
    '33900000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -147,28 +147,28 @@ select id, '33900000-0000-0000-0000-000000000014'::uuid, 'pending', now() - inte
 -- left exactly as it is, one direct Subtask with a live Executor, one public
 -- Subtask with a pending Candidate and no Executor at all.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela de anulat #339', 'Umbrela', 'edu', 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela de anulat #339', 'Umbrela', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
         now() - interval '10 days', '33900000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    difficulty, rating, created_at, started_at, submitted_at, completed_at, created_by)
-select 'Subtask finalizat #339', 'Gata inainte de anulare', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask finalizat #339', 'Gata inainte de anulare', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'completed', parent.id, 3, 4,
        now() - interval '10 days', now() - interval '9 days', now() - interval '3 days', now() - interval '2 days',
        '33900000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela de anulat #339';
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    created_at, started_at, created_by)
-select 'Subtask in lucru #339', 'Are executant', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask in lucru #339', 'Are executant', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'in_progress', parent.id, now() - interval '10 days', now() - interval '9 days',
        '33900000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela de anulat #339';
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    created_at, queue_opened_at, created_by)
-select 'Subtask public #339', 'Are coada', now() + interval '10 days', 'edu', 'org', 'public',
+select 'Subtask public #339', 'Are coada', now() + interval '10 days', pg_temp.dept_group('edu'), 'org', 'public',
        'todo', parent.id, now() - interval '10 days', now() - interval '10 days',
        '33900000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela de anulat #339';
@@ -184,20 +184,20 @@ select id, '33900000-0000-0000-0000-000000000016'::uuid, 'pending', now() - inte
 -- and the actor below is the BC, so private.task_managers(U2, BC) resolves to
 -- exactly {BCE edu} -- a deterministic, single-member recipient set.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela martor #339', 'Ramane vie', 'edu', 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela martor #339', 'Ramane vie', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
         now() - interval '10 days', '33900000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    created_at, started_at, created_by)
-select 'Subtask independent #339', 'Anulat singur', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask independent #339', 'Anulat singur', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'in_progress', parent.id, now() - interval '10 days', now() - interval '9 days',
        '33900000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela martor #339';
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    created_at, created_by)
-select 'Subtask ramas #339', 'Ramane todo', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask ramas #339', 'Ramane todo', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'todo', parent.id, now() - interval '10 days',
        '33900000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela martor #339';
@@ -208,17 +208,17 @@ select id, '33900000-0000-0000-0000-000000000017', '33900000-0000-0000-0000-0000
 
 -- ---- T4/T5: the two terminal refusals.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    difficulty, rating, created_at, started_at, completed_at, created_by)
 values
-  ('Deja finalizat #339', 'Nu se mai anuleaza', now() - interval '5 days', 'edu', 'local', 'direct', 'completed',
+  ('Deja finalizat #339', 'Nu se mai anuleaza', now() - interval '5 days', pg_temp.dept_group('edu'), 'local', 'direct', 'completed',
    3, 4, now() - interval '20 days', now() - interval '19 days', now() - interval '5 days',
    '33900000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    cancelled_at, cancel_reason, created_at, created_by)
 values
-  ('Deja anulat #339', 'Anulat demult', now() - interval '5 days', 'edu', 'local', 'direct', 'cancelled',
+  ('Deja anulat #339', 'Anulat demult', now() - interval '5 days', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled',
    now() - interval '5 days', 'Motiv vechi #339', now() - interval '20 days',
    '33900000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
@@ -229,10 +229,10 @@ select id, '33900000-0000-0000-0000-000000000018', '33900000-0000-0000-0000-0000
 -- ---- T6: the authority-matrix target. Every attempt on it is DENIED, so it
 -- must survive section 9 untouched.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, created_by)
 values
-  ('Autoritate dept #339', 'Tinta pentru refuzuri', now() + interval '10 days', 'edu', 'local', 'direct', 'in_progress',
+  ('Autoritate dept #339', 'Tinta pentru refuzuri', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
    now() - interval '10 days', now() - interval '9 days', '33900000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33900000-0000-0000-0000-000000000019', '33900000-0000-0000-0000-000000000002',
@@ -241,33 +241,33 @@ select id, '33900000-0000-0000-0000-000000000019', '33900000-0000-0000-0000-0000
 
 -- ---- T7: a `local` pr Task an edu member cannot even see.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Ascuns pr #339', 'Alt departament', now() + interval '10 days', 'pr', 'local', 'direct', 'todo',
+  ('Ascuns pr #339', 'Alt departament', now() + interval '10 days', pg_temp.dept_group('pr'), 'local', 'direct', 'todo',
    now() - interval '10 days', '33900000-0000-0000-0000-000000000003');
 
 -- ---- T8: an Independent Team's own Task. Its members MAY cancel it (manager
 -- authority) while they may never evaluate it (#336/#338).
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Echipa independenta #339', 'Task de echipa', now() + interval '10 days', 't-339-ind', 'local', 'direct', 'todo',
+  ('Echipa independenta #339', 'Task de echipa', now() + interval '10 days', pg_temp.team_group('t-339-ind'), 'local', 'direct', 'todo',
    now() - interval '10 days', '33900000-0000-0000-0000-000000000001');
 
 -- ---- T9/T11: Project Tasks.
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, created_by)
 select 'Proiect membru #339', 'Munca unui membru', now() + interval '10 days',
-       project.id, 'local', 'direct', 'in_progress'::public.task_status,
+       pg_temp.project_group(project.id), 'local', 'direct', 'in_progress'::public.task_status,
        now() - interval '10 days', now() - interval '9 days',
        '33900000-0000-0000-0000-000000000001'::uuid
   from public.projects as project where project.name = 'Proiect #339';
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, created_by)
 select 'Proiect responsabil #339', 'Anulat de responsabil', now() + interval '10 days',
-       project.id, 'local', 'direct', 'todo'::public.task_status,
+       pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '10 days',
        '33900000-0000-0000-0000-000000000001'::uuid
   from public.projects as project where project.name = 'Proiect #339';
@@ -278,10 +278,10 @@ select id, '33900000-0000-0000-0000-000000000008', '33900000-0000-0000-0000-0000
 
 -- ---- T10: the direct-write target. Nothing in section 8 may change it.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, created_by)
 values
-  ('Scriere directa #339', 'Tinta', now() + interval '10 days', 'edu', 'local', 'direct', 'in_progress',
+  ('Scriere directa #339', 'Tinta', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
    now() - interval '10 days', now() - interval '9 days', '33900000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33900000-0000-0000-0000-000000000020', '33900000-0000-0000-0000-000000000002',
@@ -294,20 +294,20 @@ select id, '33900000-0000-0000-0000-000000000020', '33900000-0000-0000-0000-0000
 -- the control: the identical shape under a LIVE Umbrella, which must still
 -- reopen.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela anulata #339', 'Se anuleaza cu subtask finalizat', 'edu', 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela anulata #339', 'Se anuleaza cu subtask finalizat', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
         now() - interval '10 days', '33900000-0000-0000-0000-000000000002'),
-       ('Umbrela nevinovata #339', 'Ramane vie', 'edu', 'umbrella', null, null, 'todo',
+       ('Umbrela nevinovata #339', 'Ramane vie', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
         now() - interval '10 days', '33900000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    created_at, started_at, submitted_at, created_by)
-select 'Subtask de redeschis #339', 'Sub umbrela anulata', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask de redeschis #339', 'Sub umbrela anulata', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'in_review'::public.task_status, parent.id, now() - interval '10 days', now() - interval '9 days', now() - interval '1 day',
        '33900000-0000-0000-0000-000000000002'::uuid
   from public.tasks as parent where parent.title = 'Umbrela anulata #339'
 union all
-select 'Subtask liber de redeschis #339', 'Sub umbrela vie', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask liber de redeschis #339', 'Sub umbrela vie', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'in_review'::public.task_status, parent.id, now() - interval '10 days', now() - interval '9 days', now() - interval '1 day',
        '33900000-0000-0000-0000-000000000002'::uuid
   from public.tasks as parent where parent.title = 'Umbrela nevinovata #339';
@@ -423,23 +423,23 @@ select ok(exists (
   'tasks_cancel_reason_ck exists on public.tasks');
 
 select throws_ok($$ insert into public.tasks
-    (title, dept_id, audience, assignment_mode, status, cancelled_at)
-  values ('Anulare fara motiv #339', 'edu', 'local', 'direct', 'cancelled', now()) $$,
+    (title, group_id, audience, assignment_mode, status, cancelled_at)
+  values ('Anulare fara motiv #339', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled', now()) $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
   'a cancelled Task with no reason is rejected -- even inserted by the table owner');
 select throws_ok($$ insert into public.tasks
-    (title, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason)
-  values ('Anulare cu motiv gol #339', 'edu', 'local', 'direct', 'cancelled', now(), E'\t\n  ') $$,
+    (title, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason)
+  values ('Anulare cu motiv gol #339', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled', now(), E'\t\n  ') $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
   'and a whitespace-only reason counts as no reason -- the POSIX class catches tabs and newlines btrim() would miss');
 select throws_ok($$ insert into public.tasks
-    (title, dept_id, audience, assignment_mode, status, cancel_reason)
-  values ('Motiv fara anulare #339', 'edu', 'local', 'direct', 'todo', 'Motiv orfan') $$,
+    (title, group_id, audience, assignment_mode, status, cancel_reason)
+  values ('Motiv fara anulare #339', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', 'Motiv orfan') $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
   'the constraint is a biconditional: a reason on a Task that is NOT cancelled is rejected too, so a reopen or a duplication can never carry a stale explanation');
 select lives_ok($$ insert into public.tasks
-    (title, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason)
-  values ('Anulare veche backfill #339', 'edu', 'local', 'direct', 'cancelled', now(),
+    (title, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason)
+  values ('Anulare veche backfill #339', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled', now(),
           'Anulat înainte de înregistrarea motivelor (#339).') $$,
   'the #339 backfill string itself satisfies the constraint -- a blank marker would have failed the ALTER on staging');
 -- #339: this restates tasks_cancel_reason_ck's own guarantee over every row
@@ -740,7 +740,7 @@ select pg_temp.test_login('33900000-0000-0000-0000-000000000009', jsonb_build_ob
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '["t-339-ind"]'::jsonb));
 select lives_ok(format($$ select public.cancel_task(%s, 'Echipa a decis sa renunte.') $$,
   (select ind_team_task_id from f339)),
-  'an Independent Team''s own active member cancels their Team''s Task -- private.can_manage_origin admits them, and cancelling awards nobody anything');
+  'an Independent Team''s own active member cancels their Team''s Task -- private.can_manage_group_work admits them, and cancelling awards nobody anything');
 reset role;
 select pg_temp.test_login('33900000-0000-0000-0000-000000000007', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -908,27 +908,27 @@ select extensions.dblink_exec('ct_setup', $$
     ('33900000-0000-0000-0000-000000000053', 'edu');
 
   insert into public.tasks
-    (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-  values ('Umbrela sonda #339 committed', 'Umbrela', 'edu', 'umbrella', null, null, 'todo',
+    (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+  values ('Umbrela sonda #339 committed', 'Umbrela', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, 'todo',
           now() - interval '5 days', '33900000-0000-0000-0000-000000000051');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+    (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      created_at, created_by)
-  select 'Sonda subtask A #339 committed', 'Primul', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
+  select 'Sonda subtask A #339 committed', 'Primul', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
          parent.id, now() - interval '5 days', '33900000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #339 committed';
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+    (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      created_at, created_by)
-  select 'Sonda subtask B #339 committed', 'Al doilea', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
+  select 'Sonda subtask B #339 committed', 'Al doilea', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
          parent.id, now() - interval '5 days', '33900000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #339 committed';
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status,
+    (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, created_by)
-  values ('Cursa anulare #339 committed', 'Doua anulari, un task', now() + interval '10 days', 'edu',
+  values ('Cursa anulare #339 committed', 'Doua anulari, un task', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'),
           'local', 'direct', 'in_progress',
           now() - interval '5 days', now() - interval '4 days',
           '33900000-0000-0000-0000-000000000051');

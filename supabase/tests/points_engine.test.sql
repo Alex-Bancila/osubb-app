@@ -69,7 +69,7 @@ select hasnt_function('public', 'sync_assignee_ledger',
 
 -- The AC in its strongest form: nothing a writer does to `tasks` may move a
 -- ledger row.
-insert into tasks (title, difficulty, dept_id) values ('pe-t1', 3, 'edu');
+insert into tasks (title, difficulty, group_id) values ('pe-t1', 3, pg_temp.dept_group('edu'));
 
 -- #312: a Rating may only be set once the Task is terminal, so grading also
 -- completes it. Under the old engine this single statement credited every
@@ -205,8 +205,8 @@ select lives_ok(
   'once the first Evaluation is reversed, the Task may be evaluated again');
 
 -- ==================== A rating of 1 still subtracts ====================
-insert into tasks (title, difficulty, rating, status, completed_at, dept_id)
-  values ('pe-t2', 2, 1, 'completed', now(), 'edu');
+insert into tasks (title, difficulty, rating, status, completed_at, group_id)
+  values ('pe-t2', 2, 1, 'completed', now(), pg_temp.dept_group('edu'));
 
 select is(
   (select pg_temp.test_credit_task(
@@ -220,8 +220,8 @@ select is(
   -2, 'a penalty lowers the member total (0 - 2)');
 
 -- ==================== A rating of 2 still records a zero-point credit ====================
-insert into tasks (title, difficulty, rating, status, completed_at, dept_id)
-  values ('pe-t3', 5, 2, 'completed', now(), 'edu');
+insert into tasks (title, difficulty, rating, status, completed_at, group_id)
+  values ('pe-t3', 5, 2, 'completed', now(), pg_temp.dept_group('edu'));
 
 select is(
   (select pg_temp.test_credit_task(
@@ -253,7 +253,7 @@ select ok(
   'higher total ranks higher (Bogdan 0 over Ana -7)');
 
 select is(
-  (select count(*) from dept_cup where dept_id = 'tst'),
+  (select count(*) from dept_cup where group_id = pg_temp.dept_group('tst')),
   0::bigint, 'the database owner sees no dept_cup row for tst either -- this suite''s own extra department competes under a real BCE+ session (department_cup_task_origins.test.sql), the owner just never sees any row at all (next assertion)');
 
 select is(

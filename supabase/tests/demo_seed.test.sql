@@ -290,7 +290,7 @@ select ok(
     select 1 from tasks task
      where task.title = 'Contactare lectori'
        and task.status = 'in_progress'
-       and task.dept_id = 'edu'
+       and task.group_id = pg_temp.dept_group('edu')
        and task.assignment_mode = 'direct' and task.audience = 'local'
        and task.started_at is not null
        and exists (select 1 from task_assignments a
@@ -356,7 +356,8 @@ select ok(
     select 1 from tasks task
      where task.title = 'Raport parteneriate pentru festival'
        and task.status = 'in_review'
-       and task.project_id is not null
+       and exists (select 1 from groups grp
+                    where grp.id = task.group_id and grp.legacy_project_id is not null)
        and task.review_round = 1
        and task.returned_to_progress_at is not null
        and task.submitted_at is not null
@@ -372,7 +373,8 @@ select ok(
 select ok(
   exists (
     select 1 from tasks task
-      join teams team on team.id = task.team_id
+      join groups task_group on task_group.id = task.group_id
+      join teams team on team.id = task_group.legacy_team_id
      where task.title = 'Migrare bază de date'
        and task.status = 'completed'
        and team.dept_id is not null
@@ -445,7 +447,8 @@ select ok(
 select ok(
   exists (
     select 1 from tasks task
-      join teams team on team.id = task.team_id
+      join groups task_group on task_group.id = task.group_id
+      join teams team on team.id = task_group.legacy_team_id
      where task.title = 'Inventar materiale pentru depozit'
        and task.status = 'cancelled'
        and team.dept_id is null
@@ -491,7 +494,7 @@ select ok(
      where clone.status = 'todo'
        and source.status = 'unfulfilled'
        and clone.title = source.title
-       and clone.dept_id is not distinct from source.dept_id
+       and clone.group_id = source.group_id
        and clone.campaign_id is not distinct from source.campaign_id
        and not exists (select 1 from task_assignments a where a.task_id = clone.id)
        and exists (select 1 from task_activity activity
@@ -508,7 +511,7 @@ select ok(
      where dept.kind = 'department'
        and not exists (
          select 1 from campaigns campaign
-          where campaign.department_id = dept.id
+          where campaign.group_id = (select grp.id from groups grp where grp.legacy_dept_id = dept.id)
             and campaign.is_active
             and exists (select 1 from tasks task where task.campaign_id = campaign.id))
   ),
@@ -669,9 +672,11 @@ select ok(
   ),
   'queue timestamps follow the mode, every terminal public Task closed its queue, and no closed queue keeps a pending Candidate');
 
--- The Origin authority model, re-derived here rather than called: the demo
--- cannot prove `private.require_origin_manager` directly (it reads auth.uid()),
--- but it can prove every creator satisfies the same predicate.
+-- The Group authority model, re-derived here rather than called: the demo
+-- cannot prove `private.require_group_work_manager` directly (it reads auth.uid()),
+-- but it can prove every creator below BC holds a live Group Manager or Group
+-- Responsible role on the path of the Task's active Group (#579: the Group is
+-- the only Origin, so the predicate reads nothing else).
 select ok(
   not exists (
     select 1
@@ -681,31 +686,11 @@ select ok(
      where creator.email like '%@demo.osubb'
        and creator_role.level < 6
        and not (
-         (task.dept_id is not null and creator.role = 'bce' and exists (
-            select 1 from member_departments md
-             where md.member_id = creator.id and md.dept_id = task.dept_id))
-         or (task.team_id is not null and creator.role = 'bce' and exists (
-            select 1 from teams team
-              join member_departments md on md.dept_id = team.dept_id
-             where team.id = task.team_id and team.dept_id is not null
-               and md.member_id = creator.id))
-         or (task.team_id is not null and exists (
-            select 1 from teams team
-              join team_members tm on tm.team_id = team.id
-             where team.id = task.team_id and team.dept_id is null
-               and tm.member_id = creator.id))
-         or (task.project_id is not null and exists (
-            select 1 from projects project
-              left join project_members pm
-                on pm.project_id = project.id
-               and pm.member_id = creator.id
-               and pm.project_role = 'responsible'
-             where project.id = task.project_id
-               and project.status = 'active'
-               and (project.leader_id = creator.id or pm.member_id is not null)))
+         coalesce(private.group_role_of(task.group_id, creator.id) in ('manager', 'responsible'), false)
+         and exists (select 1 from groups grp where grp.id = task.group_id and grp.status = 'active')
        )
   ),
-  'every demo Task names a creator private.require_origin_manager would have accepted');
+  'every demo Task names a creator private.require_group_work_manager would have accepted');
 
 select is(
   (select count(*) from task_evaluations e
@@ -793,24 +778,24 @@ select is(
 -- expected figures are computed here, as the owner, and compared from inside a
 -- leadership session (the same shape as demo_totals below).
 create temp table demo_cup_expected as
-  select department.id as dept_id,
+  select cup.id as group_id,
          coalesce((
            select sum(entry.delta)::int
              from points_ledger entry
              join tasks task on task.id = entry.task_id
-             left join teams team on team.id = task.team_id
+             join groups task_group on task_group.id = task.group_id
             where entry.reason in ('task', 'task_reversal')
-              and coalesce(task.dept_id, team.dept_id) = department.id
+              and task_group.path @> array[cup.id]
          ), 0) as points
-    from departments department
-   where department.kind = 'department';
+    from groups cup
+   where cup.competes_in_cup;
 grant select on demo_cup_expected to authenticated;
 
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000006');
 select results_eq(
-  $$ select dept_id, points from public.dept_cup order by dept_id $$,
-  $$ select dept_id, points from demo_cup_expected order by dept_id $$,
-  'dept_cup totals the seeded Task Points whose Task Origin is that Department or one of its Department Teams');
+  $$ select group_id, points from public.dept_cup order by group_id $$,
+  $$ select group_id, points from demo_cup_expected order by group_id $$,
+  'dept_cup totals the seeded Task Points whose Task Group is that competing Group or one below it');
 reset role;
 
 -- my_points is the ordinary member's own-total endpoint, and member_points is
@@ -879,9 +864,9 @@ select ok((select count(*) from events) >= 6,
   'the calendar has something in it');
 
 select ok(
-  (select count(*) from events where scope = 'org') >= 1
-  and (select count(*) from events where scope = 'dept') >= 1
-  and (select count(*) from events where scope = 'team') >= 1,
+  exists (select 1 from events e join groups g on g.id = e.group_id where g.is_organization)
+  and exists (select 1 from events e join groups g on g.id = e.group_id where g.category = 'department')
+  and exists (select 1 from events e join groups g on g.id = e.group_id where g.category = 'team'),
   'org, department and team events all exist — switching demo accounts changes the calendar');
 
 select is((select min_level from events where title = 'Adunarea Generală de toamnă'), 3,

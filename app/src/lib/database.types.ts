@@ -201,7 +201,6 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
-          department_id: string | null
           group_id: number
           id: number
           is_active: boolean
@@ -211,7 +210,6 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
-          department_id?: string | null
           group_id: number
           id?: never
           is_active?: boolean
@@ -221,7 +219,6 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
-          department_id?: string | null
           group_id?: number
           id?: never
           is_active?: boolean
@@ -272,13 +269,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "campaigns_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "campaigns_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
@@ -293,45 +283,36 @@ export type Database = {
           decided_at: string | null
           decided_by: string | null
           decision_note: string | null
-          dept_id: string | null
           description: string
           group_id: number
           id: number
-          project_id: number | null
           requester_id: string
           status: string
           task_id: number | null
-          team_id: string | null
         }
         Insert: {
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           decision_note?: string | null
-          dept_id?: string | null
           description: string
           group_id: number
           id?: never
-          project_id?: number | null
           requester_id: string
           status?: string
           task_id?: number | null
-          team_id?: string | null
         }
         Update: {
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           decision_note?: string | null
-          dept_id?: string | null
           description?: string
           group_id?: number
           id?: never
-          project_id?: number | null
           requester_id?: string
           status?: string
           task_id?: number | null
-          team_id?: string | null
         }
         Relationships: [
           {
@@ -377,24 +358,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "completed_work_requests_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "completed_work_requests_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
@@ -458,13 +425,6 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -586,7 +546,6 @@ export type Database = {
           capacity: number | null
           created_at: string
           created_by: string | null
-          dept_id: string | null
           description: string | null
           ends_at: string | null
           group_id: number
@@ -594,10 +553,7 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
-          project_id: number | null
-          scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
-          team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
           updated_at: string
@@ -608,7 +564,6 @@ export type Database = {
           capacity?: number | null
           created_at?: string
           created_by?: string | null
-          dept_id?: string | null
           description?: string | null
           ends_at?: string | null
           group_id: number
@@ -616,10 +571,7 @@ export type Database = {
           id?: never
           location?: string | null
           min_level?: number
-          project_id?: number | null
-          scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
-          team_id?: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
           updated_at?: string
@@ -630,7 +582,6 @@ export type Database = {
           capacity?: number | null
           created_at?: string
           created_by?: string | null
-          dept_id?: string | null
           description?: string | null
           ends_at?: string | null
           group_id?: number
@@ -638,10 +589,7 @@ export type Database = {
           id?: never
           location?: string | null
           min_level?: number
-          project_id?: number | null
-          scope?: Database["public"]["Enums"]["event_scope"]
           starts_at?: string
-          team_id?: string | null
           title?: string
           type?: Database["public"]["Enums"]["event_type"]
           updated_at?: string
@@ -690,32 +638,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "events_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "events_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_team_department_fkey"
-            columns: ["team_id", "dept_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id", "dept_id"]
           },
         ]
       }
@@ -2304,7 +2231,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -2312,7 +2238,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -2321,7 +2246,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -2336,7 +2260,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deadline?: string | null
-          dept_id?: string | null
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
@@ -2344,7 +2267,6 @@ export type Database = {
           id?: never
           kind?: string
           parent_task_id?: number | null
-          project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
           rating?: number | null
@@ -2353,7 +2275,6 @@ export type Database = {
           started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           submitted_at?: string | null
-          team_id?: string | null
           title: string
           type?: string | null
           unfulfilled_at?: string | null
@@ -2368,7 +2289,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deadline?: string | null
-          dept_id?: string | null
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
@@ -2376,7 +2296,6 @@ export type Database = {
           id?: never
           kind?: string
           parent_task_id?: number | null
-          project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
           rating?: number | null
@@ -2385,7 +2304,6 @@ export type Database = {
           started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           submitted_at?: string | null
-          team_id?: string | null
           title?: string
           type?: string | null
           unfulfilled_at?: string | null
@@ -2441,13 +2359,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "tasks_duplicated_from_task_id_fkey"
             columns: ["duplicated_from_task_id"]
             isOneToOne: false
@@ -2494,20 +2405,6 @@ export type Database = {
             columns: ["parent_task_id"]
             isOneToOne: false
             referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2610,7 +2507,6 @@ export type Database = {
     Views: {
       dept_cup: {
         Row: {
-          dept_id: string | null
           group_id: number | null
           members: number | null
           name: string | null
@@ -2725,7 +2621,6 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -2734,7 +2629,6 @@ export type Database = {
           is_overdue: boolean | null
           kind: string | null
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -2743,7 +2637,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"] | null
           submitted_at: string | null
-          team_id: string | null
           title: string | null
           type: string | null
           unfulfilled_at: string | null
@@ -2758,7 +2651,6 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deadline?: string | null
-          dept_id?: string | null
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
@@ -2767,7 +2659,6 @@ export type Database = {
           is_overdue?: never
           kind?: string | null
           parent_task_id?: number | null
-          project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
           rating?: number | null
@@ -2776,7 +2667,6 @@ export type Database = {
           started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           submitted_at?: string | null
-          team_id?: string | null
           title?: string | null
           type?: string | null
           unfulfilled_at?: string | null
@@ -2791,7 +2681,6 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deadline?: string | null
-          dept_id?: string | null
           description?: string | null
           difficulty?: number | null
           duplicated_from_task_id?: number | null
@@ -2800,7 +2689,6 @@ export type Database = {
           is_overdue?: never
           kind?: string | null
           parent_task_id?: number | null
-          project_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
           rating?: number | null
@@ -2809,7 +2697,6 @@ export type Database = {
           started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           submitted_at?: string | null
-          team_id?: string | null
           title?: string | null
           type?: string | null
           unfulfilled_at?: string | null
@@ -2865,13 +2752,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "tasks_duplicated_from_task_id_fkey"
             columns: ["duplicated_from_task_id"]
             isOneToOne: false
@@ -2918,20 +2798,6 @@ export type Database = {
             columns: ["parent_task_id"]
             isOneToOne: false
             referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2991,15 +2857,12 @@ export type Database = {
           decided_at: string | null
           decided_by: string | null
           decision_note: string | null
-          dept_id: string | null
           description: string
           group_id: number
           id: number
-          project_id: number | null
           requester_id: string
           status: string
           task_id: number | null
-          team_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3038,7 +2901,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3046,7 +2908,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3055,7 +2916,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3104,7 +2964,6 @@ export type Database = {
           capacity: number | null
           created_at: string
           created_by: string | null
-          dept_id: string | null
           description: string | null
           ends_at: string | null
           group_id: number
@@ -3112,10 +2971,7 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
-          project_id: number | null
-          scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
-          team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
           updated_at: string
@@ -3139,7 +2995,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3147,7 +3002,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3156,7 +3010,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3185,7 +3038,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3193,7 +3045,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3202,7 +3053,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3226,7 +3076,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3234,7 +3083,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3243,7 +3091,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3271,7 +3118,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3279,7 +3125,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3288,7 +3133,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3300,67 +3144,37 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_campaign:
-        | {
-            Args: { p_department_id: string; p_name: string }
-            Returns: {
-              created_at: string
-              created_by: string
-              department_id: string | null
-              group_id: number
-              id: number
-              is_active: boolean
-              name: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "campaigns"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { p_group_id: number; p_name: string }
-            Returns: {
-              created_at: string
-              created_by: string
-              department_id: string | null
-              group_id: number
-              id: number
-              is_active: boolean
-              name: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "campaigns"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-      create_completed_work_request: {
-        Args: {
-          p_dept_id: string
-          p_description: string
-          p_group_id?: number
-          p_project_id: number
-          p_team_id: string
+      create_campaign: {
+        Args: { p_group_id: number; p_name: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          group_id: number
+          id: number
+          is_active: boolean
+          name: string
+          updated_at: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_completed_work_request: {
+        Args: { p_description: string; p_group_id: number }
         Returns: {
           created_at: string
           decided_at: string | null
           decided_by: string | null
           decision_note: string | null
-          dept_id: string | null
           description: string
           group_id: number
           id: number
-          project_id: number | null
           requester_id: string
           status: string
           task_id: number | null
-          team_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3387,7 +3201,6 @@ export type Database = {
           capacity: number | null
           created_at: string
           created_by: string | null
-          dept_id: string | null
           description: string | null
           ends_at: string | null
           group_id: number
@@ -3395,10 +3208,7 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
-          project_id: number | null
-          scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
-          team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
           updated_at: string
@@ -3434,14 +3244,11 @@ export type Database = {
           p_audience: string
           p_campaign_id?: number
           p_deadline: string
-          p_dept_id: string
           p_description: string
           p_executor_id?: string
           p_group_id?: number
           p_kind?: string
           p_parent_task_id?: number
-          p_project_id: number
-          p_team_id: string
           p_title: string
         }
         Returns: {
@@ -3454,7 +3261,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3462,7 +3268,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3471,7 +3276,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3487,7 +3291,6 @@ export type Database = {
       department_cup: {
         Args: { p_campaign_id?: number }
         Returns: {
-          dept_id: string
           group_id: number
           members: number
           name: string
@@ -3506,7 +3309,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3514,7 +3316,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3523,7 +3324,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3547,7 +3347,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3555,7 +3354,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3564,7 +3362,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3588,7 +3385,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3596,7 +3392,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3605,7 +3400,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3667,9 +3461,6 @@ export type Database = {
           group_name: string
           is_overdue: boolean
           member_id: string
-          origin_id: string
-          origin_name: string
-          origin_type: string
           parent_task_id: number
           parent_task_title: string
           queue_closed_at: string
@@ -3715,7 +3506,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3723,7 +3513,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3732,7 +3521,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3827,15 +3615,12 @@ export type Database = {
           decided_at: string | null
           decided_by: string | null
           decision_note: string | null
-          dept_id: string | null
           description: string
           group_id: number
           id: number
-          project_id: number | null
           requester_id: string
           status: string
           task_id: number | null
-          team_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3868,7 +3653,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3876,7 +3660,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3885,7 +3668,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3909,7 +3691,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3917,7 +3698,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3926,7 +3706,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -3969,7 +3748,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -3977,7 +3755,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -3986,7 +3763,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -4003,7 +3779,6 @@ export type Database = {
         Returns: {
           created_at: string
           created_by: string
-          department_id: string | null
           group_id: number
           id: number
           is_active: boolean
@@ -4094,7 +3869,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -4102,7 +3876,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -4111,7 +3884,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -4135,7 +3907,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -4143,7 +3914,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -4152,7 +3922,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -4176,7 +3945,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -4184,7 +3952,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -4193,7 +3960,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -4210,7 +3976,6 @@ export type Database = {
         Returns: {
           created_at: string
           created_by: string
-          department_id: string | null
           group_id: number
           id: number
           is_active: boolean
@@ -4243,7 +4008,6 @@ export type Database = {
           capacity: number | null
           created_at: string
           created_by: string | null
-          dept_id: string | null
           description: string | null
           ends_at: string | null
           group_id: number
@@ -4251,10 +4015,7 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
-          project_id: number | null
-          scope: Database["public"]["Enums"]["event_scope"]
           starts_at: string
-          team_id: string | null
           title: string
           type: Database["public"]["Enums"]["event_type"]
           updated_at: string
@@ -4287,7 +4048,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -4295,7 +4055,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -4304,7 +4063,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -4334,7 +4092,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -4342,7 +4099,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -4351,7 +4107,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -4383,7 +4138,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
-          dept_id: string | null
           description: string | null
           difficulty: number | null
           duplicated_from_task_id: number | null
@@ -4391,7 +4145,6 @@ export type Database = {
           id: number
           kind: string
           parent_task_id: number | null
-          project_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
           rating: number | null
@@ -4400,7 +4153,6 @@ export type Database = {
           started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           submitted_at: string | null
-          team_id: string | null
           title: string
           type: string | null
           unfulfilled_at: string | null
@@ -4415,7 +4167,6 @@ export type Database = {
     }
     Enums: {
       announce_priority: "critical" | "important" | "normal"
-      event_scope: "team" | "dept" | "project" | "org"
       event_type:
         | "sedinta"
         | "activitate"
@@ -4572,7 +4323,6 @@ export const Constants = {
   public: {
     Enums: {
       announce_priority: ["critical", "important", "normal"],
-      event_scope: ["team", "dept", "project", "org"],
       event_type: [
         "sedinta",
         "activitate",

@@ -29,14 +29,14 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('49900000-0000-0000-0000-000000000007', 'BC 499', 'bc.499@test.local', 'bc', 'activ');
 
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    queue_opened_at, created_by)
 values
   ('Oportunitate vizibila 499', 'Task public OSUBB', '2027-09-01 09:00:00+00',
-   'edu', 'org', 'public', 'todo', now(),
+   pg_temp.dept_group('edu'), 'org', 'public', 'todo', now(),
    '49900000-0000-0000-0000-000000000007'),
   ('Task local ascuns 499', 'Task direct din alt departament', '2027-09-02 09:00:00+00',
-   'fin', 'local', 'direct', 'todo', null,
+   pg_temp.dept_group('fin'), 'local', 'direct', 'todo', null,
    '49900000-0000-0000-0000-000000000007');
 
 insert into public.task_assignments

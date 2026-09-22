@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
-import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { fetchMyGroups, isMemberOf, type MyGroup } from './my-groups';
@@ -59,21 +58,11 @@ export type SubmitCompletedWorkInput = {
 };
 
 export async function submitCompletedWork(input: SubmitCompletedWorkInput) {
-  const args = {
+  // The Group is the only Origin a Request carries (#579).
+  const { data, error } = await supabase.rpc('create_completed_work_request', {
     p_description: input.description,
     p_group_id: input.origin.id,
-    // The legacy Origin parameters have no default until #579 drops them, so
-    // PostgREST only resolves the command when they are sent, as nulls.
-    p_dept_id: null,
-    p_team_id: null,
-    p_project_id: null,
-  };
-  // PostgreSQL parameters are nullable even though generated RPC Args omit
-  // null.
-  const { data, error } = await supabase.rpc(
-    'create_completed_work_request',
-    args as unknown as Database['public']['Functions']['create_completed_work_request']['Args'],
-  );
+  });
   if (error) throw error;
   return data;
 }

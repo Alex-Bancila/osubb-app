@@ -64,10 +64,10 @@ insert into member_departments (member_id, dept_id) values
 -- this file needs for "a member cannot RSVP to an event hidden by event
 -- RLS"); it is still level >= 4 (Corina, min_level 0/0/4) that reads every
 -- attendance row.
-insert into events (title, type, scope, dept_id, min_level, starts_at) values
-  ('RSVP organizație', 'sedinta', 'org', null, 0, now() + interval '1 day'),
-  ('RSVP educațional', 'sedinta', 'dept', 'edu', 0, now() + interval '2 days'),
-  ('RSVP imagine', 'sedinta', 'dept', 'pr', 3, now() + interval '3 days');
+insert into events (title, type, group_id, min_level, starts_at) values
+  ('RSVP organizație', 'sedinta', pg_temp.dept_group('org'), 0, now() + interval '1 day'),
+  ('RSVP educațional', 'sedinta', pg_temp.dept_group('edu'), 0, now() + interval '2 days'),
+  ('RSVP imagine', 'sedinta', pg_temp.dept_group('pr'), 3, now() + interval '3 days');
 
 insert into event_attendance (event_id, member_id, status)
 select id, 'a1000000-0000-0000-0000-000000000063'::uuid, 'going'

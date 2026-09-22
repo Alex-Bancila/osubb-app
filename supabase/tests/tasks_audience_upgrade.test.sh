@@ -62,9 +62,9 @@ alter table public.tasks
   alter column status set default 'todo';
 
 alter table public.tasks drop column audience;
-insert into public.tasks (title, difficulty, status, dept_id) values
-  ('Legacy open Task', 1, 'open', 'edu'),
-  ('Legacy direct Task', 1, 'todo', 'edu');
+insert into public.tasks (title, difficulty, status, group_id) values
+  ('Legacy open Task', 1, 'open', (select id from public.groups where legacy_dept_id = 'edu')),
+  ('Legacy direct Task', 1, 'todo', (select id from public.groups where legacy_dept_id = 'edu'));
 SQL
 
   cat supabase/migrations/20260911091000_tasks_audience.sql

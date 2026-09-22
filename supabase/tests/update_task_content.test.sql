@@ -35,52 +35,52 @@ insert into public.profiles (id, full_name, email, role, status) values
 insert into public.member_departments (member_id, dept_id) values
   ('32800000-0000-0000-0000-000000000001', 'edu');
 
-insert into public.campaigns (department_id, name, is_active, created_by) values
-  ('edu', 'Campanie #328', true, '32800000-0000-0000-0000-000000000001'),
-  ('pr', 'Campanie PR #328', true, '32800000-0000-0000-0000-000000000001'),
-  ('edu', 'Campanie inactiva #328', false, '32800000-0000-0000-0000-000000000001');
+insert into public.campaigns (group_id, name, is_active, created_by) values
+  (pg_temp.dept_group('edu'), 'Campanie #328', true, '32800000-0000-0000-0000-000000000001'),
+  (pg_temp.dept_group('pr'), 'Campanie PR #328', true, '32800000-0000-0000-0000-000000000001'),
+  (pg_temp.dept_group('edu'), 'Campanie inactiva #328', false, '32800000-0000-0000-0000-000000000001');
 
-insert into public.tasks (title, description, deadline, dept_id, status, created_by) values
-  ('Authority edit #328', 'Descriere autoritate', '2027-01-05 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Executor denied #328', 'Descriere O', '2027-01-24 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Bad input task #328', 'Descriere input', '2027-01-06 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Unchanged task #328', 'Descriere I', '2027-01-18 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Field title only #328', 'Descriere neschimbata A', '2027-01-10 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Field description only #328', 'Descriere veche B', '2027-01-11 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Field deadline only #328', 'Descriere neschimbata C', '2027-01-12 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Field campaign only #328', 'Descriere neschimbata D', '2027-01-13 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Field all together #328', 'Descriere veche E', '2027-01-14 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Clear description #328', 'De sters #328', '2027-01-15 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Wrong dept campaign #328', 'Descriere J', '2027-01-19 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Inactive campaign task #328', 'Descriere K', '2027-01-20 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Executor notified #328', 'Descriere L', '2027-01-21 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Self executor #328', 'Descriere M', '2027-01-22 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('No executor #328', 'Descriere N', '2027-01-23 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Gate denial task #328', 'Descriere gate', '2027-01-26 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001'),
-  ('Direct write task #328', 'Descriere P', '2027-01-25 09:00:00+00', 'edu', 'todo', '32800000-0000-0000-0000-000000000001');
+insert into public.tasks (title, description, deadline, group_id, status, created_by) values
+  ('Authority edit #328', 'Descriere autoritate', '2027-01-05 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Executor denied #328', 'Descriere O', '2027-01-24 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Bad input task #328', 'Descriere input', '2027-01-06 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Unchanged task #328', 'Descriere I', '2027-01-18 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Field title only #328', 'Descriere neschimbata A', '2027-01-10 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Field description only #328', 'Descriere veche B', '2027-01-11 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Field deadline only #328', 'Descriere neschimbata C', '2027-01-12 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Field campaign only #328', 'Descriere neschimbata D', '2027-01-13 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Field all together #328', 'Descriere veche E', '2027-01-14 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Clear description #328', 'De sters #328', '2027-01-15 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Wrong dept campaign #328', 'Descriere J', '2027-01-19 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Inactive campaign task #328', 'Descriere K', '2027-01-20 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Executor notified #328', 'Descriere L', '2027-01-21 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Self executor #328', 'Descriere M', '2027-01-22 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('No executor #328', 'Descriere N', '2027-01-23 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Gate denial task #328', 'Descriere gate', '2027-01-26 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001'),
+  ('Direct write task #328', 'Descriere P', '2027-01-25 09:00:00+00', pg_temp.dept_group('edu'), 'todo', '32800000-0000-0000-0000-000000000001');
 
-insert into public.tasks (title, description, deadline, dept_id, campaign_id, status, created_by) values
-  ('Clear campaign #328', 'Descriere G', '2027-01-16 09:00:00+00', 'edu',
-   (select id from public.campaigns where department_id = 'edu' and name = 'Campanie #328'),
+insert into public.tasks (title, description, deadline, group_id, campaign_id, status, created_by) values
+  ('Clear campaign #328', 'Descriere G', '2027-01-16 09:00:00+00', pg_temp.dept_group('edu'),
+   (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie #328'),
    'todo', '32800000-0000-0000-0000-000000000001');
 
 insert into public.tasks
-  (title, description, deadline, dept_id, difficulty, rating, status, completed_at, created_by)
+  (title, description, deadline, group_id, difficulty, rating, status, completed_at, created_by)
 values
-  ('Terminal task #328', 'Descriere H', '2027-01-17 09:00:00+00', 'edu', 3, 4, 'completed', now(),
+  ('Terminal task #328', 'Descriere H', '2027-01-17 09:00:00+00', pg_temp.dept_group('edu'), 3, 4, 'completed', now(),
    '32800000-0000-0000-0000-000000000001');
 
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, difficulty, rating, description, status, created_by)
+  (title, group_id, kind, audience, assignment_mode, difficulty, rating, description, status, created_by)
 values
-  ('Umbrella #328', 'edu', 'umbrella', null, null, null, null, 'Umbrella desc', 'todo',
+  ('Umbrella #328', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null, 'Umbrella desc', 'todo',
    '32800000-0000-0000-0000-000000000001');
 
 create temp table f328 as
 select
-  (select id from public.campaigns where department_id = 'edu' and name = 'Campanie #328') as edu_campaign_id,
-  (select id from public.campaigns where department_id = 'pr' and name = 'Campanie PR #328') as pr_campaign_id,
-  (select id from public.campaigns where department_id = 'edu' and name = 'Campanie inactiva #328') as inactive_campaign_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie #328') as edu_campaign_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('pr') and name = 'Campanie PR #328') as pr_campaign_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie inactiva #328') as inactive_campaign_id,
   9223372036854775807::bigint as missing_id,
   (select id from public.tasks where title = 'Gate denial task #328') as gate_denial_task_id;
 grant select on f328 to authenticated, anon;
@@ -533,8 +533,8 @@ select extensions.dblink_exec('utc_lock_setup', $$
      'lock.probe.bce.328@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id)
   values ('32800000-0000-0000-0000-000000000021', 'edu');
-  insert into public.tasks (title, description, deadline, dept_id, status, created_by) values
-    ('Lock Probe Task #328', 'Descriere lock', '2027-02-01 09:00:00+00', 'edu', 'todo',
+  insert into public.tasks (title, description, deadline, group_id, status, created_by) values
+    ('Lock Probe Task #328', 'Descriere lock', '2027-02-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'todo',
      '32800000-0000-0000-0000-000000000021');
 $$);
 

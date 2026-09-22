@@ -19,7 +19,7 @@ import type { MyGroup } from './my-groups';
 describe('completed-work Request mutation', () => {
   beforeEach(resetSupabaseMock);
 
-  it('sends the chosen Group as p_group_id, the legacy Origins as nulls', async () => {
+  it('sends exactly the description and the chosen Group (#579)', async () => {
     supabaseMock.rpc.mockResolvedValue({ data: { id: 9 }, error: null });
     await submitCompletedWork({
       description: 'Activitate finalizată',
@@ -30,9 +30,6 @@ describe('completed-work Request mutation', () => {
       {
         p_description: 'Activitate finalizată',
         p_group_id: 21,
-        p_dept_id: null,
-        p_team_id: null,
-        p_project_id: null,
       },
     );
   });

@@ -163,10 +163,11 @@ values ('Cross-owned seed guard', 'active',
         'd0000000-0000-0000-0000-000000000005',
         'e2750000-0000-0000-0000-000000000001');
 insert into tasks (
-  title, difficulty, status, audience, assignment_mode, created_by, dept_id
+  title, difficulty, status, audience, assignment_mode, created_by, group_id
 )
 values ('Non-demo local opportunity', 1, 'todo', 'local', 'direct',
-        'e2750000-0000-0000-0000-000000000001', 'edu');
+        'e2750000-0000-0000-0000-000000000001',
+        (select id from groups where legacy_dept_id = 'edu'));
 insert into task_assignments (task_id, member_id, assigned_by)
 select id,
        'e2750000-0000-0000-0000-000000000001',

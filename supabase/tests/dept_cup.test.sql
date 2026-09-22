@@ -32,8 +32,8 @@ insert into public.member_departments (member_id, dept_id) values
   ('c2000000-0000-0000-0000-000000000002', 'pr'),
   ('c3000000-0000-0000-0000-000000000003', 'hr');
 
-insert into public.tasks (title, difficulty, dept_id) values
-  ('cup-active', 5, 'hr'), ('cup-inactive', 5, 'hr'), ('cup-alumni', 5, 'hr');
+insert into public.tasks (title, difficulty, group_id) values
+  ('cup-active', 5, pg_temp.dept_group('hr')), ('cup-inactive', 5, pg_temp.dept_group('hr')), ('cup-alumni', 5, pg_temp.dept_group('hr'));
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 3
  where title like 'cup-%';
@@ -62,17 +62,17 @@ select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
 
 select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE sees all five canonical departments');
-select is((select points from public.dept_cup where dept_id = 'edu'), 0,
+select is((select points from public.dept_cup where group_id = pg_temp.dept_group('edu')), 0,
   'current Department membership does not redirect another Origin''s Task Points');
-select is((select members from public.dept_cup where dept_id = 'edu'), 1::bigint,
+select is((select members from public.dept_cup where group_id = pg_temp.dept_group('edu')), 1::bigint,
   'the cup counts the active member');
-select is((select points from public.dept_cup where dept_id = 'pr'), 0,
+select is((select points from public.dept_cup where group_id = pg_temp.dept_group('pr')), 0,
   'a Department that owns no Task shows zero, regardless of its members'' status');
-select is((select members from public.dept_cup where dept_id = 'pr'), 0::bigint,
+select is((select members from public.dept_cup where group_id = pg_temp.dept_group('pr')), 0::bigint,
   'an inactive member is not counted');
-select is((select points from public.dept_cup where dept_id = 'hr'), 15,
+select is((select points from public.dept_cup where group_id = pg_temp.dept_group('hr')), 15,
   'Task Points follow the Department Task Origin regardless of Executor membership status');
-select is((select members from public.dept_cup where dept_id = 'hr'), 0::bigint,
+select is((select members from public.dept_cup where group_id = pg_temp.dept_group('hr')), 0::bigint,
   'an alumni member is not counted');
 -- ADR-0007 keeps anyone with completed Task history eligible regardless of
 -- profile status: the inactive and alumni Executors' own credits are exactly
@@ -83,15 +83,16 @@ select is(
      join public.tasks as task on task.id = entry.task_id
     where entry.member_id in ('c2000000-0000-0000-0000-000000000002',
                                'c3000000-0000-0000-0000-000000000003')
-      and task.dept_id = 'hr'),
+      and task.group_id = pg_temp.dept_group('hr')),
   10,
   'the inactive and alumni Executors'' own Task credits (5 each) are what carry hr to 15, not merely the active member''s');
-select is((select points from public.dept_cup where dept_id = 'fin'), 0,
+select is((select points from public.dept_cup where group_id = pg_temp.dept_group('fin')), 0,
   'a department without any member remains visible with zero points');
 
 select results_eq(
-  $$ select dept_id from public.dept_cup $$,
-  $$ values ('hr'::text), ('edu'::text), ('fin'::text), ('pr'::text), ('youth'::text) $$,
+  $$ select group_id from public.dept_cup $$,
+  $$ values (pg_temp.dept_group('hr')), (pg_temp.dept_group('edu')), (pg_temp.dept_group('fin')),
+            (pg_temp.dept_group('pr')), (pg_temp.dept_group('youth')) $$,
   'standings sort by points descending and then by department name');
 
 reset role;
@@ -103,7 +104,7 @@ select is((select count(*) from public.dept_cup), 0::bigint,
 reset role;
 
 select results_eq($$select column_name::text collate "C" from information_schema.columns where table_schema='public' and table_name='dept_cup' order by ordinal_position$$,
-  $$select unnest(array['dept_id','name','points','members','group_id']::text[]) collate "C"$$,
-  'Cup preserves the four existing columns and appends Group id');
+  $$select unnest(array['group_id','name','points','members']::text[]) collate "C"$$,
+  'the Cup is keyed by Group alone -- the compatibility dept_id column went with the bridge (#579)');
 select * from finish();
 rollback;

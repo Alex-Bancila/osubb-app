@@ -27,8 +27,8 @@ insert into profiles (id, full_name, email, role, status) values
 -- A graded Task with its Assignment and Evaluation, so 'task'/'task_reversal'
 -- rows (which need a task_id from #162 and an evaluation_id from #317) can be
 -- inserted below.
-insert into tasks (title, difficulty, rating, status, completed_at, dept_id)
-  values ('ledger-semantics-fixture-162', 3, 4, 'completed', now(), 'edu');
+insert into tasks (title, difficulty, rating, status, completed_at, group_id)
+  values ('ledger-semantics-fixture-162', 3, 4, 'completed', now(), pg_temp.dept_group('edu'));
 
 insert into task_assignments (task_id, member_id, ended_at, end_reason)
   select id, 'aaaaaaaa-0000-0000-0000-000000000162', completed_at, 'completed'

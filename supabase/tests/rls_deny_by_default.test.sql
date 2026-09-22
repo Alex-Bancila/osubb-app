@@ -38,8 +38,8 @@ insert into projects (name, leader_id, created_by) values
 -- fixture non-vacuous without a duplicate manual insert.
 insert into member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
-insert into campaigns (department_id, name, created_by)
-  values ('edu', 'RLS Campaign', 'ffffffff-0000-0000-0000-000000000006');
+insert into campaigns (group_id, name, created_by)
+  values (pg_temp.dept_group('edu'), 'RLS Campaign', 'ffffffff-0000-0000-0000-000000000006');
 insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-rls', 'ffffffff-0000-0000-0000-000000000006');
@@ -50,7 +50,7 @@ insert into groups (name, category) values ('RLS Group', 'team');
 insert into group_members (group_id, member_id, group_role)
   select id, 'ffffffff-0000-0000-0000-000000000006', 'manager' from groups where name = 'RLS Group';
 
-insert into tasks (title, difficulty, dept_id) values ('rls-t1', 3, 'edu');
+insert into tasks (title, difficulty, group_id) values ('rls-t1', 3, pg_temp.dept_group('edu'));
 insert into task_assignments (task_id, member_id, assigned_by)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid,
          'ffffffff-0000-0000-0000-000000000006'::uuid
@@ -86,8 +86,8 @@ insert into points_ledger (member_id, delta, reason, task_id, evaluation_id)
     join tasks task on task.id = evaluation.task_id
    where task.title = 'rls-t1';
 -- #321: a Completed-work Request row, one Origin only.
-insert into completed_work_requests (requester_id, dept_id, description)
-  values ('ffffffff-0000-0000-0000-000000000006', 'edu', 'rls fixture completed-work request');
+insert into completed_work_requests (requester_id, group_id, description)
+  values ('ffffffff-0000-0000-0000-000000000006', pg_temp.dept_group('edu'), 'rls fixture completed-work request');
 
 -- A second row owned by the claimless uid itself: the general sweep below
 -- only proves a stranger sees nothing, not that the requester branch of
@@ -96,8 +96,8 @@ insert into completed_work_requests (requester_id, dept_id, description)
 -- (the auth_is_member() guard moved to cover only the manage branch) would
 -- pass every assertion here, because no fixture row's requester_id matches
 -- the claimless session's own uid.
-insert into completed_work_requests (requester_id, dept_id, description)
-  values ('eeeeeeee-0000-0000-0000-000000000156', 'edu', 'rls fixture completed-work request (claimless owner)');
+insert into completed_work_requests (requester_id, group_id, description)
+  values ('eeeeeeee-0000-0000-0000-000000000156', pg_temp.dept_group('edu'), 'rls fixture completed-work request (claimless owner)');
 
 -- An OPEN task: the shape that leaked, and the one an unprovisioned session
 -- could have joined. #312's tasks_evaluation_inputs_ck now makes the
@@ -107,11 +107,11 @@ insert into completed_work_requests (requester_id, dept_id, description)
 -- itself, still todo/public/org/unassigned, to a claimless or deactivated
 -- session.
 insert into tasks
-  (title, difficulty, status, dept_id, audience, assignment_mode, queue_opened_at)
-  values ('rls-open', 2, 'todo', 'edu', 'org', 'public', now());
+  (title, difficulty, status, group_id, audience, assignment_mode, queue_opened_at)
+  values ('rls-open', 2, 'todo', pg_temp.dept_group('edu'), 'org', 'public', now());
 
-insert into events (title, type, scope, starts_at)
-  values ('rls-event', 'sedinta', 'org', now());
+insert into events (title, type, group_id, starts_at)
+  values ('rls-event', 'sedinta', pg_temp.dept_group('org'), now());
 insert into event_attendance (event_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from events where title = 'rls-event';
 insert into announcements (title, body) values
@@ -273,7 +273,7 @@ select is((select count(*) from dept_cup),       0::bigint, 'claimless: dept_cup
 -- attempts used to target; their successors are commands, so the attempt is
 -- now a command call and the denial comes from the command's own gate.
 select throws_ok(
-  $$ select public.create_completed_work_request('sneaky', 'edu', null, null) $$,
+  $$ select public.create_completed_work_request('sneaky', pg_temp.dept_group('edu')) $$,
   '42501', 'request_command_forbidden', 'claimless: cannot file a Completed-work Request');
 
 select throws_ok(
@@ -308,7 +308,7 @@ select is((select count(*) from dept_cup), 0::bigint,
   'real claimless user: dept_cup is empty');
 
 select throws_ok(
-  $$ select public.create_completed_work_request('real-uid-sneaky', 'edu', null, null) $$,
+  $$ select public.create_completed_work_request('real-uid-sneaky', pg_temp.dept_group('edu')) $$,
   '42501', 'request_command_forbidden',
   'real claimless user: cannot file a self-owned Completed-work Request');
 select throws_ok(
@@ -386,8 +386,8 @@ select pg_temp.test_login('34500000-0000-0000-0000-000000000001', jsonb_build_ob
   'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 
 select throws_ok(
-  $$ insert into tasks (title, difficulty, dept_id, audience, assignment_mode)
-     values ('345 direct insert', 1, 'edu', 'local', 'direct') $$,
+  $$ insert into tasks (title, difficulty, group_id, audience, assignment_mode)
+     values ('345 direct insert', 1, pg_temp.dept_group('edu'), 'local', 'direct') $$,
   '42501', 'permission denied for table tasks',
   '#345: a BC with live claims cannot INSERT a Task directly');
 select throws_ok(
@@ -403,8 +403,7 @@ select throws_ok(
 -- The same persona, the same session, through the command: this is what
 -- makes the three denials above a retirement rather than an outage.
 select lives_ok(
-  $$ select public.create_task('Task prin comandă #345', 'descriere',
-       now() + interval '7 days', 'edu', null, null, 'local', 'direct') $$,
+  $$ select public.create_task('Task prin comandă #345', 'descriere', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$,
   '#345: and the very same BC still creates a Task through public.create_task');
 
 reset role;

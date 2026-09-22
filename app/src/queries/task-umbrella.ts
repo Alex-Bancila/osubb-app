@@ -10,17 +10,13 @@ import type { TaskDraft } from '../screens/tracker/task-form-model';
 
 /**
  * The one `create_task` caller: a top-level Task, an Umbrella, or a Subtask
- * (a draft with `parentTaskId`). Named arguments only; the Origin is the
- * Group; the retired dept/team/project arguments are sent as null.
+ * (a draft with `parentTaskId`). Named arguments only; the Group is the only
+ * Origin (#579) — a Subtask sends none and inherits its Umbrella's.
  */
 export async function createTask(draft: TaskDraft) {
   if (draft.kind === 'umbrella' && draft.parentTaskId !== null)
     throw new Error('An Umbrella cannot be a Subtask');
   const args = {
-    // #579 drops these three parameters; that PR removes them from this call.
-    p_dept_id: null,
-    p_team_id: null,
-    p_project_id: null,
     p_group_id: draft.groupId,
     p_kind: draft.kind,
     p_parent_task_id: draft.parentTaskId,
@@ -34,8 +30,7 @@ export async function createTask(draft: TaskDraft) {
   };
   // PostgreSQL accepts NULL for the optional values (an Umbrella has no mode,
   // audience, Executor or Campaign). Generated RPC argument types omit
-  // nullability and still list the retired Origin arguments until #579;
-  // isolate that mismatch here.
+  // nullability; isolate that mismatch here.
   const { data, error } = await supabase.rpc(
     'create_task',
     args as unknown as Database['public']['Functions']['create_task']['Args'],

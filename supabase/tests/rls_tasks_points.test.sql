@@ -46,13 +46,13 @@ insert into teams (id, name, dept_id) values ('t-x', 'Team X', 'pr');
 insert into team_members (team_id, member_id)
   values ('t-x', 'b0000000-0000-0000-0000-000000000012');
 
-insert into tasks (title, difficulty, dept_id)          values ('t-edu',  3, 'edu');
-insert into tasks (title, difficulty, dept_id)          values ('t-edu2', 2, 'edu');
-insert into tasks (title, difficulty, dept_id)          values ('t-pr',   2, 'pr');
+insert into tasks (title, difficulty, group_id)          values ('t-edu',  3, pg_temp.dept_group('edu'));
+insert into tasks (title, difficulty, group_id)          values ('t-edu2', 2, pg_temp.dept_group('edu'));
+insert into tasks (title, difficulty, group_id)          values ('t-pr',   2, pg_temp.dept_group('pr'));
 insert into tasks
-  (title, difficulty, dept_id, status, audience, assignment_mode, queue_opened_at)
-  values ('t-open', 1, 'pr', 'todo', 'org', 'public', now());
-insert into tasks (title, difficulty, team_id)          values ('t-team', 1, 't-x');
+  (title, difficulty, group_id, status, audience, assignment_mode, queue_opened_at)
+  values ('t-open', 1, pg_temp.dept_group('pr'), 'todo', 'org', 'public', now());
+insert into tasks (title, difficulty, group_id)          values ('t-team', 1, pg_temp.team_group('t-x'));
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update tasks set status = 'completed', completed_at = now(), rating = 4 where title = 't-edu';   -- Vlad +6
 update tasks set status = 'completed', completed_at = now(), rating = 3 where title = 't-pr';    -- Bianca +2
@@ -216,8 +216,8 @@ reset role;
 -- Neither weakens the regression: the assertion below exercises the very
 -- gate that used to be missing, now inside public.express_task_interest.
 insert into tasks
-  (title, difficulty, dept_id, status, audience, assignment_mode, queue_opened_at)
-  values ('t-open-bait', 4, 'pr', 'todo', 'org', 'public', now());
+  (title, difficulty, group_id, status, audience, assignment_mode, queue_opened_at)
+  values ('t-open-bait', 4, pg_temp.dept_group('pr'), 'todo', 'org', 'public', now());
 
 create temp table fx_open as
   select (select id from tasks where title = 't-open-bait') as task_id,
@@ -244,7 +244,7 @@ select throws_ok(
   'a deactivated member cannot join an open Task''s Candidate Queue');
 
 select throws_ok(
-  $$ select public.create_completed_work_request('cerere-suspendat', 'edu', null, null) $$,
+  $$ select public.create_completed_work_request('cerere-suspendat', pg_temp.dept_group('edu')) $$,
   '42501', 'request_command_forbidden',
   'a deactivated member cannot file a Completed-work Request');
 

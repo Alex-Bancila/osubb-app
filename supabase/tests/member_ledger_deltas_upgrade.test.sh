@@ -25,7 +25,7 @@ insert into auth.users (id, email) values
 insert into public.profiles (id, full_name, email, role) values
   ('16300000-0000-0000-0000-000000000001', 'Upgrade Member', 'upgrade163@test.local', 'voluntar'),
   ('16300000-0000-0000-0000-000000000002', 'Upgrade Demo', 'upgrade163@demo.osubb', 'voluntar');
-insert into public.tasks (title, dept_id) values ('Upgrade award 163', 'edu');
+insert into public.tasks (title, group_id) values ('Upgrade award 163', (select id from public.groups where legacy_dept_id = 'edu'));
 insert into public.points_ledger (member_id, delta, reason, task_id)
 select '16300000-0000-0000-0000-000000000001', 20, 'task', id
   from public.tasks where title = 'Upgrade award 163';

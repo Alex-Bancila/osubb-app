@@ -117,7 +117,7 @@ it('requires an Umbrella to have no audience, assignment mode, Executor, or Camp
 });
 it.each([
   ['PT400', 'invalid_campaign', 'Campania nu mai este disponibilă'],
-  ['PT400', 'invalid_origin', 'Alege un grup'],
+  ['PT400', 'task_group_required', 'Alege exact un grup'],
   ['PT400', 'subtask_origin_mismatch', 'Subtaskul trebuie'],
   ['42501', 'task_manage_forbidden', 'Nu mai ai permisiunea'],
   ['PT404', 'task_not_found', 'nu mai este disponibil'],

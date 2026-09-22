@@ -69,31 +69,31 @@ insert into public.team_members (team_id, member_id) values
 -- The happy path: a direct Task with no Executor, assigned to a Member of an
 -- unrelated Department -- eligibility is not Origin-scoped.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Asignare directa #342', 'Fara executant', '2027-05-01 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Asignare directa #342', 'Fara executant', '2027-05-01 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '34200000-0000-0000-0000-000000000001');
 
 -- A manager assigning themselves: private.notify drops the actor, so this
 -- must produce zero notifications.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Manager se autoasigneaza #342', 'Autoasignare', '2027-05-02 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Manager se autoasigneaza #342', 'Autoasignare', '2027-05-02 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '34200000-0000-0000-0000-000000000001');
 
 -- Public Task: no direct-mode Executor to assign.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Public #342', 'Coada publica', '2027-05-03 09:00:00+00', 'edu', 'org', 'public', 'todo', now(),
+  ('Public #342', 'Coada publica', '2027-05-03 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo', now(),
    '34200000-0000-0000-0000-000000000001');
 
 -- Already has an active Executor.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Deja asignat #342', 'Are deja executant', '2027-05-04 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Deja asignat #342', 'Are deja executant', '2027-05-04 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '34200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '34200000-0000-0000-0000-000000000005', '34200000-0000-0000-0000-000000000001', now()
@@ -102,9 +102,9 @@ select id, '34200000-0000-0000-0000-000000000005', '34200000-0000-0000-0000-0000
 -- The remedy scenario (#342's reason for existing): the Executor gave up,
 -- fixtured directly since #332's give_up_task does not exist yet.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Executant a renuntat #342', 'Are nevoie de un nou executant', '2027-05-05 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Executant a renuntat #342', 'Are nevoie de un nou executant', '2027-05-05 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '34200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
 select id, '34200000-0000-0000-0000-000000000006', '34200000-0000-0000-0000-000000000001', now() - interval '2 days',
@@ -113,24 +113,24 @@ select id, '34200000-0000-0000-0000-000000000006', '34200000-0000-0000-0000-0000
 
 -- A direct Task with no Executor, used only for the invalid-executor test.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Tinta executant invalid #342', 'Fara executant', '2027-05-06 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Tinta executant invalid #342', 'Fara executant', '2027-05-06 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '34200000-0000-0000-0000-000000000001');
 
 -- An Umbrella: null audience/assignment_mode/difficulty/rating (#315 shape).
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
+  (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
 values
-  ('Umbrela #342', 'edu', 'umbrella', null, null, null, null, 'todo',
+  ('Umbrela #342', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null, 'todo',
    '34200000-0000-0000-0000-000000000001');
 
 -- A terminal Task: completed direct Tasks require both evaluation inputs
 -- (tasks_evaluation_inputs_ck) and a non-null completed_at.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, difficulty, rating, status, completed_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, difficulty, rating, status, completed_at, created_by)
 values
-  ('Terminal #342', 'Incheiat', '2027-05-07 09:00:00+00', 'edu', 'local', 'direct', 3, 4, 'completed', now(),
+  ('Terminal #342', 'Incheiat', '2027-05-07 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 3, 4, 'completed', now(),
    '34200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
 select id, '34200000-0000-0000-0000-000000000005', '34200000-0000-0000-0000-000000000001', now() - interval '2 days',
@@ -141,17 +141,17 @@ select id, '34200000-0000-0000-0000-000000000005', '34200000-0000-0000-0000-0000
 -- members, but manage authority still rests on the parent Department
 -- (private.require_origin_manager) -- neither team member below manages it.
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Poarta echipa #342', 'Poarta', '2027-05-08 09:00:00+00', 't-342-dt', 'local', 'direct', 'todo',
+  ('Poarta echipa #342', 'Poarta', '2027-05-08 09:00:00+00', pg_temp.team_group('t-342-dt'), 'local', 'direct', 'todo',
    '34200000-0000-0000-0000-000000000001');
 
 -- Independent-Team Task: ANY active member of an Independent Team manages
 -- it (private.can_manage_origin), so member 010 is a legitimate manager here.
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Echipa independenta #342', 'Task independent', '2027-05-09 09:00:00+00', 't-342-ind', 'local', 'direct', 'todo',
+  ('Echipa independenta #342', 'Task independent', '2027-05-09 09:00:00+00', pg_temp.team_group('t-342-ind'), 'local', 'direct', 'todo',
    '34200000-0000-0000-0000-000000000001');
 
 -- Every fixture id resolved ONCE, as the owner. Never resolve an id inside a
@@ -430,9 +430,9 @@ select extensions.dblink_exec('ate_setup', $$
   insert into public.member_departments (member_id, dept_id) values
     ('34200000-0000-0000-0000-000000000021', 'edu');
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+    (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
   values
-    ('Lock probe #342 committed', 'Sonda', '2027-06-01 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+    ('Lock probe #342 committed', 'Sonda', '2027-06-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
      '34200000-0000-0000-0000-000000000021');
 $$);
 
@@ -478,7 +478,7 @@ select ok(coalesce((
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '34200000-0000-0000-0000-000000000021'
      and authority_group.legacy_dept_id = 'edu'
-), false), 'assign_task_executor holds the manager''s Group roster row FOR SHARE too (require_origin_manager''s discipline)');
+), false), 'assign_task_executor holds the manager''s Group roster row FOR SHARE too (require_group_work_manager''s discipline)');
 
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)

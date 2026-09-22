@@ -1,8 +1,9 @@
 -- #343: create_campaign, update_campaign, set_campaign_active — the local
 -- BCE of a Campaign's own Department (plus BC/Moderator globally) manage it
 -- through narrow, actor-derived commands (ADR-0007 Sec Campaigns). All three
--- share private.require_campaign_manager, itself built on #321's
--- private.can_manage_origin Department branch.
+-- share private.require_campaign_manager, itself built on the Group authority
+-- kit (private.require_group_work_manager). #579 retired the legacy
+-- create_campaign(text, text) overload: a Campaign names its Group by id.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -42,19 +43,19 @@ insert into public.member_departments (member_id, dept_id) values
   ('34300000-0000-0000-0000-000000000007', 'edu');
 
 -- ==================== API shape and privileges ====================
-select has_function('public', 'create_campaign', array['text', 'text'],
-  'create_campaign(text, text) exists');
+select has_function('public', 'create_campaign', array['bigint', 'text'],
+  'create_campaign(bigint, text) exists');
 select has_function('public', 'update_campaign', array['bigint', 'text'],
   'update_campaign(bigint, text) exists');
 select has_function('public', 'set_campaign_active', array['bigint', 'boolean'],
   'set_campaign_active(bigint, boolean) exists');
-select is(pg_get_function_identity_arguments('public.create_campaign(text,text)'::regprocedure),
-  'p_department_id text, p_name text', 'create_campaign exposes only department and name');
+select is(pg_get_function_identity_arguments('public.create_campaign(bigint,text)'::regprocedure),
+  'p_group_id bigint, p_name text', 'create_campaign exposes only the Group and name');
 select is(pg_get_function_identity_arguments('public.update_campaign(bigint,text)'::regprocedure),
   'p_campaign_id bigint, p_name text', 'update_campaign exposes only the Campaign id and name');
 select is(pg_get_function_identity_arguments('public.set_campaign_active(bigint,boolean)'::regprocedure),
   'p_campaign_id bigint, p_active boolean', 'set_campaign_active exposes only the Campaign id and flag');
-select is(pg_get_function_result('public.create_campaign(text,text)'::regprocedure),
+select is(pg_get_function_result('public.create_campaign(bigint,text)'::regprocedure),
   'campaigns', 'create_campaign returns the created Campaign');
 select is(pg_get_function_result('public.update_campaign(bigint,text)'::regprocedure),
   'campaigns', 'update_campaign returns the updated Campaign');
@@ -92,7 +93,7 @@ select is((
    where namespace.nspname = 'public'
      and procedure.proname in ('create_campaign', 'update_campaign', 'set_campaign_active')
      and has_function_privilege('authenticated', procedure.oid, 'execute')
-), 4::bigint, 'authenticated can execute commands including the Group overload');
+), 3::bigint, 'authenticated can execute the three Campaign commands (#579 dropped the legacy create_campaign(text, text) overload)');
 select is((
   select count(*)
     from pg_proc as procedure
@@ -132,9 +133,9 @@ select ok(not has_table_privilege('authenticated', 'public.campaigns', 'delete')
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table alpha_campaign as
-select * from public.create_campaign('edu', 'Alpha Campaign');
+select * from public.create_campaign(pg_temp.dept_group('edu'), 'Alpha Campaign');
 reset role;
-select is((select department_id from alpha_campaign), 'edu',
+select is((select group_id from alpha_campaign), pg_temp.dept_group('edu'),
   'the local EDU BCE creates a Campaign in their own department');
 select is((select name from alpha_campaign), 'Alpha Campaign', 'the stored name matches');
 select is((select is_active from alpha_campaign), true, 'a new Campaign defaults to active');
@@ -143,10 +144,10 @@ select is((select created_by from alpha_campaign), '34300000-0000-0000-0000-0000
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["fin"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', 'Should Fail')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Should Fail')$$,
   '42501', 'campaign_manage_forbidden', 'a BCE of a different department is denied');
 create temp table fin_campaign as
-select * from public.create_campaign('fin', 'FIN Campaign');
+select * from public.create_campaign(pg_temp.dept_group('fin'), 'FIN Campaign');
 reset role;
 select is((select name from fin_campaign), 'FIN Campaign',
   'the FIN BCE creates a Campaign in their own department');
@@ -154,89 +155,89 @@ select is((select name from fin_campaign), 'FIN Campaign',
 select pg_temp.test_login('34300000-0000-0000-0000-000000000003', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table bc_campaign as
-select * from public.create_campaign('edu', 'BC Campaign');
+select * from public.create_campaign(pg_temp.dept_group('edu'), 'BC Campaign');
 reset role;
 select is((select name from bc_campaign), 'BC Campaign', 'BC creates a Campaign in any department');
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'moderator', 'member_level', 9, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table moderator_campaign as
-select * from public.create_campaign('fin', 'Moderator Campaign');
+select * from public.create_campaign(pg_temp.dept_group('fin'), 'Moderator Campaign');
 reset role;
 select is((select name from moderator_campaign), 'Moderator Campaign',
   'Moderator creates a Campaign in any department');
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'responsabil', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', 'Nope')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Nope')$$,
   '42501', 'campaign_manage_forbidden', 'Responsabil is denied');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', 'Nope')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Nope')$$,
   '42501', 'campaign_manage_forbidden', 'Voluntar is denied');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000007', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', 'Nope')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Nope')$$,
   '42501', 'campaign_manage_forbidden', 'an inactive EDU BCE is denied despite stale claims');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000008', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', 'Nope')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Nope')$$,
   '42501', 'campaign_manage_forbidden',
   'a BCE removed from the department is denied despite stale dept_ids');
 reset role;
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000003',
   jsonb_build_object('provider', 'email'));
-select throws_ok($$select public.create_campaign('edu', 'Nope')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Nope')$$,
   '42501', 'campaign_manage_forbidden', 'a claimless session is denied');
 reset role;
 
 set local role anon;
-select throws_ok($$select public.create_campaign('edu', 'Nope')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Nope')$$,
   '42501', null, 'anon cannot execute create_campaign');
 reset role;
 
 -- ==================== Department validation ====================
 select pg_temp.test_login('34300000-0000-0000-0000-000000000003', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok($$select public.create_campaign('org', 'Org Campaign')$$,
-  'BC creates an Organization Group Campaign through the compatibility wrapper');
-select throws_ok($$select public.create_campaign('does-not-exist-343', 'X')$$,
-  '42501', 'campaign_manage_forbidden', 'an unknown department is nondisclosing, even for BC');
+select lives_ok($$select public.create_campaign(pg_temp.dept_group('org'), 'Org Campaign')$$,
+  'BC creates an Organization Group Campaign');
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('does-not-exist-343'), 'X')$$,
+  '42501', 'campaign_manage_forbidden', 'a Group that resolves to nothing is nondisclosing, even for BC');
 create temp table diverse_campaign as
-select * from public.create_campaign('diverse', 'Diverse Campaign');
+select * from public.create_campaign(pg_temp.dept_group('diverse'), 'Diverse Campaign');
 reset role;
-select is((select department_id from diverse_campaign), 'diverse',
+select is((select group_id from diverse_campaign), pg_temp.dept_group('diverse'),
   'a coordination department (kind <> org) may own a Campaign');
 
 -- ==================== Name validation ====================
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', '   ')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), '   ')$$,
   'PT400', 'invalid_campaign_name', 'a blank name is rejected');
-select throws_ok($$select public.create_campaign('edu', null)$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), null)$$,
   'PT400', 'invalid_campaign_name', 'a null name is rejected');
 reset role;
 
 -- ==================== Uniqueness ====================
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', 'Alpha Campaign')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Alpha Campaign')$$,
   'PT409', 'campaign_name_taken', 'a duplicate name in the same department is rejected');
-select throws_ok($$select public.create_campaign('edu', 'ALPHA CAMPAIGN')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'ALPHA CAMPAIGN')$$,
   'PT409', 'campaign_name_taken',
   'a case-variant duplicate is rejected (the unique index is on lower(name))');
 reset role;
 select pg_temp.test_login('34300000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["fin"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table fin_alpha_campaign as
-select * from public.create_campaign('fin', 'Alpha Campaign');
+select * from public.create_campaign(pg_temp.dept_group('fin'), 'Alpha Campaign');
 reset role;
 select is((select name from fin_alpha_campaign), 'Alpha Campaign',
   'the same name in a different department is allowed');
@@ -246,11 +247,11 @@ select is((select name from fin_alpha_campaign), 'Alpha Campaign',
 -- tab-padded name could otherwise dodge the lower(name) uniqueness check.
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$select public.create_campaign('edu', E'\tAlpha Campaign')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), E'\tAlpha Campaign')$$,
   'PT409', 'campaign_name_taken',
   'a tab-padded duplicate name is still caught by the lower(name) uniqueness check');
 create temp table trimmed_campaign as
-select * from public.create_campaign('edu', E'\tTrimmed Campaign\t');
+select * from public.create_campaign(pg_temp.dept_group('edu'), E'\tTrimmed Campaign\t');
 reset role;
 select is((select name from trimmed_campaign), 'Trimmed Campaign',
   'a tab-padded name is stored trimmed');
@@ -258,9 +259,9 @@ select is((select name from trimmed_campaign), 'Trimmed Campaign',
 -- ==================== update_campaign ====================
 create temp table cids as
 select
-  (select id from public.campaigns where department_id = 'edu' and name = 'Alpha Campaign') as alpha_id,
-  (select id from public.campaigns where department_id = 'edu' and name = 'BC Campaign') as bc_id,
-  (select id from public.campaigns where department_id = 'fin' and name = 'FIN Campaign') as fin_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Alpha Campaign') as alpha_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'BC Campaign') as bc_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('fin') and name = 'FIN Campaign') as fin_id,
   9223372036854775807::bigint as missing_id;
 grant select on cids to authenticated;
 
@@ -481,8 +482,8 @@ reset role;
 -- ==================== Direct DML stays blocked ====================
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$insert into public.campaigns (department_id, name, created_by)
-  values ('edu', 'Direct Insert', '34300000-0000-0000-0000-000000000001')$$,
+select throws_ok($$insert into public.campaigns (group_id, name, created_by)
+  values (pg_temp.dept_group('edu'), 'Direct Insert', '34300000-0000-0000-0000-000000000001')$$,
   '42501', null, 'authenticated cannot bypass create_campaign with a direct INSERT');
 select throws_ok($$update public.campaigns set name = 'Hack'
   where id = (select alpha_id from cids)$$,
@@ -513,7 +514,7 @@ select extensions.dblink_connect('campaign_lock_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
 select extensions.dblink_exec('campaign_lock_setup', $$
-  delete from public.campaigns where department_id = 'edu' and name = 'Lock Probe Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
   insert into auth.users (id, email) values
@@ -523,8 +524,8 @@ select extensions.dblink_exec('campaign_lock_setup', $$
      'lock.probe.bce.campaign@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id)
   values ('34300000-0000-0000-0000-000000000021', 'edu');
-  insert into public.campaigns (department_id, name, is_active, created_by) values
-    ('edu', 'Lock Probe Campaign #343', true, '34300000-0000-0000-0000-000000000021');
+  insert into public.campaigns (group_id, name, is_active, created_by) values
+    ((select id from public.groups where legacy_dept_id = 'edu'), 'Lock Probe Campaign #343', true, '34300000-0000-0000-0000-000000000021');
 $$);
 
 select extensions.dblink_connect('campaign_lock', format(
@@ -545,7 +546,7 @@ select extensions.dblink_exec('campaign_lock', 'set local role authenticated');
 select * from extensions.dblink('campaign_lock', $$
   select (public.set_campaign_active(
     (select id from public.campaigns
-      where department_id = 'edu' and name = 'Lock Probe Campaign #343'),
+      where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343'),
     true
   )).is_active
 $$) as no_op_set(is_active boolean);
@@ -554,7 +555,7 @@ select ok(coalesce((
   select 'For Update' = any(row_lock.modes)
     from extensions.pgrowlocks('public.campaigns') as row_lock
     join public.campaigns as campaign on campaign.ctid = row_lock.locked_row
-   where campaign.department_id = 'edu' and campaign.name = 'Lock Probe Campaign #343'
+   where campaign.group_id = pg_temp.dept_group('edu') and campaign.name = 'Lock Probe Campaign #343'
 ), false), 'even a no-op set_campaign_active holds the Campaign row FOR UPDATE');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
@@ -582,10 +583,10 @@ create temp table lock_probe_race as
 select * from pg_temp.test_race(
   format($$ select (public.set_campaign_active(%L, false)).is_active::text $$,
     (select id from public.campaigns
-      where department_id = 'edu' and name = 'Lock Probe Campaign #343')),
+      where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343')),
   format($$ select (public.set_campaign_active(%L, false)).is_active::text $$,
     (select id from public.campaigns
-      where department_id = 'edu' and name = 'Lock Probe Campaign #343'))
+      where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343'))
 );
 reset role;
 select is((select result_a from lock_probe_race), 'false',
@@ -596,7 +597,7 @@ select is((select result_b from lock_probe_race), 'false',
   'the waiting deactivate reports the already-deactivated Campaign');
 
 select extensions.dblink_exec('campaign_lock_setup', $$
-  delete from public.campaigns where department_id = 'edu' and name = 'Lock Probe Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
 $$);
@@ -610,13 +611,13 @@ select extensions.dblink_disconnect('campaign_lock_setup');
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table ac2_campaign as
-select * from public.create_campaign('edu', 'AC2 Campaign #343');
+select * from public.create_campaign(pg_temp.dept_group('edu'), 'AC2 Campaign #343');
 select * from public.set_campaign_active((select id from ac2_campaign), false);
 reset role;
 
 select throws_ok(
-  format($$ insert into public.tasks (title, difficulty, dept_id, campaign_id)
-            values ('AC2 task 343', 1, 'edu', %L) $$,
+  format($$ insert into public.tasks (title, difficulty, group_id, campaign_id)
+            values ('AC2 task 343', 1, pg_temp.dept_group('edu'), %L) $$,
     (select id from ac2_campaign)),
   '23514', 'task_campaign_inactive',
   'a Campaign deactivated via set_campaign_active can no longer be attached to a new Task (#314 trigger)');
@@ -628,7 +629,7 @@ select extensions.dblink_connect('campaign_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
 select extensions.dblink_exec('campaign_setup', $$
-  delete from public.campaigns where department_id = 'edu' and name = 'Concurrent Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000020';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000020';
   insert into auth.users (id, email) values
@@ -648,20 +649,20 @@ reset role;
 
 select throws_ok($outer$
   select * from pg_temp.test_race(
-    $$ select (public.create_campaign('edu', 'Concurrent Campaign #343')).name $$,
-    $$ select (public.create_campaign('edu', 'Concurrent Campaign #343')).name $$
+    $$ select (public.create_campaign((select id from public.groups where legacy_dept_id = 'edu'), 'Concurrent Campaign #343')).name $$,
+    $$ select (public.create_campaign((select id from public.groups where legacy_dept_id = 'edu'), 'Concurrent Campaign #343')).name $$
   )
 $outer$, 'PT409', 'campaign_name_taken',
   'exactly one concurrent create succeeds; the other reports campaign_name_taken, not a raw unique_violation');
 
 select is((select campaign_count from extensions.dblink('campaign_setup', $$
   select count(*) from public.campaigns
-   where department_id = 'edu' and name = 'Concurrent Campaign #343'
+   where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343'
 $$) as result(campaign_count bigint)), 1::bigint,
   'concurrent duplicate creates commit exactly one Campaign');
 
 select extensions.dblink_exec('campaign_setup', $$
-  delete from public.campaigns where department_id = 'edu' and name = 'Concurrent Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000020';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000020';
 $$);

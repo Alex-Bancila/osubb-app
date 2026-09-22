@@ -30,9 +30,9 @@ select ok(not has_function_privilege('service_role', 'public.leadership_member_t
 -- carry every `tasks_with_overdue` column. Eight are exposed under another
 -- name: four would collide with an Assignment-level column (`id`,
 -- `created_at`, `created_by`, `kind` -> task_id / task_created_at /
--- task_created_by / task_kind), three are replaced by the Origin triple
--- (origin_type, origin_id, origin_name), and `type` is the retired legacy
--- column nothing reads. Pinning the *difference* rather than the overlap is
+-- task_created_by / task_kind), and `type` is the retired legacy column
+-- nothing reads. (#579 dropped the Origin triple with the legacy columns it
+-- rendered: group_id / group_name are the whole Origin.) Pinning the *difference* rather than the overlap is
 -- what makes this fail the day a migration adds a column to public.tasks --
 -- silence would otherwise be mistaken for coverage.
 create function pg_temp.drilldown_columns() returns text[]
@@ -49,8 +49,8 @@ select set_eq(
              where table_schema = 'public' and table_name = 'tasks_with_overdue'
                and column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
   $$ values ('id'::text), ('created_at'), ('created_by'), ('kind'),
-            ('dept_id'), ('team_id'), ('project_id'), ('type') $$,
-  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row, the three the Origin triple replaces, the retired legacy `type`');
+            ('type') $$,
+  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row and the retired legacy `type`');
 
 insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000001', 'bce260@example.test'),
@@ -71,17 +71,17 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('26000000-0000-0000-0000-000000000005', 'Responsabil 260', 'responsabil260@example.test', 'responsabil', 'activ'),
   ('26000000-0000-0000-0000-000000000006', 'BC 260', 'bc260@example.test', 'bc', 'activ');
 
-insert into public.campaigns (department_id, name, created_by) values
-  ('edu', 'Campaign 260', '26000000-0000-0000-0000-000000000001');
+insert into public.campaigns (group_id, name, created_by) values
+  (pg_temp.dept_group('edu'), 'Campaign 260', '26000000-0000-0000-0000-000000000001');
 insert into public.tasks
-  (title, description, deadline, dept_id, kind, audience, assignment_mode, difficulty, rating, created_by)
+  (title, description, deadline, group_id, kind, audience, assignment_mode, difficulty, rating, created_by)
 values
-  ('Umbrella 260', 'Parent details 260', now() + interval '2 days', 'edu', 'umbrella', null, null, null, null,
+  ('Umbrella 260', 'Parent details 260', now() + interval '2 days', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null,
    '26000000-0000-0000-0000-000000000001');
 insert into public.tasks
-  (title, description, deadline, dept_id, campaign_id, status, difficulty, rating,
+  (title, description, deadline, group_id, campaign_id, status, difficulty, rating,
    created_by, created_at, started_at, submitted_at, unfulfilled_at, parent_task_id)
-select 'Historical Subtask 260', 'Full details 260', now() - interval '2 days', 'edu', campaign.id,
+select 'Historical Subtask 260', 'Full details 260', now() - interval '2 days', pg_temp.dept_group('edu'), campaign.id,
        'unfulfilled', 2, 1, '26000000-0000-0000-0000-000000000001', now() - interval '5 days',
        now() - interval '4 days', now() - interval '3 days', now() - interval '1 day', parent.id
   from public.campaigns as campaign
@@ -105,8 +105,8 @@ select task.id, assignment.id, '26000000-0000-0000-0000-000000000001', 'unfulfil
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 1::bigint,
   'BCE sees the selected Member historical Assignment without current Origin membership');
-select is((select origin_type from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 'department',
-  'Task Origin is explicit');
+select is((select group_id from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), pg_temp.dept_group('edu'),
+  'Task Origin is explicit: the owning Group');
 select is((select campaign_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 'Campaign 260',
   'Campaign details are exposed');
 select is((select parent_task_title from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 'Umbrella 260',
@@ -207,11 +207,8 @@ select is(
     where title = 'Historical Subtask 260'),
   'Grup Redenumit 523',
   'group_name follows the Group''s own name, not the legacy Origin name beside it');
-select is(
-  (select distinct origin_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')
-    where title = 'Historical Subtask 260'),
-  (select name from public.departments where id = 'edu'),
-  'and origin_name still reports the legacy Department name -- ADR-0009 keeps the Origin triple beside the Group identity until Wave 3');
+select ok(not (array['origin_type', 'origin_id', 'origin_name'] && pg_temp.drilldown_columns()),
+  'the legacy Origin triple is gone -- group_id / group_name are the whole Origin (#579)');
 reset role;
 select * from finish();
 rollback;

@@ -16,40 +16,40 @@ select plan(7);
 
 -- ==================== todo: Difficulty is optional ====================
 select lives_ok(
-  $$ insert into tasks (title, dept_id)
-     values ('tei-312-todo-no-difficulty', 'edu') $$,
+  $$ insert into tasks (title, group_id)
+     values ('tei-312-todo-no-difficulty', pg_temp.dept_group('edu')) $$,
   'a todo Task may be created without a difficulty');
 
 -- ==================== completed requires both inputs ====================
 select throws_ok(
-  $$ insert into tasks (title, dept_id, status, rating, completed_at)
-     values ('tei-312-completed-no-difficulty', 'edu', 'completed', 4, now()) $$,
+  $$ insert into tasks (title, group_id, status, rating, completed_at)
+     values ('tei-312-completed-no-difficulty', pg_temp.dept_group('edu'), 'completed', 4, now()) $$,
   '23514', null,
   'a completed Task without a difficulty is rejected');
 
 select throws_ok(
-  $$ insert into tasks (title, dept_id, status, difficulty, completed_at)
-     values ('tei-312-completed-no-rating', 'edu', 'completed', 3, now()) $$,
+  $$ insert into tasks (title, group_id, status, difficulty, completed_at)
+     values ('tei-312-completed-no-rating', pg_temp.dept_group('edu'), 'completed', 3, now()) $$,
   '23514', null,
   'a completed Task without a rating is rejected');
 
 -- ==================== todo with a rating is rejected ====================
 select throws_ok(
-  $$ insert into tasks (title, dept_id, difficulty, rating)
-     values ('tei-312-todo-with-rating', 'edu', 3, 4) $$,
+  $$ insert into tasks (title, group_id, difficulty, rating)
+     values ('tei-312-todo-with-rating', pg_temp.dept_group('edu'), 3, 4) $$,
   '23514', null,
   'a todo Task with a rating is rejected');
 
 -- ==================== unfulfilled requires both inputs too ====================
 select lives_ok(
-  $$ insert into tasks (title, dept_id, status, difficulty, rating, unfulfilled_at)
-     values ('tei-312-unfulfilled-both', 'edu', 'unfulfilled', 2, 1, now()) $$,
+  $$ insert into tasks (title, group_id, status, difficulty, rating, unfulfilled_at)
+     values ('tei-312-unfulfilled-both', pg_temp.dept_group('edu'), 'unfulfilled', 2, 1, now()) $$,
   'an unfulfilled Task with both difficulty and rating is accepted');
 
 -- ==================== in_review: Difficulty may already be set, Rating may not ====================
 select lives_ok(
-  $$ insert into tasks (title, dept_id, status, difficulty, started_at, submitted_at)
-     values ('tei-312-in-review-difficulty-only', 'edu', 'in_review', 3, now(), now()) $$,
+  $$ insert into tasks (title, group_id, status, difficulty, started_at, submitted_at)
+     values ('tei-312-in-review-difficulty-only', pg_temp.dept_group('edu'), 'in_review', 3, now(), now()) $$,
   'an in_review Task may carry a difficulty without a rating');
 
 -- ==================== cancelled with a rating is rejected ====================
@@ -57,8 +57,8 @@ select lives_ok(
 -- constraint that fires -- without it tasks_cancel_reason_ck would raise the
 -- same 23514 first and this assertion would pass for the wrong reason.
 select throws_ok(
-  $$ insert into tasks (title, dept_id, status, difficulty, rating, cancelled_at, cancel_reason)
-     values ('tei-312-cancelled-with-rating', 'edu', 'cancelled', 2, 3, now(), 'Anulat #312') $$,
+  $$ insert into tasks (title, group_id, status, difficulty, rating, cancelled_at, cancel_reason)
+     values ('tei-312-cancelled-with-rating', pg_temp.dept_group('edu'), 'cancelled', 2, 3, now(), 'Anulat #312') $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_evaluation_inputs_ck"',
   'a cancelled Task with a rating is rejected');
 

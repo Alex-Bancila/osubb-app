@@ -109,10 +109,10 @@ insert into public.project_members (project_id, member_id, project_role) values
 -- 'replaced', and two pending Candidates still in the queue. Every effect of
 -- the Evaluation core shows up on this one Task.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, queue_opened_at, started_at, submitted_at, created_by)
 values
-  ('Evaluare fericita #336', 'Gata de evaluare', '2027-12-01 09:00:00+00', 'edu', 'org', 'public', 'in_review',
+  ('Evaluare fericita #336', 'Gata de evaluare', '2027-12-01 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_review',
    now() - interval '5 days', now() - interval '5 days',
    now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
@@ -136,31 +136,31 @@ select id, '33600000-0000-0000-0000-000000000014'::uuid, 'pending', now() - inte
 -- private.task_managers returns exactly the creator -- a deterministic
 -- single-recipient set for the coalesced rollup notification.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode,
+  (title, description, deadline, group_id, audience, assignment_mode,
    difficulty, rating, kind, status, created_at, created_by)
 values
-  ('Umbrela #336', 'Grup de subtaskuri', null, 'edu', null, null,
+  ('Umbrela #336', 'Grup de subtaskuri', null, pg_temp.dept_group('edu'), null, null,
    null, null, 'umbrella', 'todo', now() - interval '6 days',
    '33600000-0000-0000-0000-000000000002');
 
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    parent_task_id, created_at, started_at, submitted_at, created_by)
-select 'Subtask unu #336', 'Primul', '2027-12-02 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+select 'Subtask unu #336', 'Primul', '2027-12-02 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
        umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
        '33600000-0000-0000-0000-000000000002'
   from public.tasks as umbrella where umbrella.title = 'Umbrela #336';
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    parent_task_id, created_at, started_at, submitted_at, created_by)
-select 'Subtask doi #336', 'Al doilea', '2027-12-03 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+select 'Subtask doi #336', 'Al doilea', '2027-12-03 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
        umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
        '33600000-0000-0000-0000-000000000002'
   from public.tasks as umbrella where umbrella.title = 'Umbrela #336';
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    parent_task_id, created_at, created_by)
-select 'Subtask trei #336', 'Al treilea, inca netrimis', '2027-12-04 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+select 'Subtask trei #336', 'Al treilea, inca netrimis', '2027-12-04 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
        umbrella.id, now() - interval '5 days',
        '33600000-0000-0000-0000-000000000002'
   from public.tasks as umbrella where umbrella.title = 'Umbrela #336';
@@ -174,10 +174,10 @@ select id, '33600000-0000-0000-0000-000000000016'::uuid, '33600000-0000-0000-000
 
 -- ---- T6: an OVERDUE Task -- deadline already past while still in_review.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Intarziat #336', 'Peste termen', now() - interval '3 days', 'edu', 'local', 'direct', 'in_review',
+  ('Intarziat #336', 'Peste termen', now() - interval '3 days', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '10 days', now() - interval '9 days', now() - interval '2 days',
    '33600000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -186,10 +186,10 @@ select id, '33600000-0000-0000-0000-000000000017', '33600000-0000-0000-0000-0000
 
 -- ---- T7: shared denial target. None of the denied personas mutate it.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Poarta comuna #336', 'Tinta refuzurilor', '2027-12-05 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Poarta comuna #336', 'Tinta refuzurilor', '2027-12-05 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -198,10 +198,10 @@ select id, '33600000-0000-0000-0000-000000000018', '33600000-0000-0000-0000-0000
 
 -- ---- T8: direct-write-denial target.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Scriere directa #336', 'Tinta interzisa', '2027-12-06 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Scriere directa #336', 'Tinta interzisa', '2027-12-06 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -213,31 +213,31 @@ select id, '33600000-0000-0000-0000-000000000019', '33600000-0000-0000-0000-0000
 -- in_review), but private.evaluate_task is a shared core three later tasks
 -- call, so its own PT409 guard is pinned here rather than assumed.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Fara executant #336', 'Nimeni nu il tine', '2027-12-07 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Fara executant #336', 'Nimeni nu il tine', '2027-12-07 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
 
 -- ---- T10/T11: wrong-state targets.
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
-values ('Inca todo #336', 'Nu a inceput', '2027-12-08 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
+values ('Inca todo #336', 'Nu a inceput', '2027-12-08 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
         '33600000-0000-0000-0000-000000000002');
 -- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
-insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
-values ('Anulat #336', 'Anulat deja', '2027-12-09 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
+insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
+values ('Anulat #336', 'Anulat deja', '2027-12-09 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled',
         now(), 'Anulat inainte de verificare #336', '33600000-0000-0000-0000-000000000002');
 
 -- ---- T12: input-validation target. Every PT400 below fires against it and
 -- must leave it exactly as it is.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Validare intrari #336', 'Tinta PT400', '2027-12-10 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Validare intrari #336', 'Tinta PT400', '2027-12-10 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -247,10 +247,10 @@ select id, '33600000-0000-0000-0000-000000000020', '33600000-0000-0000-0000-0000
 -- ---- T13: a DEPARTMENT-TEAM Task -- the local BCE of the Team's parent
 -- Department evaluates it (a distinct can_evaluate_task branch).
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Echipa departamentala #336', 'Munca echipei', '2027-12-11 09:00:00+00', 't-336-dt', 'local', 'direct', 'in_review',
+  ('Echipa departamentala #336', 'Munca echipei', '2027-12-11 09:00:00+00', pg_temp.team_group('t-336-dt'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -259,10 +259,10 @@ select id, '33600000-0000-0000-0000-000000000005', '33600000-0000-0000-0000-0000
 
 -- ---- T14: an INDEPENDENT-TEAM Task executed by one of its own members.
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Echipa independenta #336', 'Munca echipei independente', '2027-12-12 09:00:00+00', 't-336-ind', 'local', 'direct', 'in_review',
+  ('Echipa independenta #336', 'Munca echipei independente', '2027-12-12 09:00:00+00', pg_temp.team_group('t-336-ind'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -271,10 +271,10 @@ select id, '33600000-0000-0000-0000-000000000009', '33600000-0000-0000-0000-0000
 
 -- ---- T15/T16: Project Tasks executed by the lead and by the Responsible.
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 select 'Proiect lead executant #336', 'Lead isi evalueaza munca', '2027-12-13 09:00:00+00',
-       project.id, 'local', 'direct', 'in_review',
+       pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
        '33600000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #336';
@@ -283,10 +283,10 @@ select task.id, '33600000-0000-0000-0000-000000000006', '33600000-0000-0000-0000
   from public.tasks as task where task.title = 'Proiect lead executant #336';
 
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 select 'Proiect responsabil executant #336', 'Responsabilul isi evalueaza munca', '2027-12-14 09:00:00+00',
-       project.id, 'local', 'direct', 'in_review',
+       pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
        '33600000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #336';
@@ -297,10 +297,10 @@ select task.id, '33600000-0000-0000-0000-000000000007', '33600000-0000-0000-0000
 -- ---- T17: a NEGATIVE award. rating 1 -> multiplier -1, so difficulty 4
 -- credits -4 points, written exactly as computed (ADR-0007's guide).
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Puncte negative #336', 'Calificativ minim', '2027-12-15 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Puncte negative #336', 'Calificativ minim', '2027-12-15 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -312,10 +312,10 @@ select id, '33600000-0000-0000-0000-000000000021', '33600000-0000-0000-0000-0000
 -- singular ("1 punct", never "1 puncte"). The same Task is reused in section
 -- 5 as the already-evaluated target of private.evaluate_task's own guard.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, submitted_at, created_by)
 values
-  ('Un singur punct #336', 'Dificultate minima, calificativ suficient', '2027-12-16 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('Un singur punct #336', 'Dificultate minima, calificativ suficient', '2027-12-16 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
    '33600000-0000-0000-0000-000000000002');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -1020,21 +1020,21 @@ select extensions.dblink_exec('ctr_setup', $$
     ('33600000-0000-0000-0000-000000000055', 'edu');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status,
+    (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, submitted_at, created_by)
   values
-    ('Cursa dubla evaluare #336 committed', 'Doi evaluatori, un task', '2027-12-21 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+    ('Cursa dubla evaluare #336 committed', 'Doi evaluatori, un task', '2027-12-21 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
      now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
      '33600000-0000-0000-0000-000000000052');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode,
+    (title, description, deadline, group_id, audience, assignment_mode,
      difficulty, rating, kind, status, created_at, created_by)
   values
-    ('Umbrela sonda #336 committed', 'Umbrela pentru sonda de blocaj', null, 'edu', null, null,
+    ('Umbrela sonda #336 committed', 'Umbrela pentru sonda de blocaj', null, (select id from public.groups where legacy_dept_id = 'edu'), null, null,
      null, null, 'umbrella', 'todo', now() - interval '6 days',
      '33600000-0000-0000-0000-000000000052'),
-    ('Umbrela cursa #336 committed', 'Umbrela pentru cursa fratilor', null, 'edu', null, null,
+    ('Umbrela cursa #336 committed', 'Umbrela pentru cursa fratilor', null, (select id from public.groups where legacy_dept_id = 'edu'), null, null,
      null, null, 'umbrella', 'todo', now() - interval '6 days',
      '33600000-0000-0000-0000-000000000052');
 
@@ -1044,24 +1044,24 @@ select extensions.dblink_exec('ctr_setup', $$
   -- locks the parent) -- the FOR KEY SHARE that its own task_activity and
   -- notifications foreign keys take is expected and harmless.
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status,
+    (title, description, deadline, group_id, audience, assignment_mode, status,
      parent_task_id, created_at, started_at, submitted_at, created_by)
-  select 'Sonda blocaj evaluare #336 committed', 'Sonda', '2027-12-20 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  select 'Sonda blocaj evaluare #336 committed', 'Sonda', '2027-12-20 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
          umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          '33600000-0000-0000-0000-000000000052'
     from public.tasks as umbrella where umbrella.title = 'Umbrela sonda #336 committed';
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status,
+    (title, description, deadline, group_id, audience, assignment_mode, status,
      parent_task_id, created_at, started_at, submitted_at, created_by)
   select 'Subtask cursa unu #336 committed', 'Frate 1', '2027-12-22 09:00:00+00'::timestamptz,
-         'edu', 'local', 'direct', 'in_review'::public.task_status,
+         (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review'::public.task_status,
          umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          '33600000-0000-0000-0000-000000000052'::uuid
     from public.tasks as umbrella where umbrella.title = 'Umbrela cursa #336 committed'
   union all
   select 'Subtask cursa doi #336 committed', 'Frate 2', '2027-12-23 09:00:00+00'::timestamptz,
-         'edu', 'local', 'direct', 'in_review'::public.task_status,
+         (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review'::public.task_status,
          umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          '33600000-0000-0000-0000-000000000052'::uuid
     from public.tasks as umbrella where umbrella.title = 'Umbrela cursa #336 committed';
@@ -1133,7 +1133,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.profiles') as row_lock
     join public.profiles as profile on profile.ctid = row_lock.locked_row
    where profile.id = '33600000-0000-0000-0000-000000000051'
-), false), 'it holds the evaluator''s own live profile row FOR SHARE (private.require_origin_manager''s discipline)');
+), false), 'it holds the evaluator''s own live profile row FOR SHARE (private.require_group_work_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
     from extensions.pgrowlocks('public.group_members') as row_lock

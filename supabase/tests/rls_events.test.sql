@@ -57,15 +57,15 @@ insert into team_members (team_id, member_id)
 -- 'Recrutare grea' is type 'recrutare' at min_level 5 specifically to prove
 -- the old "recruitment reaches everyone by type" branch is gone too — a
 -- Recrut must NOT see it.
-insert into events (title, type, scope, dept_id, team_id, min_level, starts_at) values
-  ('Everyone org',        'sedinta',   'org',  null,  null,   0, now() + interval '1 day'),
-  ('Foreign dept open',   'sedinta',   'dept', 'pr',  null,   0, now() + interval '2 days'),
-  ('Foreign team open',   'sedinta',   'team', 'pr',  't-pr', 0, now() + interval '3 days'),
-  ('AG gated',            'sedinta',   'org',  null,  null,   3, now() + interval '4 days'),
-  ('Dept gated 5',        'sedinta',   'dept', 'edu', null,   5, now() + interval '5 days'),
-  ('Recrutare grea',      'recrutare', 'dept', 'hr',  null,   5, now() + interval '6 days'),
-  ('Team gated 5',        'sedinta',   'team', 'pr',  't-pr', 5, now() + interval '7 days'),
-  ('Org gated 6',         'sedinta',   'org',  null,  null,   6, now() + interval '8 days');
+insert into events (title, type, group_id, min_level, starts_at) values
+  ('Everyone org',        'sedinta',   pg_temp.dept_group('org'),    0, now() + interval '1 day'),
+  ('Foreign dept open',   'sedinta',   pg_temp.dept_group('pr'),     0, now() + interval '2 days'),
+  ('Foreign team open',   'sedinta',   pg_temp.team_group('t-pr'),   0, now() + interval '3 days'),
+  ('AG gated',            'sedinta',   pg_temp.dept_group('org'),    3, now() + interval '4 days'),
+  ('Dept gated 5',        'sedinta',   pg_temp.dept_group('edu'),    5, now() + interval '5 days'),
+  ('Recrutare grea',      'recrutare', pg_temp.dept_group('hr'),     5, now() + interval '6 days'),
+  ('Team gated 5',        'sedinta',   pg_temp.team_group('t-pr'),   5, now() + interval '7 days'),
+  ('Org gated 6',         'sedinta',   pg_temp.dept_group('org'),    6, now() + interval '8 days');
 
 -- ==================== Recrut: level 0, dept EDU, no team ====================
 select pg_temp.test_login('01000000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -96,8 +96,8 @@ select set_eq(
   'level 3 adds the min_level = 3 row on top of everything level 0 already saw');
 
 select throws_ok(
-  $$ insert into events (title, type, scope, starts_at)
-     values ('Eveniment neautorizat', 'sedinta', 'org', now()) $$,
+  $$ insert into events (title, type, group_id, starts_at)
+     values ('Eveniment neautorizat', 'sedinta', pg_temp.dept_group('org'), now()) $$,
   '42501', null, 'level 3 cannot create events');
 
 select throws_ok(

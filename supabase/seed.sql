@@ -374,17 +374,41 @@ as $$
           + time '23:59') at time zone 'Europe/Bucharest')
 $$;
 
+-- Since #579 the Group is the only Origin a work row carries. The fixtures below
+-- still NAME their Origin the way a reader recognises it (a Department id, a Team
+-- id, or a demo Project's name); this resolves that name to the Group the forward
+-- mirror derived for it, through groups.legacy_* (kept until #591). Exactly one
+-- argument is non-null per call.
+create or replace function pg_temp.demo_group_id(p_dept text, p_team text, p_project_name text)
+returns bigint
+language sql
+stable
+as $$
+  select grp.id
+    from public.groups as grp
+   where (p_dept is not null and grp.legacy_dept_id = p_dept)
+      or (p_team is not null and grp.legacy_team_id = p_team)
+      or (p_project_name is not null and grp.legacy_project_id = (
+            select project.id from public.projects as project
+             where project.name = p_project_name
+               and project.created_by = 'd0000000-0000-0000-0000-000000000007'))
+$$;
+
 -- ---------------- Campaigns ----------------
 -- One active Campaign per real Department (issue AC). `tasks_validate_campaign`
 -- (#314) accepts a Campaign only on a Task of the same Department — or of a
 -- Department Team whose parent Department matches — and only while it is
 -- active, so these are created before any Task that carries one.
-insert into campaigns (department_id, name, is_active, created_by, created_at) values
-  ('edu',   'Școala de Toamnă 2026',            true, 'd0000000-0000-0000-0000-000000000007', now() - interval '45 days'),
-  ('pr',    'Campania de imagine — semestrul I', true, 'd0000000-0000-0000-0000-000000000007', now() - interval '40 days'),
-  ('youth', 'Tabăra de Toamnă 2026',            true, 'd0000000-0000-0000-0000-000000000007', now() - interval '38 days'),
-  ('fin',   'Bugetare 2026–2027',               true, 'd0000000-0000-0000-0000-000000000008', now() - interval '30 days'),
-  ('hr',    'Recrutarea de toamnă 2026',        true, 'd0000000-0000-0000-0000-000000000008', now() - interval '25 days');
+insert into campaigns (group_id, name, is_active, created_by, created_at)
+select pg_temp.demo_group_id(fixture.dept, null, null), fixture.name, true,
+       fixture.created_by, fixture.created_at
+  from (values
+    ('edu',   'Școala de Toamnă 2026',            'd0000000-0000-0000-0000-000000000007'::uuid, now() - interval '45 days'),
+    ('pr',    'Campania de imagine — semestrul I', 'd0000000-0000-0000-0000-000000000007'::uuid, now() - interval '40 days'),
+    ('youth', 'Tabăra de Toamnă 2026',            'd0000000-0000-0000-0000-000000000007'::uuid, now() - interval '38 days'),
+    ('fin',   'Bugetare 2026–2027',               'd0000000-0000-0000-0000-000000000008'::uuid, now() - interval '30 days'),
+    ('hr',    'Recrutarea de toamnă 2026',        'd0000000-0000-0000-0000-000000000008'::uuid, now() - interval '25 days')
+  ) as fixture (dept, name, created_by, created_at);
 
 create or replace function pg_temp.demo_campaign_id(p_dept text)
 returns bigint
@@ -394,7 +418,7 @@ as $$
   select campaign.id
     from public.campaigns as campaign
     join public.profiles as creator on creator.id = campaign.created_by
-   where campaign.department_id = p_dept
+   where campaign.group_id = pg_temp.demo_group_id(p_dept, null, null)
      and creator.email like '%@demo.osubb'
 $$;
 
@@ -405,8 +429,9 @@ $$;
 -- inserted pending here and decided further down, which is also the order the
 -- commands (#344) run in.
 insert into completed_work_requests
-  (requester_id, dept_id, team_id, project_id, description, status, created_at)
-select fixture.requester_id, fixture.dept_id, fixture.team_id, project.id,
+  (requester_id, group_id, description, status, created_at)
+select fixture.requester_id,
+       pg_temp.demo_group_id(fixture.dept_id, fixture.team_id, fixture.project_name),
        fixture.description, 'pending', fixture.created_at
   from (values
     ('d0000000-0000-0000-0000-000000000001'::uuid, 'edu', null::text, null::text,
@@ -418,10 +443,7 @@ select fixture.requester_id, fixture.dept_id, fixture.team_id, project.id,
     ('d0000000-0000-0000-0000-000000000004'::uuid, null, 't-logistica', null,
      'Am dus materialele echipei la depozit după eveniment.',
      now() - interval '6 days')
-  ) as fixture (requester_id, dept_id, team_id, project_name, description, created_at)
-  left join projects project
-    on project.name = fixture.project_name
-   and project.created_by = 'd0000000-0000-0000-0000-000000000007';
+  ) as fixture (requester_id, dept_id, team_id, project_name, description, created_at);
 
 -- ---------------- Tasks ----------------
 -- Stage 1 inserts every Task in the shape `create_task` leaves it: `todo`, no
@@ -430,7 +452,7 @@ select fixture.requester_id, fixture.dept_id, fixture.team_id, project.id,
 -- row ever sits in a shape `tasks_evaluation_inputs_ck`,
 -- `tasks_queue_timestamp_state_ck` or `tasks_cancel_reason_ck` forbids.
 --
--- Origins and creators are not decorative. `private.require_origin_manager`
+-- Origins and creators are not decorative. `private.require_group_work_manager`
 -- would have had to accept each `created_by` below: BC/Moderator for a
 -- Department (no demo BCE sits in a delivery Department after the #296
 -- remap), `bce@` for the Department Team `it` through its parent Department
@@ -567,20 +589,17 @@ insert into demo_task_seed values
    pg_temp.demo_deadline(-5), 'd0000000-0000-0000-0000-000000000007', now() - interval '34 days');
 
 insert into tasks
-  (title, description, type, dept_id, team_id, project_id, kind, audience,
+  (title, description, type, group_id, kind, audience,
    assignment_mode, campaign_id, status, deadline, created_by, created_at,
    queue_opened_at)
 select fixture.title, fixture.description, fixture.type,
-       fixture.dept_id, fixture.team_id, project.id,
+       pg_temp.demo_group_id(fixture.dept_id, fixture.team_id, fixture.project_name),
        fixture.kind, fixture.audience, fixture.assignment_mode,
        pg_temp.demo_campaign_id(fixture.campaign_dept),
        'todo'::public.task_status, fixture.deadline, fixture.created_by,
        fixture.created_at,
        case when fixture.assignment_mode = 'public' then fixture.created_at end
   from demo_task_seed fixture
-  left join projects project
-    on project.name = fixture.project_name
-   and project.created_by = 'd0000000-0000-0000-0000-000000000007'
  where fixture.parent_key is null
  order by fixture.created_at, fixture.key;
 
@@ -606,10 +625,11 @@ stable
 as $$ select id from pg_temp.demo_task where key = p_key $$;
 
 insert into tasks
-  (title, description, type, dept_id, team_id, kind, audience,
+  (title, description, type, group_id, kind, audience,
    assignment_mode, status, deadline, created_by, created_at, parent_task_id)
 select fixture.title, fixture.description, fixture.type,
-       fixture.dept_id, fixture.team_id, fixture.kind, fixture.audience,
+       pg_temp.demo_group_id(fixture.dept_id, fixture.team_id, fixture.project_name),
+       fixture.kind, fixture.audience,
        fixture.assignment_mode, 'todo'::public.task_status, fixture.deadline,
        fixture.created_by, fixture.created_at,
        pg_temp.demo_task_id(fixture.parent_key)
@@ -634,11 +654,11 @@ select fixture.key, task.id
 -- column list does not carry it over.
 with cloned as (
   insert into tasks
-    (title, description, type, dept_id, team_id, campaign_id, audience,
+    (title, description, type, group_id, campaign_id, audience,
      assignment_mode, kind, status, deadline, created_by, created_at,
      duplicated_from_task_id)
-  select source.title, source.description, null::text, source.dept_id,
-         source.team_id, source.campaign_id, source.audience,
+  select source.title, source.description, null::text, source.group_id,
+         source.campaign_id, source.audience,
          source.assignment_mode, 'task', 'todo'::public.task_status,
          pg_temp.demo_deadline(6), 'd0000000-0000-0000-0000-000000000007',
          now() - interval '7 days', source.id
@@ -999,7 +1019,7 @@ update completed_work_requests
        decision_note = 'Muncă reală, confirmată de coordonatorul standului.',
        task_id       = pg_temp.demo_task_id('edu-request-task')
  where requester_id = 'd0000000-0000-0000-0000-000000000001'
-   and dept_id = 'edu';
+   and group_id = pg_temp.demo_group_id('edu', null, null);
 
 update completed_work_requests
    set status        = 'rejected',
@@ -1007,7 +1027,7 @@ update completed_work_requests
        decided_at    = now() - interval '4 days',
        decision_note = 'Munca aceasta face deja parte dintr-un task evaluat.'
  where requester_id = 'd0000000-0000-0000-0000-000000000004'
-   and team_id = 't-logistica';
+   and group_id = pg_temp.demo_group_id(null, 't-logistica', null);
 
 -- ---------------- Activity timeline ----------------
 -- `private.log_task_activity` is the only writer of this table in production,
@@ -1408,28 +1428,34 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
 -- demonstrates a Recrut being turned away from something org-wide. Every
 -- other Event, including the recruits' own Training, stays at the default
 -- min_level 0 so the demo still shows a calendar recruits can read in full.
-insert into events (title, type, dept_id, team_id, scope, min_level, starts_at, ends_at, location, capacity, description, created_by) values
-  ('Adunarea Generală de toamnă', 'sedinta',   null,   null,       'org',  3,
+insert into events (title, type, group_id, min_level, starts_at, ends_at, location, capacity, description, created_by)
+select fixture.title, fixture.type::public.event_type,
+       pg_temp.demo_group_id(case when fixture.team is null then fixture.dept end, fixture.team, null),
+       fixture.min_level, fixture.starts_at, fixture.ends_at, fixture.location, fixture.capacity,
+       fixture.description, fixture.created_by
+  from (values
+  ('Adunarea Generală de toamnă', 'sedinta',   'org',  null::text, 3,
    now() + interval '9 days',  now() + interval '9 days 3 hours',  'Aula Magna',        200,
-   'Raport de activitate și vot.',                    'd0000000-0000-0000-0000-000000000007'),
-  ('Ședință Educational',        'sedinta',   'edu',  null,       'dept', 0,
+   'Raport de activitate și vot.',                    'd0000000-0000-0000-0000-000000000007'::uuid),
+  ('Ședință Educational',        'sedinta',   'edu',  null,       0,
    now() + interval '2 days',  now() + interval '2 days 2 hours',  'Sala 305',           25,
    'Planificarea activităților lunii.',               'd0000000-0000-0000-0000-000000000005'),
-  ('Brainstorming campanie PR',  'activitate','pr',   null,       'dept', 0,
+  ('Brainstorming campanie PR',  'activitate','pr',   null,       0,
    now() + interval '4 days',  now() + interval '4 days 2 hours',  'Sediu OSUBB',        15,
    'Idei pentru campania de iarnă.',                  'd0000000-0000-0000-0000-000000000006'),
-  ('Sprint review Echipa Aplicație', 'sedinta','diverse','t-app', 'team', 0,
+  ('Sprint review Echipa Aplicație', 'sedinta','diverse','t-app', 0,
    now() + interval '1 day',   now() + interval '1 day 1 hour',    'Online',             10,
    'Demo intern al aplicației.',                      'd0000000-0000-0000-0000-000000000006'),
-  ('Training pentru recruți',    'activitate','edu',  't-recruti','team', 0,
+  ('Training pentru recruți',    'activitate','edu',  't-recruti', 0,
    now() + interval '6 days',  now() + interval '6 days 3 hours',  'Sala 210',           40,
    'Prima întâlnire cu echipa.',                      'd0000000-0000-0000-0000-000000000005'),
-  ('Recrutare de toamnă — stand','recrutare', 'hr',   null,       'dept', 0,
+  ('Recrutare de toamnă — stand','recrutare', 'hr',   null,       0,
    now() + interval '3 days',  now() + interval '3 days 6 hours',  'Campus FSEGA',      null,
    'Stand de promovare, două ture.',                  'd0000000-0000-0000-0000-000000000005'),
-  ('Deadline: raport trimestrial','deadline', 'fin',  null,       'dept', 0,
-   now() + interval '7 days',  null,                                null,               null,
-   'Trimiterea raportului către BC.',                 'd0000000-0000-0000-0000-000000000007');
+  ('Deadline: raport trimestrial','deadline', 'fin',  null,       0,
+   now() + interval '7 days',  null::timestamptz,                   null,               null,
+   'Trimiterea raportului către BC.',                 'd0000000-0000-0000-0000-000000000007')
+  ) as fixture (title, type, dept, team, min_level, starts_at, ends_at, location, capacity, description, created_by);
 
 -- RSVPs, including one declined — a calendar where everyone always attends
 -- does not show that the toggle has two states.

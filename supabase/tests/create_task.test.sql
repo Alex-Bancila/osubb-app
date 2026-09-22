@@ -85,53 +85,53 @@ insert into public.project_members (project_id, member_id, project_role) values
   ((select id from public.projects where name = 'Proiect #327'),
    '32700000-0000-0000-0000-000000000003', 'member');
 
-insert into public.campaigns (department_id, name, is_active, created_by) values
-  ('edu', 'Campanie #327', true, '32700000-0000-0000-0000-000000000005'),
-  ('pr', 'Campanie PR #327', true, '32700000-0000-0000-0000-000000000005'),
-  ('edu', 'Campanie inactiva #327', false, '32700000-0000-0000-0000-000000000005');
+insert into public.campaigns (group_id, name, is_active, created_by) values
+  (pg_temp.dept_group('edu'), 'Campanie #327', true, '32700000-0000-0000-0000-000000000005'),
+  (pg_temp.dept_group('pr'), 'Campanie PR #327', true, '32700000-0000-0000-0000-000000000005'),
+  (pg_temp.dept_group('edu'), 'Campanie inactiva #327', false, '32700000-0000-0000-0000-000000000005');
 
 -- An Umbrella must pass explicit nulls for audience/assignment_mode (the
 -- column defaults would otherwise land it in an invalid shape, #315).
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
+  (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
 values
-  ('Umbrela #327', 'edu', 'umbrella', null, null, null, null, 'todo',
+  ('Umbrela #327', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null, 'todo',
    '32700000-0000-0000-0000-000000000005');
 
 -- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
+  (title, group_id, kind, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
-  ('Umbrela anulata #327', 'edu', 'umbrella', null, null, 'cancelled', now(),
+  ('Umbrela anulata #327', pg_temp.dept_group('edu'), 'umbrella', null, null, 'cancelled', now(),
    'Umbrela anulata inainte de #327', '32700000-0000-0000-0000-000000000005');
 
-insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
-values ('Nu e umbrela #327', 'edu', 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+values ('Nu e umbrela #327', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
         '32700000-0000-0000-0000-000000000005');
 
-insert into public.tasks (title, team_id, audience, assignment_mode, status, created_by)
-values ('Task independent #327', 't-327-ind', 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+values ('Task independent #327', pg_temp.team_group('t-327-ind'), 'local', 'direct', 'todo',
         '32700000-0000-0000-0000-000000000005');
 
-insert into public.tasks (title, project_id, audience, assignment_mode, status, created_by)
-select 'Task proiect #327', project.id, 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+select 'Task proiect #327', pg_temp.project_group(project.id), 'local', 'direct', 'todo',
        '32700000-0000-0000-0000-000000000005'
   from public.projects as project where project.name = 'Proiect #327';
 
-insert into public.tasks (title, project_id, audience, assignment_mode, status, created_by)
-select 'Task proiect lead executant #327', project.id, 'local', 'direct', 'in_progress',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+select 'Task proiect lead executant #327', pg_temp.project_group(project.id), 'local', 'direct', 'in_progress',
        '32700000-0000-0000-0000-000000000005'
   from public.projects as project where project.name = 'Proiect #327';
 
-insert into public.tasks (title, project_id, audience, assignment_mode, status, created_by)
-select 'Task proiect responsabil executant #327', project.id, 'local', 'direct', 'in_progress',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+select 'Task proiect responsabil executant #327', pg_temp.project_group(project.id), 'local', 'direct', 'in_progress',
        '32700000-0000-0000-0000-000000000005'
   from public.projects as project where project.name = 'Proiect #327';
 
-insert into public.tasks (title, project_id, audience, assignment_mode, status, created_by)
-select 'Task proiect arhivat #327', project.id, 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+select 'Task proiect arhivat #327', pg_temp.project_group(project.id), 'local', 'direct', 'todo',
        '32700000-0000-0000-0000-000000000005'
   from public.projects as project where project.name = 'Proiect arhivat #327';
 
@@ -153,9 +153,9 @@ create temp table f327 as
 select
   (select id from public.projects where name = 'Proiect #327') as project_id,
   (select id from public.projects where name = 'Proiect arhivat #327') as archived_project_id,
-  (select id from public.campaigns where department_id = 'edu' and name = 'Campanie #327') as edu_campaign_id,
-  (select id from public.campaigns where department_id = 'pr' and name = 'Campanie PR #327') as pr_campaign_id,
-  (select id from public.campaigns where department_id = 'edu' and name = 'Campanie inactiva #327') as inactive_campaign_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie #327') as edu_campaign_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('pr') and name = 'Campanie PR #327') as pr_campaign_id,
+  (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie inactiva #327') as inactive_campaign_id,
   (select id from public.tasks where title = 'Umbrela #327') as umbrella_id,
   (select id from public.tasks where title = 'Umbrela anulata #327') as cancelled_umbrella_id,
   (select id from public.tasks where title = 'Nu e umbrela #327') as plain_task_id,
@@ -170,17 +170,17 @@ grant select on f327 to authenticated;
 -- ==================== 1. API shape and privileges ====================
 
 select has_function('public', 'create_task',
-  array['text', 'text', 'timestamptz', 'text', 'text', 'bigint', 'text', 'text',
+  array['text', 'text', 'timestamptz', 'text', 'text',
         'uuid', 'bigint', 'bigint', 'text', 'bigint'],
-  'public.create_task exists with the pinned Group-compatible thirteen-parameter signature');
+  'public.create_task exists with the pinned Group-only ten-parameter signature (#579)');
 
 select is(pg_get_function_identity_arguments(
-    'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
-  'p_title text, p_description text, p_deadline timestamp with time zone, p_dept_id text, p_team_id text, p_project_id bigint, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
+  'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
   'create_task exposes no actor parameter — the actor is always auth.uid()');
 
 select is(pg_get_function_result(
-    'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
   'tasks', 'create_task returns the created Task row');
 
 select ok(not (select procedure.prosecdef
@@ -195,7 +195,7 @@ select is((
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
    where namespace.nspname = 'private'
      and procedure.proname in ('can_evaluate_task', 'require_task_visible',
-       'require_origin_manager', 'require_task_manager', 'require_task_evaluator',
+       'require_group_work_manager', 'require_task_manager', 'require_task_evaluator',
        'require_task_executor', 'log_task_activity', 'open_task_assignment',
        'end_task_assignment', 'close_task_queue', 'create_task_impl')
      and procedure.prosecdef
@@ -207,22 +207,22 @@ select ok(coalesce((
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
    where (namespace.nspname = 'public' and procedure.proname = 'create_task')
       or (namespace.nspname = 'private' and procedure.proname in
-           ('can_evaluate_task', 'require_task_visible', 'require_origin_manager',
+           ('can_evaluate_task', 'require_task_visible', 'require_group_work_manager',
             'require_task_manager', 'require_task_evaluator', 'require_task_executor',
             'log_task_activity', 'open_task_assignment', 'end_task_assignment',
             'close_task_queue', 'create_task_impl'))
 ), false), 'every function in the kit pins an empty search_path');
 
 select ok(has_function_privilege('authenticated',
-  'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
   'execute'), 'authenticated can execute public.create_task');
 
 select ok(not has_function_privilege('anon',
-  'public.create_task(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
   'execute'), 'anon cannot execute public.create_task');
 
 select ok(has_function_privilege('authenticated',
-  'private.create_task_impl(text,text,timestamptz,text,text,bigint,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'private.create_task_impl(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
   'execute'), 'authenticated can execute private.create_task_impl');
 
 select ok(has_function_privilege('authenticated',
@@ -234,7 +234,7 @@ select is((
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
    where namespace.nspname = 'private'
-     and procedure.proname in ('require_task_visible', 'require_origin_manager',
+     and procedure.proname in ('require_task_visible', 'require_group_work_manager',
        'require_task_manager', 'require_task_evaluator', 'require_task_executor',
        'log_task_activity', 'open_task_assignment', 'end_task_assignment',
        'close_task_queue')
@@ -247,73 +247,59 @@ select is((
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok($$ select public.create_task('Dept task #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, 'the local BCE creates a Department Task');
-select throws_ok($$ select public.create_task('Foreign #327', 'd', now() + interval '7 days',
-  'pr', null, null, 'local', 'direct') $$, '42501', 'task_manage_forbidden',
+select lives_ok($$ select public.create_task('Dept task #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'the local BCE creates a Department Task');
+select throws_ok($$ select public.create_task('Foreign #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('pr')) $$, '42501', 'task_manage_forbidden',
   'a BCE of another Department cannot create there');
-select lives_ok($$ select public.create_task('Dept team task #327', 'd', now() + interval '7 days',
-  null, 't-327-dt', null, 'local', 'direct') $$,
+select lives_ok($$ select public.create_task('Dept team task #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.team_group('t-327-dt')) $$,
   'the local BCE creates a Task on a Department Team of their own Department');
-select throws_ok($$ select public.create_task('Ind by bce #327', 'd', now() + interval '7 days',
-  null, 't-327-ind', null, 'local', 'direct') $$, '42501', 'task_manage_forbidden',
+select throws_ok($$ select public.create_task('Ind by bce #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.team_group('t-327-ind')) $$, '42501', 'task_manage_forbidden',
   'a BCE has no authority over an Independent Team they are not a member of');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok($$ select public.create_task('BC dept task #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, 'BC creates a Task in any Department');
-select lives_ok($$ select public.create_task('BC ind task #327', 'd', now() + interval '7 days',
-  null, 't-327-ind', null, 'local', 'direct') $$, 'BC creates a Task on an Independent Team');
+select lives_ok($$ select public.create_task('BC dept task #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'BC creates a Task in any Department');
+select lives_ok($$ select public.create_task('BC ind task #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.team_group('t-327-ind')) $$, 'BC creates a Task on an Independent Team');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000007', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_task('PR bce in edu #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, '42501', 'task_manage_forbidden',
+select throws_ok($$ select public.create_task('PR bce in edu #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, '42501', 'task_manage_forbidden',
   'the PR BCE cannot create an EDU Task');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000008', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_task('Member dept #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, '42501', 'task_manage_forbidden',
+select throws_ok($$ select public.create_task('Member dept #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, '42501', 'task_manage_forbidden',
   'an ordinary Department member cannot create a Department Task');
-select throws_ok($$ select public.create_task('Member ind #327', 'd', now() + interval '7 days',
-  null, 't-327-ind', null, 'local', 'direct') $$, '42501', 'task_manage_forbidden',
+select throws_ok($$ select public.create_task('Member ind #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.team_group('t-327-ind')) $$, '42501', 'task_manage_forbidden',
   'an ordinary member cannot create a Task on an Independent Team they do not belong to');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb,
   'team_ids', '["t-327-ind"]'::jsonb));
-select lives_ok($$ select public.create_task('Ind team task #327', 'd', now() + interval '7 days',
-  null, 't-327-ind', null, 'local', 'direct') $$,
+select lives_ok($$ select public.create_task('Ind team task #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.team_group('t-327-ind')) $$,
   'an Independent-Team member creates a Task on their own Team');
-select throws_ok($$ select public.create_task('Ind member in edu #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, '42501', 'task_manage_forbidden',
+select throws_ok($$ select public.create_task('Ind member in edu #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, '42501', 'task_manage_forbidden',
   'an Independent-Team member has no authority in a Department');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok(format($$ select public.create_task('Lead project task #327', 'd',
-  now() + interval '7 days', null, null, %s, 'local', 'direct') $$,
+select lives_ok(format($$ select public.create_task('Lead project task #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.project_group(%s)) $$,
   (select project_id from f327)), 'the Project lead creates a Task on their Project');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok(format($$ select public.create_task('Responsible project task #327', 'd',
-  now() + interval '7 days', null, null, %s, 'local', 'direct') $$,
+select lives_ok(format($$ select public.create_task('Responsible project task #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.project_group(%s)) $$,
   (select project_id from f327)), 'a Project Responsible creates a Task on the Project');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000003', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok(format($$ select public.create_task('Plain project member #327', 'd',
-  now() + interval '7 days', null, null, %s, 'local', 'direct') $$,
+select throws_ok(format($$ select public.create_task('Plain project member #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.project_group(%s)) $$,
   (select project_id from f327)), '42501', 'task_manage_forbidden',
   'a plain Project member cannot create a Project Task');
 reset role;
@@ -324,29 +310,25 @@ reset role;
 -- through the global level >= 6 branch, which sits above the Project branch).
 select pg_temp.test_login('32700000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok(format($$ select public.create_task('Archived project #327', 'd',
-  now() + interval '7 days', null, null, %s, 'local', 'direct') $$,
+select throws_ok(format($$ select public.create_task('Archived project #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.project_group(%s)) $$,
   (select archived_project_id from f327)), '42501', 'task_manage_forbidden',
   'the lead of an archived Project can no longer create Tasks on it');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000010', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_task('Deactivated bc #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, '42501', 'task_command_forbidden',
+select throws_ok($$ select public.create_task('Deactivated bc #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, '42501', 'task_command_forbidden',
   'a deactivated BC holding a still-valid level-6 token is denied by the gate');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000011',
   jsonb_build_object('provider', 'email'));
-select throws_ok($$ select public.create_task('Claimless #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, '42501', 'task_command_forbidden',
+select throws_ok($$ select public.create_task('Claimless #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, '42501', 'task_command_forbidden',
   'a real uid without organisation claims is denied by the gate');
 reset role;
 
 set local role anon;
-select throws_ok($$ select public.create_task('Anon #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, '42501', 'permission denied for function create_task',
+select throws_ok($$ select public.create_task('Anon #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, '42501', 'permission denied for function create_task',
   'anon cannot execute create_task at all — the literal grant-denial text, not a gate that happens to raise 42501');
 reset role;
 
@@ -355,46 +337,36 @@ reset role;
 -- input that is malformed for every caller is rejected before authority.
 select pg_temp.test_login('32700000-0000-0000-0000-000000000011',
   jsonb_build_object('provider', 'email'));
-select throws_ok($$ select public.create_task('Bad kind #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct', null, null, null, null) $$,
+select throws_ok($$ select public.create_task('Bad kind #327', 'd', now() + interval '7 days', 'local', 'direct', p_kind => null, p_group_id => pg_temp.dept_group('edu')) $$,
   'PT400', 'invalid_task_kind',
   'a null kind is rejected before the gate, even for a claimless caller');
 reset role;
 
 select pg_temp.test_login('32700000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_task('Bad kind #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct', null, null, null, 'epic') $$,
+select throws_ok($$ select public.create_task('Bad kind #327', 'd', now() + interval '7 days', 'local', 'direct', p_kind => 'epic', p_group_id => pg_temp.dept_group('edu')) $$,
   'PT400', 'invalid_task_kind', 'an unknown kind is rejected');
-select throws_ok(format($$ select public.create_task('Two origins #327', 'd',
-  now() + interval '7 days', 'edu', null, %s, 'local', 'direct') $$,
-  (select project_id from f327)), 'PT400', 'invalid_origin',
-  'two Origins are rejected');
-select throws_ok($$ select public.create_task('No origin #327', 'd', now() + interval '7 days',
-  null, null, null, 'local', 'direct') $$, 'PT400', 'invalid_origin',
-  'no Origin is rejected');
+select throws_ok($$ select public.create_task('Unknown Group #327', 'd', now() + interval '7 days',
+  'local', 'direct', p_group_id => -1) $$, '42501', 'task_manage_forbidden',
+  'an unknown Group is refused as not manageable, even for BC -- never disclosed as missing');
+select throws_ok($$ select public.create_task('No origin #327', 'd', now() + interval '7 days', 'local', 'direct') $$, 'PT400', 'task_group_required',
+  'a top-level Task with no Group is rejected (#579: the Group is the only Origin)');
 reset role;
 
 -- ==================== 4. Input validation ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_task('   ', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, 'PT400', 'title_required',
+select throws_ok($$ select public.create_task('   ', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'title_required',
   'a blank title is rejected');
-select throws_ok($$ select public.create_task(null, 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct') $$, 'PT400', 'title_required',
+select throws_ok($$ select public.create_task(null, 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'title_required',
   'a null title is rejected');
-select throws_ok($$ select public.create_task('No deadline #327', 'd', null,
-  'edu', null, null, 'local', 'direct') $$, 'PT400', 'deadline_required',
+select throws_ok($$ select public.create_task('No deadline #327', 'd', null, 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'deadline_required',
   'an ordinary Task requires a deadline');
-select throws_ok($$ select public.create_task('Bad audience #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'worldwide', 'direct') $$, 'PT400', 'invalid_audience',
+select throws_ok($$ select public.create_task('Bad audience #327', 'd', now() + interval '7 days', 'worldwide', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'invalid_audience',
   'an unknown Audience is rejected');
-select throws_ok($$ select public.create_task('Bad mode #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'auction') $$, 'PT400', 'invalid_assignment_mode',
+select throws_ok($$ select public.create_task('Bad mode #327', 'd', now() + interval '7 days', 'local', 'auction', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'invalid_assignment_mode',
   'an unknown Assignment Mode is rejected');
-select lives_ok($$ select public.create_task(E'\t Trimmed #327 \t', E'  spatiat  ',
-  now() + interval '7 days', 'edu', null, null, 'local', 'direct') $$,
+select lives_ok($$ select public.create_task(E'\t Trimmed #327 \t', E'  spatiat  ', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$,
   'a padded title and description are accepted');
 reset role;
 select is((select count(*) from public.tasks where title = 'Trimmed #327'), 1::bigint,
@@ -405,11 +377,9 @@ select is((select description from public.tasks where title = 'Trimmed #327'), '
 -- ==================== 5. Direct Assignment Mode with an Executor ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok($$ select public.create_task('Direct #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct', '32700000-0000-0000-0000-000000000009') $$,
+select lives_ok($$ select public.create_task('Direct #327', 'd', now() + interval '7 days', 'local', 'direct', p_executor_id => '32700000-0000-0000-0000-000000000009', p_group_id => pg_temp.dept_group('edu')) $$,
   'any active member may be the direct Executor, even outside the Origin');
-select throws_ok($$ select public.create_task('Bad exec #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct', '32700000-0000-0000-0000-000000000010') $$,
+select throws_ok($$ select public.create_task('Bad exec #327', 'd', now() + interval '7 days', 'local', 'direct', p_executor_id => '32700000-0000-0000-0000-000000000010', p_group_id => pg_temp.dept_group('edu')) $$,
   'PT400', 'invalid_executor', 'a deactivated member cannot be the Executor');
 reset role;
 
@@ -483,8 +453,7 @@ select is((select notification.body
 -- A denied create writes nothing at all.
 select pg_temp.test_login('32700000-0000-0000-0000-000000000008', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_task('Denied #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'local', 'direct', '32700000-0000-0000-0000-000000000009') $$,
+select throws_ok($$ select public.create_task('Denied #327', 'd', now() + interval '7 days', 'local', 'direct', p_executor_id => '32700000-0000-0000-0000-000000000009', p_group_id => pg_temp.dept_group('edu')) $$,
   '42501', 'task_manage_forbidden', 'an ordinary member cannot create a Task with an Executor');
 reset role;
 select is((select count(*) from public.tasks where title = 'Denied #327'), 0::bigint,
@@ -495,11 +464,8 @@ select is((select count(*) from public.notifications where title = 'Task nou: De
 -- ==================== 6. Public Assignment Mode ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok($$ select public.create_task('Public #327', 'd', now() + interval '7 days',
-  'edu', null, null, 'org', 'public') $$, 'a public Task is created without an Executor');
-select throws_ok($$ select public.create_task('Public with exec #327', 'd',
-  now() + interval '7 days', 'edu', null, null, 'org', 'public',
-  '32700000-0000-0000-0000-000000000009') $$,
+select lives_ok($$ select public.create_task('Public #327', 'd', now() + interval '7 days', 'org', 'public', p_group_id => pg_temp.dept_group('edu')) $$, 'a public Task is created without an Executor');
+select throws_ok($$ select public.create_task('Public with exec #327', 'd', now() + interval '7 days', 'org', 'public', p_executor_id => '32700000-0000-0000-0000-000000000009', p_group_id => pg_temp.dept_group('edu')) $$,
   'PT400', 'executor_not_allowed_for_public',
   'a public Task may not name an Executor at creation');
 reset role;
@@ -519,52 +485,40 @@ select is((select count(*) from public.task_activity as activity
 -- ==================== 7. Subtasks ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok(format($$ select public.create_task('Subtask #327', 'd',
-  now() + interval '7 days', null, null, null, 'local', 'direct', null, null, %s, 'task') $$,
+select lives_ok(format($$ select public.create_task('Subtask #327', 'd', now() + interval '7 days', 'local', 'direct', p_parent_task_id => %s) $$,
   (select umbrella_id from f327)),
   'a Subtask is created with null Origin parameters and inherits the Umbrella''s');
-select throws_ok(format($$ select public.create_task('Subtask mismatch #327', 'd',
-  now() + interval '7 days', 'pr', null, null, 'local', 'direct', null, null, %s, 'task') $$,
+select throws_ok(format($$ select public.create_task('Subtask mismatch #327', 'd', now() + interval '7 days', 'local', 'direct', p_parent_task_id => %s, p_group_id => pg_temp.dept_group('pr')) $$,
   (select umbrella_id from f327)), 'PT400', 'subtask_origin_mismatch',
   'a Subtask Origin that contradicts its Umbrella is rejected, never silently overwritten');
-select throws_ok(format($$ select public.create_task('Subtask of a task #327', 'd',
-  now() + interval '7 days', null, null, null, 'local', 'direct', null, null, %s, 'task') $$,
+select throws_ok(format($$ select public.create_task('Subtask of a task #327', 'd', now() + interval '7 days', 'local', 'direct', p_parent_task_id => %s) $$,
   (select plain_task_id from f327)), 'PT409', 'parent_not_umbrella',
   'an ordinary Task cannot be a parent');
-select throws_ok(format($$ select public.create_task('Subtask of a cancelled umbrella #327', 'd',
-  now() + interval '7 days', null, null, null, 'local', 'direct', null, null, %s, 'task') $$,
+select throws_ok(format($$ select public.create_task('Subtask of a cancelled umbrella #327', 'd', now() + interval '7 days', 'local', 'direct', p_parent_task_id => %s) $$,
   (select cancelled_umbrella_id from f327)), 'PT409', 'parent_terminal',
   'a terminal Umbrella takes no new Subtasks');
-select throws_ok(format($$ select public.create_task('Subumbrella #327', 'd',
-  now() + interval '7 days', null, null, null, null, null, null, null, %s, 'umbrella') $$,
+select throws_ok(format($$ select public.create_task('Subumbrella #327', 'd', now() + interval '7 days', null, null, p_parent_task_id => %s, p_kind => 'umbrella') $$,
   (select umbrella_id from f327)), 'PT400', 'subtask_cannot_be_umbrella',
   'a Subtask cannot itself be an Umbrella');
-select throws_ok(format($$ select public.create_task('Orphan subtask #327', 'd',
-  now() + interval '7 days', null, null, null, 'local', 'direct', null, null, %s, 'task') $$,
+select throws_ok(format($$ select public.create_task('Orphan subtask #327', 'd', now() + interval '7 days', 'local', 'direct', p_parent_task_id => %s) $$,
   (select missing_id from f327)), 'PT404', 'task_not_found',
   'an unknown or invisible Umbrella is not found');
 reset role;
-select is((select format('%s|%s|%s', task.dept_id, (task.team_id is null)::text,
-                         (task.project_id is null)::text)
-             from public.tasks as task where task.title = 'Subtask #327'),
-  'edu|true|true', 'the Subtask inherited the Umbrella''s Department Origin');
+select is((select task.group_id from public.tasks as task where task.title = 'Subtask #327'),
+  pg_temp.dept_group('edu'), 'the Subtask inherited the Umbrella''s Group');
 
 -- ==================== 8. Campaigns ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok(format($$ select public.create_task('Campaign task #327', 'd',
-  now() + interval '7 days', 'edu', null, null, 'local', 'direct', null, %s) $$,
+select lives_ok(format($$ select public.create_task('Campaign task #327', 'd', now() + interval '7 days', 'local', 'direct', p_campaign_id => %s, p_group_id => pg_temp.dept_group('edu')) $$,
   (select edu_campaign_id from f327)), 'an EDU Campaign attaches to an EDU Task');
-select throws_ok(format($$ select public.create_task('Wrong campaign #327', 'd',
-  now() + interval '7 days', 'edu', null, null, 'local', 'direct', null, %s) $$,
+select throws_ok(format($$ select public.create_task('Wrong campaign #327', 'd', now() + interval '7 days', 'local', 'direct', p_campaign_id => %s, p_group_id => pg_temp.dept_group('edu')) $$,
   (select pr_campaign_id from f327)), 'PT400', 'invalid_campaign',
   'a Campaign from another Department is mapped from the #314 trigger''s 23514 to PT400');
-select throws_ok(format($$ select public.create_task('Inactive campaign #327', 'd',
-  now() + interval '7 days', 'edu', null, null, 'local', 'direct', null, %s) $$,
+select throws_ok(format($$ select public.create_task('Inactive campaign #327', 'd', now() + interval '7 days', 'local', 'direct', p_campaign_id => %s, p_group_id => pg_temp.dept_group('edu')) $$,
   (select inactive_campaign_id from f327)), 'PT400', 'invalid_campaign',
   'a deactivated Campaign cannot be attached to a new Task');
-select throws_ok(format($$ select public.create_task('Unknown campaign #327', 'd',
-  now() + interval '7 days', 'edu', null, null, 'local', 'direct', null, %s) $$,
+select throws_ok(format($$ select public.create_task('Unknown campaign #327', 'd', now() + interval '7 days', 'local', 'direct', p_campaign_id => %s, p_group_id => pg_temp.dept_group('edu')) $$,
   (select missing_id from f327)), 'PT400', 'invalid_campaign',
   'an unknown Campaign id is a PT400 on a parameter, not a PT404 on the target');
 reset role;
@@ -574,8 +528,7 @@ select is((select task.campaign_id from public.tasks as task where task.title = 
 -- A shape violation that is not the Campaign check must still surface as 23514.
 select pg_temp.test_login('32700000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok(format($$ select public.create_task('Campaign on a project #327', 'd',
-  now() + interval '7 days', null, null, %s, 'local', 'direct', null, %s) $$,
+select throws_ok(format($$ select public.create_task('Campaign on a project #327', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.project_group(%s), p_campaign_id => %s) $$,
   (select project_id from f327), (select edu_campaign_id from f327)),
   'PT400', 'invalid_campaign',
   'a Campaign on a Project Origin is the same origin-mismatch reason, still PT400');
@@ -584,20 +537,15 @@ reset role;
 -- ==================== 9. Umbrellas ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select lives_ok($$ select public.create_task('Umbrela noua #327', 'd', null,
-  'edu', null, null, null, null, null, null, null, 'umbrella') $$,
+select lives_ok($$ select public.create_task('Umbrela noua #327', 'd', null, null, null, p_kind => 'umbrella', p_group_id => pg_temp.dept_group('edu')) $$,
   'an Umbrella is created with no Audience, Assignment Mode or deadline');
-select throws_ok($$ select public.create_task('Umbrela cu audienta #327', 'd', null,
-  'edu', null, null, 'local', null, null, null, null, 'umbrella') $$,
+select throws_ok($$ select public.create_task('Umbrela cu audienta #327', 'd', null, 'local', null, p_kind => 'umbrella', p_group_id => pg_temp.dept_group('edu')) $$,
   'PT400', 'umbrella_has_no_mode', 'an Umbrella rejects an Audience');
-select throws_ok($$ select public.create_task('Umbrela cu mod #327', 'd', null,
-  'edu', null, null, null, 'public', null, null, null, 'umbrella') $$,
+select throws_ok($$ select public.create_task('Umbrela cu mod #327', 'd', null, null, 'public', p_kind => 'umbrella', p_group_id => pg_temp.dept_group('edu')) $$,
   'PT400', 'umbrella_has_no_mode', 'an Umbrella rejects an Assignment Mode');
-select throws_ok($$ select public.create_task('Umbrela cu executant #327', 'd', null,
-  'edu', null, null, null, null, '32700000-0000-0000-0000-000000000009', null, null, 'umbrella') $$,
+select throws_ok($$ select public.create_task('Umbrela cu executant #327', 'd', null, null, null, p_executor_id => '32700000-0000-0000-0000-000000000009', p_kind => 'umbrella', p_group_id => pg_temp.dept_group('edu')) $$,
   'PT400', 'umbrella_has_no_mode', 'an Umbrella rejects an Executor');
-select throws_ok(format($$ select public.create_task('Umbrela cu campanie #327', 'd', null,
-  'edu', null, null, null, null, null, %s, null, 'umbrella') $$,
+select throws_ok(format($$ select public.create_task('Umbrela cu campanie #327', 'd', null, null, null, p_campaign_id => %s, p_kind => 'umbrella', p_group_id => pg_temp.dept_group('edu')) $$,
   (select edu_campaign_id from f327)), 'PT400', 'umbrella_has_no_mode',
   'an Umbrella rejects a Campaign');
 reset role;
@@ -776,17 +724,17 @@ select extensions.dblink_exec('task_lock_setup', $$
     ('32700000-0000-0000-0000-000000000022', 'edu'),
     ('32700000-0000-0000-0000-000000000023', 'edu');
   insert into public.tasks
-    (title, dept_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
-  values ('Lock Probe Umbrella #327', 'edu', 'umbrella', null, null, null, null, 'todo',
+    (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
+  values ('Lock Probe Umbrella #327', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, null, null, 'todo',
           '32700000-0000-0000-0000-000000000021');
   -- An EXISTING Subtask of that Umbrella, already submitted, with a live
   -- Executor: everything private.complete_task_review needs, so that the
   -- third session below runs the real evaluating command and not a stand-in.
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status,
+    (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, submitted_at, parent_task_id, created_by)
   select 'Lock Probe Subtask Existent #327', 'De evaluat in paralel',
-         now() + interval '7 days', 'edu', 'local', 'direct', 'in_review',
+         now() + interval '7 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
          now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          parent.id, '32700000-0000-0000-0000-000000000021'
     from public.tasks as parent where parent.title = 'Lock Probe Umbrella #327';
@@ -812,9 +760,7 @@ select * from extensions.dblink('task_lock', $$
 $$) as remote_claims(setting text);
 select extensions.dblink_exec('task_lock', 'set local role authenticated');
 select * from extensions.dblink('task_lock', $$
-  select (public.create_task('Lock Probe Subtask #327', 'd', now() + interval '7 days',
-    null, null, null, 'local', 'direct', null, null,
-    (select id from public.tasks where title = 'Lock Probe Umbrella #327'), 'task')).title
+  select (public.create_task('Lock Probe Subtask #327', 'd', now() + interval '7 days', 'local', 'direct', p_parent_task_id => (select id from public.tasks where title = 'Lock Probe Umbrella #327'))).title
 $$) as locked_create(title text);
 
 -- (a) and (b) are split for the same reason cancel_task.test.sql:1015 splits
@@ -943,8 +889,8 @@ select extensions.dblink_disconnect('task_lock_setup');
 -- below is their one direct addition.
 
 -- ---- open_task_assignment: the p_via closed allow-list (I1) ----
-insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
-values ('Kit via task #327', 'edu', 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+values ('Kit via task #327', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
         '32700000-0000-0000-0000-000000000005');
 select throws_ok(format($$ select private.open_task_assignment(%s,
   '32700000-0000-0000-0000-000000000008'::uuid,
@@ -958,8 +904,8 @@ select throws_ok(format($$ select private.open_task_assignment(%s,
   'PT400', 'invalid_assignment_via', 'an unknown p_via is rejected by the closed allow-list');
 
 -- ---- open_task_assignment: 'reopen' writes activity but skips the "Task nou" notification (I1) ----
-insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
-values ('Kit reopen task #327', 'edu', 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+values ('Kit reopen task #327', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
         '32700000-0000-0000-0000-000000000005');
 select lives_ok(format($$ select private.open_task_assignment(%s,
   '32700000-0000-0000-0000-000000000008'::uuid,
@@ -1058,8 +1004,8 @@ select throws_ok($$ select private.require_task_executor(
 -- M1: organisation claims are required even for the correct Executor —
 -- without this gate, a claimless real uid holding the one active Assignment
 -- would pass on the live-activ-profile check alone.
-insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
-values ('Kit executor claimless task #327', 'edu', 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+values ('Kit executor claimless task #327', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
         '32700000-0000-0000-0000-000000000005');
 insert into public.task_assignments (task_id, member_id, assigned_by)
 select task.id, '32700000-0000-0000-0000-000000000011',
@@ -1074,8 +1020,8 @@ select throws_ok($$ select private.require_task_executor(
   'require_task_executor requires organisation claims even for the Assignment''s own member_id (M1)');
 
 -- ---- end_task_assignment ----
-insert into public.tasks (title, dept_id, audience, assignment_mode, status, created_by)
-values ('Kit end assignment task #327', 'edu', 'local', 'direct', 'todo',
+insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
+values ('Kit end assignment task #327', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
         '32700000-0000-0000-0000-000000000005');
 select private.open_task_assignment(
   (select id from public.tasks where title = 'Kit end assignment task #327'),
@@ -1102,8 +1048,8 @@ select throws_ok(format($$ select private.end_task_assignment(%s, 'completed', n
   'end_task_assignment refuses to end an already-ended Assignment');
 
 -- ---- close_task_queue ----
-insert into public.tasks (title, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
-values ('Kit queue task #327', 'edu', 'org', 'public', 'todo', now(),
+insert into public.tasks (title, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
+values ('Kit queue task #327', pg_temp.dept_group('edu'), 'org', 'public', 'todo', now(),
         '32700000-0000-0000-0000-000000000005');
 insert into public.task_candidates (task_id, member_id, status, joined_at)
 select task.id, candidate_id, 'pending', now()
@@ -1149,22 +1095,22 @@ reset role;
 select pg_temp.g521_task('command0','project',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
-select lives_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command0'),'task')$$,'create_task: Group persona 2 in project');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command0'))$$,'create_task: Group persona 2 in project');
 reset role;
 select pg_temp.g521_task('command1','project',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
-select lives_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command1'),'task')$$,'create_task: Group persona 3 in project');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command1'))$$,'create_task: Group persona 3 in project');
 reset role;
 select pg_temp.g521_task('command2','ind',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
-select lives_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command2'),'task')$$,'create_task: Group persona 6 in ind');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command2'))$$,'create_task: Group persona 6 in ind');
 reset role;
 select pg_temp.g521_task('command3','dt',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
-select throws_ok($$select public.create_task('Subtask #521',null,now()+interval '1 day',null,null,null,'org','direct',pg_temp.g521_uid(10),null,(select id from g521_tasks where name='command3'),'task')$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
+select throws_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
 reset role;
 
 select * from finish();

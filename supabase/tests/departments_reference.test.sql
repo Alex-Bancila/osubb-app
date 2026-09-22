@@ -37,11 +37,10 @@ select is(
   (select count(*) from (
      select dept_id from member_departments where dept_id = 'it'
      union all select dept_id from teams where dept_id = 'it'
-     union all select dept_id from tasks where dept_id = 'it'
-     union all select dept_id from events where dept_id = 'it'
      union all select dept_id from announcements where dept_id = 'it'
-     -- #345 dropped task_requests, the sixth table #310 had to sweep.
-     union all select dept_id from completed_work_requests where dept_id = 'it') x),
+     -- #345 dropped task_requests, the sixth table #310 had to sweep; #579 dropped the
+     -- dept_id columns of tasks, events and completed_work_requests (their Origin is a Group).
+     union all select legacy_dept_id from groups where legacy_dept_id = 'it') x),
   0::bigint,
   'nothing references department it'
 );

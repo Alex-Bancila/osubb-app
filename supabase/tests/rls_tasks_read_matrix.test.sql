@@ -191,10 +191,11 @@ select project.id, persona.id, membership.project_role
 -- open queue | public with a closed queue). Titles carry an `m318:` prefix
 -- so the demo seed's own Tasks never enter a persona's set.
 insert into public.tasks
-  (title, dept_id, team_id, project_id, audience, assignment_mode,
+  (title, group_id, audience, assignment_mode,
    queue_opened_at, queue_closed_at)
 select 'm318:' || origin.code || '-' || shape.code,
-       origin.dept_id, origin.team_id, origin.project_id,
+       coalesce(pg_temp.dept_group(origin.dept_id), pg_temp.team_group(origin.team_id),
+                pg_temp.project_group(origin.project_id)),
        shape.audience, shape.assignment_mode,
        case when shape.assignment_mode = 'public' then now() end,
        case when shape.queue_closed then now() end
@@ -216,15 +217,15 @@ select 'm318:' || origin.code || '-' || shape.code,
 -- An Umbrella of the Department Team with a direct Subtask (the executor
 -- persona's) and an org-wide public Subtask. An Umbrella carries no
 -- Audience or Assignment Mode (tasks_umbrella_shape_ck).
-insert into public.tasks (title, kind, team_id, audience, assignment_mode)
-values ('m318:DT-umb', 'umbrella', 'm318-dt', null, null);
+insert into public.tasks (title, kind, group_id, audience, assignment_mode)
+values ('m318:DT-umb', 'umbrella', pg_temp.team_group('m318-dt'), null, null);
 insert into public.tasks
-  (title, parent_task_id, team_id, audience, assignment_mode, status, started_at)
-select 'm318:DT-umb-sub', umbrella.id, 'm318-dt', 'local', 'direct', 'in_progress', now()
+  (title, parent_task_id, group_id, audience, assignment_mode, status, started_at)
+select 'm318:DT-umb-sub', umbrella.id, pg_temp.team_group('m318-dt'), 'local', 'direct', 'in_progress', now()
   from public.tasks as umbrella where umbrella.title = 'm318:DT-umb';
 insert into public.tasks
-  (title, parent_task_id, team_id, audience, assignment_mode, queue_opened_at)
-select 'm318:DT-umb-sub-open', umbrella.id, 'm318-dt', 'org', 'public', now()
+  (title, parent_task_id, group_id, audience, assignment_mode, queue_opened_at)
+select 'm318:DT-umb-sub-open', umbrella.id, pg_temp.team_group('m318-dt'), 'org', 'public', now()
   from public.tasks as umbrella where umbrella.title = 'm318:DT-umb';
 
 -- A `pr` Umbrella whose only reader outside R1 holds a Candidature on the
@@ -232,18 +233,18 @@ select 'm318:DT-umb-sub-open', umbrella.id, 'm318-dt', 'org', 'public', now()
 -- queue); it is built here only to observe R7 in isolation, because every
 -- other branch that admits an Umbrella also admits its Subtasks through
 -- their shared, immutable Origin (#315).
-insert into public.tasks (title, kind, dept_id, audience, assignment_mode)
-values ('m318:X-umb', 'umbrella', 'pr', null, null);
-insert into public.tasks (title, parent_task_id, dept_id)
-select 'm318:X-umb-sub', umbrella.id, 'pr'
+insert into public.tasks (title, kind, group_id, audience, assignment_mode)
+values ('m318:X-umb', 'umbrella', pg_temp.dept_group('pr'), null, null);
+insert into public.tasks (title, parent_task_id, group_id)
+select 'm318:X-umb-sub', umbrella.id, pg_temp.dept_group('pr')
   from public.tasks as umbrella where umbrella.title = 'm318:X-umb';
 
 -- History of the archived Project.
 -- #339: tasks_cancel_reason_ck makes cancel_reason mandatory on -- and
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
-insert into public.tasks (title, project_id, status, cancelled_at, cancel_reason)
-select 'm318:PA-dir', project.id, 'cancelled', now(), 'Proiect arhivat #318'
+insert into public.tasks (title, group_id, status, cancelled_at, cancel_reason)
+select 'm318:PA-dir', pg_temp.project_group(project.id), 'cancelled', now(), 'Proiect arhivat #318'
   from public.projects as project where project.name = 'M318 Archived Project';
 
 -- Participation Tasks in `pr`, where no persona except R1 is a member.
@@ -255,15 +256,15 @@ select 'm318:PA-dir', project.id, 'cancelled', now(), 'Proiect arhivat #318'
 -- narrowing R6 to `todo`/`in_progress` must fail wherever org_open() feeds
 -- an expected set.
 insert into public.tasks
-  (title, dept_id, audience, assignment_mode, queue_opened_at, queue_closed_at,
+  (title, group_id, audience, assignment_mode, queue_opened_at, queue_closed_at,
    status, started_at, submitted_at)
 values
-  ('m318:X-busy',           'pr', 'org',   'public', now(), null,  'in_progress', now(), null),
-  ('m318:X-review',         'pr', 'org',   'public', now(), null,  'in_review',   now(), now()),
-  ('m318:X-exec',           'pr', 'local', 'direct', null,  null,  'in_progress', now(), null),
-  ('m318:X-past',           'pr', 'local', 'direct', null,  null,  'todo',        null,  null),
-  ('m318:X-cand-closed',    'pr', 'local', 'public', now(), now(), 'todo',        null,  null),
-  ('m318:X-cand-withdrawn', 'pr', 'local', 'public', now(), null,  'todo',        null,  null);
+  ('m318:X-busy',           pg_temp.dept_group('pr'), 'org',   'public', now(), null,  'in_progress', now(), null),
+  ('m318:X-review',         pg_temp.dept_group('pr'), 'org',   'public', now(), null,  'in_review',   now(), now()),
+  ('m318:X-exec',           pg_temp.dept_group('pr'), 'local', 'direct', null,  null,  'in_progress', now(), null),
+  ('m318:X-past',           pg_temp.dept_group('pr'), 'local', 'direct', null,  null,  'todo',        null,  null),
+  ('m318:X-cand-closed',    pg_temp.dept_group('pr'), 'local', 'public', now(), now(), 'todo',        null,  null),
+  ('m318:X-cand-withdrawn', pg_temp.dept_group('pr'), 'local', 'public', now(), null,  'todo',        null,  null);
 
 create temp table fx_task as
 select task.id, substr(task.title, 6) as title
@@ -574,11 +575,11 @@ select throws_ok($$ select count(*) from public.tasks_with_overdue $$, '42501', 
 reset role;
 select pg_temp.login_as('bce_local');
 select throws_ok(
-  $$ insert into public.tasks (title, dept_id) values ('m318:write-insert-returning', 'edu') returning id $$,
+  $$ insert into public.tasks (title, group_id) values ('m318:write-insert-returning', pg_temp.dept_group('edu')) returning id $$,
   '42501', 'permission denied for table tasks',
   'decision 4, after #345: a direct INSERT ... RETURNING is refused even for a BCE');
 select throws_ok(
-  $$ insert into public.tasks (title, dept_id) values ('m318:write-insert-noreturning', 'edu') $$,
+  $$ insert into public.tasks (title, group_id) values ('m318:write-insert-noreturning', pg_temp.dept_group('edu')) $$,
   '42501', 'permission denied for table tasks',
   'decision 4, after #345: and so is the same INSERT without RETURNING -- the table grant, not a SELECT policy, decides now');
 

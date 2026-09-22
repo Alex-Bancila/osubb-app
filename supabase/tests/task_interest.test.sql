@@ -58,19 +58,19 @@ insert into public.member_departments (member_id, dept_id) values
 
 -- Public, org-audience Opportunities: readable by every live Member (R6).
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Org first come #330', 'Primul venit', '2027-03-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Org first come #330', 'Primul venit', '2027-03-01 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001'),
-  ('Queue order #330', 'Coada ordonata', '2027-03-02 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Queue order #330', 'Coada ordonata', '2027-03-02 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001'),
-  ('Withdraw none #330', 'Fara candidatura', '2027-03-03 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Withdraw none #330', 'Fara candidatura', '2027-03-03 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001'),
-  ('Gate denial #330', 'Poarta', '2027-03-04 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Gate denial #330', 'Poarta', '2027-03-04 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001'),
-  ('Direct write #330', 'Scriere directa', '2027-03-05 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Direct write #330', 'Scriere directa', '2027-03-05 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001'),
-  ('Queue closed #330', 'Coada inchisa', '2027-03-06 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Queue closed #330', 'Coada inchisa', '2027-03-06 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001');
 
 update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
@@ -80,34 +80,34 @@ update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
 -- local needs Origin membership), while a BCE of another Department reads it
 -- through R1 and is still not eligible to join its queue.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Local audience #330', 'Doar pentru Educational', '2027-03-07 09:00:00+00', 'edu', 'local', 'public', 'todo',
+  ('Local audience #330', 'Doar pentru Educational', '2027-03-07 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001');
 
 -- Direct-mode Task: no queue at all.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Direct mode #330', 'Atribuire directa', '2027-03-08 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Direct mode #330', 'Atribuire directa', '2027-03-08 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33000000-0000-0000-0000-000000000001');
 
 -- Terminal public Task: a completed public Task always has its queue closed
 -- (tasks_queue_timestamp_state_ck) and both evaluation inputs set
 -- (tasks_evaluation_inputs_ck).
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, difficulty, rating,
+  (title, description, deadline, group_id, audience, assignment_mode, difficulty, rating,
    status, queue_opened_at, queue_closed_at, completed_at, created_by)
 values
-  ('Terminal #330', 'Incheiat', '2027-03-09 09:00:00+00', 'edu', 'local', 'public', 3, 4,
+  ('Terminal #330', 'Incheiat', '2027-03-09 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'public', 3, 4,
    'completed', '2027-01-01 00:00:00+00', '2027-01-02 00:00:00+00', now(),
    '33000000-0000-0000-0000-000000000001');
 
 -- Umbrella: no Audience, no Assignment Mode, no queue.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
+  (title, description, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
 values
-  ('Umbrella #330', 'Umbrela', 'edu', 'umbrella', null, null, null, null, 'todo',
+  ('Umbrella #330', 'Umbrela', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null, 'todo',
    '33000000-0000-0000-0000-000000000001');
 
 -- Every fixture id resolved ONCE, as the owner. Never resolve an id inside a
@@ -539,7 +539,7 @@ reset role;
 -- behind the command (#343 / #390 discipline). Without it nothing would fail
 -- if the command dropped either. Two further held calls on the same
 -- connection extend the same proof: a local-Audience Task (the only branch
--- that locks a member_departments/team_members/project_members row) and
+-- that locks a group_members roster row) and
 -- withdraw_task_interest itself, which section 9's race never exercises and
 -- whose own tasks-row FOR UPDATE would otherwise be asserted by nothing.
 --
@@ -590,16 +590,16 @@ select extensions.dblink_exec('ti_setup', $$
     ('33000000-0000-0000-0000-000000000022', 'edu'),
     ('33000000-0000-0000-0000-000000000023', 'edu');
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+    (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
-    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Local audience lock probe #330 committed', 'Sonda audienta locala', '2027-04-03 09:00:00+00',
-     'edu', 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
+     (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Withdraw lock probe #330 committed', 'Sonda retragere', '2027-04-04 09:00:00+00',
-     'edu', 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
+     (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
 
   -- Directly fixtured (never through the command) so the held withdraw call
   -- below has a real live pending Candidature to resolve: withdraw's only
@@ -653,9 +653,10 @@ select extensions.dblink_exec('ti_lock', 'rollback');
 
 -- ---- item 7: the local-Audience membership check is held FOR SHARE too ----
 -- Same connection, a second held call -- this time against a local-Audience
--- Task, the only branch that reads member_departments (or team_members /
--- project_members) under the lock. Member 22's own 'edu' membership row is
--- exactly what express_task_interest re-validates at step 4.
+-- Task, the only branch that reads a roster under the lock. #579: the rule is
+-- private.is_group_member on the Task's Group, so Member 22's own group_members
+-- row on the edu Group (mirrored from their 'edu' membership) is exactly what
+-- express_task_interest re-validates and holds at step 4.
 select extensions.dblink_exec('ti_lock', $$
   begin;
   set local statement_timeout = '5s';
@@ -674,11 +675,11 @@ $$, (select local_probe_task_id from r330))) as locked_express_local(status text
 
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
-    from extensions.pgrowlocks('public.member_departments') as row_lock
-    join public.member_departments as membership on membership.ctid = row_lock.locked_row
+    from extensions.pgrowlocks('public.group_members') as row_lock
+    join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '33000000-0000-0000-0000-000000000022'
-     and membership.dept_id = 'edu'
-), false), 'a local-Audience express_task_interest holds the actor''s Origin membership row FOR SHARE too');
+     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+), false), 'a local-Audience express_task_interest holds the actor''s Group roster row FOR SHARE too');
 
 select extensions.dblink_exec('ti_lock', 'rollback');
 

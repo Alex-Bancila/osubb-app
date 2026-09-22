@@ -16,8 +16,8 @@ select ok(
 select col_default_is('public', 'tasks', 'assignment_mode', 'direct',
   'new Tasks default to direct assignment');
 
-insert into public.tasks (title, difficulty, dept_id)
-values ('Default direct assignment', 1, 'edu');
+insert into public.tasks (title, difficulty, group_id)
+values ('Default direct assignment', 1, pg_temp.dept_group('edu'));
 
 select is(
   (select assignment_mode from public.tasks
@@ -26,12 +26,12 @@ select is(
   'the default Assignment Mode is observable on a new Task');
 select lives_ok(
   $$ insert into public.tasks
-       (title, difficulty, assignment_mode, dept_id, queue_opened_at)
-     values ('Public assignment', 1, 'public', 'edu', now()) $$,
+       (title, difficulty, assignment_mode, group_id, queue_opened_at)
+     values ('Public assignment', 1, 'public', pg_temp.dept_group('edu'), now()) $$,
   'public Assignment Mode is accepted');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, assignment_mode, dept_id)
-     values ('Invalid assignment', 1, 'open', 'edu') $$,
+  $$ insert into public.tasks (title, difficulty, assignment_mode, group_id)
+     values ('Invalid assignment', 1, 'open', pg_temp.dept_group('edu')) $$,
   '23514', null,
   'Assignment Modes outside direct and public are rejected');
 
