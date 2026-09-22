@@ -60,10 +60,18 @@ export function TaskForm({
   options,
   onDraft,
   parentTaskId = null,
+  allowSubtask = true,
+  heading = 'Pregătește un task',
+  submitLabel = 'Continuă',
 }: {
   options: TaskFormOptions;
   onDraft: (draft: TaskDraft) => void;
   parentTaskId?: number | null;
+  /** False where a Subtask cannot be started (it is created from its Umbrella). */
+  allowSubtask?: boolean;
+  /** Null when a surrounding Dialog already names the form. */
+  heading?: string | null;
+  submitLabel?: string;
 }) {
   const id = useId();
   const [values, setValues] = useState<TaskFormValues>({
@@ -132,12 +140,12 @@ export function TaskForm({
     groupsById.get(item.group_id)?.name;
   return (
     <form
-      aria-label="Pregătește un task"
+      aria-label={heading ?? 'Pregătește un task'}
       onSubmit={submit}
       noValidate
       className="space-y-5"
     >
-      <h2 className="text-xl font-semibold">Pregătește un task</h2>
+      {heading && <h2 className="text-xl font-semibold">{heading}</h2>}
       <div className="grid gap-2">
         <span id={`${id}-kind`} className="text-sm font-medium">
           Ce fel de task?
@@ -155,7 +163,10 @@ export function TaskForm({
             })
           }
         >
-          {KINDS.map((kind) => (
+          {KINDS.filter(
+            (kind) =>
+              kind.value !== 'subtask' || allowSubtask || lockedToParent,
+          ).map((kind) => (
             <RadioCard key={kind.value} className="items-start">
               <RadioGroupItem
                 value={kind.value}
@@ -417,7 +428,7 @@ export function TaskForm({
         </p>
       )}
       <Button className="min-h-11" type="submit">
-        Continuă
+        {submitLabel}
       </Button>
     </form>
   );

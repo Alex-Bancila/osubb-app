@@ -39,6 +39,34 @@ vi.mock('../../lib/auth', () => ({
     claims: { member_level: hooks.level },
   }),
 }));
+// "Task nou" has its own suite; here it only reports a created Task.
+vi.mock('./NewTaskControl', () => ({
+  NewTaskControl: ({ onCreated }: { onCreated: (id: number) => void }) => (
+    <button type="button" onClick={() => onCreated(42)}>
+      Task nou
+    </button>
+  ),
+}));
+vi.mock('./TaskDetailsSheet', () => ({
+  TaskDetailsSheet: ({
+    taskId,
+    notice,
+    onClose,
+  }: {
+    taskId: number | null;
+    notice?: string | null;
+    onClose: () => void;
+  }) =>
+    taskId === null ? null : (
+      <div role="dialog" aria-label="Detalii task">
+        <p>Task #{taskId}</p>
+        {notice && <p role="status">{notice}</p>}
+        <button type="button" onClick={onClose}>
+          Închide detaliile
+        </button>
+      </div>
+    ),
+}));
 import TrackerScreen from './TrackerScreen';
 
 function query(overrides: Record<string, unknown> = {}) {
@@ -187,6 +215,20 @@ describe('My tasks screen', () => {
       screen.queryByRole('tab', { name: 'Toate' }),
     ).not.toBeInTheDocument();
     expect(hooks.useManagedTasks).toHaveBeenCalledWith(true);
+  });
+
+  it('opens a newly created Task with a confirmation, once', async () => {
+    const user = userEvent.setup();
+    query();
+    render(<TrackerScreen />);
+    await user.click(screen.getByRole('button', { name: 'Task nou' }));
+    const details = screen.getByRole('dialog', { name: 'Detalii task' });
+    expect(details).toHaveTextContent('Task #42');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Taskul a fost creat.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Închide detaliile' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('uses live server capability to show All despite stale advisory claims', async () => {

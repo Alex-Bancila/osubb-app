@@ -8,26 +8,30 @@ import type { Database } from '../lib/database.types';
 import { keys } from './keys';
 import type { TaskDraft } from '../screens/tracker/task-form-model';
 
-export async function createSubtask(draft: TaskDraft) {
-  if (draft.kind !== 'task' || draft.parentTaskId === null)
-    throw new Error('Subtask required');
+/**
+ * The one `create_task` caller: a top-level Task, an Umbrella, or a Subtask
+ * (a draft with `parentTaskId`). Named arguments only; the Origin is the
+ * Group, and the retired dept/team/project arguments are never sent.
+ */
+export async function createTask(draft: TaskDraft) {
+  if (draft.kind === 'umbrella' && draft.parentTaskId !== null)
+    throw new Error('An Umbrella cannot be a Subtask');
   const args = {
+    p_group_id: draft.groupId,
+    p_kind: draft.kind,
+    p_parent_task_id: draft.parentTaskId,
+    p_executor_id: draft.executorId,
+    p_campaign_id: draft.campaignId,
+    p_audience: draft.audience,
+    p_assignment_mode: draft.assignmentMode,
     p_title: draft.title,
     p_description: draft.description,
     p_deadline: draft.deadline,
-    p_dept_id: null,
-    p_team_id: null,
-    p_project_id: null,
-    p_group_id: draft.groupId,
-    p_audience: draft.audience,
-    p_assignment_mode: draft.assignmentMode,
-    p_executor_id: draft.executorId,
-    p_campaign_id: draft.campaignId,
-    p_parent_task_id: draft.parentTaskId,
-    p_kind: 'task',
   };
-  // PostgreSQL accepts NULL for optional values and the retired Origin columns.
-  // Generated RPC argument types omit nullability; isolate that mismatch here.
+  // PostgreSQL accepts NULL for the optional values (an Umbrella has no mode,
+  // audience, Executor or Campaign). Generated RPC argument types omit
+  // nullability and still list the retired Origin arguments until #579;
+  // isolate that mismatch here.
   const { data, error } = await supabase.rpc(
     'create_task',
     args as unknown as Database['public']['Functions']['create_task']['Args'],
@@ -65,15 +69,15 @@ export function umbrellaCompletionErrorMessage(error: unknown): string {
     ? (completionReasons[reason] ?? fallback)
     : fallback;
 }
-export function createSubtaskMutationOptions(client: QueryClient) {
+export function createTaskMutationOptions(client: QueryClient) {
   return {
-    mutationFn: createSubtask,
+    mutationFn: createTask,
     onSettled: () => client.invalidateQueries({ queryKey: keys.tasks.all }),
   };
 }
-export function useCreateSubtask() {
+export function useCreateTask() {
   const client = useQueryClient();
-  return useMutation(createSubtaskMutationOptions(client));
+  return useMutation(createTaskMutationOptions(client));
 }
 export function useCompleteUmbrella() {
   const client = useQueryClient();

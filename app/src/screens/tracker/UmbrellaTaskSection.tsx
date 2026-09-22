@@ -4,7 +4,7 @@ import { Badge } from '../../components/ui/badge';
 import {
   useCompleteUmbrella,
   umbrellaCompletionErrorMessage,
-  useCreateSubtask,
+  useCreateTask,
 } from '../../queries/task-umbrella';
 import type { TaskDetailsData } from '../../queries/task-details';
 import { ManagedTaskForm } from './ManagedTaskForm';
@@ -27,7 +27,7 @@ function UmbrellaActions({
   terminal: number;
   onNavigate: (id: number) => void;
 }) {
-  const create = useCreateSubtask();
+  const create = useCreateTask();
   const complete = useCompleteUmbrella();
   const [adding, setAdding] = useState(false);
   const [pending, setPending] = useState(false);

@@ -11,9 +11,17 @@ import {
 export function ManagedTaskForm({
   onDraft,
   parentTaskId = null,
+  allowSubtask,
+  heading,
+  submitLabel,
+  pendingLabel = 'Se verifică opțiunile actuale…',
 }: {
   onDraft: (draft: TaskDraft) => void | Promise<void>;
   parentTaskId?: number | null;
+  allowSubtask?: boolean;
+  heading?: string | null;
+  submitLabel?: string;
+  pendingLabel?: string;
 }) {
   const query = useTaskFormOptions();
   const [error, setError] = useState<string | null>(null);
@@ -66,10 +74,13 @@ export function ManagedTaskForm({
             options={query.data}
             onDraft={prepare}
             parentTaskId={parentTaskId}
+            allowSubtask={allowSubtask}
+            heading={heading}
+            submitLabel={submitLabel}
           />
         </fieldset>
       )}
-      {pending && <p role="status">Se verifică opțiunile actuale…</p>}
+      {pending && <p role="status">{pendingLabel}</p>}
       {error && !query.isError && (
         <p role="alert" className="text-sm text-destructive">
           {error}
