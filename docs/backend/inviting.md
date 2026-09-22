@@ -7,9 +7,9 @@ How an OSUBB account comes into existence. There is no other way — public sign
 1. BC calls the `invite-member` Edge Function with an email, a name, and optionally a role, departments and teams.
 2. The function checks **you** are BC (level ≥ 6), reading your level from the database rather than your token — a token issued before a demotion still carries the old level for up to an hour.
 3. It checks the departments and teams exist, and that the address doesn't already have an account. Both checks happen **before** anything is sent, so a typo never emails a real person.
-4. Supabase sends a **magic link**. No password is created, distributed, or stored.
+4. Supabase sends a **magic link** and, in the same email, the **six-digit code** that is the same one-time password. No password is created, distributed, or stored.
 5. `provision_profile()` creates the profile plus department and team links in one atomic call — the member is complete or doesn't exist.
-6. The member clicks the link and is signed in. Their token is stamped with role, level, departments and teams, which is what every permission rule reads.
+6. The member clicks the link — or types the code, when the link would land in the wrong browser — and is signed in. Their token is stamped with role, level, departments and teams, which is what every permission rule reads.
 
 The member appears in the app immediately; the invitation stays valid until they click it.
 
@@ -154,13 +154,15 @@ Example:
 
 Rows are numbered like a spreadsheet: the header is row 1 and the first member is row 2. Fix only the rows listed in `errors`, then import those corrected rows in a new file. Re-importing successful rows is safe: existing addresses are skipped and are never overwritten or deleted.
 
-Locally, open Mailpit at http://127.0.0.1:54324 and confirm one **"You've been invited"** message for every `created` row. Hosted imports require the SMTP provider from issue #146; without working hosted email delivery, the function cannot send real invitations.
+Locally, open Mailpit at http://127.0.0.1:54324 and confirm one **"Ai fost invitat în aplicația OSUBB"** message for every `created` row, each showing both the link and the six-digit code. Hosted imports require the SMTP provider from issue #146; without working hosted email delivery, the function cannot send real invitations.
 
 ## What the member sees
 
-An email titled **"You've been invited"** with a single link. Clicking it signs them in — no password, nothing to remember. Future sign-ins also use a magic link sent to the same address; Google sign-in is not part of the accepted authentication design.
+An email titled **"Ai fost invitat în aplicația OSUBB"** with a link and a six-digit code. Clicking the link signs them in — no password, nothing to remember. Future sign-ins use the same pair, sent to the same address; Google sign-in is not part of the accepted authentication design.
 
-Tell them to check spam on first contact, and that the link signs them in on the device they open it on.
+The link and the code are **one** one-time password: same secret, same expiry, single use. The code exists because a link signs you in where you open it, and that is not always where the app is. A member who installs the app on an iPhone gets storage separate from Safari, so tapping the link in Mail signs them into Safari while the installed app keeps showing the login screen; opening the link on a laptop after typing the address on a phone fails the same way. In both cases they type the code into the login screen's second step — _"Apasă linkul din email sau introdu codul de 6 cifre"_ — and land exactly where the link would have taken them. Nothing about invite-only changes: an address with no profile still gets no claims either way.
+
+Tell them to check spam on first contact, that the link signs them in on the device they open it on, and that the code is there for when that device is the wrong one.
 
 ## When something goes wrong
 
