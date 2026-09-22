@@ -38,7 +38,8 @@ const eduGroup: Group = {
   min_level: 0,
   status: 'active',
   is_organization: false,
-  legacy_dept_id: 'edu',
+  // No bridge: the Cup row reaches its Group by `group_id` alone.
+  legacy_dept_id: null,
 };
 
 function setCup(rows: unknown[]) {
@@ -56,13 +57,12 @@ describe('DeptCupCard', () => {
     hooks.useGroups.mockReturnValue({ data: new Map([[7, eduGroup]]) });
   });
 
-  // `public.dept_cup` still keys its rows by `dept_id` on `main`, so the card
-  // reaches the Group through `groups.legacy_dept_id`. Mutation this catches:
-  // replace the lookup with `undefined` and the row silently degrades to the
-  // view's own `name`, its raw `dept_id` and neutral ink — all of which look
-  // like legitimate legacy values, which is exactly why this has to be pinned.
+  // `public.dept_cup` carries `group_id`, and the card reaches the Group by it
+  // (#577). Mutation this catches: replace the lookup with `undefined` and the
+  // row silently degrades to the view's own `name` and neutral ink — both of
+  // which look like legitimate values, which is why this has to be pinned.
   it("takes each standing's name, tag and colour from its Group", () => {
-    setCup([{ dept_id: 'edu', name: 'nume din view', points: 12, members: 3 }]);
+    setCup([{ group_id: 7, name: 'nume din view', points: 12, members: 3 }]);
 
     render(<DeptCupCard />);
 
@@ -78,12 +78,12 @@ describe('DeptCupCard', () => {
   // whose Group this member cannot read still gets a row, with the view's own
   // values and no colour — and #200's neutral tag, never the raw id that
   // would otherwise be the only thing left to show.
-  it('falls back to a neutral tag when a dept_id genuinely matches no Group', () => {
+  it('falls back to a neutral tag when a group_id matches no readable Group', () => {
     hooks.useGroups.mockReturnValue({
       data: new Map<number, Group>(),
       isPending: false,
     });
-    setCup([{ dept_id: 'edu', name: 'nume din view', points: 12, members: 3 }]);
+    setCup([{ group_id: 7, name: 'nume din view', points: 12, members: 3 }]);
 
     render(<DeptCupCard />);
 
@@ -100,7 +100,7 @@ describe('DeptCupCard', () => {
   // rendering rows keyed off `row.dept_id` ('edu', 'pr', …).
   it('shows a neutral placeholder, never the raw id, while Groups are loading', () => {
     hooks.useGroups.mockReturnValue({ data: undefined, isPending: true });
-    setCup([{ dept_id: 'edu', name: 'nume din view', points: 12, members: 3 }]);
+    setCup([{ group_id: 7, name: 'nume din view', points: 12, members: 3 }]);
 
     render(<DeptCupCard />);
 

@@ -12,10 +12,28 @@ import {
   CardTitle,
 } from '../../components/ui/card';
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+  GroupOption,
+  groupOptionLabel,
+} from '../../components/ui/combobox';
+import {
   useMyCompletedWorkRequests,
   useRequestOrigins,
   useSubmitCompletedWork,
+  type RequestOrigin,
 } from '../../queries/completed-work-requests';
+import { useGroups, type Group } from '../../queries/reference';
+
+// Parent names come from the Groups this Member may read; until they load, a
+// Child Group is shown by its own name.
+const NO_GROUPS: ReadonlyMap<number, Group> = new Map();
 
 function safeSubmitError(error: unknown) {
   const message =
@@ -34,7 +52,9 @@ export default function CompletedWorkRequestScreen() {
   const origins = useRequestOrigins();
   const myRequests = useMyCompletedWorkRequests();
   const submit = useSubmitCompletedWork();
-  const [originKey, setOriginKey] = useState('');
+  const groups = useGroups();
+  const groupsById = groups.data ?? NO_GROUPS;
+  const [origin, setOrigin] = useState<RequestOrigin | null>(null);
   const [description, setDescription] = useState('');
   const [taskId, setTaskId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -42,12 +62,11 @@ export default function CompletedWorkRequestScreen() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (submit.isPending) return;
-    const origin = origins.data?.find((item) => item.key === originKey);
     if (!origin || !description.trim()) return;
     try {
       await submit.mutateAsync({ origin, description: description.trim() });
       setDescription('');
-      setOriginKey('');
+      setOrigin(null);
       setSubmitted(true);
     } catch {
       setSubmitted(false);
@@ -97,31 +116,55 @@ export default function CompletedWorkRequestScreen() {
                 onSubmit={(event) => void onSubmit(event)}
               >
                 <div className="space-y-2">
-                  <label
+                  <span
+                    id="request-origin-label"
                     className="text-sm font-medium"
-                    htmlFor="request-origin"
                   >
                     Grup
-                  </label>
-                  <select
-                    id="request-origin"
-                    aria-describedby="request-origin-help"
-                    className="min-h-11 w-full rounded-lg border border-input bg-background px-3"
-                    value={originKey}
-                    onChange={(event) => {
-                      setOriginKey(event.target.value);
+                  </span>
+                  <Combobox<RequestOrigin>
+                    items={origins.data ?? []}
+                    value={origin}
+                    onValueChange={(next) => {
+                      setOrigin(next);
                       setSubmitted(false);
                     }}
-                    required
+                    itemToStringLabel={(item) =>
+                      groupOptionLabel(item, groupsById)
+                    }
+                    isItemEqualToValue={(a, b) => a.id === b.id}
                     disabled={!origins.data?.length}
                   >
-                    <option value="">Alege grupul</option>
-                    {origins.data?.map((origin) => (
-                      <option key={origin.key} value={origin.key}>
-                        {origin.name}
-                      </option>
-                    ))}
-                  </select>
+                    <ComboboxTrigger
+                      className="min-h-11"
+                      aria-labelledby="request-origin-label"
+                      aria-describedby="request-origin-help"
+                    >
+                      <ComboboxValue placeholder="Alege grupul">
+                        {(item: RequestOrigin | null) =>
+                          item ? (
+                            <GroupOption group={item} groupsById={groupsById} />
+                          ) : (
+                            'Alege grupul'
+                          )
+                        }
+                      </ComboboxValue>
+                    </ComboboxTrigger>
+                    <ComboboxContent>
+                      <ComboboxInput
+                        aria-label="Caută un grup"
+                        placeholder="Caută un grup"
+                      />
+                      <ComboboxEmpty />
+                      <ComboboxList>
+                        {(item: RequestOrigin) => (
+                          <ComboboxItem key={item.id} value={item}>
+                            <GroupOption group={item} groupsById={groupsById} />
+                          </ComboboxItem>
+                        )}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
                   {!origins.data?.length && (
                     <p className="text-sm text-muted-foreground">
                       Nu ai niciun grup activ disponibil pentru cereri.
@@ -164,9 +207,7 @@ export default function CompletedWorkRequestScreen() {
                 <Button
                   className="min-h-11 min-w-11"
                   type="submit"
-                  disabled={
-                    submit.isPending || !originKey || !description.trim()
-                  }
+                  disabled={submit.isPending || !origin || !description.trim()}
                 >
                   {submit.isPending ? 'Se trimite…' : 'Trimite cererea'}
                 </Button>

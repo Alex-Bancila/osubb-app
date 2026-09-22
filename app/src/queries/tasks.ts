@@ -8,11 +8,9 @@ import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 /** Tasks from this Member's current and historical Assignments, through RLS. */
 export const TASK_PRESENTATION_FIELDS = `
   id, group_id, title, description, status, deadline, completed_at, review_round,
-  dept_id, team_id, project_id, assignment_mode, audience, kind,
+  assignment_mode, audience, kind,
   parent_task_id, campaign_id, duplicated_from_task_id, queue_closed_at,
-  department:departments!tasks_dept_id_fkey(name, color),
-  team:teams!tasks_team_id_fkey(name, dept_id),
-  project:projects!tasks_project_id_fkey(name),
+  group:groups!tasks_group_id_fkey(name, short, color, category, path),
   campaign:campaigns!tasks_campaign_id_fkey(name),
   assignments:task_assignments!task_assignments_task_id_fkey(id, member_id, ended_at),
   evaluations:task_evaluations!task_evaluations_task_id_fkey(id, difficulty, rating, points, reversed_at)
@@ -43,7 +41,7 @@ export const TASK_PRESENTATION_FIELDS = `
  * #345 retired the multi-assignee join table this used to read; the read
  * policy on `task_assignments` already admits a member their own rows.
  *
- * Note what is *not* here: no filter on department, team or role. RLS already
+ * Note what is *not* here: no filter on Group or role. RLS already
  * returned exactly the tasks this member may see — filtering again in
  * TypeScript would be a second, weaker copy of a rule that already exists
  * (mini-spec §1).

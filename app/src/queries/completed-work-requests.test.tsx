@@ -14,22 +14,24 @@ import {
   submitCompletedWork,
 } from './completed-work-requests';
 import { keys } from './keys';
+import type { MyGroup } from './my-groups';
 
 describe('completed-work Request mutation', () => {
   beforeEach(resetSupabaseMock);
 
-  it('sends exactly one actor-independent Origin to the RPC', async () => {
+  it('sends the chosen Group as p_group_id, the legacy Origins as nulls', async () => {
     supabaseMock.rpc.mockResolvedValue({ data: { id: 9 }, error: null });
     await submitCompletedWork({
       description: 'Activitate finalizată',
-      origin: { key: 'team:media', type: 'team', id: 'media', name: 'Media' },
+      origin: { id: 21, name: 'Echipa Media', path: [4, 21] },
     });
     expect(supabaseMock.rpc).toHaveBeenCalledWith(
       'create_completed_work_request',
       {
         p_description: 'Activitate finalizată',
+        p_group_id: 21,
         p_dept_id: null,
-        p_team_id: 'media',
+        p_team_id: null,
         p_project_id: null,
       },
     );
@@ -56,65 +58,66 @@ describe('completed-work Request mutation', () => {
     expect(eq).toHaveBeenCalledWith('requester_id', 'member-1');
   });
 });
-it('uses live self memberships and excludes stale and archived Origins', async () => {
-  resetSupabaseMock();
-  const departmentMembershipEq = vi.fn().mockResolvedValue({
-    data: [{ dept_id: 'edu' }],
-    error: null,
-  });
-  const teamMembershipEq = vi.fn().mockResolvedValue({
-    data: [{ team_id: 'media' }],
-    error: null,
-  });
-  supabaseMock.from
-    .mockReturnValueOnce({
-      select: vi.fn().mockResolvedValue({
-        data: [
-          { id: 'edu', name: 'Educațional' },
-          { id: 'fin', name: 'Financiar' },
-        ],
-        error: null,
-      }),
-    })
-    .mockReturnValueOnce({
-      select: vi.fn().mockResolvedValue({
-        data: [
-          { id: 'media', name: 'Media' },
-          { id: 'events', name: 'Evenimente' },
-        ],
-        error: null,
-      }),
-    })
-    .mockReturnValueOnce({
-      select: vi.fn().mockReturnValue({ eq: departmentMembershipEq }),
-    })
-    .mockReturnValueOnce({
-      select: vi.fn().mockReturnValue({ eq: teamMembershipEq }),
-    })
-    .mockReturnValueOnce({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({
-          data: [
-            {
-              project_id: 7,
-              projects: { id: 7, name: 'OSUBB Fest', status: 'active' },
-            },
-            {
-              project_id: 8,
-              projects: { id: 8, name: 'Arhivă', status: 'archived' },
-            },
-          ],
-          error: null,
-        }),
-      }),
-    });
+function myGroup(overrides: Partial<MyGroup>): MyGroup {
+  return {
+    id: 1,
+    name: 'Grup',
+    short: 'GRP',
+    category: 'department',
+    color: '#123456',
+    path: [1],
+    min_level: 0,
+    status: 'active',
+    is_organization: false,
+    group_role: 'member',
+    explicit: true,
+    automatic: false,
+    ...overrides,
+  };
+}
 
-  const origins = await fetchRequestOrigins('member-1');
-  expect(departmentMembershipEq).toHaveBeenCalledWith('member_id', 'member-1');
-  expect(teamMembershipEq).toHaveBeenCalledWith('member_id', 'member-1');
-  expect(origins.map((origin) => origin.key).sort()).toEqual([
-    'department:edu',
-    'project:7',
-    'team:media',
+it('offers exactly the active my_groups() rows the Member is a member of', async () => {
+  resetSupabaseMock();
+  supabaseMock.rpc.mockResolvedValue({
+    data: [
+      myGroup({ id: 4, name: 'Educațional', path: [4] }),
+      myGroup({ id: 21, name: 'Echipa Media', path: [4, 21] }),
+      // Automatic Membership of the Group itself counts as membership.
+      myGroup({
+        id: 6,
+        name: 'Adunarea Generală',
+        path: [6],
+        explicit: false,
+        automatic: true,
+      }),
+      // Reached only through a managed ancestor: authority, not membership.
+      myGroup({
+        id: 22,
+        name: 'Echipa Evenimente',
+        path: [4, 22],
+        group_role: 'manager',
+        explicit: false,
+      }),
+      myGroup({ id: 30, name: 'Arhivă', path: [30], status: 'archived' }),
+    ],
+    error: null,
+  });
+
+  const origins = await fetchRequestOrigins();
+  expect(supabaseMock.rpc).toHaveBeenCalledWith('my_groups');
+  expect(supabaseMock.from).not.toHaveBeenCalled();
+  expect(origins).toEqual([
+    { id: 6, name: 'Adunarea Generală', path: [6] },
+    { id: 21, name: 'Echipa Media', path: [4, 21] },
+    { id: 4, name: 'Educațional', path: [4] },
   ]);
+});
+
+it('surfaces a my_groups() error instead of an empty picker', async () => {
+  resetSupabaseMock();
+  supabaseMock.rpc.mockResolvedValue({
+    data: null,
+    error: { message: 'boom' },
+  });
+  await expect(fetchRequestOrigins()).rejects.toEqual({ message: 'boom' });
 });

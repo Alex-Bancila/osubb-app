@@ -162,13 +162,14 @@ describe('Member Task cards', () => {
       title,
       description,
       deadline: null,
-      department: null,
+      group: null,
       parent_task_id: 2,
       parent: null,
     });
     expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
     expect(screen.getByText(description.trim())).toBeInTheDocument();
     expect(screen.getByText('Fără termen')).toBeInTheDocument();
+    expect(screen.getByText('Origine indisponibilă')).toBeInTheDocument();
     expect(screen.getByText('Subtask din: Task-umbrelă')).toBeInTheDocument();
     expect(screen.queryByText(/puncte/)).not.toBeInTheDocument();
   });

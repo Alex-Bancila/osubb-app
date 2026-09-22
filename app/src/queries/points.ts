@@ -92,7 +92,7 @@ export function useDeptCup() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('dept_cup')
-        .select('dept_id, name, points, members')
+        .select('group_id, name, points, members')
         .order('points', { ascending: false });
       if (error) throw error;
       return data;

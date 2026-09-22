@@ -29,9 +29,9 @@ type GroupRow = Database['public']['Tables']['groups']['Row'];
  * without a second request.
  *
  * `legacy_dept_id` is a Wave 1/2 bridge, not part of the Group model: it is
- * here only so `DeptCupCard` can join `dept_cup`'s legacy-keyed rows onto their
- * Group until the view carries `group_id`. It goes with the column, in the
- * Wave 3 task that drops `public.departments`.
+ * here only so the Announcements feed can join `announcements.dept_id` onto its
+ * Group until announcements carry `group_id` (#581). It goes with the column,
+ * in the Wave 3 task that drops `public.departments`.
  */
 export type Group = Pick<
   GroupRow,

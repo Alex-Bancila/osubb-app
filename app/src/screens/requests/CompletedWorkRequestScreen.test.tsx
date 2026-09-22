@@ -1,5 +1,5 @@
 vi.mock('./RequestDecisionQueue', () => ({ RequestDecisionQueue: () => null }));
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,12 +10,28 @@ const hooks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../queries/completed-work-requests', () => hooks);
+// Readable Groups name each option's parent: Echipa Media sits under
+// Educațional; OSUBB Fest is top-level.
+vi.mock('../../queries/reference', () => ({
+  useGroups: () => ({
+    data: new Map([
+      [4, { id: 4, name: 'Educațional', path: [4] }],
+      [21, { id: 21, name: 'Echipa Media', path: [4, 21] }],
+      [30, { id: 30, name: 'OSUBB Fest', path: [30] }],
+    ]),
+  }),
+}));
 vi.mock('../tracker/TaskDetailsSheet', () => ({
   TaskDetailsSheet: ({ taskId }: { taskId: number | null }) =>
     taskId === null ? null : <p>Detalii task #{taskId}</p>,
 }));
 
 import CompletedWorkRequestScreen from './CompletedWorkRequestScreen';
+
+const optionTexts = () =>
+  within(screen.getByRole('listbox'))
+    .getAllByRole('option')
+    .map((option) => option.textContent);
 
 describe('CompletedWorkRequestScreen', () => {
   const mutateAsync = vi.fn();
@@ -24,14 +40,9 @@ describe('CompletedWorkRequestScreen', () => {
     mutateAsync.mockReset().mockResolvedValue({ id: 1 });
     hooks.useRequestOrigins.mockReturnValue({
       data: [
-        {
-          key: 'department:edu',
-          type: 'department',
-          id: 'edu',
-          name: 'Educațional',
-        },
-        { key: 'team:media', type: 'team', id: 'media', name: 'Echipa Media' },
-        { key: 'project:7', type: 'project', id: '7', name: 'OSUBB Fest' },
+        { id: 21, name: 'Echipa Media', path: [4, 21] },
+        { id: 4, name: 'Educațional', path: [4] },
+        { id: 30, name: 'OSUBB Fest', path: [30] },
       ],
       isPending: false,
       isError: false,
@@ -101,25 +112,43 @@ describe('CompletedWorkRequestScreen', () => {
     expect(screen.getByText('Detalii task #42')).toBeVisible();
   });
 
-  it('offers only the membership Origins supplied by the query', () => {
-    render(<CompletedWorkRequestScreen />);
-
-    expect(
-      screen.getAllByRole('option').map((option) => option.textContent),
-    ).toEqual(['Alege grupul', 'Educațional', 'Echipa Media', 'OSUBB Fest']);
-    expect(
-      screen.getByRole('combobox', { name: 'Grup' }),
-    ).toHaveAccessibleDescription(
-      'Alege grupul pentru care ai lucrat: departamentul, echipa sau proiectul.',
-    );
-    expect(screen.queryByText('Financiar')).not.toBeInTheDocument();
-  });
-
-  it('submits the selected Origin and trimmed description, then confirms success', async () => {
+  it('offers a searchable Grup picker of exactly the supplied Groups, each with its parent', async () => {
     const user = userEvent.setup();
     render(<CompletedWorkRequestScreen />);
 
-    await user.selectOptions(screen.getByLabelText('Grup'), 'project:7');
+    const box = screen.getByRole('combobox', { name: 'Grup' });
+    expect(box).toHaveAccessibleDescription(
+      'Alege grupul pentru care ai lucrat: departamentul, echipa sau proiectul.',
+    );
+    await user.click(box);
+    await screen.findByRole('listbox');
+    expect(optionTexts()).toEqual([
+      'Echipa Media· Educațional',
+      'Educațional',
+      'OSUBB Fest',
+    ]);
+    await user.type(
+      await screen.findByRole('combobox', { name: 'Caută un grup' }),
+      'fest',
+    );
+    await waitFor(() => expect(optionTexts()).toEqual(['OSUBB Fest']));
+  });
+
+  it('submits the selected Group and trimmed description, then confirms success', async () => {
+    const user = userEvent.setup();
+    render(<CompletedWorkRequestScreen />);
+
+    expect(
+      screen.getByRole('button', { name: 'Trimite cererea' }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole('combobox', { name: 'Grup' }));
+    await user.click(
+      await screen.findByRole('option', { name: /^Echipa Media/ }),
+    );
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    expect(screen.getByRole('combobox', { name: 'Grup' })).toHaveTextContent(
+      'Echipa Media',
+    );
     await user.type(
       screen.getByLabelText('Descriere'),
       '  Am coordonat voluntarii.  ',
@@ -127,12 +156,7 @@ describe('CompletedWorkRequestScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Trimite cererea' }));
 
     expect(mutateAsync).toHaveBeenCalledWith({
-      origin: {
-        key: 'project:7',
-        type: 'project',
-        id: '7',
-        name: 'OSUBB Fest',
-      },
+      origin: { id: 21, name: 'Echipa Media', path: [4, 21] },
       description: 'Am coordonat voluntarii.',
     });
     expect(

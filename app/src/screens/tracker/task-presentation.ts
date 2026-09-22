@@ -19,9 +19,6 @@ export type TaskPresentationRow = Pick<
   | 'completed_at'
   | 'review_round'
   | 'group_id'
-  | 'dept_id'
-  | 'team_id'
-  | 'project_id'
   | 'assignment_mode'
   | 'audience'
   | 'kind'
@@ -30,9 +27,11 @@ export type TaskPresentationRow = Pick<
   | 'duplicated_from_task_id'
   | 'queue_closed_at'
 > & {
-  department?: Pick<Tables['departments']['Row'], 'name' | 'color'> | null;
-  team?: Pick<Tables['teams']['Row'], 'name' | 'dept_id'> | null;
-  project?: Pick<Tables['projects']['Row'], 'name'> | null;
+  /** The Task's Origin Group; null when RLS withholds it. */
+  group?: Pick<
+    Tables['groups']['Row'],
+    'name' | 'short' | 'color' | 'category' | 'path'
+  > | null;
   campaign?: Pick<Tables['campaigns']['Row'], 'name'> | null;
   parent?: Pick<Task, 'title'> | null;
   assignments?: Pick<
@@ -58,8 +57,8 @@ export type TaskPresentation = {
   status: TaskStatus;
   statusLabel: string;
   origin: {
-    kind: 'department' | 'team' | 'project' | 'unknown';
-    id: string | number | null;
+    /** The Origin Group's id. */
+    id: number;
     label: string;
     color: string | null;
   };
@@ -110,36 +109,30 @@ function validInstant(value: string | null): string | null {
   return value && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
-function taskOrigin(row: TaskPresentationRow): TaskPresentation['origin'] {
-  if (row.team_id !== null) {
-    return {
-      kind: 'team',
-      id: row.team_id,
-      label: `Echipă · ${row.team?.name?.trim() || 'Nume indisponibil'}`,
-      color: null,
-    };
-  }
-  if (row.project_id !== null) {
-    return {
-      kind: 'project',
-      id: row.project_id,
-      label: `Proiect · ${row.project?.name?.trim() || 'Nume indisponibil'}`,
-      color: null,
-    };
-  }
-  if (row.dept_id !== null) {
-    return {
-      kind: 'department',
-      id: row.dept_id,
-      label: `Departament · ${row.department?.name?.trim() || 'Nume indisponibil'}`,
-      color: row.department?.color ?? null,
-    };
-  }
+/**
+ * `groups.category` is a presentation label (ADR-0009): it picks the noun in
+ * front of the Group's name and decides nothing else.
+ */
+const GROUP_CATEGORY_NOUNS: Record<string, string> = {
+  department: 'Departament',
+  team: 'Echipă',
+  project: 'Proiect',
+};
+
+/** The Task's Origin, labelled from its Group. */
+export function taskOrigin(
+  row: Pick<TaskPresentationRow, 'group_id' | 'group'>,
+): TaskPresentation['origin'] {
+  const group = row.group;
+  const name = group?.name?.trim();
+  // No embed means RLS withheld the Group; never show an id in its place.
+  if (!group || !name)
+    return { id: row.group_id, label: 'Origine indisponibilă', color: null };
+  const noun = GROUP_CATEGORY_NOUNS[group.category];
   return {
-    kind: 'unknown',
-    id: null,
-    label: 'Origine indisponibilă',
-    color: null,
+    id: row.group_id,
+    label: noun ? `${noun} · ${name}` : name,
+    color: group.color ?? null,
   };
 }
 
