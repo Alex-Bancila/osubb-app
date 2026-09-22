@@ -38,9 +38,9 @@ select ok(
 -- the rating just as atomically, since a non-terminal status may not hold one.
 select lives_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, created_at, completed_at, rating)
+    (title, difficulty, group_id, status, created_at, completed_at, rating)
   values
-    ('Completed work then reopen 293', 2, 'edu', 'completed',
+    ('Completed work then reopen 293', 2, pg_temp.dept_group('edu'), 'completed',
      '2026-09-01 10:00+00', '2026-09-01 10:00+00', 3)
 $$, 'completed work may have no invented start timestamp');
 select is(
@@ -61,9 +61,9 @@ select ok(
 
 select lives_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, created_at, started_at, submitted_at)
+    (title, difficulty, group_id, status, created_at, started_at, submitted_at)
   values
-    ('Review return and resubmit 293', 2, 'edu', 'in_review',
+    ('Review return and resubmit 293', 2, pg_temp.dept_group('edu'), 'in_review',
      '2026-09-01 10:00+00', '2026-09-01 11:00+00',
      '2026-09-01 12:00+00');
   update public.tasks
@@ -84,9 +84,9 @@ select ok(
 
 select lives_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, created_at, started_at, submitted_at)
+    (title, difficulty, group_id, status, created_at, started_at, submitted_at)
   values
-    ('Review then cancel 293', 2, 'edu', 'in_review',
+    ('Review then cancel 293', 2, pg_temp.dept_group('edu'), 'in_review',
      '2026-09-01 10:00+00', '2026-09-01 11:00+00',
      '2026-09-01 12:00+00');
   -- #339: cancelled now also demands a non-blank cancel_reason
@@ -103,10 +103,10 @@ select is(
 
 select lives_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, assignment_mode, created_at,
+    (title, difficulty, group_id, status, assignment_mode, created_at,
      queue_opened_at, queue_closed_at)
   values
-    ('Reopened queue 293', 1, 'edu', 'todo', 'public',
+    ('Reopened queue 293', 1, pg_temp.dept_group('edu'), 'todo', 'public',
      '2026-09-01 10:00+00', '2026-09-01 11:00+00', '2026-09-01 12:00+00');
   update public.tasks set queue_closed_at = null where title = 'Reopened queue 293'
 $$, 'reopening a queue clears only its close marker');
@@ -116,101 +116,101 @@ select is(
   'queue reopening preserves the first opening in this public-mode period');
 
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
-     values ('Missing completion 293', 1, 'edu', 'completed', 3) $$,
+  $$ insert into public.tasks (title, difficulty, group_id, status, rating)
+     values ('Missing completion 293', 1, pg_temp.dept_group('edu'), 'completed', 3) $$,
   '23514', null, 'completed requires completed_at');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status, rating)
-     values ('Missing unfulfilled 293', 1, 'edu', 'unfulfilled', 2) $$,
+  $$ insert into public.tasks (title, difficulty, group_id, status, rating)
+     values ('Missing unfulfilled 293', 1, pg_temp.dept_group('edu'), 'unfulfilled', 2) $$,
   '23514', null, 'unfulfilled requires unfulfilled_at');
 -- #339: the reason is supplied so that tasks_cancelled_at_state_ck is the
 -- constraint that fires -- without it tasks_cancel_reason_ck would raise the
 -- same 23514 first and this assertion would pass for the wrong reason.
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status, cancel_reason)
-     values ('Missing cancellation 293', 1, 'edu', 'cancelled', 'Anulat #293') $$,
+  $$ insert into public.tasks (title, difficulty, group_id, status, cancel_reason)
+     values ('Missing cancellation 293', 1, pg_temp.dept_group('edu'), 'cancelled', 'Anulat #293') $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_cancelled_at_state_ck"',
   'cancelled requires cancelled_at');
 
 -- #339: tasks_cancel_reason_ck itself, both halves of the biconditional.
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status, cancelled_at)
-     values ('Missing cancel reason 293', 1, 'edu', 'cancelled', now()) $$,
+  $$ insert into public.tasks (title, difficulty, group_id, status, cancelled_at)
+     values ('Missing cancel reason 293', 1, pg_temp.dept_group('edu'), 'cancelled', now()) $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
   'cancelled requires a cancel_reason too');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status, cancel_reason)
-     values ('Reason without cancellation 293', 1, 'edu', 'todo', 'Motiv orfan') $$,
+  $$ insert into public.tasks (title, difficulty, group_id, status, cancel_reason)
+     values ('Reason without cancellation 293', 1, pg_temp.dept_group('edu'), 'todo', 'Motiv orfan') $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_cancel_reason_ck"',
   'and a cancel_reason is rejected outside cancelled');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, completed_at)
-     values ('Completion on todo 293', 1, 'edu', now()) $$,
+  $$ insert into public.tasks (title, difficulty, group_id, completed_at)
+     values ('Completion on todo 293', 1, pg_temp.dept_group('edu'), now()) $$,
   '23514', null, 'completed_at is rejected outside completed');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, status)
-     values ('Review without submission 293', 1, 'edu', 'in_review') $$,
+  $$ insert into public.tasks (title, difficulty, group_id, status)
+     values ('Review without submission 293', 1, pg_temp.dept_group('edu'), 'in_review') $$,
   '23514', null, 'in-review requires submitted_at');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, submitted_at)
-     values ('Submission on todo 293', 1, 'edu', now()) $$,
+  $$ insert into public.tasks (title, difficulty, group_id, submitted_at)
+     values ('Submission on todo 293', 1, pg_temp.dept_group('edu'), now()) $$,
   '23514', null, 'todo cannot retain submitted_at');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, started_at)
-     values ('Start on todo 293', 1, 'edu', now()) $$,
+  $$ insert into public.tasks (title, difficulty, group_id, started_at)
+     values ('Start on todo 293', 1, pg_temp.dept_group('edu'), now()) $$,
   '23514', null, 'todo cannot have started_at');
 select throws_ok(
   $$ insert into public.tasks
-       (title, difficulty, dept_id, review_round)
-     values ('Round without return 293', 1, 'edu', 1) $$,
+       (title, difficulty, group_id, review_round)
+     values ('Round without return 293', 1, pg_temp.dept_group('edu'), 1) $$,
   '23514', null, 'a positive review round requires a return marker');
 select throws_ok(
   $$ insert into public.tasks
-       (title, difficulty, dept_id, returned_to_progress_at)
-     values ('Return without round 293', 1, 'edu', now()) $$,
+       (title, difficulty, group_id, returned_to_progress_at)
+     values ('Return without round 293', 1, pg_temp.dept_group('edu'), now()) $$,
   '23514', null, 'a return marker requires a positive review round');
 select throws_ok(
-  $$ insert into public.tasks (title, difficulty, dept_id, review_round)
-     values ('Negative review 293', 1, 'edu', -1) $$,
+  $$ insert into public.tasks (title, difficulty, group_id, review_round)
+     values ('Negative review 293', 1, pg_temp.dept_group('edu'), -1) $$,
   '23514', null, 'review round cannot be negative');
 select throws_ok(
   $$ insert into public.tasks
-       (title, difficulty, dept_id, queue_opened_at)
-     values ('Direct queue 293', 1, 'edu', now()) $$,
+       (title, difficulty, group_id, queue_opened_at)
+     values ('Direct queue 293', 1, pg_temp.dept_group('edu'), now()) $$,
   '23514', null, 'direct Tasks cannot carry queue timestamps');
 select throws_ok(
   $$ insert into public.tasks
-       (title, difficulty, dept_id, assignment_mode)
-     values ('Public without opening 293', 1, 'edu', 'public') $$,
+       (title, difficulty, group_id, assignment_mode)
+     values ('Public without opening 293', 1, pg_temp.dept_group('edu'), 'public') $$,
   '23514', null, 'public Tasks require a queue opening');
 select throws_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, assignment_mode, completed_at,
+    (title, difficulty, group_id, status, assignment_mode, completed_at,
      queue_opened_at, rating)
   values
-    ('Terminal open queue 293', 1, 'edu', 'completed', 'public', now(), now(), 3)
+    ('Terminal open queue 293', 1, pg_temp.dept_group('edu'), 'completed', 'public', now(), now(), 3)
 $$, '23514', null, 'terminal public Tasks require a closed queue');
 select throws_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, assignment_mode, created_at, queue_opened_at)
+    (title, difficulty, group_id, assignment_mode, created_at, queue_opened_at)
   values
-    ('Queue before creation 293', 1, 'edu', 'public',
+    ('Queue before creation 293', 1, pg_temp.dept_group('edu'), 'public',
      '2026-09-02 10:00+00', '2026-09-01 10:00+00')
 $$, '23514', null, 'a queue cannot open before Task creation');
 select throws_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, assignment_mode, created_at,
+    (title, difficulty, group_id, assignment_mode, created_at,
      queue_opened_at, queue_closed_at)
   values
-    ('Queue closes early 293', 1, 'edu', 'public',
+    ('Queue closes early 293', 1, pg_temp.dept_group('edu'), 'public',
      '2026-09-01 10:00+00', '2026-09-01 12:00+00', '2026-09-01 11:00+00')
 $$, '23514', null, 'a queue cannot close before it opens');
 select throws_ok($$
   insert into public.tasks
-    (title, difficulty, dept_id, status, created_at,
+    (title, difficulty, group_id, status, created_at,
      submitted_at, completed_at, rating)
   values
-    ('Completion before submission 293', 1, 'edu', 'completed',
+    ('Completion before submission 293', 1, pg_temp.dept_group('edu'), 'completed',
      '2026-09-01 10:00+00', '2026-09-01 12:00+00', '2026-09-01 11:00+00', 3)
 $$, '23514', null, 'a terminal outcome cannot precede its submission');
 

@@ -49,8 +49,8 @@ insert into public.profiles (id, full_name, email, role) values
   ('28900000-0000-0000-0000-000000000001', 'Executor One', 'executor-one-289@test.local', 'voluntar'),
   ('28900000-0000-0000-0000-000000000002', 'Executor Two', 'executor-two-289@test.local', 'voluntar'),
   ('28900000-0000-0000-0000-000000000003', 'Assigner', 'assigner-289@test.local', 'responsabil');
-insert into public.tasks (title, difficulty, dept_id)
-values ('Assignment history fixture 289', 1, 'edu');
+insert into public.tasks (title, difficulty, group_id)
+values ('Assignment history fixture 289', 1, pg_temp.dept_group('edu'));
 
 insert into public.task_assignments (task_id, member_id, assigned_by)
 select id, '28900000-0000-0000-0000-000000000001',

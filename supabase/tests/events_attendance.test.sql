@@ -47,26 +47,26 @@ insert into profiles (id, full_name, email, role) values
   ('e0000000-0000-0000-0000-0000000000e1', 'Elena Test', 'elena.events@test.local', 'voluntar');
 insert into teams (id, name, dept_id) values ('t-ev', 'Events Team', 'edu');
 
--- ==================== An event carries scope + optional team (AC) ====================
-insert into events (title, type, scope, dept_id, starts_at, ends_at)
-  values ('Ședință EDU', 'sedinta', 'dept', 'edu', now(), now() + interval '2 hours');
-insert into events (title, type, scope, dept_id, team_id, starts_at)
-  values ('Call Echipa Events', 'call', 'team', 'edu', 't-ev', now());
-insert into events (title, type, scope, starts_at)
-  values ('Adunare Generală', 'sedinta', 'org', now());
+-- ==================== An event belongs to one Group (AC; #579: the Group is its only Origin) ====================
+insert into events (title, type, group_id, starts_at, ends_at)
+  values ('Ședință EDU', 'sedinta', pg_temp.dept_group('edu'), now(), now() + interval '2 hours');
+insert into events (title, type, group_id, starts_at)
+  values ('Call Echipa Events', 'call', pg_temp.team_group('t-ev'), now());
+insert into events (title, type, group_id, starts_at)
+  values ('Adunare Generală', 'sedinta', pg_temp.dept_group('org'), now());
 
 select is((select count(*) from events), 3::bigint,
-  'events accept dept, team and org scopes');
+  'events accept Department, Team and Organization Groups');
 select is(
-  (select scope from events where title = 'Call Echipa Events'),
-  'team'::event_scope, 'a team event keeps its scope and team');
+  (select group_id from events where title = 'Call Echipa Events'),
+  pg_temp.team_group('t-ev'), 'a team event keeps its Team Group');
 select is(
-  (select team_id from events where title = 'Ședință EDU'),
-  null, 'team_id is optional (a dept event has none)');
+  (select group_id from events where title = 'Ședință EDU'),
+  pg_temp.dept_group('edu'), 'a department event keeps its Department Group');
 
 select throws_ok(
-  $$ insert into events (title, type, scope, starts_at, ends_at)
-     values ('Timp invers', 'eveniment', 'org', now(), now() - interval '1 hour') $$,
+  $$ insert into events (title, type, group_id, starts_at, ends_at)
+     values ('Timp invers', 'eveniment', pg_temp.dept_group('org'), now(), now() - interval '1 hour') $$,
   '23514', null, 'an event cannot end before it starts');
 
 -- ==================== RSVP: exactly once per member (AC) ====================

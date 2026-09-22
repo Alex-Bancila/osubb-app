@@ -94,23 +94,23 @@ insert into public.project_members (project_id, member_id, project_role) values
 
 -- ---- T-ORD: an ordinary Task, never an Umbrella.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Task obisnuit #340', 'Nu e umbrela', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
+  ('Task obisnuit #340', 'Nu e umbrela', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    now() - interval '10 days', '34000000-0000-0000-0000-000000000002');
 
 -- ---- U-TERM: an Umbrella already completed.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, completed_at, created_at, created_by)
+  (title, description, group_id, kind, audience, assignment_mode, status, completed_at, created_at, created_by)
 values
-  ('Umbrela deja finalizata #340', 'Nimic de facut', 'edu', 'umbrella', null, null, 'completed',
+  ('Umbrela deja finalizata #340', 'Nimic de facut', pg_temp.dept_group('edu'), 'umbrella', null, null, 'completed',
    now() - interval '1 day', now() - interval '10 days', '34000000-0000-0000-0000-000000000002');
 
 -- ---- U-ZERO: an Umbrella with no Subtasks at all.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Umbrela fara subtaskuri #340', 'Goala', 'edu', 'umbrella', null, null, 'todo',
+  ('Umbrela fara subtaskuri #340', 'Goala', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
    now() - interval '10 days', '34000000-0000-0000-0000-000000000002');
 
 -- ---- U1 + S1: the main happy path. One Subtask still todo blocks; cancelling
@@ -120,13 +120,13 @@ values
 -- {BCE edu} through the deterministic creator branch (complete_task_review's
 -- own precedent for this shape).
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela principala #340', 'Fluxul fericit', 'edu', 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela principala #340', 'Fluxul fericit', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
         now() - interval '10 days', '34000000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    created_at, created_by)
-select 'Subtask deschis #340', 'Inca in lucru', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask deschis #340', 'Inca in lucru', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'todo', parent.id, now() - interval '10 days', '34000000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela principala #340';
 
@@ -142,13 +142,13 @@ select 'Subtask deschis #340', 'Inca in lucru', now() + interval '10 days', 'edu
 -- them immediately after -- inside this suite's own rolled-back transaction,
 -- so nothing outlives it.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela fara notificare #340', 'Managerul isi termina singur treaba', 'edu', 'umbrella',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela fara notificare #340', 'Managerul isi termina singur treaba', pg_temp.dept_group('edu'), 'umbrella',
         null, null, 'todo', now() - interval '10 days', '34000000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    cancelled_at, cancel_reason, created_at, created_by)
-select 'Subtask deja incheiat #340', 'Terminat dinainte', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask deja incheiat #340', 'Terminat dinainte', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'cancelled', parent.id, now() - interval '2 days', 'Nu mai e nevoie #340',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela fara notificare #340';
@@ -160,13 +160,13 @@ select 'Subtask deja incheiat #340', 'Terminat dinainte', now() + interval '10 d
 -- a genuine Evaluation to reverse without walking the whole start/submit/
 -- complete_task_review lifecycle.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela de redeschis #340', 'Va fi redeschisa dupa finalizare', 'edu', 'umbrella',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela de redeschis #340', 'Va fi redeschisa dupa finalizare', pg_temp.dept_group('edu'), 'umbrella',
         null, null, 'todo', now() - interval '10 days', '34000000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    difficulty, rating, created_at, started_at, submitted_at, completed_at, created_by)
-select 'Subtask creditat #340', 'Va fi redeschis', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask creditat #340', 'Va fi redeschis', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'completed', parent.id, 3, 4,
        now() - interval '10 days', now() - interval '9 days', now() - interval '3 days', now() - interval '2 days',
        '34000000-0000-0000-0000-000000000002'
@@ -183,67 +183,67 @@ select pg_temp.test_credit_task(
 -- persona. Authority (step 4) runs before any state precondition, so a
 -- denial fires the same whether or not this Umbrella could ever complete.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela tinta refuzuri #340', 'Nimeni fara autoritate nu o poate finaliza', 'edu', 'umbrella',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela tinta refuzuri #340', 'Nimeni fara autoritate nu o poate finaliza', pg_temp.dept_group('edu'), 'umbrella',
         null, null, 'todo', now() - interval '10 days', '34000000-0000-0000-0000-000000000002');
 
 -- ---- U-IND + S-IND: the Independent Team's own positive case -- the same
 -- boundary #339/#336 separate managing from evaluating.
 insert into public.tasks
-  (title, description, team_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela echipa independenta #340', 'Echipa isi termina singura treaba', 't-340-ind', 'umbrella',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela echipa independenta #340', 'Echipa isi termina singura treaba', pg_temp.team_group('t-340-ind'), 'umbrella',
         null, null, 'todo', now() - interval '10 days', '34000000-0000-0000-0000-000000000001');
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    cancelled_at, cancel_reason, created_at, created_by)
-select 'Subtask echipa independenta #340', 'Deja incheiat', now() + interval '10 days', 't-340-ind', 'local', 'direct',
+select 'Subtask echipa independenta #340', 'Deja incheiat', now() + interval '10 days', pg_temp.team_group('t-340-ind'), 'local', 'direct',
        'cancelled', parent.id, now() - interval '2 days', 'Nu mai e nevoie #340',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.tasks as parent where parent.title = 'Umbrela echipa independenta #340';
 
 -- ---- U-PROJ-LEAD + S-PROJ-LEAD: the Project lead's positive case.
 insert into public.tasks
-  (title, description, project_id, kind, audience, assignment_mode, status, created_at, created_by)
-select 'Umbrela proiect lead #340', 'Leadul o finalizeaza', project.id, 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+select 'Umbrela proiect lead #340', 'Leadul o finalizeaza', pg_temp.project_group(project.id), 'umbrella', null, null, 'todo',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #340';
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    cancelled_at, cancel_reason, created_at, created_by)
-select 'Subtask proiect lead #340', 'Deja incheiat', now() + interval '10 days', project.id, 'local', 'direct',
+select 'Subtask proiect lead #340', 'Deja incheiat', now() + interval '10 days', pg_temp.project_group(project.id), 'local', 'direct',
        'cancelled', parent.id, now() - interval '2 days', 'Nu mai e nevoie #340',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.tasks as parent
-  join public.projects as project on project.id = parent.project_id
+  join public.projects as project on pg_temp.project_group(project.id) = parent.group_id
  where parent.title = 'Umbrela proiect lead #340';
 
 -- ---- U-PROJ-RESP + S-PROJ-RESP: the Project Responsible's positive case.
 insert into public.tasks
-  (title, description, project_id, kind, audience, assignment_mode, status, created_at, created_by)
-select 'Umbrela proiect responsabil #340', 'Responsabilul o finalizeaza', project.id, 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+select 'Umbrela proiect responsabil #340', 'Responsabilul o finalizeaza', pg_temp.project_group(project.id), 'umbrella', null, null, 'todo',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #340';
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    cancelled_at, cancel_reason, created_at, created_by)
-select 'Subtask proiect responsabil #340', 'Deja incheiat', now() + interval '10 days', project.id, 'local', 'direct',
+select 'Subtask proiect responsabil #340', 'Deja incheiat', now() + interval '10 days', pg_temp.project_group(project.id), 'local', 'direct',
        'cancelled', parent.id, now() - interval '2 days', 'Nu mai e nevoie #340',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.tasks as parent
-  join public.projects as project on project.id = parent.project_id
+  join public.projects as project on pg_temp.project_group(project.id) = parent.group_id
  where parent.title = 'Umbrela proiect responsabil #340';
 
 -- ---- U-PROJ-DENY: zero Subtasks -- the plain Project member's denial.
 insert into public.tasks
-  (title, description, project_id, kind, audience, assignment_mode, status, created_at, created_by)
-select 'Umbrela proiect refuz #340', 'Membrul simplu nu o poate finaliza', project.id, 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+select 'Umbrela proiect refuz #340', 'Membrul simplu nu o poate finaliza', pg_temp.project_group(project.id), 'umbrella', null, null, 'todo',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.projects as project where project.name = 'Proiect #340';
 
 -- ---- T-HIDDEN: a 'local' pr Task an edu-only member cannot even see.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela ascunsa pr #340', 'Alt departament', 'pr', 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela ascunsa pr #340', 'Alt departament', pg_temp.dept_group('pr'), 'umbrella', null, null, 'todo',
         now() - interval '10 days', '34000000-0000-0000-0000-000000000003');
 
 create temp table f340 as
@@ -415,7 +415,7 @@ select is((select count(*) from public.notifications where task_id = (select u2_
 select pg_temp.test_login('34000000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.create_task('Subtask tarziu #340', 'd', now() + interval '7 days',
-  null, null, null, null, null, null, null, %s, 'task') $$,
+  null, null, p_parent_task_id => %s) $$,
   (select u1_id from f340)),
   'PT409', 'parent_terminal',
   '#327''s create_task refuses a new Subtask under an Umbrella #340 just completed');
@@ -590,20 +590,20 @@ select extensions.dblink_exec('cu_setup', $$
     ('34000000-0000-0000-0000-000000000051', 'edu');
 
   insert into public.tasks
-    (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-  values ('Umbrela sonda #340 committed', 'Umbrela', 'edu', 'umbrella', null, null, 'todo',
+    (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+  values ('Umbrela sonda #340 committed', 'Umbrela', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, 'todo',
           now() - interval '5 days', '34000000-0000-0000-0000-000000000051');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+    (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      cancelled_at, cancel_reason, created_at, created_by)
-  select 'Sonda subtask A #340 committed', 'Primul', now() + interval '10 days', 'edu', 'local', 'direct', 'cancelled',
+  select 'Sonda subtask A #340 committed', 'Primul', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'cancelled',
          parent.id, now() - interval '1 day', 'Sonda', now() - interval '5 days', '34000000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #340 committed';
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+    (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      cancelled_at, cancel_reason, created_at, created_by)
-  select 'Sonda subtask B #340 committed', 'Al doilea', now() + interval '10 days', 'edu', 'local', 'direct', 'cancelled',
+  select 'Sonda subtask B #340 committed', 'Al doilea', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'cancelled',
          parent.id, now() - interval '1 day', 'Sonda', now() - interval '5 days', '34000000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #340 committed';
 $$);
@@ -792,29 +792,29 @@ select extensions.dblink_disconnect('cu_setup');
 \ir _group_task_fixtures.psql
 reset role;
 select pg_temp.g521_task('command0','project',null,'todo','direct','umbrella');
-insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
-select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command0');
+insert into public.tasks(title,group_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',group_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command0');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command0'))$$,'complete_umbrella_task: Group persona 2 in project');
 reset role;
 select pg_temp.g521_task('command1','project',null,'todo','direct','umbrella');
-insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
-select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command1');
+insert into public.tasks(title,group_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',group_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command1');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
 select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command1'))$$,'complete_umbrella_task: Group persona 3 in project');
 reset role;
 select pg_temp.g521_task('command2','ind',null,'todo','direct','umbrella');
-insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
-select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command2');
+insert into public.tasks(title,group_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',group_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command2');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
 select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command2'))$$,'complete_umbrella_task: Group persona 6 in ind');
 reset role;
 select pg_temp.g521_task('command3','dt',null,'todo','direct','umbrella');
-insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
-select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command3');
+insert into public.tasks(title,group_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',group_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command3');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select throws_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','complete_umbrella_task: Group persona 8 in dt');
@@ -827,8 +827,8 @@ reset role;
 -- Responsibles PLUS every live BC/Moderator, minus the actor.
 select pg_temp.g521_task('command4','ind',null,'todo','direct','umbrella');
 update public.tasks set created_by=pg_temp.g521_uid(6) where id=(select id from g521_tasks where name='command4');
-insert into public.tasks(title,dept_id,team_id,project_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
-select 'Terminal child #521',dept_id,team_id,project_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command4');
+insert into public.tasks(title,group_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
+select 'Terminal child #521',group_id,id,'cancelled',now(),'Fixture cancellation','org','direct',created_by from public.tasks where id=(select id from g521_tasks where name='command4');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
 select lives_ok($$select public.complete_umbrella_task((select id from g521_tasks where name='command4'))$$,'complete_umbrella_task: the Manager-less peer completing their own Umbrella');

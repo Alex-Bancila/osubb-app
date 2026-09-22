@@ -122,9 +122,8 @@ reset role;
 select is((select count(*) from public.notifications where dedupe_key like 'event:%:group' and member_id::text like '24800000-%'),4::bigint,'move notifies old and new Group plus going attendee, at or above the new floor');
 select is((select count(*) from public.notifications where dedupe_key like 'event:%:min_level' and member_id::text like '24800000-%'),4::bigint,'Minimum Level change notifies recipients who can still read the Event');
 select is((select count(*) from public.notifications where dedupe_key like 'event:%:group' and member_id='24800000-0000-0000-0000-000000000002'),0::bigint,'the old Group''s Manager below the raised floor (member 2) is not told about an Event it can no longer read');
--- #248: the command never writes the legacy Origin -- events_sync_group_origin (#519)
--- re-derives scope/dept_id/team_id/project_id from the Group the move named.
-select ok((select scope='project' and project_id=(select legacy_project_id from public.groups where id=(select id from gx where name='b')) and dept_id is null and team_id is null from public.events where id=(select id from ex where title='Event a #248')),'moving the Event re-derives its legacy Origin from the new Group');
+-- #579: group_id is the Event's only Origin; a move rewrites exactly it.
+select ok((select group_id=(select id from gx where name='b') from public.events where id=(select id from ex where title='Event a #248')),'moving the Event rewrites its Group');
 select ok((select bool_and(body='Noul grup: Events B #248') from public.notifications where dedupe_key like 'event:%:group' and member_id::text like '24800000-%'),'the Group body names the new Group');
 select ok((select bool_and(body='Noul nivel minim: 3') from public.notifications where dedupe_key like 'event:%:min_level' and member_id::text like '24800000-%'),'the Minimum Level body carries the new level');
 select lives_ok($q$select private.notify(array['24800000-0000-0000-0000-000000000004'::uuid],'event','Compatibility',null,null,null,null)$q$,'existing seven-argument notify remains callable');
@@ -183,7 +182,7 @@ reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000002');
 select lives_ok($q$select public.update_event((select id from ex2 where title='Move to org #248'),'To org','sedinta',(select id from gx where name='org'),'2026-10-01 12:00+00',null,null,null,null,0)$q$,'any live Group Role may move an Event onto the Organization Group');
 reset role;
-select ok((select scope='org' and dept_id is null and team_id is null and project_id is null from public.events where id=(select id from ex2 where title='Move to org #248')),'the Organization move re-derives an org Origin');
+select ok((select group_id=(select id from gx where name='org') from public.events where id=(select id from ex2 where title='Move to org #248')),'the Organization move lands on the Organization Group');
 -- #601: the recipients are the Group Audience (private.group_audience), not the
 -- explicit roster. The Organization Group has no roster rows at all -- its
 -- members belong by Automatic Membership -- so a move INTO it must reach every

@@ -68,24 +68,24 @@ insert into public.member_departments (member_id, dept_id) values
 -- same transaction-start value, so a queue "opened" at now() is never later
 -- closed at an earlier instant.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Close two pending #331', 'Doi candidati', '2027-03-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Close two pending #331', 'Doi candidati', '2027-03-01 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33100000-0000-0000-0000-000000000001'),
-  ('Roundtrip #331', 'Compunere cu #330', '2027-03-02 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Roundtrip #331', 'Compunere cu #330', '2027-03-02 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33100000-0000-0000-0000-000000000001'),
-  ('Already open #331', 'Deja deschisa', '2027-03-04 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Already open #331', 'Deja deschisa', '2027-03-04 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33100000-0000-0000-0000-000000000001'),
-  ('Already closed #331', 'Deja inchisa', '2027-03-05 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Already closed #331', 'Deja inchisa', '2027-03-05 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33100000-0000-0000-0000-000000000001'),
-  ('Gate #331', 'Poarta', '2027-03-06 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Gate #331', 'Poarta', '2027-03-06 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33100000-0000-0000-0000-000000000001');
 
 -- Direct-mode Task: no queue timestamps at all (tasks_queue_timestamp_state_ck).
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Direct #331', 'Fara coada', '2027-03-03 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Direct #331', 'Fara coada', '2027-03-03 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33100000-0000-0000-0000-000000000001');
 
 update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
@@ -95,10 +95,10 @@ update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
 -- (tasks_queue_timestamp_state_ck) and both evaluation inputs set
 -- (tasks_evaluation_inputs_ck).
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, difficulty, rating,
+  (title, description, deadline, group_id, audience, assignment_mode, difficulty, rating,
    status, queue_opened_at, queue_closed_at, completed_at, created_by)
 values
-  ('Terminal #331', 'Incheiat', '2027-03-07 09:00:00+00', 'edu', 'local', 'public', 3, 4,
+  ('Terminal #331', 'Incheiat', '2027-03-07 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'public', 3, 4,
    'completed', '2027-01-01 00:00:00+00', '2027-01-02 00:00:00+00', now(),
    '33100000-0000-0000-0000-000000000001');
 
@@ -413,9 +413,9 @@ select extensions.dblink_exec('stq_setup', $$
     ('33100000-0000-0000-0000-000000000021', 'edu'),
     ('33100000-0000-0000-0000-000000000022', 'edu');
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+    (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #331 committed', 'Sonda', '2027-04-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Lock probe #331 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      now(), '33100000-0000-0000-0000-000000000021');
   insert into public.task_candidates (task_id, member_id, status, joined_at)
   select id, '33100000-0000-0000-0000-000000000022', 'pending', now()
@@ -464,7 +464,7 @@ select ok(coalesce((
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33100000-0000-0000-0000-000000000021'
      and authority_group.legacy_dept_id = 'edu'
-), false), 'set_task_queue holds the manager''s Group roster row FOR SHARE too (require_origin_manager''s discipline)');
+), false), 'set_task_queue holds the manager''s Group roster row FOR SHARE too (require_group_work_manager''s discipline)');
 
 select extensions.dblink_exec('stq_lock', 'rollback');
 select extensions.dblink_disconnect('stq_lock');

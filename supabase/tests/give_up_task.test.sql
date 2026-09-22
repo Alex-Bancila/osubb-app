@@ -106,9 +106,9 @@ insert into public.member_departments (member_id, dept_id) values
 -- ---- T1: the promotion happy path -- a public Task in progress, one
 -- Executor, two pending Candidates in a known order.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
-  ('Renuntare cu coada #332', 'Are coada', '2027-07-01 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+  ('Renuntare cu coada #332', 'Are coada', '2027-07-01 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now(), now(), '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-000000000001', now()
@@ -122,9 +122,9 @@ select id, '33200000-0000-0000-0000-000000000004'::uuid, 'pending', now() - inte
 
 -- ---- T2: a direct Task -- no queue, so the give-up simply empties the slot.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Renuntare directa #332', 'Fara coada', '2027-07-02 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Renuntare directa #332', 'Fara coada', '2027-07-02 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000009', '33200000-0000-0000-0000-000000000001', now()
@@ -132,9 +132,9 @@ select id, '33200000-0000-0000-0000-000000000009', '33200000-0000-0000-0000-0000
 
 -- ---- T3: in_review -- ADR-0007's explicitly blocked case.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, submitted_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, submitted_at, created_by)
 values
-  ('In verificare #332', 'Trimis spre verificare', '2027-07-03 09:00:00+00', 'edu', 'local', 'direct', 'in_review',
+  ('In verificare #332', 'Trimis spre verificare', '2027-07-03 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_review',
    now(), now(), '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000010', '33200000-0000-0000-0000-000000000001', now()
@@ -142,9 +142,9 @@ select id, '33200000-0000-0000-0000-000000000010', '33200000-0000-0000-0000-0000
 
 -- ---- T4: the blank-reason target.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Motiv gol #332', 'Motiv lipsa', '2027-07-04 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Motiv gol #332', 'Motiv lipsa', '2027-07-04 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-000000000001', now()
@@ -153,9 +153,9 @@ select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-0000
 -- ---- T5: the persona matrix target -- an active Executor plus a past one,
 -- so the past Executor reads the Task (can_read_task R2) and is still denied.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Persoane #332', 'Matricea de persoane', '2027-07-05 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Persoane #332', 'Matricea de persoane', '2027-07-05 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
 select id, '33200000-0000-0000-0000-000000000005', '33200000-0000-0000-0000-000000000001',
@@ -172,9 +172,9 @@ select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-0000
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
-  ('Anulat #332', 'Anulat', '2027-07-06 09:00:00+00', 'edu', 'local', 'direct', 'cancelled', now(),
+  ('Anulat #332', 'Anulat', '2027-07-06 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled', now(),
    'Anulat cu executant activ #332', '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-000000000001', now()
@@ -183,9 +183,9 @@ select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-0000
 -- ---- T7: a queue with ONLY a deactivated Candidate (section 6) -- the
 -- give-up now succeeds with nobody promoted, same as an empty queue.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
-  ('Candidat dezactivat #332', 'Coada moarta', '2027-07-07 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+  ('Candidat dezactivat #332', 'Coada moarta', '2027-07-07 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now(), now(), '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000011', '33200000-0000-0000-0000-000000000001', now()
@@ -199,9 +199,9 @@ select id, '33200000-0000-0000-0000-000000000007', 'pending', now() - interval '
 -- section 6's discriminating case: the dead head is skipped in place, the
 -- live Candidate behind them is promoted.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
-  ('Cap de coada dezactivat #332', 'Coada cu cap mort', '2027-07-08 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+  ('Cap de coada dezactivat #332', 'Coada cu cap mort', '2027-07-08 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now(), now(), '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000012', '33200000-0000-0000-0000-000000000001', now()
@@ -222,9 +222,9 @@ select id, '33200000-0000-0000-0000-000000000006'::uuid, 'pending', now() - inte
 -- by any command on main -- exactly the precedent T6 sets for the state
 -- check.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
-  ('Auto-candidatura cu altul #332', 'Executorul e si candidat', '2027-07-09 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+  ('Auto-candidatura cu altul #332', 'Executorul e si candidat', '2027-07-09 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now(), now(), '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000013', '33200000-0000-0000-0000-000000000001', now()
@@ -240,9 +240,9 @@ select id, '33200000-0000-0000-0000-000000000003'::uuid, 'pending', now() - inte
 -- Task -- the cheap second case: excluded from their own promotion, nobody
 -- is promoted, and the Task ends Executor-less exactly like an empty queue.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
-  ('Auto-candidatura singura #332', 'Executorul e singurul candidat', '2027-07-10 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+  ('Auto-candidatura singura #332', 'Executorul e singurul candidat', '2027-07-10 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now(), now(), '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000014', '33200000-0000-0000-0000-000000000001', now()
@@ -820,13 +820,13 @@ select extensions.dblink_exec('gut_setup', $$
     ('33200000-0000-0000-0000-000000000028', 'edu');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+    (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #332 committed', 'Sonda', '2027-08-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Lock probe #332 committed', 'Sonda', '2027-08-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33200000-0000-0000-0000-000000000021'),
-    ('Race empty queue #332 committed', 'Cursa coada goala', '2027-08-02 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Race empty queue #332 committed', 'Cursa coada goala', '2027-08-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33200000-0000-0000-0000-000000000021'),
-    ('Race promotion #332 committed', 'Cursa promovare', '2027-08-03 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Race promotion #332 committed', 'Cursa promovare', '2027-08-03 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33200000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)

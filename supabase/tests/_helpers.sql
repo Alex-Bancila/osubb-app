@@ -324,6 +324,27 @@ begin
 end;
 $function$;
 
+-- #579: the Group is the only Origin a Task, Event, Campaign or Request carries.
+-- Fixtures that used to write a Department / Team / Project id into those rows
+-- name the same Origin through these three lookups instead, which return the
+-- Group the forward mirror derived for it. They read groups.legacy_*, so they are
+-- the one place to change when #591 drops those columns. Null for an unknown key.
+-- Security definer: a fixture id lookup, answered the same whoever the test is
+-- logged in as (a claimless or deactivated persona cannot read groups under RLS,
+-- and a literal id would not care either).
+create or replace function pg_temp.dept_group(p_dept_id text) returns bigint
+language sql stable security definer set search_path = '' as $function$
+  select id from public.groups where legacy_dept_id = p_dept_id
+$function$;
+create or replace function pg_temp.team_group(p_team_id text) returns bigint
+language sql stable security definer set search_path = '' as $function$
+  select id from public.groups where legacy_team_id = p_team_id
+$function$;
+create or replace function pg_temp.project_group(p_project_id bigint) returns bigint
+language sql stable security definer set search_path = '' as $function$
+  select id from public.groups where legacy_project_id = p_project_id
+$function$;
+
 \if :{?osubb_test_suite}
 \else
 select plan(24);
@@ -432,8 +453,8 @@ select extensions.dblink_disconnect('helpers_drain');
 
 -- test_credit_task: the trigger-free replacement for "set a rating and let
 -- the points engine do the rest".
-insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
-values ('helpers-credit-fixture', 3, 4, 'completed', now(), 'edu');
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('helpers-credit-fixture', 3, 4, 'completed', now(), pg_temp.dept_group('edu'));
 
 select is(
   (select pg_temp.test_credit_task(

@@ -123,9 +123,9 @@ insert into public.member_departments (member_id, dept_id) values
 -- order. Selected with p_close_remaining = false, so the Candidate left
 -- behind must stay pending and the queue must stay open.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Slot gol #333', 'Fara executant', '2027-09-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Slot gol #333', 'Fara executant', '2027-09-01 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_candidates (task_id, member_id, status, joined_at)
 select id, '33300000-0000-0000-0000-000000000003'::uuid, 'pending', now() - interval '2 hours'
@@ -138,9 +138,9 @@ select id, '33300000-0000-0000-0000-000000000004'::uuid, 'pending', now() - inte
 -- Candidates. Selected with p_close_remaining = true, so the outgoing
 -- Executor is replaced AND the Candidate left behind is closed.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
-  ('Inlocuire #333', 'Cu executant', '2027-09-02 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+  ('Inlocuire #333', 'Cu executant', '2027-09-02 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now(), now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33300000-0000-0000-0000-000000000002', '33300000-0000-0000-0000-000000000001', now()
@@ -155,9 +155,9 @@ select id, '33300000-0000-0000-0000-000000000005'::uuid, 'pending', now() - inte
 -- ---- T3: the p_candidate_id validation target -- one withdrawn Candidature
 -- and one live pending one that must survive every rejected call.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Candidatura invalida #333', 'Validare parametru', '2027-09-03 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Candidatura invalida #333', 'Validare parametru', '2027-09-03 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_candidates (task_id, member_id, status, joined_at, decided_at, decided_by)
 select id, '33300000-0000-0000-0000-000000000011'::uuid, 'withdrawn', now() - interval '3 hours',
@@ -170,9 +170,9 @@ select id, '33300000-0000-0000-0000-000000000012'::uuid, 'pending', now() - inte
 -- ---- T4: in_review -- ADR-0007 blocks replacing an Executor whose work is
 -- already submitted, so the queue may not be selected from either.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, submitted_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, submitted_at, queue_opened_at, created_by)
 values
-  ('In verificare #333', 'Trimis spre verificare', '2027-09-04 09:00:00+00', 'edu', 'org', 'public', 'in_review',
+  ('In verificare #333', 'Trimis spre verificare', '2027-09-04 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_review',
    now(), now(), now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33300000-0000-0000-0000-000000000002', '33300000-0000-0000-0000-000000000001', now()
@@ -189,9 +189,9 @@ select id, '33300000-0000-0000-0000-000000000003'::uuid, 'pending', now() - inte
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, queue_opened_at, queue_closed_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason, queue_opened_at, queue_closed_at, created_by)
 values
-  ('Anulat #333', 'Anulat', '2027-09-05 09:00:00+00', 'edu', 'org', 'public', 'cancelled', now(),
+  ('Anulat #333', 'Anulat', '2027-09-05 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'cancelled', now(),
    'Anulat cu coada inca deschisa #333', now(), now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_candidates (task_id, member_id, status, joined_at)
 select id, '33300000-0000-0000-0000-000000000003'::uuid, 'pending', now() - interval '1 hour'
@@ -201,9 +201,9 @@ select id, '33300000-0000-0000-0000-000000000003'::uuid, 'pending', now() - inte
 -- queue at all, so a Candidature id belonging to another Task must answer
 -- task_is_umbrella, never candidate_not_pending.
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
+  (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
 values
-  ('Umbrela #333', 'edu', 'umbrella', null, null, null, null, 'todo',
+  ('Umbrela #333', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null, 'todo',
    '33300000-0000-0000-0000-000000000001');
 
 -- ---- T7: the deactivated-Candidate case, and the discriminator against
@@ -211,9 +211,9 @@ values
 -- (004) is queued right behind them. The command must FAIL, not fall through
 -- to the live one.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Candidat dezactivat #333', 'Alegere moarta', '2027-09-06 09:00:00+00', 'edu', 'org', 'public', 'todo',
+  ('Candidat dezactivat #333', 'Alegere moarta', '2027-09-06 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_candidates (task_id, member_id, status, joined_at)
 select id, '33300000-0000-0000-0000-000000000009'::uuid, 'pending', now() - interval '2 hours'
@@ -226,9 +226,9 @@ select id, '33300000-0000-0000-0000-000000000004'::uuid, 'pending', now() - inte
 -- every persona below can READ it (can_read_task R6) and the denial is the
 -- authority check, never a disguised PT404.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
-  ('Persoane #333', 'Matricea de persoane', '2027-09-07 09:00:00+00', 'edu', 'org', 'public', 'in_progress',
+  ('Persoane #333', 'Matricea de persoane', '2027-09-07 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'in_progress',
    now(), now(), '33300000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33300000-0000-0000-0000-000000000013', '33300000-0000-0000-0000-000000000001', now()
@@ -793,15 +793,15 @@ select extensions.dblink_exec('stc_setup', $$
     ('33300000-0000-0000-0000-000000000030', 'edu');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+    (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #333 committed', 'Sonda', '2027-10-01 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Lock probe #333 committed', 'Sonda', '2027-10-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race conflict #333 committed', 'Cursa cu conflict', '2027-10-02 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Race conflict #333 committed', 'Cursa cu conflict', '2027-10-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race bystander #333 committed', 'Cursa fara conflict', '2027-10-03 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Race bystander #333 committed', 'Cursa fara conflict', '2027-10-03 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race twoselect #333 committed', 'Doi manageri, un loc gol', '2027-10-04 09:00:00+00', 'edu', 'org', 'public', 'todo',
+    ('Race twoselect #333 committed', 'Doi manageri, un loc gol', '2027-10-04 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -893,7 +893,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.profiles') as row_lock
     join public.profiles as profile on profile.ctid = row_lock.locked_row
    where profile.id = '33300000-0000-0000-0000-000000000021'
-), false), 'the manager''s own live profile row is held FOR SHARE (private.require_origin_manager''s discipline)');
+), false), 'the manager''s own live profile row is held FOR SHARE (private.require_group_work_manager''s discipline)');
 select ok(coalesce((
   select bool_or(row_lock.modes && array['For Update', 'Update', 'No Key Update'])
     from extensions.pgrowlocks('public.task_candidates') as row_lock

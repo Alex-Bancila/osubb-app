@@ -57,13 +57,13 @@ insert into public.profiles (id, full_name, email, role, status) values
 -- Produce a real +6 task entry through an Evaluation (#317 retired the
 -- grading triggers), then apply a -2 sanction. The endpoint must return the
 -- complete personal total, not only positive task points.
-insert into public.tasks (title, difficulty, status, created_by, dept_id)
+insert into public.tasks (title, difficulty, status, created_by, group_id)
 values (
   'my-points-task',
   3,
   'todo',
   'a5100000-0000-0000-0000-000000000003',
-  'edu'
+  pg_temp.dept_group('edu')
 );
 -- #345 retired task_assignees; pg_temp.test_credit_task below opens the
 -- Assignment its Evaluation needs, so the participant is named there.

@@ -24,8 +24,8 @@ insert into profiles (id, full_name, email, role) values
 -- name the Evaluation that produced it. A 'task' row with no note stays
 -- legal throughout, so it — not a sanction — is what proves the column is
 -- nullable.
-insert into tasks (title, difficulty, rating, status, completed_at, dept_id)
-  values ('ledger-note-fixture-161', 3, 4, 'completed', now(), 'edu');
+insert into tasks (title, difficulty, rating, status, completed_at, group_id)
+  values ('ledger-note-fixture-161', 3, 4, 'completed', now(), pg_temp.dept_group('edu'));
 
 insert into task_assignments (task_id, member_id, ended_at, end_reason)
   select id, 'aaaaaaaa-0000-0000-0000-000000000161', completed_at, 'completed'

@@ -47,8 +47,8 @@ insert into auth.users (id, email) values
   ('29200000-0000-0000-0000-000000000001', 'actor-292@test.local');
 insert into public.profiles (id, full_name, email, role) values
   ('29200000-0000-0000-0000-000000000001', 'Activity Actor', 'actor-292@test.local', 'voluntar');
-insert into public.tasks (title, difficulty, dept_id)
-values ('Activity history fixture 292', 1, 'edu');
+insert into public.tasks (title, difficulty, group_id)
+values ('Activity history fixture 292', 1, pg_temp.dept_group('edu'));
 
 -- ==================== kind check ====================
 select lives_ok(

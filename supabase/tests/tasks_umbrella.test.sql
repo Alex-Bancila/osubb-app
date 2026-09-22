@@ -34,93 +34,93 @@ select fk_ok('public', 'tasks', 'parent_task_id', 'public', 'tasks', 'id',
 -- dropped, so omitting them here would silently fail tasks_umbrella_shape_ck.
 select lives_ok(
   $$ insert into public.tasks
-       (title, kind, dept_id, audience, assignment_mode, difficulty, rating)
+       (title, kind, group_id, audience, assignment_mode, difficulty, rating)
      values
-       ('Umbrella 315', 'umbrella', 'edu', null, null, null, null) $$,
+       ('Umbrella 315', 'umbrella', pg_temp.dept_group('edu'), null, null, null, null) $$,
   'a valid Umbrella (explicit nulls) is accepted');
 
 select lives_ok(
-  format($$ insert into public.tasks (title, dept_id, difficulty, parent_task_id)
-            values ('Subtask 315', 'edu', 2, %L) $$,
+  format($$ insert into public.tasks (title, group_id, difficulty, parent_task_id)
+            values ('Subtask 315', pg_temp.dept_group('edu'), 2, %L) $$,
     (select id from public.tasks where title = 'Umbrella 315')),
   'a valid Subtask inheriting its Umbrella''s Origin is accepted');
 
 -- Fixtures for the "parent must be an Umbrella" checks below.
-insert into public.tasks (title, dept_id, difficulty) values
-  ('Ordinary task 315', 'edu', 1);
+insert into public.tasks (title, group_id, difficulty) values
+  ('Ordinary task 315', pg_temp.dept_group('edu'), 1);
 
 -- ==================== AC: umbrella with a mode, audience, difficulty or parent: rejected ====================
 select throws_ok(
   $$ insert into public.tasks
-       (title, kind, dept_id, audience, assignment_mode, difficulty, rating)
+       (title, kind, group_id, audience, assignment_mode, difficulty, rating)
      values
-       ('Umbrella with mode 315', 'umbrella', 'edu', null, 'direct', null, null) $$,
+       ('Umbrella with mode 315', 'umbrella', pg_temp.dept_group('edu'), null, 'direct', null, null) $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_umbrella_shape_ck"',
   'an Umbrella with an Assignment Mode is rejected');
 
 select throws_ok(
   $$ insert into public.tasks
-       (title, kind, dept_id, audience, assignment_mode, difficulty, rating)
+       (title, kind, group_id, audience, assignment_mode, difficulty, rating)
      values
-       ('Umbrella with audience 315', 'umbrella', 'edu', 'org', null, null, null) $$,
+       ('Umbrella with audience 315', 'umbrella', pg_temp.dept_group('edu'), 'org', null, null, null) $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_umbrella_shape_ck"',
   'an Umbrella with an Audience is rejected');
 
 select throws_ok(
   $$ insert into public.tasks
-       (title, kind, dept_id, audience, assignment_mode, difficulty, rating)
+       (title, kind, group_id, audience, assignment_mode, difficulty, rating)
      values
-       ('Umbrella with difficulty 315', 'umbrella', 'edu', null, null, 3, null) $$,
+       ('Umbrella with difficulty 315', 'umbrella', pg_temp.dept_group('edu'), null, null, 3, null) $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_umbrella_shape_ck"',
   'an Umbrella with a Difficulty is rejected');
 
 select throws_ok(
   format($$ insert into public.tasks
-              (title, kind, dept_id, audience, assignment_mode, difficulty, rating, parent_task_id)
+              (title, kind, group_id, audience, assignment_mode, difficulty, rating, parent_task_id)
             values
-              ('Umbrella with parent 315', 'umbrella', 'edu', null, null, null, null, %L) $$,
+              ('Umbrella with parent 315', 'umbrella', pg_temp.dept_group('edu'), null, null, null, null, %L) $$,
     (select id from public.tasks where title = 'Umbrella 315')),
   '23514', 'new row for relation "tasks" violates check constraint "tasks_umbrella_shape_ck"',
   'an Umbrella with a parent_task_id is rejected');
 
 -- ==================== AC: subtask under a subtask, or under an ordinary task: rejected ====================
 select throws_ok(
-  format($$ insert into public.tasks (title, dept_id, parent_task_id)
-            values ('Subtask under ordinary 315', 'edu', %L) $$,
+  format($$ insert into public.tasks (title, group_id, parent_task_id)
+            values ('Subtask under ordinary 315', pg_temp.dept_group('edu'), %L) $$,
     (select id from public.tasks where title = 'Ordinary task 315')),
   '23514', 'task_parent_not_umbrella',
   'a Task cannot be parented under an ordinary (non-Umbrella) Task');
 
 select throws_ok(
-  format($$ insert into public.tasks (title, dept_id, parent_task_id)
-            values ('Subtask under subtask 315', 'edu', %L) $$,
+  format($$ insert into public.tasks (title, group_id, parent_task_id)
+            values ('Subtask under subtask 315', pg_temp.dept_group('edu'), %L) $$,
     (select id from public.tasks where title = 'Subtask 315')),
   '23514', 'task_parent_not_umbrella',
   'a Task cannot be parented under an existing Subtask (one level deep)');
 
 -- ==================== AC: subtask with a different origin, or an origin update on a subtask: rejected ====================
 select throws_ok(
-  format($$ insert into public.tasks (title, dept_id, parent_task_id)
-            values ('Subtask wrong origin 315', 'pr', %L) $$,
+  format($$ insert into public.tasks (title, group_id, parent_task_id)
+            values ('Subtask wrong origin 315', pg_temp.dept_group('pr'), %L) $$,
     (select id from public.tasks where title = 'Umbrella 315')),
   '23514', 'subtask_origin_mismatch',
   'a Subtask with a different Origin than its Umbrella is rejected');
 
 select throws_ok(
-  $$ update public.tasks set dept_id = 'pr' where title = 'Subtask 315' $$,
+  $$ update public.tasks set group_id = pg_temp.dept_group('pr') where title = 'Subtask 315' $$,
   '23514', 'subtask_origin_immutable',
   'updating a Subtask''s inherited Origin is rejected');
 
 -- ==================== AC: ordinary task still requires audience and mode ====================
 select throws_ok(
-  $$ insert into public.tasks (title, dept_id, audience)
-     values ('Task missing audience 315', 'edu', null) $$,
+  $$ insert into public.tasks (title, group_id, audience)
+     values ('Task missing audience 315', pg_temp.dept_group('edu'), null) $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_task_shape_ck"',
   'an ordinary Task still requires an Audience (explicit null rejected)');
 
 select throws_ok(
-  $$ insert into public.tasks (title, dept_id, assignment_mode)
-     values ('Task missing mode 315', 'edu', null) $$,
+  $$ insert into public.tasks (title, group_id, assignment_mode)
+     values ('Task missing mode 315', pg_temp.dept_group('edu'), null) $$,
   '23514', 'new row for relation "tasks" violates check constraint "tasks_task_shape_ck"',
   'an ordinary Task still requires an Assignment Mode (explicit null rejected)');
 
@@ -137,9 +137,9 @@ select throws_ok(
 
 -- A second top-level Umbrella, purely as a reparent target below.
 insert into public.tasks
-    (title, kind, dept_id, audience, assignment_mode, difficulty, rating)
+    (title, kind, group_id, audience, assignment_mode, difficulty, rating)
   values
-    ('Other umbrella 315', 'umbrella', 'edu', null, null, null, null);
+    ('Other umbrella 315', 'umbrella', pg_temp.dept_group('edu'), null, null, null, null);
 
 select throws_ok(
   format($$ update public.tasks set parent_task_id = %L where title = 'Umbrella 315' $$,
@@ -152,8 +152,8 @@ select throws_ok(
 -- `update ... set parent_task_id = <umbrella>`, not just at INSERT time. The
 -- origin-equality check must fire on that first link regardless of which
 -- statement performs it.
-insert into public.tasks (title, dept_id, difficulty) values
-  ('Ordinary task wrong-origin link 315', 'pr', 1);
+insert into public.tasks (title, group_id, difficulty) values
+  ('Ordinary task wrong-origin link 315', pg_temp.dept_group('pr'), 1);
 
 select throws_ok(
   format($$ update public.tasks set parent_task_id = %L
@@ -162,8 +162,8 @@ select throws_ok(
   '23514', 'subtask_origin_mismatch',
   'first linking a Task to an Umbrella of a different Origin via UPDATE is rejected');
 
-insert into public.tasks (title, dept_id, difficulty) values
-  ('Ordinary task same-origin link 315', 'edu', 1);
+insert into public.tasks (title, group_id, difficulty) values
+  ('Ordinary task same-origin link 315', pg_temp.dept_group('edu'), 1);
 
 select lives_ok(
   format($$ update public.tasks set parent_task_id = %L
@@ -175,21 +175,23 @@ select lives_ok(
 -- "An Umbrella with existing Subtasks cannot change its own Origin"
 -- (~lines 128-136) previously had no assertion. Isolated: 'Umbrella 315'
 -- carries no Campaign (#314's trigger returns immediately on a null
--- campaign_id) and 'fin' is a valid, distinct Department.
+-- campaign_id) and 'fin' is a valid, distinct Department Group. #579: the
+-- UPDATE names group_id alone, so it proves validate_task_hierarchy still fires
+-- on a Group-only write.
 select throws_ok(
-  $$ update public.tasks set dept_id = 'fin' where title = 'Umbrella 315' $$,
+  $$ update public.tasks set group_id = pg_temp.dept_group('fin') where title = 'Umbrella 315' $$,
   '23514', 'subtask_origin_immutable',
   'an Umbrella with existing Subtasks cannot change its own Origin');
 
 -- ==================== #314 interaction: a Campaign on an Umbrella ====================
-insert into public.campaigns (department_id, name, is_active, created_by) values
-  ('edu', 'Campaign Edu 315', true, '31500000-0000-0000-0000-000000000001');
+insert into public.campaigns (group_id, name, is_active, created_by) values
+  (pg_temp.dept_group('edu'), 'Campaign Edu 315', true, '31500000-0000-0000-0000-000000000001');
 
 select lives_ok(
   format($$ insert into public.tasks
-              (title, kind, dept_id, audience, assignment_mode, difficulty, rating, campaign_id)
+              (title, kind, group_id, audience, assignment_mode, difficulty, rating, campaign_id)
             values
-              ('Umbrella with campaign 315', 'umbrella', 'edu', null, null, null, null, %L) $$,
+              ('Umbrella with campaign 315', 'umbrella', pg_temp.dept_group('edu'), null, null, null, null, %L) $$,
     (select id from public.campaigns where name = 'Campaign Edu 315')),
   'an Umbrella accepts a same-Department Campaign (#314 interaction unchanged)');
 
@@ -201,10 +203,10 @@ select lives_ok(
 -- cancelled but never completed or marked unfulfilled, contradicting
 -- ADR-0007's manager-marks-it-completed-once-every-Subtask-resolves rule.
 insert into public.tasks
-    (title, kind, dept_id, audience, assignment_mode, difficulty, rating)
+    (title, kind, group_id, audience, assignment_mode, difficulty, rating)
   values
-    ('Umbrella to complete 315', 'umbrella', 'edu', null, null, null, null),
-    ('Umbrella to unfulfill 315', 'umbrella', 'edu', null, null, null, null);
+    ('Umbrella to complete 315', 'umbrella', pg_temp.dept_group('edu'), null, null, null, null),
+    ('Umbrella to unfulfill 315', 'umbrella', pg_temp.dept_group('edu'), null, null, null, null);
 
 select lives_ok(
   $$ update public.tasks set status = 'completed', completed_at = now()
@@ -223,8 +225,8 @@ select throws_ok(
   '23514', 'new row for relation "tasks" violates check constraint "tasks_umbrella_shape_ck"',
   'an Umbrella completed with Difficulty and Rating still violates tasks_umbrella_shape_ck (an Umbrella never carries points)');
 
-insert into public.tasks (title, dept_id, difficulty) values
-  ('Ordinary task no rating 315', 'edu', 2);
+insert into public.tasks (title, group_id, difficulty) values
+  ('Ordinary task no rating 315', pg_temp.dept_group('edu'), 2);
 
 select throws_ok(
   $$ update public.tasks set status = 'completed', completed_at = now()

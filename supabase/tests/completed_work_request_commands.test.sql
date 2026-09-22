@@ -12,7 +12,7 @@
 --
 --   2. THE VISIBILITY BOUNDARY IS THE READ POLICY, NOT THE DECIDER SET.
 --      A caller who cannot even read the Request (completed_work_requests_read:
---      the requester, or private.can_manage_origin) gets PT404
+--      the requester, or private.can_manage_group_work) gets PT404
 --      request_not_found -- hidden and missing are indistinguishable. A caller
 --      who CAN read it but may not decide it gets 42501
 --      request_decide_forbidden. See the migration header for why this is the
@@ -145,41 +145,41 @@ select cmp_ok((select length(dept_description) from d344), '>', 120,
   'the Department Request''s description is longer than 120 characters, so both title truncations are actually exercised');
 
 -- ---- Requests inserted directly as the owner (no command, no notifications).
-insert into public.completed_work_requests (requester_id, dept_id, description) values
-  ('34400000-0000-0000-0000-000000000004', 'edu', 'Cerere tinta pentru refuzuri #344'),
-  ('34400000-0000-0000-0000-000000000004', 'edu', 'Cerere aprobata de BC #344'),
-  ('34400000-0000-0000-0000-000000000004', 'edu', 'Cerere aprobata de al doilea BCE #344'),
-  ('34400000-0000-0000-0000-000000000014', 'edu', 'Cerere care va fi respinsa #344'),
-  ('34400000-0000-0000-0000-000000000011', 'edu', 'Cerere de un singur punct #344'),
-  ('34400000-0000-0000-0000-000000000017', 'edu', 'Cerere de la un membru dezactivat #344');
-insert into public.completed_work_requests (requester_id, project_id, description)
-select '34400000-0000-0000-0000-000000000008', project.id, 'A doua cerere de proiect #344'
+insert into public.completed_work_requests (requester_id, group_id, description) values
+  ('34400000-0000-0000-0000-000000000004', pg_temp.dept_group('edu'), 'Cerere tinta pentru refuzuri #344'),
+  ('34400000-0000-0000-0000-000000000004', pg_temp.dept_group('edu'), 'Cerere aprobata de BC #344'),
+  ('34400000-0000-0000-0000-000000000004', pg_temp.dept_group('edu'), 'Cerere aprobata de al doilea BCE #344'),
+  ('34400000-0000-0000-0000-000000000014', pg_temp.dept_group('edu'), 'Cerere care va fi respinsa #344'),
+  ('34400000-0000-0000-0000-000000000011', pg_temp.dept_group('edu'), 'Cerere de un singur punct #344'),
+  ('34400000-0000-0000-0000-000000000017', pg_temp.dept_group('edu'), 'Cerere de la un membru dezactivat #344');
+insert into public.completed_work_requests (requester_id, group_id, description)
+select '34400000-0000-0000-0000-000000000008', pg_temp.project_group(project.id), 'A doua cerere de proiect #344'
   from public.projects as project where project.name = 'Proiect #344';
 -- Filed while the Project was live, then the Project was archived. Only the
 -- direct insert can produce this shape: create_completed_work_request requires
 -- an active Project.
-insert into public.completed_work_requests (requester_id, project_id, description)
-select '34400000-0000-0000-0000-000000000008', project.id, 'Cerere pe un proiect arhivat intre timp #344'
+insert into public.completed_work_requests (requester_id, group_id, description)
+select '34400000-0000-0000-0000-000000000008', pg_temp.project_group(project.id), 'Cerere pe un proiect arhivat intre timp #344'
   from public.projects as project where project.name = 'Proiect arhivat #344';
 -- Same shape, but filed by the LEAD themselves. This is the one caller who
 -- clears the command's visibility test on an archived Project without
 -- private.can_manage_project_work ever being consulted (requester_id =
 -- auth.uid() short-circuits the disjunction), so it is the only caller who can
 -- reach the decider predicate's Project branch there -- see section 7b-bis.
-insert into public.completed_work_requests (requester_id, project_id, description)
-select '34400000-0000-0000-0000-000000000006', project.id, 'Cerere proprie a leadului pe proiect arhivat #344'
+insert into public.completed_work_requests (requester_id, group_id, description)
+select '34400000-0000-0000-0000-000000000006', pg_temp.project_group(project.id), 'Cerere proprie a leadului pe proiect arhivat #344'
   from public.projects as project where project.name = 'Proiect arhivat #344';
 -- And on the ACTIVE Project: the lead files their own Request and later
 -- decides it themselves (section 8b).
-insert into public.completed_work_requests (requester_id, project_id, description)
-select '34400000-0000-0000-0000-000000000006', project.id, 'Cerere proprie a leadului pe proiectul activ #344'
+insert into public.completed_work_requests (requester_id, group_id, description)
+select '34400000-0000-0000-0000-000000000006', pg_temp.project_group(project.id), 'Cerere proprie a leadului pe proiectul activ #344'
   from public.projects as project where project.name = 'Proiect #344';
 
 -- ==================== 1. Create: a Department Member's own Request ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$
-  select public.create_completed_work_request(%L, 'edu', null, null)
+  select public.create_completed_work_request(%L, pg_temp.dept_group('edu'))
 $$, (select dept_description from d344)),
   'an ordinary live Member of the Department creates a Completed-work Request for it -- creating is membership, never management');
 reset role;
@@ -216,13 +216,12 @@ grant select on f344 to authenticated;
 -- rolled-back scratch fixture, not part of the schema under test.
 grant select on f344 to anon;
 
-select is((select format('%s|%s|%s|%s|%s|%s|%s',
-              request.status, request.requester_id, request.dept_id,
-              coalesce(request.team_id, '-'), coalesce(request.project_id::text, '-'),
+select is((select format('%s|%s|%s|%s|%s',
+              request.status, request.requester_id, request.group_id,
               coalesce(request.decided_by::text, '-'), coalesce(request.task_id::text, '-'))
              from public.completed_work_requests as request
             where request.id = (select dept_request_id from f344)),
-  'pending|34400000-0000-0000-0000-000000000004|edu|-|-|-|-',
+  'pending|34400000-0000-0000-0000-000000000004|' || pg_temp.dept_group('edu') || '|-|-',
   'the new Request is pending against exactly the Department Origin, with no decision trace and no Task');
 
 select set_eq(format($$
@@ -252,10 +251,10 @@ select is((select count(distinct notification.task_id) from public.notifications
 -- ==================== 2. Create: every refusal ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_completed_work_request('Munca in alt departament', 'edu', null, null) $$,
+select throws_ok($$ select public.create_completed_work_request('Munca in alt departament', pg_temp.dept_group('edu')) $$,
   '42501', 'request_origin_forbidden',
   'a Member of another Department cannot file a Request against edu');
-select throws_ok($$ select public.create_completed_work_request('Munca intr-o echipa straina', null, 't-344-ind', null) $$,
+select throws_ok($$ select public.create_completed_work_request('Munca intr-o echipa straina', pg_temp.team_group('t-344-ind')) $$,
   '42501', 'request_origin_forbidden',
   'a non-member cannot file a Request against an Independent Team');
 reset role;
@@ -263,7 +262,7 @@ reset role;
 select pg_temp.test_login('34400000-0000-0000-0000-000000000008', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$
-  select public.create_completed_work_request('Munca pe un proiect arhivat', null, null, %s)
+  select public.create_completed_work_request('Munca pe un proiect arhivat', pg_temp.project_group(%s))
 $$, (select archived_project_id from f344)),
   '42501', 'request_origin_forbidden',
   'membership of an ARCHIVED Project does not admit a Request -- the Project must be active');
@@ -271,38 +270,38 @@ reset role;
 
 select pg_temp.test_login('34400000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_completed_work_request('   ', 'edu', null, null) $$,
+select throws_ok($$ select public.create_completed_work_request('   ', pg_temp.dept_group('edu')) $$,
   'PT400', 'description_required',
   'a blank description is refused');
-select throws_ok($$ select public.create_completed_work_request(null, 'edu', null, null) $$,
+select throws_ok($$ select public.create_completed_work_request(null, pg_temp.dept_group('edu')) $$,
   'PT400', 'description_required',
   'a null description is refused with the same reason');
-select throws_ok($$ select public.create_completed_work_request('Doua origini', 'edu', 't-344-dt', null) $$,
+select throws_ok($$ select public.create_completed_work_request('Doua origini', -1) $$,
+  '42501', 'request_origin_forbidden',
+  'an unknown Group is refused without disclosing that it does not exist');
+select throws_ok($$ select public.create_completed_work_request('Nicio origine', null) $$,
   'PT400', 'invalid_origin',
-  'two Origins are refused');
-select throws_ok($$ select public.create_completed_work_request('Nicio origine', null, null, null) $$,
-  'PT400', 'invalid_origin',
-  'zero Origins are refused with the same reason');
+  'a Request naming no Group is malformed (#579: the Group is the only Origin)');
 reset role;
 
 -- A deactivated Member holding a still-valid level-6 token, and a real uid
 -- with no organisation claims: both stop at the gate, before any Origin test.
 select pg_temp.test_login('34400000-0000-0000-0000-000000000010', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_completed_work_request('Token vechi', 'edu', null, null) $$,
+select throws_ok($$ select public.create_completed_work_request('Token vechi', pg_temp.dept_group('edu')) $$,
   '42501', 'request_command_forbidden',
   'a deactivated Member with a still-valid BC token is stopped at the gate');
 reset role;
 
 select pg_temp.test_login('34400000-0000-0000-0000-000000000011', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.create_completed_work_request('Fara claimuri', 'edu', null, null) $$,
+select throws_ok($$ select public.create_completed_work_request('Fara claimuri', pg_temp.dept_group('edu')) $$,
   '42501', 'request_command_forbidden',
   'a real uid without organisation claims is stopped at the gate too');
 reset role;
 
 select pg_temp.test_clear_jwt();
 set local role anon;
-select throws_ok($$ select public.create_completed_work_request('Anonim', 'edu', null, null) $$,
+select throws_ok($$ select public.create_completed_work_request('Anonim', pg_temp.dept_group('edu')) $$,
   '42501', 'permission denied for function create_completed_work_request',
   'anon cannot execute create_completed_work_request at all -- the literal grant denial');
 reset role;
@@ -317,7 +316,7 @@ select is((select count(*) from public.completed_work_requests
 select pg_temp.test_login('34400000-0000-0000-0000-000000000008', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$
-  select public.create_completed_work_request(%L, null, null, %s)
+  select public.create_completed_work_request(%L, pg_temp.project_group(%s))
 $$, (select project_description from d344), (select project_id from f344)),
   'a plain Project member files a Request against their active Project');
 reset role;
@@ -342,7 +341,7 @@ $$, (select project_request_id from p344)),
 select pg_temp.test_login('34400000-0000-0000-0000-000000000009', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '["t-344-ind"]'::jsonb));
 select lives_ok(format($$
-  select public.create_completed_work_request(%L, null, 't-344-ind', null)
+  select public.create_completed_work_request(%L, pg_temp.team_group('t-344-ind'))
 $$, (select ind_description from d344)),
   'an Independent-Team member files a Request against their own Team');
 reset role;
@@ -360,7 +359,7 @@ $$, (select ind_request_id from p344)),
 select pg_temp.test_login('34400000-0000-0000-0000-000000000012', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '["t-344-dt"]'::jsonb));
 select lives_ok(format($$
-  select public.create_completed_work_request(%L, null, 't-344-dt', null)
+  select public.create_completed_work_request(%L, pg_temp.team_group('t-344-dt'))
 $$, (select dt_description from d344)),
   'a Department-Team member files a Request against their Team');
 reset role;
@@ -405,7 +404,7 @@ select isnt((select task_id from t344), null,
 
 select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s',
               task.kind, task.audience, task.assignment_mode, task.status,
-              task.dept_id, task.created_by, task.difficulty, task.rating,
+              (select legacy_dept_id from public.groups where id = task.group_id), task.created_by, task.difficulty, task.rating,
               (task.completed_at is not null)::text)
              from public.tasks as task where task.id = (select task_id from t344)),
   'task|local|direct|completed|edu|34400000-0000-0000-0000-000000000002|3|4|true',
@@ -568,7 +567,7 @@ reset role;
 
 -- 7b-bis. A Project archived AFTER the Request was filed. Three shapes, and
 -- the middle one is the whole point: the visibility test is a DISJUNCTION
--- (requester_id = auth.uid() OR private.can_manage_origin(...)), so a lead who
+-- (requester_id = auth.uid() OR private.can_manage_group_work(...)), so a lead who
 -- is merely the Origin's manager is stopped at PT404 by
 -- private.can_manage_project_work's active-only branch -- but a lead who is
 -- the Request's OWN REQUESTER short-circuits on the first disjunct, never
@@ -830,8 +829,8 @@ reset role;
 select pg_temp.test_login('34400000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$
-  insert into public.completed_work_requests (requester_id, dept_id, description)
-  values ('34400000-0000-0000-0000-000000000004', 'edu', 'Scriere directa #344')
+  insert into public.completed_work_requests (requester_id, group_id, description)
+  values ('34400000-0000-0000-0000-000000000004', pg_temp.dept_group('edu'), 'Scriere directa #344')
 $$, '42501', 'permission denied for table completed_work_requests',
   'even the BC cannot insert a Request directly -- create_completed_work_request is the only path');
 select throws_ok(format($$
@@ -905,9 +904,9 @@ select extensions.dblink_exec('cwr_setup', $$
     ('34400000-0000-0000-0000-000000000052', 'edu'),
     ('34400000-0000-0000-0000-000000000053', 'edu');
 
-  insert into public.completed_work_requests (requester_id, dept_id, description) values
-    ('34400000-0000-0000-0000-000000000052', 'edu', 'Cerere pentru cursa de aprobare #344 committed'),
-    ('34400000-0000-0000-0000-000000000053', 'edu', 'Cerere pentru sonda de blocaj #344 committed');
+  insert into public.completed_work_requests (requester_id, group_id, description) values
+    ('34400000-0000-0000-0000-000000000052', (select id from public.groups where legacy_dept_id = 'edu'), 'Cerere pentru cursa de aprobare #344 committed'),
+    ('34400000-0000-0000-0000-000000000053', (select id from public.groups where legacy_dept_id = 'edu'), 'Cerere pentru sonda de blocaj #344 committed');
 $$);
 
 create temp table r344 as
@@ -950,7 +949,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.profiles') as row_lock
     join public.profiles as profile on profile.ctid = row_lock.locked_row
    where profile.id = '34400000-0000-0000-0000-000000000051'
-), false), 'it holds the decider''s own live profile row FOR SHARE, so a concurrent deactivation serializes behind the decision (private.require_origin_manager''s discipline)');
+), false), 'it holds the decider''s own live profile row FOR SHARE, so a concurrent deactivation serializes behind the decision (private.require_group_work_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
     from extensions.pgrowlocks('public.group_members') as row_lock

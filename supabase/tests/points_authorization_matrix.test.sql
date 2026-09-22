@@ -94,10 +94,11 @@ overriding system value values (
 );
 
 insert into public.tasks
-  (title, description, deadline, dept_id, team_id, project_id, status,
+  (title, description, deadline, group_id, status,
    difficulty, rating, created_by, created_at, completed_at)
 select fixture.title, 'Matrix fixture', now() - interval '1 day',
-       fixture.dept_id, fixture.team_id, fixture.project_id, 'completed',
+       coalesce(pg_temp.dept_group(fixture.dept_id), pg_temp.team_group(fixture.team_id),
+                pg_temp.project_group(fixture.project_id)), 'completed',
        fixture.difficulty, fixture.rating,
        '26200000-0000-0000-0000-000000000005',
        now() - interval '2 days', now()
@@ -137,8 +138,9 @@ select is((select count(*) from public.points_ledger where reason = 'sanction'),
 select is((select count(*) from public.tasks where title like 'Matrix % Task'), 4::bigint,
   'all four origin fixtures exist');
 select results_eq(
-  $$ select count(dept_id)::int, count(team_id)::int, count(project_id)::int
-       from public.tasks where title like 'Matrix % Task' $$,
+  $$ select count(grp.legacy_dept_id)::int, count(grp.legacy_team_id)::int, count(grp.legacy_project_id)::int
+       from public.tasks as task join public.groups as grp on grp.id = task.group_id
+      where task.title like 'Matrix % Task' $$,
   $$ values (1, 2, 1) $$,
   'the fixture contains one Department, two Team, and one Project Task'
 );
@@ -152,9 +154,9 @@ select is((select count(*) from public.points_ledger
 select is((select sum(entry.delta)::int
              from public.points_ledger as entry
              join public.tasks as task on task.id = entry.task_id
-             left join public.teams as team on team.id = task.team_id
+             join public.groups as task_group on task_group.id = task.group_id
             where entry.reason in ('task', 'task_reversal')
-              and coalesce(task.dept_id, team.dept_id) = '262-dept'), 9,
+              and task_group.path @> array[pg_temp.dept_group('262-dept')]), 9,
   'the owned Department Cup contribution is non-vacuously 9');
 select results_eq(
   $$ select member_id, sum(delta)::int from public.points_ledger
@@ -245,7 +247,7 @@ select results_eq(
   $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3) $$,
   'BCE: exact Task-only Leaderboard, including inactive earner'
 );
-select is((select points from public.department_cup() where dept_id = '262-dept'), 9, 'BCE: exact Department Cup total');
+select is((select points from public.department_cup() where group_id = pg_temp.dept_group('262-dept')), 9, 'BCE: exact Department Cup total');
 select is((select count(*) from public.leadership_member_tasks('26200000-0000-0000-0000-000000000001')), 1::bigint, 'BCE: member drill-down row');
 select is((select count(*) from public.points_ledger where member_id = '26200000-0000-0000-0000-000000000000'), 1::bigint, 'BCE: another member ledger row is visible');
 reset role;
@@ -258,7 +260,7 @@ select results_eq(
   $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3) $$,
   'BC: exact Task-only Leaderboard'
 );
-select is((select points from public.department_cup() where dept_id = '262-dept'), 9, 'BC: exact Department Cup total');
+select is((select points from public.department_cup() where group_id = pg_temp.dept_group('262-dept')), 9, 'BC: exact Department Cup total');
 select is((select count(*) from public.leadership_member_tasks('26200000-0000-0000-0000-000000000001')), 1::bigint, 'BC: member drill-down row');
 select is((select count(*) from public.points_ledger where member_id = '26200000-0000-0000-0000-000000000000'), 1::bigint, 'BC: another member ledger row is visible');
 reset role;
@@ -271,7 +273,7 @@ select results_eq(
   $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3) $$,
   'Moderator: exact Task-only Leaderboard'
 );
-select is((select points from public.department_cup() where dept_id = '262-dept'), 9, 'Moderator: exact Department Cup total');
+select is((select points from public.department_cup() where group_id = pg_temp.dept_group('262-dept')), 9, 'Moderator: exact Department Cup total');
 select is((select count(*) from public.leadership_member_tasks('26200000-0000-0000-0000-000000000001')), 1::bigint, 'Moderator: member drill-down row');
 select is((select count(*) from public.points_ledger where member_id = '26200000-0000-0000-0000-000000000000'), 1::bigint, 'Moderator: another member ledger row is visible');
 reset role;

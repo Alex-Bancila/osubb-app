@@ -1,6 +1,6 @@
 -- completed_work_requests_schema.test.sql — #321: table shape, the
 -- pending/approved/rejected constraints, and the read matrix (requester,
--- Origin managers via private.can_manage_origin, and everyone else denied).
+-- the Group's managers via private.can_manage_group_work, and everyone else denied).
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -18,7 +18,7 @@ select ok(
 
 select columns_are(
   'public', 'completed_work_requests',
-  array['id', 'requester_id', 'dept_id', 'team_id', 'project_id', 'description',
+  array['id', 'requester_id', 'description',
         'status', 'decided_by', 'decided_at', 'decision_note', 'task_id', 'created_at',
         'group_id'],
   'completed_work_requests exposes exactly the requested fields');
@@ -27,12 +27,12 @@ select col_type_is('public', 'completed_work_requests', 'id', 'bigint', 'request
 select col_not_null('public', 'completed_work_requests', 'requester_id', 'a Request names its requester');
 select fk_ok('public', 'completed_work_requests', 'requester_id', 'public', 'profiles', 'id',
   'requester_id references a Profile');
-select fk_ok('public', 'completed_work_requests', 'dept_id', 'public', 'departments', 'id',
-  'dept_id references a Department when set');
-select fk_ok('public', 'completed_work_requests', 'team_id', 'public', 'teams', 'id',
-  'team_id references a Team when set');
-select fk_ok('public', 'completed_work_requests', 'project_id', 'public', 'projects', 'id',
-  'project_id references a Project when set');
+select fk_ok('public', 'completed_work_requests', 'group_id', 'public', 'groups', 'id',
+  'group_id references the owning Group');
+select col_not_null('public', 'completed_work_requests', 'group_id',
+  'every Request names its Group (#579: the only Origin)');
+select hasnt_column('public', 'completed_work_requests', 'dept_id',
+  'the legacy Origin columns are gone (#579)');
 select col_not_null('public', 'completed_work_requests', 'description', 'description is required');
 select col_not_null('public', 'completed_work_requests', 'status', 'status is required');
 select col_default_is('public', 'completed_work_requests', 'status', 'pending',
@@ -50,12 +50,12 @@ select has_index('public', 'completed_work_requests', 'completed_work_requests_r
   'requester lookup is indexed');
 select has_index('public', 'completed_work_requests', 'completed_work_requests_status_idx',
   'status lookup is indexed');
-select has_index('public', 'completed_work_requests', 'completed_work_requests_dept_idx',
-  'Department-origin lookup is indexed');
-select has_index('public', 'completed_work_requests', 'completed_work_requests_team_idx',
-  'Team-origin lookup is indexed');
-select has_index('public', 'completed_work_requests', 'completed_work_requests_project_idx',
-  'Project-origin lookup is indexed');
+select has_index('public', 'completed_work_requests', 'completed_work_requests_group_idx',
+  'Group-origin lookup is indexed');
+select hasnt_index('public', 'completed_work_requests', 'completed_work_requests_team_idx',
+  'the legacy Team-origin index is gone (#579)');
+select hasnt_index('public', 'completed_work_requests', 'completed_work_requests_project_idx',
+  'the legacy Project-origin index is gone (#579)');
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -105,34 +105,33 @@ select project.id, '32105000-0000-0000-0000-000000000006', 'member'
   from public.projects as project
  where project.name = 'CWRS Schema Project 321';
 
-insert into public.tasks (title, dept_id)
-values ('CWRS schema fixture task 321', 'edu');
+insert into public.tasks (title, group_id)
+values ('CWRS schema fixture task 321', pg_temp.dept_group('edu'));
 
 create temp table fx as
 select
-  (select id from public.projects where name = 'CWRS Schema Project 321') as project_id,
+  pg_temp.project_group((select id from public.projects where name = 'CWRS Schema Project 321')) as project_group_id,
   (select id from public.tasks where title = 'CWRS schema fixture task 321') as task_id;
 grant select on fx to authenticated;
 
--- ==================== origin XOR ====================
+-- ==================== the Group is the only Origin (#579) ====================
 select throws_ok(
   $$ insert into public.completed_work_requests (requester_id, description)
      values ('32105000-0000-0000-0000-000000000001', 'no origin at all') $$,
-  '23514', 'request_group_required',
-  'zero Origins is rejected -- private.sync_request_group_origin answers before the Origin XOR check can (#519)');
+  '23502', null,
+  'a Request without a Group is rejected by group_id NOT NULL (#579: no bridge derives one)');
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, team_id, description)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'cwrs-dept-team-321',
-             'two origins at once') $$,
-  '23514', null,
-  'two Origins at once is rejected');
+       (requester_id, group_id, description)
+     values ('32105000-0000-0000-0000-000000000001', -1, 'an unknown Group') $$,
+  '23503', null,
+  'an unknown Group is rejected by the foreign key');
 
 -- ==================== status vocabulary ====================
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request',
+       (requester_id, group_id, description, status)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request',
              'archived') $$,
   '23514', null,
   'a status outside pending/approved/rejected is rejected');
@@ -140,8 +139,8 @@ select throws_ok(
 -- ==================== description must be non-blank ====================
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', '   ') $$,
+       (requester_id, group_id, description)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), '   ') $$,
   '23514', null,
   'an all-spaces description is rejected');
 
@@ -150,27 +149,27 @@ select throws_ok(
 -- future edit that drops a single clause is caught by exactly one test.
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'pending',
+       (requester_id, group_id, description, status, decided_by)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'pending',
              '32105000-0000-0000-0000-000000000002') $$,
   '23514', null,
   'a pending Request already naming a decider is rejected');
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_at)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'pending', now()) $$,
+       (requester_id, group_id, description, status, decided_at)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'pending', now()) $$,
   '23514', null,
   'a pending Request already timestamped as decided is rejected');
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decision_note)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'pending', 'too early') $$,
+       (requester_id, group_id, description, status, decision_note)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'pending', 'too early') $$,
   '23514', null,
   'a pending Request already carrying a decision note is rejected');
 select throws_ok(
   format($$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, task_id)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'pending', %s) $$,
+       (requester_id, group_id, description, status, task_id)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'pending', %s) $$,
     (select task_id from fx)),
   '23514', null,
   'a pending Request already naming a Task is rejected');
@@ -179,31 +178,31 @@ select throws_ok(
 -- Each case below breaks exactly one clause of the approved shape.
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, decided_at)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'approved',
+       (requester_id, group_id, description, status, decided_by, decided_at)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'approved',
              '32105000-0000-0000-0000-000000000002', now()) $$,
   '23514', null,
   'approved without a created Task is rejected');
 select throws_ok(
   format($$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_at, task_id)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'approved',
+       (requester_id, group_id, description, status, decided_at, task_id)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'approved',
              now(), %s) $$,
     (select task_id from fx)),
   '23514', null,
   'approved without a decider (decided_by) is rejected');
 select throws_ok(
   format($$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, task_id)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'approved',
+       (requester_id, group_id, description, status, decided_by, task_id)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'approved',
              '32105000-0000-0000-0000-000000000002', %s) $$,
     (select task_id from fx)),
   '23514', null,
   'approved without a decision timestamp (decided_at) is rejected');
 select throws_ok(
   format($$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, decided_at, decision_note, task_id)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'approved',
+       (requester_id, group_id, description, status, decided_by, decided_at, decision_note, task_id)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'approved',
              '32105000-0000-0000-0000-000000000002', now(), '   ', %s) $$,
     (select task_id from fx)),
   '23514', null,
@@ -212,29 +211,29 @@ select throws_ok(
 -- ==================== rejected shape ====================
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, decided_at)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'rejected',
+       (requester_id, group_id, description, status, decided_by, decided_at)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'rejected',
              '32105000-0000-0000-0000-000000000002', now()) $$,
   '23514', null,
   'rejected without a note is rejected');
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, decided_at, decision_note)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'rejected',
+       (requester_id, group_id, description, status, decided_by, decided_at, decision_note)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'rejected',
              '32105000-0000-0000-0000-000000000002', now(), '   ') $$,
   '23514', null,
   'rejected with an all-spaces note is rejected');
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_at, decision_note)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'rejected',
+       (requester_id, group_id, description, status, decided_at, decision_note)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'rejected',
              now(), 'not enough evidence') $$,
   '23514', null,
   'rejected without a decider (decided_by) is rejected');
 select throws_ok(
   format($$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, decided_at, decision_note, task_id)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'rejected',
+       (requester_id, group_id, description, status, decided_by, decided_at, decision_note, task_id)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'rejected',
              '32105000-0000-0000-0000-000000000002', now(), 'not enough evidence', %s) $$,
     (select task_id from fx)),
   '23514', null,
@@ -243,9 +242,9 @@ select throws_ok(
 -- ==================== chronology ====================
 select throws_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, decided_at,
+       (requester_id, group_id, description, status, decided_by, decided_at,
         decision_note, created_at)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'a request', 'rejected',
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'a request', 'rejected',
              '32105000-0000-0000-0000-000000000002', now() - interval '1 hour',
              'too early', now()) $$,
   '23514', null,
@@ -253,23 +252,23 @@ select throws_ok(
 
 -- ==================== valid rows, one per status ====================
 select lives_ok(
-  $$ insert into public.completed_work_requests (requester_id, dept_id, description)
-     values ('32105000-0000-0000-0000-000000000001', 'edu', 'CWRS dept fixture request') $$,
+  $$ insert into public.completed_work_requests (requester_id, group_id, description)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'), 'CWRS dept fixture request') $$,
   'a valid pending Department Request is recorded');
 select lives_ok(
   format($$ insert into public.completed_work_requests
-       (requester_id, project_id, description, status, decided_by, decided_at, task_id)
+       (requester_id, group_id, description, status, decided_by, decided_at, task_id)
      values ('32105000-0000-0000-0000-000000000006', %s, 'CWRS project fixture request',
              'approved', '32105000-0000-0000-0000-000000000005', now(), %s) $$,
-    (select project_id from fx), (select task_id from fx)),
+    (select project_group_id from fx), (select task_id from fx)),
   'a valid approved Project Request is recorded');
 
 -- One approval per Task: a second approved Request cannot reuse the same
 -- task_id (completed_work_requests_task_uidx).
 select throws_ok(
   format($$ insert into public.completed_work_requests
-       (requester_id, dept_id, description, status, decided_by, decided_at, task_id)
-     values ('32105000-0000-0000-0000-000000000001', 'edu',
+       (requester_id, group_id, description, status, decided_by, decided_at, task_id)
+     values ('32105000-0000-0000-0000-000000000001', pg_temp.dept_group('edu'),
              'a second approved request for the same task',
              'approved', '32105000-0000-0000-0000-000000000002', now(), %s) $$,
     (select task_id from fx)),
@@ -278,16 +277,16 @@ select throws_ok(
 
 select lives_ok(
   $$ insert into public.completed_work_requests
-       (requester_id, team_id, description, status, decided_by, decided_at, decision_note)
-     values ('32105000-0000-0000-0000-000000000007', 'cwrs-indep-team-321',
+       (requester_id, group_id, description, status, decided_by, decided_at, decision_note)
+     values ('32105000-0000-0000-0000-000000000007', pg_temp.team_group('cwrs-indep-team-321'),
              'CWRS independent-team fixture request', 'rejected',
              '32105000-0000-0000-0000-000000000008', now(), 'not enough evidence') $$,
   'a valid rejected Independent-Team Request is recorded');
 
 -- A pending Request from a requester who has since been deactivated. Rows
 -- like this can exist even though the requester could not create one today.
-insert into public.completed_work_requests (requester_id, dept_id, description)
-  values ('32105000-0000-0000-0000-000000000011', 'edu',
+insert into public.completed_work_requests (requester_id, group_id, description)
+  values ('32105000-0000-0000-0000-000000000011', pg_temp.dept_group('edu'),
           'CWRS deactivated-requester fixture request');
 
 create temp table fx2 as

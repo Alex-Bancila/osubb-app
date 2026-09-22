@@ -35,10 +35,10 @@ insert into public.member_departments (member_id, dept_id) values
 -- 'RSVP imagine' carries min_level 3 (#519 retires min_level 4), keeping it
 -- the one Event this file needs hidden from Ana (a level-1 Voluntar) for
 -- "a hidden event is indistinguishable from a missing event" below.
-insert into public.events (title, type, scope, dept_id, min_level, starts_at) values
-  ('RSVP organizație', 'sedinta', 'org', null, 0, now() + interval '1 day'),
-  ('RSVP educațional', 'sedinta', 'dept', 'edu', 0, now() + interval '2 days'),
-  ('RSVP imagine', 'sedinta', 'dept', 'pr', 3, now() + interval '3 days');
+insert into public.events (title, type, group_id, min_level, starts_at) values
+  ('RSVP organizație', 'sedinta', pg_temp.dept_group('org'), 0, now() + interval '1 day'),
+  ('RSVP educațional', 'sedinta', pg_temp.dept_group('edu'), 0, now() + interval '2 days'),
+  ('RSVP imagine', 'sedinta', pg_temp.dept_group('pr'), 3, now() + interval '3 days');
 
 insert into public.event_attendance (event_id, member_id, status)
 select id, 'b2000000-0000-0000-0000-000000000237'::uuid, 'declined'

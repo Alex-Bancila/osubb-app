@@ -68,9 +68,9 @@ insert into public.member_departments (member_id, dept_id) values
 
 -- ---- T1: start_task happy path -- a todo Task, direct mode, one Executor.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Start fericit #334', 'Gata de pornit', '2027-11-01 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Start fericit #334', 'Gata de pornit', '2027-11-01 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
@@ -79,9 +79,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 -- ---- T2: submit_task_for_review happy path -- in_progress, fresh (never
 -- returned), created by the manager so task_managers picks the CREATOR.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, started_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, started_at, created_by)
 values
-  ('Trimitere fericita #334', 'Gata de verificare', '2027-11-02 09:00:00+00', 'edu', 'local', 'direct', 'in_progress',
+  ('Trimitere fericita #334', 'Gata de verificare', '2027-11-02 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
    now() - interval '2 hours', now() - interval '1 hour', '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
@@ -89,9 +89,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 
 -- ---- T3: already in_progress -- wrong state for start_task.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, created_by)
 values
-  ('Deja in lucru #334', 'Nu mai e todo', '2027-11-03 09:00:00+00', 'edu', 'local', 'direct', 'in_progress',
+  ('Deja in lucru #334', 'Nu mai e todo', '2027-11-03 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
    now(), '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
@@ -105,9 +105,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
-  ('Anulat pentru start #334', 'Anulat cu executant', '2027-11-04 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
+  ('Anulat pentru start #334', 'Anulat cu executant', '2027-11-04 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled',
    now(), 'Anulat inainte de start #334', '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
@@ -115,9 +115,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 
 -- ---- T5: still todo -- wrong state for submit_task_for_review.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Netrimis pentru verificare #334', 'Nu a pornit inca', '2027-11-05 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Netrimis pentru verificare #334', 'Nu a pornit inca', '2027-11-05 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
@@ -129,9 +129,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 -- exclusive to -- a cancelled Task, so this fixture states why it was called
 -- off. Nothing else about the fixture changes.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, cancelled_at, cancel_reason, created_by)
 values
-  ('Anulat pentru verificare #334', 'Anulat cu executant', '2027-11-06 09:00:00+00', 'edu', 'local', 'direct', 'cancelled',
+  ('Anulat pentru verificare #334', 'Anulat cu executant', '2027-11-06 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'cancelled',
    now(), 'Anulat inainte de verificare #334', '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
@@ -141,9 +141,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 -- an Assignment -- section 6 pins that both commands answer plain
 -- task_executor_forbidden, with no dedicated Umbrella reason.
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
+  (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
 values
-  ('Umbrela #334', 'edu', 'umbrella', null, null, null, null, 'todo',
+  ('Umbrela #334', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null, 'todo',
    '33400000-0000-0000-0000-000000000001');
 
 -- ---- T8: returned-from-review shape -- in_progress, review_round = 1,
@@ -153,10 +153,10 @@ values
 -- review_round / returned_to_progress_at untouched -- #335/#337's job, not
 -- this command's.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, started_at, review_round, returned_to_progress_at, created_by)
 values
-  ('Retrimis dupa feedback #334', 'A fost intors', '2027-11-08 09:00:00+00', 'edu', 'local', 'direct', 'in_progress',
+  ('Retrimis dupa feedback #334', 'A fost intors', '2027-11-08 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
    now() - interval '3 days', now() - interval '2 days', 1, now() - interval '1 day', '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
@@ -166,9 +166,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 -- active Executor and a genuinely PAST one (ended Assignment), so the past
 -- Executor still reads the Task (can_read_task) but has no authority left.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Persoane start #334', 'Matricea de persoane', '2027-11-09 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  ('Persoane start #334', 'Matricea de persoane', '2027-11-09 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
 select id, '33400000-0000-0000-0000-000000000003', '33400000-0000-0000-0000-000000000001',
@@ -181,9 +181,9 @@ select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-0000
 -- ---- T10: the persona matrix target for submit_task_for_review --
 -- in_progress, same active/past Executor shape as T9.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, started_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, created_by)
 values
-  ('Persoane verificare #334', 'Matricea de persoane', '2027-11-10 09:00:00+00', 'edu', 'local', 'direct', 'in_progress',
+  ('Persoane verificare #334', 'Matricea de persoane', '2027-11-10 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
    now(), '33400000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
 select id, '33400000-0000-0000-0000-000000000003', '33400000-0000-0000-0000-000000000001',
@@ -600,9 +600,9 @@ select extensions.dblink_exec('tp_setup', $$
     ('33400000-0000-0000-0000-000000000022', 'edu');
 
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+    (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
   values
-    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
      '33400000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)

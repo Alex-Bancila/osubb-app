@@ -87,10 +87,10 @@ insert into public.teams (id, name, dept_id) values
 -- `campaigns.id` and `projects.id` are GENERATED ALWAYS, so the fixture
 -- overrides them: the Campaign filter is asserted against literal ids below,
 -- and a literal beats threading a lookup through every assertion.
-insert into public.campaigns (id, department_id, name, created_by)
+insert into public.campaigns (id, group_id, name, created_by)
 overriding system value values
-  (2590001, 'edu', 'Campania A 259', '25900000-0000-0000-0000-000000000001'),
-  (2590002, 'edu', 'Campania B 259', '25900000-0000-0000-0000-000000000001');
+  (2590001, pg_temp.dept_group('edu'), 'Campania A 259', '25900000-0000-0000-0000-000000000001'),
+  (2590002, pg_temp.dept_group('edu'), 'Campania B 259', '25900000-0000-0000-0000-000000000001');
 
 insert into public.projects (id, name, status, leader_id, created_by)
 overriding system value values
@@ -101,10 +101,11 @@ overriding system value values
 -- Assignment, the Evaluation and the ledger entry, so the award is always
 -- difficulty x rating_mult(5) = difficulty x 3.
 insert into public.tasks
-  (title, description, deadline, dept_id, team_id, project_id, campaign_id,
+  (title, description, deadline, group_id, campaign_id,
    status, difficulty, rating, created_by, created_at, completed_at)
 select fixture.title, 'Fixture', now() - interval '2 days',
-       fixture.dept_id, fixture.team_id, fixture.project_id, fixture.campaign_id,
+       coalesce(pg_temp.dept_group(fixture.dept_id), pg_temp.team_group(fixture.team_id),
+                pg_temp.project_group(fixture.project_id)), fixture.campaign_id,
        'completed', fixture.difficulty, 5,
        '25900000-0000-0000-0000-000000000001',
        -- completed_at is `now()`, not a past instant: pg_temp.test_credit_task
@@ -128,7 +129,7 @@ select fixture.title, 'Fixture', now() - interval '2 days',
 -- demo seed already puts real Task points on real Departments.
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 create temporary table cup259_before as
-  select dept_id, points from public.dept_cup;
+  select group_id, points from public.dept_cup;
 reset role;
 
 select pg_temp.test_credit_task(task.id, '25900000-0000-0000-0000-000000000002',
@@ -165,26 +166,26 @@ select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 select is((select count(*) from public.dept_cup), 5::bigint,
   'BCE sees all five competing Departments, including the ones on zero');
 
-select is((select points from public.dept_cup where dept_id = 'edu'),
-          (select points + 27 from cup259_before where dept_id = 'edu'),
+select is((select points from public.dept_cup where group_id = pg_temp.dept_group('edu')),
+          (select points + 27 from cup259_before where group_id = pg_temp.dept_group('edu')),
           'a Department Task (12) and a Department-Team Task on a child Team (15) both credit the parent Department, and the reversed award nets to zero');
 
 select is((select sum(points)::int from public.dept_cup),
           (select sum(points)::int + 27 from cup259_before),
           'the Project Task (15) and the Independent-Team Task (6) credit no Department at all -- the whole Cup moved by exactly the two qualifying awards');
 
-select is((select count(*) from public.dept_cup where dept_id in ('diverse', 'secretariat', 'org')), 0::bigint,
+select is((select count(*) from public.dept_cup where group_id in (pg_temp.dept_group('diverse'), pg_temp.dept_group('secretariat'), pg_temp.dept_group('org'))), 0::bigint,
   'coordination structures and the org row never appear as Cup rows');
 
-select is((select array_agg(dept_id) from public.dept_cup),
-          (select array_agg(dept_id order by points desc, name) from public.dept_cup),
+select is((select array_agg(group_id) from public.dept_cup),
+          (select array_agg(group_id order by points desc, name) from public.dept_cup),
           'rows use points descending with the stable Department-name tiebreak');
 
 -- ==================== 5. The Campaign filter ====================
 
-select is((select points from public.department_cup(2590001) where dept_id = 'edu'), 12,
+select is((select points from public.department_cup(2590001) where group_id = pg_temp.dept_group('edu')), 12,
   'Campania A shows only its own surviving award');
-select is((select points from public.department_cup(2590002) where dept_id = 'edu'), 15,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')), 15,
   'Campania B shows only its own award -- the same Department, a different total under each Campaign');
 select is((select sum(points)::int from public.department_cup(2590001)), 12,
   'no other Department picks up points from a Campaign it did not run');
@@ -193,18 +194,18 @@ select is((select count(*) from public.department_cup(2590001)), 5::bigint,
 select is((select sum(points)::int from public.department_cup(-1)), 0,
   'an unknown Campaign id yields a Cup of zeroes, not the unfiltered totals');
 select set_eq(
-  $$ select dept_id, points, members from public.department_cup(null) $$,
-  $$ select dept_id, points, members from public.dept_cup $$,
+  $$ select group_id, points, members from public.department_cup(null) $$,
+  $$ select group_id, points, members from public.dept_cup $$,
   'department_cup(null) is the view: one body, two entry points');
 
 -- #523: settings and deep paths, all changed only in this rolled-back fixture.
 reset role;
 update public.groups set counts_toward_parent_cup=false where legacy_team_id='259-dept-team';
-select is((select points from public.department_cup(2590002) where dept_id='edu'),0,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),0,
   'a child link that does not count blocks its Task points');
 update public.groups set counts_toward_parent_cup=true where legacy_team_id='259-dept-team';
 update public.groups set competes_in_cup=false where legacy_dept_id='youth';
-select is((select count(*) from public.dept_cup where dept_id='youth'),0::bigint,
+select is((select count(*) from public.dept_cup where group_id = pg_temp.dept_group('youth')),0::bigint,
   'disabling competition removes a Group row');
 update public.groups set competes_in_cup=true where legacy_dept_id='youth';
 
@@ -216,23 +217,23 @@ insert into public.groups(name,category,parent_id,path)
 select 'Cup native grandchild 523','project',id,'{}' from public.groups where name='Cup native child 523';
 update public.groups set parent_id=(select id from public.groups where name='Cup native grandchild 523')
 where legacy_team_id='259-dept-team';
-select is((select points from public.department_cup(2590002) where dept_id='edu'),15,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),15,
   'two native levels and the mapped leaf all count toward the competing root');
 update public.groups set counts_toward_parent_cup=false where name='Cup native grandchild 523';
-select is((select points from public.department_cup(2590002) where dept_id='edu'),0,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),0,
   'the deepest native link can block the Cup contribution');
 update public.groups set counts_toward_parent_cup=true where name='Cup native grandchild 523';
 update public.groups set counts_toward_parent_cup=false where name='Cup native child 523';
-select is((select points from public.department_cup(2590002) where dept_id='edu'),0,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),0,
   'the upper native link can independently block the Cup contribution');
 select is((select points from public.leadership_leaderboard((select id from public.groups where legacy_dept_id='edu'),2590002)
   where member_id='25900000-0000-0000-0000-000000000002'),15,
   'Cup participation settings never remove work from a Group subtree Leaderboard');
 update public.groups set counts_toward_parent_cup=true where name='Cup native child 523';
 update public.groups set counts_toward_parent_cup=false where legacy_dept_id='edu';
-select is((select points from public.department_cup(2590002) where dept_id='edu'),15,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),15,
   'the root flag is not a link below itself and does not discard descendant points');
-select is((select points from public.department_cup(2590001) where dept_id='edu'),12,
+select is((select points from public.department_cup(2590001) where group_id = pg_temp.dept_group('edu')),12,
   'a competing Group keeps its own direct work regardless of its parent flag');
 update public.groups set counts_toward_parent_cup=true where legacy_dept_id='edu';
 
@@ -244,7 +245,7 @@ select ok(exists(select 1 from public.dept_cup cup join public.groups grp on grp
   'unfiltered Cup includes the actual Group identifier');
 select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.legacy_dept_id='edu'),
   'Campaign-filtered Cup includes the actual Group identifier');
-select is((select members from public.dept_cup where dept_id='edu'),
+select is((select members from public.dept_cup where group_id = pg_temp.dept_group('edu')),
   (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where legacy_dept_id='edu')),
   'Cup roster counts active explicit members of the competitor itself');
 
@@ -264,14 +265,14 @@ select ok(
 -- The chain built above is edu -> Cup native child 523 -> Cup native grandchild
 -- 523 -> the 259-dept-team Group, which owns Campania B's only Task (15), and
 -- every link counts toward its parent again by this point.
-select is((select points from public.department_cup(2590002) where dept_id = 'edu'), 15,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')), 15,
   'with only the root competing, Campania B''s Task credits the root -- the "before" this mutation moves');
 alter table public.groups drop constraint groups_competes_top_level_ck;
 update public.groups set competes_in_cup = true where name = 'Cup native child 523';
 select is((select points from public.department_cup(2590002)
             where group_id = (select id from public.groups where name = 'Cup native child 523')), 15,
   'with two competitors on one path the Task credits the nearest competing ancestor');
-select is((select points from public.department_cup(2590002) where dept_id = 'edu'), 0,
+select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')), 0,
   'and not the furthest -- the root keeps none of the points its nearer competing descendant took');
 update public.groups set competes_in_cup = false where name = 'Cup native child 523';
 alter table public.groups add constraint groups_competes_top_level_ck
@@ -302,7 +303,7 @@ select is((select count(*) from public.department_cup(2590001)), 0::bigint,
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000005');
 select is((select count(*) from public.dept_cup), 5::bigint,
   'a BC (level 6) also sees the Department Cup -- the gate is >= 5, not = 5');
-select is((select points from public.department_cup(2590001) where dept_id = 'edu'), 12,
+select is((select points from public.department_cup(2590001) where group_id = pg_temp.dept_group('edu')), 12,
   'a BC sees the same Campaign-filtered totals a BCE would');
 
 select pg_temp.test_login('25900000-0000-0000-0000-000000000002',

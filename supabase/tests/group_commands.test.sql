@@ -12,13 +12,13 @@ create temp table g522_ids(name text primary key,id bigint);
 grant all on g522_ids to authenticated;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 set local role authenticated;
-select lives_ok($$insert into g522_ids select 'task', (public.create_task('Group native',null,now()+interval '1 day',null,null,null,'local','direct',p_group_id => pg_temp.g522_group('Project #521'))).id$$,'level-1 Manager creates by Group');
+select lives_ok($$insert into g522_ids select 'task', (public.create_task('Group native',null,now()+interval '1 day','local','direct',p_group_id => pg_temp.g522_group('Project #521'))).id$$,'level-1 Manager creates by Group');
 select lives_ok($$insert into g522_ids select 'campaign',(public.create_campaign(pg_temp.g522_group('Project #521'),'Group campaign')).id$$,'Project Manager creates Campaign');
-select throws_ok($q$select public.create_task('bad',null,now(),null,null,1,'local','direct',p_group_id=>pg_temp.g522_group('Project #521'))$q$,'PT400','invalid_origin','mixed Origin vocabularies are rejected');
-select throws_ok($q$select public.create_task('bad',null,now(),null,null,null,'local','direct',p_group_id=>-1)$q$,'42501','task_manage_forbidden','unknown Group is nondisclosing for Group Manager');
-select lives_ok($q$insert into g522_ids select 'umbrella',(public.create_task('Umbrella',null,null,null,null,null,null,null,p_kind=>'umbrella',p_group_id=>pg_temp.g522_group('Project #521'))).id$q$,'Group-native Umbrella');
-select lives_ok($q$insert into g522_ids select 'child',(public.create_task('Child',null,now(),null,null,null,'local','direct',p_parent_task_id=>(select id from g522_ids where name='umbrella'))).id$q$,'Subtask inherits Group without supplied Origin');
-select throws_ok($q$select public.create_task('bad',null,now(),null,null,null,'local','direct',p_parent_task_id=>(select id from g522_ids where name='umbrella'),p_group_id=>pg_temp.g522_group('Department #521'))$q$,'PT400','subtask_origin_mismatch','mismatched Subtask Group rejected');
+select throws_ok($q$select public.create_task('bad',null,now(),'local','direct')$q$,'PT400','task_group_required','a top-level Task naming no Group is rejected (#579: the Group is the only Origin)');
+select throws_ok($q$select public.create_task('bad',null,now(),'local','direct',p_group_id=>-1)$q$,'42501','task_manage_forbidden','unknown Group is nondisclosing for Group Manager');
+select lives_ok($q$insert into g522_ids select 'umbrella',(public.create_task('Umbrella',null,null,null,null,p_kind=>'umbrella',p_group_id=>pg_temp.g522_group('Project #521'))).id$q$,'Group-native Umbrella');
+select lives_ok($q$insert into g522_ids select 'child',(public.create_task('Child',null,now(),'local','direct',p_parent_task_id=>(select id from g522_ids where name='umbrella'))).id$q$,'Subtask inherits Group without supplied Origin');
+select throws_ok($q$select public.create_task('bad',null,now(),'local','direct',p_parent_task_id=>(select id from g522_ids where name='umbrella'),p_group_id=>pg_temp.g522_group('Department #521'))$q$,'PT400','subtask_origin_mismatch','mismatched Subtask Group rejected');
 select lives_ok($q$insert into g522_ids select 'clone',(public.duplicate_task((select id from g522_ids where name='task'),now()+interval '2 days')).id$q$,'duplicate copies Group');
 select is((select group_id from public.tasks where id=(select id from g522_ids where name='clone')),pg_temp.g522_group('Project #521'),'clone keeps source Group');
 reset role;
@@ -33,8 +33,8 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(9));
 select throws_ok($q$select public.create_campaign(pg_temp.g522_group('Project #521'),'Foreign')$q$,'42501','campaign_manage_forbidden','unrelated BCE cannot manage Project');
 select lives_ok($q$insert into g522_ids select 'department-campaign',(public.create_campaign(pg_temp.g522_group('Department #521'),'Shared name')).id$q$,'Department Group Manager creates Campaign');
-select lives_ok($q$select public.create_campaign('d521','Legacy Campaign')$q$,'legacy Department wrapper still resolves');
-select throws_ok($q$select public.create_campaign('missing-522','Hidden')$q$,'42501','campaign_manage_forbidden','unknown legacy Department is nondisclosing');
+select lives_ok($q$select public.create_campaign(pg_temp.dept_group('d521'), 'Legacy Campaign')$q$,'a Department Group Manager creates a Campaign by Group id (#579: the legacy text overload is gone)');
+select throws_ok($q$select public.create_campaign(pg_temp.dept_group('missing-522'), 'Hidden')$q$,'42501','campaign_manage_forbidden','a Group that resolves to nothing is nondisclosing');
 select throws_ok($q$select public.create_campaign(pg_temp.g522_group('Department #521'),'shared NAME')$q$,'PT409','campaign_name_taken','Group-local name uniqueness maps conflict');
 select lives_ok($q$insert into g522_ids select 'team-campaign',(public.create_campaign(pg_temp.g522_group('Child #521'),'Shared name')).id$q$,'same Campaign name in another Group allowed');
 reset role;
@@ -45,7 +45,7 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 select throws_ok($q$select public.create_campaign(pg_temp.g522_group('Archived #521'),'Archived')$q$,'42501','campaign_manage_forbidden','archived Group disallows local Campaign manager');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
-select throws_ok($q$select public.create_task('bad',null,now(),null,null,null,'local','direct',p_group_id=>-1)$q$,'42501','task_manage_forbidden','unknown Group is nondisclosing for BC too');
+select throws_ok($q$select public.create_task('bad',null,now(),'local','direct',p_group_id=>-1)$q$,'42501','task_manage_forbidden','unknown Group is nondisclosing for BC too');
 select lives_ok($q$select public.create_campaign((select id from public.groups where legacy_dept_id='org'),'Organization 522')$q$,'BC manages Organization Campaign');
 reset role;
 select throws_ok($q$update public.tasks set group_id=pg_temp.g522_group('Department #521') where id=(select id from g522_ids where name='child')$q$,'23514','subtask_origin_immutable','Group-only Subtask edit reaches hierarchy trigger');
@@ -55,21 +55,21 @@ select lives_ok($q$insert into public.tasks(title,deadline,group_id,campaign_id,
 select throws_ok($q$insert into public.tasks(title,deadline,group_id,campaign_id,audience,assignment_mode,status) values('ancestor',now(),pg_temp.g522_group('Department #521'),(select id from g522_ids where name='team-campaign'),'local','direct','todo')$q$,'23514','task_campaign_origin_mismatch','descendant Campaign cannot tag ancestor Task');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
-select lives_ok($q$insert into g522_ids select 'request-5',(public.create_completed_work_request('Request #522 5',null,null,null,p_group_id=>pg_temp.g522_group('Project #521'))).id$q$,'persona 5 files Group-native Request');
+select lives_ok($q$insert into g522_ids select 'request-5',(public.create_completed_work_request('Request #522 5', pg_temp.g522_group('Project #521'))).id$q$,'persona 5 files Group-native Request');
 select throws_ok($q$select public.reject_completed_work_request((select id from g522_ids where name='request-5'),'Self')$q$,'42501','request_decide_forbidden','persona 5 cannot decide own Request');
 reset role;
 select set_eq($q$select member::text from private.request_deciders((select id from g522_ids where name='request-5')) member where member::text like '52100000-%'$q$,array[pg_temp.g521_uid(1)::text,pg_temp.g521_uid(2)::text,pg_temp.g521_uid(3)::text,pg_temp.g521_uid(4)::text], 'deciders for persona 5');
 select set_eq($q$select member_id::text from public.notifications where dedupe_key='request:'||(select id from g522_ids where name='request-5') and member_id::text like '52100000-%'$q$,array[pg_temp.g521_uid(1)::text,pg_temp.g521_uid(2)::text,pg_temp.g521_uid(3)::text,pg_temp.g521_uid(4)::text], 'notifications match deciders for persona 5');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
-select lives_ok($q$insert into g522_ids select 'request-3',(public.create_completed_work_request('Request #522 3',null,null,null,p_group_id=>pg_temp.g522_group('Project #521'))).id$q$,'persona 3 files Group-native Request');
+select lives_ok($q$insert into g522_ids select 'request-3',(public.create_completed_work_request('Request #522 3', pg_temp.g522_group('Project #521'))).id$q$,'persona 3 files Group-native Request');
 select throws_ok($q$select public.reject_completed_work_request((select id from g522_ids where name='request-3'),'Self')$q$,'42501','request_decide_forbidden','persona 3 cannot decide own Request');
 reset role;
 select set_eq($q$select member::text from private.request_deciders((select id from g522_ids where name='request-3')) member where member::text like '52100000-%'$q$,array[pg_temp.g521_uid(1)::text,pg_temp.g521_uid(2)::text], 'deciders for persona 3');
 select set_eq($q$select member_id::text from public.notifications where dedupe_key='request:'||(select id from g522_ids where name='request-3') and member_id::text like '52100000-%'$q$,array[pg_temp.g521_uid(1)::text,pg_temp.g521_uid(2)::text], 'notifications match deciders for persona 3');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
-select lives_ok($q$insert into g522_ids select 'request-2',(public.create_completed_work_request('Request #522 2',null,null,null,p_group_id=>pg_temp.g522_group('Project #521'))).id$q$,'persona 2 files Group-native Request');
+select lives_ok($q$insert into g522_ids select 'request-2',(public.create_completed_work_request('Request #522 2', pg_temp.g522_group('Project #521'))).id$q$,'persona 2 files Group-native Request');
 select throws_ok($q$select public.reject_completed_work_request((select id from g522_ids where name='request-2'),'Self')$q$,'42501','request_decide_forbidden','persona 2 cannot decide own Request');
 reset role;
 select set_eq($q$select member::text from private.request_deciders((select id from g522_ids where name='request-2')) member where member::text like '52100000-%'$q$,array[pg_temp.g521_uid(1)::text], 'deciders for persona 2');
@@ -77,7 +77,7 @@ select set_eq($q$select member_id::text from public.notifications where dedupe_k
 insert into public.group_members(group_id,member_id,group_role) values(pg_temp.g522_group('Project #521'),pg_temp.g521_uid(1),'member');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
-select lives_ok($q$insert into g522_ids select 'request-1',(public.create_completed_work_request('Request #522 1',null,null,null,p_group_id=>pg_temp.g522_group('Project #521'))).id$q$,'persona 1 files Group-native Request');
+select lives_ok($q$insert into g522_ids select 'request-1',(public.create_completed_work_request('Request #522 1', pg_temp.g522_group('Project #521'))).id$q$,'persona 1 files Group-native Request');
 select throws_ok($q$select public.reject_completed_work_request((select id from g522_ids where name='request-1'),'Self')$q$,'42501','request_decide_forbidden','persona 1 cannot decide own Request');
 reset role;
 select set_eq($q$select member::text from private.request_deciders((select id from g522_ids where name='request-1')) member where member::text like '52100000-%'$q$,array[pg_temp.g521_uid(2)::text,pg_temp.g521_uid(3)::text,pg_temp.g521_uid(4)::text], 'deciders for persona 1');
@@ -125,25 +125,25 @@ select throws_ok($q$select public.reject_completed_work_request((select id from 
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
 select is((select count(*) from public.completed_work_requests where description like 'Request #522 %'),1::bigint,'ordinary member reads only own Request');
-select throws_ok($q$select public.create_completed_work_request('Mixed', 'd521',null,null,p_group_id=>pg_temp.g522_group('Project #521'))$q$,'PT400','invalid_origin','Request rejects multiple vocabularies');
-select throws_ok($q$select public.create_completed_work_request('Missing',null,null,null,p_group_id=>-1)$q$,'42501','request_origin_forbidden','unknown Request Group is nondisclosing');
+select throws_ok($q$select public.create_completed_work_request('Mixed', null)$q$,'PT400','invalid_origin','a Request naming no Group is malformed (#579: the Group is the only Origin)');
+select throws_ok($q$select public.create_completed_work_request('Missing', -1)$q$,'42501','request_origin_forbidden','unknown Request Group is nondisclosing');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
-select throws_ok($q$select public.create_completed_work_request('Archived',null,null,null,p_group_id=>pg_temp.g522_group('Archived #521'))$q$,'42501','request_origin_forbidden','cannot file into archived Group');
+select throws_ok($q$select public.create_completed_work_request('Archived', pg_temp.g522_group('Archived #521'))$q$,'42501','request_origin_forbidden','cannot file into archived Group');
 reset role;
 select pg_temp.test_login(pg_temp.g521_uid(2), '{}'::jsonb);
 select throws_ok($q$select public.create_campaign(pg_temp.g522_group('Project #521'),'Claimless')$q$,'42501','campaign_manage_forbidden','claimless Group Manager cannot create Campaign');
-select throws_ok($q$select public.create_completed_work_request('Claimless',null,null,null,p_group_id=>-1)$q$,'42501','request_command_forbidden','claimless member cannot file Request');
+select throws_ok($q$select public.create_completed_work_request('Claimless', -1)$q$,'42501','request_command_forbidden','claimless member cannot file Request');
 reset role;
--- Wave 2 retains the mapped legacy Origin boundary; native Campaigns are supported.
+-- #579: with the bridge gone a native Group carries Tasks and Requests like any other.
 insert into public.groups(name, category, parent_id, path, automatic_membership)
 values ('Native #522','team',pg_temp.g522_group('Project #521'),'{}',true);
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
-select throws_ok($q$select public.create_task('Native',null,now(),null,null,null,'local','direct',p_group_id=>pg_temp.g522_group('Native #522'))$q$,'23514','task_group_origin_unmapped','unmapped Task Group remains rejected until Wave 3');
+select lives_ok($q$select public.create_task('Native',null,now()+interval '1 day','local','direct',p_group_id=>pg_temp.g522_group('Native #522'))$q$,'a native Group now carries a Task -- task_group_origin_unmapped is gone with the bridge (#579)');
 select lives_ok($q$select public.create_campaign(pg_temp.g522_group('Native #522'),'Native Campaign')$q$,'ancestor Manager creates native child Group Campaign');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
-select throws_ok($q$select public.create_completed_work_request('Native request',null,null,null,p_group_id=>pg_temp.g522_group('Native #522'))$q$,'23514','request_group_origin_unmapped','unmapped Request Group remains rejected until Wave 3');
+select lives_ok($q$select public.create_completed_work_request('Native request', pg_temp.g522_group('Native #522'))$q$,'a native Group now carries a Request; Automatic Membership admits the requester (#579)');
 reset role;
 
 -- ==================== #522 plan delta: the rulings the matrix above does not yet separate ====================
@@ -157,11 +157,11 @@ reset role;
 -- create_completed_work_request_impl's `group_role_of(v_group, v_actor) is not null` with a
 -- path walk over group_members leaves the whole matrix above green; these two do not.
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
-select throws_ok($q$select public.create_completed_work_request('Down the path #522',null,null,null,p_group_id=>pg_temp.g522_group('Child #521'))$q$,
+select throws_ok($q$select public.create_completed_work_request('Down the path #522', pg_temp.g522_group('Child #521'))$q$,
   '42501','request_origin_forbidden','a Department member cannot file into the Department Team below it -- membership does not walk down the path');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
-select throws_ok($q$select public.create_completed_work_request('Up the path #522',null,null,null,p_group_id=>pg_temp.g522_group('Department #521'))$q$,
+select throws_ok($q$select public.create_completed_work_request('Up the path #522', pg_temp.g522_group('Department #521'))$q$,
   '42501','request_origin_forbidden','a Department-Team member cannot file into the Department above it -- membership does not walk up the path either');
 reset role;
 
@@ -183,48 +183,38 @@ select throws_ok($q$select public.create_campaign((select grp.id from public.gro
   '42501','campaign_manage_forbidden','a Department BCE cannot own an Organization Campaign -- only level >= 6 manages the Organization Group');
 reset role;
 
--- A Group-only create_task leaves the legacy triple to the #519 bridge.
-select is((select format('%s|%s|%s',coalesce(task.dept_id,'-'),coalesce(task.team_id,'-'),coalesce(task.project_id::text,'-'))
-             from public.tasks as task where task.id=(select id from g522_ids where name='task')),
-  format('-|-|%s',(select project.id from public.projects as project where project.name='Project #521')),
-  'a Group-only create_task derives dept_id/team_id/project_id instead of the caller supplying them');
+-- #579: a create by Group id writes exactly that Group -- there is no legacy triple to derive.
+select is((select task.group_id from public.tasks as task where task.id=(select id from g522_ids where name='task')),
+  pg_temp.g522_group('Project #521'),
+  'a create_task by Group id lands on exactly that Group');
 
--- The four writes below are `group_id = <the Group the command decided on>` in bodies whose
--- legacy triple is written beside it. While every Group still has a legacy master the bridge
--- derives the identical Group from that triple, so DELETING the group_id write changes
--- nothing observable -- the assertions above only catch a WRONG value. Turning the bridge off
--- inside this transaction removes the derivation and leaves the command's own write as the
--- only thing that can satisfy tasks.group_id NOT NULL. That is also the Wave 3 shape, where
--- the legacy columns are gone and these writes are the only ones left.
-alter table public.tasks disable trigger tasks_sync_group_origin;
+-- The writes below are `group_id = <the Group the command decided on>`. Since #579 there is no
+-- bridge to derive a Group from a legacy triple, so each command's own write is the only thing
+-- that can satisfy tasks.group_id NOT NULL, and both validators see group_id alone.
 
 select throws_ok($q$update public.tasks set group_id=pg_temp.g522_group('Department #521') where id=(select id from g522_ids where name='child')$q$,
   '23514','subtask_origin_immutable','validate_task_hierarchy refuses a Subtask Group change on group_id alone, with no legacy edit to answer for it');
--- The legacy triple here is the Umbrella's own, so the three legacy comparisons all agree and
--- only `new.group_id is distinct from v_parent_group` is left to refuse the Subtask.
-select throws_ok($q$insert into public.tasks(title,deadline,group_id,project_id,parent_task_id,audience,assignment_mode,status,kind)
+-- `new.group_id is distinct from v_parent_group` is the only rule left to refuse the Subtask.
+select throws_ok($q$insert into public.tasks(title,deadline,group_id,parent_task_id,audience,assignment_mode,status,kind)
   values('Mismatch #522',now(),pg_temp.g522_group('Department #521'),
-         (select project.id from public.projects as project where project.name='Project #521'),
          (select id from g522_ids where name='umbrella'),'local','direct','todo','task')$q$,
   '23514','subtask_origin_mismatch','and refuses a Subtask whose group_id alone differs from its Umbrella''s');
 
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 select lives_ok($q$insert into g522_ids select 'clone-nobridge',(public.duplicate_task((select id from g522_ids where name='task'),now()+interval '3 days')).id$q$,
-  'duplicate_task writes group_id itself: the clone still lands with the bridge off');
+  'duplicate_task writes group_id itself: the clone lands with no bridge to derive it');
 reset role;
 select is((select task.group_id from public.tasks as task where task.id=(select id from g522_ids where name='clone-nobridge')),
   pg_temp.g522_group('Project #521'),'and it is the source Group, written by the command rather than derived');
 
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
-select lives_ok($q$select public.approve_completed_work_request((select id from g522_ids where name='request-5'),3,3,'Bridge off #522')$q$,
-  'approve_completed_work_request writes the new Task''s group_id itself: it still lands with the bridge off');
+select lives_ok($q$select public.approve_completed_work_request((select id from g522_ids where name='request-5'),3,3,'No bridge #522')$q$,
+  'approve_completed_work_request writes the new Task''s group_id itself: it lands with no bridge to derive it');
 reset role;
 select is((select task.group_id from public.completed_work_requests as request
              join public.tasks as task on task.id=request.task_id
             where request.id=(select id from g522_ids where name='request-5')),
   pg_temp.g522_group('Project #521'),'and it is the Request''s Group, written by the command rather than derived');
-
-alter table public.tasks enable trigger tasks_sync_group_origin;
 
 -- An archived Group has no local deciders. With no other active BC/Moderator,
 -- a BC requester must remain pending and must not receive their own notice.
@@ -238,7 +228,7 @@ reset role;
 update public.profiles set role='voluntar' where id=pg_temp.g521_uid(9);
 insert into public.member_departments(member_id,dept_id) values(pg_temp.g521_uid(1),'d521');
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
-select lives_ok($q$insert into g522_ids select 'no-decider',(public.create_completed_work_request('No eligible other decider', 'd521',null,null)).id$q$,'BC requester can file work even when no eligible other decider remains');
+select lives_ok($q$insert into g522_ids select 'no-decider',(public.create_completed_work_request('No eligible other decider', pg_temp.dept_group('d521'))).id$q$,'BC requester can file work even when no eligible other decider remains');
 reset role;
 select is((select count(*) from public.notifications where dedupe_key='request:'||(select id from g522_ids where name='no-decider') and member_id=pg_temp.g521_uid(1)),0::bigint,'filing never sends requester an echo');
 reset role;

@@ -134,10 +134,10 @@ insert into public.teams (id, name, dept_id) values
 -- `campaigns.id` and `projects.id` are GENERATED ALWAYS, so the fixture
 -- overrides them: the Campaign and Project filters are asserted against
 -- literal ids, which beats threading a lookup through every assertion.
-insert into public.campaigns (id, department_id, name, created_by)
+insert into public.campaigns (id, group_id, name, created_by)
 overriding system value values
-  (2580001, '258-dept', 'Campania A 258', '25800000-0000-0000-0000-000000000001'),
-  (2580002, '258-dept', 'Campania B 258', '25800000-0000-0000-0000-000000000001');
+  (2580001, pg_temp.dept_group('258-dept'), 'Campania A 258', '25800000-0000-0000-0000-000000000001'),
+  (2580002, pg_temp.dept_group('258-dept'), 'Campania B 258', '25800000-0000-0000-0000-000000000001');
 
 insert into public.projects (id, name, status, leader_id, created_by)
 overriding system value values
@@ -153,10 +153,11 @@ overriding system value values
 -- (`difficulty x 3`); Nicu's kept Evaluation uses Rating 1 (`difficulty x -1`)
 -- so reversing his separate positive award leaves a genuinely negative net.
 insert into public.tasks
-  (title, description, deadline, dept_id, team_id, project_id, campaign_id,
+  (title, description, deadline, group_id, campaign_id,
    status, difficulty, rating, created_by, created_at, completed_at)
 select fixture.title, 'Fixture', now() - interval '2 days',
-       fixture.dept_id, fixture.team_id, fixture.project_id, fixture.campaign_id,
+       coalesce(pg_temp.dept_group(fixture.dept_id), pg_temp.team_group(fixture.team_id),
+                pg_temp.project_group(fixture.project_id)), fixture.campaign_id,
        'completed', fixture.difficulty, fixture.rating,
        '25800000-0000-0000-0000-000000000001',
        -- completed_at is `now()`: test_credit_task ends the Assignment at
@@ -403,7 +404,7 @@ select set_eq(
 select is((select points from public.leadership_leaderboard(pg_temp.g523_group('diverse'))
             where member_id = '25800000-0000-0000-0000-000000000012'), 6,
   'the Leaderboard filters on any Department id, coordination structures included');
-select is((select count(*) from public.department_cup() where dept_id = 'diverse'), 0::bigint,
+select is((select count(*) from public.department_cup() where group_id = pg_temp.dept_group('diverse')), 0::bigint,
   'the Department Cup includes only Groups whose competing setting is enabled');
 
 -- ==================== 9. The BCE+ gate returns no rows, never an error ====================

@@ -176,45 +176,45 @@ select is((select count(*) from public.campaigns where id = 6250001), 1::bigint,
 --                           completed Task counts toward tasks_completed
 --                           for Radu only, never for her too.
 insert into public.tasks
-  (title, dept_id, campaign_id, status, difficulty, rating,
+  (title, group_id, campaign_id, status, difficulty, rating,
    created_by, created_at, completed_at)
 values
-  ('T1 Completed A 625', '625-dept', 6250001, 'completed', 3, 5,
+  ('T1 Completed A 625', pg_temp.dept_group('625-dept'), 6250001, 'completed', 3, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
-  ('T2 Reopen source 625', '625-dept', 6250001, 'completed', 3, 5,
+  ('T2 Reopen source 625', pg_temp.dept_group('625-dept'), 6250001, 'completed', 3, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
-  ('T5 Completed E 625', '625-dept', 6250001, 'completed', 2, 5,
+  ('T5 Completed E 625', pg_temp.dept_group('625-dept'), 6250001, 'completed', 2, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
-  ('T7 No-Campaign H 625', '625-dept', null, 'completed', 5, 5,
+  ('T7 No-Campaign H 625', pg_temp.dept_group('625-dept'), null, 'completed', 5, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
-  ('T8 Reassigned AB 625', '625-dept', 6250001, 'completed', 2, 5,
+  ('T8 Reassigned AB 625', pg_temp.dept_group('625-dept'), 6250001, 'completed', 2, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now());
 
 insert into public.tasks
-  (title, dept_id, campaign_id, status, difficulty, rating,
+  (title, group_id, campaign_id, status, difficulty, rating,
    created_by, created_at, unfulfilled_at)
 values
-  ('T3 Unfulfilled C 625', '625-dept', 6250001, 'unfulfilled', 5, 2,
+  ('T3 Unfulfilled C 625', pg_temp.dept_group('625-dept'), 6250001, 'unfulfilled', 5, 2,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now());
 
 insert into public.tasks
-  (title, dept_id, campaign_id, status, cancel_reason,
+  (title, group_id, campaign_id, status, cancel_reason,
    created_by, created_at, cancelled_at)
 values
-  ('T4 Cancelled D 625', '625-dept', 6250001, 'cancelled', 'Fixture cancel 625',
+  ('T4 Cancelled D 625', pg_temp.dept_group('625-dept'), 6250001, 'cancelled', 'Fixture cancel 625',
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now());
 
 -- The Umbrella (no campaign_id, no difficulty/rating/audience/assignment_mode
 -- -- tasks_umbrella_shape_ck) and its one Subtask, which DOES carry the
 -- Campaign directly.
-insert into public.tasks (title, dept_id, kind, audience, assignment_mode, created_by, created_at)
-values ('U1 Umbrella G 625', '625-dept', 'umbrella', null, null,
+insert into public.tasks (title, group_id, kind, audience, assignment_mode, created_by, created_at)
+values ('U1 Umbrella G 625', pg_temp.dept_group('625-dept'), 'umbrella', null, null,
         '62500000-0000-0000-0000-000000000001', now() - interval '3 days');
 
 insert into public.tasks
-  (title, dept_id, campaign_id, parent_task_id, status, difficulty, rating,
+  (title, group_id, campaign_id, parent_task_id, status, difficulty, rating,
    created_by, created_at, completed_at)
-select 'T6 Subtask F 625', '625-dept', 6250001, parent.id, 'completed', 2, 4,
+select 'T6 Subtask F 625', pg_temp.dept_group('625-dept'), 6250001, parent.id, 'completed', 2, 4,
        '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()
   from public.tasks as parent
  where parent.title = 'U1 Umbrella G 625';

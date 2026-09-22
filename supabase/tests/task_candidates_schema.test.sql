@@ -94,13 +94,13 @@ insert into public.profiles (id, full_name, email, role) values
 -- A public-mode Task with its queue open, for realism (schema itself does not
 -- restrict candidatures to public Tasks — that guard is a command invariant,
 -- #330).
-insert into public.tasks (title, difficulty, dept_id, assignment_mode, queue_opened_at)
-values ('Candidate queue fixture 291', 1, 'edu', 'public', now());
+insert into public.tasks (title, difficulty, group_id, assignment_mode, queue_opened_at)
+values ('Candidate queue fixture 291', 1, pg_temp.dept_group('edu'), 'public', now());
 
 -- A second Task, isolated, so the deterministic-order assertion only ever
 -- sees the two rows it inserts.
-insert into public.tasks (title, difficulty, dept_id, assignment_mode, queue_opened_at)
-values ('Candidate queue order fixture 291', 1, 'edu', 'public', now());
+insert into public.tasks (title, difficulty, group_id, assignment_mode, queue_opened_at)
+values ('Candidate queue order fixture 291', 1, pg_temp.dept_group('edu'), 'public', now());
 
 -- ==================== One pending candidature per Member (Ruling A) =======
 -- "Live" means pending only: task_candidates_one_pending_per_member_uidx

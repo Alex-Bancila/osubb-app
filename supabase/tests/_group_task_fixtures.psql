@@ -11,17 +11,21 @@
 -- rls_tasks_read_matrix.test.sql deletes a project_members row for persona 3 and asserts
 -- the matching group_members row (and the read access it carried) is gone; group_commands
 -- .test.sql inserts persona 1 into member_departments('d521') after this fixture runs and
--- expects the ordinary mirror to add them to Department #521's roster; group_commands
--- .test.sql also calls the legacy create_campaign('d521', ...) overload, which resolves a
--- Group through groups.legacy_dept_id, and reads task.project_id back against
--- `public.projects` by name. None of that is reachable while the origin bridge (#519)
--- still requires every Task-bearing Group to carry a real legacy_* mapping
--- (task_group_origin_unmapped) whose value satisfies tasks.dept_id/team_id/project_id's
--- own foreign keys -- dropping the legacy tables here is not possible until #579 removes
--- the bridge itself, which is why this fixture keeps them and instead makes the
--- resulting groups/group_members rows the ones OUR OWN inserts assert, so every legacy
--- insert below now lands on its `on conflict ... where (...) is distinct from (...)`
--- guard already satisfied and writes nothing observable.
+-- expects the ordinary mirror to add them to Department #521's roster. That is why
+-- this fixture keeps the legacy rows and makes the resulting groups/group_members rows
+-- the ones OUR OWN inserts assert, so every legacy insert below lands on its
+-- `on conflict ... where (...) is distinct from (...)` guard already satisfied and
+-- writes nothing observable.
+--
+-- #579 removed the origin bridge: pg_temp.g521_task now writes group_id alone (looked
+-- up by Group name), and no Task row names a legacy id. What the bridge made necessary
+-- is gone -- a Task-bearing Group no longer needs a legacy_* mapping whose value
+-- satisfies tasks.dept_id/team_id/project_id foreign keys. What still needs the legacy
+-- rows is the forward mirror (dropped in #586): the suites above edit
+-- member_departments / project_members and read the mirrored roster back, and
+-- groups.legacy_* is how the mirror finds these Groups. So the rows stay until #586;
+-- the Project sentinel ids stay with them, because the mirror keys a Project Group on
+-- legacy_project_id.
 --
 -- One entanglement is left to the legacy pipeline on purpose: private.mirror_project_group
 -- re-syncs a Project Group's WHOLE roster the moment the `projects` row itself is

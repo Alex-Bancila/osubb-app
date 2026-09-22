@@ -43,60 +43,60 @@ insert into public.member_departments (member_id, dept_id) values
 
 -- Ordinary Tasks, one per scenario, all in dept 'edu' so the manager may act.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values
-  ('Authority edit #329', 'Direct to public', '2027-01-05 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
-  ('Executor denied #329', 'Descriere O', '2027-01-24 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
-  ('Bad audience task #329', 'Descriere input A', '2027-01-06 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
-  ('Bad mode task #329', 'Descriere input B', '2027-01-07 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
-  ('Nothing to update #329', 'Descriere unchanged', '2027-01-18 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
-  ('Already assigned #329', 'Descriere assigned', '2027-01-08 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
-  ('Gate denial task #329', 'Descriere gate', '2027-01-26 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
-  ('Direct write task #329', 'Descriere P', '2027-01-25 09:00:00+00', 'edu', 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001');
+  ('Authority edit #329', 'Direct to public', '2027-01-05 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
+  ('Executor denied #329', 'Descriere O', '2027-01-24 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
+  ('Bad audience task #329', 'Descriere input A', '2027-01-06 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
+  ('Bad mode task #329', 'Descriere input B', '2027-01-07 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
+  ('Nothing to update #329', 'Descriere unchanged', '2027-01-18 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
+  ('Already assigned #329', 'Descriere assigned', '2027-01-08 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
+  ('Gate denial task #329', 'Descriere gate', '2027-01-26 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001'),
+  ('Direct write task #329', 'Descriere P', '2027-01-25 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo', '32900000-0000-0000-0000-000000000001');
 
 -- A public, local, active Opportunity in dept 'edu': visible to any Member
 -- of that Department (task_read R6), including the ordinary member persona,
 -- who still has no manage authority over it (not a BCE).
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Member denied #329', 'Descriere member', '2027-01-27 09:00:00+00', 'edu', 'local', 'public', 'todo',
+  ('Member denied #329', 'Descriere member', '2027-01-27 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'public', 'todo',
    '2027-01-01 00:00:00+00', '32900000-0000-0000-0000-000000000001');
 
 -- Already-public Task, its queue opened in the past, used for public -> direct.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Public to direct #329', 'Descriere public', '2027-01-09 09:00:00+00', 'edu', 'local', 'public', 'todo',
+  ('Public to direct #329', 'Descriere public', '2027-01-09 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'public', 'todo',
    '2027-01-01 00:00:00+00', '32900000-0000-0000-0000-000000000001');
 
 -- Already-public Task with a fixed queue_opened_at, used to prove that
 -- toggling Audience alone (mode unchanged) never touches the queue timestamps.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Audience toggle #329', 'Descriere audience', '2027-01-10 09:00:00+00', 'edu', 'local', 'public', 'todo',
+  ('Audience toggle #329', 'Descriere audience', '2027-01-10 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'public', 'todo',
    '2027-01-02 00:00:00+00', '32900000-0000-0000-0000-000000000001');
 
 -- Task with a live Candidature -- withdrawn is still history (Ruling).
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, queue_opened_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Has candidates #329', 'Descriere candidates', '2027-01-11 09:00:00+00', 'edu', 'local', 'public', 'todo',
+  ('Has candidates #329', 'Descriere candidates', '2027-01-11 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'public', 'todo',
    '2027-01-03 00:00:00+00', '32900000-0000-0000-0000-000000000001');
 
 -- Terminal Task (completed) -- immutable regardless of Assignment/Candidature.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, difficulty, rating, status, completed_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, difficulty, rating, status, completed_at, created_by)
 values
-  ('Terminal task #329', 'Descriere H', '2027-01-17 09:00:00+00', 'edu', 'local', 'direct', 3, 4, 'completed', now(),
+  ('Terminal task #329', 'Descriere H', '2027-01-17 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 3, 4, 'completed', now(),
    '32900000-0000-0000-0000-000000000001');
 
 -- Umbrella -- no mode or audience at all.
 insert into public.tasks
-  (title, dept_id, kind, audience, assignment_mode, difficulty, rating, description, status, created_by)
+  (title, group_id, kind, audience, assignment_mode, difficulty, rating, description, status, created_by)
 values
-  ('Umbrella #329', 'edu', 'umbrella', null, null, null, null, 'Umbrella desc', 'todo',
+  ('Umbrella #329', pg_temp.dept_group('edu'), 'umbrella', null, null, null, null, 'Umbrella desc', 'todo',
    '32900000-0000-0000-0000-000000000001');
 
 create temp table f329 as
@@ -393,8 +393,8 @@ select extensions.dblink_exec('ctm_lock_setup', $$
      'lock.probe.bce.329@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id)
   values ('32900000-0000-0000-0000-000000000021', 'edu');
-  insert into public.tasks (title, description, deadline, dept_id, audience, assignment_mode, status, created_by) values
-    ('Lock Probe Task #329', 'Descriere lock', '2027-02-01 09:00:00+00', 'edu', 'local', 'direct', 'todo',
+  insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, created_by) values
+    ('Lock Probe Task #329', 'Descriere lock', '2027-02-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
      '32900000-0000-0000-0000-000000000021');
 $$);
 

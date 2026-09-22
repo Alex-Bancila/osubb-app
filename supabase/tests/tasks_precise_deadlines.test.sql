@@ -9,10 +9,10 @@ select plan(4);
 select col_type_is('public', 'tasks', 'deadline', 'timestamp with time zone',
   'Task deadlines are exact instants');
 
-insert into public.tasks (title, difficulty, deadline, dept_id)
+insert into public.tasks (title, difficulty, deadline, group_id)
 values
-  ('Precise deadline', 1, '2026-09-11 17:42:19+00', 'edu'),
-  ('No deadline', 1, null, 'edu');
+  ('Precise deadline', 1, '2026-09-11 17:42:19+00', pg_temp.dept_group('edu')),
+  ('No deadline', 1, null, pg_temp.dept_group('edu'));
 
 select is(
   (select deadline from public.tasks where title = 'Precise deadline'),

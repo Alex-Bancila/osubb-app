@@ -92,18 +92,18 @@ insert into public.project_members (project_id, member_id, project_role) values
   ((select id from public.projects where name = 'Proiect #341'),
    '34100000-0000-0000-0000-000000000008', 'member');
 
-insert into public.campaigns (department_id, name, is_active, created_by) values
-  ('edu', 'Campanie Activa #341', true, '34100000-0000-0000-0000-000000000002'),
-  ('edu', 'Campanie Ce Va Deveni Inactiva #341', true, '34100000-0000-0000-0000-000000000002');
+insert into public.campaigns (group_id, name, is_active, created_by) values
+  (pg_temp.dept_group('edu'), 'Campanie Activa #341', true, '34100000-0000-0000-0000-000000000002'),
+  (pg_temp.dept_group('edu'), 'Campanie Ce Va Deveni Inactiva #341', true, '34100000-0000-0000-0000-000000000002');
 
 -- ---- T1: the happy path. A cancelled, public, org edu Task carrying an
 -- active Campaign, a historical ENDED Assignment and a historical CLOSED
 -- Candidature -- neither may survive into the clone.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    cancelled_at, cancel_reason, queue_opened_at, queue_closed_at, campaign_id,
    created_at, created_by)
-select 'Sursa fericita #341', 'Se va clona', now() - interval '5 days', 'edu', 'org', 'public', 'cancelled',
+select 'Sursa fericita #341', 'Se va clona', now() - interval '5 days', pg_temp.dept_group('edu'), 'org', 'public', 'cancelled',
        now() - interval '2 days', 'Motiv sursa #341', now() - interval '10 days', now() - interval '2 days',
        (select id from public.campaigns where name = 'Campanie Activa #341'),
        now() - interval '20 days', '34100000-0000-0000-0000-000000000002';
@@ -118,23 +118,23 @@ select id, '34100000-0000-0000-0000-000000000012', 'closed',
 
 -- ---- U1/S1: the Subtask source -- its clone must be top-level.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela sursa #341', 'Umbrela', 'edu', 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela sursa #341', 'Umbrela', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
         now() - interval '10 days', '34100000-0000-0000-0000-000000000002');
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, parent_task_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    created_at, started_at, created_by)
-select 'Subtask sursa #341', 'Sub umbrela', now() + interval '10 days', 'edu', 'local', 'direct',
+select 'Subtask sursa #341', 'Sub umbrela', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct',
        'in_progress', parent.id, now() - interval '9 days', now() - interval '8 days',
        '34100000-0000-0000-0000-000000000002'
   from public.tasks as parent where parent.title = 'Umbrela sursa #341';
 
 -- ---- T2: an inactive-Campaign source -- clones with campaign_id null.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, campaign_id,
+  (title, description, deadline, group_id, audience, assignment_mode, status, campaign_id,
    created_at, created_by)
 select 'Sursa campanie inactiva #341', 'Campanie dezactivata ulterior', now() + interval '10 days',
-       'edu', 'local', 'direct', 'todo',
+       pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
        (select id from public.campaigns where name = 'Campanie Ce Va Deveni Inactiva #341'),
        now() - interval '5 days', '34100000-0000-0000-0000-000000000002';
 -- Deactivated AFTER the Task above already carries it -- #314's trigger only
@@ -142,57 +142,57 @@ select 'Sursa campanie inactiva #341', 'Campanie dezactivata ulterior', now() + 
 -- Campaign deactivated later out from under an untouched Task (its own
 -- header, 20260911210600_task_campaign.sql:78-88).
 update public.campaigns set is_active = false
- where department_id = 'edu' and name = 'Campanie Ce Va Deveni Inactiva #341';
+ where group_id = pg_temp.dept_group('edu') and name = 'Campanie Ce Va Deveni Inactiva #341';
 
 -- ---- T3: a COMPLETED source, Difficulty and Rating actually set -- proves
 -- neither carries over even from a source that genuinely has them, and that
 -- ANY status (not only cancelled/unfulfilled) is a legitimate template.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status,
+  (title, description, deadline, group_id, audience, assignment_mode, status,
    difficulty, rating, started_at, completed_at, created_at, created_by)
 values
-  ('Sursa finalizata #341', 'Deja incheiat', now() - interval '2 days', 'edu', 'local', 'direct', 'completed',
+  ('Sursa finalizata #341', 'Deja incheiat', now() - interval '2 days', pg_temp.dept_group('edu'), 'local', 'direct', 'completed',
    3, 4, now() - interval '9 days', now() - interval '1 day', now() - interval '10 days',
    '34100000-0000-0000-0000-000000000002');
 
 -- ---- T4: an Umbrella itself -- PT409 task_is_umbrella.
 insert into public.tasks
-  (title, description, dept_id, kind, audience, assignment_mode, status, created_at, created_by)
-values ('Umbrela tinta #341', 'Nu se poate clona', 'edu', 'umbrella', null, null, 'todo',
+  (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
+values ('Umbrela tinta #341', 'Nu se poate clona', pg_temp.dept_group('edu'), 'umbrella', null, null, 'todo',
         now() - interval '5 days', '34100000-0000-0000-0000-000000000002');
 
 -- ---- T5: the authority-matrix / null-deadline target.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Tinta autoritate #341', 'Tinta pentru refuzuri', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
+  ('Tinta autoritate #341', 'Tinta pentru refuzuri', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    now() - interval '5 days', '34100000-0000-0000-0000-000000000002');
 
 -- ---- T6: a `local` pr Task an edu member cannot even see.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Ascuns pr #341', 'Alt departament', now() + interval '10 days', 'pr', 'local', 'direct', 'todo',
+  ('Ascuns pr #341', 'Alt departament', now() + interval '10 days', pg_temp.dept_group('pr'), 'local', 'direct', 'todo',
    now() - interval '5 days', '34100000-0000-0000-0000-000000000003');
 
 -- ---- T7: an Independent Team's own Task -- its own active member duplicates.
 insert into public.tasks
-  (title, description, deadline, team_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Echipa independenta #341', 'Task de echipa', now() + interval '10 days', 't-341-ind', 'local', 'direct', 'todo',
+  ('Echipa independenta #341', 'Task de echipa', now() + interval '10 days', pg_temp.team_group('t-341-ind'), 'local', 'direct', 'todo',
    now() - interval '5 days', '34100000-0000-0000-0000-000000000001');
 
 -- ---- T8/T9: Project Tasks.
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 select 'Proiect responsabil #341', 'Task de proiect', now() + interval '10 days',
-       project.id, 'local', 'direct', 'todo'::public.task_status,
+       pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '5 days', '34100000-0000-0000-0000-000000000001'::uuid
   from public.projects as project where project.name = 'Proiect #341';
 insert into public.tasks
-  (title, description, deadline, project_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 select 'Proiect membru #341', 'Munca unui membru', now() + interval '10 days',
-       project.id, 'local', 'direct', 'todo'::public.task_status,
+       pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '5 days', '34100000-0000-0000-0000-000000000001'::uuid
   from public.projects as project where project.name = 'Proiect #341';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -202,9 +202,9 @@ select id, '34100000-0000-0000-0000-000000000008', '34100000-0000-0000-0000-0000
 
 -- ---- T10: the direct-write target.
 insert into public.tasks
-  (title, description, deadline, dept_id, audience, assignment_mode, status, created_at, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 values
-  ('Scriere directa #341', 'Tinta', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
+  ('Scriere directa #341', 'Tinta', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    now() - interval '5 days', '34100000-0000-0000-0000-000000000002');
 
 -- ==================== Ids, resolved as the owner ====================
@@ -300,7 +300,7 @@ select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-01 09:00:00+
 reset role;
 
 select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s',
-                         clone.title, clone.description, clone.dept_id, clone.audience,
+                         clone.title, clone.description, (select legacy_dept_id from public.groups where id = clone.group_id), clone.audience,
                          clone.assignment_mode, clone.campaign_id::text, clone.kind, clone.status::text,
                          clone.deadline::text, clone.created_by::text,
                          (clone.parent_task_id is null)::text,
@@ -396,7 +396,7 @@ select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-02 09:00:00+
 reset role;
 
 select is((select format('%s|%s|%s',
-                         (clone.parent_task_id is null)::text, clone.dept_id,
+                         (clone.parent_task_id is null)::text, (select legacy_dept_id from public.groups where id = clone.group_id),
                          clone.duplicated_from_task_id::text)
              from public.tasks as clone
             where clone.duplicated_from_task_id = (select sub_source_id from f341)),
@@ -577,8 +577,8 @@ select throws_ok(format($$ insert into public.task_activity (task_id, kind, acto
 -- #345 revoked insert/update/delete on public.tasks from authenticated, so a
 -- direct write now dies on the table grant before any trigger runs.
 select throws_ok(format($$ insert into public.tasks
-  (title, deadline, dept_id, audience, assignment_mode, duplicated_from_task_id)
-  values ('Proveniență falsă #341', '2027-06-11 09:00:00+00', 'edu', 'local', 'direct', %s) $$,
+  (title, deadline, group_id, audience, assignment_mode, duplicated_from_task_id)
+  values ('Proveniență falsă #341', '2027-06-11 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', %s) $$,
   (select authority_task_id from f341)),
   '42501', 'permission denied for table tasks',
   'a manager cannot forge duplicate provenance on a direct Task insert -- since #345 the table grants refuse it outright');
@@ -644,11 +644,11 @@ select extensions.dblink_exec('dt_setup', $$
     ('34100000-0000-0000-0000-000000000051', 'Probe Manager 341', 'probe.manager.341@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id) values
     ('34100000-0000-0000-0000-000000000051', 'edu');
-  insert into public.campaigns (department_id, name, is_active, created_by) values
-    ('edu', 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
+  insert into public.campaigns (group_id, name, is_active, created_by) values
+    ((select id from public.groups where legacy_dept_id = 'edu'), 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
   insert into public.tasks
-    (title, description, deadline, dept_id, audience, assignment_mode, status, campaign_id, created_at, created_by)
-  select 'Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', 'edu', 'local', 'direct', 'todo',
+    (title, description, deadline, group_id, audience, assignment_mode, status, campaign_id, created_at, created_by)
+  select 'Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
          campaign.id, now() - interval '3 days', '34100000-0000-0000-0000-000000000051'
     from public.campaigns as campaign
    where campaign.name = 'Campanie blocaj #341 committed';
@@ -696,7 +696,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.profiles') as row_lock
     join public.profiles as profile on profile.ctid = row_lock.locked_row
    where profile.id = '34100000-0000-0000-0000-000000000051'
-), false), 'duplicate_task holds the actor''s live profile row FOR SHARE (private.require_origin_manager''s discipline)');
+), false), 'duplicate_task holds the actor''s live profile row FOR SHARE (private.require_group_work_manager''s discipline)');
 select ok(coalesce((
   select 'For Share' = any(row_lock.modes)
     from extensions.pgrowlocks('public.group_members') as row_lock

@@ -57,9 +57,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('f4000000-0000-0000-0000-0000000000f4', 'fin'),
   ('f5000000-0000-0000-0000-0000000000f5', 'hr');
 
-insert into public.tasks (title, difficulty, dept_id) values
-  ('pv-flor', 1, 'edu'), ('pv-felix', 2, 'edu'), ('pv-fiona', 3, 'edu'),
-  ('pv-frida', 4, 'edu'), ('pv-fane', 5, 'edu');
+insert into public.tasks (title, difficulty, group_id) values
+  ('pv-flor', 1, pg_temp.dept_group('edu')), ('pv-felix', 2, pg_temp.dept_group('edu')), ('pv-fiona', 3, pg_temp.dept_group('edu')),
+  ('pv-frida', 4, pg_temp.dept_group('edu')), ('pv-fane', 5, pg_temp.dept_group('edu'));
 -- #312: rating may only be set once completed (tasks_evaluation_inputs_ck).
 update public.tasks set status = 'completed', completed_at = now(), rating = 3
  where title like 'pv-%';

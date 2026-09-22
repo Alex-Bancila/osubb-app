@@ -30,16 +30,16 @@ select ok(
 -- exclusive to -- a cancelled Task, so the cancelled row states why it was
 -- called off and every other row must leave the column null.
 insert into public.tasks
-  (title, difficulty, dept_id, deadline, status, started_at, submitted_at,
+  (title, difficulty, group_id, deadline, status, started_at, submitted_at,
    completed_at, unfulfilled_at, cancelled_at, cancel_reason, rating) values
-  ('Past todo 288', 1, 'edu', now() - interval '1 second', 'todo', null, null, null, null, null, null, null),
-  ('Past progress 288', 1, 'edu', now() - interval '1 day', 'in_progress', now(), null, null, null, null, null, null),
-  ('Past review 288', 1, 'edu', now() - interval '1 hour', 'in_review', now(), now(), null, null, null, null, null),
-  ('Past completed 288', 1, 'edu', now() - interval '1 day', 'completed', null, null, now(), null, null, null, 3),
-  ('Past unfulfilled 288', 1, 'edu', now() - interval '1 day', 'unfulfilled', null, null, null, now(), null, null, 2),
-  ('Past cancelled 288', 1, 'edu', now() - interval '1 day', 'cancelled', null, null, null, null, now(), 'Anulat #288', null),
-  ('Future todo 288', 1, 'edu', now() + interval '1 day', 'todo', null, null, null, null, null, null, null),
-  ('No deadline 288', 1, 'edu', null, 'in_progress', now(), null, null, null, null, null, null);
+  ('Past todo 288', 1, pg_temp.dept_group('edu'), now() - interval '1 second', 'todo', null, null, null, null, null, null, null),
+  ('Past progress 288', 1, pg_temp.dept_group('edu'), now() - interval '1 day', 'in_progress', now(), null, null, null, null, null, null),
+  ('Past review 288', 1, pg_temp.dept_group('edu'), now() - interval '1 hour', 'in_review', now(), now(), null, null, null, null, null),
+  ('Past completed 288', 1, pg_temp.dept_group('edu'), now() - interval '1 day', 'completed', null, null, now(), null, null, null, 3),
+  ('Past unfulfilled 288', 1, pg_temp.dept_group('edu'), now() - interval '1 day', 'unfulfilled', null, null, null, now(), null, null, 2),
+  ('Past cancelled 288', 1, pg_temp.dept_group('edu'), now() - interval '1 day', 'cancelled', null, null, null, null, now(), 'Anulat #288', null),
+  ('Future todo 288', 1, pg_temp.dept_group('edu'), now() + interval '1 day', 'todo', null, null, null, null, null, null, null),
+  ('No deadline 288', 1, pg_temp.dept_group('edu'), null, 'in_progress', now(), null, null, null, null, null, null);
 
 select is((select is_overdue from public.tasks_with_overdue where title = 'Past todo 288'),
   true, 'a past-deadline todo Task is overdue');
@@ -63,11 +63,11 @@ insert into public.profiles (id, full_name, email, role, status) values
    'overdue-outsider-288@test.local', 'voluntar', 'activ');
 
 insert into public.tasks
-  (title, difficulty, dept_id, deadline, status, audience, assignment_mode,
+  (title, difficulty, group_id, deadline, status, audience, assignment_mode,
    queue_opened_at)
 values
-  ('Visible opportunity 288', 1, 'pr', now() - interval '1 day', 'todo', 'org', 'public', now()),
-  ('Hidden local Task 288', 1, 'pr', now() - interval '1 day', 'todo', 'local', 'direct', null);
+  ('Visible opportunity 288', 1, pg_temp.dept_group('pr'), now() - interval '1 day', 'todo', 'org', 'public', now()),
+  ('Hidden local Task 288', 1, pg_temp.dept_group('pr'), now() - interval '1 day', 'todo', 'local', 'direct', null);
 
 select pg_temp.test_login(
   '28800000-0000-0000-0000-000000000001',

@@ -66,14 +66,14 @@ insert into public.profiles (id, full_name, email, role) values
 -- completed Task carries both difficulty and rating) and dobrerares'
 -- lifecycle-timestamp checks (completed_at is required once status is
 -- completed; started_at/submitted_at may stay null for a direct-mode Task).
-insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
-values ('Evaluation fixture Task A 316', 3, 4, 'completed', now(), 'edu');
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('Evaluation fixture Task A 316', 3, 4, 'completed', now(), pg_temp.dept_group('edu'));
 
 -- Task B: isolated, so the "assignment from a different task" case has a
 -- real Assignment that genuinely belongs elsewhere. Also doubles as the
 -- legacy_migration fixture below, once that case is reached.
-insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
-values ('Evaluation fixture Task B 316', 2, 3, 'completed', now(), 'edu');
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('Evaluation fixture Task B 316', 2, 3, 'completed', now(), pg_temp.dept_group('edu'));
 
 insert into public.task_assignments (task_id, member_id)
 select id, '31600000-0000-0000-0000-000000000002'
@@ -215,8 +215,8 @@ select throws_ok(
 
 -- ==================== reversal_reason must be non-blank, even when the
 -- trio is set together at insert ====================
-insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
-values ('Evaluation fixture Task E 316 (blank reversal reason)', 3, 4, 'completed', now(), 'edu');
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('Evaluation fixture Task E 316 (blank reversal reason)', 3, 4, 'completed', now(), pg_temp.dept_group('edu'));
 insert into public.task_assignments (task_id, member_id)
 select id, '31600000-0000-0000-0000-000000000002'
   from public.tasks where title = 'Evaluation fixture Task E 316 (blank reversal reason)';
@@ -276,8 +276,8 @@ select throws_ok(
 -- Assignments of the same Task, isolated from the per-Assignment cap
 -- (the test above reuses one Assignment, so it cannot tell which index
 -- actually rejected the second insert) ====================
-insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
-values ('Evaluation fixture Task D 316 (per-task cap)', 3, 4, 'completed', now(), 'edu');
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('Evaluation fixture Task D 316 (per-task cap)', 3, 4, 'completed', now(), pg_temp.dept_group('edu'));
 -- One ended Assignment (replaced) and one still-active Assignment, both on
 -- Task D — task_assignments_one_active_per_task_uidx only bars two
 -- simultaneously active rows, not this shape.
@@ -354,8 +354,8 @@ select lives_ok(
 -- on one Task across two different Assignments (the multi-assignee case:
 -- "Migrare bază de date" has two assignees and two legitimate ledger
 -- credits) ====================
-insert into public.tasks (title, difficulty, rating, status, completed_at, dept_id)
-values ('Evaluation fixture Task C 316 (multi-assignee legacy)', 3, 4, 'completed', now(), 'edu');
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('Evaluation fixture Task C 316 (multi-assignee legacy)', 3, 4, 'completed', now(), pg_temp.dept_group('edu'));
 -- Both Assignments are ended, per #290's backfill
 -- (20260911106000_backfill_task_assignments.sql) and the matching block in
 -- seed.sql: for a *completed* legacy Task, every participant's Assignment

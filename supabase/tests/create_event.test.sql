@@ -122,20 +122,17 @@ reset role;
 select pg_temp.login(4);
 select throws_ok($$select public.create_event('case-4-archived','sedinta',(select id from fx where name='archived'),now()+interval '1 day')$$,'42501','calendar_manage_forbidden','persona 4 denied in archived');
 reset role;
-select is((select scope::text||':'||coalesce(dept_id,'-') from public.events where title='case-8-ind'),'team:-','Independent Team has no Department');
-select is((select dept_id from public.events where title='case-2-dt'),'edu','Department-Team parent is derived');
+select is((select group_id from public.events where title='case-8-ind'),(select id from fx where name='ind'),'an Independent Team Event carries exactly its Team Group');
+select is((select group_id from public.events where title='case-2-dt'),(select id from fx where name='dt'),'a Department-Team Event carries its own Team Group, not the parent Department');
 select is((select created_by from public.events where title='case-5-project'),'37000000-0000-0000-0000-000000000005'::uuid,'creator comes from authenticated identity');
--- #370 delta: the command inserts group_id and nothing legacy; events_sync_group_origin (#519)
--- derives the whole (scope, dept_id, team_id, project_id) Origin. Pinned for the two shapes the
--- suite did not already pin -- a Project Group and the Organization Group.
-select is((select e.scope::text||':'||coalesce(e.dept_id,'-')||':'||coalesce(e.team_id,'-')||':'||coalesce(e.project_id::text,'-')
-           from public.events as e where e.title='case-4-project'),
-          'project:-:-:'||(select p.id::text from public.projects as p where p.name='Project #370'),
-          'a Project Group derives scope project and project_id, nothing else');
-select is((select e.scope::text||':'||coalesce(e.dept_id,'-')||':'||coalesce(e.team_id,'-')||':'||coalesce(e.project_id::text,'-')
-           from public.events as e where e.title='case-1-org'),
-          'org:-:-:-',
-          'the Organization Group derives scope org and no Origin column at all');
+-- #579: group_id is the Event's only Origin -- no legacy scope/dept_id/team_id/project_id is
+-- derived or stored. Pinned for a Project Group and the Organization Group.
+select is((select e.group_id from public.events as e where e.title='case-4-project'),
+          (select id from fx where name='project'),
+          'a Project Group Event carries exactly its Project Group');
+select is((select e.group_id from public.events as e where e.title='case-1-org'),
+          (select id from fx where name='org'),
+          'an Organization Event carries exactly the Organization Group');
 -- A legacy-mapped Event owner can sit below arbitrarily deep native ancestors.
 insert into public.groups(name,category,parent_id)
 values ('Middle #370','team',(select id from fx where name='project'));

@@ -80,6 +80,40 @@ npx --yes supabase@2.117.0 db reset
 
 The final reset restores the normal seeded development database.
 
+## Upgrade harnesses
+
+`*_upgrade.test.sh` replay one historical migration inside a rolled-back
+transaction over a database that already holds rows, which a `db reset` never
+does. CI runs every one after the pgTAP suites (`bash "$harness"`), against the
+seeded stack.
+
+A harness can only replay a migration whose objects still exist. When a later
+migration deletes what an old one creates, the old proof is retired and its
+replacement named here:
+
+- **#579 (the origin-bridge drop)** retired `tasks_origin_upgrade.test.sh`
+  (#284: the one-Origin CHECK over legacy `dept_id`/`team_id`/`project_id`)
+  and `tasks_group_id_backfill_upgrade.test.sh` (#519: the `group_id` backfill
+  and the bridge triggers). Both replayed migrations that recreate the legacy
+  columns #579 deletes. `origin_drop_upgrade.test.sh` replaces them: it restores
+  the pre-drop shape with both identities on every row, replays
+  `20260922134557_drop_origin_bridge.sql`, proves a clean database loses
+  nothing, and proves each guard (`work_row_group_id_null`,
+  `work_row_on_native_group`, and the four `*_group_origin_disagreement`
+  reasons) refuses its planted fault. What the retired harnesses proved about
+  live rows is now a precondition #579's guards check on the real database.
+- `tasks_lifecycle_upgrade.test.sh` stays: its teardown re-adds `tasks.dept_id`
+  and `team_id` as plain nullable columns, because the pre-#287 policy it
+  replays names them.
+
+Task fixtures in suites and harnesses name their Group, never a legacy id:
+`pg_temp.dept_group(text)`, `pg_temp.team_group(text)` and
+`pg_temp.project_group(bigint)` in `_helpers.sql` resolve a Department, Team
+or Project id to the Group the forward mirror derived for it (security
+definer, so the lookup answers the same for a claimless persona). SQL sent
+through `dblink` runs in another session with no `pg_temp`, so it inlines the
+same lookup as a subquery over `groups.legacy_*`.
+
 ## Fixtures and names
 
 Existing test UUIDs are grandfathered. For new fixtures, use a recognizable

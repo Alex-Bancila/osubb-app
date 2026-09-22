@@ -1063,3 +1063,28 @@ comment on function public.leadership_member_tasks(uuid) is
   'Live BCE+ Assignment history with the owning Group''s id and name, plus Task and Evaluation history. The legacy Origin presentation triple went with the bridge (#579).';
 comment on function private.leadership_member_tasks_impl(uuid) is
   'One row per selected Member Assignment, newest first, labelled by the Task''s owning Group.';
+
+-- ==================== 10. Two comments that described the bridge ====================
+-- private.create_event_impl and private.update_event_impl are untouched by this migration,
+-- but each says in prose that events_sync_group_origin derives the legacy Origin from
+-- group_id. That trigger is gone, so the sentence is replaced in place rather than the
+-- whole comment being restated here (and drifting from the one #248/#370 wrote).
+do $$
+declare
+  v_event_impl constant text :=
+    'private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer)';
+  v_update_impl constant text :=
+    'private.update_event_impl(bigint,text,text,bigint,timestamptz,timestamptz,text,integer,text,integer)';
+  v_comment text;
+begin
+  v_comment := replace(obj_description(v_event_impl::regprocedure, 'pg_proc'),
+    'The legacy (scope, dept_id, team_id, project_id) Origin is NEVER written here: the events_sync_group_origin trigger (#519) derives it from group_id, which is what makes an Independent Team Event -- scope team, no Department -- expressible at all.',
+    'The Group is the Event''s only Origin (#579 dropped scope, dept_id, team_id and project_id): an Independent Team Event is simply one whose Group is that Team''s.');
+  execute format('comment on function %s is %L', v_event_impl, v_comment);
+
+  v_comment := replace(obj_description(v_update_impl::regprocedure, 'pg_proc'),
+    'The legacy (scope, dept_id, team_id, project_id) Origin is never written here: events_sync_group_origin re-derives it from group_id.',
+    'The Group is the Event''s only Origin (#579 dropped scope, dept_id, team_id and project_id), so a move rewrites exactly group_id.');
+  execute format('comment on function %s is %L', v_update_impl, v_comment);
+end;
+$$;

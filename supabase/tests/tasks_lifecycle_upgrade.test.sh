@@ -83,6 +83,12 @@ alter table public.tasks
   alter column status type public.task_status using status::public.task_status,
   alter column status set default 'todo';
 
+-- #579 dropped tasks.dept_id / team_id. The pre-#287 policy below -- and the
+-- replayed migration's own copy of it -- name both, so the scratch
+-- transaction restores them as the plain nullable columns they were then.
+-- Nothing reads them: the fixtures name their Group, and rollback drops them.
+alter table public.tasks add column dept_id text, add column team_id text;
+
 create policy task_read on public.tasks for select to authenticated using (
   public.auth_is_member() and (
        public.auth_level() >= 4
@@ -106,14 +112,14 @@ insert into public.profiles (id, full_name, email, role) values
   ('28700000-0000-0000-0000-000000000002', 'Completed Points 287', 'completed-points-287@test.local', 'voluntar');
 
 insert into public.tasks
-  (title, difficulty, rating, dept_id, status, audience, assignment_mode)
+  (title, difficulty, rating, group_id, status, audience, assignment_mode)
 values
-  ('Legacy todo 287', 1, null, 'edu', 'todo', 'local', 'direct'),
-  ('Legacy progress 287', 1, null, 'edu', 'progress', 'local', 'direct'),
-  ('Legacy done 287', 3, 4, 'edu', 'done', 'local', 'direct'),
-  ('Legacy overdue unassigned 287', 1, null, 'edu', 'overdue', 'local', 'direct'),
-  ('Legacy overdue assigned 287', 1, null, 'edu', 'overdue', 'local', 'direct'),
-  ('Legacy open 287', 1, null, 'edu', 'open', 'org', 'public');
+  ('Legacy todo 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', 'local', 'direct'),
+  ('Legacy progress 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'progress', 'local', 'direct'),
+  ('Legacy done 287', 3, 4, (select id from public.groups where legacy_dept_id = 'edu'), 'done', 'local', 'direct'),
+  ('Legacy overdue unassigned 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'overdue', 'local', 'direct'),
+  ('Legacy overdue assigned 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'overdue', 'local', 'direct'),
+  ('Legacy open 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'open', 'org', 'public');
 
 insert into public.task_assignees (task_id, member_id)
 select id, '28700000-0000-0000-0000-000000000001'::uuid

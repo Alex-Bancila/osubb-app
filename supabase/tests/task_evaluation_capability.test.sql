@@ -11,8 +11,8 @@ insert into auth.users(id,email) values
 insert into public.profiles(id,full_name,email,role,status) values
 ('18900000-0000-0000-0000-000000000001','BC 189','bc.189@test.local','bc','activ'),
 ('18900000-0000-0000-0000-000000000002','Member 189','member.189@test.local','voluntar','activ');
-insert into public.tasks(title,description,deadline,dept_id,audience,assignment_mode,status,queue_opened_at,created_by)
-values ('Capability #189','Review capability',now()+interval '1 day','edu','org','public','todo',now(),'18900000-0000-0000-0000-000000000001');
+insert into public.tasks(title,description,deadline,group_id,audience,assignment_mode,status,queue_opened_at,created_by)
+values ('Capability #189','Review capability',now()+interval '1 day',pg_temp.dept_group('edu'),'org','public','todo',now(),'18900000-0000-0000-0000-000000000001');
 create temporary table target as select id from public.tasks where title='Capability #189';
 grant select on target to authenticated;
 select has_function('public','can_evaluate_task',array['bigint']);
