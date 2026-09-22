@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(58);
 insert into auth.users(id,email)
 select ('24800000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid, 'event248-'||n||'@test.local'
 from generate_series(1,9) n;
@@ -110,11 +110,18 @@ select is((select count(*) from public.notifications where member_id::text like 
 -- #248: coalescing is only useful if the surviving row carries the LATER value.
 select ok((select bool_and(body='Noua programare: 03.10.2026 15:00') from public.notifications where dedupe_key like 'event:%:schedule' and member_id::text like '24800000-%'),'the coalesced row carries the second change, not the first');
 reset role;
+-- #601: every recipient must be able to read the Event after the change
+-- (private.can_read_event, the events_read rule). The move below raises the floor
+-- to 3, so members 3-6 are promoted to Drept de Vot first and member 2 (voluntar,
+-- the old Group's Manager) stays below it: 2 must hear nothing about an Event it
+-- can no longer read.
+update public.profiles set role='vot' where id in ('24800000-0000-0000-0000-000000000003','24800000-0000-0000-0000-000000000004','24800000-0000-0000-0000-000000000005','24800000-0000-0000-0000-000000000006');
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');
 select lives_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='b'),'2026-10-03 12:00+00',null,'Sala',null,null,3)$q$,'BC moves Event and raises floor');
 reset role;
-select is((select count(*) from public.notifications where dedupe_key like 'event:%:group' and member_id::text like '24800000-%'),5::bigint,'move notifies old and new Group plus going attendee');
-select is((select count(*) from public.notifications where dedupe_key like 'event:%:min_level' and member_id::text like '24800000-%'),5::bigint,'Minimum Level change notifies recipients');
+select is((select count(*) from public.notifications where dedupe_key like 'event:%:group' and member_id::text like '24800000-%'),4::bigint,'move notifies old and new Group plus going attendee, at or above the new floor');
+select is((select count(*) from public.notifications where dedupe_key like 'event:%:min_level' and member_id::text like '24800000-%'),4::bigint,'Minimum Level change notifies recipients who can still read the Event');
+select is((select count(*) from public.notifications where dedupe_key like 'event:%:group' and member_id='24800000-0000-0000-0000-000000000002'),0::bigint,'the old Group''s Manager below the raised floor (member 2) is not told about an Event it can no longer read');
 -- #248: the command never writes the legacy Origin -- events_sync_group_origin (#519)
 -- re-derives scope/dept_id/team_id/project_id from the Group the move named.
 select ok((select scope='project' and project_id=(select legacy_project_id from public.groups where id=(select id from gx where name='b')) and dept_id is null and team_id is null from public.events where id=(select id from ex where title='Event a #248')),'moving the Event re-derives its legacy Origin from the new Group');

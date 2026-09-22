@@ -17,15 +17,15 @@
 --   6  vot       activ    Sub; manager of the Automatic Group
 --   7  vot       inactiv  Sub
 --   8  bce       activ    none
---   9  vot       activ    none
+--   9  vot       activ    Arch #601 only (an archived Group)
 --  10  bce       inactiv  none
---  11  recrut    activ    none
+--  11  recrut    activ    Below Arch #601 only (a Group below an archived one)
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(27);
 
 create function pg_temp.u601(n integer) returns uuid language sql immutable as $$
   select ('60100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -61,12 +61,26 @@ select id, pg_temp.u601(n), 'member' from public.groups, unnest(array[4, 6, 7]) 
 insert into public.group_members(group_id, member_id, group_role)
 select id, pg_temp.u601(6), 'manager' from public.groups
  where name = 'Auto #601' and legacy_team_id is null;
+-- Fix round 1 (archived Groups): Arch #601 under Sub, archived, rostering member 9;
+-- Below Arch #601 under it, still active, rostering member 11. Neither Member is on
+-- any other roster, so each is reached only through an archived Group (or a Group
+-- below one) from the Department, the Team and the Sub.
+insert into public.groups(name, category, parent_id, application_level)
+values ('Arch #601', 'team', (select id from public.groups where name = 'Sub #601' and legacy_team_id is null), 0);
+insert into public.groups(name, category, parent_id, application_level)
+values ('Below Arch #601', 'team', (select id from public.groups where name = 'Arch #601' and legacy_team_id is null), 0);
+insert into public.group_members(group_id, member_id, group_role)
+select id, pg_temp.u601(9), 'member' from public.groups where name = 'Arch #601' and legacy_team_id is null
+union all
+select id, pg_temp.u601(11), 'member' from public.groups where name = 'Below Arch #601' and legacy_team_id is null;
+update public.groups set status = 'archived' where name = 'Arch #601' and legacy_team_id is null;
 
 create temp table g601 as
 select 'dept'::text as name, id from public.groups where legacy_dept_id = 'd601'
 union all select 'team', id from public.groups where legacy_team_id = 'dt601'
 union all select 'sub', id from public.groups where name = 'Sub #601' and legacy_team_id is null
 union all select 'auto', id from public.groups where name = 'Auto #601' and legacy_team_id is null
+union all select 'arch', id from public.groups where name = 'Arch #601' and legacy_team_id is null
 union all select 'org', id from public.groups where is_organization
 union all select 'diverse', id from public.groups where legacy_dept_id = 'diverse';
 grant select on g601 to authenticated, anon;
@@ -108,6 +122,15 @@ select is(
   (select count(*) - count(distinct a) from private.group_audience((select id from g601 where name = 'auto')) as a),
   0::bigint,
   'a Member reached by roster and by Automatic Membership appears once');
+select is(
+  (select count(*) from private.group_audience((select id from g601 where name = 'dept')) as a
+    where a in (pg_temp.u601(9), pg_temp.u601(11))),
+  0::bigint,
+  'a Member reached only through an archived Group (member 9) or a Group below one (member 11) is not in the audience');
+select set_eq(
+  $q$select * from private.group_audience((select id from g601 where name = 'arch'))$q$,
+  $q$select pg_temp.u601(n) from unnest(array[9, 11]) n$q$,
+  'the audience of an archived Group itself is still answered: its own status is the caller''s business');
 select is(
   (select count(*) from private.group_audience(-1)),
   0::bigint,
@@ -176,6 +199,57 @@ select set_eq(
         and member_id::text like '60100000-%'$q$,
   $q$select pg_temp.u601(n) from unnest(array[2, 4, 6]) n$q$,
   'moving an Event away notifies the old Group''s whole audience, sub-Groups included');
+
+-- ==================== Fix round 1: nobody who cannot read the Event is told ====================
+-- Two Events at Minimum Level 3. On the Department one, members 2 (voluntar) and 4
+-- (activ) are in the Group Audience but below level 3; member 4 and member 11 (recrut,
+-- on no live roster) marked going -- a going attendee demoted below the floor.
+
+insert into public.events(title, type, group_id, starts_at, created_by, min_level)
+select 'Hidden ' || name || ' #601', 'sedinta', id, '2026-10-01 12:00+00', pg_temp.u601(1), 3
+  from g601 where name in ('org', 'dept');
+create temp table h601 as
+select case title when 'Hidden org #601' then 'org' else 'dept' end as name, id
+  from public.events where title in ('Hidden org #601', 'Hidden dept #601');
+grant select on h601 to authenticated, anon;
+insert into public.event_attendance(event_id, member_id, status)
+select id, pg_temp.u601(n), 'going' from h601, unnest(array[4, 11]) n where name = 'dept';
+
+select set_eq(
+  $q$select * from private.event_notification_recipients((select id from h601 where name = 'org'))$q$,
+  $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role
+      where p.status = 'activ' and r.level >= 3$q$,
+  'an Organization Group Event at Minimum Level 3 has only the active Members at level >= 3 as recipients');
+select set_eq(
+  $q$select * from private.event_notification_recipients((select id from h601 where name = 'dept'))$q$,
+  $q$select pg_temp.u601(6)$q$,
+  'below-level audience Members 2 and 4 and below-level going attendee 11 are not recipients of a Minimum Level 3 Event');
+
+select pg_temp.test_login_leadership(pg_temp.u601(1));
+select lives_ok(
+  $q$select public.cancel_event((select id from h601 where name = 'dept'), 'Anulat #601')$q$,
+  'BC cancels a Minimum Level 3 Department Event');
+select lives_ok(
+  $q$select public.cancel_event((select id from h601 where name = 'org'), 'Anulat #601')$q$,
+  'BC cancels a Minimum Level 3 Organization Group Event');
+reset role;
+select is(
+  (select count(*) from public.notifications
+    where dedupe_key = 'event:' || (select id from h601 where name = 'dept') || ':cancelled'
+      and member_id = pg_temp.u601(11)),
+  0::bigint,
+  'a going attendee below the Event''s Minimum Level (member 11) gets no Notification carrying its title');
+select set_eq(
+  $q$select member_id from public.notifications
+      where dedupe_key = 'event:' || (select id from h601 where name = 'dept') || ':cancelled'$q$,
+  $q$select pg_temp.u601(6)$q$,
+  'cancelling a Minimum Level 3 Department Event reaches only the audience Members who can read it');
+select set_eq(
+  $q$select member_id from public.notifications
+      where dedupe_key = 'event:' || (select id from h601 where name = 'org') || ':cancelled'$q$,
+  $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role
+      where p.status = 'activ' and r.level >= 3 and p.id <> pg_temp.u601(1)$q$,
+  'cancelling a Minimum Level 3 Organization Group Event reaches every active Member at level >= 3 except the actor, nobody below');
 
 select * from finish();
 rollback;

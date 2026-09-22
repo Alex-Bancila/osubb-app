@@ -611,11 +611,14 @@ insert into pinned_private_functions (proname, args, category) values
   -- Membership) behind Event and announcement fan-out. Internal only: no
   -- client role executes it, event_notification_recipients and the
   -- announcement fan-out call it as definer.
-  ('group_audience', 'p_group_id bigint', 'none');
+  ('group_audience', 'p_group_id bigint', 'none'),
+  -- #601: the Event visibility rule, one definition read by the events_read
+  -- policy (for the caller) and by event_notification_recipients (per recipient).
+  ('can_read_event', 'p_min_level integer, p_member uuid', 'predicate');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 142,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper');
+  (select count(*) from pinned_private_functions)::int, 143,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
