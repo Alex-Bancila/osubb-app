@@ -20,6 +20,7 @@ import { TaskCard } from './TaskCard';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
+import { TaskEditControl } from './TaskEditControl';
 import { TaskEvaluationControl } from './TaskEvaluationControl';
 import { toTaskPresentation } from './task-presentation';
 
@@ -59,6 +60,7 @@ function TaskDetails({
           progress.mutateAsync({ taskId: selectedId, action })
         }
       />
+      <TaskEditControl task={query.data.task} canManage={canManage} />
       <TaskAssignControl
         taskId={taskId}
         groupId={query.data.task.group_id}

@@ -5,13 +5,13 @@ export function taskRow(
 ): TaskPresentationRow {
   return {
     id: 1,
+    group_id: 1,
     title: 'Pregătește materialele',
     description: null,
     status: 'todo',
     deadline: '2026-09-16T10:00:00Z',
     completed_at: null,
     review_round: 0,
-    group_id: 1,
     dept_id: 'edu',
     team_id: null,
     project_id: null,
