@@ -3939,6 +3939,7 @@ export type Database = {
       set_member_role: {
         Args: {
           p_member_id: string
+          p_reason?: string
           p_role: Database["public"]["Enums"]["member_role"]
         }
         Returns: {
@@ -3964,6 +3965,7 @@ export type Database = {
       set_member_status: {
         Args: {
           p_member_id: string
+          p_reason?: string
           p_status: Database["public"]["Enums"]["member_status"]
         }
         Returns: {
