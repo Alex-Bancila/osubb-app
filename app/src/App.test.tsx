@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
+const management = vi.hoisted(() => ({ useTaskManagement: vi.fn() }));
+vi.mock('./queries/task-tabs', () => management);
 vi.mock('./lib/auth', () => ({ useAuth: auth.useAuth }));
 vi.mock('@ionic/react', () => ({
   IonApp: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -87,7 +89,26 @@ const ordinaryMember = {
 describe('route guards', () => {
   beforeEach(() => {
     auth.useAuth.mockReset();
+    management.useTaskManagement.mockReturnValue({ data: false });
     window.history.pushState({}, '', '/');
+  });
+
+  it('opens Campaigns only for members who manage work in some Group', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    window.history.pushState({}, '', '/administrare/campanii');
+    const view = render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(
+      screen.queryByRole('heading', { name: 'Campanii screen' }),
+    ).toBeNull();
+    view.unmount();
+
+    management.useTaskManagement.mockReturnValue({ data: true });
+    window.history.pushState({}, '', '/administrare/grupuri/2/campanii');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Campanii screen' }),
+    ).toBeVisible();
   });
 
   it('preserves a deep link and restores it after the session arrives', async () => {
