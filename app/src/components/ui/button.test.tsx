@@ -27,4 +27,12 @@ describe('Button', () => {
     });
     expect(results.violations).toEqual([]);
   });
+
+  it('drops its transition and press movement under reduced motion (#219)', () => {
+    expect(buttonVariants()).toContain('motion-reduce:transition-none');
+    expect(buttonVariants()).toContain(
+      'motion-safe:active:not-aria-[haspopup]:translate-y-px',
+    );
+    expect(buttonVariants()).not.toMatch(/(^| )active:not-aria/);
+  });
 });
