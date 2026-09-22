@@ -3093,6 +3093,7 @@ export type Database = {
           tasks_total: number
         }[]
       }
+      can_evaluate_task: { Args: { p_task_id: number }; Returns: boolean }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
       cancel_event: {
