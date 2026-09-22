@@ -11,7 +11,7 @@ import type { DbError, InviteDeps, ProvisionArgs } from "./deps.ts";
 interface FakeOptions {
   callerId?: string | null;
   level?: number;
-  missing?: Record<string, string[]>;
+  missingGroups?: number[];
   profileExists?: boolean;
   inviteError?: DbError & { status?: number };
   provisionError?: DbError;
@@ -33,9 +33,9 @@ function fakeDeps(options: FakeOptions = {}) {
       calls.push("memberLevel");
       return Promise.resolve(options.level ?? 6);
     },
-    missingIds: (table, ids) => {
-      if (ids.length > 0) calls.push(`missingIds:${table}`);
-      return Promise.resolve(options.missing?.[table] ?? []);
+    missingGroupIds: (ids) => {
+      if (ids.length > 0) calls.push("missingGroupIds");
+      return Promise.resolve(options.missingGroups ?? []);
     },
     profileExists: () => {
       calls.push("profileExists");
@@ -129,19 +129,17 @@ Deno.test("a duplicate detected during provisioning must not delete the auth use
   assertEquals(calls.includes("deleteUser"), false);
 });
 
-Deno.test("unknown department fails before any invitation is emailed", async () => {
-  const { deps, calls } = fakeDeps({
-    missing: { departments: ["inexistent"] },
-  });
+Deno.test("an unknown Group fails before any invitation is emailed", async () => {
+  const { deps, calls } = fakeDeps({ missingGroups: [999] });
 
   const res = await handleInvite(
-    request({ ...validBody, dept_ids: ["edu", "inexistent"] }),
+    request({ ...validBody, group_ids: [4, 999] }),
     deps,
   );
   const payload = await res.json();
 
   assertEquals(res.status, 400);
-  assertEquals(payload.error.includes("inexistent"), true);
+  assertEquals(payload.error, "Grup inexistent: 999.");
   // A typo must never mail a real person an account we then delete.
   assertEquals(calls.includes("inviteByEmail"), false);
 });
@@ -177,6 +175,37 @@ Deno.test("malformed JSON is refused", async () => {
   assertEquals(res.status, 400);
 });
 
+// ==================== the Groups body (#602) ====================
+
+Deno.test("dept_ids and team_ids are refused as unknown fields, never ignored", async () => {
+  const { deps, calls } = fakeDeps();
+
+  for (const legacy of [{ dept_ids: ["edu"] }, { team_ids: ["t-app"] }]) {
+    const res = await handleInvite(request({ ...validBody, ...legacy }), deps);
+    const payload = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(
+      payload.error,
+      "Câmpurile dept_ids și team_ids nu mai există. Trimite group_ids.",
+    );
+  }
+  // Silently dropping them would create a member placed nowhere.
+  assertEquals(calls.includes("inviteByEmail"), false);
+});
+
+Deno.test("group_ids must be a list of integer ids", async () => {
+  const { deps, calls } = fakeDeps();
+
+  for (const bad of ["edu", ["edu"], [1.5], [null]]) {
+    const res = await handleInvite(
+      request({ ...validBody, group_ids: bad }),
+      deps,
+    );
+    assertEquals(res.status, 400);
+  }
+  assertEquals(calls.includes("inviteByEmail"), false);
+});
+
 Deno.test("email and name are required", async () => {
   const { deps } = fakeDeps();
   assertEquals(
@@ -199,7 +228,7 @@ Deno.test("a BC invites, and the email is normalised once", async () => {
       email: "  Ioana.Noua@Osubb.Local ",
       full_name: "  Ioana Nouă  ",
       role: "voluntar",
-      dept_ids: ["edu"],
+      group_ids: [4, 7],
     }),
     deps,
   );
@@ -213,7 +242,10 @@ Deno.test("a BC invites, and the email is normalised once", async () => {
   assertEquals(provisioned[0].email, "ioana.noua@osubb.local");
   assertEquals(provisioned[0].fullName, "Ioana Nouă");
   assertEquals(provisioned[0].role, "voluntar");
-  assertEquals(provisioned[0].deptIds, ["edu"]);
+  assertEquals(provisioned[0].groupIds, [4, 7]);
+  // The verified caller is the Appointment's actor, so the new member's
+  // Notification names the person who actually invited them (#602).
+  assertEquals(provisioned[0].appointedBy, "caller-1");
   assertEquals(calls.includes("deleteUser"), false);
 });
 
@@ -223,12 +255,11 @@ Deno.test("role defaults to recrut", async () => {
   assertEquals(provisioned[0].role, "recrut");
 });
 
-Deno.test("bad member data rolls the invitation back", async () => {
+Deno.test("a Group the roster path refuses rolls the invitation back", async () => {
+  // What provisioning raises since #602: the Appointment core's own reason,
+  // normalised to PT400 so every placement refusal is one class here.
   const { deps, calls } = fakeDeps({
-    provisionError: {
-      code: "23503",
-      message: "violates foreign key constraint",
-    },
+    provisionError: { code: "PT400", message: "group_archived" },
   });
 
   const res = await handleInvite(request(validBody), deps);
