@@ -2,7 +2,6 @@ import type { ReactElement } from 'react';
 import { IonApp } from '@ionic/react';
 import {
   BrowserRouter,
-  Link,
   Navigate,
   Route,
   Routes,
@@ -17,7 +16,8 @@ import AppShell from './components/shell/AppShell';
 import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
-import Placeholder from './screens/Placeholder';
+import AdministrareScreen from './screens/administrare/AdministrareScreen';
+import GroupScreen from './screens/administrare/GroupScreen';
 import CampaignsScreen from './screens/campaigns/CampaignsScreen';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
@@ -225,14 +225,15 @@ export default function App() {
               path="/administrare"
               element={
                 <RequireCapability capability="administer">
-                  <Placeholder title="Administrare" issue="#588">
-                    <Link
-                      className="inline-flex min-h-11 items-center underline"
-                      to="/administrare/campanii"
-                    >
-                      Gestionează campaniile grupurilor
-                    </Link>
-                  </Placeholder>
+                  <AdministrareScreen />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="/administrare/grupuri/:groupId"
+              element={
+                <RequireCapability capability="administer">
+                  <GroupScreen />
                 </RequireCapability>
               }
             />
