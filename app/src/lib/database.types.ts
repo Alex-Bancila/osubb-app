@@ -2817,6 +2817,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      add_group_member: {
+        Args: { p_group_id: number; p_member_id: string }
+        Returns: {
+          created_at: string
+          group_id: number
+          group_role: string
+          member_id: string
+          position_title: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       add_independent_team_member: {
         Args: { p_member_id: string; p_team_id: string }
         Returns: {
@@ -3709,6 +3725,22 @@ export type Database = {
         Args: { p_member_id: string; p_team_id: string }
         Returns: boolean
       }
+      remove_group_member: {
+        Args: { p_group_id: number; p_member_id: string }
+        Returns: {
+          created_at: string
+          group_id: number
+          group_role: string
+          member_id: string
+          position_title: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       remove_independent_team_member: {
         Args: { p_member_id: string; p_team_id: string }
         Returns: boolean
@@ -3879,6 +3911,27 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "event_attendance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_group_role: {
+        Args: {
+          p_group_id: number
+          p_group_role: string
+          p_member_id: string
+          p_position_title?: string
+        }
+        Returns: {
+          created_at: string
+          group_id: number
+          group_role: string
+          member_id: string
+          position_title: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_members"
           isOneToOne: true
           isSetofReturn: false
         }
