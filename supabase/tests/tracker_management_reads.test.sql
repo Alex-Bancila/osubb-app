@@ -76,18 +76,26 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
 select is(public.can_manage_tasks(),false,'an ordinary Group Member has no Tracker management capability');
 reset role;
 -- #521 (delta): can_manage_tasks() now sweeps public.groups, not the three legacy Origin
--- tables. This pins the one Group that has no legacy Origin of its own -- the Adunarea
--- Generală organization Group at the root -- so a Group Role held only there still yields the
--- capability. NOTE for the mutation record: this row does NOT distinguish the Groups sweep
--- from the legacy departments/teams/projects sweep, because root authority flows down the
--- path into every legacy Origin, so both bodies answer true. In Wave 2 no reachable state
--- tells them apart; Wave 3's Groups without legacy rows are what makes the sweep load-bearing.
+-- tables. This pins the Organization Group -- the Adunarea Generală, a root Group with no
+-- ancestor of its own -- so a Group Role held only there yields the capability.
+-- NOTE for the mutation record (corrected by the wave review): this row does NOT yet
+-- distinguish the Groups sweep from the legacy departments/teams/projects sweep, and the
+-- reason is NOT that root authority flows down the path. It does not: the Organization
+-- Group's path is {itself} and it is nobody's ancestor. The reason is that the `org`
+-- pseudo-department row is still there, so groups.legacy_dept_id = 'org' mirrors
+-- departments.id = 'org' and the legacy sweep reaches the very same Group. Reverting
+-- can_manage_tasks() to the legacy sweep therefore survives this suite; reverting it to that
+-- same sweep with `d.id <> 'org'` excluded fails on exactly this assertion. Wave 3 drops the
+-- pseudo-department, and that is what makes this row load-bearing.
+-- The Group is picked by `category` deliberately (review D6): it is the Wave-3 spelling, and
+-- a test file is outside conventions.test.sql's function/policy sweep. Every consumer in the
+-- wave says legacy_dept_id = 'org' instead, and must keep saying it.
 -- Rolled back with the suite; no production roster write.
 insert into public.group_members(group_id,member_id,group_role)
 select grp.id,pg_temp.g521_uid(12),'manager' from public.groups as grp where grp.category='organization';
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(12));
-select is(public.can_manage_tasks(),true,'a Group Manager of the root Group, which has no legacy Origin of its own, has the Tracker management capability');
+select is(public.can_manage_tasks(),true,'a Group Manager of the Organization Group has the Tracker management capability');
 reset role;
 
 select * from finish();
