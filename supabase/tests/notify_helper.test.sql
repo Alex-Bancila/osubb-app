@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(57);
 
 -- ==================== Definition and privileges ====================
 select is(
@@ -477,25 +477,22 @@ select is(
 select is(
   (select array_agg(member_id order by member_id)
      from private.task_managers((select indepteam_task_id from fx), '32000000-0000-0000-0000-000000000301'::uuid) as member_id),
-  array['32000000-0000-0000-0000-000000000302'::uuid],
-  'task_managers: Independent-Team origin -- every active member manages jointly, excluding the actor'
+  array(select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and (r.level>=6 or p.id='32000000-0000-0000-0000-000000000302'::uuid) order by p.id),
+  'task_managers: Independent-Team origin -- peers and live BC/Moderator, excluding the actor'
 );
 select is(
   (select array_agg(member_id order by member_id)
      from private.task_managers((select indepteam_task_id from fx), '32000000-0000-0000-0000-000000000302'::uuid) as member_id),
-  array['32000000-0000-0000-0000-000000000301'::uuid],
-  'task_managers: Independent-Team origin -- the other member is excluded when they are the actor instead'
+  array(select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and (r.level>=6 or p.id='32000000-0000-0000-0000-000000000301'::uuid) order by p.id),
+  'task_managers: Independent-Team origin -- peers and BC/Moderator still exclude the acting peer'
 );
 
 -- ==================== task_managers: Project origin, Responsible included, plain member excluded ====================
 select is(
   (select array_agg(member_id order by member_id)
      from private.task_managers((select project_task_id from fx), '32000000-0000-0000-0000-000000000404'::uuid) as member_id),
-  array(select unnest(array[
-    '32000000-0000-0000-0000-000000000401'::uuid,
-    '32000000-0000-0000-0000-000000000402'::uuid
-  ]) order by 1),
-  'task_managers: Project origin -- the lead and every Responsible manage; a plain project member does not'
+  array['32000000-0000-0000-0000-000000000401'::uuid],
+  'task_managers: Project origin -- the nearest Managers receive fallback; Responsibles do not when a Manager exists'
 );
 
 -- ==================== task_managers: empty Origin falls back to BC/Moderator ====================
@@ -571,6 +568,15 @@ select throws_ok(
   'service_role cannot execute private.task_managers'
 );
 reset role;
+
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+select pg_temp.g521_task('project','project',5);
+select pg_temp.g521_task('ind','ind',7);
+select results_eq($$select private.task_managers((select id from g521_tasks where name='project'),pg_temp.g521_uid(5)) order by 1$$,$$select pg_temp.g521_uid(1)$$,'live creator remains the first recipient');
+select results_eq($$select private.task_managers((select id from g521_tasks where name='project'),pg_temp.g521_uid(1)) order by 1$$,$$select pg_temp.g521_uid(2)$$,'creator acting falls back to Group Manager, excluding Responsibles');
+select results_eq($$select private.task_managers((select id from g521_tasks where name='ind'),pg_temp.g521_uid(1)) order by 1$$,$$select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and p.id<>pg_temp.g521_uid(1) and (r.level>=6 or p.id in (pg_temp.g521_uid(6),pg_temp.g521_uid(7))) order by 1$$,'Manager-less chain notifies peers and BC without echo');
 
 select * from finish();
 rollback;

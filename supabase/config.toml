@@ -75,6 +75,24 @@ enable_signup = true
 enable_confirmations = true
 double_confirm_changes = true
 
+# Both sign-in emails carry the link AND `{{ .Token }}` — the same one-time
+# password, the same expiry, rendered twice. The code is what makes an installed
+# PWA on iOS usable at all: its storage is separate from Safari's, so a tapped
+# link signs the member into Safari while the app they installed keeps showing
+# the login screen. A link opened on a second device fails the same way. This is
+# not a new authentication path (#599, ADR-0003).
+#
+# `content_path` is resolved from the directory the CLI runs in — the repository
+# root — not from this file. Hosted projects never read config.toml: the same
+# two bodies are pasted into Authentication → Email Templates (#54, #77).
+[auth.email.template.magic_link]
+subject = "Conectare la aplicația OSUBB"
+content_path = "./supabase/templates/magic-link.html"
+
+[auth.email.template.invite]
+subject = "Ai fost invitat în aplicația OSUBB"
+content_path = "./supabase/templates/invite.html"
+
 # Google OAuth — fill client_id/secret from env when enabling (Epic 2.1).
 [auth.external.google]
 enabled = false
