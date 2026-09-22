@@ -402,7 +402,7 @@ describe('"Task nou" in the Tracker', () => {
     auth.useAuth.mockReset();
     window.history.pushState({}, '', '/tracker');
   });
-  // Visibility follows the live can_manage_tasks() read, never the claims.
+  // Visibility follows the live manage_tasks capability, never the claims.
   it.each([
     ['a Group Manager', 'voluntar', 3, true],
     ['a Responsible', 'voluntar', 2, true],
@@ -413,7 +413,7 @@ describe('"Task nou" in the Tracker', () => {
       ...member,
       claims: { ...member.claims, member_role: role, member_level: level },
     });
-    management.useTaskManagement.mockReturnValue({ data: manages });
+    grant(...(manages ? ['manageTasks'] : []));
     render(
       <QueryClientProvider client={new QueryClient()}>
         <App />
