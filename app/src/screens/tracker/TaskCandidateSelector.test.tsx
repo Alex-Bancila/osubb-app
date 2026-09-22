@@ -16,6 +16,11 @@ vi.mock('../../queries/task-candidate-selection', () => ({
   useSelectTaskCandidate: () => hooks.selection,
 }));
 
+const profileHook = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/member-profile', () => ({
+  useMemberProfile: profileHook,
+}));
+
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 
 describe('Task candidate selector', () => {
@@ -182,6 +187,44 @@ describe('Task candidate selector', () => {
     });
     rerender(<TaskCandidateSelector taskId={17} />);
     expect(screen.getByText('Nu există persoane în coadă.')).toBeVisible();
+  });
+
+  it('moves between candidates with the arrow keys', async () => {
+    const user = userEvent.setup();
+    render(<TaskCandidateSelector taskId={17} />);
+    await user.click(screen.getByRole('radio', { name: /Ana Pop/ }));
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('radio', { name: /Mihai Ionescu/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Ana Pop/ })).not.toBeChecked();
+  });
+
+  it('opens a candidate’s profile without selecting them', async () => {
+    profileHook.mockReturnValue({
+      data: {
+        id: 'member-2',
+        fullName: 'Mihai Ionescu',
+        avatarColor: null,
+        roleLabel: 'Voluntar',
+        joinedYear: 2025,
+        groups: [],
+        email: null,
+        phone: null,
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<TaskCandidateSelector taskId={17} />);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Profilul membrului Mihai Ionescu' }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Mihai Ionescu' }),
+    ).toHaveTextContent('Voluntar');
+    expect(profileHook).toHaveBeenCalledWith('member-2');
+    expect(
+      screen.getByRole('radio', { name: /Mihai Ionescu/, hidden: true }),
+    ).not.toBeChecked();
   });
 
   it('uses semantic controls with no accessibility violations', async () => {
