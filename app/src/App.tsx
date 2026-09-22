@@ -17,6 +17,7 @@ import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
+import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
 import CalendarScreen from './screens/calendar/CalendarScreen';
@@ -192,7 +193,7 @@ export default function App() {
               path="/voluntari"
               element={
                 <RequireCapability capability="seeDirectory">
-                  <Placeholder title="Voluntari" issue="#102–#103" />
+                  <VolunteersScreen />
                 </RequireCapability>
               }
             />
