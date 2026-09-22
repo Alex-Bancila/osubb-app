@@ -15,11 +15,13 @@ import { supabase } from './supabase';
 export type MemberClaims = {
   member_role: string;
   member_level: number;
-  dept_ids: string[];
-  team_ids: string[];
+  /** Legacy structure claims: nothing reads them; removed in #591. */
+  dept_ids?: string[];
+  team_ids?: string[];
   /**
    * Explicit Group memberships (ADR-0009 Wave 1); the Organization Group is
-   * automatic and never listed.
+   * automatic and never listed. Stamped at token issue, so it can be up to an
+   * hour stale: the Tracker decides membership from `my_groups()` instead.
    */
   group_ids: number[];
 };

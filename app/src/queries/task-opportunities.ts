@@ -2,47 +2,31 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
+import { fetchMyGroups, memberGroupIds } from './my-groups';
 import { TASK_PRESENTATION_FIELDS } from './tasks';
 import { attachVisibleTaskExecutors } from './task-executors';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
-export type TaskMemberships = {
-  departments: string[];
-  teams: string[];
-  projects: number[];
-};
+/** The ids of the Groups this Member is a member of, from `my_groups()`. */
+export type TaskMemberships = ReadonlySet<number>;
 
-export async function fetchTaskMemberships(
-  memberId: string,
-): Promise<TaskMemberships> {
-  const [departments, teams, projects] = await Promise.all([
-    supabase
-      .from('member_departments')
-      .select('dept_id')
-      .eq('member_id', memberId),
-    supabase.from('team_members').select('team_id').eq('member_id', memberId),
-    supabase
-      .from('project_members')
-      .select('project_id')
-      .eq('member_id', memberId),
-  ]);
-  for (const result of [departments, teams, projects])
-    if (result.error) throw result.error;
-  return {
-    departments: (departments.data ?? []).map((row) => row.dept_id),
-    teams: (teams.data ?? []).map((row) => row.team_id),
-    projects: (projects.data ?? []).map((row) => row.project_id),
-  };
+/**
+ * Read live on every fetch of Available work, so an Appointment into a Group
+ * makes its local Opportunities "own" on the next refetch, with no re-login.
+ */
+export async function fetchTaskMemberships(): Promise<TaskMemberships> {
+  return memberGroupIds(await fetchMyGroups());
 }
 
+/**
+ * Exact membership of the Task's own Group — never an ancestor or descendant
+ * walk: a Department member is not a member of its Child Team.
+ */
 export function hasOwnOrigin(
   task: TaskPresentationRow,
-  scopes: TaskMemberships,
+  memberships: TaskMemberships,
 ): boolean {
-  if (task.team_id !== null) return scopes.teams.includes(task.team_id);
-  if (task.project_id !== null)
-    return scopes.projects.includes(task.project_id);
-  return task.dept_id !== null && scopes.departments.includes(task.dept_id);
+  return memberships.has(task.group_id);
 }
 
 export function orderOpportunities(
@@ -73,7 +57,7 @@ export async function fetchTaskOpportunities(
   memberId: string,
 ): Promise<TaskPresentationRow[]> {
   const [scopes, candidatures] = await Promise.all([
-    fetchTaskMemberships(memberId),
+    fetchTaskMemberships(),
     supabase
       .from('task_candidates')
       .select('task_id')
