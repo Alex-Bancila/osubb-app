@@ -10,16 +10,48 @@ const fixtures: Record<string, unknown[]> = {
   ],
   profiles_contact: [{ id: 'a', email: 'ana@example.test', phone: null }],
   group_members: [
-    { member_id: 'a', group_id: 1 },
     { member_id: 'a', group_id: 2 },
+    { member_id: 'a', group_id: 1 },
+    { member_id: 'a', group_id: 3 },
+    { member_id: 'a', group_id: 9 },
   ],
   groups: [
-    { id: 1, name: 'Educațional', category: 'department' },
-    { id: 2, name: 'Logistică', category: 'team' },
+    {
+      id: 1,
+      name: 'Educațional',
+      category: 'department',
+      path: [1],
+      status: 'active',
+      is_organization: false,
+    },
+    {
+      id: 2,
+      name: 'Logistică',
+      category: 'team',
+      path: [1, 2],
+      status: 'active',
+      is_organization: false,
+    },
+    {
+      id: 3,
+      name: 'Arhivă',
+      category: 'team',
+      path: [1, 3],
+      status: 'archived',
+      is_organization: false,
+    },
+    {
+      id: 9,
+      name: 'OSUBB',
+      category: 'organization',
+      path: [9],
+      status: 'active',
+      is_organization: true,
+    },
   ],
   roles: [
-    { id: 'voluntar', name: 'Voluntar' },
-    { id: 'bc', name: 'BC' },
+    { id: 'voluntar', name: 'Voluntar', level: 1 },
+    { id: 'bc', name: 'BC', level: 6 },
   ],
 };
 function query(data: unknown[] | null, error: unknown = null) {
@@ -46,8 +78,14 @@ describe('directory reads', () => {
     expect(members[0]).toMatchObject({
       name: 'Ana',
       role: 'Voluntar',
-      departments: ['Educațional'],
-      teams: ['Logistică'],
+      roleId: 'voluntar',
+      roleLevel: 1,
+      // Archived Groups and the Organization Group are left out; the
+      // Department comes before its team, which carries its parent's name.
+      groups: [
+        { id: 1, label: 'Educațional', path: [1] },
+        { id: 2, label: 'Logistică · Educațional', path: [1, 2] },
+      ],
       points: -3,
       contact: { email: 'ana@example.test' },
     });
@@ -78,7 +116,10 @@ describe('directory reads', () => {
     ]);
     mocks.rpc.mockReturnValue(ranking);
     const members = await fetchMemberDirectory();
-    expect(members[1]).toMatchObject({ teams: ['Logistică'], points: 42 });
+    expect(members[1]).toMatchObject({
+      groups: [{ label: 'Logistică · Educațional' }],
+      points: 42,
+    });
     expect(pages.range).toHaveBeenCalledWith(500, 999);
     expect(ranking.range).toHaveBeenCalledWith(500, 999);
   });

@@ -1,32 +1,88 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DirectoryMember } from '../../queries/member-directory';
+import type {
+  DirectoryGroup,
+  DirectoryMember,
+} from '../../queries/member-directory';
 import VolunteersScreen from './VolunteersScreen';
 
-const mock = vi.hoisted(() => ({ useMemberDirectory: vi.fn() }));
-vi.mock('../../queries/member-directory', () => mock);
+const mock = vi.hoisted(() => ({
+  useMemberDirectory: vi.fn(),
+  useGroups: vi.fn(),
+  useMemberProfile: vi.fn(),
+}));
+vi.mock('../../queries/member-directory', () => ({
+  useMemberDirectory: mock.useMemberDirectory,
+}));
+vi.mock('../../queries/reference', () => ({ useGroups: mock.useGroups }));
+vi.mock('../../queries/member-profile', () => ({
+  useMemberProfile: mock.useMemberProfile,
+}));
+
+// Group tree: Educațional ⟶ Logistică, Mentorat; Imagine & PR ⟶ Foto;
+// plus a few top-level Projects so one member can sit in many Groups.
+const tree = [
+  { id: 1, name: 'Educațional', path: [1], category: 'department' },
+  { id: 2, name: 'Logistică', path: [1, 2], category: 'team' },
+  { id: 3, name: 'Mentorat', path: [1, 3], category: 'team' },
+  { id: 4, name: 'Imagine & PR', path: [4], category: 'department' },
+  { id: 5, name: 'Foto', path: [4, 5], category: 'team' },
+  { id: 6, name: 'Balul Bobocilor', path: [6], category: 'project' },
+  { id: 7, name: 'Zilele Studenților', path: [7], category: 'project' },
+  { id: 8, name: 'Voluntariat de iarnă', path: [8], category: 'project' },
+].map((group) => ({ ...group, status: 'active', is_organization: false }));
+const byId = new Map(tree.map((group) => [group.id, group]));
+function g(id: number): DirectoryGroup {
+  const group = byId.get(id) as (typeof tree)[number];
+  const parent = byId.get(group.path.at(-2) ?? -1);
+  return {
+    id,
+    name: group.name,
+    label: parent ? `${group.name} · ${parent.name}` : group.name,
+    category: group.category,
+    path: group.path,
+  };
+}
+
 const members: DirectoryMember[] = [
   {
     id: 'a',
     name: 'Ștefan Pop',
+    avatarColor: null,
+    roleId: 'voluntar',
     role: 'Voluntar',
+    roleLevel: 1,
     status: 'activ',
-    departments: ['Educațional'],
-    teams: ['Logistică'],
+    groups: [g(2)],
     points: -2,
     contact: { email: 'stefan@example.test', phone: null },
   },
   {
     id: 'b',
     name: 'Ana Ionescu',
+    avatarColor: '#284C93',
+    roleId: 'bc',
     role: 'BC',
+    roleLevel: 6,
     status: 'inactiv',
-    departments: ['Imagine & PR'],
-    teams: [],
+    groups: [g(4)],
     points: 0,
     contact: undefined,
+  },
+  {
+    // A member in many Groups: the row must stay one readable line.
+    id: 'c',
+    name: 'Maria Dobre',
+    avatarColor: null,
+    roleId: 'vot',
+    role: 'Membru cu Drept de Vot',
+    roleLevel: 3,
+    status: 'activ',
+    groups: [g(1), g(4), g(3), g(5), g(6), g(7), g(8)],
+    points: 40,
+    contact: { email: 'maria@example.test', phone: '0700' },
   },
 ];
 function result(overrides = {}) {
@@ -38,33 +94,187 @@ function result(overrides = {}) {
     ...overrides,
   };
 }
-beforeEach(() => mock.useMemberDirectory.mockReturnValue(result()));
+function rowOf(name: string) {
+  return screen.getByRole('button', { name }).closest('tr') as HTMLElement;
+}
+function names() {
+  return screen
+    .getAllByRole('row', { hidden: true })
+    .slice(1)
+    .map((row) => row.querySelector('td button span.truncate')?.textContent);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mock.useMemberDirectory.mockReturnValue(result());
+  mock.useGroups.mockReturnValue({ data: byId, isError: false });
+  mock.useMemberProfile.mockImplementation((id: string) => ({
+    data: {
+      id,
+      fullName: members.find((member) => member.id === id)?.name ?? '',
+      avatarColor: null,
+      roleLabel: null,
+      joinedYear: null,
+      groups: (members.find((member) => member.id === id)?.groups ?? []).map(
+        (group) => ({
+          ...group,
+          short: null,
+          color: null,
+          group_role: 'member',
+          position_title: null,
+          role_label: 'Membru',
+        }),
+      ),
+      email: null,
+      phone: null,
+    },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  }));
+});
+
 describe('Member directory', () => {
-  it('searches Romanian names without requiring diacritics and combines the Department filter', async () => {
+  it('searches names without diacritics, and Group names too', async () => {
     const user = userEvent.setup();
     render(<VolunteersScreen />);
+    const search = screen.getByRole('searchbox', { name: 'Caută un membru' });
+    await user.type(search, 'stefan');
+    expect(names()).toEqual(['Ștefan Pop']);
+    await user.clear(search);
+    await user.type(search, 'foto');
+    expect(names()).toEqual(['Maria Dobre']);
+    expect(screen.getByRole('status')).toHaveTextContent('1 din 3 membri');
+  });
+
+  it('keeps a member with many Groups on one readable line and lists the rest', async () => {
+    const user = userEvent.setup();
+    render(<VolunteersScreen />);
+    const row = rowOf('Maria Dobre');
+    // Two chips, then "+5" naming the other five.
+    expect(within(row).getByText('Educațional')).toBeVisible();
+    expect(within(row).getByText('Imagine & PR')).toBeVisible();
+    expect(within(row).queryByText('Foto · Imagine & PR')).toBeNull();
+    const more = within(row).getByRole('button', { name: /^\+5 grupuri/ });
+    expect(more).toHaveTextContent('+5');
+    expect(more).toHaveAccessibleName(
+      '+5 grupuri: Mentorat · Educațional, Foto · Imagine & PR, Balul Bobocilor, Zilele Studenților, Voluntariat de iarnă. Vezi profilul membrului Maria Dobre',
+    );
+    expect(more.title.split('\n')).toHaveLength(5);
+    // Every chip truncates instead of stretching the row.
+    for (const chip of within(row).getAllByTitle(/./))
+      if (chip !== more) expect(chip.className).toContain('truncate');
+
+    await user.click(more);
+    const dialog = await screen.findByRole('dialog', { name: 'Maria Dobre' });
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(7);
+    expect(dialog).toHaveTextContent('40 puncte');
+  });
+
+  it('opens a member’s profile from their name', async () => {
+    const user = userEvent.setup();
+    render(<VolunteersScreen />);
+    await user.click(screen.getByRole('button', { name: 'Ana Ionescu' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Ana Ionescu' }),
+    ).toBeVisible();
+    expect(mock.useMemberProfile).toHaveBeenCalledWith('b');
+  });
+
+  it('adds Group, role and status filters in a Dialog and shows them as removable chips', async () => {
+    const user = userEvent.setup();
+    render(<VolunteersScreen />);
+    await user.click(screen.getByRole('button', { name: 'Filtrează' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Filtrează membrii',
+    });
+
+    // A parent Group finds the members of its Child Groups too: Ștefan is
+    // only in Logistică, under Educațional.
+    await user.click(within(dialog).getByRole('combobox', { name: 'Grup' }));
     await user.type(
-      screen.getByRole('searchbox', { name: 'Caută după nume' }),
-      'stefan',
+      await screen.findByPlaceholderText('Caută un grup'),
+      'educ',
     );
-    expect(screen.getByText('Ștefan Pop')).toBeVisible();
-    expect(screen.queryByText('Ana Ionescu')).not.toBeInTheDocument();
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Departament' }),
-      'Imagine & PR',
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('listbox'))
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual([
+        'Educațional',
+        'Logistică· Educațional',
+        'Mentorat· Educațional',
+      ]),
     );
+    await user.click(screen.getByRole('option', { name: 'Educațional' }));
+    expect(names()).toEqual(['Maria Dobre', 'Ștefan Pop']);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Voluntar' }));
+    expect(
+      within(dialog).getByRole('button', { name: 'Voluntar' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(names()).toEqual(['Ștefan Pop']);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Gata' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    const active = screen.getByRole('list', { name: 'Filtre active' });
+    expect(within(active).getAllByRole('button')).toHaveLength(2);
+    expect(
+      screen.getByRole('button', { name: /Filtrează.*2 filtre active/ }),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole('button', { name: 'Elimină filtrul Rol: Voluntar' }),
+    );
+    expect(names()).toEqual(['Maria Dobre', 'Ștefan Pop']);
+
+    await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
+    expect(names()).toHaveLength(3);
+    expect(screen.queryByRole('list', { name: 'Filtre active' })).toBeNull();
+  });
+
+  it('filters by status and says so when nothing matches', async () => {
+    const user = userEvent.setup();
+    render(<VolunteersScreen />);
+    await user.click(screen.getByRole('button', { name: 'Filtrează' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Inactiv' }));
+    expect(names()).toEqual(['Ana Ionescu']);
+    await user.click(within(dialog).getByRole('button', { name: 'Voluntar' }));
     expect(
       screen.getByText('Niciun membru nu corespunde filtrelor.'),
     ).toBeVisible();
   });
-  it('shows named memberships, negative and zero Task points, and view-provided contacts', () => {
+
+  it('switches to a card view with the same members and filters', async () => {
+    const user = userEvent.setup();
     render(<VolunteersScreen />);
-    expect(screen.getByText('Logistică')).toBeVisible();
-    expect(screen.getByText('-2')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Carduri' }));
+    expect(screen.getByRole('button', { name: 'Carduri' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(
+      screen.getAllByRole('button', { name: /^\+4 grupuri/ }),
+    ).toHaveLength(1);
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Caută un membru' }),
+      'ana',
+    );
+    expect(screen.getByRole('button', { name: 'Ana Ionescu' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Maria Dobre' })).toBeNull();
+  });
+
+  it('shows negative and zero Task points and view-provided contacts', () => {
+    render(<VolunteersScreen />);
+    expect(screen.getByText('−2')).toBeVisible();
     expect(screen.getByText('0')).toBeVisible();
     expect(screen.getByText('stefan@example.test')).toBeVisible();
     expect(screen.getByText('Inactiv')).toBeVisible();
   });
+
   it('does not invent contact columns when the protected view returns no contact rows', () => {
     mock.useMemberDirectory.mockReturnValue(
       result({
@@ -79,6 +289,7 @@ describe('Member directory', () => {
       screen.queryByRole('columnheader', { name: /Telefon/ }),
     ).not.toBeInTheDocument();
   });
+
   it('offers retry on a failed read without displaying raw database errors', async () => {
     const query = result({ isError: true, data: undefined });
     mock.useMemberDirectory.mockReturnValue(query);
@@ -88,6 +299,7 @@ describe('Member directory', () => {
     );
     expect(query.refetch).toHaveBeenCalledOnce();
   });
+
   it('has loading and empty states', () => {
     mock.useMemberDirectory.mockReturnValue(result({ isPending: true }));
     const view = render(<VolunteersScreen />);
@@ -96,26 +308,31 @@ describe('Member directory', () => {
     view.rerender(<VolunteersScreen />);
     expect(screen.getByText('Niciun membru disponibil.')).toBeVisible();
   });
-  it('sorts Task points numerically through the table controls', async () => {
+
+  it('sorts Task points numerically and roles by seniority', async () => {
+    const user = userEvent.setup();
     render(<VolunteersScreen />);
-    await userEvent.click(
+    await user.click(
       screen.getByRole('button', {
         name: 'Sortează Puncte din taskuri crescător',
       }),
     );
-    expect(screen.getAllByRole('row')[1]).toHaveTextContent('Ștefan Pop');
-    await userEvent.click(
-      screen.getByRole('button', {
-        name: 'Sortează Puncte din taskuri descrescător',
-      }),
+    expect(names()[0]).toContain('Ștefan Pop');
+    await user.click(
+      screen.getByRole('button', { name: 'Sortează Rol crescător' }),
     );
-    expect(screen.getAllByRole('row')[1]).toHaveTextContent('Ana Ionescu');
+    expect(names()).toEqual(['Ștefan Pop', 'Maria Dobre', 'Ana Ionescu']);
   });
-  it('has no automated accessibility violations', async () => {
+
+  it('has no automated accessibility violations in either view or the filter Dialog', async () => {
+    const user = userEvent.setup();
     const { container } = render(<VolunteersScreen />);
-    const results = await axe.run(container, {
-      rules: { 'color-contrast': { enabled: false } },
-    });
-    expect(results.violations).toEqual([]);
+    const rules = { 'color-contrast': { enabled: false } };
+    expect((await axe.run(container, { rules })).violations).toEqual([]);
+    await user.click(screen.getByRole('button', { name: 'Carduri' }));
+    expect((await axe.run(container, { rules })).violations).toEqual([]);
+    await user.click(screen.getByRole('button', { name: 'Filtrează' }));
+    const dialog = await screen.findByRole('dialog');
+    expect((await axe.run(dialog, { rules })).violations).toEqual([]);
   });
 });

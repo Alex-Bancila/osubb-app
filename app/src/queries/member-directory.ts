@@ -1,15 +1,30 @@
 import { useQuery } from '@tanstack/react-query';
+import { groupOptionLabel } from '../components/ui/combobox';
 import { useAuth } from '../lib/auth';
 import { can } from '../lib/capabilities';
 import { supabase } from '../lib/supabase';
 
+/** One Group a member belongs to, labelled `Name · Parent`. */
+export type DirectoryGroup = {
+  id: number;
+  name: string;
+  /** `Name · Parent` for a Child Group, `Name` for a top-level one. */
+  label: string;
+  category: string;
+  /** Root-first ancestor ids ending with this Group's own id. */
+  path: number[];
+};
+
 export type DirectoryMember = {
   id: string;
   name: string;
+  avatarColor: string | null;
+  roleId: string | null;
   role: string;
+  /** Higher is more senior; orders the role filter and sorting. */
+  roleLevel: number;
   status: string;
-  departments: string[];
-  teams: string[];
+  groups: DirectoryGroup[];
   points: number;
   contact: { email: string | null; phone: string | null } | undefined;
 };
@@ -39,7 +54,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       readAllRows((from, to) =>
         supabase
           .from('profiles_directory')
-          .select('id, full_name, role, status')
+          .select('id, full_name, role, status, avatar_color')
           .order('id')
           .range(from, to),
       ),
@@ -61,12 +76,16 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       readAllRows((from, to) =>
         supabase
           .from('groups')
-          .select('id, name, category')
+          .select('id, name, category, path, status, is_organization')
           .order('id')
           .range(from, to),
       ),
       readAllRows((from, to) =>
-        supabase.from('roles').select('id, name').order('id').range(from, to),
+        supabase
+          .from('roles')
+          .select('id, name, level')
+          .order('id')
+          .range(from, to),
       ),
       readAllRows((from, to) =>
         supabase
@@ -76,30 +95,41 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       ),
     ]);
   const groupById = new Map(groups.map((group) => [group.id, group]));
-  const roleById = new Map(roles.map((role) => [role.id, role.name]));
+  const roleById = new Map(roles.map((role) => [role.id, role]));
   const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
   const pointsById = new Map(points.map((row) => [row.member_id, row.points]));
+  const groupsByMember = new Map<string, DirectoryGroup[]>();
+  for (const membership of memberships) {
+    const group = groupById.get(membership.group_id);
+    // Archived Groups and the Organization Group say nothing about a member.
+    if (!group || group.status !== 'active' || group.is_organization) continue;
+    const list = groupsByMember.get(membership.member_id) ?? [];
+    list.push({
+      id: group.id,
+      name: group.name,
+      label: groupOptionLabel(group, groupById),
+      category: group.category,
+      path: group.path,
+    });
+    groupsByMember.set(membership.member_id, list);
+  }
   return profiles.flatMap((profile) => {
     if (!profile.id) return [];
-    const memberGroups = memberships
-      .filter((membership) => membership.member_id === profile.id)
-      .flatMap((membership) => {
-        const group = groupById.get(membership.group_id);
-        return group ? [group] : [];
-      });
+    const role = profile.role ? roleById.get(profile.role) : undefined;
     return [
       {
         id: profile.id,
         name: profile.full_name ?? 'Membru',
-        role: profile.role ? (roleById.get(profile.role) ?? profile.role) : '—',
+        avatarColor: profile.avatar_color,
+        roleId: profile.role,
+        role: role?.name ?? profile.role ?? '—',
+        roleLevel: role?.level ?? -1,
         status: profile.status ?? '—',
-        // Category is a presentation label here, never an authority decision.
-        departments: memberGroups
-          .filter((group) => group.category === 'department')
-          .map((group) => group.name),
-        teams: memberGroups
-          .filter((group) => group.category === 'team')
-          .map((group) => group.name),
+        // Top-level Groups first, then by name, so a Department leads its teams.
+        groups: (groupsByMember.get(profile.id) ?? []).sort(
+          (a, b) =>
+            a.path.length - b.path.length || a.name.localeCompare(b.name, 'ro'),
+        ),
         points: pointsById.get(profile.id) ?? 0,
         contact: contactById.get(profile.id),
       },
