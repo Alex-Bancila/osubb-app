@@ -8,7 +8,7 @@ const queries = vi.hoisted(() => ({
   useMyProfile: vi.fn(),
   useRoles: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
-  useTaskManagement: vi.fn(),
+  useCapabilities: vi.fn(),
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
@@ -20,11 +20,12 @@ vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
 }));
 
-vi.mock('../../queries/task-tabs', () => ({
-  useTaskManagement: queries.useTaskManagement,
+vi.mock('../../lib/capabilities', () => ({
+  useCapabilities: queries.useCapabilities,
 }));
 
 import AppShell from './AppShell';
+import type { Capabilities } from '../../lib/capabilities';
 
 const ordinaryClaims = {
   member_role: 'voluntar',
@@ -33,6 +34,21 @@ const ordinaryClaims = {
   team_ids: [],
   group_ids: [],
 };
+
+/* The server capability row: all false unless a test says otherwise. */
+function capabilities(granted: Partial<Capabilities> = {}): Capabilities {
+  return {
+    managesAnyGroup: false,
+    manageTasks: false,
+    seeDirectory: false,
+    seeLeadership: false,
+    manageRoles: false,
+    provisionMembers: false,
+    createTopLevelGroups: false,
+    administer: false,
+    ...granted,
+  };
+}
 
 function renderShell(path = '/calendar') {
   return render(
@@ -63,7 +79,7 @@ describe('AppShell', () => {
       data: new Map([['voluntar', { name: 'Voluntar' }]]),
     });
     queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
-    queries.useTaskManagement.mockReturnValue({ data: false });
+    queries.useCapabilities.mockReturnValue({ data: capabilities() });
   });
 
   it('keeps ordinary navigation gated and marks the current route in both menus', () => {
@@ -83,7 +99,7 @@ describe('AppShell', () => {
       within(primary).queryByRole('link', { name: 'Voluntari' }),
     ).toBeNull();
     expect(
-      within(primary).queryByRole('link', { name: 'Panou BC' }),
+      within(primary).queryByRole('link', { name: 'Administrare' }),
     ).toBeNull();
 
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
@@ -97,7 +113,7 @@ describe('AppShell', () => {
   });
 
   it('offers Campaigns only to members who manage work in some Group', () => {
-    queries.useTaskManagement.mockReturnValue({ isPending: true });
+    queries.useCapabilities.mockReturnValue({ isPending: true });
     const view = renderShell();
     const primary = () =>
       screen.getByRole('navigation', { name: 'Navigare principală' });
@@ -105,7 +121,9 @@ describe('AppShell', () => {
       within(primary()).queryByRole('link', { name: 'Campanii' }),
     ).toBeNull();
 
-    queries.useTaskManagement.mockReturnValue({ data: true });
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ manageTasks: true }),
+    });
     view.rerender(
       <MemoryRouter initialEntries={['/calendar']}>
         <Routes>
@@ -171,13 +189,25 @@ describe('AppShell', () => {
     expect(screen.getByRole('main')).not.toHaveClass('overflow-hidden');
   });
 
-  it('shows directory and BC destinations at the existing leadership gate', () => {
+  it('shows directory and Administrare destinations from the server capability row', () => {
     auth.useAuth.mockReturnValue({
       claims: { ...ordinaryClaims, member_role: 'bc', member_level: 6 },
       session: { user: { email: 'mara@osubb.ro' } },
       signOut: auth.signOut,
     });
-    renderShell('/bc');
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({
+        managesAnyGroup: true,
+        manageTasks: true,
+        seeDirectory: true,
+        seeLeadership: true,
+        manageRoles: true,
+        provisionMembers: true,
+        createTopLevelGroups: true,
+        administer: true,
+      }),
+    });
+    renderShell('/administrare');
 
     const primary = screen.getByRole('navigation', {
       name: 'Navigare principală',
@@ -186,8 +216,45 @@ describe('AppShell', () => {
       within(primary).getByRole('link', { name: 'Voluntari' }),
     ).toBeVisible();
     expect(
-      within(primary).getByRole('link', { name: 'Panou BC' }),
+      within(primary).getByRole('link', { name: 'Administrare' }),
     ).toHaveAttribute('aria-current', 'page');
+    expect(
+      within(primary).getByRole('link', { name: 'Campanii' }),
+    ).not.toHaveAttribute('aria-current');
+  });
+
+  it('offers Administrare to a level-1 Group Manager and not to a BCE without a Group Role', () => {
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({
+        managesAnyGroup: true,
+        manageTasks: true,
+        administer: true,
+      }),
+    });
+    const view = renderShell('/administrare/campanii');
+    const primary = () =>
+      screen.getByRole('navigation', { name: 'Navigare principală' });
+    expect(
+      within(primary()).getByRole('link', { name: 'Administrare' }),
+    ).not.toHaveAttribute('aria-current');
+    expect(
+      within(primary()).getByRole('link', { name: 'Campanii' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      within(primary()).queryByRole('link', { name: 'Voluntari' }),
+    ).toBeNull();
+    view.unmount();
+
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeDirectory: true, seeLeadership: true }),
+    });
+    renderShell();
+    expect(
+      within(primary()).queryByRole('link', { name: 'Administrare' }),
+    ).toBeNull();
+    expect(
+      within(primary()).getByRole('link', { name: 'Voluntari' }),
+    ).toBeVisible();
   });
 
   it('opens a keyboard-safe mobile menu and returns focus when Escape closes it', async () => {

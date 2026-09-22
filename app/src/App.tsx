@@ -10,7 +10,7 @@ import {
 } from 'react-router';
 import { useAuth } from './lib/auth';
 import { authDestination, loginDestination } from './lib/auth-destination';
-import { can, type Capability } from './lib/capabilities';
+import { useCapability, type Capability } from './lib/capabilities';
 import LeadershipScreen from './screens/leadership/LeadershipScreen';
 import MemberTrackerScreen from './screens/leadership/MemberTrackerScreen';
 import AppShell from './components/shell/AppShell';
@@ -19,7 +19,6 @@ import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import Placeholder from './screens/Placeholder';
 import CampaignsScreen from './screens/campaigns/CampaignsScreen';
-import { useTaskManagement } from './queries/task-tabs';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
 import TrackerScreen from './screens/tracker/TrackerScreen';
@@ -86,6 +85,10 @@ function RequireMember({ children }: { children: ReactElement }) {
   return children;
 }
 
+/**
+ * Waits for the one capability row (`my_capabilities()`), then admits or sends
+ * home. Cosmetic: the server decides every read and command again.
+ */
 function RequireNamedCapability({
   capability,
   children,
@@ -93,8 +96,9 @@ function RequireNamedCapability({
   capability: Capability;
   children: ReactElement;
 }) {
-  const { claims } = useAuth();
-  return can(claims, capability) ? (
+  const allowed = useCapability(capability);
+  if (allowed.isPending) return null;
+  return allowed.data === true ? (
     children
   ) : (
     <Navigate
@@ -105,17 +109,6 @@ function RequireNamedCapability({
       }
     />
   );
-}
-
-/**
- * Cosmetic, like the capabilities: Campaign commands authorize on the server.
- * A member who manages work in no Group is sent home instead of to a panel
- * with nothing to manage.
- */
-function RequireWorkManagement({ children }: { children: ReactElement }) {
-  const management = useTaskManagement();
-  if (management.isPending) return null;
-  return management.data === true ? children : <Navigate to="/" replace />;
 }
 
 /** Same idea one level in: a route the navigation never offers you. */
@@ -186,17 +179,17 @@ export default function App() {
             <Route
               path="/administrare/campanii"
               element={
-                <RequireWorkManagement>
+                <RequireCapability capability="manageTasks">
                   <CampaignsScreen />
-                </RequireWorkManagement>
+                </RequireCapability>
               }
             />
             <Route
               path="/administrare/grupuri/:groupId/campanii"
               element={
-                <RequireWorkManagement>
+                <RequireCapability capability="manageTasks">
                   <CampaignsScreen />
-                </RequireWorkManagement>
+                </RequireCapability>
               }
             />
             <Route
@@ -229,18 +222,17 @@ export default function App() {
             />
             <Route path="/profil" element={<ProfileScreen />} />
             <Route
-              path="/bc"
+              path="/administrare"
               element={
-                <RequireCapability capability="manageRoles">
-                  <section>
-                    <Placeholder title="Panou BC" issue="#104–#107" />
+                <RequireCapability capability="administer">
+                  <Placeholder title="Administrare" issue="#588">
                     <Link
-                      className="inline-flex min-h-11 items-center p-4 underline"
+                      className="inline-flex min-h-11 items-center underline"
                       to="/administrare/campanii"
                     >
                       Gestionează campaniile grupurilor
                     </Link>
-                  </section>
+                  </Placeholder>
                 </RequireCapability>
               }
             />

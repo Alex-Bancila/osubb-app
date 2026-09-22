@@ -19,11 +19,11 @@ export type NavItem = {
   /** Sidebar label and, when the item is on the tab bar, the tab caption. */
   label: string;
   icon: LucideIcon;
-  /** Shown to everyone when absent; otherwise gated on this level threshold. */
+  /** Shown to everyone when absent; otherwise gated on this server
+   *  capability (`my_capabilities()`, live rank and Group Roles). */
   capability?: Capability;
-  /** Shown only to members who may manage work in some Group (a Group
-   *  Manager or Responsible, or BC): Group Roles are not in the level claims. */
-  requiresWorkManagement?: boolean;
+  /** Active only on this exact path, not on the routes nested below it. */
+  exact?: boolean;
   /** Mobile shows five of these; the rest live in the drawer. */
   onTabBar?: boolean;
 };
@@ -56,7 +56,7 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/administrare/campanii',
     label: 'Campanii',
     icon: Tag,
-    requiresWorkManagement: true,
+    capability: 'manageTasks',
   },
   {
     path: '/calendar',
@@ -79,10 +79,11 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { path: '/profil', label: 'Profil', icon: UserRound, onTabBar: true },
   {
-    path: '/bc',
-    label: 'Panou BC',
+    path: '/administrare',
+    label: 'Administrare',
     icon: ShieldCheck,
-    capability: 'manageRoles',
+    capability: 'administer',
+    exact: true,
   },
 ];
 

@@ -3,8 +3,7 @@ import MyPointsCard from './MyPointsCard';
 import LeaderboardCard from './LeaderboardCard';
 import DeptCupCard from './DeptCupCard';
 import { useMyProfile } from '../../queries/profile';
-import { useAuth } from '../../lib/auth';
-import { can } from '../../lib/capabilities';
+import { useCapability } from '../../lib/capabilities';
 import { firstName, formatLongDate } from '../../lib/format';
 
 /**
@@ -23,12 +22,11 @@ import { firstName, formatLongDate } from '../../lib/format';
 export default function DashboardScreen() {
   const profile = useMyProfile();
   const name = firstName(profile.data?.full_name);
-  const { claims } = useAuth();
-  // Same threshold the database enforces on `leaderboard`, `dept_cup` and
-  // `member_points` (`seeLeadership`, capabilities.ts): an ordinary member
-  // never gets rows back from those views, so there is nothing here for the
-  // cards to show and no query worth firing for them.
-  const leader = can(claims, 'seeLeadership');
+  // The server's `see_leadership` capability, the same rank gate the database
+  // enforces on `leaderboard`, `dept_cup` and `member_points`: an ordinary
+  // member never gets rows back from those views, so there is nothing here for
+  // the cards to show and no query worth firing for them.
+  const leader = useCapability('seeLeadership').data === true;
 
   return (
     <IonPage>

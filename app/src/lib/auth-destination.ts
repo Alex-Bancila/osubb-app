@@ -7,7 +7,7 @@ const memberRoutes = new Set([
   '/anunturi',
   '/voluntari',
   '/profil',
-  '/bc',
+  '/administrare',
 ]);
 
 export function safeAuthDestination(value: string | null): string {

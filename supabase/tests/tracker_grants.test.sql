@@ -347,7 +347,11 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('update_task',            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean',
                                                                      false, true,  false, false),
   ('preview_task_update',    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text',
-                                                                     false, true,  false, false);
+                                                                     false, true,  false, false),
+  -- #576: the capability row and the caller's effective Groups. Read-only
+  -- wrappers with the same grant shape as every other wrapper.
+  ('my_capabilities',        '',                                     false, true,  false, false),
+  ('my_groups',              '',                                     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -596,11 +600,17 @@ insert into pinned_private_functions (proname, args, category) values
   ('update_event_impl', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', 'impl'),
   ('event_notification_recipients', 'p_event_id bigint', 'none'),
   ('create_event_impl', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', 'impl'),
-  ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
+  ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl'),
+  -- #576: the live "holds a Group Role anywhere" policy helper (T8's
+  -- Organization-Group compose arm), and the two read bodies behind
+  -- public.my_capabilities() / public.my_groups().
+  ('holds_any_group_role', '', 'predicate'),
+  ('my_capabilities_impl', '', 'impl'),
+  ('my_groups_impl',       '', 'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 138,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, and #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set)');
+  (select count(*) from pinned_private_functions)::int, 141,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

@@ -3745,6 +3745,36 @@ export type Database = {
         }
       }
       member_level: { Args: { p_member: string }; Returns: number }
+      my_capabilities: {
+        Args: never
+        Returns: {
+          administer: boolean
+          create_top_level_groups: boolean
+          manage_roles: boolean
+          manage_tasks: boolean
+          manages_any_group: boolean
+          provision_members: boolean
+          see_directory: boolean
+          see_leadership: boolean
+        }[]
+      }
+      my_groups: {
+        Args: never
+        Returns: {
+          automatic: boolean
+          category: string
+          color: string
+          explicit: boolean
+          group_role: string
+          id: number
+          is_organization: boolean
+          min_level: number
+          name: string
+          path: number[]
+          short: string
+          status: string
+        }[]
+      }
       my_managed_task_ids: {
         Args: never
         Returns: {
