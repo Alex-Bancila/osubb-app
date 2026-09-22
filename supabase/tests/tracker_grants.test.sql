@@ -257,6 +257,7 @@ create temporary table expected_function_privs (
 
 insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) values
   -- #345 dropped public.claim_open_task; its row went with it.
+  ('create_event', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', false, true, false, false),
   ('rating_mult',        'r integer',                                false, true,  true,  false),
   ('auth_level',         '',                                         false, true,  true,  false),
   ('auth_role',          '',                                         false, true,  true,  false),
@@ -589,11 +590,12 @@ insert into pinned_private_functions (proname, args, category) values
   ('can_manage_group_work', 'p_group_id bigint', 'predicate'),
   ('require_group_work_manager', 'p_group_id bigint', 'require'),
   ('group_managers', 'p_group_id bigint', 'none'),
+  ('create_event_impl', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer', 'impl'),
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 134,
-  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, and #625''s two Campaign reporting bodies plus their shared require_* preamble');
+  (select count(*) from pinned_private_functions)::int, 135,
+  'the audited roster includes Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, and #370''s Event creation implementation');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
