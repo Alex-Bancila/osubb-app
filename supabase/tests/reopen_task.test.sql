@@ -41,7 +41,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(117);
+select plan(120);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1454,6 +1454,28 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select lives_ok($$select public.reopen_task((select id from g521_tasks where name='command8'),'Reopen #521')$$,'reopen_task: Group persona 1 on executor 7 in ind');
 reset role;
+
+-- #524: the evaluate-authority refinement at step 7 now reads Groups, not the
+-- legacy Origin (wave-review M2). Two behavioural rows for the rule as the
+-- Group model states it -- a Project's Coordonator is a Group Manager at
+-- whatever rank, an ordinary Project member is nobody -- and one catalog row
+-- for what actually changed. The catalog row is the load-bearing one: under
+-- the Wave 2 gate at step 4 the legacy shape and the Group shape agree on
+-- every input a caller can reach (the Executor can_evaluate_task judges IS
+-- the Assignment this command reverses), so only the catalog tells a reader
+-- whether the decision still depends on a table Wave 3 drops.
+select pg_temp.g521_task('command9','project',3,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select lives_ok($$select public.reopen_task((select id from g521_tasks where name='command9'),'Reopen #524')$$,'reopen_task: a Project Coordonator -- Group Manager at level 1 -- reverses a Responsible''s award');
+reset role;
+select pg_temp.g521_task('command10','project',5,'completed','direct');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select throws_ok($$select public.reopen_task((select id from g521_tasks where name='command10'),'Reopen #524')$$,'42501','task_evaluate_forbidden','reopen_task: an ordinary Project member cannot reopen, not even their own Task');
+reset role;
+select ok((select pg_get_functiondef('private.reopen_task_impl(bigint,text)'::regprocedure)) !~ 'is_project_lead|public\.projects|project_id',
+  'reopen_task''s body reads no legacy Origin: its evaluate-authority refinement is decided by the Group predicates alone');
 
 select * from finish();
 rollback;

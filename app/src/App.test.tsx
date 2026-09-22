@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
+const management = vi.hoisted(() => ({ useTaskManagement: vi.fn() }));
+vi.mock('./queries/task-tabs', () => management);
 vi.mock('./lib/auth', () => ({ useAuth: auth.useAuth }));
 vi.mock('@ionic/react', () => ({
   IonApp: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -25,6 +27,9 @@ vi.mock('./screens/login/AuthCallback', () => ({
 vi.mock('./screens/no-profile/NoProfileScreen', () => ({
   default: () => <h1>No profile screen</h1>,
 }));
+vi.mock('./screens/volunteers/VolunteersScreen', () => ({
+  default: () => <h1>Voluntari</h1>,
+}));
 vi.mock('./screens/Placeholder', () => ({
   default: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
@@ -46,6 +51,15 @@ vi.mock('./screens/profile/ProfileScreen', () => ({
   default: () => <h1>Profil screen</h1>,
 }));
 
+vi.mock('./screens/campaigns/CampaignsScreen', () => ({
+  default: () => <h1>Campanii screen</h1>,
+}));
+vi.mock('./screens/leadership/LeadershipScreen', () => ({
+  default: () => <h1>Clasament screen</h1>,
+}));
+vi.mock('./screens/leadership/MemberTrackerScreen', () => ({
+  default: () => <h1>Member history screen</h1>,
+}));
 import App from './App';
 
 const signedOut = {
@@ -75,7 +89,26 @@ const ordinaryMember = {
 describe('route guards', () => {
   beforeEach(() => {
     auth.useAuth.mockReset();
+    management.useTaskManagement.mockReturnValue({ data: false });
     window.history.pushState({}, '', '/');
+  });
+
+  it('opens Campaigns only for members who manage work in some Group', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    window.history.pushState({}, '', '/administrare/campanii');
+    const view = render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(
+      screen.queryByRole('heading', { name: 'Campanii screen' }),
+    ).toBeNull();
+    view.unmount();
+
+    management.useTaskManagement.mockReturnValue({ data: true });
+    window.history.pushState({}, '', '/administrare/grupuri/2/campanii');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Campanii screen' }),
+    ).toBeVisible();
   });
 
   it('preserves a deep link and restores it after the session arrives', async () => {
@@ -286,4 +319,26 @@ describe('route guards', () => {
       screen.getByRole('heading', { name: 'Profil screen' }),
     ).toBeInTheDocument();
   });
+});
+
+it.each(['/clasament', '/tracker/membru/35400000-0000-0000-0000-000000000001'])(
+  'protects leadership route %s with an explanation',
+  async (path) => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    window.history.pushState({}, '', path);
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(window.history.state.usr).toEqual({ leadershipDenied: true });
+  },
+);
+it('opens the leadership page for BCE', () => {
+  auth.useAuth.mockReturnValue({
+    ...member,
+    claims: { ...member.claims, member_level: 5 },
+  });
+  window.history.pushState({}, '', '/clasament');
+  render(<App />);
+  expect(
+    screen.getByRole('heading', { name: 'Clasament screen' }),
+  ).toBeInTheDocument();
 });

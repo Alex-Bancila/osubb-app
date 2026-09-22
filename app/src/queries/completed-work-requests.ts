@@ -88,7 +88,7 @@ export function useRequestOrigins() {
 export async function fetchMyCompletedWorkRequests(memberId: string) {
   const { data, error } = await supabase
     .from('completed_work_requests')
-    .select('id,description,status,created_at')
+    .select('id,description,status,created_at,decision_note,task_id')
     .eq('requester_id', memberId)
     .order('created_at', { ascending: false });
   if (error) throw error;

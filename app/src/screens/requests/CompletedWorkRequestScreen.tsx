@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from 'react';
+import { RequestDecisionQueue } from './RequestDecisionQueue';
 import { CheckCircle2 } from 'lucide-react';
+import { TaskDetailsSheet } from '../tracker/TaskDetailsSheet';
+import { RequestStatusBadge } from './RequestStatusBadge';
 import { Button } from '../../components/ui/button';
 import {
   Card,
@@ -33,6 +36,7 @@ export default function CompletedWorkRequestScreen() {
   const submit = useSubmitCompletedWork();
   const [originKey, setOriginKey] = useState('');
   const [description, setDescription] = useState('');
+  const [taskId, setTaskId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   async function onSubmit(event: FormEvent) {
@@ -61,6 +65,7 @@ export default function CompletedWorkRequestScreen() {
             Descrie contribuția, iar coordonatorii grupului o vor evalua.
           </p>
         </header>
+        <RequestDecisionQueue />
         <Card>
           <CardHeader>
             <CardTitle>Activitatea ta</CardTitle>
@@ -193,14 +198,32 @@ export default function CompletedWorkRequestScreen() {
             <ul className="space-y-2">
               {myRequests.data.map((request) => (
                 <li key={request.id} className="rounded-lg border bg-card p-4">
-                  <p className="wrap-anywhere">{request.description}</p>
-                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                    {request.status === 'pending'
-                      ? 'În așteptare'
-                      : request.status === 'approved'
-                        ? 'Aprobată'
-                        : 'Respinsă'}
-                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1 wrap-anywhere">
+                      {request.description}
+                    </p>
+                    <RequestStatusBadge status={request.status} />
+                  </div>
+                  {request.decision_note && (
+                    <p className="mt-2 text-sm wrap-anywhere">
+                      <span className="font-semibold">
+                        {request.status === 'rejected'
+                          ? 'Motivul respingerii: '
+                          : 'Notă: '}
+                      </span>
+                      {request.decision_note}
+                    </p>
+                  )}
+                  {request.status === 'approved' &&
+                    request.task_id !== null && (
+                      <Button
+                        variant="link"
+                        className="min-h-11 min-w-11 px-0"
+                        onClick={() => setTaskId(request.task_id)}
+                      >
+                        Deschide taskul #{request.task_id}
+                      </Button>
+                    )}
                 </li>
               ))}
             </ul>
@@ -210,6 +233,7 @@ export default function CompletedWorkRequestScreen() {
             </p>
           )}
         </section>
+        <TaskDetailsSheet taskId={taskId} onClose={() => setTaskId(null)} />
       </div>
     </div>
   );

@@ -19,6 +19,14 @@
 export const keys = {
   points: {
     all: ['points'] as const,
+    leadership: (
+      memberId: string | undefined,
+      filters: { groupId?: number; campaignId?: number },
+    ) => ['points', 'leadership', memberId, filters] as const,
+    leadershipCup: (memberId: string | undefined, campaignId?: number) =>
+      ['points', 'leadership-cup', memberId, campaignId] as const,
+    board: (memberId: string | undefined) =>
+      ['points', 'board', { memberId }] as const,
     me: (memberId: string | undefined) =>
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
@@ -33,6 +41,13 @@ export const keys = {
     groups: (memberId: string | undefined) =>
       ['profile', 'groups', { memberId }] as const,
   },
+  /* Other members as the viewer may see them. Keyed by viewer too: what a
+     profile shows depends on who is looking (contact details, rosters). */
+  members: {
+    all: ['members'] as const,
+    profile: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'profile', { memberId, viewerId }] as const,
+  },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare
      changes a Group, is the whole cache-busting story (see `reference.ts`). */
@@ -40,9 +55,16 @@ export const keys = {
     all: ['reference'] as const,
     groups: () => ['reference', 'groups'] as const,
     roles: () => ['reference', 'roles'] as const,
+    evaluationScale: () => ['reference', 'evaluation-scale'] as const,
   },
   tasks: {
     all: ['tasks'] as const,
+    formOptions: (memberId: string | undefined) =>
+      ['tasks', 'form-options', { memberId }] as const,
+    directExecutors: (memberId: string | undefined) =>
+      ['tasks', 'direct-executors', { memberId }] as const,
+    memberHistory: (memberId: string | undefined, targetId: string) =>
+      ['tasks', 'member-history', memberId, targetId] as const,
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
@@ -68,7 +90,14 @@ export const keys = {
       ['tasks', 'all', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
   },
+  campaigns: {
+    all: ['campaigns'] as const,
+    list: (memberId: string | undefined, groupId?: number) =>
+      ['campaigns', { memberId, groupId }] as const,
+  },
   requests: {
+    decisions: (memberId: string | undefined) =>
+      ['requests', 'decisions', { memberId }] as const,
     all: ['requests'] as const,
     origins: (memberId: string | undefined) =>
       ['requests', 'origins', { memberId }] as const,
@@ -86,6 +115,15 @@ export const keys = {
     all: ['announcements'] as const,
     feed: (memberId?: string) =>
       ['announcements', 'feed', { memberId }] as const,
+  },
+  /* Leadership page support reads (the metrics themselves live under points
+     and tasks, so evaluations refresh them). */
+  leadership: {
+    all: ['leadership'] as const,
+    filters: (memberId: string | undefined) =>
+      ['leadership', 'filters', { memberId }] as const,
+    memberName: (memberId: string | undefined, targetId: string) =>
+      ['leadership', 'member-name', { memberId, targetId }] as const,
   },
   notifications: {
     all: ['notifications'] as const,

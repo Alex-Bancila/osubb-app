@@ -41,6 +41,10 @@ insert into member_departments (member_id, dept_id) values
   ('02000000-0000-0000-0000-000000000002', 'pr'),
   ('03000000-0000-0000-0000-000000000003', 'edu');
 
+update public.group_members set group_role = 'responsible'
+where member_id = '03000000-0000-0000-0000-000000000003'
+  and group_id = (select id from public.groups where legacy_dept_id = 'edu');
+
 insert into teams (id, name, dept_id) values
   ('t-pr', 'Echipa PR', 'pr');
 insert into team_members (team_id, member_id)
@@ -119,10 +123,9 @@ select lives_ok(
   $$ select public.create_event(
        p_title := 'Workshop CV',
        p_type := 'activitate',
-       p_scope := 'dept',
-       p_starts_at := now(),
-       p_dept_id := 'edu') $$,
-  'level >= 4 creates events through the validated command');
+       p_group_id := (select id from public.groups where legacy_dept_id = 'edu'),
+       p_starts_at := now()) $$,
+  'a Group Responsible creates Events through the validated command');
 select throws_ok(
   $$ update events set location = 'Sala 5' where title = 'Dept gated 5' $$,
   '42501', null, 'direct event updates are disabled until the update command lands');

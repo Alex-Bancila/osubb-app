@@ -6,19 +6,27 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
-select plan(11);
+select plan(14);
 -- Committed remote fixtures are required for lock observations and test_race.
 -- Both setup and cleanup are idempotent so an interrupted run can be retried.
 select extensions.dblink_connect('commands_522_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres', current_database()));
 select extensions.dblink_exec('commands_522_setup', $setup$
+  drop function if exists public.test_348_deactivate_target();
+  -- Owner-only fixture teardown follows the existing committed-race pattern.
+  set session_replication_role='replica';
+  delete from public.task_activity where task_id in (select id from public.tasks where title='Race task #348');
+  set session_replication_role='origin';
+  delete from public.notifications where task_id in (select id from public.tasks where title='Race task #348');
+  delete from public.task_assignments where task_id in (select id from public.tasks where title='Race task #348');
+  delete from public.tasks where title='Race task #348';
   drop function if exists public.test_522_campaign();
   drop function if exists public.test_522_revoke();
   delete from public.campaigns where name='Race campaign #522';
   delete from public.completed_work_requests where description='Race request #522';
   delete from public.projects where name = 'Race #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
-    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092');
+    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
   insert into auth.users(id,email) values
     ('52200000-0000-0000-0000-000000000090','coord.race.522@test.local'),
     ('52200000-0000-0000-0000-000000000091','resp.race.522@test.local'),
@@ -91,14 +99,49 @@ create temp table request_race_522 as select * from pg_temp.test_race(
 select is((select result_a from request_race_522),'rejected','Responsible decides ordinary Request before revocation');
 select ok((select b_waited from request_race_522),'roster revocation waits for the Request decision transaction');
 select is((select result_b from request_race_522),'true','revocation completes after Request decision commits');
+-- #348: an unrelated Executor Profile must stay stable through Task creation.
+select extensions.dblink_exec('commands_522_setup', $setup$
+  insert into auth.users(id,email) values
+    ('52200000-0000-0000-0000-000000000093','target.race.348@test.local');
+  insert into public.profiles(id,full_name,email,role,status) values
+    ('52200000-0000-0000-0000-000000000093','Race target','target.race.348@test.local','vot','activ');
+  update public.groups set min_level=3,application_level=3 where name='Race #522';
+  -- Test-only fixed-row bridge for the concurrent administrative change.
+  create function public.test_348_deactivate_target() returns text
+  language sql security definer set search_path='' as $$
+    update public.profiles set status='inactiv'
+      where id='52200000-0000-0000-0000-000000000093' returning status::text
+  $$;
+  revoke execute on function public.test_348_deactivate_target() from public,anon,authenticated,service_role;
+  grant execute on function public.test_348_deactivate_target() to authenticated;
+$setup$);
+select pg_temp.test_login('52200000-0000-0000-0000-000000000092',
+  '{"member_role":"bc","member_level":6}');
+reset role;
+create temp table target_race_348 as select * from pg_temp.test_race(
+  $q$select (public.create_task('Race task #348',null,now()+interval '1 day',null,null,null,'org','direct',
+    '52200000-0000-0000-0000-000000000093',null,null,'task',
+    (select id from public.groups where name='Race #522'))).status::text$q$,
+  'select public.test_348_deactivate_target()');
+select is((select result_a from target_race_348),'todo','creation assigns a live, eligible Executor');
+select ok((select b_waited from target_race_348),'target deactivation waits for the creating transaction');
+select is((select result_b from target_race_348),'inactiv','target deactivation completes after Task creation commits');
 select extensions.dblink_exec('commands_522_setup', $$
+  drop function public.test_348_deactivate_target();
+  -- Owner-only fixture teardown follows the existing committed-race pattern.
+  set session_replication_role='replica';
+  delete from public.task_activity where task_id in (select id from public.tasks where title='Race task #348');
+  set session_replication_role='origin';
+  delete from public.notifications where task_id in (select id from public.tasks where title='Race task #348');
+  delete from public.task_assignments where task_id in (select id from public.tasks where title='Race task #348');
+  delete from public.tasks where title='Race task #348';
   drop function public.test_522_campaign();
   drop function public.test_522_revoke();
   delete from public.campaigns where name='Race campaign #522';
   delete from public.completed_work_requests where description='Race request #522';
   delete from public.projects where name='Race #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
-    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092');
+    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
 $$);
 select extensions.dblink_disconnect('commands_522_setup');
 
