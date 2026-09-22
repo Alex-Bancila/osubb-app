@@ -1,3 +1,4 @@
+import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
 import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import {
@@ -18,6 +19,7 @@ import { UmbrellaTaskSection } from './UmbrellaTaskSection';
 import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { TaskEditControl } from './TaskEditControl';
+import { TaskEvaluationControl } from './TaskEvaluationControl';
 import { toTaskPresentation } from './task-presentation';
 
 function TaskDetails({
@@ -62,6 +64,13 @@ function TaskDetails({
         <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
       )}
       <TaskEditControl task={query.data.task} canManage={canManage} />
+      {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}
+      <TaskEvaluationControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
+        executorName={query.data.executorName}
+      />
       <dl className="grid gap-3 text-sm">
         {task.kind === 'task' && (
           <div>

@@ -32,6 +32,9 @@ const candidateHooks = vi.hoisted(() => ({
     isPending: false,
   },
 }));
+vi.mock('../../queries/task-review', () => ({
+  useTaskEvaluationCapability: () => ({ data: false }),
+}));
 vi.mock('../../queries/task-details', () => ({ useTaskDetails }));
 vi.mock('../../queries/task-candidate-selection', () => ({
   usePendingTaskCandidates: candidateHooks.candidates,

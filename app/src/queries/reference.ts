@@ -260,3 +260,28 @@ export function useRoles() {
     },
   });
 }
+
+/**
+ * The Rating and Difficulty scales an evaluator chooses from. The labels and
+ * multipliers live in migrations (house rule 6), so the evaluation form reads
+ * them rather than hard-coding a second copy; the server still computes the
+ * points (`private.evaluate_task`) — anything shown from this is a preview.
+ */
+export function useEvaluationScale() {
+  return useQuery({
+    queryKey: keys.reference.evaluationScale(),
+    staleTime: Infinity,
+    queryFn: async () => {
+      const [ratings, difficulties] = await Promise.all([
+        supabase
+          .from('rating_guide')
+          .select('rating, multiplier, label')
+          .order('rating'),
+        supabase.from('difficulty_guide').select('stars, note').order('stars'),
+      ]);
+      if (ratings.error) throw ratings.error;
+      if (difficulties.error) throw difficulties.error;
+      return { ratings: ratings.data, difficulties: difficulties.data };
+    },
+  });
+}
