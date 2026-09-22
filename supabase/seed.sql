@@ -1476,6 +1476,12 @@ select e.id, a.member_id, a.status
 -- One critical + pinned (the feed's loudest state), one with a form link
 -- (the v1 forms story — a Google Form, not a native engine), one scoped to a
 -- single department, and ordinary ones underneath.
+-- #68: demo announcements are fixtures, not live broadcasts. Staging reapplies
+-- this seed on a live database with real Members; keep its fan-out disabled only
+-- for these inserts so reruns never notify anyone outside the demo cohort.
+-- The documented seed entrypoints run as postgres in one transaction, so an
+-- error rolls the trigger state back with the inserts.
+alter table announcements disable trigger announcements_fan_out;
 insert into announcements (title, body, dept_id, author, priority, category, pinned, form_label, form_url, published_at, created_by, group_id, audience) values
   ('Ședință extraordinară BC — vineri',
    'Vineri, ora 18:00, Aula Magna. Prezența tuturor coordonatorilor este obligatorie.',
@@ -1498,6 +1504,7 @@ insert into announcements (title, body, dept_id, author, priority, category, pin
    'Dificultatea și nota se înmulțesc — detaliile sunt în aplicație, la Ghid.',
    null, 'BC', 'normal', 'organizatoric', false, null, null,
    now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org');
+alter table announcements enable trigger announcements_fan_out;
 
 -- A few members have already read things, so the unread badge shows a real
 -- number instead of "everything" or "nothing".
@@ -1512,8 +1519,8 @@ select a.id, r.member_id
   join announcements a on a.title = r.title;
 
 -- ==================== Notifications ====================
--- Written here by hand only because the fan-out trigger is issue #68; once
--- that lands, announcements will produce these rows themselves.
+-- Curated demo Notifications remain explicit while demo Announcement fan-out
+-- is suppressed above: staging may already contain real Members.
 -- Note the suppression rule at work: BC and BCE get the announcement, never
 -- the task/deadline broadcasts.
 insert into notifications (member_id, kind, icon, title, body, critical, read, link, created_at) values
