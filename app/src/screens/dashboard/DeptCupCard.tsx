@@ -45,6 +45,16 @@ export default function DeptCupCard() {
 
   const max = Math.max(1, ...(cup.data ?? []).map((row) => row.points ?? 0));
 
+  // #200 — a row exists the instant `dept_cup` resolves, but its Group may
+  // not: `groups` is a second, independent query. Rendering rows as soon as
+  // `cup` settles, while `groupByDeptId` is still empty because `groups` is
+  // still in flight, is exactly how `row.dept_id` ('edu', 'pr', …) used to
+  // flash on screen before its Group's name and colour arrived. Waiting on
+  // both — the same shape `MyPointsCard` already uses for its own two
+  // queries — means no row is ever painted before its Group lookup can
+  // answer, so there is no frame in which a raw id is the fallback.
+  const isPending = cup.isPending || groups.isPending;
+
   return (
     <section className="card">
       <header className="card-head">
@@ -54,7 +64,7 @@ export default function DeptCupCard() {
         </h2>
       </header>
 
-      {cup.isPending ? (
+      {isPending ? (
         <Loading />
       ) : cup.isError ? (
         <ErrorState error={cup.error} onRetry={() => void cup.refetch()} />
@@ -81,7 +91,12 @@ export default function DeptCupCard() {
                   } as CSSProperties
                 }
               >
-                <span className="cup-tag">{group?.short ?? row.dept_id}</span>
+                {/* An id genuinely matching no Group (RLS withheld it, or the
+                    bridge is stale) is not a name — '—' is the same neutral
+                    ink-coloured fallback the row's colour already takes,
+                    never the raw legacy id and never a second, hard-coded
+                    department map. */}
+                <span className="cup-tag">{group?.short ?? '—'}</span>
                 <div className="cup-body">
                   <div className="cup-line">
                     <span className="cup-name">{group?.name ?? row.name}</span>
