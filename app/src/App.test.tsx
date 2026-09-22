@@ -36,6 +36,15 @@ vi.mock('./screens/calendar/CalendarScreen', () => ({ default: () => null }));
 vi.mock('./screens/requests/CompletedWorkRequestScreen', () => ({
   default: () => <h1>Cereri screen</h1>,
 }));
+vi.mock('./screens/announcements/AnnouncementsScreen', () => ({
+  default: () => <h1>Anunțuri screen</h1>,
+}));
+vi.mock('./screens/notifications/NotificationsScreen', () => ({
+  default: () => <h1>Notificări screen</h1>,
+}));
+vi.mock('./screens/profile/ProfileScreen', () => ({
+  default: () => <h1>Profil screen</h1>,
+}));
 
 vi.mock('./screens/campaigns/CampaignsScreen', () => ({
   default: () => <h1>Campanii screen</h1>,
@@ -70,6 +79,22 @@ describe('route guards', () => {
   beforeEach(() => {
     auth.useAuth.mockReset();
     window.history.pushState({}, '', '/');
+  });
+
+  it('preserves a deep link and restores it after the session arrives', async () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState({}, '', '/cereri?source=test#requests');
+    const view = render(<App />);
+    await screen.findByRole('heading', { name: 'Login screen' });
+    expect(new URLSearchParams(window.location.search).get('next')).toBe(
+      '/cereri?source=test#requests',
+    );
+    auth.useAuth.mockReturnValue(member);
+    view.rerender(<App />);
+    await screen.findByRole('heading', { name: 'Cereri screen' });
+    expect(
+      window.location.pathname + window.location.search + window.location.hash,
+    ).toBe('/cereri?source=test#requests');
   });
 
   it('redirects a signed-out visitor from /no-profile to login', async () => {
@@ -230,5 +255,38 @@ describe('route guards', () => {
 
     await screen.findByRole('heading', { name: 'Dashboard' });
     expect(window.location.pathname).toBe('/');
+  });
+
+  it('renders the notification centre for an active member at /notificari', () => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', '/notificari');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Notificări screen' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the announcements screen for an active member at /anunturi', () => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', '/anunturi');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Anunțuri screen' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the profile screen for an active member at /profil', () => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', '/profil');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Profil screen' }),
+    ).toBeInTheDocument();
   });
 });

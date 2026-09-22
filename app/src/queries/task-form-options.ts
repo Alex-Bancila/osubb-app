@@ -28,7 +28,7 @@ export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
       .range(from, to),
   );
   if (!groups.length) return { groups: [], campaigns: [], umbrellas: [] };
-  const [campaigns, umbrellas] = await Promise.all([
+  const [campaigns, umbrellas, groupNames] = await Promise.all([
     fetchCampaigns().then((rows) =>
       rows.filter((campaign) => campaign.is_active),
     ),
@@ -41,12 +41,17 @@ export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
         .order('id')
         .range(from, to),
     ),
+    // Readable Group names, so a managed Child Group is shown with its parent.
+    pages((from, to) =>
+      supabase.from('groups').select('id,name').order('id').range(from, to),
+    ),
   ]);
   const ids = new Set(groups.map((group) => group.id));
   return {
     groups,
     campaigns,
     umbrellas: umbrellas.filter((parent) => ids.has(parent.group_id)),
+    groupNames,
   };
 }
 export function useTaskFormOptions() {

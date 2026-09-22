@@ -34,15 +34,27 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
                   min_level: 0,
                   category: 'team',
                 }))
-              : table === 'campaigns'
-                ? [
-                    { id: 10, name: 'Campanie', group_id: 1, is_active: true },
-                    { id: 11, name: 'Inactivă', group_id: 1, is_active: false },
-                  ]
-                : [
-                    { id: 20, title: 'Umbrelă administrată', group_id: 501 },
-                    { id: 21, title: 'Doar vizibilă', group_id: 999 },
-                  ],
+              : table === 'groups'
+                ? [{ id: 1, name: 'Educațional' }]
+                : table === 'campaigns'
+                  ? [
+                      {
+                        id: 10,
+                        name: 'Campanie',
+                        group_id: 1,
+                        is_active: true,
+                      },
+                      {
+                        id: 11,
+                        name: 'Inactivă',
+                        group_id: 1,
+                        is_active: false,
+                      },
+                    ]
+                  : [
+                      { id: 20, title: 'Umbrelă administrată', group_id: 501 },
+                      { id: 21, title: 'Doar vizibilă', group_id: 999 },
+                    ],
           error: null,
         };
       },
@@ -65,6 +77,8 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
   expect(data.umbrellas).toEqual([
     { id: 20, title: 'Umbrelă administrată', group_id: 501 },
   ]);
+  expect(data.groupNames).toEqual([{ id: 1, name: 'Educațional' }]);
+  expect(calls).toContainEqual(['groups', 'select', 'id,name']);
   expect(api.rpc).toHaveBeenCalledWith('managed_work_groups');
 });
 it('returns no form options for a successful lack of managed origins', async () => {

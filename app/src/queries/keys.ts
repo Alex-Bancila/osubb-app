@@ -30,14 +30,15 @@ export const keys = {
     all: ['profile'] as const,
     me: (memberId: string | undefined) =>
       ['profile', 'me', { memberId }] as const,
+    groups: (memberId: string | undefined) =>
+      ['profile', 'groups', { memberId }] as const,
   },
-  /* Reference data — roles, departments, the scoring guides. It changes in a
-     migration, never at runtime, so these are fetched once and kept (see
-     `reference.ts`). Same family for all of it: one `['reference']`
-     invalidation after a deploy is the whole cache-busting story. */
+  /* Reference data — roles, Groups, the scoring guides. Same family for all of
+     it: one `['reference']` invalidation after a deploy, or after Administrare
+     changes a Group, is the whole cache-busting story (see `reference.ts`). */
   reference: {
     all: ['reference'] as const,
-    departments: () => ['reference', 'departments'] as const,
+    groups: () => ['reference', 'groups'] as const,
     roles: () => ['reference', 'roles'] as const,
   },
   tasks: {
@@ -92,10 +93,17 @@ export const keys = {
   },
   announcements: {
     all: ['announcements'] as const,
-    feed: () => ['announcements', 'feed'] as const,
+    feed: (memberId?: string) =>
+      ['announcements', 'feed', { memberId }] as const,
   },
   notifications: {
     all: ['notifications'] as const,
-    unread: () => ['notifications', 'unread'] as const,
+    /* The Notification centre and its badge are both "mine", so both carry the
+       member (rule 3) and both start with `['notifications']`: marking one row
+       read refreshes the list and the badge from a single invalidation. */
+    list: (memberId: string | undefined) =>
+      ['notifications', 'list', { memberId }] as const,
+    unread: (memberId?: string) =>
+      ['notifications', 'unread', { memberId }] as const,
   },
 } as const;
