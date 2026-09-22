@@ -38,9 +38,10 @@ select md5(string_agg(x, '|' order by x))
                             coalesce(assignment_mode, '-'), coalesce(audience, '-'))
                 from tasks
     union all select format('campaign:%s:%s:%s:%s',
-                            coalesce(campaign.department_id, '-'), campaign.name,
+                            campaign_group.name, campaign.name,
                             campaign.is_active, creator.full_name)
                 from campaigns campaign
+                join groups campaign_group on campaign_group.id = campaign.group_id
                 join profiles creator on creator.id = campaign.created_by
     union all select format('candidate:%s:%s:%s:%s:%s',
                             task.title, task.status, member.full_name,
@@ -103,7 +104,8 @@ select md5(string_agg(x, '|' order by x))
                 join profiles member on member.id = assignment.member_id
     union all select format('ledger:%s:%s:%s', p.full_name, l.delta, l.reason)
                 from points_ledger l join profiles p on p.id = l.member_id
-    union all select format('event:%s:%s:%s', title, scope, min_level) from events
+    union all select format('event:%s:%s:%s', e.title, g.name, e.min_level)
+                from events e join groups g on g.id = e.group_id
     union all select format('rsvp:%s:%s:%s', e.title, p.full_name, a.status)
                 from event_attendance a
                 join events e on e.id = a.event_id

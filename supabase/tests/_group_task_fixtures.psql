@@ -96,11 +96,12 @@ create function pg_temp.g521_task(p_name text,p_origin text,p_executor integer d
 returns bigint language plpgsql as $$
 declare v_id bigint; v_saved text := current_setting('request.jwt.claims',true);
 begin
-  insert into public.tasks(title,dept_id,team_id,project_id,created_by,deadline,status,audience,assignment_mode,kind,started_at,submitted_at,created_at,queue_opened_at)
+  insert into public.tasks(title,group_id,created_by,deadline,status,audience,assignment_mode,kind,started_at,submitted_at,created_at,queue_opened_at)
   values ('Group #521 '||p_name,
-    case when p_origin='dept' then 'd521' end,
-    case when p_origin in ('dt','ind') then p_origin||'521' end,
-    case when p_origin in ('project','archived') then (select id from public.projects where name=case when p_origin='project' then 'Project #521' else 'Archived #521' end) end,
+    (select id from public.groups where name = case p_origin
+       when 'dept' then 'Department #521' when 'dt' then 'Child #521'
+       when 'ind' then 'Independent #521' when 'project' then 'Project #521'
+       when 'archived' then 'Archived #521' end),
     pg_temp.g521_uid(1),now()-interval '1 day',
     (case when p_status='completed' then 'in_review' else p_status end)::public.task_status,
     case when p_kind='task' then 'org' end,case when p_kind='task' then p_mode end,p_kind,
