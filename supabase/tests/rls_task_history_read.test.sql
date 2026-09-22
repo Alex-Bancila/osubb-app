@@ -34,7 +34,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(61);
+select plan(66);
 
 -- ==================== Shape ====================
 select policies_are('public', 'task_assignments', array['task_assignments_read'],
@@ -592,5 +592,42 @@ select throws_ok($$ select count(*) from public.task_queue_summary $$, '42501', 
   'anon: no privilege on task_queue_summary at all');
 
 reset role;
+
+-- #521: Group authority regression matrix.
+\ir _group_task_fixtures.psql
+select pg_temp.g521_task('private','project',5);
+select pg_temp.g521_task('team','dt',10);
+insert into public.task_activity(task_id,kind,actor_id) select id,'created',pg_temp.g521_uid(1) from g521_tasks;
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='private')),0::bigint,'ordinary Project Executor does not gain unrelated full activity with shared visibility off');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
+select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='team')),1::bigint,'Child Group membership retains complete shared Task activity');
+reset role;
+
+-- #521 (delta): is_task_team_member is a SHARED WORK VISIBILITY rule over the Task's whole
+-- ancestor path, not the legacy "member of the Task's Team" rule. Only these three rows tell
+-- the two apart: persona 5 is a Department member who is in no Team at all, so the legacy body
+-- answers false for them on every Task in the tree whatever the Groups settings say.
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='team')),0::bigint,
+  'a Department member reads none of a Child Team Task''s activity while the Department Group''s Shared Work Visibility is off');
+reset role;
+-- ADR-0009 settings fixture, rolled back with the suite; no production Group write.
+update public.groups set shared_work_visibility=true where legacy_dept_id='d521';
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='team')),1::bigint,
+  'Shared Work Visibility on an ANCESTOR Group opens a Child Team Task''s complete activity to a Department member who is in no Team');
+reset role;
+-- Asked of the predicate directly, not through the policy: task_activity_read gates on
+-- can_read_task first, which would refuse persona 6 for its own reasons and hide a
+-- is_task_team_member that had stopped checking the Task's path at all.
+select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
+select is(private.is_task_team_member((select id from g521_tasks where name='team')),false,
+  'an Independent Team''s own Shared Work Visibility is not on that Child Team Task''s path, so its member is not one of the Task''s shared-visibility members');
+reset role;
+
 select * from finish();
 rollback;

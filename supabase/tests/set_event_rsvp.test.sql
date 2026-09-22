@@ -32,13 +32,13 @@ insert into public.member_departments (member_id, dept_id) values
 
 -- ADR-0008/#372: scope no longer gates visibility, Minimum Level does — a
 -- dept-scoped Event is otherwise readable org-wide at min_level 0 now. So
--- 'RSVP imagine' carries min_level 4, keeping it the one Event this file
--- needs hidden from Ana (a level-1 Voluntar) for "a hidden event is
--- indistinguishable from a missing event" below.
+-- 'RSVP imagine' carries min_level 3 (#519 retires min_level 4), keeping it
+-- the one Event this file needs hidden from Ana (a level-1 Voluntar) for
+-- "a hidden event is indistinguishable from a missing event" below.
 insert into public.events (title, type, scope, dept_id, min_level, starts_at) values
   ('RSVP organizație', 'sedinta', 'org', null, 0, now() + interval '1 day'),
   ('RSVP educațional', 'sedinta', 'dept', 'edu', 0, now() + interval '2 days'),
-  ('RSVP imagine', 'sedinta', 'dept', 'pr', 4, now() + interval '3 days');
+  ('RSVP imagine', 'sedinta', 'dept', 'pr', 3, now() + interval '3 days');
 
 insert into public.event_attendance (event_id, member_id, status)
 select id, 'b2000000-0000-0000-0000-000000000237'::uuid, 'declined'

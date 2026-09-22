@@ -21,4 +21,12 @@ it('does not send blank feedback and translates conflicts', async () => {
   await expect(
     returnTaskToProgress({ taskId: 17, note: 'Surse' }),
   ).rejects.toThrow('s-a schimbat');
+  rpc.mockResolvedValue({ error: { code: '42501' } });
+  await expect(
+    returnTaskToProgress({ taskId: 17, note: 'Surse' }),
+  ).rejects.toThrow('trimite acest task înapoi');
+  rpc.mockResolvedValue({ error: { code: 'XX000' } });
+  await expect(
+    returnTaskToProgress({ taskId: 17, note: 'Surse' }),
+  ).rejects.toThrow('Nu am putut trimite feedbackul');
 });

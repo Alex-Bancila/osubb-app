@@ -13,7 +13,12 @@ export async function returnTaskToProgress(input: {
     p_task_id: input.taskId,
     p_note: note,
   });
-  if (error) throw reviewError(error.code);
+  if (error)
+    throw reviewError(error.code, {
+      forbidden:
+        'Nu mai ai permisiunea de a trimite acest task înapoi în lucru.',
+      failed: 'Nu am putut trimite feedbackul. Încearcă din nou.',
+    });
   return data;
 }
 export function useReturnTaskToProgress() {
