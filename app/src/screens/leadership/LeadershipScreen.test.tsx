@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -164,22 +164,8 @@ it('does not mount protected reads while live access is loading or failed', asyn
   expect(state.board).not.toHaveBeenCalled();
 });
 
-it('searches Groups by name or parent and labels a Child Group with its parent', async () => {
-  const user = userEvent.setup();
-  renderPage();
-  await user.click(screen.getByRole('combobox', { name: 'Grup' }));
-  await user.type(await screen.findByPlaceholderText('Caută un grup'), 'educ');
-  // "Mentorat · Educație" matches through its parent's name.
-  await waitFor(() =>
-    expect(
-      within(screen.getByRole('listbox'))
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual(['Educație', 'Mentorat· Educație']),
-  );
-  await user.click(screen.getByRole('option', { name: /Mentorat/ }));
-  expect(state.board).toHaveBeenLastCalledWith({
-    groupId: 9,
-    campaignId: undefined,
-  });
-});
+// The searchable Group Combobox's own "search by name or parent" behaviour
+// is pinned once, on the shared component itself
+// (components/group/GroupFilterCombobox.test.tsx, #646) -- this file only
+// needs to prove the selection reaches the leaderboard's filters, which the
+// first test in this file ("changes authoritative filters...") already does.
