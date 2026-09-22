@@ -220,7 +220,10 @@ it('locks Subtask Origin to a live parent and cannot create nested Umbrellas', a
   const onDraft = vi.fn();
   render(<TaskForm options={options} onDraft={onDraft} parentTaskId={30} />);
   const user = await content();
-  expect(screen.getByRole('radio', { name: 'Task-umbrelă' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'Task-umbrelă' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
   expect(parentBox()).toBeDisabled();
   expect(parentBox()).toHaveTextContent('Pregătește conferința');
   expect(groupBox()).toBeDisabled();

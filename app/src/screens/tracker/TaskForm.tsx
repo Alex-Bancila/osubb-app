@@ -12,6 +12,11 @@ import {
   GroupOption,
   groupOptionLabel,
 } from '../../components/ui/combobox';
+import {
+  RadioCard,
+  RadioGroup,
+  RadioGroupItem,
+} from '../../components/ui/radio-group';
 import { DirectExecutorSelector } from './DirectExecutorSelector';
 import {
   campaignsFor,
@@ -133,51 +138,49 @@ export function TaskForm({
       className="space-y-5"
     >
       <h2 className="text-xl font-semibold">Pregătește un task</h2>
-      <fieldset
-        role="radiogroup"
-        disabled={lockedToParent}
-        className="grid gap-2"
-      >
-        <legend className="mb-1 text-sm font-medium">Ce fel de task?</legend>
-        {KINDS.map((kind) => (
-          <label
-            key={kind.value}
-            className="flex min-h-11 cursor-pointer items-start gap-3 rounded-md border border-input p-3 has-checked:border-primary has-checked:bg-muted has-disabled:cursor-default"
-          >
-            <input
-              type="radio"
-              name={`${id}-kind`}
-              value={kind.value}
-              checked={values.kind === kind.value}
-              className="mt-1"
-              aria-labelledby={`${id}-kind-${kind.value}-label`}
-              aria-describedby={`${id}-kind-${kind.value}`}
-              onChange={() =>
-                update({
-                  kind: kind.value,
-                  parentTaskId: null,
-                  campaignId: null,
-                  executorId: null,
-                })
-              }
-            />
-            <span className="grid gap-0.5">
-              <span
-                id={`${id}-kind-${kind.value}-label`}
-                className="text-sm font-medium"
-              >
-                {kind.label}
+      <div className="grid gap-2">
+        <span id={`${id}-kind`} className="text-sm font-medium">
+          Ce fel de task?
+        </span>
+        <RadioGroup
+          aria-labelledby={`${id}-kind`}
+          value={values.kind}
+          disabled={lockedToParent}
+          onValueChange={(kind: TaskFormValues['kind']) =>
+            update({
+              kind,
+              parentTaskId: null,
+              campaignId: null,
+              executorId: null,
+            })
+          }
+        >
+          {KINDS.map((kind) => (
+            <RadioCard key={kind.value} className="items-start">
+              <RadioGroupItem
+                value={kind.value}
+                aria-labelledby={`${id}-kind-${kind.value}-label`}
+                aria-describedby={`${id}-kind-${kind.value}`}
+                className="mt-0.5"
+              />
+              <span className="grid gap-0.5">
+                <span
+                  id={`${id}-kind-${kind.value}-label`}
+                  className="text-sm font-medium"
+                >
+                  {kind.label}
+                </span>
+                <span
+                  id={`${id}-kind-${kind.value}`}
+                  className="text-sm text-muted-foreground"
+                >
+                  {kind.hint}
+                </span>
               </span>
-              <span
-                id={`${id}-kind-${kind.value}`}
-                className="text-sm text-muted-foreground"
-              >
-                {kind.hint}
-              </span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+            </RadioCard>
+          ))}
+        </RadioGroup>
+      </div>
       <div className="grid gap-1.5">
         <span id={`${id}-group`} className="text-sm font-medium">
           Grup de origine (obligatoriu)
