@@ -53,6 +53,8 @@ function rawRow(
     title: 'Ședință extraordinară BC',
     body: 'Vineri la ora 18:00 în Aula Magna.',
     dept_id: null,
+    group_id: 1,
+    audience: 'org',
     author: 'BC',
     priority: 'critical',
     category: 'organizatoric',

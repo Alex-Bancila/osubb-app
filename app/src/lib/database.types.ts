@@ -104,6 +104,7 @@ export type Database = {
       }
       announcements: {
         Row: {
+          audience: string
           author: string | null
           body: string
           category: string | null
@@ -111,6 +112,7 @@ export type Database = {
           dept_id: string | null
           form_label: string | null
           form_url: string | null
+          group_id: number
           id: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
@@ -118,6 +120,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          audience?: string
           author?: string | null
           body: string
           category?: string | null
@@ -125,6 +128,7 @@ export type Database = {
           dept_id?: string | null
           form_label?: string | null
           form_url?: string | null
+          group_id: number
           id?: never
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -132,6 +136,7 @@ export type Database = {
           title: string
         }
         Update: {
+          audience?: string
           author?: string | null
           body?: string
           category?: string | null
@@ -139,6 +144,7 @@ export type Database = {
           dept_id?: string | null
           form_label?: string | null
           form_url?: string | null
+          group_id?: number
           id?: never
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -193,6 +199,13 @@ export type Database = {
             columns: ["dept_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
         ]
