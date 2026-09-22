@@ -6,7 +6,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(82);
+select plan(85);
 select has_function('private', 'group_role_of', array['bigint','uuid'], 'group_role_of exists');
 select has_function('private', 'is_group_member', array['bigint','uuid'], 'is_group_member exists');
 select has_function('private', 'has_group_manager', array['bigint'], 'has_group_manager exists');
@@ -15,6 +15,30 @@ select has_function('private', 'is_group_responsible', array['bigint'], 'is_grou
 select has_function('private', 'can_manage_group_work', array['bigint'], 'can_manage_group_work exists');
 select has_function('private', 'require_group_work_manager', array['bigint'], 'require_group_work_manager exists');
 select has_function('private', 'group_managers', array['bigint'], 'group_managers exists');
+-- Existence alone is not the interface. A helper that quietly loses `security definer`
+-- still answers every behavioural assertion below, because the three caller-facing
+-- predicates are definers themselves and run it as the owner either way -- the gap only
+-- opens for a future direct caller under RLS. Pin the declaration, not just the name.
+-- Postgres stores an empty search_path as the literal proconfig entry search_path=""
+-- (conventions.test.sql confirmed that spelling against the live database).
+create function pg_temp.group_kit_shape_violations() returns text[]
+language sql as $$
+  select coalesce(array_agg(p.proname
+           || case when not p.prosecdef then ' (not security definer)'
+                   else ' (search_path not pinned to the empty string)' end
+           order by p.proname), '{}')
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'private'
+     and p.proname in ('group_role_of', 'is_group_member', 'has_group_manager',
+                       'is_group_manager', 'is_group_responsible', 'can_manage_group_work',
+                       'require_group_work_manager', 'group_managers')
+     and (not p.prosecdef
+          or not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c
+                          where c = 'search_path=""'));
+$$;
+select is(pg_temp.group_kit_shape_violations(), '{}'::text[],
+  'every Group authority helper is security definer with search_path pinned to the empty string');
 create temp table people (n integer, name text, role public.member_role, status public.member_status);
 insert into people values
 (1,'bc','bc','activ'),(2,'bce_edu','bce','activ'),(3,'bce_foreign','bce','activ'),
@@ -76,6 +100,9 @@ select is(private.is_group_member((select id from fx where name = 'dt'), '520000
 select is(private.is_group_member((select id from fx where name = 'org'), '52000000-0000-0000-0000-000000000011'),true,'automatic Organization membership');
 select is(private.is_group_member((select id from fx where name = 'ag'), '52000000-0000-0000-0000-000000000006'),false,'automatic Group Minimum Level applies');
 select is(private.is_group_member((select id from fx where name = 'edu'), '52000000-0000-0000-0000-000000000012'),false,'inactive explicit membership is ignored');
+-- The other direction of ruling D2: the Child Group's roster is not the Department's.
+-- Only this assertion fails if the exists() is rewritten to accept a descendant's roster row.
+select is(private.is_group_member((select id from fx where name = 'edu'), '52000000-0000-0000-0000-000000000010'),false,'Child Group membership never counts as membership of the ancestor');
 reset role;
 select pg_temp.test_login_leadership('52000000-0000-0000-0000-000000000001');
 select is(private.can_manage_group_work((select id from fx where name = 'edu')),true,'persona 1 manage edu: True');
@@ -185,6 +212,7 @@ select is(private.group_role_of((select id from public.groups where name='Respon
 'responsible','Responsible authority flows to a Child Group');
 set local role anon;
 select throws_ok($$select private.can_manage_group_work((select id from fx where name = 'edu'))$$,'42501','permission denied for schema private','anon cannot reach authority predicates');
+select throws_ok($$select private.is_group_member((select id from fx where name = 'edu'), '52000000-0000-0000-0000-000000000010')$$,'42501','permission denied for schema private','anon cannot reach the owner-only membership lookup');
 reset role;
 -- Native fixture follows the Wave 2 OD9 exception; no legacy leader invariant masks liveness.
 insert into public.groups(name,category) values ('Inactive manager #520','project');

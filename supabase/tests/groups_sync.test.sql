@@ -32,7 +32,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(47);
+select plan(48);
 
 -- ==================== 1. The seven triggers exist ====================
 -- Pinned by name and table (the `shared_timestamps.test.sql` idiom): a
@@ -319,6 +319,16 @@ select is(
      from public.groups as grp where grp.legacy_dept_id = 'c-dept-509'),
   'Departament C 509|department|true|BCE|-',
   'inserting a Department mirrors one top-level competing Group run by a BCE, in the same statement');
+
+-- Wave 3 T1: the mirror maps `kind = 'org'` onto groups.is_organization, and the
+-- marker admits one row, so a second org pseudo-department cannot be mirrored at
+-- all. Two mutations this catches: drop `dept.kind = 'org'` from the sync's insert
+-- list (the insert then succeeds, and a rebuilt mirror would come back unmarked),
+-- or drop groups_one_organization_uidx (the insert succeeds with two Organizations).
+select throws_ok($$ insert into public.departments (id, name, short, color, kind)
+    values ('c-org-509', 'A Doua Organizatie 509', 'CO5', '#654321', 'org') $$,
+  '23505', 'duplicate key value violates unique constraint "groups_one_organization_uidx"',
+  'and a second org pseudo-department is refused by the Organization marker rather than mirrored into a second Organization Group');
 
 update public.departments set name = 'Departament C 509 redenumit' where id = 'c-dept-509';
 
