@@ -19,7 +19,7 @@ create extension if not exists pgtap with schema extensions;
 select plan(14);
 
 -- Postgres stores an empty search_path as the literal proconfig entry
--- search_path="" (confirmed against add_project_member_impl on the live
+-- search_path="" (confirmed against add_group_member_impl on the live
 -- database) — match that exact text, not just any search_path setting.
 create function pg_temp.definers_without_empty_search_path() returns text[]
 language sql as $$
