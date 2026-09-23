@@ -167,6 +167,37 @@ describe('AppShell', () => {
     ).toHaveTextContent(/^Notificări$/);
   });
 
+  it('shows the mobile header bell with the unread count, hidden at desktop width', () => {
+    queries.useUnreadNotificationCount.mockReturnValue({ data: 3 });
+
+    const { container } = renderShell();
+    const header = within(container.querySelector('header') as HTMLElement);
+
+    const bell = header.getByRole('link', {
+      name: 'Notificări, 3 notificări necitite',
+    });
+    expect(bell).toHaveAttribute('href', '/notificari');
+    expect(bell).toHaveClass('lg:hidden');
+    expect(bell).toHaveTextContent('3');
+  });
+
+  it('leaves the mobile header bell unbadged once everything is read', () => {
+    const { container } = renderShell();
+    const header = within(container.querySelector('header') as HTMLElement);
+
+    const bell = header.getByRole('link', { name: 'Notificări' });
+    expect(bell).toHaveAttribute('href', '/notificari');
+    expect(bell).not.toHaveTextContent(/\d/);
+  });
+
+  it('keeps the mobile header bell in its active state on the notifications screen itself', () => {
+    const { container } = renderShell('/notificari');
+    const header = within(container.querySelector('header') as HTMLElement);
+
+    const bell = header.getByRole('link', { name: 'Notificări' });
+    expect(bell).toHaveAttribute('aria-current', 'page');
+  });
+
   it('uses the complete official logo as decorative mobile branding', () => {
     const { container } = renderShell();
 
