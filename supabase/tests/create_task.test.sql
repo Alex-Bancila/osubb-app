@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(133);
+select plan(138);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1123,6 +1123,22 @@ select pg_temp.g521_task('command3','dt',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select throws_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
+reset role;
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_task(repeat('t', 121), 'd', now() + interval '7 days', 'local', 'direct') $$,
+  'PT400', 'title_too_long', 'a title over 120 characters is refused before the gate');
+select throws_ok($$ select public.create_task('  ab  ', 'd', now() + interval '7 days', 'local', 'direct') $$,
+  'PT400', 'title_too_short', 'the title is measured trimmed: "  ab  " is two characters, too short');
+select throws_ok($$ select public.create_task(E'\t' || repeat('t', 120) || '  ', 'd', now() + interval '7 days', 'local', 'direct') $$,
+  '42501', 'task_command_forbidden', 'surrounding whitespace does not count: a trimmed 120-character title passes step 1 and meets the gate');
+select throws_ok($$ select public.create_task('Titlu bun #673', repeat('d', 2001), now() + interval '7 days', 'local', 'direct') $$,
+  'PT400', 'description_too_long', 'a description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.create_task('Titlu bun #673', 'd', now() - interval '1 day', 'local', 'direct') $$,
+  'PT400', 'deadline_in_past', 'a deadline in the past is refused at creation, before the gate');
 reset role;
 
 select * from finish();

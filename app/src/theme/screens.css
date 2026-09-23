@@ -144,18 +144,14 @@
   color: var(--red);
 }
 
-.rank-name {
+/* The Member's name button (avatar + Nickname) spans the avatar and name
+   columns; the "tu" tag stays beside it. */
+.rank-member {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: var(--fw-medium);
-}
-
-.avatar--sm {
-  width: 26px;
-  height: 26px;
-  font-size: var(--fs-xs);
 }
 
 /* Marks the jump from the top ten down to my own row. */

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -16,6 +16,15 @@ vi.mock('../../queries/leadership', () => ({
 }));
 vi.mock('../../queries/task-tabs', () => ({ useTaskLeadership: state.access }));
 import LeadershipScreen from './LeadershipScreen';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+// A leadership viewer: the Member Card carries the tracker link.
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: (name: string) => ({ data: name === 'seeLeadership' }),
+}));
+import { useMemberCard } from '../../test/member-card-mock';
 const uid = '35400000-0000-0000-0000-000000000001';
 function renderPage() {
   return render(
@@ -77,8 +86,36 @@ it('changes authoritative filters, displays returned totals and removes chips', 
     campaignId: 3,
   });
 });
-it('opens member history through an accessible keyboard link and has no axe violations', async () => {
+it('names each Member by Nickname as a card button whose card links to their history, with no axe violations', async () => {
   const user = userEvent.setup();
+  state.board.mockReturnValue({
+    data: [
+      {
+        member_id: uid,
+        full_name: 'Ioana Popescu',
+        nickname: 'Ioana',
+        points: 30,
+        rank: 1,
+      },
+    ],
+  });
+  useMemberCard.mockReturnValue({
+    data: {
+      memberId: uid,
+      nickname: 'Ioana',
+      fullName: 'Ioana Popescu',
+      roleLabel: null,
+      joinedAt: null,
+      avatarColor: null,
+      primaryGroup: null,
+      otherMemberships: 0,
+      groups: [],
+      contact: null,
+    },
+    isPending: false,
+    isError: false,
+    refetch: async () => {},
+  } as never);
   const { container } = renderPage();
   expect(
     (
@@ -87,9 +124,16 @@ it('opens member history through an accessible keyboard link and has no axe viol
       })
     ).violations,
   ).toEqual([]);
-  const link = screen.getByRole('link', { name: 'Ioana Popescu' });
-  link.focus();
+  const name = screen.getByRole('button', { name: 'Profilul membrului Ioana' });
+  name.focus();
   await user.keyboard('{Enter}');
+  const card = await screen.findByRole('dialog', { name: 'Ioana' });
+  // Clicking inside the card is not a click on the row behind it.
+  await user.click(within(card).getByText('Ioana Popescu'));
+  expect(screen.queryByRole('heading', { name: 'Istoric membru' })).toBeNull();
+  await user.click(
+    within(card).getByRole('link', { name: 'Vezi istoricul taskurilor' }),
+  );
   expect(
     screen.getByRole('heading', { name: 'Istoric membru' }),
   ).toBeInTheDocument();

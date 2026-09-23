@@ -12,6 +12,8 @@ export type PendingDecision = {
   description: string;
   requester_id: string;
   requester_name: string;
+  /** The Requester's Nickname (#675); null when they chose none. */
+  requester_nickname?: string | null;
   group_id: number;
   group_name: string;
   created_at: string;

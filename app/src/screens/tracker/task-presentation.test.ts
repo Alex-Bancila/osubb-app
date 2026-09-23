@@ -189,7 +189,11 @@ describe('TaskPresentation', () => {
           { id: 1, member_id: 'former', ended_at: '2026-09-14T00:00:00Z' },
           { id: 2, member_id: 'current', ended_at: null },
         ],
-        visibleExecutor: { memberId: 'current', fullName: 'Ioana Pop' },
+        visibleExecutor: {
+          memberId: 'current',
+          fullName: 'Ioana Pop',
+          nickname: ' Ioana ',
+        },
       }),
       now,
       candidature,
@@ -198,6 +202,7 @@ describe('TaskPresentation', () => {
       assignmentId: 2,
       memberId: 'current',
       name: 'Ioana Pop',
+      nickname: 'Ioana',
     });
     expect(model.candidature).toEqual(candidature);
     expect(
@@ -217,7 +222,12 @@ describe('TaskPresentation', () => {
         }),
         now,
       ).executor,
-    ).toEqual({ assignmentId: null, memberId: 'current', name: null });
+    ).toEqual({
+      assignmentId: null,
+      memberId: 'current',
+      name: null,
+      nickname: null,
+    });
   });
 
   it('uses only the current evaluation points, including zero and negative values', () => {

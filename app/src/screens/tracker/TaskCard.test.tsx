@@ -21,6 +21,13 @@ vi.mock('./TaskInterestControls', () => ({
   TaskInterestControls: () => <button>Participă</button>,
 }));
 import { taskRow } from '../../test/task-fixtures';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 
 function card(
   overrides: Partial<TaskPresentationRow> = {},
@@ -203,6 +210,25 @@ describe('Member Task cards', () => {
     expect(
       screen.queryByRole('button', { name: 'Renunță la task' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('names the Executor as a button that opens their Member Card', async () => {
+    const user = userEvent.setup();
+    card(
+      {
+        visibleExecutor: {
+          memberId: 'member',
+          fullName: 'Ioana Pop',
+          nickname: 'Ioana',
+        },
+      },
+      vi.fn(),
+      'someone-else',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Profilul membrului Ioana' }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Ioana' })).toBeVisible();
   });
 
   it('withholds actions from a former Executor', () => {

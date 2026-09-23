@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
 import { cn } from 'cn';
-import { MemberProfileDialog } from '../../components/member/MemberProfileDialog';
+import { MemberCard } from '../../components/member/MemberCard';
+import { MemberName } from '../../components/member/MemberName';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
 import { Button } from '../../components/ui/button';
-import { MemberAvatar } from '../../components/ui/combobox';
 import { formatPoints } from '../../lib/format';
 import {
   useMemberDirectory,
@@ -24,22 +24,20 @@ import {
 
 type View = 'list' | 'grid';
 
-function MemberName({
-  member,
-  onOpen,
-}: {
-  member: DirectoryMember;
-  onOpen: () => void;
-}) {
+/** The name the directory shows and sorts by: the Nickname, else the full name. */
+function shownName(member: DirectoryMember) {
+  return member.nickname ?? member.name;
+}
+
+function DirectoryName({ member }: { member: DirectoryMember }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-md text-left font-semibold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-    >
-      <MemberAvatar name={member.name} avatarColor={member.avatarColor} />
-      <span className="truncate">{member.name}</span>
-    </button>
+    <MemberName
+      memberId={member.id}
+      nickname={member.nickname}
+      fullName={member.name}
+      avatarColor={member.avatarColor}
+      showFullName
+    />
   );
 }
 
@@ -52,11 +50,9 @@ function columnsFor(
     {
       accessorKey: 'name',
       header: 'Nume',
-      cell: ({ row }) => (
-        <MemberName member={row.original} onOpen={() => open(row.original)} />
-      ),
+      cell: ({ row }) => <DirectoryName member={row.original} />,
       sortFn: (left, right) =>
-        left.original.name.localeCompare(right.original.name, 'ro'),
+        shownName(left.original).localeCompare(shownName(right.original), 'ro'),
     },
     {
       accessorKey: 'role',
@@ -72,7 +68,7 @@ function columnsFor(
       cell: ({ row }) => (
         <MemberGroups
           groups={row.original.groups}
-          memberName={row.original.name}
+          memberName={shownName(row.original)}
           onShowAll={() => open(row.original)}
         />
       ),
@@ -114,7 +110,7 @@ function columnsFor(
   ];
 }
 
-function MemberCard({
+function DirectoryCard({
   member,
   onOpen,
 }: {
@@ -125,7 +121,7 @@ function MemberCard({
     <li className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="min-w-0">
-          <MemberName member={member} onOpen={onOpen} />
+          <DirectoryName member={member} />
           <p className="text-sm text-muted-foreground">
             {member.role} · {statusLabel(member.status)}
           </p>
@@ -140,7 +136,7 @@ function MemberCard({
       <MemberGroups
         groups={member.groups}
         max={3}
-        memberName={member.name}
+        memberName={shownName(member)}
         onShowAll={onOpen}
       />
       {member.contact?.email && (
@@ -243,7 +239,7 @@ export default function VolunteersScreen() {
           ) : visible.length ? (
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {visible.map((member) => (
-                <MemberCard
+                <DirectoryCard
                   key={member.id}
                   member={member}
                   onOpen={() => openProfile(member)}
@@ -258,13 +254,13 @@ export default function VolunteersScreen() {
         </>
       )}
       {selected && (
-        <MemberProfileDialog
+        <MemberCard
           open={profileOpen}
           onOpenChange={setProfileOpen}
           memberId={selected.id}
-          name={selected.name}
+          nickname={selected.nickname}
+          fullName={selected.name}
           avatarColor={selected.avatarColor}
-          points={selected.points}
         />
       )}
     </section>

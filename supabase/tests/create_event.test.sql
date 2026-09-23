@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(59);
+select plan(64);
 truncate public.events, public.event_attendance cascade;
 create temp table people (n integer, name text, role public.member_role, status public.member_status);
 insert into people values
@@ -151,20 +151,20 @@ select pg_temp.test_login('37000000-0000-0000-0000-000000000004','{"provider":"e
 select throws_ok($$select public.create_event('claimless','sedinta',(select id from fx where name='org'),now())$$,'42501','calendar_manage_forbidden','claimless denied');
 select throws_ok($$select public.create_event(null,'sedinta',null,now())$$,'PT400','invalid_event_title','malformed title precedes claimless gate');
 select throws_ok($$select public.create_event(E'\t\n','sedinta',null,now())$$,'PT400','invalid_event_title','malformed title precedes claimless gate');
-select throws_ok($$select public.create_event('x','wrong',null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
-select throws_ok($$select public.create_event('x',null,null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,null)$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),now())$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),p_capacity:=0)$$,'PT400','invalid_event_capacity','malformed capacity precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),p_min_level:=4)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),p_min_level:=null)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','wrong',null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
+select throws_ok($$select public.create_event('xyz',null,null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,null)$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),now())$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),p_capacity:=0)$$,'PT400','invalid_event_capacity','malformed capacity precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),p_min_level:=4)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),p_min_level:=null)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
 -- #370 delta: a call that names no Group is malformed, not forbidden -- the claimless caller is
 -- told what is missing instead of being refused. Same reason string the #519 trigger uses for an
 -- Event that names no Group; PT400 here because a rejected argument is not a trigger invariant.
-select throws_ok($$select public.create_event('x','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed and precedes the claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed and precedes the claimless gate');
 reset role;
 select pg_temp.login(1);
-select throws_ok($$select public.create_event('x','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed for an authorized caller too, never calendar_manage_forbidden');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed for an authorized caller too, never calendar_manage_forbidden');
 reset role;
 update public.groups set min_level=3,application_level=3 where legacy_team_id='t-370-dt';
 select pg_temp.login(2);
@@ -204,5 +204,21 @@ select throws_ok($$select public.create_event('anon','sedinta',null,now())$$,'42
 -- Pin the message so the revoke on the WRAPPER is what this suite is testing.
 select throws_ok($$select public.create_event('anon','sedinta',null,now())$$,'42501','permission denied for function create_event','anon is stopped at the wrapper, not at the private schema behind it');
 reset role;
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_event(repeat('t', 121), 'sedinta', 0, now() + interval '1 day') $$,
+  'PT400', 'title_too_long', 'an Event title over 120 characters is refused before the gate');
+select throws_ok($$ select public.create_event('  ab  ', 'sedinta', 0, now() + interval '1 day') $$,
+  'PT400', 'title_too_short', 'an Event title is measured trimmed');
+select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() + interval '1 day', p_description => repeat('d', 2001)) $$,
+  'PT400', 'description_too_long', 'an Event description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() - interval '1 hour') $$,
+  'PT400', 'starts_at_in_past', 'an Event cannot be created starting in the past');
+select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() + interval '1 day', p_capacity => 1001) $$,
+  'PT400', 'invalid_event_capacity', 'a capacity above 1000 is invalid_event_capacity');
+reset role;
+
 select * from finish();
 rollback;
