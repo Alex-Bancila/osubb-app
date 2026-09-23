@@ -422,13 +422,9 @@ create temporary table pinned_private_functions (
 ) on commit drop;
 
 insert into pinned_private_functions (proname, args, category) values
-  ('add_department_team_member_impl',             'p_team_id text, p_member_id uuid',                                                                                   'impl'),
-  ('add_independent_team_member_impl',            'p_team_id text, p_member_id uuid',                                                                                   'impl'),
-  ('add_project_member_impl',                     'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   -- #344: approving a Completed-work Request mints the completed Task, its
   -- Evaluation and its ledger credit in one transaction.
   ('approve_completed_work_request_impl',         'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text',                                           'impl'),
-  ('archive_project_impl',                        'p_project_id bigint',                                                                                                'impl'),
   ('assign_task_executor_impl',                   'p_task_id bigint, p_member_id uuid',                                                                                 'impl'),
   ('actor_level',                                 'p_actor uuid',                                                                                                      'none'),
   -- #339: cancelling a Task with a recorded reason, plus its Umbrella cascade.
@@ -442,14 +438,12 @@ insert into pinned_private_functions (proname, args, category) values
   -- (private.can_manage_group_work), never a silent empty result.
   ('campaign_report_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
   ('campaign_totals_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
-  ('can_administer_team_structure',               'p_dept_id text',                                                                                                     'predicate'),
   -- #507: the Group roster predicate behind group_members_read. It walks
   -- groups.path, so a Group Manager or Responsible of an ancestor reads every
   -- Group below it.
   ('can_read_group_roster',                       'p_group_id bigint',                                                                                                  'predicate'),
   ('can_evaluate_task',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('can_manage_department_memberships',           '',                                                                                                                   'predicate'),
-  ('can_manage_project_work',                     'p_project_id bigint',                                                                                                'predicate'),
   ('can_manage_task',                             'p_task_id bigint',                                                                                                   'predicate'),
   ('can_read_task',                               'p_task_id bigint',                                                                                                   'predicate'),
   ('can_read_team',                               'p_team_id text',                                                                                                     'predicate'),
@@ -461,7 +455,6 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_campaign_impl',                        'p_group_id bigint, p_name text',                                                                                  'impl'),
   -- #344: filing a Completed-work Request -- membership, not management.
   ('create_completed_work_request_impl',          'p_description text, p_group_id bigint',                                            'impl'),
-  ('create_project_impl',                         'p_name text, p_leader_id uuid',                                                                                      'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint', 'impl'),
   -- #259: the Department Cup body behind both the legacy `dept_cup` view and
   -- the filtered `public.department_cup(p_campaign_id)` wrapper.
@@ -475,7 +468,6 @@ insert into pinned_private_functions (proname, args, category) values
   ('evaluate_task',                               'p_task_id bigint, p_outcome text, p_difficulty integer, p_rating integer, p_note text, p_actor uuid',               'none'),
   ('express_task_interest_impl',                  'p_task_id bigint',                                                                                                   'impl'),
   ('give_up_task_impl',                           'p_task_id bigint, p_reason text',                                                                                    'impl'),
-  ('grant_project_responsible_impl',              'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   -- #519: the resolver behind the four group_id/legacy-Origin sync triggers below --
   -- the Group that masters a legacy Origin (project, else team, else department).
   -- `none`: called only by those four triggers and by the migration's own backfill.
@@ -484,8 +476,6 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_active_project_member',                    'p_project_id bigint',                                                                                                'predicate'),
   ('is_global_task_reader',                       '',                                                                                                                   'predicate'),
   ('is_own_assignment',                           'p_assignment_id bigint',                                                                                             'predicate'),
-  ('is_project_lead',                             'p_project_id bigint',                                                                                                'predicate'),
-  ('is_project_responsible',                      'p_project_id bigint',                                                                                                'predicate'),
   ('is_task_candidate',                           'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_executor',                            'p_task_id bigint',                                                                                                   'predicate'),
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
@@ -515,8 +505,6 @@ insert into pinned_private_functions (proname, args, category) values
   ('notify',                                      'p_recipients uuid[], p_kind noti_kind, p_title text, p_body text, p_task_id bigint, p_dedupe_key text, p_actor uuid, p_link text', 'none'),
   ('open_task_assignment',                        'p_task_id bigint, p_member_id uuid, p_actor uuid, p_via text',                                                       'none'),
   ('pending_candidate_count',                     'p_task_id bigint',                                                                                                   'authenticated_only'),
-  ('protect_active_project_manager_deactivation', '',                                                                                                                   'trigger'),
-  ('protect_project_leader_membership',           '',                                                                                                                   'trigger'),
   ('queue_position',                              'p_task_id bigint, p_member_id uuid',                                                                                 'authenticated_only'),
   -- #509: rank BCE *is* a Department Group's Group Manager, so a promotion or
   -- demotion re-derives that Group Role. Same `trigger` category and the same
@@ -526,12 +514,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('reject_completed_work_request_impl',          'p_request_id bigint, p_note text',                                                                                   'impl'),
   ('reject_legacy_evaluation_source',             '',                                                                                                                   'trigger'),
   ('reject_task_activity_change',                 '',                                                                                                                   'trigger'),
-  ('remove_department_team_member_impl',          'p_team_id text, p_member_id uuid',                                                                                   'impl'),
-  ('remove_independent_team_member_impl',         'p_team_id text, p_member_id uuid',                                                                                   'impl'),
-  ('remove_project_member_impl',                  'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   -- #338: the undo of an Evaluation -- the one command that reverses points.
   ('reopen_task_impl',                            'p_task_id bigint, p_reason text',                                                                                    'impl'),
-  ('require_active_project_lead',                 'p_project_id bigint',                                                                                                'require'),
   ('require_active_member',                       '',                                                                                                                   'require'),
   ('request_deciders', 'p_request_id bigint', 'none'),
   ('can_decide_request', 'p_request_id bigint', 'predicate'),
@@ -539,9 +523,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- #625 fix round 1: the shared preamble both Campaign reporting bodies
   -- call with `perform`, never an assignment (Sec4's unused-variable trap).
   ('require_campaign_report_access',              'p_campaign_id bigint',                                                                                               'require'),
-  ('require_department_team_membership_manager',  'p_team_id text',                                                                                                     'require'),
-  ('require_independent_team_membership_manager', 'p_team_id text',                                                                                                     'require'),
-  ('require_project_admin',                       '',                                                                                                                   'require'),
   -- #344: who may DECIDE a Completed-work Request -- narrower than
   -- private.can_manage_group_work (no Project Responsible, no Independent-Team
   -- member) and, like every require_*, granted to nobody.
@@ -556,7 +537,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- runs it as the function owner, and a client that could reach it directly
   -- would hold an unaudited sign-out for any Member in OSUBB.
   ('revoke_member_sessions',                      'p_member_id uuid',                                                                                                   'none'),
-  ('revoke_project_responsible_impl',             'p_project_id bigint, p_member_id uuid',                                                                              'impl'),
   ('select_task_candidate_impl',                  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',                                                 'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
   -- #580: the two audited Member commands. `impl` like every other command
@@ -568,7 +548,6 @@ insert into pinned_private_functions (proname, args, category) values
   ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
   ('submit_task_for_review_impl',                 'p_task_id bigint',                                                                                                   'impl'),
-  ('sync_project_leader_membership',              '',                                                                                                                   'trigger'),
   -- #519: the four two-way group_id/legacy-Origin sync triggers (ADR-0009 Wave 2 bridge).
   -- A legacy write derives group_id; a Group write derives the legacy Origin; both sides
   -- set inconsistently is refused. `trigger`: nothing may call one directly.
@@ -600,8 +579,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- rules on `groups`, and the immutable-identity rule on `group_members`.
   ('validate_group_hierarchy',                    '',                                                                                                                   'trigger'),
   ('validate_group_member',                       '',                                                                                                                   'trigger'),
-  ('validate_project_manager_state',              '',                                                                                                                   'trigger'),
-  ('validate_project_membership_change',          '',                                                                                                                   'trigger'),
   ('validate_task_campaign',                      '',                                                                                                                   'trigger'),
   ('validate_task_hierarchy',                     '',                                                                                                                   'trigger'),
   -- #499: the body behind public.visible_task_executors(bigint[]). It reveals
@@ -683,8 +660,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('has_pending_group_application',     'p_group_id bigint',              'predicate');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 153,
-  'the audited roster includes #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
+  (select count(*) from pinned_private_functions)::int, 130,
+  'the audited roster includes #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager) and less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

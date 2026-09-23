@@ -223,12 +223,14 @@ select ok(
 select is(
   (select count(*)
      from projects p
-     join project_members pm
-       on pm.project_id = p.id
-      and pm.member_id = p.leader_id
+     join groups g on g.legacy_project_id = p.id
+     join group_members gm
+       on gm.group_id = g.id
+      and gm.member_id = p.leader_id
+      and gm.group_role = 'manager'
     where p.name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025')),
   2::bigint,
-  'each demo Project lead is also an explicit Project member');
+  'each demo Project lead is mirrored as its Group Manager');
 
 select ok(
   exists (
