@@ -17,7 +17,10 @@ export type DirectoryGroup = {
 
 export type DirectoryMember = {
   id: string;
+  /** The full name. */
   name: string;
+  /** The Member's Nickname (R5); the full name stands in when null. */
+  nickname: string | null;
   avatarColor: string | null;
   roleId: string | null;
   role: string;
@@ -54,7 +57,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       readAllRows((from, to) =>
         supabase
           .from('profiles_directory')
-          .select('id, full_name, role, status, avatar_color')
+          .select('id, full_name, nickname, role, status, avatar_color')
           .order('id')
           .range(from, to),
       ),
@@ -120,6 +123,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       {
         id: profile.id,
         name: profile.full_name ?? 'Membru',
+        nickname: profile.nickname?.trim() || null,
         avatarColor: profile.avatar_color,
         roleId: profile.role,
         role: role?.name ?? profile.role ?? '—',

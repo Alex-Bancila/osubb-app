@@ -6,12 +6,21 @@ import axe from 'axe-core';
 const state = vi.hoisted(() => ({ history: vi.fn() }));
 vi.mock('../../queries/leadership', () => ({
   useLeadershipMemberTasks: state.history,
-  useLeadershipMemberName: () => ({ data: 'Ioana Popescu' }),
+  useLeadershipMember: () => ({
+    data: { fullName: 'Ioana Popescu', nickname: 'Ioana', avatarColor: null },
+  }),
 }));
 vi.mock('../../queries/task-tabs', () => ({
   useTaskLeadership: () => ({ data: true }),
 }));
 import MemberTrackerScreen from './MemberTrackerScreen';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 const uid = '35400000-0000-0000-0000-000000000001';
 function view(id = uid) {
   return render(
@@ -97,4 +106,13 @@ it('shows an ordinary empty history and a safe retriable error', async () => {
     screen.getByRole('button', { name: 'Reîncarcă istoricul' }),
   );
   expect(retry).toHaveBeenCalled();
+});
+it('names the Member above their history as a button that opens their Member Card', async () => {
+  const user = userEvent.setup();
+  view();
+  const name = screen.getByRole('button', { name: 'Profilul membrului Ioana' });
+  // The full name sits under the Nickname here, as in Voluntari.
+  expect(name).toHaveTextContent('IoanaIoana Popescu');
+  await user.click(name);
+  expect(await screen.findByRole('dialog', { name: 'Ioana' })).toBeVisible();
 });

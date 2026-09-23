@@ -203,6 +203,14 @@ function DataTable<TData extends RowData>({
                 onClick={
                   onRowClick
                     ? (event) => {
+                        // React bubbles clicks from a portal (a Member Card
+                        // opened from a name in this row) through the row:
+                        // only clicks on the row's own DOM open it.
+                        if (
+                          !(event.target instanceof Node) ||
+                          !event.currentTarget.contains(event.target)
+                        )
+                          return;
                         if (
                           event.target instanceof Element &&
                           event.target.closest('a,button,input,select,textarea')

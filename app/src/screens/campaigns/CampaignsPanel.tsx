@@ -1,4 +1,5 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -152,8 +153,16 @@ function CampaignReportView({ campaignId }: { campaignId: number }) {
       ) : (
         <ul className="space-y-1 text-sm" aria-label="Voluntari cu puncte">
           {members.map((member) => (
-            <li key={member.memberId} className="flex justify-between gap-3">
-              <span className="truncate">{member.name}</span>
+            <li
+              key={member.memberId}
+              className="flex items-center justify-between gap-3"
+            >
+              <MemberName
+                size="sm"
+                memberId={member.memberId}
+                nickname={member.nickname}
+                fullName={member.name}
+              />
               <span className="shrink-0 tabular-nums">
                 {formatPoints(member.points)} p · {member.tasksCompleted}{' '}
                 taskuri

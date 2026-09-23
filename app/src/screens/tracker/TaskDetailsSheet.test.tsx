@@ -3,7 +3,7 @@ vi.mock('../../queries/task-umbrella', () => ({
   useCompleteUmbrella: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('./TaskEditControl', () => ({ TaskEditControl: () => null }));
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -70,6 +70,13 @@ vi.mock('./TaskHistory', () => ({
 }));
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { taskRow } from '../../test/task-fixtures';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 
 describe('Task details sheet', () => {
   it('shows authorized fields, hides unknown Executor identity and closes with Escape', async () => {
@@ -102,6 +109,33 @@ describe('Task details sheet', () => {
     ).toEqual([]);
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledOnce();
+  });
+  it('names the Executor as a button that opens their Member Card', async () => {
+    const user = userEvent.setup();
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          visibleExecutor: {
+            memberId: 'member',
+            fullName: 'Ioana Pop',
+            nickname: null,
+          },
+        }),
+        executorName: 'Ioana Pop',
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    const executor = screen.getByText('Executor').closest('div') as HTMLElement;
+    await user.click(
+      within(executor).getByRole('button', {
+        name: 'Profilul membrului Ioana Pop',
+      }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Ioana Pop' }),
+    ).toBeVisible();
   });
   it('does not distinguish a hidden Task from a missing Task', async () => {
     useTaskDetails.mockReturnValue({ data: null });

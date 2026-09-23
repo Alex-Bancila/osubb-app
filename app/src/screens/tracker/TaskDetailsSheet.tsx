@@ -4,6 +4,7 @@ import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
 import { useRef, useState } from 'react';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import {
   Sheet,
@@ -127,7 +128,17 @@ function TaskDetails({
         {task.kind === 'task' && (
           <div>
             <dt className="font-semibold">Executor</dt>
-            <dd>{query.data.executorName ?? 'Indisponibil'}</dd>
+            <dd>
+              {task.executor?.name ? (
+                <MemberName
+                  memberId={task.executor.memberId}
+                  nickname={task.executor.nickname}
+                  fullName={task.executor.name}
+                />
+              ) : (
+                'Indisponibil'
+              )}
+            </dd>
           </div>
         )}
         <div>

@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(33);
 
 -- The demo seed fills the calendar. This suite owns its rows and rolls the
 -- truncation back after the assertions.
@@ -113,17 +113,22 @@ select lives_ok(
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at)
      values ('', 'sedinta', pg_temp.dept_group('org'), now()) $$,
-  '23514', null, 'an event title cannot be empty');
+  '23514', 'new row for relation "events" violates check constraint "events_title_length_ck"',
+  'an event title cannot be empty (#673: the length rule sorts before the blank rule)');
 
+-- #673: three characters each, so the length rule passes and only the blank
+-- rule can refuse them.
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at)
      values ('   ', 'sedinta', pg_temp.dept_group('org'), now()) $$,
-  '23514', null, 'an event title cannot contain only whitespace');
+  '23514', 'new row for relation "events" violates check constraint "events_title_not_blank_ck"',
+  'an event title cannot contain only whitespace');
 
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at)
-     values (E'\t\n', 'sedinta', pg_temp.dept_group('org'), now()) $$,
-  '23514', null, 'tabs and line breaks do not make a valid event title');
+     values (E'\t\n\t', 'sedinta', pg_temp.dept_group('org'), now()) $$,
+  '23514', 'new row for relation "events" violates check constraint "events_title_not_blank_ck"',
+  'tabs and line breaks do not make a valid event title');
 
 select throws_ok(
   $$ insert into events (title, type, group_id)
@@ -138,12 +143,26 @@ select throws_ok(
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at, capacity)
      values ('Capacitate zero', 'sedinta', pg_temp.dept_group('org'), now(), 0) $$,
-  '23514', null, 'capacity cannot be zero');
+  '23514', 'new row for relation "events" violates check constraint "events_capacity_range_ck"',
+  'capacity cannot be zero');
 
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at, capacity)
      values ('Capacitate negativă', 'sedinta', pg_temp.dept_group('org'), now(), -1) $$,
-  '23514', null, 'capacity cannot be negative');
+  '23514', 'new row for relation "events" violates check constraint "events_capacity_range_ck"',
+  'capacity cannot be negative');
+
+-- #673 (R8): the ceiling events_capacity_range_ck adds to the old floor.
+select throws_ok(
+  $$ insert into events (title, type, group_id, starts_at, capacity)
+     values ('Capacitate prea mare', 'sedinta', pg_temp.dept_group('org'), now(), 1001) $$,
+  '23514', 'new row for relation "events" violates check constraint "events_capacity_range_ck"',
+  'capacity cannot exceed 1000');
+
+select lives_ok(
+  $$ insert into events (title, type, group_id, starts_at, capacity)
+     values ('Capacitate maximă', 'sedinta', pg_temp.dept_group('org'), now(), 1000) $$,
+  'a capacity of exactly 1000 is accepted');
 
 -- ==================== The Group is the whole Origin invariant (#579) ====================
 select throws_ok(

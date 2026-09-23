@@ -12,6 +12,7 @@ export type PendingTaskCandidate = {
   id: number;
   memberId: string;
   memberName: string;
+  memberNickname?: string | null;
   avatarColor: string | null;
   joinedAt: string;
 };
@@ -58,7 +59,7 @@ export async function fetchPendingTaskCandidates(
   const { data, error } = await supabase
     .from('task_candidates')
     .select(
-      'id, member_id, joined_at, member:profiles_directory!task_candidates_member_id_fkey(full_name, avatar_color)',
+      'id, member_id, joined_at, member:profiles_directory!task_candidates_member_id_fkey(full_name, nickname, avatar_color)',
     )
     .eq('task_id', taskId)
     .eq('status', 'pending')
@@ -70,6 +71,7 @@ export async function fetchPendingTaskCandidates(
     id: candidate.id,
     memberId: candidate.member_id,
     memberName: candidate.member?.full_name ?? 'Membru OSUBB',
+    memberNickname: candidate.member?.nickname?.trim() || null,
     avatarColor: candidate.member?.avatar_color ?? null,
     joinedAt: candidate.joined_at,
   }));

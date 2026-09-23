@@ -13,7 +13,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(119);
+select plan(125);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u(n integer) returns uuid language sql immutable as $$
@@ -294,6 +294,25 @@ select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:umbrell
   'PT400', 'umbrella_has_no_campaign', 'an Umbrella can never carry a Campaign');
 select lives_ok(format('select public.update_task(%s)', pg_temp.args('x:umbrella', p_title => 'T626 umbrela noua')),
   'an Umbrella''s title is editable with null mode and Audience');
+-- #673 (R8): the length rules, at step 1 for the command and its preview alike.
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => repeat('t', 121))),
+  'PT400', 'title_too_long', '#673: a title over 120 characters is refused');
+select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('x:input', p_title => '  ab  ')),
+  'PT400', 'title_too_short', '#673: the preview measures the trimmed title, so "  ab  " is too short');
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, now() + interval ''7 days'', null, %L, %L)',
+    pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 2001), 'direct', 'org'),
+  'PT400', 'description_too_long', '#673: a description over 2000 characters is refused');
+select lives_ok(format('select public.update_task(%s)', pg_temp.args('todo:deadline', p_deadline => now() - interval '1 day')),
+  '#673: update_task accepts a deadline in the past on an existing Task -- R8 judges the deadline only at creation');
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.update_task(0, 0, repeat('t', 121), null, null, null, null, null) $$,
+  'PT400', 'title_too_long', '#673: step 1 answers a claimless caller before the gate');
+select throws_ok($$ select * from public.preview_task_update(0, 0, 'Titlu bun #673', repeat('d', 2001), null, null, null, null) $$,
+  'PT400', 'description_too_long', '#673: the preview answers a claimless caller before the gate too');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u(1));
+
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => '   ')),
   'PT400', 'title_required', 'a blank title is refused');
 select throws_ok(format('select public.update_task(%s, %s, %L, %L, null, null, %L, %L)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
