@@ -1,5 +1,4 @@
 import { lazy, Suspense, type ReactElement } from 'react';
-import { IonApp } from '@ionic/react';
 import {
   BrowserRouter,
   Navigate,
@@ -156,126 +155,124 @@ function FrontDoor({ children }: { children: ReactElement }) {
 
 export default function App() {
   return (
-    <IonApp>
-      <BrowserRouter>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <FrontDoor>
-                <LoginScreen />
-              </FrontDoor>
-            }
-          />
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <FrontDoor>
+              <LoginScreen />
+            </FrontDoor>
+          }
+        />
 
-          {/* Deliberately unguarded: this route's whole job is to turn a link
+        {/* Deliberately unguarded: this route's whole job is to turn a link
               into a session, so it has to run before there is one. */}
-          <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
+        <Route
+          path="/no-profile"
+          element={
+            <RequireSession>
+              <NoProfileScreen />
+            </RequireSession>
+          }
+        />
+
+        {/* Everything a member sees renders inside the shell. */}
+        <Route
+          element={
+            <RequireMember>
+              <AppShell />
+            </RequireMember>
+          }
+        >
+          <Route path="/" element={<DashboardScreen />} />
           <Route
-            path="/no-profile"
+            path="/tracker"
             element={
-              <RequireSession>
-                <NoProfileScreen />
-              </RequireSession>
+              <DeferredRoute>
+                <TrackerScreen />
+              </DeferredRoute>
             }
           />
-
-          {/* Everything a member sees renders inside the shell. */}
           <Route
+            path="/administrare/campanii"
             element={
-              <RequireMember>
-                <AppShell />
-              </RequireMember>
+              <RequireCapability capability="manageTasks">
+                <CampaignsScreen />
+              </RequireCapability>
             }
-          >
-            <Route path="/" element={<DashboardScreen />} />
-            <Route
-              path="/tracker"
-              element={
+          />
+          <Route
+            path="/administrare/grupuri/:groupId/campanii"
+            element={
+              <RequireCapability capability="manageTasks">
+                <CampaignsScreen />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/clasament"
+            element={
+              <RequireCapability capability="seeLeadership">
+                <LeadershipScreen />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/tracker/membru/:id"
+            element={
+              <RequireCapability capability="seeLeadership">
+                <MemberTrackerScreen />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <DeferredRoute>
+                <CalendarScreen />
+              </DeferredRoute>
+            }
+          />
+          <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
+          <Route path="/anunturi" element={<AnnouncementsScreen />} />
+          <Route path="/notificari" element={<NotificationsScreen />} />
+          <Route
+            path="/voluntari"
+            element={
+              <RequireCapability capability="seeDirectory">
+                <VolunteersScreen />
+              </RequireCapability>
+            }
+          />
+          <Route path="/profil" element={<ProfileScreen />} />
+          <Route
+            path="/administrare"
+            element={
+              <RequireCapability capability="administer">
                 <DeferredRoute>
-                  <TrackerScreen />
+                  <AdministrareScreen />
                 </DeferredRoute>
-              }
-            />
-            <Route
-              path="/administrare/campanii"
-              element={
-                <RequireCapability capability="manageTasks">
-                  <CampaignsScreen />
-                </RequireCapability>
-              }
-            />
-            <Route
-              path="/administrare/grupuri/:groupId/campanii"
-              element={
-                <RequireCapability capability="manageTasks">
-                  <CampaignsScreen />
-                </RequireCapability>
-              }
-            />
-            <Route
-              path="/clasament"
-              element={
-                <RequireCapability capability="seeLeadership">
-                  <LeadershipScreen />
-                </RequireCapability>
-              }
-            />
-            <Route
-              path="/tracker/membru/:id"
-              element={
-                <RequireCapability capability="seeLeadership">
-                  <MemberTrackerScreen />
-                </RequireCapability>
-              }
-            />
-            <Route
-              path="/calendar"
-              element={
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/administrare/grupuri/:groupId"
+            element={
+              <RequireCapability capability="administer">
                 <DeferredRoute>
-                  <CalendarScreen />
+                  <GroupScreen />
                 </DeferredRoute>
-              }
-            />
-            <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
-            <Route path="/anunturi" element={<AnnouncementsScreen />} />
-            <Route path="/notificari" element={<NotificationsScreen />} />
-            <Route
-              path="/voluntari"
-              element={
-                <RequireCapability capability="seeDirectory">
-                  <VolunteersScreen />
-                </RequireCapability>
-              }
-            />
-            <Route path="/profil" element={<ProfileScreen />} />
-            <Route
-              path="/administrare"
-              element={
-                <RequireCapability capability="administer">
-                  <DeferredRoute>
-                    <AdministrareScreen />
-                  </DeferredRoute>
-                </RequireCapability>
-              }
-            />
-            <Route
-              path="/administrare/grupuri/:groupId"
-              element={
-                <RequireCapability capability="administer">
-                  <DeferredRoute>
-                    <GroupScreen />
-                  </DeferredRoute>
-                </RequireCapability>
-              }
-            />
-          </Route>
+              </RequireCapability>
+            }
+          />
+        </Route>
 
-          {/* Unknown routes still return through the member guard. */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </IonApp>
+        {/* Unknown routes still return through the member guard. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

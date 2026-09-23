@@ -30,7 +30,6 @@ function grant(...names: string[]) {
 }
 vi.mock('./lib/auth', () => ({ useAuth: auth.useAuth }));
 vi.mock('@ionic/react', () => ({
-  IonApp: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   IonContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   IonPage: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   IonSpinner: ({ 'aria-label': label }: { 'aria-label': string }) => (
