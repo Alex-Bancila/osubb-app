@@ -39,22 +39,22 @@ select pg_temp.u601(n), 'Audience #601 ' || n, 'audience.' || n || '.601@test.lo
        (case when n in (3, 5, 7, 10) then 'inactiv' else 'activ' end)::public.member_status
   from generate_series(1, 11) n;
 
-insert into public.departments(id, name, short, color, kind)
+insert into pg_temp.fixture_departments(id, name, short, color, kind)
 values ('d601', 'Department #601', 'D601', '#601601', 'department');
-insert into public.teams(id, name, dept_id) values ('dt601', 'Team #601', 'd601');
-insert into public.member_departments(member_id, dept_id)
+insert into pg_temp.fixture_teams(id, name, dept_id) values ('dt601', 'Team #601', 'd601');
+insert into pg_temp.fixture_member_departments(member_id, dept_id)
 values (pg_temp.u601(2), 'd601'), (pg_temp.u601(3), 'd601');
-insert into public.team_members(team_id, member_id)
+insert into pg_temp.fixture_team_members(team_id, member_id)
 values ('dt601', pg_temp.u601(4)), ('dt601', pg_temp.u601(5));
 insert into public.groups(name,category,legacy_dept_id)
 values ('Department #601','department','d601');
 insert into public.groups(name,category,parent_id,legacy_team_id)
 values ('Team #601','team',(select id from public.groups where legacy_dept_id='d601'),'dt601');
 insert into public.group_members(group_id,member_id,group_role)
-select g.id,md.member_id,'member' from public.member_departments md
+select g.id,md.member_id,'member' from pg_temp.fixture_member_departments md
   join public.groups g on g.legacy_dept_id=md.dept_id where md.dept_id='d601';
 insert into public.group_members(group_id,member_id,group_role)
-select g.id,tm.member_id,'member' from public.team_members tm
+select g.id,tm.member_id,'member' from pg_temp.fixture_team_members tm
   join public.groups g on g.legacy_team_id=tm.team_id where tm.team_id='dt601';
 
 insert into public.groups(name, category, parent_id, application_level)

@@ -17,22 +17,22 @@ insert into auth.users(id,email)
 select ('37000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid, name || '.370@test.local' from people;
 insert into public.profiles(id,full_name,email,role,status)
 select ('37000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,name,name || '.370@test.local',role,status from people;
-insert into public.member_departments(member_id,dept_id)
+insert into pg_temp.fixture_member_departments(member_id,dept_id)
 select ('37000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,
 case when n=3 then 'pr' else 'edu' end from people where n in (2,3,4,6,12,13);
-insert into public.teams(id,name,dept_id) values ('t-370-dt','Child #370','edu'),('t-370-ind','Independent #370',null);
-insert into public.team_members(team_id,member_id) values
+insert into pg_temp.fixture_teams(id,name,dept_id) values ('t-370-dt','Child #370','edu'),('t-370-ind','Independent #370',null);
+insert into pg_temp.fixture_team_members(team_id,member_id) values
 ('t-370-dt','37000000-0000-0000-0000-000000000010'),
 ('t-370-ind','37000000-0000-0000-0000-000000000008'),
 ('t-370-ind','37000000-0000-0000-0000-000000000009');
-insert into public.projects(name,leader_id,created_by) values
+insert into pg_temp.fixture_projects(name,leader_id,created_by) values
 ('Project #370','37000000-0000-0000-0000-000000000004','37000000-0000-0000-0000-000000000001'),
 ('Archived #370','37000000-0000-0000-0000-000000000004','37000000-0000-0000-0000-000000000001');
-insert into public.project_members(project_id,member_id,project_role)
-select id,'37000000-0000-0000-0000-000000000005','responsible' from public.projects where name='Project #370';
-insert into public.project_members(project_id,member_id,project_role)
-select id,'37000000-0000-0000-0000-000000000007','member' from public.projects where name='Project #370';
-update public.projects set status='archived' where name='Archived #370';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'37000000-0000-0000-0000-000000000005','responsible' from pg_temp.fixture_projects where name='Project #370';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'37000000-0000-0000-0000-000000000007','member' from pg_temp.fixture_projects where name='Project #370';
+update pg_temp.fixture_projects set status='archived' where name='Archived #370';
 select pg_temp.materialize_legacy_groups();
 update public.groups set status='archived' where name='Archived #370';
 -- Wave 2 OD9 exception: gated/native fixtures only, rolled back with this suite.

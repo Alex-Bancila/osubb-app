@@ -18,7 +18,6 @@ select extensions.dblink_exec('commands_370_setup', $setup$
   drop function if exists public.test_370_revoke();
   delete from public.events where title='Race event #370';
   delete from public.groups where name = 'Race #370';
-  delete from public.projects where name = 'Race #370';
   delete from auth.users where id in ('37000000-0000-0000-0000-000000000090',
     '37000000-0000-0000-0000-000000000091','37000000-0000-0000-0000-000000000092');
   insert into auth.users(id,email) values
@@ -29,12 +28,7 @@ select extensions.dblink_exec('commands_370_setup', $setup$
     ('37000000-0000-0000-0000-000000000090','Race coord','coord.race.370@test.local','voluntar','activ'),
     ('37000000-0000-0000-0000-000000000091','Race resp','resp.race.370@test.local','voluntar','activ'),
     ('37000000-0000-0000-0000-000000000092','Race BC','bc.race.370@test.local','bc','activ');
-  insert into public.projects(name,leader_id,created_by) values
-    ('Race #370','37000000-0000-0000-0000-000000000090','37000000-0000-0000-0000-000000000092');
-  insert into public.project_members(project_id,member_id,project_role)
-    select id,'37000000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #370';
-  insert into public.groups(name,category,legacy_project_id)
-    select name,'project',id from public.projects where name='Race #370';
+  insert into public.groups(name,category) values ('Race #370','project');
   insert into public.group_members(group_id,member_id,group_role)
     select id,'37000000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #370';
   insert into public.group_members(group_id,member_id,group_role)
@@ -93,7 +87,6 @@ select extensions.dblink_exec('commands_370_setup', $$
   drop function public.test_370_revoke();
   delete from public.events where title='Race event #370';
   delete from public.groups where name='Race #370';
-  delete from public.projects where name='Race #370';
   delete from auth.users where id in ('37000000-0000-0000-0000-000000000090',
     '37000000-0000-0000-0000-000000000091','37000000-0000-0000-0000-000000000092');
 $$);

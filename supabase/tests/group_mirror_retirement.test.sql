@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(9);
 
 select is((select count(*) from pg_trigger where not tgisinternal
   and tgname in ('departments_mirror_group','teams_mirror_group',
@@ -28,19 +28,6 @@ values ('58600000-0000-0000-0000-000000000001','member.586@test.local'),
 insert into public.profiles(id,full_name,email,role,status)
 values ('58600000-0000-0000-0000-000000000001','Member 586','member.586@test.local','voluntar','activ'),
        ('58600000-0000-0000-0000-000000000002','BC 586','bc.586@test.local','bc','activ');
-insert into public.teams(id,name,dept_id)
-values ('legacy-team-586','Legacy Team 586','edu');
-select is((select count(*) from public.groups where legacy_team_id='legacy-team-586'),
-  0::bigint, 'legacy Team insert does not create a Group');
-
-insert into public.member_departments(member_id,dept_id)
-values ('58600000-0000-0000-0000-000000000001','edu');
-select is((select count(*) from public.group_members gm
-  join public.groups g on g.id=gm.group_id
-  where g.legacy_dept_id='edu'
-    and gm.member_id='58600000-0000-0000-0000-000000000001'),
-  0::bigint, 'legacy roster insert does not appoint a Group member');
-
 select is((select count(*) from public.group_members gm
   join public.groups g on g.id=gm.group_id
   join public.profiles p on p.id=gm.member_id

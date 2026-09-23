@@ -23,6 +23,9 @@ drop policy announcements_create on public.announcements;
 drop policy announcements_update on public.announcements;
 drop policy announcements_delete on public.announcements;
 drop function private.can_read_announcement(bigint,text);
+-- #590 removed the final legacy column; restore it only for this historical replay.
+alter table public.announcements add column dept_id text;
+update public.announcements a set dept_id=g.legacy_dept_id from public.groups g where g.id=a.group_id;
 alter table public.announcements drop column audience, drop column group_id;
 create policy announcements_read on public.announcements for select to authenticated using (public.auth_is_member());
 create policy announcements_manage on public.announcements for all to authenticated

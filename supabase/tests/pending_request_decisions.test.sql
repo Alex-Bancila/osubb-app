@@ -6,7 +6,7 @@ create extension if not exists pgtap with schema extensions;
 select plan(12);
 \ir _group_task_fixtures.psql
 insert into public.completed_work_requests(requester_id,group_id,description)
-select pg_temp.g521_uid(n),g.id,'decision353-'||n from public.groups g cross join (values(1),(2),(3),(5)) members(n) where g.legacy_project_id=(select id from public.projects where name='Project #521');
+select pg_temp.g521_uid(n),g.id,'decision353-'||n from public.groups g cross join (values(1),(2),(3),(5)) members(n) where g.legacy_project_id=(select id from pg_temp.fixture_projects where name='Project #521');
 select ok(not has_function_privilege('anon','public.pending_request_decisions()','execute'),'anonymous has no endpoint grant');
 select ok(not has_function_privilege('service_role','public.pending_request_decisions()','execute'),'service role has no endpoint grant');
 reset role;

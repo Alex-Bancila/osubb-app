@@ -75,18 +75,18 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('26200000-0000-0000-0000-000000000010', 'Matrix Inactive', 'matrix.inactive@test.local', 'activ', 'inactiv'),
   ('26200000-0000-0000-0000-000000000011', 'Matrix Second', 'matrix.second@test.local', 'voluntar', 'activ');
 
-insert into public.departments (id, name, short, color, kind) values
+insert into pg_temp.fixture_departments (id, name, short, color, kind) values
   ('262-dept', 'Matrix Department', 'M262', '#284C93', 'department');
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('262-dept-team', 'Matrix Department Team', '262-dept'),
   ('262-independent-team', 'Matrix Independent Team', null);
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('26200000-0000-0000-0000-000000000001', '262-dept'),
   ('26200000-0000-0000-0000-000000000011', '262-dept');
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('262-independent-team', '26200000-0000-0000-0000-000000000011');
 
-insert into public.projects (id, name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (id, name, status, leader_id, created_by)
 overriding system value values (
   2620001, 'Matrix Project', 'active',
   '26200000-0000-0000-0000-000000000005',

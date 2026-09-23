@@ -58,20 +58,20 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('32700000-0000-0000-0000-000000000010', 'BC Inactiv 327', 'inactive.bc.327@test.local', 'bc', 'inactiv'),
   ('32700000-0000-0000-0000-000000000011', 'Fara Claimuri 327', 'claimless.327@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('32700000-0000-0000-0000-000000000006', 'edu'),
   ('32700000-0000-0000-0000-000000000007', 'pr'),
   ('32700000-0000-0000-0000-000000000008', 'edu'),
   ('32700000-0000-0000-0000-000000000009', 'pr');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-327-ind', 'Echipa Independenta 327', null),
   ('t-327-dt', 'Echipa Departamentala 327', 'edu');
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-327-ind', '32700000-0000-0000-0000-000000000004');
 
-insert into public.projects (name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by)
 values ('Proiect #327', 'active',
         '32700000-0000-0000-0000-000000000001',
         '32700000-0000-0000-0000-000000000005'),
@@ -79,10 +79,10 @@ values ('Proiect #327', 'active',
         '32700000-0000-0000-0000-000000000001',
         '32700000-0000-0000-0000-000000000005');
 
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #327'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #327'),
    '32700000-0000-0000-0000-000000000002', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #327'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #327'),
    '32700000-0000-0000-0000-000000000003', 'member');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -121,22 +121,22 @@ values ('Task independent #327', pg_temp.team_group('t-327-ind'), 'local', 'dire
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect #327', pg_temp.project_group(project.id), 'local', 'direct', 'todo',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #327';
 
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect lead executant #327', pg_temp.project_group(project.id), 'local', 'direct', 'in_progress',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #327';
 
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect responsabil executant #327', pg_temp.project_group(project.id), 'local', 'direct', 'in_progress',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #327';
 
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect arhivat #327', pg_temp.project_group(project.id), 'local', 'direct', 'todo',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect arhivat #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect arhivat #327';
 
 update public.tasks set started_at = now()
  where title in ('Task proiect lead executant #327',
@@ -154,8 +154,8 @@ select task.id, '32700000-0000-0000-0000-000000000002',
 
 create temp table f327 as
 select
-  (select id from public.projects where name = 'Proiect #327') as project_id,
-  (select id from public.projects where name = 'Proiect arhivat #327') as archived_project_id,
+  (select id from pg_temp.fixture_projects where name = 'Proiect #327') as project_id,
+  (select id from pg_temp.fixture_projects where name = 'Proiect arhivat #327') as archived_project_id,
   (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie #327') as edu_campaign_id,
   (select id from public.campaigns where group_id = pg_temp.dept_group('pr') and name = 'Campanie PR #327') as pr_campaign_id,
   (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie inactiva #327') as inactive_campaign_id,
@@ -705,9 +705,6 @@ select extensions.dblink_exec('task_lock_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
-  delete from public.member_departments where member_id in (
-    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
-    '32700000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
     '32700000-0000-0000-0000-000000000023');
@@ -724,14 +721,12 @@ select extensions.dblink_exec('task_lock_setup', $$
      'lock.probe.evaluator.327@test.local', 'bce', 'activ'),
     ('32700000-0000-0000-0000-000000000023', 'Lock Probe Executor 327',
      'lock.probe.executor.327@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('32700000-0000-0000-0000-000000000021', 'edu'),
-    ('32700000-0000-0000-0000-000000000022', 'edu'),
-    ('32700000-0000-0000-0000-000000000023', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('32700000-0000-0000-0000-000000000021'::uuid, 'edu'),
+    ('32700000-0000-0000-0000-000000000022'::uuid, 'edu'),
+    ('32700000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '32700000-%'
   on conflict (group_id,member_id) do nothing;
@@ -877,9 +872,6 @@ select extensions.dblink_exec('task_lock_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
-  delete from public.member_departments where member_id in (
-    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
-    '32700000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
     '32700000-0000-0000-0000-000000000023');

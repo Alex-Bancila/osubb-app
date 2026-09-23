@@ -104,7 +104,7 @@ select is((select count(*) from (
 select is((select count(distinct g.legacy_dept_id) from group_members gm
   join groups g on g.id=gm.group_id join profiles p on p.id=gm.member_id
   where p.email like '%@demo.osubb' and g.legacy_dept_id in
-    (select id from departments where kind='department')), 5::bigint,
+    (select id from pg_temp.fixture_departments where kind='department')), 5::bigint,
   'all five delivery Departments have a demo member');
 select ok(exists (select 1 from group_members gm join groups g on g.id=gm.group_id
   where g.legacy_dept_id='diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006')
@@ -120,13 +120,9 @@ select is((select min_level from events where title='Training pentru recruți'),
   'recruit training remains visible at Minimum Level zero');
 select is((select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'),
   6::bigint, 'six native demo Groups exist');
-select is((select count(*) from teams where id in ('t-app','t-recruti','t-logistica')),
-  0::bigint, 'no demo legacy Team rows remain');
-select is((select count(*) from projects where created_by='d0000000-0000-0000-0000-000000000007'),
-  0::bigint, 'no demo legacy Project rows remain');
-select is((select count(*) from member_departments md join profiles p on p.id=md.member_id
-  where p.email like '%@demo.osubb'), 0::bigint,
-  'no demo legacy Department roster rows remain');
+select is(to_regclass('public.teams'), null::regclass, 'legacy Team storage is absent');
+select is(to_regclass('public.projects'), null::regclass, 'legacy Project storage is absent');
+select is(to_regclass('public.member_departments'), null::regclass, 'legacy Department roster storage is absent');
 select is((select gm.group_role from group_members gm join groups g on g.id=gm.group_id
   where g.legacy_dept_id='diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006'),
   'manager', 'BCE manages Diverse explicitly');
@@ -404,7 +400,7 @@ select ok(
 -- One active Campaign per real Department, each carrying at least one Task.
 select ok(
   not exists (
-    select 1 from departments dept
+    select 1 from pg_temp.fixture_departments dept
      where dept.kind = 'department'
        and not exists (
          select 1 from campaigns campaign

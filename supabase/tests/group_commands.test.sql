@@ -228,7 +228,7 @@ reset role;
 update public.profiles set role='voluntar' where id=pg_temp.g521_uid(9);
 update public.group_members set group_role='member'
  where group_id=pg_temp.dept_group('d521') and member_id=pg_temp.g521_uid(9);
-insert into public.member_departments(member_id,dept_id) values(pg_temp.g521_uid(1),'d521');
+insert into pg_temp.fixture_member_departments(member_id,dept_id) values(pg_temp.g521_uid(1),'d521');
 insert into public.group_members(group_id,member_id,group_role)
 values(pg_temp.dept_group('d521'),pg_temp.g521_uid(1),'member');
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));

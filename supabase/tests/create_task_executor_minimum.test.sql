@@ -7,7 +7,7 @@ select plan(8);
 \ir _group_task_fixtures.psql
 select pg_temp.g521_task('parent348','project',null,'todo','direct','umbrella');
 -- Rolled-back settings fixture, not a production Group mutation path.
-update public.groups set min_level=3,application_level=3 where legacy_project_id=(select id from public.projects where name='Project #521');
+update public.groups set min_level=3,application_level=3 where legacy_project_id=(select id from pg_temp.fixture_projects where name='Project #521');
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select throws_ok($$select public.create_task('Denied root #348', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(5), p_group_id => (select group_id from public.tasks where id=(select id from g521_tasks where name='parent348')))$$,'PT400','invalid_executor','root Task creation rejects an active but below-minimum Executor');
 select throws_ok($$select public.create_task('Denied child #348', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(5), p_parent_task_id => (select id from g521_tasks where name='parent348'))$$,'PT400','invalid_executor','Subtask creation enforces the inherited Group Minimum Level');

@@ -27,7 +27,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('c2000000-0000-0000-0000-000000000002', 'Membru Inactiv', 'cup.inactive@test.local', 'voluntar', 'inactiv'),
   ('c3000000-0000-0000-0000-000000000003', 'Fost Membru',    'cup.alumni@test.local',   'voluntar', 'alumni');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('c1000000-0000-0000-0000-000000000001', 'edu'),
   ('c2000000-0000-0000-0000-000000000002', 'pr'),
   ('c3000000-0000-0000-0000-000000000003', 'hr');

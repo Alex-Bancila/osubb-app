@@ -14,7 +14,6 @@ select extensions.dblink_exec('events_248_setup',$setup$
  delete from public.notifications where member_id::text like '24800000-%';
  delete from public.events where title='Race #248';
  delete from public.groups where name='Race #248';
- delete from public.projects where name='Race #248';
  delete from auth.users where id in ('24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000091','24800000-0000-0000-0000-000000000092');
  insert into auth.users(id,email) values
  ('24800000-0000-0000-0000-000000000090','lead.race248@test.local'),
@@ -24,14 +23,8 @@ select extensions.dblink_exec('events_248_setup',$setup$
  ('24800000-0000-0000-0000-000000000090','Leader','lead.race248@test.local','voluntar','activ'),
  ('24800000-0000-0000-0000-000000000091','Responsible','resp.race248@test.local','voluntar','activ'),
  ('24800000-0000-0000-0000-000000000092','BC','bc.race248@test.local','bc','activ');
- insert into public.projects(name,leader_id,created_by) values
- ('Race #248','24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000092');
- insert into public.project_members(project_id,member_id,project_role)
- select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
-  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
- insert into public.groups(name,category,legacy_project_id)
- select name,'project',id from public.projects where name='Race #248';
- insert into public.group_members(group_id,member_id,group_role)
+ insert into public.groups(name,category) values ('Race #248','project');
+  insert into public.group_members(group_id,member_id,group_role)
  select id,'24800000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #248';
  insert into public.group_members(group_id,member_id,group_role)
  select id,'24800000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #248';
@@ -88,7 +81,6 @@ select extensions.dblink_exec('events_248_setup',$cleanup$
  delete from public.notifications where member_id::text like '24800000-%';
  delete from public.events where title='Race #248';
  delete from public.groups where name='Race #248';
- delete from public.projects where name='Race #248';
  delete from auth.users where id in ('24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000091','24800000-0000-0000-0000-000000000092');
 $cleanup$);
 select extensions.dblink_disconnect('events_248_setup');

@@ -90,7 +90,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33200000-0000-0000-0000-000000000013', 'Executor Auto-Candidat 332', 'self.candidate.332@test.local', 'voluntar', 'activ'),
   ('33200000-0000-0000-0000-000000000014', 'Executor Auto-Candidat Singur 332', 'self.only.332@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33200000-0000-0000-0000-000000000001', 'edu'),
   ('33200000-0000-0000-0000-000000000002', 'edu'),
   ('33200000-0000-0000-0000-000000000003', 'edu'),
@@ -785,11 +785,6 @@ select extensions.dblink_exec('gut_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#332 committed%');
   delete from public.tasks where title like '%#332 committed%';
-  delete from public.member_departments where member_id in (
-    '33200000-0000-0000-0000-000000000021', '33200000-0000-0000-0000-000000000022',
-    '33200000-0000-0000-0000-000000000023', '33200000-0000-0000-0000-000000000024',
-    '33200000-0000-0000-0000-000000000025', '33200000-0000-0000-0000-000000000026',
-    '33200000-0000-0000-0000-000000000027', '33200000-0000-0000-0000-000000000028');
   delete from auth.users where id in (
     '33200000-0000-0000-0000-000000000021', '33200000-0000-0000-0000-000000000022',
     '33200000-0000-0000-0000-000000000023', '33200000-0000-0000-0000-000000000024',
@@ -814,15 +809,6 @@ select extensions.dblink_exec('gut_setup', $$
     ('33200000-0000-0000-0000-000000000026', 'Race2 B 332', 'race2.b.332@test.local', 'voluntar', 'activ'),
     ('33200000-0000-0000-0000-000000000027', 'Probe Executor 332', 'probe.executor.332@test.local', 'voluntar', 'activ'),
     ('33200000-0000-0000-0000-000000000028', 'Probe Candidat 332', 'probe.candidate.332@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33200000-0000-0000-0000-000000000021', 'edu'),
-    ('33200000-0000-0000-0000-000000000022', 'edu'),
-    ('33200000-0000-0000-0000-000000000023', 'edu'),
-    ('33200000-0000-0000-0000-000000000024', 'edu'),
-    ('33200000-0000-0000-0000-000000000025', 'edu'),
-    ('33200000-0000-0000-0000-000000000026', 'edu'),
-    ('33200000-0000-0000-0000-000000000027', 'edu'),
-    ('33200000-0000-0000-0000-000000000028', 'edu');
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
@@ -1049,11 +1035,6 @@ select extensions.dblink_exec('gut_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#332 committed%');
   delete from public.tasks where title like '%#332 committed%';
-  delete from public.member_departments where member_id in (
-    '33200000-0000-0000-0000-000000000021', '33200000-0000-0000-0000-000000000022',
-    '33200000-0000-0000-0000-000000000023', '33200000-0000-0000-0000-000000000024',
-    '33200000-0000-0000-0000-000000000025', '33200000-0000-0000-0000-000000000026',
-    '33200000-0000-0000-0000-000000000027', '33200000-0000-0000-0000-000000000028');
   delete from auth.users where id in (
     '33200000-0000-0000-0000-000000000021', '33200000-0000-0000-0000-000000000022',
     '33200000-0000-0000-0000-000000000023', '33200000-0000-0000-0000-000000000024',

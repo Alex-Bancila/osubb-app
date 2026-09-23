@@ -251,12 +251,10 @@ select lives_ok(
 reset role;
 select is(pg_temp.g602_roster_legacy(10), 'member',
   'the Department Group roster row is written directly, not derived by the mirror');
-select is(
-  (select count(*) from member_departments where member_id = pg_temp.g602_uid(10)),
-  0::bigint, 'and public.member_departments is not written any more (#590 drops it)');
-select is(
-  (select count(*) from team_members where member_id = pg_temp.g602_uid(10)),
-  0::bigint, 'nor public.team_members');
+select is(to_regclass('public.member_departments'), null::regclass,
+  'legacy Department roster storage is absent');
+select is(to_regclass('public.team_members'), null::regclass,
+  'legacy Team roster storage is absent');
 
 select * from finish();
 rollback;

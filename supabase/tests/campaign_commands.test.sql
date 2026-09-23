@@ -37,7 +37,7 @@ insert into public.profiles (id, full_name, email, role, status) values
 
 -- 0007 keeps a real Department row (its stale JWT and live status disagree).
 -- 0008 deliberately gets none (its stale JWT and live membership disagree).
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('34300000-0000-0000-0000-000000000001', 'edu'),
   ('34300000-0000-0000-0000-000000000002', 'fin'),
   ('34300000-0000-0000-0000-000000000007', 'edu');
@@ -520,19 +520,16 @@ select extensions.dblink_connect('campaign_lock_setup', format(
 select extensions.dblink_exec('campaign_lock_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_lock_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
-  delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
   insert into auth.users (id, email) values
     ('34300000-0000-0000-0000-000000000021', 'lock.probe.bce.campaign@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('34300000-0000-0000-0000-000000000021', 'Lock Probe BCE Campaign',
      'lock.probe.bce.campaign@test.local', 'bce', 'activ');
-  insert into public.member_departments (member_id, dept_id)
-  values ('34300000-0000-0000-0000-000000000021', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34300000-0000-0000-0000-000000000021'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34300000-%'
   on conflict (group_id,member_id) do nothing;
@@ -610,7 +607,6 @@ select is((select result_b from lock_probe_race), 'false',
 
 select extensions.dblink_exec('campaign_lock_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
-  delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
 $$);
 select extensions.dblink_disconnect('campaign_lock_setup');
@@ -644,19 +640,16 @@ select extensions.dblink_connect('campaign_setup', format(
 select extensions.dblink_exec('campaign_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
-  delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000020';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000020';
   insert into auth.users (id, email) values
     ('34300000-0000-0000-0000-000000000020', 'concurrent.bce.campaign@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('34300000-0000-0000-0000-000000000020', 'Concurrent BCE Campaign',
      'concurrent.bce.campaign@test.local', 'bce', 'activ');
-  insert into public.member_departments (member_id, dept_id)
-  values ('34300000-0000-0000-0000-000000000020', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34300000-0000-0000-0000-000000000020'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34300000-%'
   on conflict (group_id,member_id) do nothing;
@@ -684,7 +677,6 @@ $$) as result(campaign_count bigint)), 1::bigint,
 
 select extensions.dblink_exec('campaign_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
-  delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000020';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000020';
 $$);
 select extensions.dblink_disconnect('campaign_setup');

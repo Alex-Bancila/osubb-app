@@ -49,7 +49,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33000000-0000-0000-0000-000000000007', 'BC Inactiv 330', 'inactive.bc.330@test.local', 'bc', 'inactiv'),
   ('33000000-0000-0000-0000-000000000008', 'Fara Claimuri 330', 'claimless.330@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33000000-0000-0000-0000-000000000001', 'edu'),
   ('33000000-0000-0000-0000-000000000002', 'edu'),
   ('33000000-0000-0000-0000-000000000003', 'edu'),
@@ -573,10 +573,6 @@ select extensions.dblink_exec('ti_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.tasks where title like '%#330 committed%';
-  delete from public.member_departments where member_id in (
-    '33000000-0000-0000-0000-000000000021',
-    '33000000-0000-0000-0000-000000000022',
-    '33000000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '33000000-0000-0000-0000-000000000021',
     '33000000-0000-0000-0000-000000000022',
@@ -590,14 +586,12 @@ select extensions.dblink_exec('ti_setup', $$
     ('33000000-0000-0000-0000-000000000021', 'Race Manager 330', 'race.manager.330@test.local', 'bce', 'activ'),
     ('33000000-0000-0000-0000-000000000022', 'Race A 330', 'race.a.330@test.local', 'voluntar', 'activ'),
     ('33000000-0000-0000-0000-000000000023', 'Race B 330', 'race.b.330@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33000000-0000-0000-0000-000000000021', 'edu'),
-    ('33000000-0000-0000-0000-000000000022', 'edu'),
-    ('33000000-0000-0000-0000-000000000023', 'edu');
   -- #586: committed race fixtures require native Group roster rows.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('33000000-0000-0000-0000-000000000021'::uuid, 'edu'),
+    ('33000000-0000-0000-0000-000000000022'::uuid, 'edu'),
+    ('33000000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33000000-%'
   on conflict (group_id,member_id) do nothing;
@@ -824,10 +818,6 @@ select extensions.dblink_exec('ti_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.tasks where title like '%#330 committed%';
-  delete from public.member_departments where member_id in (
-    '33000000-0000-0000-0000-000000000021',
-    '33000000-0000-0000-0000-000000000022',
-    '33000000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '33000000-0000-0000-0000-000000000021',
     '33000000-0000-0000-0000-000000000022',

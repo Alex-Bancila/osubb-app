@@ -159,13 +159,13 @@ insert into public.profiles (id, full_name, email, role, status)
 select persona.id, 'M318 ' || persona.code, 'm318.' || persona.code || '@test.local',
        persona.role, persona.status
   from fx_persona as persona;
-insert into public.member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
 select persona.id, persona.dept_id from fx_persona as persona where persona.dept_id is not null;
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('m318-dt', 'M318 Department Team', 'edu'),
   ('m318-it', 'M318 Independent Team', null);
-insert into public.team_members (team_id, member_id)
+insert into pg_temp.fixture_team_members (team_id, member_id)
 select membership.team_id, persona.id
   from (values ('m318-dt', 'dept_team_member'), ('m318-it', 'indep_team_member'))
          as membership (team_id, code)
@@ -173,15 +173,15 @@ select membership.team_id, persona.id
 
 -- Same lead, Responsible and plain member in an active and an archived
 -- Project. The leader's own membership comes from projects_sync_leader_membership.
-insert into public.projects (name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by)
 select project.name, project.status, lead.id, bc.id
   from (values ('M318 Project', 'active'), ('M318 Archived Project', 'archived'))
          as project (name, status)
  cross join (select id from fx_persona where code = 'project_lead') as lead
  cross join (select id from fx_persona where code = 'bc') as bc;
-insert into public.project_members (project_id, member_id, project_role)
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role)
 select project.id, persona.id, membership.project_role
-  from public.projects as project
+  from pg_temp.fixture_projects as project
  cross join (values ('project_responsible', 'responsible'), ('project_member', 'member'))
          as membership (code, project_role)
   join fx_persona as persona on persona.code = membership.code
@@ -206,7 +206,7 @@ select 'm318:' || origin.code || '-' || shape.code,
           ('D',  'edu',      null::text, null::bigint),
           ('DT', null,       'm318-dt',  null),
           ('IT', null,       'm318-it',  null),
-          ('P',  null,       null,       (select id from public.projects where name = 'M318 Project'))
+          ('P',  null,       null,       (select id from pg_temp.fixture_projects where name = 'M318 Project'))
        ) as origin (code, dept_id, team_id, project_id)
  cross join (values
           ('loc-dir',    'local', 'direct', false),
@@ -248,7 +248,7 @@ select 'm318:X-umb-sub', umbrella.id, pg_temp.dept_group('pr')
 -- off. Nothing else about the fixture changes.
 insert into public.tasks (title, group_id, status, cancelled_at, cancel_reason)
 select 'm318:PA-dir', pg_temp.project_group(project.id), 'cancelled', now(), 'Proiect arhivat #318'
-  from public.projects as project where project.name = 'M318 Archived Project';
+  from pg_temp.fixture_projects as project where project.name = 'M318 Archived Project';
 
 -- Participation Tasks in `pr`, where no persona except R1 is a member.
 -- X-busy is an org-wide Opportunity that already has an Executor and is in
@@ -759,7 +759,7 @@ update public.groups set min_level=0,application_level=0 where name='Project #52
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
 reset role;
-delete from public.project_members where project_id=(select id from public.projects where name='Project #521') and member_id=pg_temp.g521_uid(3);
+delete from pg_temp.fixture_project_members where project_id=(select id from pg_temp.fixture_projects where name='Project #521') and member_id=pg_temp.g521_uid(3);
 delete from public.group_members where group_id=(select id from public.groups where name='Project #521')
   and member_id=pg_temp.g521_uid(3);
 set local role authenticated;

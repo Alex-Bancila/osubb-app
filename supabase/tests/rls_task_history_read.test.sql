@@ -159,11 +159,11 @@ insert into public.profiles (id, full_name, email, role, status)
 select persona.id, 'M319 ' || persona.code, 'm319.' || persona.code || '@test.local',
        persona.role, persona.status
   from fx_persona_319 as persona;
-insert into public.member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
 select persona.id, persona.dept_id from fx_persona_319 as persona where persona.dept_id is not null;
 
-insert into public.teams (id, name, dept_id) values ('m319-dt', 'M319 Department Team', 'edu');
-insert into public.team_members (team_id, member_id)
+insert into pg_temp.fixture_teams (id, name, dept_id) values ('m319-dt', 'M319 Department Team', 'edu');
+insert into pg_temp.fixture_team_members (team_id, member_id)
 select 'm319-dt', persona.id from fx_persona_319 as persona where persona.code = 'team_member';
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();

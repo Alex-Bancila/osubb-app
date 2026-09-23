@@ -109,7 +109,6 @@ export type Database = {
           body: string
           category: string | null
           created_by: string | null
-          dept_id: string | null
           form_label: string | null
           form_url: string | null
           group_id: number
@@ -125,7 +124,6 @@ export type Database = {
           body: string
           category?: string | null
           created_by?: string | null
-          dept_id?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id: number
@@ -141,7 +139,6 @@ export type Database = {
           body?: string
           category?: string | null
           created_by?: string | null
-          dept_id?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id?: number
@@ -192,13 +189,6 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "announcements_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
           {
@@ -441,30 +431,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      departments: {
-        Row: {
-          color: string
-          id: string
-          kind: string
-          name: string
-          short: string
-        }
-        Insert: {
-          color: string
-          id: string
-          kind?: string
-          name: string
-          short: string
-        }
-        Update: {
-          color?: string
-          id?: string
-          kind?: string
-          name?: string
-          short?: string
-        }
-        Relationships: []
       }
       difficulty_guide: {
         Row: {
@@ -989,71 +955,6 @@ export type Database = {
           },
         ]
       }
-      member_departments: {
-        Row: {
-          dept_id: string
-          member_id: string
-        }
-        Insert: {
-          dept_id: string
-          member_id: string
-        }
-        Update: {
-          dept_id?: string
-          member_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_departments_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_departments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "member_departments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "member_departments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "member_departments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_departments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_contact"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_departments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       notif_suppression: {
         Row: {
           kind: Database["public"]["Enums"]["noti_kind"]
@@ -1376,192 +1277,6 @@ export type Database = {
           tier?: string | null
         }
         Relationships: []
-      }
-      project_members: {
-        Row: {
-          created_at: string
-          member_id: string
-          project_id: number
-          project_role: string
-        }
-        Insert: {
-          created_at?: string
-          member_id: string
-          project_id: number
-          project_role: string
-        }
-        Update: {
-          created_at?: string
-          member_id?: string
-          project_id?: number
-          project_role?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "project_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "project_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "project_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_contact"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_members_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      projects: {
-        Row: {
-          created_at: string
-          created_by: string
-          id: number
-          leader_id: string
-          name: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          id?: never
-          leader_id: string
-          name: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          id?: never
-          leader_id?: string
-          name?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_contact"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_leader_id_fkey"
-            columns: ["leader_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "projects_leader_id_fkey"
-            columns: ["leader_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "projects_leader_id_fkey"
-            columns: ["leader_id"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "projects_leader_id_fkey"
-            columns: ["leader_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_leader_id_fkey"
-            columns: ["leader_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_contact"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_leader_id_fkey"
-            columns: ["leader_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       push_tokens: {
         Row: {
@@ -2546,100 +2261,6 @@ export type Database = {
             columns: ["parent_task_id"]
             isOneToOne: false
             referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      team_members: {
-        Row: {
-          member_id: string
-          team_id: string
-        }
-        Insert: {
-          member_id: string
-          team_id: string
-        }
-        Update: {
-          member_id?: string
-          team_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "team_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "team_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "team_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "team_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "team_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_contact"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "team_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "team_members_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      teams: {
-        Row: {
-          dept_id: string | null
-          id: string
-          is_interne: boolean
-          name: string
-        }
-        Insert: {
-          dept_id?: string | null
-          id: string
-          is_interne?: boolean
-          name: string
-        }
-        Update: {
-          dept_id?: string | null
-          id?: string
-          is_interne?: boolean
-          name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "teams_dept_id_fkey"
-            columns: ["dept_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]

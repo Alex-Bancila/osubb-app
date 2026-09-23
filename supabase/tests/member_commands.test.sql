@@ -135,7 +135,7 @@ insert into profiles (id, full_name, email, role, status) values
 
 -- One Department membership, so the Wave 1 mirror has Group Roles to move if
 -- the command ever reached for them.
-insert into member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
   values ('58000000-0000-0000-0000-00000000000a', 'edu');
 
 -- Three native Groups spanning the Minimum Level boundary a demotion crosses.

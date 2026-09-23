@@ -49,17 +49,17 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('34200000-0000-0000-0000-000000000009', 'Fara Claimuri 342', 'claimless.342@test.local', 'voluntar', 'activ'),
   ('34200000-0000-0000-0000-000000000010', 'Membru Echipa Independenta 342', 'indep.team.342@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('34200000-0000-0000-0000-000000000001', 'edu'),
   ('34200000-0000-0000-0000-000000000002', 'pr'),
   ('34200000-0000-0000-0000-000000000005', 'edu'),
   ('34200000-0000-0000-0000-000000000006', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-342-dt', 'Echipa Departamentala 342', 'edu'),
   ('t-342-ind', 'Echipa Independenta 342', null);
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-342-dt', '34200000-0000-0000-0000-000000000003'),
   ('t-342-dt', '34200000-0000-0000-0000-000000000004'),
   ('t-342-ind', '34200000-0000-0000-0000-000000000010');
@@ -432,8 +432,6 @@ select extensions.dblink_exec('ate_setup', $$
   insert into public.profiles (id, full_name, email, role, status) values
     ('34200000-0000-0000-0000-000000000021', 'Lock Manager 342', 'lock.manager.342@test.local', 'bce', 'activ'),
     ('34200000-0000-0000-0000-000000000022', 'Lock Assignee 342', 'lock.assignee.342@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('34200000-0000-0000-0000-000000000021', 'edu');
   insert into public.group_members (group_id, member_id, group_role)
   select id, '34200000-0000-0000-0000-000000000021', 'manager'
     from public.groups where legacy_dept_id = 'edu';
@@ -537,8 +535,6 @@ select extensions.dblink_exec('ate_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#342 committed%');
   delete from public.tasks where title like '%#342 committed%';
-  delete from public.member_departments where member_id in (
-    '34200000-0000-0000-0000-000000000021', '34200000-0000-0000-0000-000000000022');
   delete from auth.users where id in (
     '34200000-0000-0000-0000-000000000021', '34200000-0000-0000-0000-000000000022');
 $$);

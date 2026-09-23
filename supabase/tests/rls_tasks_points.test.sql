@@ -38,12 +38,12 @@ insert into profiles (id, full_name, email, role) values
   ('b0000000-0000-0000-0000-000000000012', 'Bianca Voluntar PR', 'bianca.rls@test.local',    'voluntar'),
   ('c0000000-0000-0000-0000-000000000013', 'Radu Responsabil',   'radu.rls@test.local',      'responsabil'),
   ('d0000000-0000-0000-0000-000000000014', 'Bogdan BC',          'bogdan.bc.rls@test.local', 'bc');
-insert into member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('a0000000-0000-0000-0000-000000000011', 'edu'),
   ('b0000000-0000-0000-0000-000000000012', 'pr'),
   ('c0000000-0000-0000-0000-000000000013', 'edu');
-insert into teams (id, name, dept_id) values ('t-x', 'Team X', 'pr');
-insert into team_members (team_id, member_id)
+insert into pg_temp.fixture_teams (id, name, dept_id) values ('t-x', 'Team X', 'pr');
+insert into pg_temp.fixture_team_members (team_id, member_id)
   values ('t-x', 'b0000000-0000-0000-0000-000000000012');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
