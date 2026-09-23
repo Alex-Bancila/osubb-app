@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import {
@@ -32,13 +33,15 @@ function changeError(error: unknown) {
 }
 
 /** The Role and Status management surface; the server capability gates mount. */
-export function RolePanel() {
+export function RolePanel({
+  selectedMemberId,
+}: { selectedMemberId?: string } = {}) {
   const { session } = useAuth();
   const members = useAppointableMembers();
   const roles = useRoles();
   const groups = useAdminGroups();
   const change = useMemberChange();
-  const [memberId, setMemberId] = useState('');
+  const [memberId, setMemberId] = useState(selectedMemberId ?? '');
   const [roleDraft, setRoleDraft] = useState('');
   const [statusDraft, setStatusDraft] = useState('');
   const [reason, setReason] = useState('');
@@ -138,29 +141,39 @@ export function RolePanel() {
         <p role="alert">Nu am putut încărca membrii și rolurile.</p>
       ) : (
         <>
-          <label className="block max-w-xl space-y-1">
-            <span>Membru</span>
-            <select
-              className={control}
-              value={memberId}
-              disabled={change.isPending}
-              onChange={(event) => {
-                setMemberId(event.target.value);
-                setRoleDraft('');
-                setStatusDraft('');
-                setReason('');
-                setError(null);
-                setMessage(null);
-              }}
+          {!selectedMemberId && (
+            <label className="block max-w-xl space-y-1">
+              <span>Membru</span>
+              <select
+                className={control}
+                value={memberId}
+                disabled={change.isPending}
+                onChange={(event) => {
+                  setMemberId(event.target.value);
+                  setRoleDraft('');
+                  setStatusDraft('');
+                  setReason('');
+                  setError(null);
+                  setMessage(null);
+                }}
+              >
+                <option value="">Alege un membru</option>
+                {members.data?.map((row) => (
+                  <option key={row.memberId} value={row.memberId}>
+                    {row.name} · {row.roleLabel}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {member && !selectedMemberId && (
+            <Link
+              className="inline-flex min-h-11 items-center underline"
+              to={`/administrare/membri/${member.memberId}`}
             >
-              <option value="">Alege un membru</option>
-              {members.data?.map((row) => (
-                <option key={row.memberId} value={row.memberId}>
-                  {row.name} · {row.roleLabel}
-                </option>
-              ))}
-            </select>
-          </label>
+              Vezi detaliile membrului
+            </Link>
+          )}
           {member && (
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-3 rounded-lg border p-4">

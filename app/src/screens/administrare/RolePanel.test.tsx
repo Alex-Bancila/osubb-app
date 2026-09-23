@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
@@ -113,7 +114,11 @@ beforeEach(() => {
 
 it('offers seven reference ranks, excludes responsabil, and blocks self and BC targets for a BC', async () => {
   const user = userEvent.setup();
-  render(<RolePanel />);
+  render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   const select = screen.getByLabelText('Rol organizațional');
   const options = within(select).getAllByRole('option');
@@ -139,7 +144,11 @@ it('offers seven reference ranks, excludes responsabil, and blocks self and BC t
 
 it('shows explicit archived and automatic Groups before a demotion and sends the audited Role command', async () => {
   const user = userEvent.setup();
-  const { container } = render(<RolePanel />);
+  const { container } = render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'vot');
   expect(screen.getByText(/Confirmi Drept de Vot/)).toBeVisible();
@@ -182,7 +191,11 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
     isError: false,
   });
   const user = userEvent.setup();
-  render(<RolePanel />);
+  render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'bce');
   expect(screen.queryByText(/Retragi Drept de Vot/)).toBeNull();
@@ -202,7 +215,11 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
 
 it('deactivates through the atomic Status command and explains the token window', async () => {
   const user = userEvent.setup();
-  render(<RolePanel />);
+  render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   expect(screen.getByText(/cel mult o oră/)).toBeVisible();
@@ -233,7 +250,11 @@ it('lets only the live Moderator edit a BC target', async () => {
     isError: false,
   });
   const user = userEvent.setup();
-  render(<RolePanel />);
+  render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'protected');
   expect(screen.getByLabelText('Rol organizațional')).toBeEnabled();
   expect(
@@ -249,7 +270,11 @@ it('fails closed when live actor row is absent despite stale moderator claims', 
     claims: { member_role: 'moderator' },
   });
   const user = userEvent.setup();
-  render(<RolePanel />);
+  render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'protected');
   expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
   expect(screen.getByLabelText('Status')).toBeDisabled();
@@ -264,7 +289,11 @@ it('disables edits when the live actor is inactive', async () => {
     isError: false,
   });
   const user = userEvent.setup();
-  render(<RolePanel />);
+  render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
 });
@@ -272,7 +301,11 @@ it('disables edits when the live actor is inactive', async () => {
 it('keeps the target and reason on a refused command', async () => {
   state.mutate.mockRejectedValueOnce({ message: 'member_manage_forbidden' });
   const user = userEvent.setup();
-  render(<RolePanel />);
+  render(
+    <MemoryRouter>
+      <RolePanel />
+    </MemoryRouter>,
+  );
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Verificare');

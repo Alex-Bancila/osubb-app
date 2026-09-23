@@ -29,6 +29,7 @@ const CalendarScreen = lazy(() => import('./screens/calendar/CalendarScreen'));
 const AdministrareScreen = lazy(
   () => import('./screens/administrare/AdministrareScreen'),
 );
+const MemberScreen = lazy(() => import('./screens/administrare/MemberScreen'));
 const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
 
 /* Shown while the stored session is being read — a beat, not a screen. It
@@ -254,6 +255,16 @@ export default function App() {
               <RequireCapability capability="administer">
                 <DeferredRoute>
                   <AdministrareScreen />
+                </DeferredRoute>
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/administrare/membri/:memberId"
+            element={
+              <RequireCapability capability="administer">
+                <DeferredRoute>
+                  <MemberScreen />
                 </DeferredRoute>
               </RequireCapability>
             }

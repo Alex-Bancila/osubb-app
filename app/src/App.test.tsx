@@ -56,6 +56,9 @@ vi.mock('./screens/volunteers/VolunteersScreen', () => ({
 vi.mock('./screens/administrare/AdministrareScreen', () => ({
   default: () => <h1>Administrare</h1>,
 }));
+vi.mock('./screens/administrare/MemberScreen', () => ({
+  default: () => <h1>Membru screen</h1>,
+}));
 vi.mock('./screens/administrare/GroupScreen', () => ({
   default: () => <h1>Grup screen</h1>,
 }));
@@ -196,6 +199,25 @@ describe('route guards', () => {
     render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
     expect(screen.queryByRole('heading', { name: 'Grup screen' })).toBeNull();
+  });
+
+  it('opens a Member screen behind the same capability as the panel', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    // A Group Manager reaches their own Group's screen …
+    grant('administer');
+    window.history.pushState({}, '', '/administrare/membri/target');
+    const view = render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Membru screen' }),
+    ).toBeVisible();
+    view.unmount();
+
+    // … and a member with no Group Role anywhere never does.
+    grant('seeDirectory', 'seeLeadership');
+    window.history.pushState({}, '', '/administrare/membri/target');
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(screen.queryByRole('heading', { name: 'Membru screen' })).toBeNull();
   });
 
   it('decides nothing while the capability row is still loading', () => {
