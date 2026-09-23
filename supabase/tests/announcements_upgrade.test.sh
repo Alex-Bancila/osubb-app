@@ -8,6 +8,16 @@ db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
 cat <<'SQL'
 \set ON_ERROR_STOP on
 begin;
+-- #68 attaches a fan-out trigger to the new columns. Disable it only within
+-- this rollback transaction while the pre-#581 table shape is replayed.
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgrelid='public.announcements'::regclass
+                                      and tgname='announcements_fan_out') then
+    execute 'alter table public.announcements disable trigger announcements_fan_out';
+  end if;
+end;
+$$;
 drop policy announcements_read on public.announcements;
 drop policy announcements_create on public.announcements;
 drop policy announcements_update on public.announcements;
