@@ -251,6 +251,8 @@ select extensions.dblink_connect(
     'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
     current_database()
   ));
+-- #621: this connection also commits and cleans up fixture rows.
+select extensions.dblink_exec('project_leader_lock', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec(
   'project_leader_lock',
   $$ delete from auth.users

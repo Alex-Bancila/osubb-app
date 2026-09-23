@@ -118,18 +118,25 @@ select throws_ok($$
 $$, '42501', null, 'a demoted BC is denied despite stale claims');
 reset role;
 
+-- Since #602 provisioning places the initial Group by Appointment rather than
+-- by writing this table: the Department is named by its GROUP id and the
+-- roster row is the Group's, not member_departments'. The policy story around
+-- it is unchanged, which is what the assertion below is here to show.
 set local role service_role;
 select is(public.provision_profile(
   '27910000-0000-0000-0000-000000000008', 'Service Provisioned',
-  'service.dept-policy@test.local', 'voluntar', array['fin'], array[]::text[]),
+  'service.dept-policy@test.local', 'voluntar',
+  array[(select id from public.groups where legacy_dept_id = 'fin')],
+  '27910000-0000-0000-0000-000000000003'),
   '27910000-0000-0000-0000-000000000008'::uuid,
   'service_role can still provision an invited Member');
 reset role;
-select is((select format('%s:%s', profile.status, membership.dept_id)
+select is((select format('%s:%s', profile.status, grp.legacy_dept_id)
   from public.profiles as profile
-  join public.member_departments as membership on membership.member_id = profile.id
+  join public.group_members as membership on membership.member_id = profile.id
+  join public.groups as grp on grp.id = membership.group_id
   where profile.id = '27910000-0000-0000-0000-000000000008'),
-  'activ:fin', 'provisioning creates the active profile and Department membership');
+  'activ:fin', 'provisioning creates the active profile and the Department Group roster row');
 
 select is((select count(*) from pg_policies
   where schemaname = 'public' and tablename = 'member_departments'

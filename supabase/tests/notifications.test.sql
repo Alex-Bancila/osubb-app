@@ -6,7 +6,13 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(34);
+select plan(35);
+
+select ok(exists (
+  select 1 from pg_publication_tables
+   where pubname = 'supabase_realtime'
+     and schemaname = 'public' and tablename = 'notifications'
+), 'notifications publishes changes for the member-filtered Realtime channel');
 
 -- ==================== Shape ====================
 select has_table('public', 'notifications', 'notifications table exists');

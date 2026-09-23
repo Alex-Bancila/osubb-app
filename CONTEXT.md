@@ -33,6 +33,14 @@ The number attached to a Role: 0, 1, 2, 3, 5, 6, or 9; 4 is no longer used. Leve
 Whether a Member is active, inactive, or alumni. Only an active Member may perform organization work in the application.
 _Avoid_: Task status
 
+**Nickname**:
+The short name a Member chooses for themselves, shown wherever the application names them; when unset, the full name stands in. A Member changes their own Nickname; BC and Moderator may change anyone's. The full name itself is changed only by BC or Moderator.
+_Avoid_: Display name, alias, username, handle
+
+**Member Card**:
+The summary opened from any Member's name: Nickname, full name, Role, join date, and Groups. Contact details appear only to viewers already allowed to read them; Task Points and rank never appear.
+_Avoid_: Profile pop-up, tooltip, user card
+
 **Group**:
 A named body of OSUBB people and work, created by BC or Moderator with its own name and settings. A Group holds one roster of Members with Group roles and one Minimum Level. Departments, Teams, Projects, and the Adunarea Generală are Groups; every Task Origin and Event Scope is a Group.
 _Avoid_: Scope, structure, org unit, entity
@@ -66,7 +74,7 @@ A Group Manager, Group Responsible, BC, or Moderator adding a Member to a Group 
 _Avoid_: Assignment (a Task term), invite, enrolment
 
 **Application**:
-A Member's request to join a Group that accepts applications, made at or above the Group's Application Level and accepted or declined by a Group Manager or Group Responsible.
+A Member's request to join a Group that accepts applications, made at or above the Group's Application Level and accepted or declined by a Group Manager or Group Responsible. A Group may instead point applicants to an external form through an Attached Link; joining then happens by Appointment.
 _Avoid_: Join request, call form, candidature (a Task term)
 
 **Application Level**:
@@ -131,14 +139,19 @@ The Group that owns a Task. Every Task has exactly one Origin.
 _Avoid_: Scope when ownership is meant
 
 **Task Audience**:
-Whether a public Task opportunity is local to its Origin Group or open to every Member its Minimum Level admits.
+Whether the Candidate Queue of a public Task admits only the Origin Group's members or every Member its Minimum Level admits. Seeing an Opportunity does not depend on it; joining does.
+_Avoid_: Visibility, scope
 
 **Assignment Mode**:
 Whether a Task is assigned directly to one active Member or offered publicly through the Candidate Queue.
 
 **Campaign**:
-A label owned by one Group that tags Tasks whose Origin is that Group or any Group below it. A Campaign filters the Tracker, Leaderboard, and Department Cup; it is not an Origin, has no roster, and is managed by the owning Group's Managers and Responsibles.
+A label owned by one Group that tags Tasks and Events whose Origin is that Group or any Group below it. A Campaign filters the Tracker, the Calendar, the Leaderboard, and the Department Cup; it is not an Origin, has no roster, earns points only through its Tasks, and is managed by the owning Group's Managers and Responsibles.
 _Avoid_: Campaign as a Task Origin
+
+**Work Filter**:
+The one filter every page uses to narrow Tasks, Events, Campaigns, and Leaderboard rows: a top-level Group, then a Group below it, then a Campaign, then a date range. Choosing a Group always means that Group and every Group below it; the Campaign choices are those able to tag a Task in the chosen Group. The date range reads a Task's deadline, an Event's start, or the day Task Points were awarded.
+_Avoid_: Origin filter, scope filter, search when the filter is meant
 
 **Umbrella Task**:
 A Task that groups Subtasks one level deep. It has no Executor, Candidate Queue, Difficulty, Rating, or Task Points and is completed by its Task Manager only when every Subtask is terminal.
@@ -163,8 +176,13 @@ _Avoid_: Open status
 **Candidate**:
 A Member who has expressed interest in a public Task and is waiting, selected, withdrawn, or closed in its queue.
 
+**Other OSUBB Opportunity**:
+A visible Opportunity of a Group the Member is not in, presented greyed below the Opportunities of their own Groups. A Member sees every open Opportunity of a Group whose Minimum Level they satisfy, and may join it only when its Task Audience admits them. Opportunities and Events of the Organization Group are never "other": they belong to everyone and carry the OSUBB colour.
+_Avoid_: Foreign task, external opportunity
+
 **Candidate Queue**:
-The ordered list of Candidates for a public Task after the first eligible Member becomes Executor.
+The arrival-ordered list of every Member who expressed interest in a public Task. Nobody becomes Executor by arriving first: the Task Manager selects the Executor from the queue, and selects again when an Executor gives up.
+_Avoid_: Waitlist, first come first served
 
 **Give Up**:
 An Executor’s recorded decision to leave a Task before review, with a required explanation and preserved history.
@@ -182,6 +200,14 @@ The derived condition of an In-progress Task that a Reviewer returned with a not
 **Unfulfilled**:
 The terminal outcome of an overdue Task evaluated as not delivered. It carries Difficulty and Rating like a completion and may award zero or negative Task Points to the Executor.
 _Avoid_: Failed
+
+**Submission Note**:
+The optional note an Executor attaches when submitting a Task for review, with at most one Attached Link. It is part of the Task's history and is what the reviewer reads first.
+_Avoid_: Feedback (the reviewer's note), completion description, comment
+
+**Attached Link**:
+One labelled external address carried by an Announcement, a Task, or a Submission Note, shown as a button under its label. Text fields stay plain text and never carry links themselves.
+_Avoid_: Form link, URL field, inline link
 
 **Task Activity**:
 The immutable chronological history of Task lifecycle, assignment, queue, evaluation, and cancellation events.
@@ -263,11 +289,20 @@ A named span of time opened and closed by BC, typically from one AGO to the next
 _Avoid_: Season, scoring window, semester when the ranking window is meant
 
 **Promotion Rule**:
-A BC-set rule that moves a Member to a higher Role. Automatic for Recrut to Voluntar (tenure) and for Voluntar to Voluntar Activ (a top share of the Evaluation Period's Leaderboard plus tenure); human-confirmed for Voluntar Activ to Voluntar cu Drept de Vot; never automatic downward.
+A BC-set rule that moves a Member to a higher Role. Automatic for Recrut to Voluntar (tenure) and for Voluntar to Voluntar Activ, which needs the required tenure counted from the join date plus either a top share of the Evaluation Period's Leaderboard when the Period closes or, during the following Period, passing the Promotion Threshold; human-confirmed for Voluntar Activ to Voluntar cu Drept de Vot; never automatic downward. A Member below the required tenure is neither promoted nor notified.
 _Avoid_: Auto-promotion, level-up, threshold alone
 
+**Promotion Threshold**:
+The Task Points the last Member inside the top share held when an Evaluation Period closed. It stays constant through the following Period as the visible target a Voluntar with the required tenure must pass to become Voluntar Activ; BC seeds it by hand before the first Period closes.
+_Avoid_: Cutoff, minimum points, prag alone
+
+**Retention Signal**:
+The automatic notice BC receives when an Evaluation Period closes with a Voluntar Activ or a Voluntar cu Drept de Vot below the share of the Leaderboard their Role requires. BC decides each withdrawal by hand; nobody loses a Role automatically.
+_Avoid_: Demotion, auto-demotion, downgrade
+
 **AG Eligibility**:
-The qualification a Voluntar Activ reaches under the Promotion Rule for Drept de Vot. It sends the adherence form to BC; only BC's confirmation grants the Role and, through Automatic Membership, a seat in the Adunarea Generală.
+The qualification every Voluntar Activ holds by Role, because that Role already required both tenure and the Promotion Threshold. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală. There is no second threshold.
+_Avoid_: Drept de Vot threshold, AG threshold
 
 **Vote Retention Threshold**:
 The top share of the Evaluation Period's Leaderboard a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after the Period closes; nobody is removed automatically.
