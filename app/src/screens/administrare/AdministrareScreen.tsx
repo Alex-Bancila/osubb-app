@@ -21,6 +21,7 @@ import {
   type GroupCommand,
 } from '../../queries/groups-admin';
 import { GroupCreateDialog } from './GroupCreateDialog';
+import { CsvImportPanel } from './CsvImportPanel';
 import {
   buildTree,
   categoryLabel,
@@ -375,6 +376,7 @@ export default function AdministrareScreen() {
           <MyGroupsTable groups={myGroupsQuery.data ?? []} />
         </>
       )}
+      {capabilities.data?.provisionMembers === true && <CsvImportPanel />}
     </section>
   );
 }
