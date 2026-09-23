@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { lazy, Suspense, type ReactElement } from 'react';
 import { IonApp } from '@ionic/react';
 import {
   BrowserRouter,
@@ -16,18 +16,21 @@ import AppShell from './components/shell/AppShell';
 import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
-import AdministrareScreen from './screens/administrare/AdministrareScreen';
-import GroupScreen from './screens/administrare/GroupScreen';
 import CampaignsScreen from './screens/campaigns/CampaignsScreen';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
-import TrackerScreen from './screens/tracker/TrackerScreen';
-import CalendarScreen from './screens/calendar/CalendarScreen';
 import CompletedWorkRequestScreen from './screens/requests/CompletedWorkRequestScreen';
 import AnnouncementsScreen from './screens/announcements/AnnouncementsScreen';
 import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import ProfileScreen from './screens/profile/ProfileScreen';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
+
+const TrackerScreen = lazy(() => import('./screens/tracker/TrackerScreen'));
+const CalendarScreen = lazy(() => import('./screens/calendar/CalendarScreen'));
+const AdministrareScreen = lazy(
+  () => import('./screens/administrare/AdministrareScreen'),
+);
+const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -39,6 +42,18 @@ function Splash() {
       <SessionLoader label="Se încarcă" />
     </SessionScreen>
   );
+}
+
+function RouteLoader() {
+  return (
+    <div className="page">
+      <SessionLoader label="Se încarcă pagina" />
+    </div>
+  );
+}
+
+function DeferredRoute({ children }: { children: ReactElement }) {
+  return <Suspense fallback={<RouteLoader />}>{children}</Suspense>;
 }
 
 /**
@@ -175,7 +190,14 @@ export default function App() {
             }
           >
             <Route path="/" element={<DashboardScreen />} />
-            <Route path="/tracker" element={<TrackerScreen />} />
+            <Route
+              path="/tracker"
+              element={
+                <DeferredRoute>
+                  <TrackerScreen />
+                </DeferredRoute>
+              }
+            />
             <Route
               path="/administrare/campanii"
               element={
@@ -208,7 +230,14 @@ export default function App() {
                 </RequireCapability>
               }
             />
-            <Route path="/calendar" element={<CalendarScreen />} />
+            <Route
+              path="/calendar"
+              element={
+                <DeferredRoute>
+                  <CalendarScreen />
+                </DeferredRoute>
+              }
+            />
             <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
             <Route path="/anunturi" element={<AnnouncementsScreen />} />
             <Route path="/notificari" element={<NotificationsScreen />} />
@@ -225,7 +254,9 @@ export default function App() {
               path="/administrare"
               element={
                 <RequireCapability capability="administer">
-                  <AdministrareScreen />
+                  <DeferredRoute>
+                    <AdministrareScreen />
+                  </DeferredRoute>
                 </RequireCapability>
               }
             />
@@ -233,7 +264,9 @@ export default function App() {
               path="/administrare/grupuri/:groupId"
               element={
                 <RequireCapability capability="administer">
-                  <GroupScreen />
+                  <DeferredRoute>
+                    <GroupScreen />
+                  </DeferredRoute>
                 </RequireCapability>
               }
             />
