@@ -2,7 +2,7 @@
 # #581: replay the real migration over pre-upgrade announcement rows. A clean
 # db reset applies migrations before seed.sql, so it cannot exercise backfill.
 set -euo pipefail
-migration='supabase/migrations/20260923090000_announcement_group_audience.sql'
+migration='supabase/migrations/20260923102000_announcement_group_audience.sql'
 db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
 {
 cat <<'SQL'
