@@ -95,6 +95,23 @@ export const keys = {
     all: ['campaigns'] as const,
     list: (memberId: string | undefined, groupId?: number) =>
       ['campaigns', { memberId, groupId }] as const,
+    report: (memberId: string | undefined, campaignId: number) =>
+      ['campaigns', 'report', { memberId, campaignId }] as const,
+  },
+  /* Administrare's own reads: the Group tree with its settings and member
+     counts, and one Group's roster. They start with `['groups']`, so every
+     Group command invalidates the family with a single prefix. */
+  groups: {
+    all: ['groups'] as const,
+    tree: (memberId: string | undefined) =>
+      ['groups', 'tree', { memberId }] as const,
+    roster: (groupId: number, memberId: string | undefined) =>
+      ['groups', 'roster', { groupId, memberId }] as const,
+    /* Whom a Group may appoint: every member the caller can see at all. */
+    appointable: (memberId: string | undefined) =>
+      ['groups', 'appointable', { memberId }] as const,
+    mine: (memberId: string | undefined) =>
+      ['groups', 'mine', { memberId }] as const,
   },
   requests: {
     decisions: (memberId: string | undefined) =>
@@ -107,6 +124,8 @@ export const keys = {
   },
   events: {
     all: ['events'] as const,
+    formOptions: (memberId: string | undefined) =>
+      ['events', 'form-options', { memberId }] as const,
     upcoming: (memberId: string) =>
       ['events', 'upcoming', { memberId }] as const,
     rsvp: (eventId: number, memberId: string) =>

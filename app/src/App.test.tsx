@@ -54,8 +54,11 @@ vi.mock('./screens/no-profile/NoProfileScreen', () => ({
 vi.mock('./screens/volunteers/VolunteersScreen', () => ({
   default: () => <h1>Voluntari</h1>,
 }));
-vi.mock('./screens/Placeholder', () => ({
-  default: ({ title }: { title: string }) => <h1>{title}</h1>,
+vi.mock('./screens/administrare/AdministrareScreen', () => ({
+  default: () => <h1>Administrare</h1>,
+}));
+vi.mock('./screens/administrare/GroupScreen', () => ({
+  default: () => <h1>Grup screen</h1>,
 }));
 vi.mock('./screens/dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
@@ -158,7 +161,7 @@ describe('route guards', () => {
     window.history.pushState({}, '', '/administrare');
     const view = render(<App />);
     expect(
-      screen.getByRole('heading', { name: 'Administrare' }),
+      await screen.findByRole('heading', { name: 'Administrare' }),
     ).toBeInTheDocument();
     view.unmount();
 
@@ -175,6 +178,25 @@ describe('route guards', () => {
     render(<App />);
     await screen.findByRole('heading', { name: 'Dashboard' });
     expect(window.location.pathname).toBe('/');
+  });
+
+  it('opens a Group screen behind the same capability as the panel', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    // A Group Manager reaches their own Group's screen …
+    grant('administer');
+    window.history.pushState({}, '', '/administrare/grupuri/2');
+    const view = render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Grup screen' }),
+    ).toBeVisible();
+    view.unmount();
+
+    // … and a member with no Group Role anywhere never does.
+    grant('seeDirectory', 'seeLeadership');
+    window.history.pushState({}, '', '/administrare/grupuri/2');
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(screen.queryByRole('heading', { name: 'Grup screen' })).toBeNull();
   });
 
   it('decides nothing while the capability row is still loading', () => {
@@ -402,28 +424,52 @@ describe('"Task nou" in the Tracker', () => {
     auth.useAuth.mockReset();
     window.history.pushState({}, '', '/tracker');
   });
+
+  it('shows an accessible loader while the Tracker route chunk loads', () => {
+    auth.useAuth.mockReturnValue(member);
+    grant('manageTasks');
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <App />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.getByRole('status', { name: 'Se încarcă pagina' }),
+    ).toBeInTheDocument();
+  });
+
   // Visibility follows the live manage_tasks capability, never the claims.
   it.each([
     ['a Group Manager', 'voluntar', 3, true],
     ['a Responsible', 'voluntar', 2, true],
     ['BC', 'bc', 6, true],
     ['an ordinary member', 'voluntar', 1, false],
-  ] as const)('for %s: shown = %s', async (_persona, role, level, manages) => {
-    auth.useAuth.mockReturnValue({
-      ...member,
-      claims: { ...member.claims, member_role: role, member_level: level },
-    });
-    grant(...(manages ? ['manageTasks'] : []));
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <App />
-      </QueryClientProvider>,
-    );
-    await screen.findByRole('heading', { name: 'Tracker screen' });
-    expect(screen.queryByRole('button', { name: 'Task nou' }) !== null).toBe(
-      manages,
-    );
-  });
+  ] as const)(
+    'for %s: shown = %s',
+    async (_persona, role, level, manages) => {
+      auth.useAuth.mockReturnValue({
+        ...member,
+        claims: { ...member.claims, member_role: role, member_level: level },
+      });
+      grant(...(manages ? ['manageTasks'] : []));
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App />
+        </QueryClientProvider>,
+      );
+      await screen.findByRole(
+        'heading',
+        { name: 'Tracker screen' },
+        { timeout: 10_000 },
+      );
+      expect(screen.queryByRole('button', { name: 'Task nou' }) !== null).toBe(
+        manages,
+      );
+    },
+    15_000,
+  );
 });
 
 it.each(['/clasament', '/tracker/membru/35400000-0000-0000-0000-000000000001'])(
