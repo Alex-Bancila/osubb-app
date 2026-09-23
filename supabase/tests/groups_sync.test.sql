@@ -117,6 +117,18 @@ select extensions.dblink_exec('race_setup_509', $$
      'race.promovat.509@test.local', 'voluntar', 'activ');
   insert into public.member_departments (member_id, dept_id)
   values ('50900000-0000-0000-0000-000000000091', 'youth');
+  -- The race commits: use a narrowly scoped owner fixture, never the audited
+  -- Member command. Query B must remain one statement returning one text cell.
+  create or replace function public.test_promote_509() returns text
+  language sql security definer set search_path = '' as $fixture$
+    with promoted as (
+      update public.profiles set role = 'bce'
+      where id = '50900000-0000-0000-0000-000000000091'
+      returning id
+    ) select id::text from promoted
+  $fixture$;
+  revoke all on function public.test_promote_509() from public, anon, authenticated, service_role;
+  grant execute on function public.test_promote_509() to authenticated;
 $$);
 
 select pg_temp.test_login('50900000-0000-0000-0000-000000000090', jsonb_build_object(
@@ -255,11 +267,7 @@ select * from pg_temp.test_race(
        values ('c-race-f-509', 'Echipa Race F 509', 'youth')
        returning id
      ) select id::text from mirrored $$,
-  $$ with promoted as (
-       update public.profiles set role = 'bce'
-        where id = '50900000-0000-0000-0000-000000000091'
-       returning id
-     ) select id::text from promoted $$);
+  $$ select public.test_promote_509() $$);
 
 select is(
   (select format('%s:%s', race.result_b, race.b_waited::text)
@@ -268,6 +276,7 @@ select is(
   'and a rank promotion in that same Department does not wait on the Team being mirrored — the mirror never takes a write lock on a Group it did not have to create');
 
 select extensions.dblink_exec('race_setup_509', $$
+  drop function public.test_promote_509();
   delete from public.teams
    where id in ('c-race-a-509', 'c-race-b-509', 'c-race-c-509',
                 'c-race-d-509', 'c-race-e-509', 'c-race-f-509');
@@ -702,10 +711,10 @@ select is(
   0::bigint,
   'promoting a member whose only Department is `org` still writes no Organization roster row');
 
--- The same promotion through the client path: `profiles_update_self` lets a
--- live BC change anyone's role as `authenticated`. Mutation this catches:
--- drop `security definer` from private.rederive_department_group_roles().
-select pg_temp.test_login_leadership('50900000-0000-0000-0000-000000000001');
+-- A privileged server fixture still exercises the definer mirror. service_role
+-- keeps column privileges but has no private-schema usage; no audited command
+-- runs in this mirror suite, and authenticated never regains the revoked grant.
+set local role service_role;
 update public.profiles set role = 'bce'
  where id = '50900000-0000-0000-0000-000000000008';
 reset role;
@@ -716,7 +725,7 @@ select is(
     where grp.legacy_dept_id = 'secretariat'
       and membership.member_id = '50900000-0000-0000-0000-000000000008'),
   'manager',
-  'a BC promoting someone through profiles_update_self re-derives the Group Role too — the mirror never depends on who held the session');
+  'a privileged server promotion re-derives the Group Role without a client write grant');
 
 -- ==================== 9. Fixpoint ====================
 -- The one assertion that holds #508 and #509 to the same mapping: after every
