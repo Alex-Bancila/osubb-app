@@ -25,10 +25,12 @@
 ### Task 1: Specify the foreground refresh coordinator
 
 **Files:**
+
 - Modify: `app/src/lib/auth.test.tsx`
 - Test: `app/src/lib/auth.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `supabase.auth.refreshSession(): Promise<{ data: { session: Session | null; user: User | null }; error: AuthError | null }>`.
 - Produces: browser-event behavior observable through stable Member claims and refresh call count.
 
@@ -77,10 +79,12 @@ Expected: the new tests fail because no listeners or `refreshSession` coordinato
 ### Task 2: Decode `iat` and coordinate refresh attempts
 
 **Files:**
+
 - Modify: `app/src/lib/auth.tsx`
 - Test: `app/src/lib/auth.test.tsx`
 
 **Interfaces:**
+
 - Produces: `decodeTokenPayload(accessToken): { app_metadata?: Record<string, unknown>; iat?: unknown } | null` and internal foreground handlers.
 - Consumes: the current session through a ref updated by `getSession` and `onAuthStateChange`.
 
@@ -126,13 +130,21 @@ const attemptRefresh = () => {
     ? decodeTokenPayload(current.access_token)?.iat
     : null;
   const now = Date.now();
-  if (typeof issuedAt !== 'number' || now - issuedAt * 1000 < staleAfterMs) return;
+  if (typeof issuedAt !== "number" || now - issuedAt * 1000 < staleAfterMs)
+    return;
   if (refreshInFlight.current) return;
-  if (lastRefreshAttemptAt.current !== null && now - lastRefreshAttemptAt.current < retryAfterMs) return;
+  if (
+    lastRefreshAttemptAt.current !== null &&
+    now - lastRefreshAttemptAt.current < retryAfterMs
+  )
+    return;
 
   lastRefreshAttemptAt.current = now;
-  const request = supabase.auth.refreshSession()
-    .then(({ error }) => { if (error) return; })
+  const request = supabase.auth
+    .refreshSession()
+    .then(({ error }) => {
+      if (error) return;
+    })
     .catch(() => undefined)
     .finally(() => {
       if (refreshInFlight.current === request) refreshInFlight.current = null;
@@ -154,10 +166,12 @@ Expected: all auth tests pass with no unhandled rejection or React warning.
 ### Task 3: Run frontend gates and commit
 
 **Files:**
+
 - Verify: `app/src/lib/auth.tsx`
 - Verify: `app/src/lib/auth.test.tsx`
 
 **Interfaces:**
+
 - Consumes: the completed coordinator.
 - Produces: a shippable #598 branch.
 
@@ -187,4 +201,3 @@ Expected: every command exits 0.
 git add app/src/lib/auth.tsx app/src/lib/auth.test.tsx
 git commit -m "fix(auth): refresh stale claims on focus"
 ```
-

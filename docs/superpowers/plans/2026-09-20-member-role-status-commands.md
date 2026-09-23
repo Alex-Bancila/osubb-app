@@ -25,12 +25,14 @@
 ### Task 1: Capture the started implementation baseline
 
 **Files:**
+
 - Inspect: `supabase/migrations/20260920192117_member_role_status_commands.sql`
 - Inspect: `supabase/tests/member_commands.test.sql`
 - Inspect: `supabase/tests/rls_profiles_write.test.sql`
 - Inspect: `supabase/tests/tracker_grants.test.sql`
 
 **Interfaces:**
+
 - Consumes: the uncommitted #580 command implementation and its existing 49-assertion suite.
 - Produces: a precise baseline without changing user-owned work.
 
@@ -61,10 +63,12 @@ Expected: all currently planned assertions pass before adding the missing Notifi
 ### Task 2: Add a failing Role Notification contract
 
 **Files:**
+
 - Modify: `supabase/tests/member_commands.test.sql`
 - Modify: `supabase/migrations/20260920192117_member_role_status_commands.sql`
 
 **Interfaces:**
+
 - Consumes: `private.notify(uuid[], public.noti_kind, text, text, uuid, text, uuid)`.
 - Produces: one `system` Notification for the changed Member after `public.set_member_role(uuid, member_role)`.
 
@@ -131,6 +135,7 @@ Expected: every planned assertion passes, including normal Role copy, `vot` copy
 ### Task 3: Close the command, audit, grant, and roster boundaries
 
 **Files:**
+
 - Modify: `supabase/tests/rls_profiles_write.test.sql`
 - Modify: `supabase/tests/tracker_grants.test.sql`
 - Modify: `CONTEXT.md`
@@ -140,6 +145,7 @@ Expected: every planned assertion passes, including normal Role copy, `vot` copy
 - Modify: `docs/adr/0009-groups.md`
 
 **Interfaces:**
+
 - Consumes: wrappers `public.set_member_role` and `public.set_member_status` and private `_impl` functions.
 - Produces: authenticated execute only on wrappers/implementations, no authenticated direct column updates, and docs matching the approved split.
 
