@@ -9,6 +9,7 @@ import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
 import { useUnreadNotificationCount } from '../../queries/notifications';
+import { useNotificationRealtime } from '../../queries/notifications-realtime';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
@@ -158,6 +159,7 @@ function SidebarContent({
 
 export default function AppShell() {
   const { claims, session, signOut } = useAuth();
+  useNotificationRealtime(session?.user.id);
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const firstMobileLinkRef = useRef<HTMLAnchorElement>(null);

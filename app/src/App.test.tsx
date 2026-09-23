@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 /* The server capability row (`my_capabilities()`), per test: `granted` lists
@@ -161,7 +161,7 @@ describe('route guards', () => {
     window.history.pushState({}, '', '/administrare');
     const view = render(<App />);
     expect(
-      screen.getByRole('heading', { name: 'Administrare' }),
+      await screen.findByRole('heading', { name: 'Administrare' }),
     ).toBeInTheDocument();
     view.unmount();
 
@@ -420,6 +420,10 @@ describe('route guards', () => {
 });
 
 describe('"Task nou" in the Tracker', () => {
+  beforeAll(async () => {
+    // The route is lazy; warm its async mock before the per-role timing checks.
+    await import('./screens/tracker/TrackerScreen');
+  });
   beforeEach(() => {
     auth.useAuth.mockReset();
     window.history.pushState({}, '', '/tracker');
@@ -441,7 +445,11 @@ describe('"Task nou" in the Tracker', () => {
         <App />
       </QueryClientProvider>,
     );
-    await screen.findByRole('heading', { name: 'Tracker screen' });
+    await screen.findByRole(
+      'heading',
+      { name: 'Tracker screen' },
+      { timeout: 10_000 },
+    );
     expect(screen.queryByRole('button', { name: 'Task nou' }) !== null).toBe(
       manages,
     );
