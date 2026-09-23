@@ -291,7 +291,11 @@ export function RolePanel() {
                     })
                   }
                 >
-                  {nextStatus === 'inactiv' ? 'Dezactivează' : 'Reactivează'}
+                  {nextStatus === member.status
+                    ? 'Salvează statusul'
+                    : nextStatus === 'inactiv'
+                      ? 'Dezactivează'
+                      : 'Reactivează'}
                 </Button>
               </div>
             </div>
