@@ -19,7 +19,7 @@ create extension if not exists pgtap with schema extensions;
 select plan(14);
 
 -- Postgres stores an empty search_path as the literal proconfig entry
--- search_path="" (confirmed against add_project_member_impl on the live
+-- search_path="" (confirmed against add_group_member_impl on the live
 -- database) — match that exact text, not just any search_path setting.
 create function pg_temp.definers_without_empty_search_path() returns text[]
 language sql as $$
@@ -106,8 +106,7 @@ select is(pg_temp.definers_without_empty_search_path() || pg_temp.anon_executabl
 
 
 -- ADR-0009 Groups: no authority, visibility, membership, notification or Cup rule may branch
--- on the Group's presentation label. The three Wave 1 mirror functions WRITE that column and
--- are excluded by name. #576's public.my_groups() only PROJECTS it for the pickers (R14): a
+-- on the Group's presentation label. #576's public.my_groups() only PROJECTS it for the pickers (R14): a
 -- security-invoker read whose every row decision lives in private.my_groups_impl, which stays
 -- under this sweep.
 --
@@ -126,7 +125,6 @@ language sql as $$
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname in ('public', 'private')
      and p.prokind = 'f'
-     and p.proname not in ('sync_department_groups', 'sync_team_groups', 'sync_project_groups')
      and not (n.nspname = 'private'
               and p.proname in ('create_group_impl', 'update_group_structure_impl'))
      and not (n.nspname = 'public'

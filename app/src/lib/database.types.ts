@@ -104,6 +104,7 @@ export type Database = {
       }
       announcements: {
         Row: {
+          audience: string
           author: string | null
           body: string
           category: string | null
@@ -111,6 +112,7 @@ export type Database = {
           dept_id: string | null
           form_label: string | null
           form_url: string | null
+          group_id: number
           id: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
@@ -118,6 +120,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          audience?: string
           author?: string | null
           body: string
           category?: string | null
@@ -125,6 +128,7 @@ export type Database = {
           dept_id?: string | null
           form_label?: string | null
           form_url?: string | null
+          group_id: number
           id?: never
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -132,6 +136,7 @@ export type Database = {
           title: string
         }
         Update: {
+          audience?: string
           author?: string | null
           body?: string
           category?: string | null
@@ -139,6 +144,7 @@ export type Database = {
           dept_id?: string | null
           form_label?: string | null
           form_url?: string | null
+          group_id?: number
           id?: never
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -193,6 +199,13 @@ export type Database = {
             columns: ["dept_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
         ]
@@ -642,6 +655,134 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_applications: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
+          member_id: string
+          note: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          group_id: number
+          id?: never
+          member_id: string
+          note?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          group_id?: number
+          id?: never
+          member_id?: string
+          note?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -2804,19 +2945,6 @@ export type Database = {
       }
     }
     Functions: {
-      add_department_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: {
-          member_id: string
-          team_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "team_members"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       add_group_member: {
         Args: { p_group_id: number; p_member_id: string }
         Returns: {
@@ -2833,30 +2961,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      add_independent_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: {
-          member_id: string
-          team_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "team_members"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      add_project_member: {
-        Args: { p_member_id: string; p_project_id: number }
+      apply_to_group: {
+        Args: { p_group_id: number; p_note?: string }
         Returns: {
           created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
           member_id: string
-          project_id: number
-          project_role: string
+          note: string | null
+          status: string
         }
         SetofOptions: {
           from: "*"
-          to: "project_members"
+          to: "group_applications"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2917,24 +3037,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "groups"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      archive_project: {
-        Args: { p_project_id: number }
-        Returns: {
-          created_at: string
-          created_by: string
-          id: number
-          leader_id: string
-          name: string
-          status: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "projects"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3312,24 +3414,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_project: {
-        Args: { p_leader_id: string; p_name: string }
-        Returns: {
-          created_at: string
-          created_by: string
-          id: number
-          leader_id: string
-          name: string
-          status: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "projects"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       create_task: {
         Args: {
           p_assignment_mode: string
@@ -3380,6 +3464,26 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      decide_group_application: {
+        Args: { p_accept: boolean; p_application_id: number; p_note?: string }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
+          member_id: string
+          note: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       department_cup: {
         Args: { p_campaign_id?: number }
         Returns: {
@@ -3499,21 +3603,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "tasks"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      grant_project_responsible: {
-        Args: { p_member_id: string; p_project_id: number }
-        Returns: {
-          created_at: string
-          member_id: string
-          project_id: number
-          project_role: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_members"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3691,11 +3780,11 @@ export type Database = {
       }
       provision_profile: {
         Args: {
-          p_dept_ids?: string[]
+          p_appointed_by?: string
           p_email: string
           p_full_name: string
+          p_group_ids?: number[]
           p_role?: Database["public"]["Enums"]["member_role"]
-          p_team_ids?: string[]
           p_user_id: string
         }
         Returns: string
@@ -3722,10 +3811,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      remove_department_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: boolean
-      }
       remove_group_member: {
         Args: { p_group_id: number; p_member_id: string }
         Returns: {
@@ -3741,14 +3826,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      remove_independent_team_member: {
-        Args: { p_member_id: string; p_team_id: string }
-        Returns: boolean
-      }
-      remove_project_member: {
-        Args: { p_member_id: string; p_project_id: number }
-        Returns: boolean
       }
       reopen_task: {
         Args: { p_reason: string; p_task_id: number }
@@ -3822,21 +3899,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "tasks"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      revoke_project_responsible: {
-        Args: { p_member_id: string; p_project_id: number }
-        Returns: {
-          created_at: string
-          member_id: string
-          project_id: number
-          project_role: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_members"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3940,6 +4002,7 @@ export type Database = {
       set_member_role: {
         Args: {
           p_member_id: string
+          p_reason?: string
           p_role: Database["public"]["Enums"]["member_role"]
         }
         Returns: {
@@ -3965,6 +4028,7 @@ export type Database = {
       set_member_status: {
         Args: {
           p_member_id: string
+          p_reason?: string
           p_status: Database["public"]["Enums"]["member_status"]
         }
         Returns: {
@@ -4344,6 +4408,26 @@ export type Database = {
           member_id: string
           task_id: number
         }[]
+      }
+      withdraw_group_application: {
+        Args: { p_application_id: number }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
+          member_id: string
+          note: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       withdraw_task_interest: {
         Args: { p_task_id: number }

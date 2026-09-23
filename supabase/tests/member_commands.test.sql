@@ -17,33 +17,33 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(76);
+select plan(108);
 
 -- ==================== Structure ====================
 
-select has_function('public', 'set_member_role', array['uuid', 'member_role'],
-  'the rank command exists with the signature #580 specifies');
-select has_function('public', 'set_member_status', array['uuid', 'member_status'],
-  'the status command exists with the signature #580 specifies');
+select has_function('public', 'set_member_role', array['uuid', 'member_role', 'text'],
+  'the rank command exists with the optional-reason signature #612 specifies');
+select has_function('public', 'set_member_status', array['uuid', 'member_status', 'text'],
+  'the status command exists with the optional-reason signature #612 specifies');
 
 -- ADR-0009 ruling R15: rank and position decouple. The comment is the durable
 -- statement of that boundary, so it is asserted, not assumed.
 select matches(
-  obj_description('public.set_member_role(uuid, public.member_role)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_role(uuid, public.member_role, text)'::regprocedure, 'pg_proc'),
   'leaves Group Roles alone',
   'set_member_role''s comment states R15 — it never appoints or removes a Group Role');
 
 -- …and the single exception to it, stated in the same comment so nobody reads
 -- R15 as absolute and "fixes" the Minimum-Level cleanup away.
 select matches(
-  obj_description('public.set_member_role(uuid, public.member_role)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_role(uuid, public.member_role, text)'::regprocedure, 'pg_proc'),
   'single exception is Minimum Level',
   'and states R15''s one exception — falling below a Group''s Minimum Level');
 
 -- The half of that AC this issue cannot ship: public.group_applications does
 -- not exist until #584. Deferred is fine; silently dropped is not.
 select matches(
-  obj_description('public.set_member_role(uuid, public.member_role)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_role(uuid, public.member_role, text)'::regprocedure, 'pg_proc'),
   '#584',
   'and names #584 as the owner of the pending-Application withdrawal it cannot do yet');
 
@@ -55,15 +55,15 @@ select matches(
 -- because it is the only place a reader is told the access token still lives
 -- out its hour.
 select matches(
-  obj_description('public.set_member_status(uuid, public.member_status)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_status(uuid, public.member_status, text)'::regprocedure, 'pg_proc'),
   'revokes the Member''s Auth sessions in this same transaction',
   'set_member_status''s comment states that a non-activ Status revokes sessions here, in this transaction (#603)');
 select matches(
-  obj_description('public.set_member_status(uuid, public.member_status)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_status(uuid, public.member_status, text)'::regprocedure, 'pg_proc'),
   'at most jwt_expiry \(one hour\)',
   'and still states the ADR-0003 window the revoke bounds but cannot close — the issued access token expires on its own');
 select matches(
-  obj_description('public.set_member_status(uuid, public.member_status)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_status(uuid, public.member_status, text)'::regprocedure, 'pg_proc'),
   'never touches group_members',
   'and states that deactivation leaves every roster row and Group Role in place');
 
@@ -622,6 +622,90 @@ select throws_ok(
              '58000000-0000-0000-0000-000000000002', 'human', 'Nothing at all') $$,
   '23514', 'new row for relation "role_history" violates check constraint "role_history_change_ck"',
   'and a row recording no change at all is still refused, exactly as #50 intended');
+
+-- #612: optional reasons preserve the existing two-argument behavior.
+select has_function('private', 'set_member_role_impl', array['uuid', 'member_role', 'text'], 'the role implementation accepts a reason');
+select is(has_function_privilege('anon', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), false, 'anon execute on public role command is false');
+select is(has_function_privilege('public', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), false, 'public execute on public role command is false');
+select is(has_function_privilege('service_role', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), false, 'service_role execute on public role command is false');
+select is(has_function_privilege('authenticated', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), true, 'authenticated execute on public role command is true');
+select is(has_function_privilege('anon', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), false, 'anon execute on private role command is false');
+select is(has_function_privilege('public', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), false, 'public execute on private role command is false');
+select is(has_function_privilege('service_role', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), false, 'service_role execute on private role command is false');
+select is(has_function_privilege('authenticated', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), true, 'authenticated execute on private role command is true');
+select has_function('private', 'set_member_status_impl', array['uuid', 'member_status', 'text'], 'the status implementation accepts a reason');
+select is(has_function_privilege('anon', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'anon execute on public status command is false');
+select is(has_function_privilege('public', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'public execute on public status command is false');
+select is(has_function_privilege('service_role', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'service_role execute on public status command is false');
+select is(has_function_privilege('authenticated', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), true, 'authenticated execute on public status command is true');
+select is(has_function_privilege('anon', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), false, 'anon execute on private status command is false');
+select is(has_function_privilege('public', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), false, 'public execute on private status command is false');
+select is(has_function_privilege('service_role', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), false, 'service_role execute on private status command is false');
+select is(has_function_privilege('authenticated', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), true, 'authenticated execute on private status command is true');
+
+insert into auth.users (id, email) values
+  ('61200000-0000-0000-0000-000000000001', 'reason612@test.local');
+insert into public.profiles (id, full_name, email, role, status) values
+  ('61200000-0000-0000-0000-000000000001', 'Reason 612', 'reason612@test.local', 'voluntar', 'activ');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+
+select is((select role::text from public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'activ', E' \tDecizie motivată\n ')),
+  'activ', 'role command accepts reason case 1');
+reset role;
+select is((select reason from public.role_history
+  where member_id = '61200000-0000-0000-0000-000000000001'
+  order by id desc limit 1), 'Decizie motivată', 'role reason case 1 is trimmed or uses the fallback');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+select is((select role::text from public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'vot', null)),
+  'vot', 'role command accepts reason case 2');
+reset role;
+select is((select reason from public.role_history
+  where member_id = '61200000-0000-0000-0000-000000000001'
+  order by id desc limit 1), 'Role changed by leadership (set_member_role)', 'role reason case 2 is trimmed or uses the fallback');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+select is((select role::text from public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'voluntar', E' \t\n\r ')),
+  'voluntar', 'role command accepts reason case 3');
+reset role;
+select is((select reason from public.role_history
+  where member_id = '61200000-0000-0000-0000-000000000001'
+  order by id desc limit 1), 'Role changed by leadership (set_member_role)', 'role reason case 3 is trimmed or uses the fallback');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+select is((select status::text from public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'inactiv', E' \tDecizie motivată\n ')),
+  'inactiv', 'status command accepts reason case 1');
+reset role;
+select is((select reason from public.role_history
+  where member_id = '61200000-0000-0000-0000-000000000001'
+  order by id desc limit 1), 'Decizie motivată', 'status reason case 1 is trimmed or uses the fallback');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+select is((select status::text from public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'activ', null)),
+  'activ', 'status command accepts reason case 2');
+reset role;
+select is((select reason from public.role_history
+  where member_id = '61200000-0000-0000-0000-000000000001'
+  order by id desc limit 1), 'Status changed by leadership (set_member_status)', 'status reason case 2 is trimmed or uses the fallback');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+select is((select status::text from public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'alumni', E' \t\n\r ')),
+  'alumni', 'status command accepts reason case 3');
+reset role;
+select is((select reason from public.role_history
+  where member_id = '61200000-0000-0000-0000-000000000001'
+  order by id desc limit 1), 'Status changed by leadership (set_member_status)', 'status reason case 3 is trimmed or uses the fallback');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+reset role;
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000003');
+select throws_ok($$select public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'activ', 'A reason grants no authority')$$,
+  '42501', 'member_manage_forbidden', 'a supplied role reason does not bypass authority');
+select throws_ok($$select public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'activ', 'A reason grants no authority')$$,
+  '42501', 'member_manage_forbidden', 'a supplied status reason does not bypass authority');
+reset role;
 
 select * from finish();
 rollback;

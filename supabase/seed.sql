@@ -42,7 +42,7 @@
 -- `from_member` and
 -- `decided_by` are plain references with no `on delete` clause, so Postgres
 -- refuses to remove a member while any of them still points at that member:
--- the children go first. Everything else — memberships, team memberships,
+-- the children go first. Everything else — Group memberships,
 -- RSVPs, announcement reads, notifications, push tokens — cascades
 -- from `profiles`, which itself cascades from the single `auth.users` delete
 -- at the end.
@@ -178,18 +178,19 @@ delete from events e
 delete from announcements a
  using profiles p where a.created_by = p.id and p.email like '%@demo.osubb';
 
--- Project memberships cascade from their Project. A Project is demo-owned
--- only when its creator belongs to the demo cohort; names are not ownership.
+-- Clear legacy demo fixtures left by a pre-#587 staging seed. This seed never
+-- creates them again; the deletion allows a live staging database to upgrade.
 delete from projects project
- where exists (
-   select 1 from profiles creator
-    where creator.id = project.created_by
-      and creator.email like '%@demo.osubb'
- );
+ where exists (select 1 from profiles creator
+                where creator.id = project.created_by
+                  and creator.email like '%@demo.osubb');
+delete from teams t where t.id in ('t-app', 't-recruti', 't-logistica');
 
--- Teams after tasks and events, which reference them.
-delete from teams t
- where t.id in ('t-app', 't-recruti', 't-logistica');
+-- #586: Group commands now master these demo Groups. Remove only Groups
+-- created by the demo cohort after their work and Events have gone.
+delete from groups g
+ using profiles creator
+ where g.created_by = creator.id and creator.email like '%@demo.osubb';
 
 delete from auth.users where email like '%@demo.osubb';
 
@@ -236,100 +237,111 @@ insert into profiles (id, full_name, email, role, joined_year, joined_at, avatar
   ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          2023, '2023-01-01', '#FF3B3B'),
   ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   2023, '2023-01-01', '#241F1E');
 
--- Departments: spread across the five real ones so the department cup has
--- something to compare, and two members sit in two (that combination is what
--- the visibility rules are hardest on).
---
--- #296 remap: `bce@` and `moderator@` belong to the coordination structure
--- **Diverse** (and Team `it` below), not to a delivery Department. That is
--- the AC, and it has a visible consequence the demo is meant to show:
--- private.can_manage_origin gives Department authority to BC/Moderator
--- (level ≥ 6) and to a **local BCE of that Department** only, so with no BCE
--- inside edu/pr/youth/fin/hr, every Department Task below is created and
--- evaluated by `bc@` or `moderator@`. The other three authority branches are
--- each demonstrated by exactly one Origin: the Department Team `it` (its
--- parent Department is Diverse, so `bce@` manages it), the Independent Team
--- `t-logistica` (every active member manages it), and the active Project
--- (its lead and its Responsible).
-insert into member_departments (member_id, dept_id) values
-  ('d0000000-0000-0000-0000-000000000001', 'edu'),
-  ('d0000000-0000-0000-0000-000000000002', 'edu'),
-  ('d0000000-0000-0000-0000-000000000003', 'pr'),
-  ('d0000000-0000-0000-0000-000000000004', 'youth'),
-  ('d0000000-0000-0000-0000-000000000005', 'edu'),
-  ('d0000000-0000-0000-0000-000000000006', 'diverse'),
-  ('d0000000-0000-0000-0000-000000000007', 'org'),
-  ('d0000000-0000-0000-0000-000000000008', 'diverse'),
-  -- Financiar and Resurse Umane get a member each so all five real
-  -- departments show a member in the directory and the Department picker.
-  -- Since #259, `dept_cup`'s standings follow each Task's Origin, not
-  -- `member_departments` -- every `kind = 'department'` row is a Cup row even
-  -- on zero members -- so this membership fixture is for the `members`
-  -- column and the picker, not for a department's presence in the cup
-  -- (issue #134, closed by #259).
-  ('d0000000-0000-0000-0000-000000000007', 'fin'),
-  ('d0000000-0000-0000-0000-000000000005', 'hr'),
-  -- Secretariat is the other coordination structure #310 created. It carries
-  -- no Tasks of its own; it exists here so the directory and the Department
-  -- picker show both coordination structures populated.
-  ('d0000000-0000-0000-0000-000000000004', 'secretariat');
+-- Group commands own the demo directory and rosters. Claims are set only for
+-- this transaction; the command implementations still verify the live BC role.
+create or replace function pg_temp.seed_bc_claims()
+returns void language sql as $$
+  select set_config('request.jwt.claims',
+    jsonb_build_object('sub','d0000000-0000-0000-0000-000000000007',
+      'role','authenticated',
+      'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,
+    true)::void
+$$;
+create or replace function pg_temp.seed_group_id(p_name text)
+returns bigint language sql stable as $$
+  select id from public.groups
+   where name = p_name
+     and created_by = 'd0000000-0000-0000-0000-000000000007'
+$$;
+select pg_temp.seed_bc_claims();
 
--- Representative Team kinds: two Department Teams and one Independent Team.
--- t-recruti keeps existing as a plain Department Team — demo accounts
--- reference it — even though #372 retired the recruits flag it used to
--- carry; Calendar visibility for recruits is Minimum Level now (ADR-0008),
--- demonstrated below by the events that stay at min_level 0.
-insert into teams (id, name, dept_id, is_interne) values
-  ('t-app',     'Echipa Aplicație', 'diverse', false),
-  ('t-recruti', 'Echipa Recruți',   'edu',     false),
-  ('t-logistica','Echipa Logistică', null,     false);
+-- The five established Department Groups are reference data. BCE manages
+-- Diverse; everyone else is an ordinary Department member.
+select public.set_group_role(
+  (select id from groups where legacy_dept_id='diverse'),
+  'd0000000-0000-0000-0000-000000000006','manager');
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select grp.id as group_id, fixture.member_id
+      from (values
+        ('edu', 'd0000000-0000-0000-0000-000000000001'::uuid),
+        ('edu', 'd0000000-0000-0000-0000-000000000002'::uuid),
+        ('pr', 'd0000000-0000-0000-0000-000000000003'::uuid),
+        ('youth', 'd0000000-0000-0000-0000-000000000004'::uuid),
+        ('edu', 'd0000000-0000-0000-0000-000000000005'::uuid),
+        ('fin', 'd0000000-0000-0000-0000-000000000007'::uuid),
+        ('hr', 'd0000000-0000-0000-0000-000000000005'::uuid),
+        ('secretariat', 'd0000000-0000-0000-0000-000000000004'::uuid),
+        ('diverse', 'd0000000-0000-0000-0000-000000000008'::uuid)
+      ) as fixture(dept_id, member_id)
+      join groups grp on grp.legacy_dept_id = fixture.dept_id
+  loop
+    perform public.add_group_member(v_row.group_id, v_row.member_id);
+  end loop;
+end;
+$$;
 
--- `it` is reference data from #310 (a Department Team under Diverse), not a
--- demo Team, so it is never deleted above — only these memberships are, and
--- they cascade from `profiles`. It is where the #296 remap puts `bce@` and
--- `moderator@`, and it is the Origin of the "completed on time" Task below.
-insert into team_members (team_id, member_id) values
-  ('t-app',     'd0000000-0000-0000-0000-000000000006'),
-  ('t-app',     'd0000000-0000-0000-0000-000000000008'),
-  ('t-recruti', 'd0000000-0000-0000-0000-000000000002'),
-  ('t-recruti', 'd0000000-0000-0000-0000-000000000005'),
-  ('t-logistica','d0000000-0000-0000-0000-000000000004'),
-  ('t-logistica','d0000000-0000-0000-0000-000000000007'),
-  ('it',        'd0000000-0000-0000-0000-000000000006'),
-  ('it',        'd0000000-0000-0000-0000-000000000008');
+-- Three Teams and two Projects, created by BC. Group names are scoped to
+-- the demo creator for every later lookup so another BC's same-name Group is
+-- never changed by a staging rerun.
+select public.create_group('Echipa Aplicație','team',
+  (select id from groups where legacy_dept_id='diverse'));
+select public.create_group('Echipa Recruți','team',
+  (select id from groups where legacy_dept_id='edu'));
+select public.create_group('Echipa Logistică','team');
+select public.create_group('Festivalul Studențesc 2026','project',
+  p_manager_id => 'd0000000-0000-0000-0000-000000000005');
+select public.create_group('Gala Voluntarilor 2025','project',
+  p_manager_id => 'd0000000-0000-0000-0000-000000000004');
 
--- ==================== Representative Projects ====================
--- Projects are independent from departments. These two fixtures cover the
--- active and archived lifecycles as well as lead, Responsible, ordinary
--- member, and outsider authorization scenarios. The database assigns their
--- ids; tests and dependent seed rows locate them by stable content instead.
-insert into projects (name, status, leader_id, created_by) values
-  ('Festivalul Studențesc 2026', 'active',
-   'd0000000-0000-0000-0000-000000000005',
-   'd0000000-0000-0000-0000-000000000007'),
-  ('Gala Voluntarilor 2025', 'archived',
-   'd0000000-0000-0000-0000-000000000004',
-   'd0000000-0000-0000-0000-000000000007');
+-- `it` (Echipa Interne) is a reference Team beneath Diverse.
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select ids.group_id, fixture.member_id, fixture.group_role, fixture.title
+      from (values
+        ('Echipa Aplicație', 'd0000000-0000-0000-0000-000000000006'::uuid, 'member', null::text),
+        ('Echipa Aplicație', 'd0000000-0000-0000-0000-000000000008'::uuid, 'member', null),
+        ('Echipa Recruți', 'd0000000-0000-0000-0000-000000000002'::uuid, 'member', null),
+        ('Echipa Recruți', 'd0000000-0000-0000-0000-000000000005'::uuid, 'member', null),
+        ('Echipa Logistică', 'd0000000-0000-0000-0000-000000000004'::uuid, 'responsible', 'Membru Logistică'),
+        ('Echipa Logistică', 'd0000000-0000-0000-0000-000000000007'::uuid, 'responsible', 'Membru Logistică'),
+        ('Festivalul Studențesc 2026', 'd0000000-0000-0000-0000-000000000003'::uuid, 'responsible', 'Responsabil proiect'),
+        ('Festivalul Studențesc 2026', 'd0000000-0000-0000-0000-000000000002'::uuid, 'member', null),
+        ('Gala Voluntarilor 2025', 'd0000000-0000-0000-0000-000000000006'::uuid, 'responsible', 'Responsabil proiect'),
+        ('Gala Voluntarilor 2025', 'd0000000-0000-0000-0000-000000000001'::uuid, 'member', null)
+      ) as fixture(group_name, member_id, group_role, title)
+      cross join lateral (select pg_temp.seed_group_id(fixture.group_name) as group_id) as ids
+  loop
+    if v_row.group_role = 'responsible' then
+      perform public.set_group_role(v_row.group_id, v_row.member_id, 'responsible', v_row.title);
+    else
+      perform public.add_group_member(v_row.group_id, v_row.member_id);
+    end if;
+  end loop;
+  perform public.add_group_member(
+    (select id from groups where legacy_team_id='it'),
+    'd0000000-0000-0000-0000-000000000006');
+  perform public.add_group_member(
+    (select id from groups where legacy_team_id='it'),
+    'd0000000-0000-0000-0000-000000000008');
+end;
+$$;
 
--- The leader membership is inserted automatically by the Project invariant
--- trigger. Add only the non-leader roles here. Vlad deliberately has the
--- ordinary OSUBB role `activ` while being a Project Responsible: Project
--- authority is independent from the organization-wide `responsabil` role.
-insert into project_members (project_id, member_id, project_role)
-select project.id, fixture.member_id, fixture.project_role
-  from (values
-    ('Festivalul Studențesc 2026',
-     'd0000000-0000-0000-0000-000000000003'::uuid, 'responsible'),
-    ('Festivalul Studențesc 2026',
-     'd0000000-0000-0000-0000-000000000002'::uuid, 'member'),
-    ('Gala Voluntarilor 2025',
-     'd0000000-0000-0000-0000-000000000006'::uuid, 'responsible'),
-    ('Gala Voluntarilor 2025',
-     'd0000000-0000-0000-0000-000000000001'::uuid, 'member')
-  ) as fixture (project_name, member_id, project_role)
-  join projects project
-    on project.name = fixture.project_name
-   and project.created_by = 'd0000000-0000-0000-0000-000000000007';
+-- The General Assembly follows Level 3 automatically, with the Interne
+-- roster appointed as its Responsibles. It accepts no applications or Cup.
+select public.create_group('Adunarea Generală','team');
+select public.update_group_structure(pg_temp.seed_group_id('Adunarea Generală'),
+  'team', false, false, true, 3, null, null, false);
+select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
+  'd0000000-0000-0000-0000-000000000006','responsible','Responsabil Adunarea Generală');
+select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
+  'd0000000-0000-0000-0000-000000000008','responsible','Responsabil Adunarea Generală');
+select public.archive_group(pg_temp.seed_group_id('Gala Voluntarilor 2025'));
+select set_config('request.jwt.claims','',true);
 
 -- ==================== Demo work: campaigns, Tasks, evaluations, points ====================
 -- #296 rebuilds this section on the normalized Tracker model (ADR-0007).
@@ -376,9 +388,8 @@ $$;
 
 -- Since #579 the Group is the only Origin a work row carries. The fixtures below
 -- still NAME their Origin the way a reader recognises it (a Department id, a Team
--- id, or a demo Project's name); this resolves that name to the Group the forward
--- mirror derived for it, through groups.legacy_* (kept until #591). Exactly one
--- argument is non-null per call.
+-- id, or a demo Project's name); this resolves that name to its native Group
+-- (or a reference Department Group). Exactly one argument is non-null per call.
 create or replace function pg_temp.demo_group_id(p_dept text, p_team text, p_project_name text)
 returns bigint
 language sql
@@ -387,11 +398,16 @@ as $$
   select grp.id
     from public.groups as grp
    where (p_dept is not null and grp.legacy_dept_id = p_dept)
-      or (p_team is not null and grp.legacy_team_id = p_team)
-      or (p_project_name is not null and grp.legacy_project_id = (
-            select project.id from public.projects as project
-             where project.name = p_project_name
-               and project.created_by = 'd0000000-0000-0000-0000-000000000007'))
+      or (p_team is not null and
+        (grp.legacy_team_id = p_team or
+         (grp.created_by = 'd0000000-0000-0000-0000-000000000007'
+          and grp.name = case p_team
+            when 't-app' then 'Echipa Aplicație'
+            when 't-recruti' then 'Echipa Recruți'
+            when 't-logistica' then 'Echipa Logistică' end)))
+      or (p_project_name is not null and grp.name = p_project_name
+        and grp.category = 'project'
+        and grp.created_by = 'd0000000-0000-0000-0000-000000000007')
 $$;
 
 -- ---------------- Campaigns ----------------
@@ -1476,28 +1492,35 @@ select e.id, a.member_id, a.status
 -- One critical + pinned (the feed's loudest state), one with a form link
 -- (the v1 forms story — a Google Form, not a native engine), one scoped to a
 -- single department, and ordinary ones underneath.
-insert into announcements (title, body, dept_id, author, priority, category, pinned, form_label, form_url, published_at, created_by) values
+-- #68: demo announcements are fixtures, not live broadcasts. Staging reapplies
+-- this seed on a live database with real Members; keep its fan-out disabled only
+-- for these inserts so reruns never notify anyone outside the demo cohort.
+-- The documented seed entrypoints run as postgres in one transaction, so an
+-- error rolls the trigger state back with the inserts.
+alter table announcements disable trigger announcements_fan_out;
+insert into announcements (title, body, dept_id, author, priority, category, pinned, form_label, form_url, published_at, created_by, group_id, audience) values
   ('Ședință extraordinară BC — vineri',
    'Vineri, ora 18:00, Aula Magna. Prezența tuturor coordonatorilor este obligatorie.',
    null, 'BC', 'critical', 'organizatoric', true, null, null,
-   now() - interval '1 day',  'd0000000-0000-0000-0000-000000000007'),
+   now() - interval '1 day',  'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org'),
   ('Feedback eveniment de deschidere',
    'Spune-ne cum ți s-a părut. Durează două minute și chiar ne ajută.',
    null, 'Imagine & PR', 'important', 'feedback', false,
    'Completează formularul', 'https://forms.gle/exemplu-osubb',
-   now() - interval '3 days', 'd0000000-0000-0000-0000-000000000006'),
+   now() - interval '3 days', 'd0000000-0000-0000-0000-000000000006', (select id from groups where is_organization), 'org'),
   ('Materiale de la cursul de Excel',
    'Slide-urile și exercițiile sunt în drive-ul departamentului.',
    'edu', 'Educational', 'normal', 'resurse', false, null, null,
-   now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005'),
+   now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where legacy_dept_id='edu'), 'local'),
   ('Recrutarea de toamnă începe luni',
    'Standul din campus are nevoie de voluntari pentru două ture pe zi.',
    null, 'Resurse Umane', 'important', 'recrutare', true, null, null,
-   now() - interval '2 days', 'd0000000-0000-0000-0000-000000000005'),
+   now() - interval '2 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where is_organization), 'org'),
   ('Noul ghid de punctaj',
    'Dificultatea și nota se înmulțesc — detaliile sunt în aplicație, la Ghid.',
    null, 'BC', 'normal', 'organizatoric', false, null, null,
-   now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007');
+   now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org');
+alter table announcements enable trigger announcements_fan_out;
 
 -- A few members have already read things, so the unread badge shows a real
 -- number instead of "everything" or "nothing".
@@ -1512,8 +1535,8 @@ select a.id, r.member_id
   join announcements a on a.title = r.title;
 
 -- ==================== Notifications ====================
--- Written here by hand only because the fan-out trigger is issue #68; once
--- that lands, announcements will produce these rows themselves.
+-- Curated demo Notifications remain explicit while demo Announcement fan-out
+-- is suppressed above: staging may already contain real Members.
 -- Note the suppression rule at work: BC and BCE get the announcement, never
 -- the task/deadline broadcasts.
 insert into notifications (member_id, kind, icon, title, body, critical, read, link, created_at) values

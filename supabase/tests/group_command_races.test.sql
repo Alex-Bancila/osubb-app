@@ -11,6 +11,8 @@ select plan(14);
 -- Both setup and cleanup are idempotent so an interrupted run can be retried.
 select extensions.dblink_connect('commands_522_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres', current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('commands_522_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('commands_522_setup', $setup$
   drop function if exists public.test_348_deactivate_target();
   -- Owner-only fixture teardown follows the existing committed-race pattern.
@@ -24,6 +26,7 @@ select extensions.dblink_exec('commands_522_setup', $setup$
   drop function if exists public.test_522_revoke();
   delete from public.campaigns where name='Race campaign #522';
   delete from public.completed_work_requests where description='Race request #522';
+  delete from public.groups where name = 'Race #522';
   delete from public.projects where name = 'Race #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
     '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
@@ -38,7 +41,14 @@ select extensions.dblink_exec('commands_522_setup', $setup$
   insert into public.projects(name,leader_id,created_by) values
     ('Race #522','52200000-0000-0000-0000-000000000090','52200000-0000-0000-0000-000000000092');
   insert into public.project_members(project_id,member_id,project_role)
-    select id,'52200000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #522';
+    select id,'52200000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #522'
+  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
+  insert into public.groups(name,category,legacy_project_id)
+    select name,'project',id from public.projects where name='Race #522';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52200000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #522';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52200000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #522';
   -- Test-only callable bridge to the owner-only gate, never a production grant.
   create function public.test_522_campaign() returns text
   language sql security definer set search_path = '' as $$
@@ -48,8 +58,9 @@ select extensions.dblink_exec('commands_522_setup', $setup$
   language plpgsql security definer set search_path = '' as $$
   begin
     perform set_config('request.jwt.claims', '{"sub":"52200000-0000-0000-0000-000000000092","role":"authenticated","app_metadata":{"member_role":"bc","member_level":6}}', true);
-    return public.remove_project_member((select id from public.projects where name='Race #522'),
-      '52200000-0000-0000-0000-000000000091')::text;
+    perform public.set_group_role((select id from public.groups where name='Race #522'),
+      '52200000-0000-0000-0000-000000000091', 'member');
+    return 'true';
   end;
   $$;
   revoke execute on function public.test_522_campaign(), public.test_522_revoke() from public,anon,authenticated,service_role;
@@ -88,8 +99,9 @@ select is(private.can_manage_group_work((select id from public.groups where name
 select throws_ok($$select public.test_522_campaign()$$,
   '42501','campaign_manage_forbidden','revoked Responsible cannot create another Campaign');
 select extensions.dblink_exec('commands_522_setup', $setup$
-  insert into public.project_members(project_id,member_id,project_role)
-    select id,'52200000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #522';
+  update public.group_members set group_role='responsible'
+   where group_id=(select id from public.groups where name='Race #522')
+     and member_id='52200000-0000-0000-0000-000000000091';
   insert into public.completed_work_requests(requester_id,group_id,description)
     select '52200000-0000-0000-0000-000000000092',id,'Race request #522' from public.groups where name='Race #522';
 $setup$);

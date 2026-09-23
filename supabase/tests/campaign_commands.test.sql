@@ -128,6 +128,9 @@ select ok(not has_table_privilege('authenticated', 'public.campaigns', 'update')
   'authenticated has no direct campaigns UPDATE');
 select ok(not has_table_privilege('authenticated', 'public.campaigns', 'delete'),
   'authenticated has no direct campaigns DELETE');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ==================== Persona matrix: create_campaign ====================
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -513,6 +516,8 @@ reset role;
 select extensions.dblink_connect('campaign_lock_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('campaign_lock_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_lock_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
@@ -524,6 +529,13 @@ select extensions.dblink_exec('campaign_lock_setup', $$
      'lock.probe.bce.campaign@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id)
   values ('34300000-0000-0000-0000-000000000021', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '34300000-%'
+  on conflict (group_id,member_id) do nothing;
   insert into public.campaigns (group_id, name, is_active, created_by) values
     ((select id from public.groups where legacy_dept_id = 'edu'), 'Lock Probe Campaign #343', true, '34300000-0000-0000-0000-000000000021');
 $$);
@@ -628,6 +640,8 @@ select throws_ok(
 select extensions.dblink_connect('campaign_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('campaign_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000020';
@@ -639,6 +653,13 @@ select extensions.dblink_exec('campaign_setup', $$
      'concurrent.bce.campaign@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id)
   values ('34300000-0000-0000-0000-000000000020', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '34300000-%'
+  on conflict (group_id,member_id) do nothing;
 $$);
 
 select pg_temp.test_login(

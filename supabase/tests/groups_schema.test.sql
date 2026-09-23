@@ -276,6 +276,7 @@ insert into public.groups (name, category, parent_id, min_level)
           (select grp.id from public.groups as grp where grp.name = 'Grup A #507p'), 3);
 insert into public.groups (name, category, status) values ('Grup C #507p', 'project', 'archived');
 insert into public.groups (name, category, min_level) values ('Grup D #507p', 'team', 9);
+insert into public.groups (name, category, min_level) values ('Unrelated #507r', 'team', 0);
 
 insert into public.group_members (group_id, member_id, group_role)
 select grp.id, roster.member_id, roster.group_role
@@ -285,7 +286,7 @@ select grp.id, roster.member_id, roster.group_role
     ('Grup A #507p', '50700000-0000-0000-0000-000000000010'::uuid, 'manager'),
     ('Grup A #507p', '50700000-0000-0000-0000-000000000011'::uuid, 'member'),
     ('Grup B #507p', '50700000-0000-0000-0000-000000000006'::uuid, 'member'),
-    ('Grup D #507p', '50700000-0000-0000-0000-000000000009'::uuid, 'manager')
+    ('Unrelated #507r', '50700000-0000-0000-0000-000000000009'::uuid, 'manager')
   ) as roster(group_name, member_id, group_role)
   join public.groups as grp on grp.name = roster.group_name;
 
@@ -362,7 +363,7 @@ select is(
 select is(
   (select count(*) from public.group_members as membership
     where membership.group_id in (select unnest(fx.policy_groups) from pg_temp.fx507 as fx)),
-  6::bigint,
+  5::bigint,
   'and every roster row of those Groups');
 reset role;
 
@@ -455,8 +456,8 @@ select is(
 reset role;
 
 -- ==================== 6. Grants ====================
--- Both tables are read-only for every client role: #509's mirror triggers run
--- as the table owner, and there is no Group command in Wave 1 at all.
+-- Both tables are read-only for every client role: native Group commands
+-- mediate writes through their owner-only implementations.
 
 select pg_temp.test_login('50700000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));

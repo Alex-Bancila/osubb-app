@@ -117,8 +117,10 @@ insert into public.departments (id, name, short, color) values
 insert into public.member_departments (member_id, dept_id) values
   ('62500000-0000-0000-0000-000000000001', '625-dept'),
   ('62500000-0000-0000-0000-000000000003', '625-other');
+-- Historical Department fixtures have no production mirror after #586.
+select pg_temp.materialize_legacy_groups();
 
--- The Campaign lives on 625-dept's mirrored Group (ADR-0009 Wave 2): a
+-- The Campaign lives on 625-dept's Group (ADR-0009 Wave 2): a
 -- direct insert naming group_id, exactly the shape 625's own commands write
 -- (private.create_campaign_impl) and campaign_commands.test.sql / #522's own
 -- fixtures already use for a Group-scoped Campaign.
@@ -131,9 +133,8 @@ select 6250001, grp.id, 'Campania 625', '62500000-0000-0000-0000-000000000001'
 select is((select count(*) from public.campaigns where id = 6250001), 1::bigint,
   'the fixture Campaign exists and really carries 625-dept''s Group -- every assertion below is against it, never vacuous');
 
--- Every Task below names dept_id = '625-dept'; the sync trigger
--- (private.sync_task_group_origin) derives group_id from it, so it lands
--- inside the Campaign's own Group and tasks_validate_campaign accepts it.
+-- Every Task below names the Campaign's Group directly, so
+-- tasks_validate_campaign accepts it.
 --
 --   T1 Completed A       -- 3 x rating 5 (x3) = 9,  Executor: Ana (05).
 --   T2 Reopen source     -- 3 x rating 5 (x3) = 9 credited then reversed,

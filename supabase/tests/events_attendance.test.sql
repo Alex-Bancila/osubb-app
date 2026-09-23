@@ -46,8 +46,9 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role) values
   ('e0000000-0000-0000-0000-0000000000e1', 'Elena Test', 'elena.events@test.local', 'voluntar');
 insert into teams (id, name, dept_id) values ('t-ev', 'Events Team', 'edu');
+select pg_temp.materialize_legacy_groups();
 
--- ==================== An event belongs to one Group (AC; #579: the Group is its only Origin) ====================
+-- ==================== An event belongs to one Group (#579) ====================
 insert into events (title, type, group_id, starts_at, ends_at)
   values ('Ședință EDU', 'sedinta', pg_temp.dept_group('edu'), now(), now() + interval '2 hours');
 insert into events (title, type, group_id, starts_at)

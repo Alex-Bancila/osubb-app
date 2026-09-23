@@ -56,9 +56,15 @@ insert into public.projects (name, status, leader_id, created_by) values
    'a7200000-0000-0000-0000-000000000008',
    'a7200000-0000-0000-0000-000000000006');
 
--- The manager-invariant trigger inserted each lead. Add a complete roster to
--- both projects owned by the primary lead, including historical inactive and
--- claimless rows so member reads cannot pass against a hollow fixture.
+-- #585 retired the legacy leader-membership trigger. These historical read
+-- policies still use the legacy roster until #590 drops it, so fixture rows
+-- are explicit.
+insert into public.project_members (project_id, member_id, project_role)
+select id, leader_id, 'member' from public.projects
+where name in ('Project Read Active', 'Project Read Archived', 'Project Read Hidden');
+
+-- Add a complete roster to both projects owned by the primary lead, including
+-- historical inactive and claimless rows.
 insert into public.project_members (project_id, member_id, project_role)
 select project.id, membership.member_id, membership.project_role
   from public.projects as project

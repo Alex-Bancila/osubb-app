@@ -186,6 +186,9 @@ select project.id, persona.id, membership.project_role
          as membership (code, project_role)
   join fx_persona as persona on persona.code = membership.code
  where project.name in ('M318 Project', 'M318 Archived Project');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- The 24-row core: every Origin kind x Audience x (direct | public with an
 -- open queue | public with a closed queue). Titles carry an `m318:` prefix
@@ -757,6 +760,8 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
 reset role;
 delete from public.project_members where project_id=(select id from public.projects where name='Project #521') and member_id=pg_temp.g521_uid(3);
+delete from public.group_members where group_id=(select id from public.groups where name='Project #521')
+  and member_id=pg_temp.g521_uid(3);
 set local role authenticated;
 select is(private.can_read_task((select id from g521_tasks where name='private')),false,'removed Group role loses private reads despite stale token');
 select is(private.can_read_task((select id from g521_tasks where name='dtorg')),false,'stale Group role does not bypass another Group Minimum Level');

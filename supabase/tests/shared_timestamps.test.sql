@@ -56,6 +56,9 @@ insert into public.projects (
   'a3680000-0000-0000-0000-000000000002',
   now() - interval '2 days', now() - interval '1 day'
 );
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 insert into public.campaigns (
   id, group_id, name, created_by, created_at, updated_at
 ) overriding system value values (
@@ -95,11 +98,13 @@ select ok(
   'an arbitrary event update refreshes updated_at');
 
 select ok(
-  (select created_at is not null
-     from public.project_members
-    where project_id = 368001
-      and member_id = 'a3680000-0000-0000-0000-000000000001'),
-  'trigger-created project memberships receive created_at automatically');
+  (select gm.created_at is not null
+     from public.group_members gm
+     join public.groups g on g.id = gm.group_id
+    where g.name = 'Festivalul Studențesc 2026'
+      and g.created_by = 'd0000000-0000-0000-0000-000000000007'
+      and gm.member_id = 'd0000000-0000-0000-0000-000000000005'),
+  'command-appointed demo Group Managers receive created_at automatically');
 
 select ok(
   not has_table_privilege('authenticated', 'public.projects', 'update')

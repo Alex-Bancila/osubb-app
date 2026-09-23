@@ -11,7 +11,7 @@ insert into people values
 (1,'bc','bc','activ'),(2,'bce_edu','bce','activ'),(3,'bce_foreign','bce','activ'),
 (4,'coord','voluntar','activ'),(5,'resp','voluntar','activ'),(6,'ordinary_edu','voluntar','activ'),
 (7,'ordinary_proj','voluntar','activ'),(8,'ind_a','voluntar','activ'),(9,'ind_b','voluntar','activ'),
-(10,'dt_member','voluntar','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
+(10,'dt_member','vot','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
 (13,'claimless','voluntar','activ'),(14,'moderator','moderator','activ');
 insert into auth.users(id,email)
 select ('37000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid, name || '.370@test.local' from people;
@@ -33,6 +33,8 @@ select id,'37000000-0000-0000-0000-000000000005','responsible' from public.proje
 insert into public.project_members(project_id,member_id,project_role)
 select id,'37000000-0000-0000-0000-000000000007','member' from public.projects where name='Project #370';
 update public.projects set status='archived' where name='Archived #370';
+select pg_temp.materialize_legacy_groups();
+update public.groups set status='archived' where name='Archived #370';
 -- Wave 2 OD9 exception: gated/native fixtures only, rolled back with this suite.
 
 insert into public.groups(name,category,min_level,automatic_membership) values ('AG #370','team',3,true);

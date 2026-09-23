@@ -53,6 +53,11 @@ jobs:
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
 
+      # setup-cli forces GHCR; clear its override so the CLI can fall back
+      # through public ECR, GHCR, and Docker Hub if a registry is throttled.
+      - name: Enable Supabase image registry fallback
+        run: echo 'SUPABASE_INTERNAL_IMAGE_REGISTRY=' >> "$GITHUB_ENV"
+
       # Starts the local stack and applies every migration in supabase/migrations/
       - name: Start local Supabase (applies migrations)
         run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector

@@ -5,6 +5,7 @@
 - **Amended:** 2026-09-18 — ADR-0009: an Event is owned by one Group; the `org`/`dept`/`team`/`project` scope and the per-scope management table are read through Group Roles; Minimum Level choices become 0, 3, 5, 6
 - **Amended:** 2026-09-20 — ADR-0009 Wave 2 as built: `create_event` takes the owning Group, `update_event` and `cancel_event` join it, and the level-4 Calendar gate is gone (see the ADR-0009 header for the exact signatures)
 - **Amended:** 2026-09-20 — the relevant audience of an Event is its Group's Group Audience (Automatic Membership resolved, every Group below included); archiving a Group cancels its future Events
+- **Amended:** 2026-09-23 — past Events readable under the same Minimum Level rule; an Event may carry one Campaign; the month view and the Work Filter
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -98,3 +99,11 @@ Member Web Push delivery is a later architecture decision. Calendar commands wri
 **The relevant audience is the Group Audience.** "The Event's relevant audience" in §Important-change notifications, and "the member's Groups" in §Relevance ordering, mean the Event's Group's **Group Audience** as ADR-0009 (amended 2026-09-20) and `CONTEXT.md` define it: every active Member of that Group or of any Group below it, by roster row or by Automatic Membership. An organization-wide Event therefore reaches every active Member on an important change, and a Department Event reaches its Department Teams' members even when they are not on the Department's own roster. No fan-out joins the roster table directly; one server helper resolves the audience. Attendees who answered "Vin" remain part of the audience regardless of membership, as before.
 
 **Archiving a Group cancels its future Events.** When a Group is archived (which ADR-0009 permits only once its work is finished), its future Events and those of every Group below it are cancelled by the same command with the archiving reason, preserving Event and audit history exactly as a manual cancellation does. Past Events stay readable as history.
+
+## Amendment (2026-09-23) — history, Campaigns, and the month view
+
+**Past Events are readable.** §Visibility's "future" restriction is lifted: every active Member reads every Event, past or future, whose Minimum Level they satisfy. Events carry nothing personal, and a month view without its own past days is not a calendar. Relevance, RSVP, and notification rules are unchanged; RSVP stays meaningful only on future Events.
+
+**An Event may carry one Campaign.** `events.campaign_id` is nullable and, like a Task's, must name a Campaign owned by the Event's Group or by a Group above it on its path; `create_event` and `update_event` set it, and a Campaign change alone is not an important change. Campaigns remain labels: they earn points only through Tasks and never decide who may see or manage an Event.
+
+**Month view and filter.** The Calendar offers a month grid beside the agenda. A day shows the Events the Member may read and the deadlines of the Member's own Tasks (Executor or pending Candidate), with a manager-only toggle adding the Tasks they manage. The Work Filter (`CONTEXT.md`) narrows both, with its date range on the Event start. Colours follow the Tracker's rule: the Member's own Groups in their colour, the Organization Group in OSUBB red, Other OSUBB Events grey (grilling of 2026-09-23).
