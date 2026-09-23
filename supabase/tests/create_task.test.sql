@@ -687,6 +687,8 @@ reset role;
 select extensions.dblink_connect('task_lock_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('task_lock_setup', 'set lock_timeout = ''2s''');
 -- Clean first: these fixtures are COMMITTED, so an aborted earlier run would
 -- otherwise leave them behind and the next run would fail on a duplicate key
 -- instead of on the feature (the #336/#339 precedent). task_activity is

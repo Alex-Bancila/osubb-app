@@ -9,11 +9,13 @@ import {
   type RecruitCsvReferences,
   type RecruitCsvResult,
 } from "../_shared/csv.ts";
+import { buildGroupLookup, type GroupReference } from "../_shared/groups.ts";
 
 export interface CsvImportDeps {
   callerId(): Promise<string | null>;
   memberLevel(userId: string): Promise<number>;
-  referenceIds(table: "departments" | "teams"): Promise<string[]>;
+  /** Every active Group, loaded ONCE per request and shared by every row. */
+  activeGroups(): Promise<GroupReference[]>;
   invite(
     input: InviteMemberInput,
     references: RecruitCsvReferences,
@@ -101,27 +103,16 @@ export async function handleCsvImport(
       origin,
     );
   }
-  let departmentIds: string[];
-  let teamIds: string[];
+  let groups: GroupReference[];
   try {
-    [departmentIds, teamIds] = await Promise.all([
-      deps.referenceIds("departments"),
-      deps.referenceIds("teams"),
-    ]);
+    groups = await deps.activeGroups();
   } catch (error) {
     console.error("csv-import reference load failed", {
       errorType: error instanceof Error ? error.name : typeof error,
     });
-    return json(
-      { error: "Nu am putut încărca departamentele și echipele." },
-      500,
-      origin,
-    );
+    return json({ error: "Nu am putut încărca grupurile." }, 500, origin);
   }
-  const references: RecruitCsvReferences = {
-    departmentIds: new Set(departmentIds),
-    teamIds: new Set(teamIds),
-  };
+  const references: RecruitCsvReferences = buildGroupLookup(groups);
   let parsed: RecruitCsvResult;
   try {
     parsed = parseRecruitsCsv(csv, references);
@@ -165,8 +156,8 @@ export async function handleCsvImport(
           fullName: row.fullName,
           email: row.email,
           role: "recrut",
-          deptIds: row.deptIds,
-          teamIds: row.teamIds,
+          groupIds: row.groupIds,
+          appointedBy: callerId,
         },
         references,
       );

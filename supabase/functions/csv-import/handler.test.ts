@@ -4,14 +4,21 @@ import type {
   InviteMemberResult,
 } from "../_shared/member-invite.ts";
 import type { RecruitCsvReferences } from "../_shared/csv.ts";
+import type { GroupReference } from "../_shared/groups.ts";
 import { type CsvImportDeps, handleCsvImport } from "./handler.ts";
+
+const demoGroups: GroupReference[] = [
+  { id: 1, name: "Educațional", short: "EDU", path: [1] },
+  { id: 2, name: "Imagine & PR", short: "PR", path: [2] },
+  { id: 3, name: "Echipa App", short: "T-APP", path: [1, 3] },
+];
 
 interface FakeOptions {
   callerId?: string | null;
   callerError?: Error;
   level?: number;
   memberLevelError?: Error;
-  references?: Record<"departments" | "teams", string[]>;
+  groups?: GroupReference[];
   outcomes?: Record<string, InviteMemberResult>;
   referenceError?: Error;
   throwEmails?: ReadonlySet<string>;
@@ -32,13 +39,10 @@ function fakeDeps(options: FakeOptions = {}) {
       options.memberLevelError
         ? Promise.reject(options.memberLevelError)
         : Promise.resolve(options.level ?? 6),
-    referenceIds: (table) => {
-      referenceLoads.push(table);
+    activeGroups: () => {
+      referenceLoads.push("groups");
       if (options.referenceError) return Promise.reject(options.referenceError);
-      return Promise.resolve(
-        options.references?.[table] ??
-          (table === "departments" ? ["edu", "pr"] : ["t-app"]),
-      );
+      return Promise.resolve(options.groups ?? demoGroups);
     },
     invite: (input) => {
       invited.push(input);
@@ -101,18 +105,22 @@ Deno.test("imports valid rows sequentially and keeps validation failures in the 
     "name,email,dept,team",
     "Ana Pop,ANA@EXAMPLE.COM,edu,",
     "Greșit,bad@example.com,necunoscut,",
-    "Existent,existent@example.com,pr,t-app",
+    "Existent,existent@example.com,educational,T-App",
   ].join("\n");
   const response = await handleCsvImport(request({ csv }), deps);
   const payload = await response.json();
 
   assertEquals(response.status, 200);
-  assertEquals(referenceLoads, ["departments", "teams"]);
+  // One Group load for the whole file, not one per row.
+  assertEquals(referenceLoads, ["groups"]);
   assertEquals(invited.map((row) => row.email), [
     "ana@example.com",
     "existent@example.com",
   ]);
+  assertEquals(invited.map((row) => row.groupIds), [[1], [1, 3]]);
   assertEquals(invited.every((row) => row.role === "recrut"), true);
+  // Every row's Appointment is attributed to the importing BC (#602).
+  assertEquals(invited.every((row) => row.appointedBy === "caller-1"), true);
   assertEquals(payload, {
     summary: { created: 1, skipped: 1, errors: 1 },
     created: [{ row: 2, email: "ana@example.com", user_id: "user-1" }],
@@ -134,7 +142,7 @@ Deno.test("imports valid rows sequentially and keeps validation failures in the 
   });
 });
 
-Deno.test("passes the once-loaded reference sets into every shared invite", async () => {
+Deno.test("passes the once-loaded Group lookup into every shared invite", async () => {
   const { deps } = fakeDeps();
   const seen: Array<RecruitCsvReferences | undefined> = [];
   const observingDeps: CsvImportDeps = {
@@ -154,15 +162,9 @@ Deno.test("passes the once-loaded reference sets into every shared invite", asyn
   );
 
   assertEquals(seen.length, 1);
-  assertEquals(
-    seen[0]
-      ? {
-        departmentIds: [...seen[0].departmentIds],
-        teamIds: [...seen[0].teamIds],
-      }
-      : null,
-    { departmentIds: ["edu", "pr"], teamIds: ["t-app"] },
-  );
+  assertEquals(seen[0]?.resolve("EDU"), [1]);
+  assertEquals(seen[0]?.has(3), true);
+  assertEquals(seen[0]?.has(99), false);
 });
 
 Deno.test("refuses a request without a bearer token before reading the batch", async () => {
@@ -393,9 +395,7 @@ Deno.test("stops the whole import safely when reference data cannot load", async
   const payload = await response.json().catch(() => ({}));
 
   assertEquals(response.status, 500);
-  assertEquals(payload, {
-    error: "Nu am putut încărca departamentele și echipele.",
-  });
+  assertEquals(payload, { error: "Nu am putut încărca grupurile." });
   assertEquals(invited, []);
 });
 
@@ -495,12 +495,12 @@ Deno.test("records a compensated provisioning failure without exposing database 
   );
 });
 
-Deno.test("records a reference removed after parsing as a row failure", async () => {
+Deno.test("records a Group removed after parsing as a row failure", async () => {
   const { deps } = fakeDeps({
     outcomes: {
       "race@example.com": {
         kind: "invalid_reference",
-        message: "Departament inexistent: edu.",
+        message: "Grup inexistent: 1.",
       },
     },
   });
@@ -515,7 +515,7 @@ Deno.test("records a reference removed after parsing as a row failure", async ()
     email: "race@example.com",
     field: "row",
     code: "invalid_reference",
-    message: "Departament inexistent: edu.",
+    message: "Grup inexistent: 1.",
   }]);
 });
 
