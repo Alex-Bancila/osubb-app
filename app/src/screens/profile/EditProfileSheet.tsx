@@ -15,6 +15,7 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
+import { useCapability } from '../../lib/capabilities';
 import { cn } from '../../lib/utils';
 import { type MyProfile, useUpdateMyProfile } from '../../queries/profile';
 
@@ -50,12 +51,16 @@ function EditProfileForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const updateMutation = useUpdateMyProfile();
+  // #675 (R5): the full name is a privileged column -- only BC/Moderator
+  // (the same rank as `manageRoles`) may change it. Below that the field is
+  // read-only and never sent, so a save cannot trip the server's 42501.
+  const canEditFullName = useCapability('manageRoles').data === true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const trimmedName = fullName.trim();
-    if (!trimmedName) {
+    if (canEditFullName && !trimmedName) {
       setNameError('Numele complet este obligatoriu.');
       return;
     }
@@ -64,7 +69,7 @@ function EditProfileForm({
 
     try {
       await updateMutation.mutateAsync({
-        fullName: trimmedName,
+        ...(canEditFullName ? { fullName: trimmedName } : {}),
         phone: phone.trim() || null,
         avatarColor,
       });
@@ -91,20 +96,35 @@ function EditProfileForm({
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <Field>
           <FieldLabel htmlFor="edit-profile-name">Nume complet</FieldLabel>
-          <input
-            id="edit-profile-name"
-            type="text"
-            value={fullName}
-            onChange={(e) => {
-              setFullName(e.target.value);
-              if (nameError) setNameError(null);
-            }}
-            className={cn(
-              'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-              nameError &&
-                'border-destructive focus-visible:border-destructive',
-            )}
-          />
+          {canEditFullName ? (
+            <input
+              id="edit-profile-name"
+              type="text"
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                if (nameError) setNameError(null);
+              }}
+              className={cn(
+                'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+                nameError &&
+                  'border-destructive focus-visible:border-destructive',
+              )}
+            />
+          ) : (
+            <>
+              <input
+                id="edit-profile-name"
+                type="text"
+                value={profile.full_name}
+                disabled
+                className="flex min-h-11 w-full cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-75 outline-none"
+              />
+              <FieldDescription>
+                Numele complet îl modifică Biroul de Conducere.
+              </FieldDescription>
+            </>
+          )}
           {nameError && <FieldError errors={[{ message: nameError }]} />}
         </Field>
 
