@@ -11,9 +11,10 @@ function presentation(
     id: 1,
     title: 'Ședință extraordinară BC',
     body: 'Vineri la ora 18:00 în Aula Magna.\nPrezența tuturor coordonatorilor este obligatorie.',
-    deptId: null,
-    department: null,
-    departmentLabel: 'OSUBB',
+    groupId: 1,
+    group: { id: 1, name: 'OSUBB', short: 'OSUBB' },
+    audience: 'org',
+    audienceLabel: 'Toată organizația',
     author: 'BC',
     priority: 'critical',
     category: 'organizatoric',
@@ -37,18 +38,13 @@ describe('AnnouncementDetailsSheet', () => {
 
   it('renders neutral fallback badge when department is unresolved and does not label it OSUBB', () => {
     const item = presentation({
-      deptId: 'unresolved-dept',
-      department: {
-        id: 'unresolved-dept',
-        name: 'Departament',
-        short: 'DEP',
-      },
-      departmentLabel: 'Departament',
+      groupId: 99,
+      group: { id: 99, name: 'Grup', short: 'GRUP' },
     });
 
     render(<AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />);
 
-    expect(screen.getByText('Departament')).toBeInTheDocument();
+    expect(screen.getByText('Grup')).toBeInTheDocument();
     expect(screen.queryByText('OSUBB')).not.toBeInTheDocument();
   });
 

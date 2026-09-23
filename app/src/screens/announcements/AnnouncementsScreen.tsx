@@ -14,6 +14,7 @@ import {
 import AnnouncementCard from './AnnouncementCard';
 import AnnouncementDetailsSheet from './AnnouncementDetailsSheet';
 import CriticalAnnouncementBanner from './CriticalAnnouncementBanner';
+import AnnouncementComposeSheet from './AnnouncementComposeSheet';
 import { Empty, ErrorState, Loading } from '../../components/states';
 
 export default function AnnouncementsScreen() {
@@ -52,17 +53,9 @@ export default function AnnouncementsScreen() {
   }
 
   const rawAnnouncements = feedQuery.data ?? [];
-  // Wave 2 stack / ADR-0009 bridge: announcements still carry dept_id, so the
-  // Group is reached through the Wave 1 bridge column `groups.legacy_dept_id`.
-  const groupByDeptId = new Map(
-    [...(groupsQuery.data?.values() ?? [])]
-      .filter((group) => group.legacy_dept_id !== null)
-      .map((group) => [group.legacy_dept_id as string, group]),
-  );
-
   const announcements: AnnouncementPresentation[] = sortAnnouncements(
     rawAnnouncements.map((row) =>
-      toAnnouncementPresentation(row, groupByDeptId),
+      toAnnouncementPresentation(row, groupsQuery.data),
     ),
   );
 
@@ -82,20 +75,23 @@ export default function AnnouncementsScreen() {
       className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8"
       aria-labelledby="announcements-title"
     >
-      <header className="space-y-1">
-        <h1
-          id="announcements-title"
-          className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
-        >
-          Anunțuri
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {unreadCount === 0
-            ? 'Toate anunțurile sunt citite'
-            : unreadCount === 1
-              ? '1 anunț necitit'
-              : `${unreadCount} anunțuri necitite`}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1
+            id="announcements-title"
+            className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
+          >
+            Anunțuri
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {unreadCount === 0
+              ? 'Toate anunțurile sunt citite'
+              : unreadCount === 1
+                ? '1 anunț necitit'
+                : `${unreadCount} anunțuri necitite`}
+          </p>
+        </div>
+        <AnnouncementComposeSheet />
       </header>
 
       {isPending ? (

@@ -11,9 +11,10 @@ function presentation(
     id: 1,
     title: 'Ședință extraordinară BC',
     body: 'Vineri la ora 18:00 în Aula Magna. Prezența obligatorie.',
-    deptId: null,
-    department: null,
-    departmentLabel: 'OSUBB',
+    groupId: 1,
+    group: { id: 1, name: 'OSUBB', short: 'OSUBB' },
+    audience: 'org',
+    audienceLabel: 'Toată organizația',
     author: 'BC',
     priority: 'critical',
     category: 'organizatoric',
@@ -86,14 +87,13 @@ describe('AnnouncementCard', () => {
     render(
       <AnnouncementCard
         announcement={presentation({
-          deptId: 'edu',
-          department: {
-            id: 'edu',
+          groupId: 2,
+          group: {
+            id: 2,
             name: 'Educațional',
             short: 'EDU',
             color: '#284C93',
           },
-          departmentLabel: 'Educațional',
         })}
         onOpen={vi.fn()}
       />,
@@ -107,7 +107,10 @@ describe('AnnouncementCard', () => {
   it('renders OSUBB for org-wide announcements', () => {
     render(
       <AnnouncementCard
-        announcement={presentation({ deptId: null, department: null })}
+        announcement={presentation({
+          audience: 'org',
+          audienceLabel: 'Toată organizația',
+        })}
         onOpen={vi.fn()}
       />,
     );
@@ -119,19 +122,14 @@ describe('AnnouncementCard', () => {
     render(
       <AnnouncementCard
         announcement={presentation({
-          deptId: 'unresolved-dept',
-          department: {
-            id: 'unresolved-dept',
-            name: 'Departament',
-            short: 'DEP',
-          },
-          departmentLabel: 'Departament',
+          groupId: 99,
+          group: { id: 99, name: 'Grup', short: 'GRUP' },
         })}
         onOpen={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('DEP')).toBeInTheDocument();
+    expect(screen.getByText('GRUP')).toBeInTheDocument();
     expect(screen.queryByText('OSUBB')).not.toBeInTheDocument();
   });
 

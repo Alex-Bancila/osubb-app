@@ -12,8 +12,8 @@ export type RawAnnouncementRow =
     announcement_reads?: { read_at: string }[] | null;
   };
 
-export type AnnouncementDepartment = {
-  id: string;
+export type AnnouncementGroup = {
+  id: number;
   name: string;
   short?: string;
   color?: string | null;
@@ -23,9 +23,10 @@ export type AnnouncementPresentation = {
   id: number;
   title: string;
   body: string;
-  deptId: string | null;
-  department: AnnouncementDepartment | null;
-  departmentLabel: string;
+  groupId: number;
+  group: AnnouncementGroup;
+  audience: string;
+  audienceLabel: string;
   author: string | null;
   priority: AnnouncementPriority;
   category: string | null;
@@ -63,27 +64,17 @@ export function formatAnnouncementDate(instant: string): string {
 
 export function toAnnouncementPresentation(
   row: RawAnnouncementRow,
-  groupsByDeptId?: ReadonlyMap<string, Group>,
+  groupsById?: ReadonlyMap<number, Group>,
 ): AnnouncementPresentation {
-  const group = row.dept_id ? groupsByDeptId?.get(row.dept_id) : undefined;
-  let department: AnnouncementDepartment | null = null;
-
-  if (row.dept_id !== null) {
-    if (group) {
-      department = {
-        id: row.dept_id,
-        name: group.name,
-        short: group.short ?? undefined,
-        color: group.color,
-      };
-    } else {
-      department = {
-        id: row.dept_id,
-        name: 'Departament',
-        short: 'DEP',
-      };
-    }
-  }
+  const origin = groupsById?.get(row.group_id);
+  const group: AnnouncementGroup = origin
+    ? {
+        id: origin.id,
+        name: origin.name,
+        short: origin.short ?? undefined,
+        color: origin.color,
+      }
+    : { id: row.group_id, name: 'Grup', short: 'GRUP' };
 
   const isRead = Array.isArray(row.announcement_reads)
     ? row.announcement_reads.length > 0
@@ -93,9 +84,10 @@ export function toAnnouncementPresentation(
     id: row.id,
     title: row.title,
     body: row.body,
-    deptId: row.dept_id,
-    department,
-    departmentLabel: department ? department.name : 'OSUBB',
+    groupId: row.group_id,
+    group,
+    audience: row.audience,
+    audienceLabel: row.audience === 'org' ? 'Toată organizația' : 'Doar grupul',
     author: row.author,
     priority: row.priority,
     category: row.category,
