@@ -1,43 +1,9 @@
 -- #521: reusable rolled-back Group fixtures for the existing command matrices.
 -- Included explicitly; .psql keeps the CLI from discovering it as a standalone suite.
 --
--- #578: groups/group_members are asserted directly below, field-for-field the shape
--- private.sync_department_groups/_team_groups/_project_groups produce today, instead of
--- waiting on the legacy inserts + the forward mirror to derive them. The legacy
--- departments/teams/projects rows (and their own member_departments/team_members/
--- project_members roster tables) stay, unchanged, as compatibility anchors: several of
--- the including suites manipulate them directly, later in their OWN file, and depend on
--- the still-live mirror to propagate that edit into group_members --
--- rls_tasks_read_matrix.test.sql deletes a project_members row for persona 3 and asserts
--- the matching group_members row (and the read access it carried) is gone; group_commands
--- .test.sql inserts persona 1 into member_departments('d521') after this fixture runs and
--- expects the ordinary mirror to add them to Department #521's roster. That is why
--- this fixture keeps the legacy rows and makes the resulting groups/group_members rows
--- the ones OUR OWN inserts assert, so every legacy insert below lands on its
--- `on conflict ... where (...) is distinct from (...)` guard already satisfied and
--- writes nothing observable.
---
--- #579 removed the origin bridge: pg_temp.g521_task now writes group_id alone (looked
--- up by Group name), and no Task row names a legacy id. What the bridge made necessary
--- is gone -- a Task-bearing Group no longer needs a legacy_* mapping whose value
--- satisfies tasks.dept_id/team_id/project_id foreign keys. What still needs the legacy
--- rows is the forward mirror (dropped in #586): the suites above edit
--- member_departments / project_members and read the mirrored roster back, and
--- groups.legacy_* is how the mirror finds these Groups. So the rows stay until #586;
--- the Project sentinel ids stay with them, because the mirror keys a Project Group on
--- legacy_project_id.
---
--- One entanglement is left to the legacy pipeline on purpose: private.mirror_project_group
--- re-syncs a Project Group's WHOLE roster the moment the `projects` row itself is
--- inserted (the Project leader lives on that row, not on a separate roster row), before
--- this file's own `project_members` insert has run -- so a group_members row for a
--- non-leader Project member, if asserted here ahead of that moment, would be deleted by
--- that same-statement resync and only reappear once `project_members` is inserted
--- afterwards. Rather than rely on that transient delete-then-reinsert cycle, personas 3,
--- 4 and 5's Project #521 roster rows are left to the legacy `project_members` insert
--- below exactly as before; the Group Manager row (the Project leader, persona 2, matched
--- by `projects.leader_id` rather than by a roster row) carries no such risk and is
--- asserted directly with everything else.
+-- #586: every Group and roster row is native fixture data. The legacy rows
+-- below remain only for suites that still inspect the old tables; changing
+-- one of those rows no longer changes Group authority.
 reset role;
 create function pg_temp.g521_uid(n integer) returns uuid language sql immutable as $$
   select ('52100000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid
@@ -50,9 +16,7 @@ select pg_temp.g521_uid(n),'Member #521 '||n,'member.'||n||'.521@test.local',
 from generate_series(1,12) n;
 
 -- ==================== #578: groups/group_members, asserted directly ====================
--- Field values below mirror private.sync_department_groups/_team_groups/_project_groups
--- exactly (as of the Wave 1 migrations) so the legacy mirror's own upserts, still fired by
--- the legacy inserts further down, always find their guard already satisfied.
+-- The corresponding legacy rows are retained below solely as historical read fixtures.
 insert into public.groups(name,category,competes_in_cup,application_level,manager_title,short,color,legacy_dept_id)
 values ('Department #521','department',true,1,'BCE','D521','#123456','d521');
 insert into public.groups(name,category,parent_id,application_level,shared_work_visibility,manager_title,legacy_team_id)
@@ -77,7 +41,10 @@ select id,pg_temp.g521_uid(6),'responsible' from public.groups where name='Indep
 union all
 select id,pg_temp.g521_uid(7),'responsible' from public.groups where name='Independent #521'
 union all
-select id,pg_temp.g521_uid(2),'manager' from public.groups where name in ('Project #521','Archived #521');
+select id,pg_temp.g521_uid(2),'manager' from public.groups where name in ('Project #521','Archived #521')
+union all
+select id,pg_temp.g521_uid(n),case when n in (3,4) then 'responsible' else 'member' end
+from public.groups cross join generate_series(3,5) n where name='Project #521';
 
 -- ==================== Legacy compatibility rows (unchanged shape) ====================
 insert into public.departments(id,name,short,color,kind) values ('d521','Department #521','D521','#123456','department');
@@ -93,6 +60,7 @@ insert into public.project_members(project_id,member_id,project_role)
 select p.id,pg_temp.g521_uid(n),case when n in (3,4) then 'responsible' else 'member' end
 from public.projects p cross join generate_series(3,5) n where p.name='Project #521';
 update public.projects set status='archived' where name='Archived #521';
+update public.groups set status='archived' where name='Archived #521';
 create temp table g521_tasks(name text primary key,id bigint);
 grant select on g521_tasks to authenticated;
 create function pg_temp.g521_task(p_name text,p_origin text,p_executor integer default null,

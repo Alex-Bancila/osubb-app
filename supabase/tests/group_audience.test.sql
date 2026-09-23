@@ -2,10 +2,8 @@
 -- Member of a Group or of any Group below it, by roster row or by Automatic
 -- Membership -- and the Event commands' fan-out through it.
 --
--- Fixture: a three-level chain Department #601 -> Team #601 -> Sub #601 (the
--- Department and its Team through the legacy tables and the Wave 1 mirror, so
--- Events can live on them; the sub-Team native, since no legacy table nests a
--- Team under a Team), one root Automatic Group at Minimum Level 3, and an
+-- Fixture: a three-level chain Department #601 -> Team #601 -> Sub #601,
+-- one root Automatic Group at Minimum Level 3, and an
 -- inactive Member planted on every roster level.
 --
 --   n  role      status   roster
@@ -48,6 +46,16 @@ insert into public.member_departments(member_id, dept_id)
 values (pg_temp.u601(2), 'd601'), (pg_temp.u601(3), 'd601');
 insert into public.team_members(team_id, member_id)
 values ('dt601', pg_temp.u601(4)), ('dt601', pg_temp.u601(5));
+insert into public.groups(name,category,legacy_dept_id)
+values ('Department #601','department','d601');
+insert into public.groups(name,category,parent_id,legacy_team_id)
+values ('Team #601','team',(select id from public.groups where legacy_dept_id='d601'),'dt601');
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,md.member_id,'member' from public.member_departments md
+  join public.groups g on g.legacy_dept_id=md.dept_id where md.dept_id='d601';
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,tm.member_id,'member' from public.team_members tm
+  join public.groups g on g.legacy_team_id=tm.team_id where tm.team_id='dt601';
 
 insert into public.groups(name, category, parent_id, application_level)
 values ('Sub #601', 'team', (select id from public.groups where legacy_team_id = 'dt601'), 0);

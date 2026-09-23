@@ -91,6 +91,9 @@ insert into public.project_members (project_id, member_id, project_role) values
    '34000000-0000-0000-0000-000000000008', 'responsible'),
   ((select id from public.projects where name = 'Proiect #340'),
    '34000000-0000-0000-0000-000000000009', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T-ORD: an ordinary Task, never an Umbrella.
 insert into public.tasks
@@ -590,6 +593,13 @@ select extensions.dblink_exec('cu_setup', $$
     ('34000000-0000-0000-0000-000000000051', 'Probe Manager 340', 'probe.manager.340@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id) values
     ('34000000-0000-0000-0000-000000000051', 'edu');
+  -- #586: committed race fixtures require native Group roster rows.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '34000000-%'
+  on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)

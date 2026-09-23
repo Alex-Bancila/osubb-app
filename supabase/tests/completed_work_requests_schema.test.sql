@@ -104,6 +104,9 @@ insert into public.project_members (project_id, member_id, project_role)
 select project.id, '32105000-0000-0000-0000-000000000006', 'member'
   from public.projects as project
  where project.name = 'CWRS Schema Project 321';
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.tasks (title, group_id)
 values ('CWRS schema fixture task 321', pg_temp.dept_group('edu'));

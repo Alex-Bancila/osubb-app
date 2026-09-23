@@ -31,6 +31,9 @@ select pg_temp.u(n), 'Membru 626 ' || n, 'member.' || n || '.626@test.local',
   from generate_series(1, 8) as n;
 insert into public.member_departments (member_id, dept_id) values
   (pg_temp.u(1), 'edu'), (pg_temp.u(2), 'edu'), (pg_temp.u(4), 'edu'), (pg_temp.u(7), 'edu');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.campaigns (group_id, name, is_active, created_by) values
   (pg_temp.dept_group('edu'), 'Campanie #626', true, pg_temp.u(1)),

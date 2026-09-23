@@ -56,6 +56,9 @@ insert into public.projects (
   'a3680000-0000-0000-0000-000000000002',
   now() - interval '2 days', now() - interval '1 day'
 );
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 insert into public.campaigns (
   id, group_id, name, created_by, created_at, updated_at
 ) overriding system value values (

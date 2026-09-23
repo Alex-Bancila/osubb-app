@@ -53,7 +53,7 @@ from generate_series(1, 10) n;
 insert into public.groups (name, category, min_level, created_by)
 values ('Rădăcină #583', 'department', 0, pg_temp.g583_uid(1)),
        ('Arhivată #583', 'department', 0, pg_temp.g583_uid(1)),
-       ('Nivel #583',    'department', 3, pg_temp.g583_uid(1));
+       ('Nivel #583',    'department', 1, pg_temp.g583_uid(1));
 insert into public.groups (name, category, min_level, automatic_membership, created_by)
 values ('Automat #583', 'department', 0, true, pg_temp.g583_uid(1));
 update public.groups set status = 'archived' where name = 'Arhivată #583';
@@ -74,12 +74,7 @@ values (pg_temp.g583_group('Rădăcină #583'), pg_temp.g583_uid(3), 'manager', 
        (pg_temp.g583_group('Copil #583'),    pg_temp.g583_uid(7), 'member',      null),
        (pg_temp.g583_group('Automat #583'),  pg_temp.g583_uid(3), 'manager',     null),
        (pg_temp.g583_group('Automat #583'),  pg_temp.g583_uid(8), 'responsible', 'Responsabil automat #583'),
-       (pg_temp.g583_group('Nivel #583'),    pg_temp.g583_uid(3), 'manager',     null),
-       -- A roster row already below its Group's Minimum Level. #580's Role
-       -- change and #582's Minimum-Level raise both remove such rows, and #586
-       -- makes the invariant total; until then one can still be planted, and
-       -- these commands must refuse to PROMOTE the Member holding it.
-       (pg_temp.g583_group('Nivel #583'),    pg_temp.g583_uid(6), 'member',      null);
+       (pg_temp.g583_group('Nivel #583'),    pg_temp.g583_uid(3), 'manager',     null);
 
 create function pg_temp.g583_bc() returns void language sql as $$
   select pg_temp.test_login(pg_temp.g583_uid(1), '{"member_role":"bc","member_level":6}'::jsonb) $$;
@@ -212,19 +207,17 @@ select throws_ok(
          pg_temp.g583_group('Nivel #583'), pg_temp.g583_uid(6)),
   'PT400', 'group_member_below_min_level',
   'set_group_role: a Member below the Group''s Minimum Level cannot be appointed into it');
--- The same two refusals on the other branch: the Member already holds a
--- roster row, so the write is an UPDATE rather than an insert through the
--- core, and the rule has to be enforced there too.
+-- An inactive Member may still have a historical roster row; no appointment
+-- may promote it. A below-Minimum-Level row can no longer be planted (#586).
 select throws_ok(
   format($$select public.set_group_role(%s, %L, 'responsible', 'Responsabil inactiv #583')$$,
          pg_temp.g583_group('Copil #583'), pg_temp.g583_uid(7)),
   'PT400', 'group_member_not_eligible',
   'set_group_role: an inactive Member already on the roster cannot be promoted either');
-select throws_ok(
-  format($$select public.set_group_role(%s, %L, 'responsible', 'Responsabil sub nivel #583')$$,
-         pg_temp.g583_group('Nivel #583'), pg_temp.g583_uid(6)),
-  'PT400', 'group_member_below_min_level',
-  'set_group_role: nor can a roster row already below the Minimum Level be promoted');
+select is((select count(*) from public.group_members
+  where group_id=pg_temp.g583_group('Nivel #583')
+    and member_id=pg_temp.g583_uid(6)), 0::bigint,
+  'a refused below-Minimum-Level appointment leaves no roster row');
 select throws_ok(
   format($$select public.set_group_role(%s, %L, 'responsible', 'Responsabil #583')$$,
          pg_temp.g583_group('Rădăcină #583'), pg_temp.g583_uid(4)),
@@ -413,14 +406,11 @@ language sql as $$
      -- refuses to render at all (conventions.test.sql's sweep does the same).
      and p.prokind = 'f'
      and pg_get_functiondef(p.oid) ~ 'insert\s+into\s+public\.group_members'
-     and p.proname not in ('appoint_group_member',
-                           'sync_department_memberships',
-                           'sync_team_memberships',
-                           'sync_project_memberships')
+     and p.proname <> 'appoint_group_member'
 $$;
 
 select is(pg_temp.g583_roster_writers(), '{}'::text[],
-  'private.appoint_group_member is the only insert path into public.group_members outside the Wave 1 mirror writers -- a second writer fails here by name');
+  'private.appoint_group_member is the only insert path into public.group_members -- a second writer fails here by name');
 
 create function public.g583_probe_roster_insert(g bigint, m uuid) returns void
 language sql security definer set search_path = '' as $$

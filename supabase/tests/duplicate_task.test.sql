@@ -91,6 +91,9 @@ insert into public.project_members (project_id, member_id, project_role) values
    '34100000-0000-0000-0000-000000000007', 'responsible'),
   ((select id from public.projects where name = 'Proiect #341'),
    '34100000-0000-0000-0000-000000000008', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.campaigns (group_id, name, is_active, created_by) values
   (pg_temp.dept_group('edu'), 'Campanie Activa #341', true, '34100000-0000-0000-0000-000000000002'),
@@ -646,6 +649,13 @@ select extensions.dblink_exec('dt_setup', $$
     ('34100000-0000-0000-0000-000000000051', 'Probe Manager 341', 'probe.manager.341@test.local', 'bce', 'activ');
   insert into public.member_departments (member_id, dept_id) values
     ('34100000-0000-0000-0000-000000000051', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '34100000-%'
+  on conflict (group_id,member_id) do nothing;
   insert into public.campaigns (group_id, name, is_active, created_by) values
     ((select id from public.groups where legacy_dept_id = 'edu'), 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
   insert into public.tasks

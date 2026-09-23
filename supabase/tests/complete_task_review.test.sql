@@ -103,6 +103,9 @@ insert into public.project_members (project_id, member_id, project_role) values
    '33600000-0000-0000-0000-000000000007', 'responsible'),
   ((select id from public.projects where name = 'Proiect #336'),
    '33600000-0000-0000-0000-000000000008', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T1: the happy path. A PUBLIC Department Task in_review, with a live
 -- Executor, a PAST Executor whose Assignment the owner already ended
@@ -1020,6 +1023,13 @@ select extensions.dblink_exec('ctr_setup', $$
     ('33600000-0000-0000-0000-000000000053', 'edu'),
     ('33600000-0000-0000-0000-000000000054', 'edu'),
     ('33600000-0000-0000-0000-000000000055', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33600000-%'
+  on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status,

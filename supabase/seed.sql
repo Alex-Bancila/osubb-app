@@ -191,6 +191,12 @@ delete from projects project
 delete from teams t
  where t.id in ('t-app', 't-recruti', 't-logistica');
 
+-- #586: Group commands now master these demo Groups. Remove only Groups
+-- created by the demo cohort after their work and Events have gone.
+delete from groups g
+ using profiles creator
+ where g.created_by = creator.id and creator.email like '%@demo.osubb';
+
 delete from auth.users where email like '%@demo.osubb';
 
 -- ==================== One login per role ====================
@@ -331,6 +337,99 @@ select project.id, fixture.member_id, fixture.project_role
     on project.name = fixture.project_name
    and project.created_by = 'd0000000-0000-0000-0000-000000000007';
 
+-- #586 compatibility until #587 removes the legacy demo roster entirely.
+-- The old tables above still support legacy read tests, but their mirror no
+-- longer creates Groups. Use the Group commands for the actual demo roster.
+create or replace function pg_temp.seed_bc_claims()
+returns void language sql as $$
+  select set_config('request.jwt.claims',
+    jsonb_build_object('sub','d0000000-0000-0000-0000-000000000007',
+      'role','authenticated',
+      'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,
+    true)::void
+$$;
+select pg_temp.seed_bc_claims();
+
+select public.create_group('Echipa Aplicație','team',
+  (select id from groups where legacy_dept_id='diverse'));
+select public.create_group('Echipa Recruți','team',
+  (select id from groups where legacy_dept_id='edu'));
+select public.create_group('Echipa Logistică','team');
+select public.create_group('Festivalul Studențesc 2026','project',
+  p_manager_id => 'd0000000-0000-0000-0000-000000000005');
+select public.create_group('Gala Voluntarilor 2025','project',
+  p_manager_id => 'd0000000-0000-0000-0000-000000000004');
+
+select public.set_group_role(
+  (select id from groups where legacy_dept_id='diverse'),
+  'd0000000-0000-0000-0000-000000000006','manager');
+
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select g.id as group_id, md.member_id
+      from member_departments md
+      join groups g on g.legacy_dept_id=md.dept_id
+     where md.member_id in (select id from profiles where email like '%@demo.osubb')
+       and md.dept_id <> 'org'
+       and not (md.dept_id='diverse' and md.member_id='d0000000-0000-0000-0000-000000000006')
+  loop
+    perform public.add_group_member(v_row.group_id,v_row.member_id);
+  end loop;
+end;
+$$;
+
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select coalesce(g.id, native.id) as group_id, tm.member_id,
+           tm.team_id='t-logistica' as logistics
+      from team_members tm
+      left join groups g on g.legacy_team_id=tm.team_id
+      left join groups native on native.name=case tm.team_id
+        when 't-app' then 'Echipa Aplicație'
+        when 't-recruti' then 'Echipa Recruți'
+        when 't-logistica' then 'Echipa Logistică' end
+       and native.created_by='d0000000-0000-0000-0000-000000000007'
+     where tm.member_id in (select id from profiles where email like '%@demo.osubb')
+  loop
+    if v_row.logistics then
+      perform public.set_group_role(v_row.group_id,v_row.member_id,
+        'responsible','Membru Logistică');
+    else
+      perform public.add_group_member(v_row.group_id,v_row.member_id);
+    end if;
+  end loop;
+end;
+$$;
+
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select g.id as group_id, pm.member_id, pm.project_role
+      from project_members pm
+      join projects p on p.id=pm.project_id
+      join groups g on g.name=p.name and g.category='project'
+        and g.created_by='d0000000-0000-0000-0000-000000000007'
+     where p.created_by='d0000000-0000-0000-0000-000000000007'
+  loop
+    if v_row.project_role='responsible' then
+      perform public.set_group_role(v_row.group_id,v_row.member_id,
+        'responsible','Responsabil proiect');
+    else
+      perform public.add_group_member(v_row.group_id,v_row.member_id);
+    end if;
+  end loop;
+end;
+$$;
+select public.archive_group(
+  (select id from groups where name='Gala Voluntarilor 2025'
+    and created_by='d0000000-0000-0000-0000-000000000007'));
+select set_config('request.jwt.claims','',true);
+
 -- ==================== Demo work: campaigns, Tasks, evaluations, points ====================
 -- #296 rebuilds this section on the normalized Tracker model (ADR-0007).
 --
@@ -387,11 +486,16 @@ as $$
   select grp.id
     from public.groups as grp
    where (p_dept is not null and grp.legacy_dept_id = p_dept)
-      or (p_team is not null and grp.legacy_team_id = p_team)
-      or (p_project_name is not null and grp.legacy_project_id = (
-            select project.id from public.projects as project
-             where project.name = p_project_name
-               and project.created_by = 'd0000000-0000-0000-0000-000000000007'))
+      or (p_team is not null and
+        (grp.legacy_team_id = p_team or
+         (grp.created_by = 'd0000000-0000-0000-0000-000000000007'
+          and grp.name = case p_team
+            when 't-app' then 'Echipa Aplicație'
+            when 't-recruti' then 'Echipa Recruți'
+            when 't-logistica' then 'Echipa Logistică' end)))
+      or (p_project_name is not null and grp.name = p_project_name
+        and grp.category = 'project'
+        and grp.created_by = 'd0000000-0000-0000-0000-000000000007')
 $$;
 
 -- ---------------- Campaigns ----------------
