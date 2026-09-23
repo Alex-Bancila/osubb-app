@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-07 (rewritten)
+- **Amended:** 2026-09-23 — ADR-0010 decides the Web Push comparison below: a Supabase Edge Function
 - **Deciders:** Alex Băncilă (IT Coordinator) + team
 - **Supersedes:** the dated BC/BCE-first rollout recorded in the earlier version of this file
 - **Superseded by:** —
@@ -54,6 +55,8 @@ Before expanding access, the team must prove:
 In-app notifications remain part of the core data model. Browser push delivery is deferred until after Task Tracker and Calendar.
 
 Cloudflare account notifications monitor Cloudflare resources; they are **not** member-facing Web Push. The team must compare a Cloudflare Worker/Queue, a Supabase Edge Function, and an external provider, then record provider, retry, deduplication, privacy, service-worker, and operational decisions in a separate ADR. OneSignal is not a default.
+
+> **Amended 2026-09-23 by [ADR-0010](0010-web-push-edge-function.md).** The comparison is decided: Web Push is a Supabase Edge Function using VAPID and the Web Push protocol, fed by a `pg_cron` outbox. The Cloudflare Worker/Queue and external providers are rejected; no option remains open.
 
 ## Consequences
 
