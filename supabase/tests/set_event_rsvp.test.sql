@@ -21,7 +21,7 @@ insert into auth.users (id, email) values
 insert into public.profiles (id, full_name, email, role, status) values
   ('a1000000-0000-0000-0000-000000000237', 'Ana Voluntar', 'ana.rsvp@test.local', 'voluntar', 'activ'),
   ('b2000000-0000-0000-0000-000000000237', 'Bogdan Voluntar', 'bogdan.rsvp@test.local', 'voluntar', 'activ'),
-  ('c3000000-0000-0000-0000-000000000237', 'Corina Responsabil', 'corina.rsvp@test.local', 'responsabil', 'activ'),
+  ('c3000000-0000-0000-0000-000000000237', 'Corina Responsabil', 'corina.rsvp@test.local', 'vot', 'activ'),
   ('d4000000-0000-0000-0000-000000000237', 'Dan Dezactivat', 'dan.rsvp@test.local', 'voluntar', 'inactiv');
 
 insert into pg_temp.fixture_member_departments (member_id, dept_id) values
@@ -185,7 +185,7 @@ reset role;
 
 -- Manager read authority never changes whose RSVP the command owns.
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000237', jsonb_build_object(
-    'member_role', 'responsabil', 'member_level', 4,
+    'member_role', 'vot', 'member_level', 4,
     'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
   ));
 select lives_ok(

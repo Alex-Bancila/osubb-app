@@ -30,7 +30,7 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role, status) values
   ('01000000-0000-0000-0000-000000000001', 'Rareș Recrut',      'rares.recrut@test.local', 'recrut',      'activ'),
   ('02000000-0000-0000-0000-000000000002', 'Vlad Vot',          'vlad.vot@test.local',     'vot',         'activ'),
-  ('03000000-0000-0000-0000-000000000003', 'Raluca Responsabil','raluca.resp@test.local',  'responsabil', 'activ'),
+  ('03000000-0000-0000-0000-000000000003', 'Raluca Responsabil','raluca.resp@test.local',  'vot', 'activ'),
   ('04000000-0000-0000-0000-000000000004', 'Bianca BCE',        'bianca.bce@test.local',   'bce',         'activ'),
   ('05000000-0000-0000-0000-000000000005', 'Bogdan BC',         'bogdan.bc@test.local',    'bc',          'activ'),
   -- A former BC, deactivated. Kept at the 'bc' role row so the fixture proves
@@ -110,7 +110,7 @@ reset role;
 
 -- ==================== Responsabil: level 4 =====================
 select pg_temp.test_login('03000000-0000-0000-0000-000000000003', jsonb_build_object(
-    'member_role', 'responsabil',
+    'member_role', 'vot',
     'member_level', 4,
     'dept_ids', '["edu"]'::jsonb,
     'team_ids', '[]'::jsonb

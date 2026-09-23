@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(3);
+select plan(7);
 
 select is((select role.name from public.roles as role where role.id = 'activ'),
   'Voluntar Activ',
@@ -20,11 +20,14 @@ select is((select role.name from public.roles as role where role.id = 'vot'),
   'Voluntar cu Drept de Vot',
   'level 3 renders as Voluntar cu Drept de Vot');
 
--- The staging seed's preflight refuses to run unless public.roles holds
--- exactly 8 rows (.github/workflows/seed-staging.yml). A rename must never
--- become an insert or a delete.
-select is((select count(*) from public.roles), 8::bigint,
-  'the ladder is still eight rows — this is a rename, not a change to the Role set');
+select is((select count(*) from public.roles),7::bigint,'seven live ranks remain');
+select is(enum_range(null::public.member_role)::text,'{recrut,voluntar,activ,vot,bce,bc,moderator}','the live enum has exactly seven values');
+select ok(not exists(select 1 from public.roles where level=4),'level 4 is unused');
+
+select is((select data_type from information_schema.columns where table_schema='public' and table_name='role_history' and column_name='from_role'),'text','audit rank names are historical text');
+select lives_ok($$insert into public.role_history(member_id,from_role,to_role,changed_by,actor_kind,reason)
+values('d0000000-0000-0000-0000-000000000002','responsabil','vot','d0000000-0000-0000-0000-000000000007','human','Historical rank preservation #593')$$,
+ 'historical audit labels remain valid without existing in the live rank enum');
 
 select * from finish();
 rollback;

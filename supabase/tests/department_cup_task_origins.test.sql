@@ -74,7 +74,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   -- pins the threshold: `app/src/lib/capabilities.ts` carries `manageTasks: 4`
   -- for `responsabil`, so a gate accidentally loosened to `>= 4` must be
   -- caught here rather than shipping unnoticed (review finding 1).
-  ('25900000-0000-0000-0000-000000000004', 'Responsabil 259', 'responsabil259@example.test', 'responsabil', 'activ'),
+  ('25900000-0000-0000-0000-000000000004', 'Responsabil 259', 'responsabil259@example.test', 'vot', 'activ'),
   -- Level 6 -- proves the allow side is not carried by BCE alone.
   ('25900000-0000-0000-0000-000000000005', 'BC 259', 'bc259@example.test', 'bc', 'activ');
 

@@ -95,7 +95,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   -- `app/src/lib/capabilities.ts` already draws a `manageTasks: 4` line, so a
   -- gate loosened to `>= 4` would hand every Project Responsible the whole
   -- organisation's points. Ruling 5: pin the threshold, not "some lower role".
-  ('25800000-0000-0000-0000-000000000004', 'Responsabil 258', 'responsabil258@example.test', 'responsabil', 'activ'),
+  ('25800000-0000-0000-0000-000000000004', 'Responsabil 258', 'responsabil258@example.test', 'vot', 'activ'),
   -- Level 6 -- proves the allow side is not carried by BCE alone.
   ('25800000-0000-0000-0000-000000000005', 'BC 258', 'bc258@example.test', 'bc', 'activ'),
   ('25800000-0000-0000-0000-000000000006', 'Ana Egalitate 258', 'egalitate258@example.test', 'activ', 'activ'),

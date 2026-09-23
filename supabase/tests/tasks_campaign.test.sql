@@ -16,7 +16,7 @@ insert into auth.users (id, email) values
   ('31400000-0000-0000-0000-000000000001', 'campaign-actor-314@test.local');
 insert into public.profiles (id, full_name, email, role, status) values
   ('31400000-0000-0000-0000-000000000001', 'Campaign Actor 314',
-   'campaign-actor-314@test.local', 'responsabil', 'activ');
+   'campaign-actor-314@test.local', 'vot', 'activ');
 
 insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Origin Project 314', 'active',

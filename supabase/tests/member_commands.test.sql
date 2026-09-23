@@ -123,7 +123,7 @@ insert into profiles (id, full_name, email, role, status) values
   ('58000000-0000-0000-0000-000000000003', 'BCE 580',           'bce580@test.local',        'bce',         'activ'),
   ('58000000-0000-0000-0000-000000000004', 'Voluntar 580 A',    'vol580a@test.local',       'voluntar',    'activ'),
   ('58000000-0000-0000-0000-000000000005', 'Voluntar 580 B',    'vol580b@test.local',       'voluntar',    'activ'),
-  ('58000000-0000-0000-0000-000000000006', 'Responsabil 580',   'resp580@test.local',       'responsabil', 'activ'),
+  ('58000000-0000-0000-0000-000000000006', 'Responsabil 580',   'resp580@test.local',       'vot', 'activ'),
   ('58000000-0000-0000-0000-000000000007', 'BC țintă 580',      'bctarget580@test.local',   'bc',          'activ'),
   -- Deactivated, but still holding the level-6 token it was issued (ADR-0003).
   ('58000000-0000-0000-0000-000000000008', 'BC dezactivat 580', 'bcstale580@test.local',    'bc',          'inactiv'),
@@ -250,9 +250,9 @@ select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
 -- Answered ahead of any authority verdict, so they are asserted as BC.
 
 select throws_ok(
-  $$ select public.set_member_role('58000000-0000-0000-0000-000000000004', 'responsabil') $$,
-  'PT400', 'invalid_member_role',
-  'responsabil is a source rank only — nobody is moved onto it (ADR-0009)');
+  $$ select public.set_member_role('58000000-0000-0000-0000-000000000004', 'retired_rank') $$,
+  '22P02', null,
+  'only the seven live enum values are accepted');
 select throws_ok(
   $$ select public.set_member_role('58000000-0000-0000-0000-000000000004', null) $$,
   'PT400', 'invalid_member_role',

@@ -68,7 +68,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('26000000-0000-0000-0000-000000000002', 'Target 260', 'target260@example.test', 'activ', 'activ'),
   ('26000000-0000-0000-0000-000000000003', 'Ordinary 260', 'ordinary260@example.test', 'activ', 'activ'),
   ('26000000-0000-0000-0000-000000000004', 'Inactive BCE 260', 'inactive260@example.test', 'bce', 'inactiv'),
-  ('26000000-0000-0000-0000-000000000005', 'Responsabil 260', 'responsabil260@example.test', 'responsabil', 'activ'),
+  ('26000000-0000-0000-0000-000000000005', 'Responsabil 260', 'responsabil260@example.test', 'vot', 'activ'),
   ('26000000-0000-0000-0000-000000000006', 'BC 260', 'bc260@example.test', 'bc', 'activ');
 
 insert into public.campaigns (group_id, name, created_by) values

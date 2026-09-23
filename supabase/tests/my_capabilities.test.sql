@@ -43,7 +43,7 @@ insert into public.profiles (id, email, full_name, role, status) values
   ('57600000-0000-0000-0000-000000000004', 'coordonator576@test.local', 'Coordonator 576', 'voluntar',    'activ'),
   ('57600000-0000-0000-0000-000000000005', 'responsible576@test.local', 'Responsible 576', 'voluntar',    'activ'),
   ('57600000-0000-0000-0000-000000000006', 'vot576@test.local',         'Vot 576',         'vot',         'activ'),
-  ('57600000-0000-0000-0000-000000000007', 'responsabil576@test.local', 'Responsabil 576', 'responsabil', 'activ'),
+  ('57600000-0000-0000-0000-000000000007', 'responsabil576@test.local', 'Responsabil 576', 'vot', 'activ'),
   ('57600000-0000-0000-0000-000000000008', 'bce576@test.local',         'BCE 576',         'bce',         'activ'),
   ('57600000-0000-0000-0000-000000000009', 'bcemanager576@test.local',  'BCE Manager 576', 'bce',         'activ'),
   ('57600000-0000-0000-0000-000000000010', 'bc576@test.local',          'BC 576',          'bc',          'activ'),

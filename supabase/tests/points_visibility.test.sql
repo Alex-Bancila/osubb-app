@@ -45,7 +45,7 @@ insert into auth.users (id, email) values
 
 insert into public.profiles (id, full_name, email, role) values
   ('f1000000-0000-0000-0000-0000000000f1', 'Flor Voluntar',   'flor.vol@test.local',   'voluntar'),
-  ('f2000000-0000-0000-0000-0000000000f2', 'Felix Responsabil','felix.resp@test.local', 'responsabil'),
+  ('f2000000-0000-0000-0000-0000000000f2', 'Felix Responsabil','felix.resp@test.local', 'vot'),
   ('f3000000-0000-0000-0000-0000000000f3', 'Fiona BCE',       'fiona.bce@test.local',  'bce'),
   ('f4000000-0000-0000-0000-0000000000f4', 'Frida BC',        'frida.bc@test.local',   'bc'),
   ('f5000000-0000-0000-0000-0000000000f5', 'Fane Moderator',  'fane.mod@test.local',   'moderator');
@@ -106,7 +106,7 @@ select is(
 reset role;
 
 select pg_temp.test_login('f2000000-0000-0000-0000-0000000000f2', jsonb_build_object(
-    'member_role', 'responsabil',
+    'member_role', 'vot',
     'member_level', 4,
     'dept_ids', '["edu"]'::jsonb,
     'team_ids', '[]'::jsonb

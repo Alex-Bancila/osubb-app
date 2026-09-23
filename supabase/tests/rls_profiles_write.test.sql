@@ -39,7 +39,7 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, phone, role, status) values
   ('e1000000-0000-0000-0000-0000000000e1', 'Emil Voluntar',   'emil.vol@test.local',   '0700000001', 'voluntar',    'activ'),
   ('e2000000-0000-0000-0000-0000000000e2', 'Eva Voluntar',    'eva.vol@test.local',    '0700000002', 'voluntar',    'activ'),
-  ('e3000000-0000-0000-0000-0000000000e3', 'Elena Responsabil','elena.resp@test.local', '0700000003', 'responsabil', 'activ'),
+  ('e3000000-0000-0000-0000-0000000000e3', 'Elena Responsabil','elena.resp@test.local', '0700000003', 'vot', 'activ'),
   ('e4000000-0000-0000-0000-0000000000e4', 'Eduard BC',       'eduard.bc@test.local',  '0700000004', 'bc',          'activ'),
   -- Deactivated: keeps their uid and their row, loses their claims (ADR-0003).
   ('e5000000-0000-0000-0000-0000000000e5', 'Ela Fostă',       'ela.fost@test.local',   '0700000005', 'voluntar',    'inactiv');
@@ -118,7 +118,7 @@ reset role;
 -- A Responsabil manages tasks, not people. The nearest thing to a promotion
 -- attempt by someone who legitimately holds power elsewhere.
 select pg_temp.test_login('e3000000-0000-0000-0000-0000000000e3', jsonb_build_object(
-    'member_role', 'responsabil',
+    'member_role', 'vot',
     'member_level', 4,
     'dept_ids', '["edu"]'::jsonb,
     'team_ids', '[]'::jsonb

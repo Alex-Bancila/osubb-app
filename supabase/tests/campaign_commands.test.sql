@@ -30,7 +30,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('34300000-0000-0000-0000-000000000002', 'FIN BCE Campaign', 'fin.bce.campaign@test.local', 'bce', 'activ'),
   ('34300000-0000-0000-0000-000000000003', 'BC Campaign', 'bc.campaign@test.local', 'bc', 'activ'),
   ('34300000-0000-0000-0000-000000000004', 'Moderator Campaign', 'moderator.campaign@test.local', 'moderator', 'activ'),
-  ('34300000-0000-0000-0000-000000000005', 'Responsabil Campaign', 'responsabil.campaign@test.local', 'responsabil', 'activ'),
+  ('34300000-0000-0000-0000-000000000005', 'Responsabil Campaign', 'responsabil.campaign@test.local', 'vot', 'activ'),
   ('34300000-0000-0000-0000-000000000006', 'Voluntar Campaign', 'voluntar.campaign@test.local', 'voluntar', 'activ'),
   ('34300000-0000-0000-0000-000000000007', 'Inactive EDU BCE Campaign', 'inactive.edu.bce.campaign@test.local', 'bce', 'inactiv'),
   ('34300000-0000-0000-0000-000000000008', 'Removed EDU BCE Campaign', 'removed.edu.bce.campaign@test.local', 'bce', 'activ');
@@ -171,7 +171,7 @@ select is((select name from moderator_campaign), 'Moderator Campaign',
   'Moderator creates a Campaign in any department');
 
 select pg_temp.test_login('34300000-0000-0000-0000-000000000005', jsonb_build_object(
-  'member_role', 'responsabil', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+  'member_role', 'vot', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.create_campaign(pg_temp.dept_group('edu'), 'Nope')$$,
   '42501', 'campaign_manage_forbidden', 'Responsabil is denied');
 reset role;
@@ -308,7 +308,7 @@ reset role;
 -- #343 review round 1 (Minor 6): persona gaps -- update_campaign only had
 -- BCE-of-another-department, claimless and anon covered.
 select pg_temp.test_login('34300000-0000-0000-0000-000000000005', jsonb_build_object(
-  'member_role', 'responsabil', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+  'member_role', 'vot', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.update_campaign(
   (select alpha_id from cids), 'Hacked')$$,
   '42501', 'campaign_manage_forbidden', 'Responsabil cannot update a Campaign');
@@ -419,7 +419,7 @@ reset role;
 -- #343 review round 1 (Minor 6): persona gaps -- set_campaign_active only
 -- had BCE-of-another-department, claimless and anon covered.
 select pg_temp.test_login('34300000-0000-0000-0000-000000000005', jsonb_build_object(
-  'member_role', 'responsabil', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+  'member_role', 'vot', 'member_level', 4, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.set_campaign_active(
   (select alpha_id from cids), false)$$,
   '42501', 'campaign_manage_forbidden', 'Responsabil cannot toggle a Campaign');
