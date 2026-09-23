@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   options: vi.fn(),
   campaigns: vi.fn(),
   mutate: vi.fn(),
+  report: vi.fn(),
 }));
 vi.mock('../../queries/task-form-options', () => ({
   useTaskFormOptions: api.options,
@@ -16,8 +17,16 @@ vi.mock('../../queries/campaigns', async (original) => ({
   ...(await original<object>()),
   useCampaigns: api.campaigns,
   useCampaignChange: () => ({ mutateAsync: api.mutate, isPending: false }),
+  useCampaignReport: api.report,
 }));
 import CampaignsScreen from './CampaignsScreen';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 // The first case walks two pop-ups and an axe run end to end; on a loaded
 // machine that can pass the 5 s default without anything being wrong.
 vi.setConfig({ testTimeout: 15_000 });
@@ -37,6 +46,7 @@ beforeEach(() => {
   });
   api.campaigns.mockReturnValue({ data: [campaign] });
   api.mutate.mockResolvedValue(campaign);
+  api.report.mockReturnValue({ isPending: true });
 });
 function show(path = '/administrare/grupuri/2/campanii') {
   return render(
@@ -149,4 +159,32 @@ it('keeps the pop-up and its input for retry and hides unexpected server details
   expect(within(create).getByLabelText('Numele campaniei')).toHaveValue(
     'Iarnă',
   );
+});
+it('names each contributor in the report as a button that opens their Member Card', async () => {
+  const user = userEvent.setup();
+  api.report.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: {
+      totals: { points: 12, tasksCompleted: 2, tasksTotal: 3 },
+      members: [
+        {
+          memberId: 'ana',
+          name: 'Ana Pop',
+          nickname: 'Ani',
+          points: 12,
+          tasksCompleted: 2,
+        },
+      ],
+    },
+  });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Vezi raportul' }));
+  const list = screen.getByRole('list', { name: 'Voluntari cu puncte' });
+  await user.click(
+    within(list).getByRole('button', { name: 'Profilul membrului Ani' }),
+  );
+  const card = await screen.findByRole('dialog', { name: 'Ani' });
+  // The report row shows points; the Member Card never does.
+  expect(card).not.toHaveTextContent('12');
 });

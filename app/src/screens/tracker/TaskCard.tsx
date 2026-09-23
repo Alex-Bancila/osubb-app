@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { UserRound } from 'lucide-react';
+import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -133,11 +134,20 @@ export function TaskCard({
                 className="size-4 shrink-0 text-muted-foreground"
               />
               <span className="font-medium">Responsabil:</span>
-              <span className="min-w-0 wrap-anywhere">
-                {task.executor
-                  ? (task.executor.name ?? 'Nume indisponibil')
-                  : 'Neatribuit'}
-              </span>
+              {/* Only an identity #499's lookup returned becomes a name
+                  button; an Executor known by id alone stays anonymous. */}
+              {task.executor?.name ? (
+                <MemberName
+                  size="sm"
+                  memberId={task.executor.memberId}
+                  nickname={task.executor.nickname}
+                  fullName={task.executor.name}
+                />
+              ) : (
+                <span className="min-w-0 wrap-anywhere">
+                  {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
+                </span>
+              )}
             </p>
           )}
           <p className="text-sm">

@@ -22,6 +22,7 @@ export async function attachVisibleTaskExecutors(
       {
         memberId: executor.member_id,
         fullName: executor.full_name?.trim() || null,
+        nickname: executor.nickname?.trim() || null,
       },
     ]),
   );

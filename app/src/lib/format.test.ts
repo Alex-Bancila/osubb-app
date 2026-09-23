@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { formatDate, formatLongDate } from './format';
+import { formatDate, formatDayMonthYear, formatLongDate } from './format';
 
 // Pinned because #376 briefly swapped these to date-fns, whose Romanian
 // abbreviations differ ("12 noi", no full stops) — a visible change.
@@ -21,4 +21,10 @@ it('formats the long date a screen leads with', () => {
 it('shows a dash for a missing or malformed date', () => {
   expect(formatDate(null)).toBe('—');
   expect(formatDate('2026-02-30')).toBe('—');
+});
+
+it('formats a milestone date with day, month and year', () => {
+  expect(formatDayMonthYear('2024-03-12')).toBe('12 martie 2024');
+  expect(formatDayMonthYear(null)).toBeNull();
+  expect(formatDayMonthYear('2026-02-30')).toBeNull();
 });

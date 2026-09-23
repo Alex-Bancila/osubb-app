@@ -26,6 +26,13 @@ vi.mock('../../queries/reference', () => ({
   useEvaluationScale: () => state.scale,
 }));
 import { RequestDecisionQueue } from './RequestDecisionQueue';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 const request = {
   id: 7,
   requester_id: 'ana',
@@ -140,4 +147,15 @@ it('keeps the request and note on unexpected failure without leaking details', a
   expect(
     screen.getByLabelText('Motivul respingerii (obligatoriu)'),
   ).toHaveValue('Notă');
+});
+it('names the Requester by Nickname as a button that opens their Member Card', async () => {
+  state.queue.mockReturnValue({
+    data: [{ ...request, requester_nickname: 'Ani' }],
+  });
+  render(<RequestDecisionQueue />);
+  const name = screen.getByRole('button', { name: 'Profilul membrului Ani' });
+  expect(name.closest('p')).toHaveTextContent(/Ani\s*·\s*Ateliere$/);
+  expect(name).not.toHaveTextContent('Ana Pop');
+  await userEvent.click(name);
+  expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
 });
