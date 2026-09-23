@@ -71,6 +71,25 @@ $$;
 -- The legacy columns, backfilled from each row's own Group as the bridge kept them.
 create type public.event_scope as enum ('team', 'dept', 'project', 'org');
 
+-- #586's current demo seed creates its three Team and two Project Groups with
+-- commands after the bridge was dropped. For this rollback-only replay of the
+-- older, pre-#579 shape, attach their corresponding surviving legacy keys.
+-- The transaction rolls these synthetic keys back after each run.
+update public.groups as grp
+   set legacy_team_id = team.id
+  from public.teams as team
+ where grp.created_by = 'd0000000-0000-0000-0000-000000000007'
+   and (grp.name, team.id) in (('Echipa Aplicație', 't-app'),
+                              ('Echipa Recruți', 't-recruti'),
+                              ('Echipa Logistică', 't-logistica'));
+update public.groups as grp
+   set legacy_project_id = project.id
+  from public.projects as project
+ where grp.created_by = 'd0000000-0000-0000-0000-000000000007'
+   and project.created_by = grp.created_by
+   and project.name = grp.name
+   and project.name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025');
+
 alter table public.tasks add column dept_id text, add column team_id text, add column project_id bigint;
 update public.tasks as task
    set dept_id = grp.legacy_dept_id, team_id = grp.legacy_team_id, project_id = grp.legacy_project_id
