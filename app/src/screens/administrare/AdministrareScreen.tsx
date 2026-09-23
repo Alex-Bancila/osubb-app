@@ -21,6 +21,7 @@ import {
   type GroupCommand,
 } from '../../queries/groups-admin';
 import { GroupCreateDialog } from './GroupCreateDialog';
+import { RolePanel } from './RolePanel';
 import {
   buildTree,
   categoryLabel,
@@ -350,6 +351,8 @@ export default function AdministrareScreen() {
           {error}
         </p>
       )}
+
+      {capabilities.data?.manageRoles === true && <RolePanel />}
 
       {pending ? (
         <p role="status">Se încarcă grupurile…</p>
