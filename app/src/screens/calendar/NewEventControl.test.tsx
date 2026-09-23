@@ -1,0 +1,172 @@
+import * as axe from 'axe-core';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const state = vi.hoisted(() => ({
+  options: vi.fn(),
+  create: vi.fn(),
+  auth: vi.fn(),
+  mutateAsync: vi.fn(),
+}));
+
+vi.mock('../../queries/event-creation', () => ({
+  useEventFormOptions: state.options,
+  useCreateEvent: state.create,
+  eventCreationErrorMessage: (error: { message?: string }) =>
+    error.message === 'calendar_manage_forbidden'
+      ? 'Nu mai ai permisiunea să creezi evenimente în acest grup.'
+      : 'Nu am putut crea evenimentul. Reîncearcă.',
+}));
+vi.mock('../../lib/auth', () => ({ useAuth: state.auth }));
+
+import { NewEventControl } from './NewEventControl';
+
+const formOptions = {
+  groups: [
+    {
+      id: 1,
+      name: 'OSUBB',
+      path: [1],
+      minLevel: 0,
+      isOrganization: true,
+    },
+    {
+      id: 7,
+      name: 'Educațional',
+      path: [7],
+      minLevel: 0,
+      isOrganization: false,
+    },
+  ],
+  groupNames: [
+    { id: 1, name: 'OSUBB' },
+    { id: 7, name: 'Educațional' },
+  ],
+};
+
+function setup() {
+  const user = userEvent.setup();
+  render(<NewEventControl />);
+  return user;
+}
+
+async function open(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Eveniment nou' }));
+  return screen.findByRole('dialog', { name: 'Eveniment nou' });
+}
+
+async function chooseGroup(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('combobox', { name: 'Grup' }));
+  await user.click(await screen.findByRole('option', { name: 'Educațional' }));
+}
+
+async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
+  await chooseGroup(user);
+  await user.type(screen.getByLabelText('Titlu'), 'Ședință de toamnă');
+  fireEvent.change(screen.getByLabelText(/Începe/), {
+    target: { value: '2026-10-01T18:00' },
+  });
+}
+
+describe('NewEventControl', () => {
+  beforeEach(() => {
+    state.options.mockReturnValue({ data: formOptions });
+    state.create.mockReturnValue({
+      mutateAsync: state.mutateAsync,
+      isPending: false,
+    });
+    state.auth.mockReturnValue({
+      session: { user: { id: 'manager-1' } },
+      claims: { member_level: 6 },
+    });
+    state.mutateAsync.mockReset();
+  });
+
+  it.each([
+    ['while options load', { isPending: true }],
+    ['when options fail', { isError: true }],
+    ['without a manageable Group', { data: { groups: [], groupNames: [] } }],
+  ])('is hidden %s', (_label, result) => {
+    state.options.mockReturnValue(result);
+    setup();
+    expect(screen.queryByRole('button', { name: 'Eveniment nou' })).toBeNull();
+  });
+
+  it('opens an accessible responsive Event form', async () => {
+    const user = setup();
+    const dialog = await open(user);
+    expect(screen.getByLabelText('Titlu')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tip')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Grup' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Începe/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Se încheie/)).toBeInTheDocument();
+    const results = await axe.run(dialog, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(results.violations).toEqual([]);
+  });
+
+  it('creates through the normalized RPC draft and closes', async () => {
+    state.mutateAsync.mockResolvedValue({ id: 44 });
+    const user = setup();
+    await open(user);
+    await fillRequired(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    await waitFor(() => expect(state.mutateAsync).toHaveBeenCalledOnce());
+    expect(state.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Ședință de toamnă',
+        groupId: 7,
+        startsAt: '2026-10-01T15:00:00.000Z',
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('keeps the draft and shows safe Romanian feedback after refusal', async () => {
+    state.mutateAsync.mockRejectedValue({
+      code: '42501',
+      message: 'calendar_manage_forbidden',
+      details: 'private SQL detail',
+    });
+    const user = setup();
+    await open(user);
+    await fillRequired(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Nu mai ai permisiunea',
+    );
+    expect(screen.queryByText('private SQL detail')).toBeNull();
+    expect(screen.getByLabelText('Titlu')).toHaveValue('Ședință de toamnă');
+    expect(screen.getByRole('dialog', { name: 'Eveniment nou' })).toBeVisible();
+  });
+
+  it('blocks a locally invalid draft without calling the RPC', async () => {
+    const user = setup();
+    await open(user);
+    await user.type(screen.getByLabelText('Titlu'), 'Fără grup');
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Alege grupul evenimentului.',
+    );
+    expect(state.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('resets an explicitly cancelled draft on the next opening', async () => {
+    const user = setup();
+    await open(user);
+    await user.type(screen.getByLabelText('Titlu'), 'Draft abandonat');
+    await user.click(screen.getByRole('button', { name: 'Renunță' }));
+    await open(user);
+    expect(screen.getByLabelText('Titlu')).toHaveValue('');
+  });
+});
