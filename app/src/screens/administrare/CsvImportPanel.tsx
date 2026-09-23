@@ -111,24 +111,27 @@ export function CsvImportPanel() {
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
-          <label
-            htmlFor="csv-import-file"
-            className="block text-sm font-medium"
-          >
-            Fișier CSV
-          </label>
+          <span className="block text-sm font-medium">Fișier CSV</span>
           <input
             id="csv-import-file"
             type="file"
+            aria-label="Fișier CSV"
             accept=".csv,text/csv"
             disabled={pending}
-            className="block max-w-full text-sm"
+            className="peer sr-only"
             onChange={(event) => {
               setFile(event.target.files?.[0] ?? null);
               setReport(null);
               setError(null);
             }}
           />
+          <label
+            htmlFor="csv-import-file"
+            className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border px-4 text-sm font-medium hover:bg-muted peer-focus-visible:outline-2 peer-focus-visible:outline-ring peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+          >
+            Alege fișier CSV
+          </label>
+          {file && <span className="ml-2 text-sm break-all">{file.name}</span>}
         </div>
         <Button
           type="button"

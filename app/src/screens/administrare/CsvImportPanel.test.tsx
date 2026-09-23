@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
@@ -144,4 +144,31 @@ it('reports a malformed file response without crashing', async () => {
 it('keeps import disabled until a file is selected', () => {
   show();
   expect(screen.getByRole('button', { name: 'Import CSV' })).toBeDisabled();
+});
+
+it('locks the selected file while its report is pending', async () => {
+  let finish!: (value: unknown) => void;
+  api.invoke.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  show();
+  await uploadAndImport(user);
+  await waitFor(() =>
+    expect(screen.getByLabelText('Fișier CSV')).toBeDisabled(),
+  );
+  finish({
+    data: {
+      summary: { created: 0, skipped: 0, errors: 0 },
+      created: [],
+      skipped: [],
+      errors: [],
+    },
+    error: null,
+  });
+  await waitFor(() =>
+    expect(screen.getByLabelText('Fișier CSV')).toBeEnabled(),
+  );
 });
