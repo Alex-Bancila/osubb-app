@@ -18,7 +18,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(126);
+select plan(127);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1356,6 +1356,14 @@ select pg_temp.g521_task('command8','ind',7,'in_review','direct');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select lives_ok($$select public.complete_task_review((select id from g521_tasks where name='command8'),3,3,'Evaluation #521')$$,'complete_task_review: Group persona 1 on executor 7 in ind');
+reset role;
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.complete_task_review(0, 3, 3, repeat('n', 1001)) $$,
+  'PT400', 'note_too_long', 'an Evaluation note over 1000 characters is refused before the gate');
 reset role;
 
 select * from finish();

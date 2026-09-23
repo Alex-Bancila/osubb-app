@@ -1,11 +1,12 @@
 import { formatPoints } from '../../lib/format';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { Trophy, XIcon } from 'lucide-react';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
 import { GroupOption, groupOptionLabel } from '../../components/ui/combobox';
@@ -19,15 +20,16 @@ import { LeadershipAccess } from './LeadershipAccess';
 
 const columns: DataTableColumn<LeaderboardRow>[] = [
   {
-    accessorKey: 'full_name',
+    id: 'member',
+    accessorFn: (row) => row.nickname || row.full_name,
     header: 'Membru',
+    // The card carries "Vezi istoricul taskurilor" for leadership viewers.
     cell: ({ row }) => (
-      <Link
-        className="inline-flex min-h-11 items-center font-semibold text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
-        to={`/tracker/membru/${row.original.member_id}`}
-      >
-        {row.original.full_name}
-      </Link>
+      <MemberName
+        memberId={row.original.member_id}
+        nickname={row.original.nickname}
+        fullName={row.original.full_name}
+      />
     ),
   },
   {

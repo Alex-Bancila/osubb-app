@@ -79,3 +79,14 @@ export function initials(nameOrEmail: string | undefined | null): string {
   }
   return nameOrEmail.slice(0, 2).toUpperCase();
 }
+
+/** `12 martie 2024` — day, month and year, for a date that is a milestone. */
+export function formatDayMonthYear(iso: string | null): string | null {
+  const date = parseLocalDate(iso);
+  if (!date) return null;
+  return new Intl.DateTimeFormat('ro-RO', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}

@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(38);
+select plan(41);
 
 -- ==================== Structure ====================
 select has_function('public', 'guard_profile_privileged_columns',
@@ -83,6 +83,36 @@ select lives_ok(
   $$ update profiles set full_name = 'Emil Voluntar', phone = '0711999777', avatar_color = '#ED2025'
       where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
   'a self-update resending the unchanged full_name still saves');
+
+-- #673 (R8): the phone is normalised to E.164 on the way in, or refused.
+-- Read back as the owner: authenticated reads contact fields through
+-- profiles_contact, not the table.
+reset role;
+select is(
+  (select phone from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
+  '+40711999777', 'SELF''s phone 0711999777 is stored as +40711999777 (#673)');
+select pg_temp.test_login('e1000000-0000-0000-0000-0000000000e1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
+select throws_ok(
+  $$ update profiles set phone = '+40 123456789'
+      where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '23514', 'phone_invalid', 'a Romanian number that is not a mobile is refused as phone_invalid (#673)');
+update profiles set phone = '   ' where id = 'e1000000-0000-0000-0000-0000000000e1';
+reset role;
+select is(
+  (select phone from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
+  null, 'a blank phone clears the field (#673)');
+select pg_temp.test_login('e1000000-0000-0000-0000-0000000000e1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
+
 
 -- ==================== …but never promotes themselves (AC) ====================
 -- These raise rather than silently affecting zero rows: the row IS visible to

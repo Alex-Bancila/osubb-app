@@ -55,7 +55,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(98);
+select plan(99);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1131,6 +1131,14 @@ update public.tasks set created_by=pg_temp.g521_uid(8) where id=(select id from 
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select lives_ok($$select public.give_up_task((select id from g521_tasks where name='executor3'),'Leaving #521')$$,'give_up_task: Executor persona 8 remains authorized');
+reset role;
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.give_up_task(0, repeat('r', 1001)) $$,
+  'PT400', 'reason_too_long', 'a give-up reason over 1000 characters is refused before the gate');
 reset role;
 
 select * from finish();
