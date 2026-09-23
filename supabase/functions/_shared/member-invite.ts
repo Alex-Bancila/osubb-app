@@ -3,8 +3,10 @@ export interface ProvisionArgs {
   fullName: string;
   email: string;
   role: string;
-  deptIds: string[];
-  teamIds: string[];
+  /** The initial Groups, appointed through the roster path (#602). */
+  groupIds: number[];
+  /** The inviting BC or Moderator — the Appointment's actor. */
+  appointedBy: string;
 }
 
 export interface DbError {
@@ -17,8 +19,8 @@ export interface InviteDeps {
   callerId(): Promise<string | null>;
   /** Authoritative level from the database; 0 for missing/inactive members. */
   memberLevel(userId: string): Promise<number>;
-  /** Which of these ids do NOT exist in the table. */
-  missingIds(table: "departments" | "teams", ids: string[]): Promise<string[]>;
+  /** Which of these Group ids do NOT name an active Group. */
+  missingGroupIds(ids: number[]): Promise<number[]>;
   /** True when a profile already uses this email. */
   profileExists(email: string): Promise<boolean>;
   /** Sends the magic-link invite; returns the new (or existing) user id. */
@@ -33,8 +35,9 @@ export interface InviteMemberInput {
   fullName: string;
   email: string;
   role?: string;
-  deptIds?: string[];
-  teamIds?: string[];
+  groupIds?: number[];
+  /** The verified inviting BC or Moderator; recorded as the Appointment actor. */
+  appointedBy: string;
 }
 
 export type InviteMemberResult =
@@ -54,20 +57,19 @@ export async function inviteMember(
 ): Promise<InviteMemberResult> {
   const email = input.email.trim().toLowerCase();
   const fullName = input.fullName.trim();
-  const deptIds = input.deptIds ?? [];
-  const teamIds = input.teamIds ?? [];
+  const groupIds = input.groupIds ?? [];
 
-  for (
-    const [table, ids, label] of [
-      ["departments", deptIds, "Departament inexistent"],
-      ["teams", teamIds, "Echipă inexistentă"],
-    ] as const
-  ) {
-    const missing = await deps.missingIds(table, ids);
+  // Still BEFORE the invitation is sent, for the same reason as ever: a typo
+  // must never mail a real person an account we then delete. The Appointment
+  // core refuses far more than a missing id (archived, Automatic, below the
+  // Minimum Level) and those refusals are answered by the rollback below —
+  // this check only keeps the cheapest, commonest mistake out of the mailbox.
+  if (groupIds.length > 0) {
+    const missing = await deps.missingGroupIds(groupIds);
     if (missing.length > 0) {
       return {
         kind: "invalid_reference",
-        message: `${label}: ${missing.join(", ")}.`,
+        message: `Grup inexistent: ${missing.join(", ")}.`,
       };
     }
   }
@@ -92,8 +94,8 @@ export async function inviteMember(
     fullName,
     email,
     role: input.role ?? "recrut",
-    deptIds,
-    teamIds,
+    groupIds,
+    appointedBy: input.appointedBy,
   });
 
   if (!provisionError) {

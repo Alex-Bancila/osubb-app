@@ -26,6 +26,10 @@ vi.mock('../../queries/event-rsvp', () => ({
   useSetEventRsvp: hooks.useSetEventRsvp,
 }));
 
+vi.mock('./NewEventControl', () => ({
+  NewEventControl: () => <button type="button">Eveniment nou</button>,
+}));
+
 import CalendarScreen from './CalendarScreen';
 
 const eduGroup: EventGroup = {
@@ -204,6 +208,9 @@ describe('CalendarScreen', () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(
+      screen.getByRole('button', { name: 'Eveniment nou' }),
+    ).toBeInTheDocument();
   });
 
   it('shows Group identity, time, place, and informational capacity', () => {

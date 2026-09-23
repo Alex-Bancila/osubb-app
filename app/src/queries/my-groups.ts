@@ -1,5 +1,8 @@
 import type { Database } from '../lib/database.types';
+import { skipToken, useQuery } from '@tanstack/react-query';
+import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { keys } from './keys';
 
 /**
  * One row of `public.my_groups()` (#576): a Group where the live caller holds an
@@ -18,6 +21,15 @@ export async function fetchMyGroups(): Promise<MyGroup[]> {
   const { data, error } = await supabase.rpc('my_groups');
   if (error) throw error;
   return data ?? [];
+}
+
+/** Live effective Group Roles, shared by screens outside Administrare. */
+export function useMyGroupRoles() {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.groups.mine(memberId),
+    queryFn: memberId ? fetchMyGroups : skipToken,
+  });
 }
 
 /**

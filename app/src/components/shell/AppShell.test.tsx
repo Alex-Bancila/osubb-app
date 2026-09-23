@@ -23,6 +23,9 @@ vi.mock('../../queries/notifications', () => ({
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: queries.useCapabilities,
 }));
+vi.mock('../../queries/notifications-realtime', () => ({
+  useNotificationRealtime: vi.fn(),
+}));
 
 import AppShell from './AppShell';
 import type { Capabilities } from '../../lib/capabilities';

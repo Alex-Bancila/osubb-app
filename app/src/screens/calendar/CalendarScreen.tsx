@@ -5,6 +5,7 @@ import { useUpcomingEvents } from '../../queries/events';
 import { useGroups } from '../../queries/reference';
 import { groupUpcomingEvents } from './calendar-presentation';
 import EventCard from './EventCard';
+import { NewEventControl } from './NewEventControl';
 
 export default function CalendarScreen() {
   const events = useUpcomingEvents();
@@ -18,11 +19,17 @@ export default function CalendarScreen() {
       <IonContent>
         <div className="page calendar-page">
           <header className="page-head calendar-head">
-            <p className="calendar-kicker">Agenda OSUBB</p>
-            <h1 className="page-title">Ce urmează</h1>
-            <p className="calendar-intro">
-              Întâlnirile, activitățile și deadline-urile vizibile pentru tine.
-            </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="calendar-kicker">Agenda OSUBB</p>
+                <h1 className="page-title">Ce urmează</h1>
+                <p className="calendar-intro">
+                  Întâlnirile, activitățile și deadline-urile vizibile pentru
+                  tine.
+                </p>
+              </div>
+              <NewEventControl />
+            </div>
           </header>
 
           {events.isPending ? (
