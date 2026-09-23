@@ -26,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(97);
+select plan(99);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -892,6 +892,17 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select lives_ok($$select public.express_task_interest((select id from g521_tasks where name='executor3'))$$,'task_interest: Executor persona 8 remains authorized');
 reset role;
+
+-- #675: the first-come "Executor nou" body names the Executor by Nickname when
+-- one is set (section 2 above named a Nickname-less Executor by full name).
+update public.profiles set nickname='Primul 675' where id=pg_temp.g521_uid(4);
+select pg_temp.g521_task('executor675','project',null,'todo','public');
+update public.tasks set created_by=pg_temp.g521_uid(4) where id=(select id from g521_tasks where name='executor675');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(4));
+select lives_ok($$select public.express_task_interest((select id from g521_tasks where name='executor675'))$$,'task_interest: a Nicknamed Member takes a first-come Task');
+reset role;
+select is((select body from public.notifications where task_id=(select id from g521_tasks where name='executor675') and member_id=pg_temp.g521_uid(2) and title like 'Executor nou:%'),'Primul 675 a preluat taskul.','with a Nickname set, the "Executor nou" body names the Executor by it, read at write time (#675)');
 
 select * from finish();
 rollback;

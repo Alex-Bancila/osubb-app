@@ -9,6 +9,13 @@ import EditProfileSheet from './EditProfileSheet';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 
 const updateProfileMock = vi.fn();
+// `manageRoles` is the BC/Moderator rank: the only one allowed to change a
+// full name (#675, R5). Each test sets it; the default is an ordinary Member.
+const capabilityMock = vi.hoisted(() => ({ manageRoles: false }));
+
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: (name: 'manageRoles') => ({ data: capabilityMock[name] }),
+}));
 
 vi.mock('../../queries/profile', () => ({
   useUpdateMyProfile: () => ({
@@ -42,6 +49,7 @@ describe('EditProfileSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     updateProfileMock.mockResolvedValue(undefined);
+    capabilityMock.manageRoles = false;
   });
 
   it('renders existing profile fields with email disabled', () => {
@@ -73,7 +81,40 @@ describe('EditProfileSheet', () => {
     ).toBeInTheDocument();
   });
 
-  it('submits updated name, phone, and avatar color', async () => {
+  it('shows the full name read-only below BC and saves without sending it (#675)', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+
+    render(
+      <EditProfileSheet
+        open={true}
+        onClose={onClose}
+        profile={sampleProfile}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    const nameInput = screen.getByLabelText(/nume complet/i);
+    expect(nameInput).toHaveValue('Ana Popescu');
+    expect(nameInput).toBeDisabled();
+    expect(
+      screen.getByText(/numele complet îl modifică biroul de conducere/i),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: /salvează modificările/i }),
+    );
+
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      phone: '0711223344',
+      avatarColor: '#284C93',
+    });
+    expect(updateProfileMock.mock.calls[0]?.[0]).not.toHaveProperty('fullName');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('lets BC submit an updated name, phone, and avatar color', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
     const onClose = vi.fn();
 
@@ -112,6 +153,7 @@ describe('EditProfileSheet', () => {
   });
 
   it('validates that full name cannot be blank', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
 
     render(
@@ -159,7 +201,6 @@ describe('EditProfileSheet', () => {
     await user.click(saveButton);
 
     expect(updateProfileMock).toHaveBeenCalledWith({
-      fullName: 'Ana Popescu',
       phone: null,
       avatarColor: '#284C93',
     });
