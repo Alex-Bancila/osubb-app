@@ -45,9 +45,9 @@ select extensions.dblink_exec('task_627_setup', $setup$
   insert into public.task_assignments(task_id,member_id,assigned_by)
     values ((select id from public.tasks where title='Race task #627'),
       '62700000-0000-0000-0000-000000000091','62700000-0000-0000-0000-000000000090');
-  -- Isolate the Profile row: the production set_member_role also removes
-  -- below-minimum roster rows, whose Group lock would mask this probe.
-  create function public.test_627_demote() returns text
+  -- A direct non-key Role UPDATE isolates the Profile FOR SHARE lock.
+  -- The production Role command takes additional locks that could mask it.
+  create or replace function public.test_627_demote() returns text
   language sql security definer set search_path='' as $body$
     update public.profiles set role='voluntar'
      where id='62700000-0000-0000-0000-000000000091' returning role::text
