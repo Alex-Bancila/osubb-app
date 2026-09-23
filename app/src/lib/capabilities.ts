@@ -1,6 +1,6 @@
 import { skipToken, useQuery } from '@tanstack/react-query';
 import { keys } from '../queries/keys';
-import { useAuth } from './auth';
+import { useAuth, type MemberClaims } from './auth';
 import { supabase } from './supabase';
 
 /**
@@ -68,4 +68,19 @@ export function useCapabilities<T = Capabilities>(
 /** `useCapability('manageRoles').data === true` — one capability, same query. */
 export function useCapability(capability: Capability) {
   return useCapabilities((capabilities) => capabilities[capability]);
+}
+
+/**
+ * True for a Member who still files Completed-work Requests for their own
+ * work — below level 5 (ruling R14 of the 2026-09-21 profile page grill,
+ * corrected 2026-09-22): BC and BCE do not work by points, so a Request for
+ * their own work has no use to them. Decision authority over other members'
+ * Requests is unrelated and never gated by this.
+ *
+ * Reads the token's own claims rather than the capability row above: the
+ * level number lives here, in one place, until `my_capabilities()` (#576)
+ * carries the flag.
+ */
+export function submitsWorkRequests(claims: MemberClaims | null): boolean {
+  return (claims?.member_level ?? 0) < 5;
 }
