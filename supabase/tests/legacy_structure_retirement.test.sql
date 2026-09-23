@@ -48,6 +48,12 @@ values ('58500000-0000-0000-0000-000000000001','Member 585','member.585@test.loc
 insert into public.teams(id,name,dept_id) values ('team-585','Team 585','edu');
 insert into public.team_members(team_id,member_id)
 values ('team-585','58500000-0000-0000-0000-000000000001');
+-- A native roster explicitly authorizes the transitional Team read.
+insert into public.groups(name,category,parent_id,legacy_team_id)
+values ('Team 585','team',(select id from public.groups where legacy_dept_id='edu'),'team-585');
+insert into public.group_members(group_id,member_id,group_role)
+select id,'58500000-0000-0000-0000-000000000001','member'
+  from public.groups where legacy_team_id='team-585';
 select pg_temp.test_login_leadership('58500000-0000-0000-0000-000000000001');
 select is((select count(*) from public.teams where id='team-585'),
   1::bigint, 'a live Group member reads the transitional legacy Team');

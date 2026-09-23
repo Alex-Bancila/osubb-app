@@ -24,6 +24,7 @@ select extensions.dblink_exec('commands_522_setup', $setup$
   drop function if exists public.test_522_revoke();
   delete from public.campaigns where name='Race campaign #522';
   delete from public.completed_work_requests where description='Race request #522';
+  delete from public.groups where name = 'Race #522';
   delete from public.projects where name = 'Race #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
     '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
@@ -40,6 +41,12 @@ select extensions.dblink_exec('commands_522_setup', $setup$
   insert into public.project_members(project_id,member_id,project_role)
     select id,'52200000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #522'
   on conflict (project_id, member_id) do update set project_role = excluded.project_role;
+  insert into public.groups(name,category,legacy_project_id)
+    select name,'project',id from public.projects where name='Race #522';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52200000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #522';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52200000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #522';
   -- Test-only callable bridge to the owner-only gate, never a production grant.
   create function public.test_522_campaign() returns text
   language sql security definer set search_path = '' as $$
@@ -90,9 +97,9 @@ select is(private.can_manage_group_work((select id from public.groups where name
 select throws_ok($$select public.test_522_campaign()$$,
   '42501','campaign_manage_forbidden','revoked Responsible cannot create another Campaign');
 select extensions.dblink_exec('commands_522_setup', $setup$
-  insert into public.project_members(project_id,member_id,project_role)
-    select id,'52200000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #522'
-  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
+  update public.group_members set group_role='responsible'
+   where group_id=(select id from public.groups where name='Race #522')
+     and member_id='52200000-0000-0000-0000-000000000091';
   insert into public.completed_work_requests(requester_id,group_id,description)
     select '52200000-0000-0000-0000-000000000092',id,'Race request #522' from public.groups where name='Race #522';
 $setup$);

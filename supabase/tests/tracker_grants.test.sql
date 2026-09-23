@@ -485,12 +485,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- because the legacy writes they observe arrive from `authenticated`
   -- sessions (member_departments_manage, teams_create, profiles_update_self)
   -- that hold no write grant on `groups`/`group_members` at all.
-  ('mirror_department_group',                     '',                                                                                                                   'trigger'),
-  ('mirror_department_membership',                '',                                                                                                                   'trigger'),
-  ('mirror_project_group',                        '',                                                                                                                   'trigger'),
-  ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
-  ('mirror_team_group',                           '',                                                                                                                   'trigger'),
-  ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
   -- #50: internal trigger function; no client execution.
   ('guard_role_history', '', 'trigger'),
   -- #69: scheduler-only job.
@@ -502,7 +496,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- #509: rank BCE *is* a Department Group's Group Manager, so a promotion or
   -- demotion re-derives that Group Role. Same `trigger` category and the same
   -- definer reasoning as the six mirrors above.
-  ('rederive_department_group_roles',             '',                                                                                                                   'trigger'),
   -- #344: rejecting a Completed-work Request -- a reason, and no Task.
   ('reject_completed_work_request_impl',          'p_request_id bigint, p_note text',                                                                                   'impl'),
   ('reject_legacy_evaluation_source',             '',                                                                                                                   'trigger'),
@@ -549,13 +542,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- are the only callers, and both run as the table owner. Granting any of
   -- these back would hand a client a write path into `groups`/`group_members`,
   -- which #507 deliberately left read-only for every role.
-  ('sync_department_groups',                      'p_dept_id text',                                                                                                     'none'),
-  ('sync_team_groups',                            'p_team_id text',                                                                                                     'none'),
-  ('sync_project_groups',                         'p_project_id bigint',                                                                                                'none'),
-  ('sync_department_memberships',                 'p_member_id uuid, p_dept_id text',                                                                                   'none'),
-  ('sync_team_memberships',                       'p_team_id text, p_member_id uuid',                                                                                   'none'),
-  ('sync_project_memberships',                    'p_project_id bigint, p_member_id uuid',                                                                              'none'),
-  ('sync_groups_from_legacy',                     '',                                                                                                                   'none'),
   -- #345 dropped private.task_is_unassigned with the legacy task table it
   -- queried and the claim command that was its last caller.
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
@@ -638,7 +624,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('remove_group_member_impl', 'p_group_id bigint, p_member_id uuid', 'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 123,
+  (select count(*) from pinned_private_functions)::int, 109,
   'the audited roster includes #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
 
 create function pg_temp.unpinned_private_functions() returns text[]

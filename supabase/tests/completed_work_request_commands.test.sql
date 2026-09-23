@@ -143,6 +143,9 @@ grant select on d344 to authenticated;
 
 select cmp_ok((select length(dept_description) from d344), '>', 120,
   'the Department Request''s description is longer than 120 characters, so both title truncations are actually exercised');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- Requests inserted directly as the owner (no command, no notifications).
 insert into public.completed_work_requests (requester_id, group_id, description) values
@@ -903,6 +906,13 @@ select extensions.dblink_exec('cwr_setup', $$
     ('34400000-0000-0000-0000-000000000051', 'edu'),
     ('34400000-0000-0000-0000-000000000052', 'edu'),
     ('34400000-0000-0000-0000-000000000053', 'edu');
+  -- #586: committed race fixtures require native Group roster rows.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '34400000-%'
+  on conflict (group_id,member_id) do nothing;
 
   insert into public.completed_work_requests (requester_id, group_id, description) values
     ('34400000-0000-0000-0000-000000000052', (select id from public.groups where legacy_dept_id = 'edu'), 'Cerere pentru cursa de aprobare #344 committed'),

@@ -30,6 +30,9 @@ insert into public.projects (name, status, leader_id, created_by)
 values ('Event Integrity Project 369', 'active',
         '36900000-0000-0000-0000-000000000001',
         '36900000-0000-0000-0000-000000000001');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ==================== Any Group owns an Event ====================
 select lives_ok(

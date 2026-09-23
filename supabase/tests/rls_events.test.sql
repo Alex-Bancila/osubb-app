@@ -41,14 +41,16 @@ insert into member_departments (member_id, dept_id) values
   ('02000000-0000-0000-0000-000000000002', 'pr'),
   ('03000000-0000-0000-0000-000000000003', 'edu');
 
-update public.group_members set group_role = 'responsible'
-where member_id = '03000000-0000-0000-0000-000000000003'
-  and group_id = (select id from public.groups where legacy_dept_id = 'edu');
-
 insert into teams (id, name, dept_id) values
   ('t-pr', 'Echipa PR', 'pr');
 insert into team_members (team_id, member_id)
   values ('t-pr', '02000000-0000-0000-0000-000000000002');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+update public.group_members set group_role = 'responsible'
+where member_id = '03000000-0000-0000-0000-000000000003'
+  and group_id = (select id from public.groups where legacy_dept_id = 'edu');
+
 
 -- One event per (scope, Minimum Level) combination that matters: 0 spread
 -- across all three scopes (proving scope is no longer a visibility gate —

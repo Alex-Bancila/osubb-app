@@ -210,6 +210,9 @@ insert into public.project_members (project_id, member_id, project_role)
 select project.id, '32000000-0000-0000-0000-000000000403', 'member'
   from public.projects as project
  where project.name = 'TM320 Helper Project';
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.tasks (title, group_id, created_by) values
   ('TM320 dept task A', pg_temp.dept_group('edu'), '32000000-0000-0000-0000-000000000101');
@@ -231,12 +234,14 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('32000000-0000-0000-0000-000000000701', 'TM No Dept BCE Creator', 'tm.nodeptbce-creator@test.local', 'voluntar', 'activ');
 insert into public.departments (id, name, short, color, kind) values
   ('zz320dept', 'Test No BCE Dept', 'ZZ', '#000000', 'coordination');
+select pg_temp.materialize_legacy_groups();
 insert into public.tasks (title, group_id, created_by) values
   ('TM320 dept-no-bce task', pg_temp.dept_group('zz320dept'), '32000000-0000-0000-0000-000000000701');
 
 -- Department Team with no BCE parent: fallback test fixture
 insert into public.teams (id, name, dept_id) values
   ('tm320-deptteam-nobce', 'TM320 DeptTeam with No BCE Parent', 'zz320dept');
+select pg_temp.materialize_legacy_groups();
 insert into public.tasks (title, group_id, created_by) values
   ('TM320 deptteam-no-bce task', pg_temp.team_group('tm320-deptteam-nobce'), '32000000-0000-0000-0000-000000000701');
 

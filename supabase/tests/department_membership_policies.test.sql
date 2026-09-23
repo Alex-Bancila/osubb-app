@@ -34,6 +34,7 @@ insert into public.member_departments (member_id, dept_id) values
   ('27910000-0000-0000-0000-000000000005', 'edu');
 insert into public.teams (id, name, dept_id)
 values ('department-team-279-policy', 'Department policy Team #279', 'edu');
+select pg_temp.materialize_legacy_groups();
 
 select pg_temp.test_login_leadership('27910000-0000-0000-0000-000000000001');
 select throws_ok($$

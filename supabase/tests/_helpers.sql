@@ -324,25 +324,93 @@ begin
 end;
 $function$;
 
--- #579: the Group is the only Origin a Task, Event, Campaign or Request carries.
--- Fixtures that used to write a Department / Team / Project id into those rows
--- name the same Origin through these three lookups instead, which return the
--- Group the forward mirror derived for it. They read groups.legacy_*, so they are
--- the one place to change when #591 drops those columns. Null for an unknown key.
--- Security definer: a fixture id lookup, answered the same whoever the test is
--- logged in as (a claimless or deactivated persona cannot read groups under RLS,
--- and a literal id would not care either).
+-- #586: transitional, rolled-back test fixture materializer. Historical
+-- Task/Calendar suites call this explicitly after creating legacy fixtures.
+-- No trigger or production-schema sync function is created.
+create or replace function pg_temp.materialize_legacy_groups() returns void
+language plpgsql security definer set search_path = '' as $function$
+begin
+  insert into public.groups(name,category,competes_in_cup,application_level,
+                            manager_title,short,color,legacy_dept_id)
+  select d.name,'department',d.kind='department',0,'BCE',d.short,d.color,d.id
+    from public.departments d
+   where not exists(select 1 from public.groups g where g.legacy_dept_id=d.id)
+  on conflict (legacy_dept_id) do nothing;
+
+  insert into public.groups(name,category,parent_id,application_level,
+                            shared_work_visibility,manager_title,legacy_team_id)
+  select t.name,'team',parent.id,0,true,
+         case when t.dept_id is null then null else 'Coordonator' end,t.id
+    from public.teams t
+    left join public.groups parent on parent.legacy_dept_id=t.dept_id
+   where t.id not in ('t-app','t-recruti','t-logistica')
+     and not exists(select 1 from public.groups g where g.legacy_team_id=t.id)
+  on conflict (legacy_team_id) do nothing;
+
+  insert into public.groups(name,category,application_level,manager_title,
+                            status,legacy_project_id,created_by)
+  select p.name,'project',0,'Coordonator Principal',p.status,p.id,p.created_by
+    from public.projects p
+   where not exists(select 1 from public.profiles creator
+     where creator.id=p.created_by and creator.email like '%@demo.osubb')
+     and not exists(select 1 from public.groups g where g.legacy_project_id=p.id)
+  on conflict (legacy_project_id) do nothing;
+
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,
+         case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md
+    join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.dept_id <> 'org'
+  on conflict (group_id,member_id) do nothing;
+
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,tm.member_id,
+         case when t.dept_id is null then 'responsible' else 'member' end
+    from public.team_members tm
+    join public.teams t on t.id=tm.team_id
+    join public.groups g on g.legacy_team_id=tm.team_id
+  on conflict (group_id,member_id) do nothing;
+
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,p.leader_id,'manager'
+    from public.projects p
+    join public.groups g on g.legacy_project_id=p.id
+  on conflict (group_id,member_id) do nothing;
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,pm.member_id,pm.project_role
+    from public.project_members pm
+    join public.groups g on g.legacy_project_id=pm.project_id
+  on conflict (group_id,member_id) do nothing;
+end;
+$function$;
+
+-- Fixture id lookups are read-only and owner-backed so denied personas can
+-- name a Group without gaining any read privilege.
 create or replace function pg_temp.dept_group(p_dept_id text) returns bigint
 language sql stable security definer set search_path = '' as $function$
-  select id from public.groups where legacy_dept_id = p_dept_id
+  select id from public.groups where legacy_dept_id=p_dept_id
 $function$;
 create or replace function pg_temp.team_group(p_team_id text) returns bigint
 language sql stable security definer set search_path = '' as $function$
-  select id from public.groups where legacy_team_id = p_team_id
+  select g.id from public.groups g where g.legacy_team_id=p_team_id
+    union all select g.id from public.groups g
+      where g.created_by='d0000000-0000-0000-0000-000000000007'
+        and g.name=case p_team_id when 't-app' then 'Echipa Aplicație'
+          when 't-recruti' then 'Echipa Recruți'
+          when 't-logistica' then 'Echipa Logistică' end
+    limit 1
 $function$;
 create or replace function pg_temp.project_group(p_project_id bigint) returns bigint
 language sql stable security definer set search_path = '' as $function$
-  select id from public.groups where legacy_project_id = p_project_id
+  select g.id from public.groups g where g.legacy_project_id=p_project_id
+    union all select g.id from public.groups g
+      join public.projects p on p.name=g.name
+      where p.id=p_project_id
+        and g.created_by='d0000000-0000-0000-0000-000000000007'
+        and p.created_by=g.created_by
+    limit 1
 $function$;
 
 \if :{?osubb_test_suite}
@@ -356,6 +424,7 @@ values ('e3670000-0000-0000-0000-000000000001', 'Helpers BCE',
         'helpers.bce@test.local', 'bce', 'activ');
 insert into public.member_departments (member_id, dept_id)
 values ('e3670000-0000-0000-0000-000000000001', 'edu');
+select pg_temp.materialize_legacy_groups();
 
 select lives_ok($$
   select pg_temp.test_login(

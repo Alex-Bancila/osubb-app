@@ -165,6 +165,9 @@ select persona.id, persona.dept_id from fx_persona_319 as persona where persona.
 insert into public.teams (id, name, dept_id) values ('m319-dt', 'M319 Department Team', 'edu');
 insert into public.team_members (team_id, member_id)
 select 'm319-dt', persona.id from fx_persona_319 as persona where persona.code = 'team_member';
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- Task M — Department 'edu' origin, direct, completed: managed by
 -- manager_bce_local, executed by executor, evaluated by manager_bce_local.

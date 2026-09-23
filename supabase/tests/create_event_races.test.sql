@@ -15,6 +15,7 @@ select extensions.dblink_exec('commands_370_setup', $setup$
   drop function if exists public.test_370_event();
   drop function if exists public.test_370_revoke();
   delete from public.events where title='Race event #370';
+  delete from public.groups where name = 'Race #370';
   delete from public.projects where name = 'Race #370';
   delete from auth.users where id in ('37000000-0000-0000-0000-000000000090',
     '37000000-0000-0000-0000-000000000091','37000000-0000-0000-0000-000000000092');
@@ -30,10 +31,16 @@ select extensions.dblink_exec('commands_370_setup', $setup$
     ('Race #370','37000000-0000-0000-0000-000000000090','37000000-0000-0000-0000-000000000092');
   insert into public.project_members(project_id,member_id,project_role)
     select id,'37000000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #370';
+  insert into public.groups(name,category,legacy_project_id)
+    select name,'project',id from public.projects where name='Race #370';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'37000000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #370';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'37000000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #370';
   -- Test-only callable bridge to the owner-only gate, never a production grant.
   create function public.test_370_event() returns text
   language sql security definer set search_path = '' as $$
-    select (public.create_event('Race event #370','sedinta',(select id from public.groups where legacy_dept_id='org'),now()+interval '1 day')).title
+    select (public.create_event('Race event #370','sedinta',(select id from public.groups where name='Race #370'),now()+interval '1 day')).title
   $$;
   create function public.test_370_revoke() returns text
   language plpgsql security definer set search_path = '' as $$
@@ -63,7 +70,7 @@ select ok(exists(select 1 from extensions.pgrowlocks('public.profiles') l
   where p.id='37000000-0000-0000-0000-000000000091' and 'For Share'=any(l.modes)),
   'gate holds the live actor profile FOR SHARE');
 select is((select count(*) from extensions.pgrowlocks('public.groups') l
-  join public.groups g on g.ctid=l.locked_row where g.legacy_dept_id='org' and not ('For Key Share'=any(l.modes))),0::bigint,
+  join public.groups g on g.ctid=l.locked_row where g.name='Race #370' and not ('For Key Share'=any(l.modes))),0::bigint,
   'command only takes compatible FK Key Share on Group, never an authority Share lock');
 select extensions.dblink_exec('commands_370_lock','rollback');
 select extensions.dblink_disconnect('commands_370_lock');
@@ -83,6 +90,7 @@ select extensions.dblink_exec('commands_370_setup', $$
   drop function public.test_370_event();
   drop function public.test_370_revoke();
   delete from public.events where title='Race event #370';
+  delete from public.groups where name='Race #370';
   delete from public.projects where name='Race #370';
   delete from auth.users where id in ('37000000-0000-0000-0000-000000000090',
     '37000000-0000-0000-0000-000000000091','37000000-0000-0000-0000-000000000092');

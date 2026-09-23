@@ -136,18 +136,14 @@ select is((select count(*) from teams where id = 't-logistica' and dept_id is nu
 select is((select min_level from events where title = 'Training pentru recruți'), 0,
   't-recruti''s own event stays min_level 0 — the branch the calendar rule turns on');
 
--- ==================== The demo, seen as Groups (#509) ====================
--- `groups`/`group_members` are mirrored from the legacy structure tables by
--- the #509 triggers, so the demo Departments, Teams, Projects and rosters have
--- to show up there too — the seed never writes a Group itself. These six are
--- seed-dependent by design: they are what a Wave 2 screen reading the Group
--- model will actually find after `db reset`. Mutation they catch: drop any of
--- the six mirror triggers and the Group or the roster role it owns is missing.
+-- ==================== The demo, seen as Groups (#586) ====================
+-- Native Group commands own the demo roster. Legacy rows remain temporarily
+-- for older screens and historical tests, but they do not drive Group writes.
 
 select is(
-  (select count(*) from groups),
-  (select count(*) from departments) + (select count(*) from teams) + (select count(*) from projects),
-  'every Department, Team and Project of the seeded database is mirrored as exactly one Group, and nothing else is');
+  (select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'),
+  5::bigint,
+  'the demo BC creates three Team and two Project Groups through native commands');
 
 select is(
   (select string_agg(format('%s=%s', grp.legacy_dept_id, membership.group_role), ',' order by grp.legacy_dept_id)
@@ -176,7 +172,8 @@ select is(
      from group_members membership
      join groups grp on grp.id = membership.group_id
      join profiles member on member.id = membership.member_id
-    where grp.legacy_team_id = 't-logistica'),
+    where grp.name = 'Echipa Logistică'
+      and grp.created_by='d0000000-0000-0000-0000-000000000007'),
   'responsible,responsible',
   'the Independent Team''s two members are both Group Responsibles — ADR-0007''s joint management, with no special case in the model');
 
@@ -184,10 +181,10 @@ select is(
   (select format('%s|%s', grp.status,
                  string_agg(format('%s=%s', member.email, membership.group_role), ',' order by member.email))
      from groups grp
-     join projects project on project.id = grp.legacy_project_id
      join group_members membership on membership.group_id = grp.id
      join profiles member on member.id = membership.member_id
-    where project.name = 'Festivalul Studențesc 2026'
+    where grp.name = 'Festivalul Studențesc 2026'
+      and grp.created_by='d0000000-0000-0000-0000-000000000007'
     group by grp.status),
   'active|activ@demo.osubb=responsible,responsabil@demo.osubb=manager,voluntar@demo.osubb=member',
   'the active demo Project is an active Group whose lead is its Group Manager, its Project Responsible a Group Responsible, and its ordinary member an ordinary member');
@@ -198,8 +195,8 @@ select is(
                    where membership.group_id = grp.id
                      and membership.member_id = (select id from profiles where email = 'vot@demo.osubb')))
      from groups grp
-     join projects project on project.id = grp.legacy_project_id
-    where project.name = 'Gala Voluntarilor 2025'),
+    where grp.name = 'Gala Voluntarilor 2025'
+      and grp.created_by='d0000000-0000-0000-0000-000000000007'),
   'archived|manager',
   'and the archived demo Project is an archived Group that keeps its lead as Group Manager — archiving carries the lifecycle, it does not dissolve the roster');
 
@@ -223,14 +220,15 @@ select ok(
 select is(
   (select count(*)
      from projects p
-     join groups g on g.legacy_project_id = p.id
+     join groups g on g.name = p.name
+      and g.created_by='d0000000-0000-0000-0000-000000000007'
      join group_members gm
        on gm.group_id = g.id
       and gm.member_id = p.leader_id
       and gm.group_role = 'manager'
     where p.name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025')),
   2::bigint,
-  'each demo Project lead is mirrored as its Group Manager');
+  'each demo Project lead is appointed its native Group Manager');
 
 select ok(
   exists (
@@ -359,7 +357,8 @@ select ok(
      where task.title = 'Raport parteneriate pentru festival'
        and task.status = 'in_review'
        and exists (select 1 from groups grp
-                    where grp.id = task.group_id and grp.legacy_project_id is not null)
+                    where grp.id = task.group_id and grp.category = 'project'
+                      and grp.created_by='d0000000-0000-0000-0000-000000000007')
        and task.review_round = 1
        and task.returned_to_progress_at is not null
        and task.submitted_at is not null
@@ -450,10 +449,10 @@ select ok(
   exists (
     select 1 from tasks task
       join groups task_group on task_group.id = task.group_id
-      join teams team on team.id = task_group.legacy_team_id
      where task.title = 'Inventar materiale pentru depozit'
        and task.status = 'cancelled'
-       and team.dept_id is null
+       and task_group.name = 'Echipa Logistică'
+       and task_group.created_by='d0000000-0000-0000-0000-000000000007'
        and task.cancel_reason ~ '[^[:space:]]'
        and task.queue_closed_at is not null
        and exists (select 1 from task_assignments a

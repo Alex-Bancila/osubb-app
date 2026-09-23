@@ -118,6 +118,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('33300000-0000-0000-0000-000000000012', 'edu'),
   ('33300000-0000-0000-0000-000000000013', 'edu'),
   ('33300000-0000-0000-0000-000000000014', 'edu');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T1: an empty Executor slot and two pending Candidates in a known
 -- order. Selected with p_close_remaining = false, so the Candidate left
@@ -791,6 +794,13 @@ select extensions.dblink_exec('stc_setup', $$
     ('33300000-0000-0000-0000-000000000028', 'edu'),
     ('33300000-0000-0000-0000-000000000029', 'edu'),
     ('33300000-0000-0000-0000-000000000030', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33300000-%'
+  on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
