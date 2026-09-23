@@ -39,7 +39,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(102);
+select plan(103);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1189,6 +1189,14 @@ select pg_temp.g521_task('command3','dt',5,'todo','direct');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select throws_ok($$select public.cancel_task((select id from g521_tasks where name='command3'),'Reason #521')$$,'42501','task_manage_forbidden','cancel_task: Group persona 8 on executor 5 in dt');
+reset role;
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.cancel_task(0, repeat('r', 1001)) $$,
+  'PT400', 'reason_too_long', 'a cancellation reason over 1000 characters is refused before the gate');
 reset role;
 
 select * from finish();

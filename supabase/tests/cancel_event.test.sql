@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(23);
 insert into auth.users(id,email)
 select ('24800000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid, 'event248-'||n||'@test.local'
 from generate_series(1,9) n;
@@ -113,5 +113,13 @@ reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000011');
 select lives_ok($q$select public.cancel_event((select id from ex2 where title='Team ancestor #248'),'Anulat')$q$,'a Department lead cancels a Team Event through the Group path');
 reset role;
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.cancel_event(0, repeat('r', 1001)) $$,
+  'PT400', 'reason_too_long', 'an Event cancellation reason over 1000 characters is refused before the gate');
+reset role;
+
 select * from finish();
 rollback;

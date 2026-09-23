@@ -12,7 +12,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(84);
+select plan(86);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -211,7 +211,7 @@ select pg_temp.test_login('34300000-0000-0000-0000-000000000003', jsonb_build_ob
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok($$select public.create_campaign(pg_temp.dept_group('org'), 'Org Campaign')$$,
   'BC creates an Organization Group Campaign');
-select throws_ok($$select public.create_campaign(pg_temp.dept_group('does-not-exist-343'), 'X')$$,
+select throws_ok($$select public.create_campaign(pg_temp.dept_group('does-not-exist-343'), 'Xyz')$$,
   '42501', 'campaign_manage_forbidden', 'a Group that resolves to nothing is nondisclosing, even for BC');
 create temp table diverse_campaign as
 select * from public.create_campaign(pg_temp.dept_group('diverse'), 'Diverse Campaign');
@@ -276,7 +276,7 @@ grant select on cids to authenticated;
 select pg_temp.test_login('34300000-0000-0000-0000-000000000006', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.update_campaign(
-  (select missing_id from cids), 'X')$$,
+  (select missing_id from cids), 'Xyz')$$,
   'PT404', 'campaign_not_found',
   'an active member can discover that a Campaign is missing after the membership gate');
 reset role;
@@ -284,7 +284,7 @@ reset role;
 select pg_temp.test_login('34300000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok($$select public.update_campaign(
-  (select missing_id from cids), 'X')$$,
+  (select missing_id from cids), 'Xyz')$$,
   'PT404', 'campaign_not_found',
   'a BCE passes the pre-lock gate and still gets not-found for an unknown Campaign');
 reset role;
@@ -351,13 +351,13 @@ reset role;
 select pg_temp.test_login('34300000-0000-0000-0000-000000000003',
   jsonb_build_object('provider', 'email'));
 select throws_ok($$select public.update_campaign(
-  (select alpha_id from cids), 'X')$$,
+  (select alpha_id from cids), 'Xyz')$$,
   '42501', 'campaign_manage_forbidden', 'a claimless session cannot update a Campaign');
 reset role;
 
 set local role anon;
 select throws_ok($$select public.update_campaign(
-  (select alpha_id from cids), 'X')$$,
+  (select alpha_id from cids), 'Xyz')$$,
   '42501', null, 'anon cannot execute update_campaign');
 reset role;
 
@@ -680,6 +680,16 @@ select extensions.dblink_exec('campaign_setup', $$
   delete from auth.users where id = '34300000-0000-0000-0000-000000000020';
 $$);
 select extensions.dblink_disconnect('campaign_setup');
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_campaign(0, '  ab  ') $$,
+  'PT400', 'name_too_short', 'a Campaign name is measured trimmed and must have 3 characters');
+select throws_ok($$ select public.update_campaign(0, repeat('c', 121)) $$,
+  'PT400', 'name_too_long', 'a Campaign name over 120 characters is refused before the gate');
+reset role;
 
 select * from finish();
 rollback;

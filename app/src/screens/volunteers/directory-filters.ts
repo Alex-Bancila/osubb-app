@@ -45,6 +45,7 @@ export function matchesFilters(
     const haystack = normalizeSearch(
       [
         member.name,
+        member.nickname ?? '',
         member.role,
         member.contact?.email ?? '',
         ...member.groups.map((group) => group.label),

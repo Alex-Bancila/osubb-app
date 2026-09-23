@@ -106,19 +106,31 @@ export function useLeadershipMemberTasks(targetId: string) {
   });
 }
 
-export function useLeadershipMemberName(targetId: string) {
+/** Who the tracker page is about: enough to render their name button. */
+export type LeadershipMember = {
+  fullName: string;
+  nickname: string | null;
+  avatarColor: string | null;
+};
+
+export function useLeadershipMember(targetId: string) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
     queryKey: keys.leadership.memberName(memberId, targetId),
     queryFn: memberId
-      ? async () => {
+      ? async (): Promise<LeadershipMember | null> => {
           const { data, error } = await supabase
             .from('profiles_directory')
-            .select('full_name')
+            .select('full_name, nickname, avatar_color')
             .eq('id', targetId)
             .maybeSingle();
           if (error) throw error;
-          return data?.full_name ?? null;
+          if (!data?.full_name) return null;
+          return {
+            fullName: data.full_name,
+            nickname: data.nickname?.trim() || null,
+            avatarColor: data.avatar_color,
+          };
         }
       : skipToken,
   });
