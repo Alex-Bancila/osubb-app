@@ -635,6 +635,8 @@ insert into pinned_private_functions (proname, args, category) values
   -- #601: the Event visibility rule, one definition read by the events_read
   -- policy (for the caller) and by event_notification_recipients (per recipient).
   ('can_read_event', 'p_min_level integer, p_member uuid', 'predicate'),
+  -- #581: the live announcement visibility predicate called by announcements_read.
+  ('can_read_announcement', 'p_group_id bigint, p_audience text', 'predicate'),
   -- #582: the Manager tier of the Group authority kit (ruling R19) -- a
   -- require_* helper, so nobody may execute it directly -- and the four Group
   -- structure command bodies behind public.create_group / update_group /
@@ -678,8 +680,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('has_pending_group_application',     'p_group_id bigint',              'predicate');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 151,
-  'the audited roster includes #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
+  (select count(*) from pinned_private_functions)::int, 152,
+  'the audited roster includes #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

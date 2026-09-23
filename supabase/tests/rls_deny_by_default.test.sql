@@ -125,9 +125,9 @@ insert into events (title, type, group_id, starts_at)
   values ('rls-event', 'sedinta', pg_temp.dept_group('org'), now());
 insert into event_attendance (event_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from events where title = 'rls-event';
-insert into announcements (title, body) values
-  ('rls-announce', 'corp'),
-  ('rls-announce-unread', 'corp');
+insert into announcements (title, body, group_id, audience) values
+  ('rls-announce', 'corp', pg_temp.dept_group('org'), 'org'),
+  ('rls-announce-unread', 'corp', pg_temp.dept_group('org'), 'org');
 insert into announcement_reads (announcement_id, member_id)
   select id, member_id
     from announcements
