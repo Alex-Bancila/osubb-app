@@ -77,12 +77,15 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
 }
 
 /**
- * Mutation to update own profile fields (full_name, phone, avatar_color).
+ * Mutation to update own profile fields (phone, avatar_color; full_name only
+ * when the caller passes it).
  *
  * Database security boundary:
  * 1. RLS policy `profiles_update_self` allows updates where `id = auth.uid()`.
- * 2. Trigger `guard_profile_privileged_columns()` rejects changes to `role, status, email, tier, joined_year, joined_at`
- *    unless level >= 6.
+ * 2. Trigger `guard_profile_privileged_columns()` rejects changes to
+ *    `full_name, role, status, email, tier, joined_year, joined_at` unless level >= 6
+ *    (#675: the full name is BC/Moderator's). `full_name` is therefore sent only
+ *    when `fullName` is given, which the edit sheet does only for BC/Moderator.
  * 3. Crucially, the update statement does NOT use `.select('phone')` because `phone` is revoked from
  *    `authenticated` on the table directly. We invalidate `keys.profile.all` to refetch via `profiles_contact`.
  */

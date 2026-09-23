@@ -1245,6 +1245,7 @@ export type Database = {
           id: string
           joined_at: string | null
           joined_year: number | null
+          nickname: string | null
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
@@ -1258,6 +1259,7 @@ export type Database = {
           id: string
           joined_at?: string | null
           joined_year?: number | null
+          nickname?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
           status?: Database["public"]["Enums"]["member_status"]
@@ -1271,6 +1273,7 @@ export type Database = {
           id?: string
           joined_at?: string | null
           joined_year?: number | null
+          nickname?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
           status?: Database["public"]["Enums"]["member_status"]
@@ -2326,6 +2329,7 @@ export type Database = {
           id: string | null
           joined_at: string | null
           joined_year: number | null
+          nickname: string | null
           role: Database["public"]["Enums"]["member_role"] | null
           status: Database["public"]["Enums"]["member_status"] | null
           tier: string | null
@@ -2337,6 +2341,7 @@ export type Database = {
           id?: string | null
           joined_at?: string | null
           joined_year?: number | null
+          nickname?: string | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null
           tier?: string | null
@@ -2348,6 +2353,7 @@ export type Database = {
           id?: string | null
           joined_at?: string | null
           joined_year?: number | null
+          nickname?: string | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null
           tier?: string | null
@@ -2714,6 +2720,7 @@ export type Database = {
         Returns: {
           full_name: string
           member_id: string
+          nickname: string
           points: number
           tasks_completed: number
         }[]
@@ -3233,6 +3240,7 @@ export type Database = {
         Returns: {
           full_name: string
           member_id: string
+          nickname: string
           points: number
           rank: number
         }[]
@@ -3334,6 +3342,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      member_card: {
+        Args: { p_member_id: string }
+        Returns: {
+          avatar_color: string
+          full_name: string
+          joined_at: string
+          member_id: string
+          memberships: Json
+          nickname: string
+          other_memberships: number
+          primary_group_color: string
+          primary_group_id: number
+          primary_group_name: string
+          role: Database["public"]["Enums"]["member_role"]
+        }[]
+      }
       member_level: { Args: { p_member: string }; Returns: number }
       my_capabilities: {
         Args: never
@@ -3381,6 +3405,7 @@ export type Database = {
           id: number
           requester_id: string
           requester_name: string
+          requester_nickname: string
         }[]
       }
       preview_task_update: {
@@ -3634,6 +3659,7 @@ export type Database = {
           id: string
           joined_at: string | null
           joined_year: number | null
+          nickname: string | null
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
@@ -3660,6 +3686,7 @@ export type Database = {
           id: string
           joined_at: string | null
           joined_year: number | null
+          nickname: string | null
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
@@ -4027,6 +4054,7 @@ export type Database = {
         Returns: {
           full_name: string
           member_id: string
+          nickname: string
           task_id: number
         }[]
       }

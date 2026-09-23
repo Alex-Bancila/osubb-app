@@ -15,7 +15,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(61);
+select plan(62);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -30,8 +30,8 @@ select has_function('private', 'campaign_totals_impl', array['bigint'],
 
 select is(
   pg_get_function_result('public.campaign_report(bigint)'::regprocedure),
-  'TABLE(member_id uuid, full_name text, tasks_completed integer, points integer)',
-  'the report returns member id, name, tasks_completed and points -- one row per volunteer');
+  'TABLE(member_id uuid, full_name text, nickname text, tasks_completed integer, points integer)',
+  'the report returns member id, full name, Nickname (#675), tasks_completed and points -- one row per volunteer');
 select is(
   pg_get_function_result('public.campaign_totals(bigint)'::regprocedure),
   'TABLE(tasks_total integer, tasks_completed integer, points_total integer)',
@@ -329,7 +329,15 @@ select is((select coalesce(sum(entry.delta), 0)::int
 
 -- ==================== 3. The report, as a live Group manager ====================
 
+-- #675: a Nickname set on the fixture is returned beside the full name.
+update public.profiles set nickname = 'Ana 625'
+ where id = '62500000-0000-0000-0000-000000000005';
+
 select pg_temp.test_login_leadership('62500000-0000-0000-0000-000000000001');
+
+select is((select nickname from public.campaign_report(6250001)
+            where member_id = '62500000-0000-0000-0000-000000000005'), 'Ana 625',
+  'the report carries the volunteer''s Nickname beside the full name (#675)');
 
 select is((select points from public.campaign_report(6250001)
             where member_id = '62500000-0000-0000-0000-000000000005'), 15,

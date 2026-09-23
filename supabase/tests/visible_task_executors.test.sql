@@ -28,6 +28,10 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('49900000-0000-0000-0000-000000000006', 'Fara Claimuri 499', 'claimless.499@test.local', 'voluntar', 'activ'),
   ('49900000-0000-0000-0000-000000000007', 'BC 499', 'bc.499@test.local', 'bc', 'activ');
 
+-- #675: the current Executor carries a Nickname; the RPC returns it beside the full name.
+update public.profiles set nickname = 'Execu 499'
+ where id = '49900000-0000-0000-0000-000000000002';
+
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status,
    queue_opened_at, created_by)
@@ -101,8 +105,8 @@ select is(
     where namespace.nspname = 'public'
       and procedure.proname = 'visible_task_executors'
       and procedure.proargtypes = '1016'::oidvector),
-  array['p_task_ids', 'task_id', 'member_id', 'full_name']::text[],
-  'the public API exposes only Task id, Member id, and safe display name');
+  array['p_task_ids', 'task_id', 'member_id', 'full_name', 'nickname']::text[],
+  'the public API exposes only Task id, Member id, and the safe display names (full name and Nickname, #675)');
 
 select ok(
   has_function_privilege('authenticated', 'public.visible_task_executors(bigint[])', 'execute')
@@ -132,7 +136,7 @@ select pg_temp.test_login(
 
 select results_eq(
   $$
-    select task_id, member_id, full_name
+    select task_id, member_id, full_name, nickname
       from public.visible_task_executors(array[
         (select visible_task_id from f499),
         (select hidden_task_id from f499)
@@ -141,9 +145,10 @@ select results_eq(
   $$ values (
     (select visible_task_id from f499),
     '49900000-0000-0000-0000-000000000002'::uuid,
-    'Executor Curent 499'::text
+    'Executor Curent 499'::text,
+    'Execu 499'::text
   ) $$,
-  'an active caller receives the current Executor only for a readable Task');
+  'an active caller receives the current Executor, with their Nickname, only for a readable Task');
 
 select is(
   (select count(*)

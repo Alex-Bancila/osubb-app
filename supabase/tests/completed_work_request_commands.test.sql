@@ -36,7 +36,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(112);
+select plan(113);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -316,6 +316,11 @@ select is((select count(*) from public.completed_work_requests
   'not one refused call left a Request behind');
 
 -- ==================== 3. Create on a Project: the lead decides, the Responsible does not ====================
+-- #675: this requester carries a Nickname; section 1's requester (none) was
+-- named by full name, this one is named by the Nickname.
+reset role;
+update public.profiles set nickname = 'Proiect 344'
+ where id = '34400000-0000-0000-0000-000000000008';
 select pg_temp.test_login('34400000-0000-0000-0000-000000000008', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$
@@ -339,6 +344,11 @@ $$, (select project_request_id from p344)),
         '34400000-0000-0000-0000-000000000006',
         '34400000-0000-0000-0000-000000000007'],
   'a Project Request by an ordinary member notifies its Manager, Responsible and BC');
+select is((select notification.body from public.notifications as notification
+            where notification.dedupe_key = 'request:' || (select project_request_id from p344)::text
+              and notification.member_id = '34400000-0000-0000-0000-000000000001'),
+  'Proiect 344 a trimis o cerere de muncă realizată.',
+  'with a Nickname set, the "Cerere nouă" body names the requester by it, read at write time (#675)');
 
 -- ==================== 4. Create on an Independent Team: nobody local decides ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000009', jsonb_build_object(

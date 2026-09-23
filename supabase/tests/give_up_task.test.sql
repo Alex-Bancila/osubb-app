@@ -55,7 +55,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(97);
+select plan(98);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -430,6 +430,12 @@ select is((select format('%s|%s', notification.title, notification.body)
 
 -- ==================== 3. A direct Task ends with no Executor, then #342 fills it ====================
 
+-- #675: this Executor carries a Nickname; section 2's give-up (no Nickname)
+-- named its actor by full name, this one names its actor by the Nickname.
+reset role;
+update public.profiles set nickname = 'Renunt 332'
+ where id = '33200000-0000-0000-0000-000000000009';
+
 select pg_temp.test_login('33200000-0000-0000-0000-000000000009', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.give_up_task(%s, 'Nu mai pot continua.') $$,
@@ -454,6 +460,11 @@ select set_eq(
              where notification.task_id = %s $$, (select direct_task_id from f332)),
   $$ values ('33200000-0000-0000-0000-000000000001'::uuid) $$,
   'only the Task manager is notified -- with no promotion there is no "Task nou" recipient');
+select is((select notification.body from public.notifications as notification
+            where notification.task_id = (select direct_task_id from f332)
+              and notification.title like 'Renunțare:%'),
+  'Renunt 332 a renunțat: Nu mai pot continua.',
+  'with a Nickname set, the "Renunțare" body names the Executor by it, read at write time (#675)');
 
 select pg_temp.test_login('33200000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));

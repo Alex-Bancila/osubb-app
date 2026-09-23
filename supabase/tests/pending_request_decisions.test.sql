@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path=public,extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(14);
 \ir _group_task_fixtures.psql
 insert into public.completed_work_requests(requester_id,group_id,description)
 select pg_temp.g521_uid(n),g.id,'decision353-'||n from public.groups g cross join (values(1),(2),(3),(5)) members(n) where g.legacy_project_id=(select id from pg_temp.fixture_projects where name='Project #521');
@@ -13,6 +13,13 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select is((select count(*) from public.pending_request_decisions() where description like 'decision353-%'),3::bigint,'BC sees all other pending requesters, never self');
 select ok(not exists(select 1 from public.pending_request_decisions() where requester_id=auth.uid()),'self excluded explicitly');
+select is(pg_get_function_result('public.pending_request_decisions()'::regprocedure),
+  'TABLE(id bigint, description text, requester_id uuid, requester_name text, requester_nickname text, group_id bigint, group_name text, created_at timestamp with time zone)',
+  'the queue returns the Requester''s Nickname beside their full name (#675)');
+reset role;
+update public.profiles set nickname='Cerere 353' where id=pg_temp.g521_uid(5);
+select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
+select is((select requester_nickname from public.pending_request_decisions() where description='decision353-5'),'Cerere 353','a Requester''s Nickname is read live beside requester_name (#675)');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 select is((select count(*) from public.pending_request_decisions() where description like 'decision353-%'),3::bigint,'Group Manager can decide other requesters');

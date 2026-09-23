@@ -15,6 +15,14 @@ const authMock = vi.hoisted(() => ({
   session: { user: { id: 'p1' } },
 }));
 
+// The edit sheet asks whether the viewer may change a full name (#675, R5):
+// only BC/Moderator (`manageRoles`). Tests that rename set it.
+const capabilityMock = vi.hoisted(() => ({ manageRoles: false }));
+
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: (name: 'manageRoles') => ({ data: capabilityMock[name] }),
+}));
+
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({
     claims: authMock.claims,
@@ -213,6 +221,7 @@ describe('ProfileScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    capabilityMock.manageRoles = false;
     document.documentElement.removeAttribute('data-theme');
 
     authMock.claims = {
@@ -405,6 +414,7 @@ describe('ProfileScreen', () => {
   });
 
   it('opens EditProfileSheet when clicking "Editează profil" and saves updated fields', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
     render(<ProfileScreen />, { wrapper: wrapper() });
 
@@ -430,6 +440,7 @@ describe('ProfileScreen', () => {
   });
 
   it('after saving a profile edit, the header re-renders with the updated name', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
     render(<ProfileScreen />, { wrapper: wrapper() });
 
