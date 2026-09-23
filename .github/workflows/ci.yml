@@ -214,6 +214,11 @@ jobs:
           grep -Fq -- '--font-family-base: "Montserrat Variable"' src/theme/tokens.css
 
       - name: Build
+        # Exercise the live SDK bundle path; missing VITE vars let Rollup
+        # tree-shake Supabase transport after the config guard throws.
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_ANON_KEY: build-placeholder
         run: npm run build
 
   push-staging:
