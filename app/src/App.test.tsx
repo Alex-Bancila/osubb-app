@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 /* The server capability row (`my_capabilities()`), per test: `granted` lists
@@ -420,40 +420,56 @@ describe('route guards', () => {
 });
 
 describe('"Task nou" in the Tracker', () => {
-  beforeAll(async () => {
-    // The route is lazy; warm its async mock before the per-role timing checks.
-    await import('./screens/tracker/TrackerScreen');
-  });
   beforeEach(() => {
     auth.useAuth.mockReset();
     window.history.pushState({}, '', '/tracker');
   });
+
+  it('shows an accessible loader while the Tracker route chunk loads', () => {
+    auth.useAuth.mockReturnValue(member);
+    grant('manageTasks');
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <App />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.getByRole('status', { name: 'Se încarcă pagina' }),
+    ).toBeInTheDocument();
+  });
+
   // Visibility follows the live manage_tasks capability, never the claims.
   it.each([
     ['a Group Manager', 'voluntar', 3, true],
     ['a Responsible', 'voluntar', 2, true],
     ['BC', 'bc', 6, true],
     ['an ordinary member', 'voluntar', 1, false],
-  ] as const)('for %s: shown = %s', async (_persona, role, level, manages) => {
-    auth.useAuth.mockReturnValue({
-      ...member,
-      claims: { ...member.claims, member_role: role, member_level: level },
-    });
-    grant(...(manages ? ['manageTasks'] : []));
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <App />
-      </QueryClientProvider>,
-    );
-    await screen.findByRole(
-      'heading',
-      { name: 'Tracker screen' },
-      { timeout: 10_000 },
-    );
-    expect(screen.queryByRole('button', { name: 'Task nou' }) !== null).toBe(
-      manages,
-    );
-  });
+  ] as const)(
+    'for %s: shown = %s',
+    async (_persona, role, level, manages) => {
+      auth.useAuth.mockReturnValue({
+        ...member,
+        claims: { ...member.claims, member_role: role, member_level: level },
+      });
+      grant(...(manages ? ['manageTasks'] : []));
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App />
+        </QueryClientProvider>,
+      );
+      await screen.findByRole(
+        'heading',
+        { name: 'Tracker screen' },
+        { timeout: 10_000 },
+      );
+      expect(screen.queryByRole('button', { name: 'Task nou' }) !== null).toBe(
+        manages,
+      );
+    },
+    15_000,
+  );
 });
 
 it.each(['/clasament', '/tracker/membru/35400000-0000-0000-0000-000000000001'])(
