@@ -34,8 +34,11 @@ insert into projects (name, leader_id, created_by) values
   ('RLS Project',
    'ffffffff-0000-0000-0000-000000000006',
    'ffffffff-0000-0000-0000-000000000006');
--- The project-manager invariant creates the leader membership, keeping this
--- fixture non-vacuous without a duplicate manual insert.
+-- #585 retired the Project leader synchronization command path. Populate this
+-- legacy table explicitly so the deny-by-default sweep remains non-vacuous.
+insert into project_members(project_id, member_id, project_role)
+select id, 'ffffffff-0000-0000-0000-000000000006', 'responsible'
+  from projects where name='RLS Project';
 insert into member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
 insert into campaigns (group_id, name, created_by)

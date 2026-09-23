@@ -101,9 +101,10 @@ select ok(
   (select gm.created_at is not null
      from public.group_members gm
      join public.groups g on g.id = gm.group_id
-    where g.legacy_project_id = 368001
-      and gm.member_id = 'a3680000-0000-0000-0000-000000000001'),
-  'mirrored Group Manager memberships receive created_at automatically');
+    where g.name = 'Festivalul Studențesc 2026'
+      and g.created_by = 'd0000000-0000-0000-0000-000000000007'
+      and gm.member_id = 'd0000000-0000-0000-0000-000000000005'),
+  'command-appointed demo Group Managers receive created_at automatically');
 
 select ok(
   not has_table_privilege('authenticated', 'public.projects', 'update')
