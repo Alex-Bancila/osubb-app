@@ -115,6 +115,15 @@ select extensions.dblink_exec('race_setup_509', $$
      'race.promovat.509@test.local', 'voluntar', 'activ');
   insert into public.member_departments (member_id, dept_id)
   values ('50900000-0000-0000-0000-000000000091', 'youth');
+
+  create function public.test_509_race_promote() returns text
+  language sql security definer set search_path = '' as $fn$
+    update public.profiles set role = 'bce'
+     where id = '50900000-0000-0000-0000-000000000091'
+    returning id::text;
+  $fn$;
+  revoke execute on function public.test_509_race_promote() from public, anon, authenticated, service_role;
+  grant execute on function public.test_509_race_promote() to authenticated;
 $$);
 
 select pg_temp.test_login('50900000-0000-0000-0000-000000000090', jsonb_build_object(
@@ -253,11 +262,7 @@ select * from pg_temp.test_race(
        values ('c-race-f-509', 'Echipa Race F 509', 'youth')
        returning id
      ) select id::text from mirrored $$,
-  $$ with promoted as (
-       update public.profiles set role = 'bce'
-        where id = '50900000-0000-0000-0000-000000000091'
-       returning id
-     ) select id::text from promoted $$);
+  $$ select public.test_509_race_promote() $$);
 
 select is(
   (select format('%s:%s', race.result_b, race.b_waited::text)
@@ -272,6 +277,7 @@ select extensions.dblink_exec('race_setup_509', $$
   delete from auth.users where id in (
     '50900000-0000-0000-0000-000000000090',
     '50900000-0000-0000-0000-000000000091');
+  drop function public.test_509_race_promote();
 $$);
 select extensions.dblink_disconnect('race_setup_509');
 select pg_temp.test_clear_jwt();
@@ -700,12 +706,28 @@ select is(
   0::bigint,
   'promoting a member whose only Department is `org` still writes no Organization roster row');
 
--- The same promotion through the client path: `profiles_update_self` lets a
--- live BC change anyone's role as `authenticated`. Mutation this catches:
+-- The same promotion through the client path (#610): a fixture helper owned by
+-- a deliberately constrained test role performs the direct update without
+-- inserting into role_history (so role_history_audit's absolute counts are
+-- unaffected), while proving that the trigger elevates privileges.
+-- Mutation this catches:
 -- drop `security definer` from private.rederive_department_group_roles().
+drop role if exists test_promoter_509;
+create role test_promoter_509 bypassrls;
+grant authenticated to test_promoter_509;
+grant test_promoter_509 to postgres;
+grant select (id), update (role) on public.profiles to test_promoter_509;
+
+create function pg_temp.test_direct_promote(p_id uuid, p_role public.member_role)
+returns void
+language sql security definer set search_path = '' as $$
+  update public.profiles set role = p_role where id = p_id;
+$$;
+alter function pg_temp.test_direct_promote(uuid, public.member_role) owner to test_promoter_509;
+grant execute on function pg_temp.test_direct_promote(uuid, public.member_role) to authenticated;
+
 select pg_temp.test_login_leadership('50900000-0000-0000-0000-000000000001');
-update public.profiles set role = 'bce'
- where id = '50900000-0000-0000-0000-000000000008';
+select pg_temp.test_direct_promote('50900000-0000-0000-0000-000000000008', 'bce');
 reset role;
 
 select is(

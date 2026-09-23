@@ -17,7 +17,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(76);
+select plan(78);
 
 -- ==================== Structure ====================
 
@@ -93,12 +93,10 @@ select is(has_function_privilege('service_role', 'private.revoke_member_sessions
 select is(has_function_privilege('public', 'private.revoke_member_sessions(uuid)', 'execute'), false,
   'and the default PUBLIC execute grant Postgres hands every new function was revoked');
 
--- Deliberately NOT asserted here: that `authenticated` has lost
--- `update (role, status)` on `profiles`. #580 leaves that grant in place, so
--- the direct path still exists beside these commands and the audit is complete
--- only for callers who use them. Closing it is a security-boundary change for
--- every client and belongs in its own PR — the migration header says so, and
--- `rls_profiles_write.test.sql` still pins the behaviour that is true today.
+select is(has_column_privilege('authenticated', 'public.profiles', 'role', 'update'), false,
+  'authenticated has lost update on profiles.role — set_member_role is the only client path (#610)');
+select is(has_column_privilege('authenticated', 'public.profiles', 'status', 'update'), false,
+  'authenticated has lost update on profiles.status — set_member_status is the only client path (#610)');
 
 -- ==================== Fixtures ====================
 

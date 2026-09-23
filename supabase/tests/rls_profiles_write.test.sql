@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(31);
 
 -- ==================== Structure ====================
 select has_function('public', 'guard_profile_privileged_columns',
@@ -20,12 +20,17 @@ select policies_are('public', 'profiles',
   array['profiles_read', 'profiles_update_self', 'profiles_read_auth_admin'],
   'profiles carries the read policy, the self-update policy, and the hook''s');
 
--- The two columns no client writes, ever — not even BC (they are not a level
--- question, they are "never edited from the app").
+-- Columns no client writes directly: id/created_at were never writable;
+-- role and status writes were revoked (#610) once set_member_role and
+-- set_member_status (#580) became their sole client path.
 select ok(not has_column_privilege('authenticated', 'profiles', 'id', 'update'),
   'no member may write profiles.id — it IS the auth user');
 select ok(not has_column_privilege('authenticated', 'profiles', 'created_at', 'update'),
   'no member may write profiles.created_at');
+select ok(not has_column_privilege('authenticated', 'profiles', 'role', 'update'),
+  'no member may write profiles.role directly — set_member_role owns it (#610)');
+select ok(not has_column_privilege('authenticated', 'profiles', 'status', 'update'),
+  'no member may write profiles.status directly — set_member_status owns it (#610)');
 select ok(has_column_privilege('authenticated', 'profiles', 'full_name', 'update'),
   'full_name stays writable at the column level (the trigger is not involved)');
 
@@ -119,10 +124,12 @@ select throws_ok(
   $$ update profiles set role = 'bce' where id = 'e3000000-0000-0000-0000-0000000000e3' $$,
   '42501', null, 'a responsabil (level 4) cannot promote themselves either');
 
-update profiles set role = 'recrut' where id = 'e1000000-0000-0000-0000-0000000000e1';
+select throws_ok(
+  $$ update profiles set role = 'recrut' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '42501', null, 'a responsabil cannot demote someone else (denied by column privilege)');
 select is(
   (select role::text from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
-  'voluntar', 'a responsabil cannot demote someone else (denied silently)');
+  'voluntar', 'and the target''s role is untouched');
 
 reset role;
 
@@ -134,15 +141,13 @@ select pg_temp.test_login('e4000000-0000-0000-0000-0000000000e4', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-update profiles set role = 'activ' where id = 'e1000000-0000-0000-0000-0000000000e1';
-select is(
-  (select role::text from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
-  'activ', 'BC promotes a member');
+select throws_ok(
+  $$ update profiles set role = 'activ' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '42501', null, 'direct role update by BC is denied by column privilege — must use set_member_role');
 
-update profiles set status = 'alumni' where id = 'e2000000-0000-0000-0000-0000000000e2';
-select is(
-  (select status::text from profiles where id = 'e2000000-0000-0000-0000-0000000000e2'),
-  'alumni', 'BC changes a member''s status');
+select throws_ok(
+  $$ update profiles set status = 'alumni' where id = 'e2000000-0000-0000-0000-0000000000e2' $$,
+  '42501', null, 'direct status update by BC is denied by column privilege — must use set_member_status');
 
 update profiles set email = 'eva.corectat@test.local'
  where id = 'e2000000-0000-0000-0000-0000000000e2';
@@ -168,11 +173,13 @@ reset role;
 select pg_temp.test_clear_jwt();
 set local role authenticated;
 
--- Both are denied silently: the policy hides the row, so zero rows are updated.
+-- full_name update is denied silently: the policy hides the row, so zero rows are updated.
 update profiles set full_name = 'Ela Revenită'
  where id = 'e5000000-0000-0000-0000-0000000000e5';
-update profiles set status = 'activ'
- where id = 'e5000000-0000-0000-0000-0000000000e5';
+select throws_ok(
+  $$ update profiles set status = 'activ'
+      where id = 'e5000000-0000-0000-0000-0000000000e5' $$,
+  '42501', null, 'and above all cannot reactivate itself (denied by column privilege)');
 
 -- The assertions come *after* reset role on purpose: this session cannot read
 -- the row either, so checking from inside it would compare NULL to NULL and
@@ -184,7 +191,7 @@ select is(
   'Ela Fostă', 'a claimless session cannot edit the profile it used to own');
 select is(
   (select status::text from profiles where id = 'e5000000-0000-0000-0000-0000000000e5'),
-  'inactiv', 'and above all cannot reactivate itself');
+  'inactiv', 'and status is untouched');
 
 -- ==================== anon ====================
 set local role anon;
