@@ -2,6 +2,11 @@
 -- Replace the old arities instead of retaining overloads: a two-argument call
 -- uses the default, and PostgREST has exactly one matching command signature.
 -- Preserve the latest #603 session-revoke implementation and all authority gates.
+-- Both _impl bodies are rebuilt from main's latest definitions:
+-- set_member_role_impl from #584 (20260922224243_group_applications.sql,
+-- including ruling R30's pending-Application withdrawal on demotion) and
+-- set_member_status_impl from #603 (20260921104500_revoke_member_sessions.sql).
+-- The only delta is p_reason and its trimmed-or-fallback role_history write.
 
 drop function public.set_member_role(uuid, public.member_role);
 
@@ -135,6 +140,29 @@ begin
     into v_groups_left
     from removed;
 
+  -- #584 (ruling R30). The Application half of the same rule: a request to
+  -- join a Group the target can no longer qualify for is settled here rather
+  -- than left for a Manager to be told group_member_below_min_level about.
+  -- The rows are locked in id order before anything is decided about them.
+  perform 1
+     from public.group_applications as application
+     join public.groups as grp on grp.id = application.group_id
+    where application.member_id = p_member_id
+      and application.status = 'pending'
+      and grp.min_level > v_new_level
+    order by application.id
+      for update of application;
+
+  update public.group_applications as application
+     set status     = 'withdrawn',
+         decided_by = v_actor,
+         decided_at = clock_timestamp()
+    from public.groups as grp
+   where grp.id = application.group_id
+     and application.member_id = p_member_id
+     and application.status = 'pending'
+     and grp.min_level > v_new_level;
+
   perform private.notify(
     array[p_member_id],
     'system'::public.noti_kind,
@@ -176,7 +204,7 @@ as $$
 $$;
 
 comment on function public.set_member_role(uuid, public.member_role, text) is
-  'Sets a Member''s rank, callable only by a live active BC or Moderator and never on themselves; granting or removing bc/moderator -- and any change whose target already holds either -- is the Moderator''s alone, and responsabil is accepted only as a source rank. Writes exactly one public.role_history row naming the real actor, and one direct system Notification to the target (never to the actor). It leaves Group Roles alone (ADR-0009 ruling R15): a promotion to BCE does not appoint a Department Group Manager and a demotion from it does not remove one -- a Group Manager or Responsible position is appointed and removed only by a Group command (#583). The single exception is Minimum Level: when the new rank falls below a Group''s min_level, the target''s rows on that Group are deleted -- ordinary membership and Group Role alike -- because a Group states the rank its members must hold, and T13''s invariant (#586, no roster row below its Group''s Minimum Level) holds from this side because of it. An ancestor Group with a lower Minimum Level keeps its row and its authority still flows down through groups.path. Not yet done here: withdrawing the target''s pending Applications on those Groups. public.group_applications does not exist until #584, whose implementer replaces this body to add it -- it is deferred, not forgotten.';
+  'Sets a Member''s rank, callable only by a live active BC or Moderator and never on themselves; granting or removing bc/moderator -- and any change whose target already holds either -- is the Moderator''s alone, and responsabil is accepted only as a source rank. Writes exactly one public.role_history row naming the real actor, and one direct system Notification to the target (never to the actor). It leaves Group Roles alone (ADR-0009 ruling R15): a promotion to BCE does not appoint a Department Group Manager and a demotion from it does not remove one -- a Group Manager or Responsible position is appointed and removed only by a Group command (#583). The single exception is Minimum Level: when the new rank falls below a Group''s min_level, the target''s rows on that Group are deleted -- ordinary membership and Group Role alike -- because a Group states the rank its members must hold, and T13''s invariant (#586, no roster row below its Group''s Minimum Level) holds from this side because of it. An ancestor Group with a lower Minimum Level keeps its row and its authority still flows down through groups.path. Since #584 (ruling R30) the same demotion also withdraws the target''s pending Applications to every Group whose Minimum Level now exceeds their rank, with the actor as decider. p_reason (#612), when non-blank, is stored trimmed as role_history.reason; omitted, null or all-whitespace falls back to a fixed string.';
 
 revoke execute on function public.set_member_role(uuid, public.member_role, text)
   from public, anon, authenticated, service_role;
@@ -184,7 +212,7 @@ grant execute on function public.set_member_role(uuid, public.member_role, text)
   to authenticated;
 
 comment on function private.set_member_role_impl(uuid, public.member_role, text) is
-  'Body behind public.set_member_role: authority, target lock, role_history write, Minimum-Level roster cleanup, and the direct Role-change Notification (#580).';
+  'Body behind public.set_member_role (#580): authority, the audited rank change, and ruling R23''s Minimum-Level consequences. When the new rank falls below a Group''s min_level the target''s rows on that Group are deleted — ordinary membership and Group Role alike — and, since #584 (ruling R30), their pending Applications to every Group whose Minimum Level now exceeds their rank are withdrawn with the actor as decider: such an Application could only ever be answered group_member_below_min_level, and leaving it pending would keep the Group visible to them through ruling R17''s groups_read limb indefinitely. An ancestor Group with a lower Minimum Level keeps its row and its authority still flows down through groups.path. It leaves Group Roles alone everywhere else (ruling R15): a promotion to BCE does not appoint a Department Group Manager and a demotion from it does not remove one. p_reason (#612) is stored trimmed in role_history.reason, falling back to a fixed string when omitted or blank.';
 
 revoke execute on function private.set_member_role_impl(uuid, public.member_role, text)
   from public, anon, authenticated, service_role;
