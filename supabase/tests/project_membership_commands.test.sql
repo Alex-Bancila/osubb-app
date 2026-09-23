@@ -528,6 +528,8 @@ select extensions.dblink_connect(
     'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
     current_database()
   ));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('membership_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('membership_setup', $$
   delete from public.projects where name = 'Membership concurrency probe';
   delete from auth.users where id in (
