@@ -42,7 +42,7 @@
 -- `from_member` and
 -- `decided_by` are plain references with no `on delete` clause, so Postgres
 -- refuses to remove a member while any of them still points at that member:
--- the children go first. Everything else — memberships, team memberships,
+-- the children go first. Everything else — Group memberships,
 -- RSVPs, announcement reads, notifications, push tokens — cascades
 -- from `profiles`, which itself cascades from the single `auth.users` delete
 -- at the end.
@@ -178,18 +178,13 @@ delete from events e
 delete from announcements a
  using profiles p where a.created_by = p.id and p.email like '%@demo.osubb';
 
--- Project memberships cascade from their Project. A Project is demo-owned
--- only when its creator belongs to the demo cohort; names are not ownership.
+-- Clear legacy demo fixtures left by a pre-#587 staging seed. This seed never
+-- creates them again; the deletion allows a live staging database to upgrade.
 delete from projects project
- where exists (
-   select 1 from profiles creator
-    where creator.id = project.created_by
-      and creator.email like '%@demo.osubb'
- );
-
--- Teams after tasks and events, which reference them.
-delete from teams t
- where t.id in ('t-app', 't-recruti', 't-logistica');
+ where exists (select 1 from profiles creator
+                where creator.id = project.created_by
+                  and creator.email like '%@demo.osubb');
+delete from teams t where t.id in ('t-app', 't-recruti', 't-logistica');
 
 -- #586: Group commands now master these demo Groups. Remove only Groups
 -- created by the demo cohort after their work and Events have gone.
@@ -242,104 +237,8 @@ insert into profiles (id, full_name, email, role, joined_year, joined_at, avatar
   ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          2023, '2023-01-01', '#FF3B3B'),
   ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   2023, '2023-01-01', '#241F1E');
 
--- Departments: spread across the five real ones so the department cup has
--- something to compare, and two members sit in two (that combination is what
--- the visibility rules are hardest on).
---
--- #296 remap: `bce@` and `moderator@` belong to the coordination structure
--- **Diverse** (and Team `it` below), not to a delivery Department. That is
--- the AC, and it has a visible consequence the demo is meant to show:
--- private.can_manage_origin gives Department authority to BC/Moderator
--- (level ≥ 6) and to a **local BCE of that Department** only, so with no BCE
--- inside edu/pr/youth/fin/hr, every Department Task below is created and
--- evaluated by `bc@` or `moderator@`. The other three authority branches are
--- each demonstrated by exactly one Origin: the Department Team `it` (its
--- parent Department is Diverse, so `bce@` manages it), the Independent Team
--- `t-logistica` (every active member manages it), and the active Project
--- (its lead and its Responsible).
-insert into member_departments (member_id, dept_id) values
-  ('d0000000-0000-0000-0000-000000000001', 'edu'),
-  ('d0000000-0000-0000-0000-000000000002', 'edu'),
-  ('d0000000-0000-0000-0000-000000000003', 'pr'),
-  ('d0000000-0000-0000-0000-000000000004', 'youth'),
-  ('d0000000-0000-0000-0000-000000000005', 'edu'),
-  ('d0000000-0000-0000-0000-000000000006', 'diverse'),
-  ('d0000000-0000-0000-0000-000000000007', 'org'),
-  ('d0000000-0000-0000-0000-000000000008', 'diverse'),
-  -- Financiar and Resurse Umane get a member each so all five real
-  -- departments show a member in the directory and the Department picker.
-  -- Since #259, `dept_cup`'s standings follow each Task's Origin, not
-  -- `member_departments` -- every `kind = 'department'` row is a Cup row even
-  -- on zero members -- so this membership fixture is for the `members`
-  -- column and the picker, not for a department's presence in the cup
-  -- (issue #134, closed by #259).
-  ('d0000000-0000-0000-0000-000000000007', 'fin'),
-  ('d0000000-0000-0000-0000-000000000005', 'hr'),
-  -- Secretariat is the other coordination structure #310 created. It carries
-  -- no Tasks of its own; it exists here so the directory and the Department
-  -- picker show both coordination structures populated.
-  ('d0000000-0000-0000-0000-000000000004', 'secretariat');
-
--- Representative Team kinds: two Department Teams and one Independent Team.
--- t-recruti keeps existing as a plain Department Team — demo accounts
--- reference it — even though #372 retired the recruits flag it used to
--- carry; Calendar visibility for recruits is Minimum Level now (ADR-0008),
--- demonstrated below by the events that stay at min_level 0.
-insert into teams (id, name, dept_id, is_interne) values
-  ('t-app',     'Echipa Aplicație', 'diverse', false),
-  ('t-recruti', 'Echipa Recruți',   'edu',     false),
-  ('t-logistica','Echipa Logistică', null,     false);
-
--- `it` is reference data from #310 (a Department Team under Diverse), not a
--- demo Team, so it is never deleted above — only these memberships are, and
--- they cascade from `profiles`. It is where the #296 remap puts `bce@` and
--- `moderator@`, and it is the Origin of the "completed on time" Task below.
-insert into team_members (team_id, member_id) values
-  ('t-app',     'd0000000-0000-0000-0000-000000000006'),
-  ('t-app',     'd0000000-0000-0000-0000-000000000008'),
-  ('t-recruti', 'd0000000-0000-0000-0000-000000000002'),
-  ('t-recruti', 'd0000000-0000-0000-0000-000000000005'),
-  ('t-logistica','d0000000-0000-0000-0000-000000000004'),
-  ('t-logistica','d0000000-0000-0000-0000-000000000007'),
-  ('it',        'd0000000-0000-0000-0000-000000000006'),
-  ('it',        'd0000000-0000-0000-0000-000000000008');
-
--- ==================== Representative Projects ====================
--- Projects are independent from departments. These two fixtures cover the
--- active and archived lifecycles as well as lead, Responsible, ordinary
--- member, and outsider authorization scenarios. The database assigns their
--- ids; tests and dependent seed rows locate them by stable content instead.
-insert into projects (name, status, leader_id, created_by) values
-  ('Festivalul Studențesc 2026', 'active',
-   'd0000000-0000-0000-0000-000000000005',
-   'd0000000-0000-0000-0000-000000000007'),
-  ('Gala Voluntarilor 2025', 'archived',
-   'd0000000-0000-0000-0000-000000000004',
-   'd0000000-0000-0000-0000-000000000007');
-
--- The leader membership is inserted automatically by the Project invariant
--- trigger. Add only the non-leader roles here. Vlad deliberately has the
--- ordinary OSUBB role `activ` while being a Project Responsible: Project
--- authority is independent from the organization-wide `responsabil` role.
-insert into project_members (project_id, member_id, project_role)
-select project.id, fixture.member_id, fixture.project_role
-  from (values
-    ('Festivalul Studențesc 2026',
-     'd0000000-0000-0000-0000-000000000003'::uuid, 'responsible'),
-    ('Festivalul Studențesc 2026',
-     'd0000000-0000-0000-0000-000000000002'::uuid, 'member'),
-    ('Gala Voluntarilor 2025',
-     'd0000000-0000-0000-0000-000000000006'::uuid, 'responsible'),
-    ('Gala Voluntarilor 2025',
-     'd0000000-0000-0000-0000-000000000001'::uuid, 'member')
-  ) as fixture (project_name, member_id, project_role)
-  join projects project
-    on project.name = fixture.project_name
-   and project.created_by = 'd0000000-0000-0000-0000-000000000007';
-
--- #586 compatibility until #587 removes the legacy demo roster entirely.
--- The old tables above still support legacy read tests, but their mirror no
--- longer creates Groups. Use the Group commands for the actual demo roster.
+-- Group commands own the demo directory and rosters. Claims are set only for
+-- this transaction; the command implementations still verify the live BC role.
 create or replace function pg_temp.seed_bc_claims()
 returns void language sql as $$
   select set_config('request.jwt.claims',
@@ -348,8 +247,45 @@ returns void language sql as $$
       'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,
     true)::void
 $$;
+create or replace function pg_temp.seed_group_id(p_name text)
+returns bigint language sql stable as $$
+  select id from public.groups
+   where name = p_name
+     and created_by = 'd0000000-0000-0000-0000-000000000007'
+$$;
 select pg_temp.seed_bc_claims();
 
+-- The five established Department Groups are reference data. BCE manages
+-- Diverse; everyone else is an ordinary Department member.
+select public.set_group_role(
+  (select id from groups where legacy_dept_id='diverse'),
+  'd0000000-0000-0000-0000-000000000006','manager');
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select grp.id as group_id, fixture.member_id
+      from (values
+        ('edu', 'd0000000-0000-0000-0000-000000000001'::uuid),
+        ('edu', 'd0000000-0000-0000-0000-000000000002'::uuid),
+        ('pr', 'd0000000-0000-0000-0000-000000000003'::uuid),
+        ('youth', 'd0000000-0000-0000-0000-000000000004'::uuid),
+        ('edu', 'd0000000-0000-0000-0000-000000000005'::uuid),
+        ('fin', 'd0000000-0000-0000-0000-000000000007'::uuid),
+        ('hr', 'd0000000-0000-0000-0000-000000000005'::uuid),
+        ('secretariat', 'd0000000-0000-0000-0000-000000000004'::uuid),
+        ('diverse', 'd0000000-0000-0000-0000-000000000008'::uuid)
+      ) as fixture(dept_id, member_id)
+      join groups grp on grp.legacy_dept_id = fixture.dept_id
+  loop
+    perform public.add_group_member(v_row.group_id, v_row.member_id);
+  end loop;
+end;
+$$;
+
+-- Three Teams and two Projects, created by BC. Group names are scoped to
+-- the demo creator for every later lookup so another BC's same-name Group is
+-- never changed by a staging rerun.
 select public.create_group('Echipa Aplicație','team',
   (select id from groups where legacy_dept_id='diverse'));
 select public.create_group('Echipa Recruți','team',
@@ -360,74 +296,51 @@ select public.create_group('Festivalul Studențesc 2026','project',
 select public.create_group('Gala Voluntarilor 2025','project',
   p_manager_id => 'd0000000-0000-0000-0000-000000000004');
 
-select public.set_group_role(
-  (select id from groups where legacy_dept_id='diverse'),
-  'd0000000-0000-0000-0000-000000000006','manager');
-
+-- `it` (Echipa Interne) is a reference Team beneath Diverse.
 do $$
 declare v_row record;
 begin
   for v_row in
-    select g.id as group_id, md.member_id
-      from member_departments md
-      join groups g on g.legacy_dept_id=md.dept_id
-     where md.member_id in (select id from profiles where email like '%@demo.osubb')
-       and md.dept_id <> 'org'
-       and not (md.dept_id='diverse' and md.member_id='d0000000-0000-0000-0000-000000000006')
+    select ids.group_id, fixture.member_id, fixture.group_role, fixture.title
+      from (values
+        ('Echipa Aplicație', 'd0000000-0000-0000-0000-000000000006'::uuid, 'member', null::text),
+        ('Echipa Aplicație', 'd0000000-0000-0000-0000-000000000008'::uuid, 'member', null),
+        ('Echipa Recruți', 'd0000000-0000-0000-0000-000000000002'::uuid, 'member', null),
+        ('Echipa Recruți', 'd0000000-0000-0000-0000-000000000005'::uuid, 'member', null),
+        ('Echipa Logistică', 'd0000000-0000-0000-0000-000000000004'::uuid, 'responsible', 'Membru Logistică'),
+        ('Echipa Logistică', 'd0000000-0000-0000-0000-000000000007'::uuid, 'responsible', 'Membru Logistică'),
+        ('Festivalul Studențesc 2026', 'd0000000-0000-0000-0000-000000000003'::uuid, 'responsible', 'Responsabil proiect'),
+        ('Festivalul Studențesc 2026', 'd0000000-0000-0000-0000-000000000002'::uuid, 'member', null),
+        ('Gala Voluntarilor 2025', 'd0000000-0000-0000-0000-000000000006'::uuid, 'responsible', 'Responsabil proiect'),
+        ('Gala Voluntarilor 2025', 'd0000000-0000-0000-0000-000000000001'::uuid, 'member', null)
+      ) as fixture(group_name, member_id, group_role, title)
+      cross join lateral (select pg_temp.seed_group_id(fixture.group_name) as group_id) as ids
   loop
-    perform public.add_group_member(v_row.group_id,v_row.member_id);
-  end loop;
-end;
-$$;
-
-do $$
-declare v_row record;
-begin
-  for v_row in
-    select coalesce(g.id, native.id) as group_id, tm.member_id,
-           tm.team_id='t-logistica' as logistics
-      from team_members tm
-      left join groups g on g.legacy_team_id=tm.team_id
-      left join groups native on native.name=case tm.team_id
-        when 't-app' then 'Echipa Aplicație'
-        when 't-recruti' then 'Echipa Recruți'
-        when 't-logistica' then 'Echipa Logistică' end
-       and native.created_by='d0000000-0000-0000-0000-000000000007'
-     where tm.member_id in (select id from profiles where email like '%@demo.osubb')
-  loop
-    if v_row.logistics then
-      perform public.set_group_role(v_row.group_id,v_row.member_id,
-        'responsible','Membru Logistică');
+    if v_row.group_role = 'responsible' then
+      perform public.set_group_role(v_row.group_id, v_row.member_id, 'responsible', v_row.title);
     else
-      perform public.add_group_member(v_row.group_id,v_row.member_id);
+      perform public.add_group_member(v_row.group_id, v_row.member_id);
     end if;
   end loop;
+  perform public.add_group_member(
+    (select id from groups where legacy_team_id='it'),
+    'd0000000-0000-0000-0000-000000000006');
+  perform public.add_group_member(
+    (select id from groups where legacy_team_id='it'),
+    'd0000000-0000-0000-0000-000000000008');
 end;
 $$;
 
-do $$
-declare v_row record;
-begin
-  for v_row in
-    select g.id as group_id, pm.member_id, pm.project_role
-      from project_members pm
-      join projects p on p.id=pm.project_id
-      join groups g on g.name=p.name and g.category='project'
-        and g.created_by='d0000000-0000-0000-0000-000000000007'
-     where p.created_by='d0000000-0000-0000-0000-000000000007'
-  loop
-    if v_row.project_role='responsible' then
-      perform public.set_group_role(v_row.group_id,v_row.member_id,
-        'responsible','Responsabil proiect');
-    else
-      perform public.add_group_member(v_row.group_id,v_row.member_id);
-    end if;
-  end loop;
-end;
-$$;
-select public.archive_group(
-  (select id from groups where name='Gala Voluntarilor 2025'
-    and created_by='d0000000-0000-0000-0000-000000000007'));
+-- The General Assembly follows Level 3 automatically, with the Interne
+-- roster appointed as its Responsibles. It accepts no applications or Cup.
+select public.create_group('Adunarea Generală','team');
+select public.update_group_structure(pg_temp.seed_group_id('Adunarea Generală'),
+  'team', false, false, true, 3, null, null, false);
+select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
+  'd0000000-0000-0000-0000-000000000006','responsible','Responsabil Adunarea Generală');
+select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
+  'd0000000-0000-0000-0000-000000000008','responsible','Responsabil Adunarea Generală');
+select public.archive_group(pg_temp.seed_group_id('Gala Voluntarilor 2025'));
 select set_config('request.jwt.claims','',true);
 
 -- ==================== Demo work: campaigns, Tasks, evaluations, points ====================
@@ -475,9 +388,8 @@ $$;
 
 -- Since #579 the Group is the only Origin a work row carries. The fixtures below
 -- still NAME their Origin the way a reader recognises it (a Department id, a Team
--- id, or a demo Project's name); this resolves that name to the Group the forward
--- mirror derived for it, through groups.legacy_* (kept until #591). Exactly one
--- argument is non-null per call.
+-- id, or a demo Project's name); this resolves that name to its native Group
+-- (or a reference Department Group). Exactly one argument is non-null per call.
 create or replace function pg_temp.demo_group_id(p_dept text, p_team text, p_project_name text)
 returns bigint
 language sql
