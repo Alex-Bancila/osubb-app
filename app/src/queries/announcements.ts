@@ -14,7 +14,8 @@ const ANNOUNCEMENT_FIELDS = `
   id,
   title,
   body,
-  dept_id,
+  group_id,
+  audience,
   author,
   priority,
   category,
@@ -69,6 +70,37 @@ export function useAnnouncementsFeed(memberId?: string) {
   return useQuery({
     ...announcementsFeedQueryOptions(effectiveMemberId),
     enabled: Boolean(effectiveMemberId),
+  });
+}
+
+export type CreateAnnouncementInput = Pick<
+  import('../lib/database.types').Database['public']['Tables']['announcements']['Insert'],
+  | 'title'
+  | 'body'
+  | 'group_id'
+  | 'audience'
+  | 'priority'
+  | 'pinned'
+  | 'form_label'
+  | 'form_url'
+  | 'created_by'
+>;
+
+/** No RETURNING: a global writer can post a local item outside their own read audience. */
+export async function createAnnouncement(
+  input: CreateAnnouncementInput,
+): Promise<void> {
+  const { error } = await supabase.from('announcements').insert(input);
+  if (error) throw error;
+}
+
+export function useCreateAnnouncement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createAnnouncement,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: keys.announcements.all });
+    },
   });
 }
 

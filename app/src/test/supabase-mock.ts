@@ -14,8 +14,17 @@ export function createSupabaseMock() {
     range: vi.fn(),
     update: vi.fn(),
     maybeSingle: vi.fn(),
+    channel: vi.fn(),
+    on: vi.fn(),
+    subscribe: vi.fn(),
+    removeChannel: vi.fn(),
   };
-  const client = { from: mocks.from, rpc: mocks.rpc };
+  const client = {
+    from: mocks.from,
+    rpc: mocks.rpc,
+    channel: mocks.channel,
+    removeChannel: mocks.removeChannel,
+  };
 
   function reset() {
     for (const mock of Object.values(mocks)) mock.mockReset();
@@ -30,6 +39,9 @@ export function createSupabaseMock() {
     mocks.limit.mockReturnValue(mocks);
     mocks.range.mockReturnValue(mocks);
     mocks.update.mockReturnValue(mocks);
+    mocks.channel.mockReturnValue(mocks);
+    mocks.on.mockReturnValue(mocks);
+    mocks.subscribe.mockReturnValue(mocks);
   }
 
   reset();

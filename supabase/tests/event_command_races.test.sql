@@ -8,6 +8,8 @@ create extension if not exists dblink with schema extensions;
 select plan(8);
 select extensions.dblink_connect('events_248_setup', format(
  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('events_248_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('events_248_setup',$setup$
  delete from public.notifications where member_id::text like '24800000-%';
  delete from public.events where title='Race #248';
