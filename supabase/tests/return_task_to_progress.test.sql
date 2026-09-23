@@ -79,6 +79,9 @@ insert into public.project_members (project_id, member_id, project_role) values
    '33500000-0000-0000-0000-000000000010', 'responsible'),
   ((select id from public.projects where name = 'Proiect #335'),
    '33500000-0000-0000-0000-000000000011', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T1: happy path / round trip. Department Task, in_review, one Executor.
 insert into public.tasks
@@ -659,6 +662,8 @@ reset role;
 select extensions.dblink_connect('rtp_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('rtp_setup', 'set lock_timeout = ''2s''');
 
 select extensions.dblink_exec('rtp_setup', $$
   set session_replication_role = 'replica';
@@ -686,6 +691,13 @@ select extensions.dblink_exec('rtp_setup', $$
   insert into public.member_departments (member_id, dept_id) values
     ('33500000-0000-0000-0000-000000000051', 'edu'),
     ('33500000-0000-0000-0000-000000000052', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33500000-%'
+  on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status,

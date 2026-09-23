@@ -59,6 +59,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('33100000-0000-0000-0000-000000000005', 'edu'),
   ('33100000-0000-0000-0000-000000000006', 'edu'),
   ('33100000-0000-0000-0000-000000000007', 'edu');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- Two pending Candidates on an open queue: the plain close scenario.
 -- queue_opened_at is now(), not a fictional future date: private.close_task_
@@ -401,6 +404,8 @@ reset role;
 select extensions.dblink_connect('stq_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('stq_setup', 'set lock_timeout = ''2s''');
 
 select extensions.dblink_exec('stq_setup', $$
   insert into auth.users (id, email) values
@@ -412,6 +417,13 @@ select extensions.dblink_exec('stq_setup', $$
   insert into public.member_departments (member_id, dept_id) values
     ('33100000-0000-0000-0000-000000000021', 'edu'),
     ('33100000-0000-0000-0000-000000000022', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33100000-%'
+  on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values

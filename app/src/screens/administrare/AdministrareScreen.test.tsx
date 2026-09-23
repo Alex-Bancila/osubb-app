@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -121,12 +122,23 @@ it('mounts the Role panel only from the live server capability', () => {
 });
 
 function show() {
+  const client = new QueryClient();
   return render(
-    <MemoryRouter>
-      <AdministrareScreen />
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <AdministrareScreen />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
+
+it('shows CSV provisioning only when the server capability allows it', () => {
+  show();
+  expect(screen.queryByRole('heading', { name: 'Import CSV' })).toBeNull();
+  capabilities({ provisionMembers: true });
+  show();
+  expect(screen.getByRole('heading', { name: 'Import CSV' })).toBeVisible();
+});
 
 it('shows BC the whole tree, collapsed, and expands one Group at a time', async () => {
   const user = userEvent.setup();

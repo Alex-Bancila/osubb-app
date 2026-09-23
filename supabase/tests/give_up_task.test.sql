@@ -102,6 +102,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('33200000-0000-0000-0000-000000000012', 'edu'),
   ('33200000-0000-0000-0000-000000000013', 'edu'),
   ('33200000-0000-0000-0000-000000000014', 'edu');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T1: the promotion happy path -- a public Task in progress, one
 -- Executor, two pending Candidates in a known order.
@@ -757,6 +760,8 @@ reset role;
 select extensions.dblink_connect('gut_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('gut_setup', 'set lock_timeout = ''2s''');
 
 select extensions.dblink_exec('gut_setup', $$
   set session_replication_role = 'replica';

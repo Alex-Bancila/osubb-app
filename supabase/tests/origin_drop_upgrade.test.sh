@@ -71,6 +71,35 @@ $$;
 -- The legacy columns, backfilled from each row's own Group as the bridge kept them.
 create type public.event_scope as enum ('team', 'dept', 'project', 'org');
 
+-- Native demo Groups have no legacy rows. Reconstruct the older shape solely
+-- inside this rollback-only replay so #579's historical guards meet realistic
+-- pre-drop keys without reintroducing a production mirror.
+insert into public.teams (id, name, dept_id, is_interne) values
+  ('t-app', 'Echipa Aplicație', 'diverse', false),
+  ('t-recruti', 'Echipa Recruți', 'edu', false),
+  ('t-logistica', 'Echipa Logistică', null, false);
+insert into public.projects (name, status, leader_id, created_by) values
+  ('Festivalul Studențesc 2026', 'active',
+   'd0000000-0000-0000-0000-000000000005',
+   'd0000000-0000-0000-0000-000000000007'),
+  ('Gala Voluntarilor 2025', 'archived',
+   'd0000000-0000-0000-0000-000000000004',
+   'd0000000-0000-0000-0000-000000000007');
+update public.groups as grp
+   set legacy_team_id = team.id
+  from public.teams as team
+ where grp.created_by = 'd0000000-0000-0000-0000-000000000007'
+   and (grp.name, team.id) in (('Echipa Aplicație', 't-app'),
+                              ('Echipa Recruți', 't-recruti'),
+                              ('Echipa Logistică', 't-logistica'));
+update public.groups as grp
+   set legacy_project_id = project.id
+  from public.projects as project
+ where grp.created_by = 'd0000000-0000-0000-0000-000000000007'
+   and project.created_by = grp.created_by
+   and project.name = grp.name
+   and project.name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025');
+
 alter table public.tasks add column dept_id text, add column team_id text, add column project_id bigint;
 update public.tasks as task
    set dept_id = grp.legacy_dept_id, team_id = grp.legacy_team_id, project_id = grp.legacy_project_id

@@ -95,6 +95,9 @@ insert into public.project_members (project_id, member_id, project_role) values
    '33700000-0000-0000-0000-000000000007', 'responsible'),
   ((select id from public.projects where name = 'Proiect #337'),
    '33700000-0000-0000-0000-000000000008', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T1: the happy path. A PUBLIC, OVERDUE Department Task in_progress,
 -- with a live Executor and two pending Candidates. Difficulty 4 x
@@ -735,6 +738,8 @@ select is((select count(*) from public.task_evaluations
 select extensions.dblink_connect('ctr_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('ctr_setup', 'set lock_timeout = ''2s''');
 
 select extensions.dblink_exec('ctr_setup', $$
   insert into auth.users (id, email) values
@@ -752,6 +757,13 @@ select extensions.dblink_exec('ctr_setup', $$
     ('33700000-0000-0000-0000-000000000052', 'edu'),
     ('33700000-0000-0000-0000-000000000053', 'edu'),
     ('33700000-0000-0000-0000-000000000054', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33700000-%'
+  on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status,

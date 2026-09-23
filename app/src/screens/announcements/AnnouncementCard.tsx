@@ -61,27 +61,22 @@ export default function AnnouncementCard({
               <span>{meta.label}</span>
             </Badge>
 
-            {announcement.department ? (
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold',
-                  announcement.department.color
-                    ? 'text-white'
-                    : 'bg-muted text-muted-foreground',
-                )}
-                style={
-                  announcement.department.color
-                    ? { backgroundColor: announcement.department.color }
-                    : undefined
-                }
-              >
-                {announcement.department.short ?? announcement.department.name}
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                OSUBB
-              </span>
-            )}
+            <span
+              className={cn(
+                'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold',
+                announcement.group.color
+                  ? 'text-white'
+                  : 'bg-muted text-muted-foreground',
+              )}
+              style={
+                announcement.group.color
+                  ? { backgroundColor: announcement.group.color }
+                  : undefined
+              }
+            >
+              {announcement.group.short ?? announcement.group.name}
+            </span>
+            <Badge variant="outline">{announcement.audienceLabel}</Badge>
 
             {announcement.category && (
               <Badge variant="outline" className="text-muted-foreground">

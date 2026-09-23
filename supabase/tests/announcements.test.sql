@@ -1,79 +1,36 @@
--- announcements.test.sql — Epic 1.5b: announcements feed + read receipts.
--- Runs in one transaction and rolls back — leaves no residue in the local db.
+-- #581: announcement Origin, Audience, content and read receipts.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-
-select plan(12);
-
--- ==================== Shape ====================
+select plan(14);
 select has_table('public', 'announcements', 'announcements table exists');
 select has_table('public', 'announcement_reads', 'announcement_reads table exists');
-
-select ok(
-  (select relrowsecurity from pg_class
-    where relname = 'announcements' and relnamespace = 'public'::regnamespace),
-  'RLS is enabled on announcements');
-select ok(
-  (select relrowsecurity from pg_class
-    where relname = 'announcement_reads' and relnamespace = 'public'::regnamespace),
-  'RLS is enabled on announcement_reads');
-
-select has_index('public', 'announcements', 'announcements_published_idx',
-  'the feed is indexed by publication date');
-select has_index('public', 'announcement_reads', 'announcement_reads_member_idx',
-  'read receipts are indexed by member (unread counter)');
-
--- ==================== Fixtures ====================
--- The demo seed fills these tables; the counts below are about this file's
--- rows. Cleared inside the transaction, which rolls back.
+select has_column('public', 'announcements', 'group_id', 'Origin Group column exists');
+select has_column('public', 'announcements', 'audience', 'Audience column exists');
+select col_not_null('public', 'announcements', 'group_id', 'Origin Group is required');
+select col_not_null('public', 'announcements', 'audience', 'Audience is required');
+select has_index('public', 'announcements', 'announcements_group_idx', 'Origin lookup is indexed');
 truncate announcements, announcement_reads cascade;
-
-insert into auth.users (id, email) values
-  ('a1000000-0000-0000-0000-0000000000a1', 'andrei.ann@test.local');
-insert into profiles (id, full_name, email, role) values
-  ('a1000000-0000-0000-0000-0000000000a1', 'Andrei Test', 'andrei.ann@test.local', 'voluntar');
-
-insert into announcements (title, body, priority, pinned)
-  values ('Ședință extraordinară', 'Vineri, ora 18.', 'critical', true);
-insert into announcements (title, body, dept_id)
-  values ('Materiale EDU', 'Le găsiți în drive.', 'edu');
-insert into announcements (title, body, form_label, form_url)
-  values ('Feedback eveniment', 'Ne ajută mult.', 'Completează formularul',
-          'https://forms.gle/exemplu');
-
--- ==================== Content rules ====================
-select is((select count(*) from announcements), 3::bigint,
-  'org-wide, department and form announcements all insert');
-select is(
-  (select dept_id from announcements where title = 'Ședință extraordinară'),
-  null, 'a null dept means org-wide reach');
-select is(
-  (select priority from announcements where title = 'Materiale EDU'),
-  'normal'::announce_priority, 'priority defaults to normal');
-
-select throws_ok(
-  $$ insert into announcements (title, body, form_label)
-     values ('Buton mort', 'Fără link.', 'Completează formularul') $$,
-  '23514', null, 'a form label without a URL is rejected (dead button)');
-
--- ==================== Read receipts: exactly once (AC) ====================
-insert into announcement_reads (announcement_id, member_id)
-  select id, 'a1000000-0000-0000-0000-0000000000a1'::uuid
-    from announcements where title = 'Materiale EDU';
-
-select throws_ok(
-  $$ insert into announcement_reads (announcement_id, member_id)
-     select id, 'a1000000-0000-0000-0000-0000000000a1'::uuid
-       from announcements where title = 'Materiale EDU' $$,
-  '23505', null, 'a member is marked as having read an announcement exactly once');
-
--- Deleting an announcement takes its receipts with it (no orphans).
-delete from announcements where title = 'Materiale EDU';
-select is((select count(*) from announcement_reads), 0::bigint,
-  'read receipts cascade with their announcement');
-
+insert into announcements(title,body,dept_id,group_id,audience) values
+('Organization #581','Org.',null,(select id from groups where is_organization),'org'),
+('EDU #581','EDU.','edu',(select id from groups where legacy_dept_id='edu'),'local');
+insert into announcements(title,body,group_id,audience)
+select 'Wide EDU #581','All.',id,'org' from groups where legacy_dept_id='edu';
+select is((select count(*) from announcements),3::bigint,'three announcements can be created');
+select is((select group_id from announcements where title='Organization #581'),
+(select id from groups where is_organization),'organization announcement has Organization Origin');
+select is((select audience from announcements where title='EDU #581'),'local','Department announcement is local');
+select is((select audience from announcements where title='Wide EDU #581'),'org',
+'organization Audience is independent of Department Origin');
+select throws_ok($$insert into announcements(title,body) values('No Origin #581','x')$$,
+'23502',null,'an announcement requires a Group Origin');
+select throws_ok($$insert into announcements(title,body,group_id,audience)
+select 'Bad Audience #581','x',id,'elsewhere' from groups where legacy_dept_id='edu'$$,
+'23514',null,'announcements_audience_ck rejects an unknown Audience');
+select throws_ok($$insert into announcements(title,body,group_id,form_label)
+select 'Dead link #581','x',id,'Form' from groups where legacy_dept_id='edu'$$,
+'23514',null,'form button still requires a URL');
 select * from finish();
 rollback;

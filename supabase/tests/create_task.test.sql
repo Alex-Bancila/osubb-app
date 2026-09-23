@@ -84,6 +84,9 @@ insert into public.project_members (project_id, member_id, project_role) values
    '32700000-0000-0000-0000-000000000002', 'responsible'),
   ((select id from public.projects where name = 'Proiect #327'),
    '32700000-0000-0000-0000-000000000003', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.campaigns (group_id, name, is_active, created_by) values
   (pg_temp.dept_group('edu'), 'Campanie #327', true, '32700000-0000-0000-0000-000000000005'),
@@ -684,6 +687,8 @@ reset role;
 select extensions.dblink_connect('task_lock_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('task_lock_setup', 'set lock_timeout = ''2s''');
 -- Clean first: these fixtures are COMMITTED, so an aborted earlier run would
 -- otherwise leave them behind and the next run would fail on a duplicate key
 -- instead of on the feature (the #336/#339 precedent). task_activity is
@@ -723,6 +728,13 @@ select extensions.dblink_exec('task_lock_setup', $$
     ('32700000-0000-0000-0000-000000000021', 'edu'),
     ('32700000-0000-0000-0000-000000000022', 'edu'),
     ('32700000-0000-0000-0000-000000000023', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '32700000-%'
+  on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
   values ('Lock Probe Umbrella #327', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, null, null, 'todo',

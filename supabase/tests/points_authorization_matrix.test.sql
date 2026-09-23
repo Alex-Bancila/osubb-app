@@ -92,6 +92,9 @@ overriding system value values (
   '26200000-0000-0000-0000-000000000005',
   '26200000-0000-0000-0000-000000000005'
 );
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.tasks
   (title, description, deadline, group_id, status,
