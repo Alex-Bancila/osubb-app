@@ -17,7 +17,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(80);
+select plan(82);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -620,6 +620,16 @@ select pg_temp.g521_task('command3','dt',5,'todo','direct');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select throws_ok($$select public.update_task_content((select id from g521_tasks where name='command3'),'Updated #521',null,now()+interval '1 day',null)$$,'42501','task_manage_forbidden','update_task_content: Group persona 8 on executor 5 in dt');
+reset role;
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.update_task_content(0, repeat('t', 121), null, now() + interval '7 days', null) $$,
+  'PT400', 'title_too_long', 'a title over 120 characters is refused before the gate');
+select throws_ok($$ select public.update_task_content(0, 'Titlu bun #673', repeat('d', 2001), now() + interval '7 days', null) $$,
+  'PT400', 'description_too_long', 'a description over 2000 characters is refused before the gate');
 reset role;
 
 select * from finish();

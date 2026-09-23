@@ -21,7 +21,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(83);
+select plan(85);
 
 -- ==================== Fixtures ====================
 
@@ -589,6 +589,16 @@ select lives_ok(
   $$select public.cancel_event(
       (select id from public.events where title = 'Eveniment organizație #582'), 'gata')$$,
   'cancel_event: and its creator still cancels it');
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_group(repeat('g', 121), 'team') $$,
+  'PT400', 'name_too_long', 'a Group name over 120 characters is refused before the gate');
+select throws_ok($$ select public.update_group(0, 'ab', null, false, null, false, 0) $$,
+  'PT400', 'name_too_short', 'a Group name under 3 characters is refused before the gate');
+reset role;
 
 select * from finish();
 rollback;

@@ -70,6 +70,8 @@ begin
   if p_name is null or p_name !~ '[^[:space:]]' then
     raise sqlstate 'PT400' using message = 'invalid_group_name';
   end if;
+  -- #673 (R8): measured as stored (btrim).
+  perform private.require_text_length('name', btrim(p_name), 3, 120);
   if p_category is null or p_category not in ('department', 'project', 'team') then
     raise sqlstate 'PT400' using message = 'invalid_group_category';
   end if;
@@ -187,8 +189,7 @@ begin
 
   return v_created;
 end;
-$function$
-;
+$function$;
 
 CREATE OR REPLACE FUNCTION private.update_group_impl(p_group_id bigint, p_name text, p_manager_title text, p_accepts_applications boolean, p_application_level integer, p_shared_work_visibility boolean, p_min_level integer, p_confirm_removals boolean DEFAULT false)
  RETURNS groups
@@ -212,6 +213,8 @@ begin
   if p_name is null or p_name !~ '[^[:space:]]' then
     raise sqlstate 'PT400' using message = 'invalid_group_name';
   end if;
+  -- #673 (R8): measured as stored (btrim).
+  perform private.require_text_length('name', btrim(p_name), 3, 120);
   if p_manager_title is not null and p_manager_title !~ '[^[:space:]]' then
     raise sqlstate 'PT400' using message = 'invalid_position_title';
   end if;
@@ -355,5 +358,5 @@ begin
 
   return v_updated;
 end;
-$function$
-;
+$function$;
+

@@ -4,19 +4,22 @@ import { Empty, ErrorState, Loading } from '../../components/states';
 import { useLeaderboard, useMyStanding } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useAuth } from '../../lib/auth';
-import { formatPoints, initials } from '../../lib/format';
+import { formatPoints } from '../../lib/format';
+import { MemberName } from '../../components/member/MemberName';
 
 type Row = {
-  member_id: string | null;
+  member_id: string;
   full_name: string | null;
+  nickname?: string | null;
   points: number | null;
   rank: number | null;
 };
 
 /**
- * One row of the board. `isMe` drives both the highlight and the avatar
- * colour — the leaderboard view carries no colour for anyone else, so everyone
- * but me gets the neutral default rather than an invented one.
+ * One row of the board: rank, the Member's name button, points. `isMe` drives
+ * both the highlight and the avatar colour — the board carries no colour for
+ * anyone else, so everyone but me gets the neutral default rather than an
+ * invented one (the Member Card shows their own once opened).
  */
 function RankRow({
   row,
@@ -37,15 +40,15 @@ function RankRow({
       >
         {row.rank ?? '—'}
       </span>
-      <span
-        className="avatar avatar--sm"
-        style={{ background: (isMe && color) || 'var(--ink-700)' }}
-        aria-hidden="true"
-      >
-        {initials(row.full_name)}
-      </span>
-      <span className="rank-name">
-        {row.full_name ?? '—'}
+      <span className="rank-member">
+        <MemberName
+          size="sm"
+          className="font-medium"
+          memberId={row.member_id}
+          nickname={row.nickname}
+          fullName={row.full_name ?? 'Membru OSUBB'}
+          avatarColor={(isMe && color) || 'var(--ink-700)'}
+        />
         {isMe && <span className="tag tag--me">tu</span>}
       </span>
       <span className="rank-points">{formatPoints(row.points ?? 0)}</span>

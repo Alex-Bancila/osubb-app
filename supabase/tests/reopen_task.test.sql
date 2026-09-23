@@ -41,7 +41,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(120);
+select plan(121);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1480,6 +1480,14 @@ select throws_ok($$select public.reopen_task((select id from g521_tasks where na
 reset role;
 select ok((select pg_get_functiondef('private.reopen_task_impl(bigint,text)'::regprocedure)) !~ 'is_project_lead|public\.projects|project_id',
   'reopen_task''s body reads no legacy Origin: its evaluate-authority refinement is decided by the Group predicates alone');
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.reopen_task(0, repeat('r', 1001)) $$,
+  'PT400', 'reason_too_long', 'a reopen reason over 1000 characters is refused before the gate');
+reset role;
 
 select * from finish();
 rollback;
