@@ -28,26 +28,28 @@
 
 ## Verified State at Plan Creation
 
-| Surface | Verified state on 2026-09-16 | Consequence |
-| --- | --- | --- |
-| `origin/main` | `450b3d6`, through PR #476 | The reporting Cup and member drill-down are already on `main`. |
-| PR #492 / #258 | Remote head `0959015`, `CLEAN`, old checks green | The green run predates the review fixes and is no longer sufficient. |
-| Local #492 worktree | Two unstaged files: the leaderboard migration and test; test now declares `plan(58)` | Preserve and finish this work before switching branches or pulling. |
-| PR #477 / #364 | Remote head `defb7b0`, `DIRTY`; old checks green | It conflicts with current `main`; the verified textual conflict is `supabase/tests/tracker_grants.test.sql`. |
-| PR #478 / #370 | Remote head `4326677`, based on `backend/364-actor-helpers`, old checks red | It must not be merged into its feature-branch base. Merge #477, retarget #478 to `main`, reconcile, and rerun all checks. |
-| Task Tracker backend milestone | Open: #258, #364, #262, optional #379 | #296 and the lifecycle-command wave are closed. |
+| Surface                        | Verified state on 2026-09-16                                                         | Consequence                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `origin/main`                  | `450b3d6`, through PR #476                                                           | The reporting Cup and member drill-down are already on `main`.                                                            |
+| PR #492 / #258                 | Remote head `0959015`, `CLEAN`, old checks green                                     | The green run predates the review fixes and is no longer sufficient.                                                      |
+| Local #492 worktree            | Two unstaged files: the leaderboard migration and test; test now declares `plan(58)` | Preserve and finish this work before switching branches or pulling.                                                       |
+| PR #477 / #364                 | Remote head `defb7b0`, `DIRTY`; old checks green                                     | It conflicts with current `main`; the verified textual conflict is `supabase/tests/tracker_grants.test.sql`.              |
+| PR #478 / #370                 | Remote head `4326677`, based on `backend/364-actor-helpers`, old checks red          | It must not be merged into its feature-branch base. Merge #477, retarget #478 to `main`, reconcile, and rerun all checks. |
+| Task Tracker backend milestone | Open: #258, #364, #262, optional #379                                                | #296 and the lifecycle-command wave are closed.                                                                           |
 
 ---
 
 ### Task 1: Finish the PR #492 review-fix round without losing local work
 
 **Files:**
+
 - Modify: `supabase/migrations/20260916174640_leadership_leaderboard.sql`
 - Modify: `supabase/tests/leadership_leaderboard.test.sql`
 - Local-only report: `.superpowers/sdd/2026-09-16-tracker-completion/task-g1-report.md`
 - Never stage: `docs/superpowers/plans/2026-09-11-project-team-role-matrix.md`
 
 **Interfaces:**
+
 - Consumes: `private.department_cup_rows(bigint)`, `private.caller_level()`, Task-origin columns, and `points_ledger.reason in ('task', 'task_reversal')`.
 - Produces: `public.leadership_leaderboard(text, text, bigint, bigint)` with shared ranks, deterministic display order, and one row for every member with in-scope Task history, including a zero or negative net.
 
@@ -179,6 +181,7 @@ Expected: Repository, database, Edge Function, frontend, and secret-scan jobs pa
 **Files:** None.
 
 **Interfaces:**
+
 - Consumes: fresh green PR #492.
 - Produces: `main` with the final #258 contract and private-function roster count `86`.
 
@@ -201,12 +204,14 @@ Expected: the newest `main` workflow is green and contains the #492 merge. If st
 ### Task 3: Reconcile PR #477 / issue #364 with post-#492 `main`
 
 **Files:**
+
 - Modify: `supabase/tests/tracker_grants.test.sql`
 - Review, and modify only if required by current definitions: `supabase/migrations/20260915222925_actor_authorization_helpers.sql`
 - Review: `supabase/tests/actor_level.test.sql`
 - Update: PR #477 body and issue #364 body/status notes
 
 **Interfaces:**
+
 - Consumes: private-function roster `86`, `private.caller_level()` contract, all merged Task commands, and the #258 leadership gate.
 - Produces: `private.actor_level(uuid default auth.uid())`, `private.require_active_member()`, preserved `private.caller_level()` `-1` sentinel, preserved `public.member_level(uuid)` `0` sentinel, and final roster count `88`.
 
@@ -334,6 +339,7 @@ gh pr checks 477 --watch
 **Files:** None.
 
 **Interfaces:**
+
 - Consumes: green #477 against post-#492 `main`.
 - Produces: final shared live-actor helpers used by subsequent authorization tests and #478.
 
@@ -346,10 +352,12 @@ The #477 migration timestamp is older than #492's but is semantically independen
 ### Task 5: Implement #262 as the final Task Tracker points authorization matrix
 
 **Files:**
+
 - Create: `supabase/tests/points_authorization_matrix.test.sql`
 - Do not modify implementation or grants unless the matrix exposes a real defect.
 
 **Interfaces:**
+
 - Consumes: `public.my_points`, `public.points_ledger`, `public.leadership_leaderboard(text,text,bigint,bigint)`, `public.department_cup(bigint)`, and `public.leadership_member_tasks(uuid)`.
 - Produces: one non-vacuous matrix proving the complete points read boundary across all relevant identities.
 
@@ -378,17 +386,17 @@ Add non-vacuity assertions as `postgres` proving every expected row exists befor
 
 The test must exercise:
 
-| Persona | `my_points` | own ledger | another ledger | leaderboard | Cup | member drill-down |
-| --- | --- | --- | --- | --- | --- | --- |
-| anonymous | none/denied | none | none | no execute/no rows | no execute/no rows | no execute/no rows |
-| valid UID, no org claims | none | none | none | no rows | no rows | no rows |
-| inactive with stale claims | none | none | none | no rows | no rows | no rows |
-| levels 0–3 | own total | own rows | none | no rows | no rows | no rows |
-| Responsabil level 4 | own total | own rows | none | no rows | no rows | no rows |
-| BCE level 5 | own total | globally authorized ledger rows | globally authorized rows | rows | rows | rows |
-| BC level 6 | same leadership boundary | same | same | rows | rows | rows |
-| Moderator level 9 | same leadership boundary | same | same | rows | rows | rows |
-| `service_role` | only explicitly granted server surfaces | only explicit grants | no accidental public-wrapper bypass | no accidental leadership bypass | no accidental leadership bypass | no accidental leadership bypass |
+| Persona                    | `my_points`                             | own ledger                      | another ledger                      | leaderboard                     | Cup                             | member drill-down               |
+| -------------------------- | --------------------------------------- | ------------------------------- | ----------------------------------- | ------------------------------- | ------------------------------- | ------------------------------- |
+| anonymous                  | none/denied                             | none                            | none                                | no execute/no rows              | no execute/no rows              | no execute/no rows              |
+| valid UID, no org claims   | none                                    | none                            | none                                | no rows                         | no rows                         | no rows                         |
+| inactive with stale claims | none                                    | none                            | none                                | no rows                         | no rows                         | no rows                         |
+| levels 0–3                 | own total                               | own rows                        | none                                | no rows                         | no rows                         | no rows                         |
+| Responsabil level 4        | own total                               | own rows                        | none                                | no rows                         | no rows                         | no rows                         |
+| BCE level 5                | own total                               | globally authorized ledger rows | globally authorized rows            | rows                            | rows                            | rows                            |
+| BC level 6                 | same leadership boundary                | same                            | same                                | rows                            | rows                            | rows                            |
+| Moderator level 9          | same leadership boundary                | same                            | same                                | rows                            | rows                            | rows                            |
+| `service_role`             | only explicitly granted server surfaces | only explicit grants            | no accidental public-wrapper bypass | no accidental leadership bypass | no accidental leadership bypass | no accidental leadership bypass |
 
 For each “no rows” case, use a known fixture ID and assert exact zero. For each allowed case, assert exact IDs/totals, not only `lives_ok`.
 
@@ -415,6 +423,7 @@ Expected: no migration and no generated type diff. Merge #262 before declaring t
 ### Task 6: Recover and finish PR #478 / issue #370 after #477 lands
 
 **Files:**
+
 - Modify as needed: `supabase/tests/tracker_grants.test.sql`
 - Regenerate: `app/src/lib/database.types.ts`
 - Review: `supabase/migrations/20260915230000_create_event_scope_authorization.sql`
@@ -423,6 +432,7 @@ Expected: no migration and no generated type diff. Merge #262 before declaring t
 - Review: `supabase/tests/rls_events.test.sql`
 
 **Interfaces:**
+
 - Consumes: `private.actor_level`, `private.require_active_member`, project/team membership helpers, and ADR-0008.
 - Produces: final `public.create_event(..., p_project_id bigint, p_min_level integer)` and `private.create_event_impl(...)`; final private-function roster `89` for the stated merge order.
 
@@ -475,6 +485,7 @@ Run `npx supabase db reset`, all pgTAP suites, generated-type drift, and `bash s
 **Files:** None by default.
 
 **Interfaces:**
+
 - Consumes: final backend milestone state.
 - Produces: an explicit backlog decision rather than an indefinitely open optional blocker.
 
@@ -497,6 +508,7 @@ The backend command wave is already merged. The safest immediate frontend work i
 ### Task 8: Lane A — issue #354 leadership leaderboard and Cup
 
 **Files:**
+
 - Create: `app/src/queries/leadership-points.ts`
 - Create: `app/src/queries/leadership-points.test.ts`
 - Create: `app/src/screens/leadership/LeadershipScreen.tsx`
@@ -508,6 +520,7 @@ The backend command wave is already merged. The safest immediate frontend work i
 - Modify: `app/src/components/shell/navItems.ts`
 
 **Interfaces:**
+
 - Consumes: `leadership_leaderboard`, `department_cup`, `leadership_member_tasks`, `LEVEL.seeLeadership = 5`.
 - Produces: `/clasament`, filter state keyed by Department/Team/Project/Campaign, and member-row navigation to `/tracker/membru/:memberId`.
 
@@ -547,6 +560,7 @@ Run the frontend gates, then use one level-4 and one BCE seeded session. The lev
 ### Task 9: Lane B — issue #176 give up an assigned task
 
 **Files:**
+
 - Create: `app/src/queries/task-give-up.ts`
 - Create: `app/src/queries/task-give-up.test.ts`
 - Create: `app/src/screens/tracker/GiveUpTaskDialog.tsx`
@@ -556,6 +570,7 @@ Run the frontend gates, then use one level-4 and one BCE seeded session. The lev
 - Modify: `app/src/queries/keys.ts` only if a missing detail/queue invalidation prefix is proven.
 
 **Interfaces:**
+
 - Consumes: `give_up_task(p_task_id bigint, p_reason text)` and the existing Task details/current-stage data.
 - Produces: executor-only give-up action for `todo`/`in_progress`, with automatic-promotion feedback after invalidation.
 
@@ -580,7 +595,7 @@ Prove the action is shown only to the active executor in `todo` or `in_progress`
 Call only:
 
 ```ts
-supabase.rpc('give_up_task', {
+supabase.rpc("give_up_task", {
   p_task_id: taskId,
   p_reason: reason.trim(),
 });
@@ -591,6 +606,7 @@ Never send an executor/member ID. After success, refetch and show whether the Ta
 ### Task 10: Continue the member-action lane sequentially with #185 then #186
 
 **Files:**
+
 - Create: `app/src/queries/task-progress-actions.ts`
 - Create: `app/src/queries/task-progress-actions.test.ts`
 - Modify: `app/src/screens/tracker/TaskStageSummary.tsx`
@@ -598,6 +614,7 @@ Never send an executor/member ID. After success, refetch and show whether the Ta
 - Modify corresponding tests.
 
 **Interfaces:**
+
 - Consumes: `start_task(p_task_id bigint)` and `submit_task_for_review(p_task_id bigint)`.
 - Produces: one state-aware executor action module shared by #185 and #186.
 

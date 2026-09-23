@@ -23,10 +23,12 @@
 ### Task 1: Reproduce the undrained asynchronous result
 
 **Files:**
+
 - Test: `supabase/tests/groups_sync.test.sql`
 - Inspect: `supabase/tests/_helpers.sql`
 
 **Interfaces:**
+
 - Consumes: `pg_temp.test_race(p_setup_sql text, p_sql_a text, p_sql_b text)`.
 - Produces: a captured failing run showing the helper leaves connection B busy before transaction cleanup.
 
@@ -55,10 +57,12 @@ The production change that must make the test fail is: removing the post-result 
 ### Task 2: Drain and disconnect both race connections
 
 **Files:**
+
 - Modify: `supabase/tests/_helpers.sql` in `pg_temp.test_race`
 - Test: `supabase/tests/groups_sync.test.sql`
 
 **Interfaces:**
+
 - Consumes: named `dblink` connections already opened by `pg_temp.test_race`.
 - Produces: the unchanged table result `(result_a text, result_b text, b_waited boolean)` with no live named connection after success or failure.
 
@@ -126,9 +130,11 @@ Expected: all database suites pass again, proving no connection or row cleanup l
 ### Task 3: Verify interruption recovery and repository gates
 
 **Files:**
+
 - Verify only: `supabase/tests/_helpers.sql`
 
 **Interfaces:**
+
 - Consumes: the completed helper.
 - Produces: recorded commands suitable for issue #596's PR body.
 

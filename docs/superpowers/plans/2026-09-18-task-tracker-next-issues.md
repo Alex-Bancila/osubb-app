@@ -65,6 +65,7 @@ These three issues deliberately run in one sequential lane because they modify t
 ### Task 1: #177 — Select a queued Candidate
 
 **Files:**
+
 - Create: `app/src/queries/task-candidate-selection.ts`
 - Create: `app/src/queries/task-candidate-selection.test.tsx`
 - Create: `app/src/screens/tracker/TaskCandidateSelector.tsx`
@@ -76,6 +77,7 @@ These three issues deliberately run in one sequential lane because they modify t
 - Modify: `app/src/screens/tracker/TrackerScreen.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `public.task_candidates`, `public.profiles_directory`, `public.my_managed_task_ids()`, and `public.select_task_candidate(bigint,bigint,boolean)`.
 - Produces:
 
@@ -113,7 +115,7 @@ Expected: fail because the module does not exist.
 Query `task_candidates` with the explicit `task_candidates_member_id_fkey` relation to the safe `profiles_directory` projection. Call only:
 
 ```ts
-supabase.rpc('select_task_candidate', {
+supabase.rpc("select_task_candidate", {
   p_task_id: taskId,
   p_candidate_id: candidateId,
   p_close_remaining: closeRemaining,
@@ -137,11 +139,13 @@ Run the focused query/component/sheet tests, then the complete frontend verifica
 ### Task 2: #178 — Decide the remaining queue in the same transaction
 
 **Files:**
+
 - Modify: `app/src/screens/tracker/TaskCandidateSelector.tsx`
 - Modify: `app/src/screens/tracker/TaskCandidateSelector.test.tsx`
 - Modify: `app/src/queries/task-candidate-selection.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `selectTaskCandidate({ taskId, candidateId, closeRemaining })` from Task 1.
 - Produces: an explicit `closeRemaining` decision before the single RPC call.
 
@@ -175,6 +179,7 @@ Use the commands in Global Constraints.
 ### Task 3: #179 — Open or close a public Candidate Queue
 
 **Files:**
+
 - Create: `app/src/queries/task-queue-management.ts`
 - Create: `app/src/queries/task-queue-management.test.tsx`
 - Create: `app/src/screens/tracker/TaskQueueControl.tsx`
@@ -183,6 +188,7 @@ Use the commands in Global Constraints.
 - Modify: `app/src/screens/tracker/TaskDetailsSheet.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `TaskPresentation.assignmentMode`, `TaskPresentation.queueClosed`, the per-task manager flag, and `public.set_task_queue(bigint,boolean)`.
 - Produces:
 
@@ -220,6 +226,7 @@ Run focused tests and complete frontend verification.
 ### Task 4: #188 — Present the canonical scoring guide
 
 **Files:**
+
 - Create: `app/src/queries/scoring-guide.ts`
 - Create: `app/src/queries/scoring-guide.test.ts`
 - Create: `app/src/screens/tracker/ScoringGuide.tsx`
@@ -227,6 +234,7 @@ Run focused tests and complete frontend verification.
 - Modify: `app/src/queries/keys.ts`
 
 **Interfaces:**
+
 - Consumes: RLS-protected `public.rating_guide` and the immutable points formula `difficulty × multiplier`.
 - Produces: `<ScoringGuide difficulty?: number />`, reusable by #189, #346, and #353.
 
@@ -261,6 +269,7 @@ These are new issues that should be created individually before assigning #180 o
 **Suggested issue title:** `Tracker: expose the current member's manageable Origins`
 
 **Files:**
+
 - Create: new timestamped migration via `npx supabase migration new manageable_task_origins`
 - Create: `supabase/tests/manageable_task_origins.test.sql`
 - Modify: `supabase/tests/tracker_grants.test.sql`
@@ -299,6 +308,7 @@ Use the commands in Global Constraints.
 **Suggested issue title:** `Tracker: expose the current member's evaluable Tasks`
 
 **Files:**
+
 - Create: new timestamped migration via `npx supabase migration new evaluable_task_ids`
 - Create: `supabase/tests/evaluable_task_ids.test.sql`
 - Modify: `supabase/tests/tracker_grants.test.sql`
@@ -350,13 +360,13 @@ export type TaskDraft = {
   title: string;
   description: string | null;
   deadline: string | null;
-  origin: { type: 'department' | 'team' | 'project'; id: string };
-  audience: 'local' | 'org' | null;
-  assignmentMode: 'direct' | 'public' | null;
+  origin: { type: "department" | "team" | "project"; id: string };
+  audience: "local" | "org" | null;
+  assignmentMode: "direct" | "public" | null;
   executorId: string | null;
   campaignId: number | null;
   parentTaskId: number | null;
-  kind: 'task' | 'umbrella';
+  kind: "task" | "umbrella";
 };
 ```
 
@@ -445,4 +455,3 @@ The next Tracker milestone is accepted when:
 - Ordinary Members still see only their own Tasks, Candidates, points, and eligible Opportunities.
 - A fresh `npx supabase db reset` plus full pgTAP and frontend suites pass.
 - Desktop/mobile keyboard use has no console errors and every touch target is at least 44×44 px.
-

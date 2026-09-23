@@ -27,13 +27,13 @@
 
 Inspected remote `main` at `e9253a88f1929e938d2e329eec71b9c6ffd9551a`.
 
-| Item | Verified state | Consequence |
-| --- | --- | --- |
-| #275, representative Project seed | Closed through PR #304 | Listed dependency satisfied. |
-| #280, scoped Team policies | Closed through PR #394, merged September 10 | Listed dependency satisfied. Use `20260910210000_scope_team_policies.sql`. |
-| #278 / #279 Team membership commands | Present on `main` | Both command families are available to test. |
-| #311, BC/Moderator Project-roster override | Open; the current helper still requires the actor to be the lead | **Missing acceptance dependency:** final #281 sign-off must follow #311. |
-| Current local checkout | `ci/378-secret-scan-deno-cors` | It contains unrelated unmerged CI work and lacks the merged #280 changes. Do not base #281 on this checkout's HEAD. |
+| Item                                       | Verified state                                                   | Consequence                                                                                                         |
+| ------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| #275, representative Project seed          | Closed through PR #304                                           | Listed dependency satisfied.                                                                                        |
+| #280, scoped Team policies                 | Closed through PR #394, merged September 10                      | Listed dependency satisfied. Use `20260910210000_scope_team_policies.sql`.                                          |
+| #278 / #279 Team membership commands       | Present on `main`                                                | Both command families are available to test.                                                                        |
+| #311, BC/Moderator Project-roster override | Open; the current helper still requires the actor to be the lead | **Missing acceptance dependency:** final #281 sign-off must follow #311.                                            |
+| Current local checkout                     | `ci/378-secret-scan-deno-cors`                                   | It contains unrelated unmerged CI work and lacks the merged #280 changes. Do not base #281 on this checkout's HEAD. |
 
 Recommended sequence: implement and merge #311 in its own branch/PR, then implement and complete #281 from updated `main`. Test design and fixtures can be prepared earlier in an independent branch, but its BC/Moderator override assertions will remain red until #311 lands. Do not stack the PRs.
 
@@ -43,13 +43,13 @@ This plan supersedes **Task 8 only** in `2026-09-10-alex-assigned-issues.md`. Th
 
 ## Scope and file ownership
 
-| File | Action | Responsibility |
-| --- | --- | --- |
-| `supabase/tests/project_team_authorization_matrix.test.sql` | Create | Shared fixtures, explicit role/scope cases, public-command outcomes, cross-scope denials, stale-session regressions. |
-| `supabase/tests/_helpers.sql` | Reuse without editing | `test_login(uuid,jsonb)`, `test_login_leadership(uuid)`, `test_clear_jwt()`. |
-| `supabase/tests/README.md` | Read | Existing fixture conventions, targeted execution, and seed-independent checks. |
-| Existing Project/Team suites | Read and run | Preserve detailed validation, invariants, idempotency, and concurrency coverage already present. |
-| `.github/workflows/ci.yml` | Reuse without editing | `supabase test db` already discovers the new SQL file. |
+| File                                                        | Action                | Responsibility                                                                                                       |
+| ----------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `supabase/tests/project_team_authorization_matrix.test.sql` | Create                | Shared fixtures, explicit role/scope cases, public-command outcomes, cross-scope denials, stale-session regressions. |
+| `supabase/tests/_helpers.sql`                               | Reuse without editing | `test_login(uuid,jsonb)`, `test_login_leadership(uuid)`, `test_clear_jwt()`.                                         |
+| `supabase/tests/README.md`                                  | Read                  | Existing fixture conventions, targeted execution, and seed-independent checks.                                       |
+| Existing Project/Team suites                                | Read and run          | Preserve detailed validation, invariants, idempotency, and concurrency coverage already present.                     |
+| `.github/workflows/ci.yml`                                  | Reuse without editing | `supabase test db` already discovers the new SQL file.                                                               |
 
 Do not copy existing schema-shape assertions or concurrency harnesses into the new suite. Its added value is testing different scopes with the same identities and fixtures. It does not certify the future Task lifecycle, evaluation, Calendar, or frontend.
 
@@ -57,20 +57,20 @@ Do not copy existing schema-shape assertions or concurrency harnesses into the n
 
 All allowed cases below require organization claims **and** a currently active Profile.
 
-| Surface | Allowed | Denied |
-| --- | --- | --- |
-| Project row and complete roster, active or archived | Current Project members; BC/Moderator globally | Nonmembers, including BCE without Project membership |
-| Manage work helper for an active Project | Lead, Project Responsible, BC/Moderator | Plain member; organizational Responsabil or BCE without an explicit Project management role |
-| Manage work helper for an archived Project | Nobody | All identities, including BC/Moderator |
-| Create/archive Project | BC/Moderator | All other roles, including the lead |
-| Add/remove Project members; grant/revoke Responsible | Lead or BC/Moderator after #311 | Project Responsible without another authorization; unrelated BCE/Responsabil/member |
-| Mutate archived Project roster | Nobody; an otherwise authorized actor receives `PT409` | Unauthorized caller still receives `42501` |
-| Department Team row and complete roster | Its members; BCE currently in the parent Department; BC/Moderator | Department peers without Team membership or leadership; foreign BCE without Team membership |
-| Independent Team row and complete roster | Its members; BC/Moderator | Nonmembers, including BCE |
-| Create Department Team / manage its roster through commands | Local BCE, BC/Moderator | Ordinary Team members; foreign BCE |
-| Create Independent Team / manage its roster through commands | BC/Moderator | Team members, BCE, and all other roles |
-| Direct INSERT/UPDATE/DELETE of Project or Team memberships | No authenticated role | Even legitimate managers must use the commands |
-| Direct Project writes and Team UPDATE/DELETE | No authenticated role | Team INSERT is the deliberate scoped-policy exception above |
+| Surface                                                      | Allowed                                                           | Denied                                                                                      |
+| ------------------------------------------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Project row and complete roster, active or archived          | Current Project members; BC/Moderator globally                    | Nonmembers, including BCE without Project membership                                        |
+| Manage work helper for an active Project                     | Lead, Project Responsible, BC/Moderator                           | Plain member; organizational Responsabil or BCE without an explicit Project management role |
+| Manage work helper for an archived Project                   | Nobody                                                            | All identities, including BC/Moderator                                                      |
+| Create/archive Project                                       | BC/Moderator                                                      | All other roles, including the lead                                                         |
+| Add/remove Project members; grant/revoke Responsible         | Lead or BC/Moderator after #311                                   | Project Responsible without another authorization; unrelated BCE/Responsabil/member         |
+| Mutate archived Project roster                               | Nobody; an otherwise authorized actor receives `PT409`            | Unauthorized caller still receives `42501`                                                  |
+| Department Team row and complete roster                      | Its members; BCE currently in the parent Department; BC/Moderator | Department peers without Team membership or leadership; foreign BCE without Team membership |
+| Independent Team row and complete roster                     | Its members; BC/Moderator                                         | Nonmembers, including BCE                                                                   |
+| Create Department Team / manage its roster through commands  | Local BCE, BC/Moderator                                           | Ordinary Team members; foreign BCE                                                          |
+| Create Independent Team / manage its roster through commands | BC/Moderator                                                      | Team members, BCE, and all other roles                                                      |
+| Direct INSERT/UPDATE/DELETE of Project or Team memberships   | No authenticated role                                             | Even legitimate managers must use the commands                                              |
+| Direct Project writes and Team UPDATE/DELETE                 | No authenticated role                                             | Team INSERT is the deliberate scoped-policy exception above                                 |
 
 BCE global **Task** visibility does not imply global Project/Team roster visibility. Archived context remains readable to current active participants for history; it does not permit new work or roster changes. Project Responsible is a scoped relationship and is independent of the organizational Responsabil role.
 
@@ -103,20 +103,20 @@ Use `no_plan()` while adding the explicit matrix cases; finish with `finish()` s
 
 - [ ] Create `auth.users` and Profile fixtures using these slots; create only the auth row for slot 15. Reference existing `edu` and `fin` Department rows without modifying them.
 
-| Slot | Organizational role/status | Relationships |
-| --- | --- | --- |
-| 1–5 | `recrut`, `voluntar`, `activ`, `vot`, `responsabil`; all active | Plain members of Project A, archived A, EDU Team A, and Independent Team A; Department `edu` |
-| 6 | Active BCE | Department `edu`; no Project or Team membership initially |
-| 7 | Active BCE | Department `fin`; lead of unrelated Project B; no Project A/Team A membership |
-| 8–9 | Active BC, Moderator | Initially no Project/Team memberships |
-| 10 | Active Voluntar | Lead of Project A and archived A |
-| 11 | Active Recrut | Project Responsible in Project A and archived A |
-| 12 | Active Voluntar | Department `edu`; roster fixture for EDU B/FIN only, with no Project or Team A memberships |
-| 13 | Inactive BC | Plain historical member of Project A/archived A and both Team A rosters |
-| 14 | Active Voluntar, tested without organization claims | Plain member of Project A/archived A and both Team A rosters |
-| 15 | Auth UID without Profile | Supply stale-looking BC claims for denial tests |
-| 16 | Active Voluntar | Target for command tests; initially no memberships |
-| 17 | Alumni Voluntar | Historical plain member of Project A/archived A and both Team A rosters |
+| Slot | Organizational role/status                                      | Relationships                                                                                |
+| ---- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1–5  | `recrut`, `voluntar`, `activ`, `vot`, `responsabil`; all active | Plain members of Project A, archived A, EDU Team A, and Independent Team A; Department `edu` |
+| 6    | Active BCE                                                      | Department `edu`; no Project or Team membership initially                                    |
+| 7    | Active BCE                                                      | Department `fin`; lead of unrelated Project B; no Project A/Team A membership                |
+| 8–9  | Active BC, Moderator                                            | Initially no Project/Team memberships                                                        |
+| 10   | Active Voluntar                                                 | Lead of Project A and archived A                                                             |
+| 11   | Active Recrut                                                   | Project Responsible in Project A and archived A                                              |
+| 12   | Active Voluntar                                                 | Department `edu`; roster fixture for EDU B/FIN only, with no Project or Team A memberships   |
+| 13   | Inactive BC                                                     | Plain historical member of Project A/archived A and both Team A rosters                      |
+| 14   | Active Voluntar, tested without organization claims             | Plain member of Project A/archived A and both Team A rosters                                 |
+| 15   | Auth UID without Profile                                        | Supply stale-looking BC claims for denial tests                                              |
+| 16   | Active Voluntar                                                 | Target for command tests; initially no memberships                                           |
+| 17   | Alumni Voluntar                                                 | Historical plain member of Project A/archived A and both Team A rosters                      |
 
 Give each auth row a unique `matrix.281.<slot>@test.local` email. Do not use demo logins or seed IDs. Use legitimate app-metadata claims for ordinary tests and explicitly supplied metadata for stale/claimless cases.
 
