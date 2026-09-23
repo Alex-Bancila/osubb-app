@@ -8,16 +8,14 @@ export function realCsvImportDeps(request: Request): CsvImportDeps {
   return {
     callerId: () => deps.callerId(),
     memberLevel: (userId) => deps.memberLevel(userId),
-    referenceIds: (table) => deps.referenceIds(table),
+    activeGroups: () => deps.activeGroups(),
     invite: (input, references) => {
+      // The Group set was loaded once for the whole file; asking the database
+      // again per row would turn a 100-row import into 100 extra round trips.
       const cachedReferenceDeps: InviteDeps = {
         ...deps,
-        missingIds: (table, ids) => {
-          const existing = table === "departments"
-            ? references.departmentIds
-            : references.teamIds;
-          return Promise.resolve(ids.filter((id) => !existing.has(id)));
-        },
+        missingGroupIds: (ids) =>
+          Promise.resolve(ids.filter((id) => !references.has(id))),
       };
       return inviteMember(input, cachedReferenceDeps);
     },
