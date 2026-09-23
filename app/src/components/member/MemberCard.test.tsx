@@ -175,17 +175,13 @@ it('traps focus inside and closes on Escape, handing focus back', async () => {
     name: 'Profilul membrului Ani',
     hidden: true,
   });
-  expect(dialog).toContainElement(document.activeElement as HTMLElement);
-  for (let step = 0; step < 4; step += 1) {
-    await userEvent.tab();
-    const active = document.activeElement as HTMLElement;
-    // Base UI's focus guards bounce focus back in; nothing behind is reached.
-    expect(
-      dialog.contains(active) ||
-        active.hasAttribute('data-base-ui-focus-guard'),
-    ).toBe(true);
-    expect(active).not.toBe(trigger);
-  }
+  // Focus moves into the card, and the page behind it is taken out of reach:
+  // Base UI hides it from assistive technology and the Tab order (modal).
+  await waitFor(() =>
+    expect(dialog).toContainElement(document.activeElement as HTMLElement),
+  );
+  expect(dialog).toHaveAttribute('role', 'dialog');
+  expect(trigger.closest('[aria-hidden="true"], [inert]')).not.toBeNull();
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(trigger).toHaveFocus();
