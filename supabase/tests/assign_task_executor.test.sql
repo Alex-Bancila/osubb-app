@@ -63,6 +63,9 @@ insert into public.team_members (team_id, member_id) values
   ('t-342-dt', '34200000-0000-0000-0000-000000000003'),
   ('t-342-dt', '34200000-0000-0000-0000-000000000004'),
   ('t-342-ind', '34200000-0000-0000-0000-000000000010');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ==================== Tasks ====================
 
@@ -419,6 +422,8 @@ reset role;
 select extensions.dblink_connect('ate_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('ate_setup', 'set lock_timeout = ''2s''');
 
 select extensions.dblink_exec('ate_setup', $$
   insert into auth.users (id, email) values
@@ -429,6 +434,9 @@ select extensions.dblink_exec('ate_setup', $$
     ('34200000-0000-0000-0000-000000000022', 'Lock Assignee 342', 'lock.assignee.342@test.local', 'voluntar', 'activ');
   insert into public.member_departments (member_id, dept_id) values
     ('34200000-0000-0000-0000-000000000021', 'edu');
+  insert into public.group_members (group_id, member_id, group_role)
+  select id, '34200000-0000-0000-0000-000000000021', 'manager'
+    from public.groups where legacy_dept_id = 'edu';
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
   values

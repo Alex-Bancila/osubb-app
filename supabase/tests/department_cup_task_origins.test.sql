@@ -83,6 +83,9 @@ insert into public.profiles (id, full_name, email, role, status) values
 insert into public.teams (id, name, dept_id) values
   ('259-dept-team', 'Department Team 259', 'edu'),
   ('259-independent', 'Independent Team 259', null);
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- `campaigns.id` and `projects.id` are GENERATED ALWAYS, so the fixture
 -- overrides them: the Campaign filter is asserted against literal ids below,
@@ -96,6 +99,7 @@ insert into public.projects (id, name, status, leader_id, created_by)
 overriding system value values
   (2590003, 'Project 259', 'active', '25900000-0000-0000-0000-000000000001',
    '25900000-0000-0000-0000-000000000001');
+select pg_temp.materialize_legacy_groups();
 
 -- Every Task is already evaluated; `pg_temp.test_credit_task` below writes the
 -- Assignment, the Evaluation and the ledger entry, so the award is always

@@ -181,15 +181,15 @@ select pg_temp.smoke_assert(
   'step 0: the three seed personas exist and are active (run this against a seeded db reset)');
 
 select pg_temp.smoke_assert(
-  (select count(*) = 2 from public.member_departments
-    where dept_id = 'edu'
-      and member_id in ('d0000000-0000-0000-0000-000000000002',
-                        'd0000000-0000-0000-0000-000000000005')),
+  (select count(*) = 2 from public.group_members gm
+    join public.groups g on g.id = gm.group_id
+    where g.legacy_dept_id = 'edu'
+      and gm.member_id in ('d0000000-0000-0000-0000-000000000002',
+                           'd0000000-0000-0000-0000-000000000005')),
   'step 0: both interested members belong to edu (the local-Audience eligibility rule)');
 
 select pg_temp.smoke_points('d0000000-0000-0000-0000-000000000002') as base_02 \gset
--- #579: the Group is the only Origin a command takes. edu's Group is the one the
--- forward mirror derived for the edu Department.
+-- The Group is the only Origin a command takes. Educațional is reference data.
 select id as edu_group from public.groups where legacy_dept_id = 'edu' \gset
 
 -- ==================== step 1: manager creates a public Task ====================
@@ -763,8 +763,9 @@ select pg_temp.smoke_denied(
 reset role;
 
 -- ==================== step 20: a Coordonator manages a Project Task end to end ====================
-select id as project_group, legacy_project_id as project_id from public.groups
-where name = 'Festivalul Studențesc 2026' \gset
+select id as project_group from public.groups
+where name = 'Festivalul Studențesc 2026'
+  and created_by = 'd0000000-0000-0000-0000-000000000007' \gset
 select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
 select id as ordinary from public.profiles where email = 'voluntar@demo.osubb' \gset
 select pg_temp.smoke_points(:'ordinary') as project_points_before \gset
@@ -836,8 +837,9 @@ select pg_temp.smoke_assert(
   'step 20: the Coordonator closes the Candidate Queue of a Group-side Task');
 
 -- ==================== step 21: a Responsible evaluates ordinary members, never the Manager ====================
-select id as project_group, legacy_project_id as project_id from public.groups
-where name = 'Festivalul Studențesc 2026' \gset
+select id as project_group from public.groups
+where name = 'Festivalul Studențesc 2026'
+  and created_by = 'd0000000-0000-0000-0000-000000000007' \gset
 select id as responsible from public.profiles where email = 'activ@demo.osubb' \gset
 select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
 select id as ordinary from public.profiles where email = 'voluntar@demo.osubb' \gset
@@ -896,7 +898,8 @@ select pg_temp.smoke_assert(
   'step 21: three refused commands leave the Group Manager''s Task in review');
 
 -- ==================== step 22: Independent-Team peers manage, BC evaluates ====================
-select id as team_group, legacy_team_id as team_id from public.groups where name = 'Echipa Logistică' \gset
+select id as team_group from public.groups where name = 'Echipa Logistică'
+  and created_by = 'd0000000-0000-0000-0000-000000000007' \gset
 select id as peer from public.profiles where email = 'vot@demo.osubb' \gset
 select id as bc_peer from public.profiles where email = 'bc@demo.osubb' \gset
 select pg_temp.test_login_leadership(:'peer');
@@ -927,17 +930,16 @@ select pg_temp.smoke_eq((select status::text from public.tasks where id = :peer_
 -- Above, the teammate whose Task the peer manages is bc@ (level 6), so the
 -- management half could in principle be answered by something about BC rather
 -- than by the Independent-Team peer rule. Add a third teammate through the
--- public roster command -- private.sync_team_groups makes every Independent-Team
--- member a Group Responsible, so there is no "ordinary" teammate to use instead
--- -- and drive the same pair against them.
+-- public Group command, appointing the Independent-Team peer as Responsible,
+-- then drive the same pair against them.
 select id as third_peer from public.profiles where email = 'activ@demo.osubb' \gset
 select pg_temp.test_login_leadership(:'bc_peer');
-select public.add_independent_team_member(:'team_id', :'third_peer');
+select public.set_group_role(:team_group, :'third_peer', 'responsible', 'Membru Logistică');
 reset role;
 select pg_temp.smoke_assert(
   (select group_role = 'responsible' from public.group_members
     where group_id = :team_group and member_id = :'third_peer'),
-  'step 22: the roster command mirrors the new teammate as a Group Responsible');
+  'step 22: the roster command appoints the new teammate as a Group Responsible');
 select pg_temp.test_login_leadership(:'peer');
 select public.create_task(
   p_title => 'SMOKE Independent peer pair',
@@ -967,8 +969,9 @@ select pg_temp.smoke_assert(
   'step 22: the peer manages a non-BC teammate on a Group-side Independent-Team Task');
 
 -- ==================== step 23: Group Minimum Level hides and closes an org Opportunity ====================
-select id as gated_group, legacy_project_id as gated_project from public.groups
-where name = 'Festivalul Studențesc 2026' \gset
+select id as gated_group from public.groups
+where name = 'Festivalul Studențesc 2026'
+  and created_by = 'd0000000-0000-0000-0000-000000000007' \gset
 select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
 select id as below_minimum from public.profiles where email = 'voluntar@demo.osubb' \gset
 select id as eligible from public.profiles where email = 'vot@demo.osubb' \gset

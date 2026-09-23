@@ -19,6 +19,7 @@ insert into public.project_members(project_id,member_id,project_role)
 select id,'24800000-0000-0000-0000-000000000003','responsible' from public.projects where name='Events A #248';
 insert into public.project_members(project_id,member_id,project_role)
 select id,'24800000-0000-0000-0000-000000000004','member' from public.projects where name='Events A #248';
+select pg_temp.materialize_legacy_groups();
 create temp table gx as select id, case when name='Events A #248' then 'a' when name='Events B #248' then 'b' else 'org' end name
 from public.groups where name in ('Events A #248','Events B #248') or legacy_dept_id='org';
 grant select on gx to authenticated,anon;
@@ -163,6 +164,7 @@ insert into public.profiles(id,full_name,email,role,status) values
 insert into public.member_departments(member_id,dept_id) values
   ('24800000-0000-0000-0000-000000000011','diverse'),
   ('24800000-0000-0000-0000-000000000012','edu');
+select pg_temp.materialize_legacy_groups();
 insert into public.events(title,type,group_id,starts_at,created_by,min_level)
 select 'Team ancestor #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000001',0
   from public.groups where legacy_team_id='it';

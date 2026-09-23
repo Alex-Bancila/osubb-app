@@ -34,6 +34,7 @@ insert into public.member_departments (member_id, dept_id) values
   ('27910000-0000-0000-0000-000000000005', 'edu');
 insert into public.teams (id, name, dept_id)
 values ('department-team-279-policy', 'Department policy Team #279', 'edu');
+select pg_temp.materialize_legacy_groups();
 
 select pg_temp.test_login_leadership('27910000-0000-0000-0000-000000000001');
 select throws_ok($$
@@ -54,16 +55,18 @@ delete from public.member_departments
 select ok(exists(select 1 from public.member_departments
   where member_id = '27910000-0000-0000-0000-000000000005' and dept_id = 'edu'),
   'BCE cannot delete a Department membership');
-select is((select membership.member_id from public.add_department_team_member(
-  'department-team-279-policy', '27910000-0000-0000-0000-000000000005') membership),
+select is((select membership.member_id from public.add_group_member(
+  (select id from public.groups where legacy_team_id = 'department-team-279-policy'),
+  '27910000-0000-0000-0000-000000000005') membership),
   '27910000-0000-0000-0000-000000000005'::uuid,
   'local BCE can still add a Member to a Department Team');
 reset role;
 select pg_temp.test_login_leadership('27910000-0000-0000-0000-000000000002');
 select throws_ok($$
-  select public.add_department_team_member(
-    'department-team-279-policy', '27910000-0000-0000-0000-000000000005')
-$$, '42501', 'department_team_membership_forbidden',
+  select public.add_group_member(
+    (select id from public.groups where legacy_team_id = 'department-team-279-policy'),
+    '27910000-0000-0000-0000-000000000005')
+$$, '42501', 'group_manage_forbidden',
   'a foreign Department BCE remains denied by the command');
 reset role;
 
@@ -118,18 +121,25 @@ select throws_ok($$
 $$, '42501', null, 'a demoted BC is denied despite stale claims');
 reset role;
 
+-- Since #602 provisioning places the initial Group by Appointment rather than
+-- by writing this table: the Department is named by its GROUP id and the
+-- roster row is the Group's, not member_departments'. The policy story around
+-- it is unchanged, which is what the assertion below is here to show.
 set local role service_role;
 select is(public.provision_profile(
   '27910000-0000-0000-0000-000000000008', 'Service Provisioned',
-  'service.dept-policy@test.local', 'voluntar', array['fin'], array[]::text[]),
+  'service.dept-policy@test.local', 'voluntar',
+  array[(select id from public.groups where legacy_dept_id = 'fin')],
+  '27910000-0000-0000-0000-000000000003'),
   '27910000-0000-0000-0000-000000000008'::uuid,
   'service_role can still provision an invited Member');
 reset role;
-select is((select format('%s:%s', profile.status, membership.dept_id)
+select is((select format('%s:%s', profile.status, grp.legacy_dept_id)
   from public.profiles as profile
-  join public.member_departments as membership on membership.member_id = profile.id
+  join public.group_members as membership on membership.member_id = profile.id
+  join public.groups as grp on grp.id = membership.group_id
   where profile.id = '27910000-0000-0000-0000-000000000008'),
-  'activ:fin', 'provisioning creates the active profile and Department membership');
+  'activ:fin', 'provisioning creates the active profile and the Department Group roster row');
 
 select is((select count(*) from pg_policies
   where schemaname = 'public' and tablename = 'member_departments'

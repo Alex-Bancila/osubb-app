@@ -226,7 +226,11 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select throws_ok($q$select public.reject_completed_work_request((select id from public.completed_work_requests where description='No other decider #522'),'Self')$q$,'42501','request_decide_forbidden','no fallback grants BC self-decision');
 reset role;
 update public.profiles set role='voluntar' where id=pg_temp.g521_uid(9);
+update public.group_members set group_role='member'
+ where group_id=pg_temp.dept_group('d521') and member_id=pg_temp.g521_uid(9);
 insert into public.member_departments(member_id,dept_id) values(pg_temp.g521_uid(1),'d521');
+insert into public.group_members(group_id,member_id,group_role)
+values(pg_temp.dept_group('d521'),pg_temp.g521_uid(1),'member');
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select lives_ok($q$insert into g522_ids select 'no-decider',(public.create_completed_work_request('No eligible other decider', pg_temp.dept_group('d521'))).id$q$,'BC requester can file work even when no eligible other decider remains');
 reset role;

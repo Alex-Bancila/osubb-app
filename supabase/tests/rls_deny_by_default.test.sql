@@ -34,8 +34,11 @@ insert into projects (name, leader_id, created_by) values
   ('RLS Project',
    'ffffffff-0000-0000-0000-000000000006',
    'ffffffff-0000-0000-0000-000000000006');
--- The project-manager invariant creates the leader membership, keeping this
--- fixture non-vacuous without a duplicate manual insert.
+-- #585 retired the Project leader synchronization command path. Populate this
+-- legacy table explicitly so the deny-by-default sweep remains non-vacuous.
+insert into project_members(project_id, member_id, project_role)
+select id, 'ffffffff-0000-0000-0000-000000000006', 'responsible'
+  from projects where name='RLS Project';
 insert into member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
 insert into campaigns (group_id, name, created_by)
@@ -49,6 +52,17 @@ insert into team_members (team_id, member_id)
 insert into groups (name, category) values ('RLS Group', 'team');
 insert into group_members (group_id, member_id, group_role)
   select id, 'ffffffff-0000-0000-0000-000000000006', 'manager' from groups where name = 'RLS Group';
+-- #584: the Applications table. Two rows, for the same reason
+-- completed_work_requests carries two: a row owned by the claimless uid
+-- itself is what exercises the `member_id = auth.uid()` limb of
+-- group_applications_read. Without it a mutated policy that dropped the
+-- auth_is_member() guard from that limb would still pass every assertion
+-- below, because no fixture row's member_id would match the session's uid.
+insert into group_applications (group_id, member_id)
+  select id, 'ffffffff-0000-0000-0000-000000000006' from groups where name = 'RLS Group';
+insert into group_applications (group_id, member_id, note)
+  select id, 'eeeeeeee-0000-0000-0000-000000000156', 'rls fixture application (claimless owner)'
+    from groups where name = 'RLS Group';
 
 insert into tasks (title, difficulty, group_id) values ('rls-t1', 3, pg_temp.dept_group('edu'));
 insert into task_assignments (task_id, member_id, assigned_by)
@@ -114,9 +128,9 @@ insert into events (title, type, group_id, starts_at)
   values ('rls-event', 'sedinta', pg_temp.dept_group('org'), now());
 insert into event_attendance (event_id, member_id)
   select id, 'ffffffff-0000-0000-0000-000000000006'::uuid from events where title = 'rls-event';
-insert into announcements (title, body) values
-  ('rls-announce', 'corp'),
-  ('rls-announce-unread', 'corp');
+insert into announcements (title, body, group_id, audience) values
+  ('rls-announce', 'corp', pg_temp.dept_group('org'), 'org'),
+  ('rls-announce-unread', 'corp', pg_temp.dept_group('org'), 'org');
 insert into announcement_reads (announcement_id, member_id)
   select id, member_id
     from announcements

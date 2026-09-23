@@ -4,6 +4,7 @@ import {
   fetchAnnouncementsFeed,
   markAnnouncementRead,
   announcementsFeedQueryOptions,
+  createAnnouncement,
 } from './announcements';
 import { keys } from './keys';
 
@@ -59,6 +60,8 @@ describe('announcements query layer', () => {
       expect(mockSelect).toHaveBeenCalledWith(
         expect.stringContaining('announcement_reads'),
       );
+      expect(mockSelect.mock.calls[0]?.[0]).toContain('group_id');
+      expect(mockSelect.mock.calls[0]?.[0]).toContain('audience');
       expect(mockOrderPinned).toHaveBeenCalledWith('pinned', {
         ascending: false,
       });
@@ -92,6 +95,25 @@ describe('announcements query layer', () => {
         message: 'permission denied',
       });
     });
+  });
+
+  it('inserts without RETURNING, so a global writer can publish a local row outside their read audience', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const select = vi.fn();
+    (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      insert,
+      select,
+    });
+    const payload = {
+      title: 'Ședință',
+      body: 'Detalii',
+      group_id: 12,
+      audience: 'local',
+      created_by: 'member-1',
+    };
+    await createAnnouncement(payload);
+    expect(insert).toHaveBeenCalledWith(payload);
+    expect(select).not.toHaveBeenCalled();
   });
 
   describe('markAnnouncementRead', () => {

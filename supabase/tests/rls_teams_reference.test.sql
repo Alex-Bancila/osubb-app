@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(20);
+select plan(21);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -23,6 +23,7 @@ insert into member_departments (member_id, dept_id)
 insert into teams (id, name, dept_id) values ('t-ref', 'Echipa Referință', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-ref', 'c1000000-0000-0000-0000-0000000000c1');
+select pg_temp.materialize_legacy_groups();
 
 -- ==================== A voluntar reads the vocabulary (AC) ====================
 select pg_temp.test_login('c1000000-0000-0000-0000-0000000000c1', jsonb_build_object(
@@ -78,6 +79,16 @@ select is((select multiplier from rating_guide where rating = 5), 3,
 
 reset role;
 
+-- A retained roster row and stale claims never authorize an inactive Member.
+update public.profiles set status = 'inactiv'
+ where id = 'c1000000-0000-0000-0000-0000000000c1';
+select pg_temp.test_login('c1000000-0000-0000-0000-0000000000c1', jsonb_build_object(
+    'member_role', 'voluntar', 'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb, 'team_ids', '["t-ref"]'::jsonb));
+select is((select count(*) from teams where id = 't-ref'), 0::bigint,
+  'inactive Member cannot read a legacy Team with stale claims and roster');
+reset role;
+
 -- ==================== BCE manages structure (AC) ====================
 select pg_temp.test_login('c2000000-0000-0000-0000-0000000000c2', jsonb_build_object(
     'member_role', 'bce',
@@ -86,12 +97,12 @@ select pg_temp.test_login('c2000000-0000-0000-0000-0000000000c2', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-select lives_ok(
+select throws_ok(
   $$ insert into teams (id, name, dept_id) values ('t-new', 'Echipa Nouă', 'edu') $$,
-  'level >= 5 creates teams');
+  '42501', null, 'legacy Team creation is retired for BCE');
 select throws_ok(
   $$ insert into team_members (team_id, member_id)
-     values ('t-new', 'c1000000-0000-0000-0000-0000000000c1') $$,
+     values ('t-ref', 'c2000000-0000-0000-0000-0000000000c2') $$,
   '42501', null,
   'legacy direct Team roster writes are retired pending scoped commands');
 select throws_ok(

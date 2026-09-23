@@ -22,6 +22,9 @@ insert into public.projects (name, status, leader_id, created_by) values
   ('Origin Project 314', 'active',
    '31400000-0000-0000-0000-000000000001',
    '31400000-0000-0000-0000-000000000001');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.campaigns (group_id, name, is_active, created_by) values
   (pg_temp.dept_group('edu'), 'Campaign Edu 314', true, '31400000-0000-0000-0000-000000000001'),

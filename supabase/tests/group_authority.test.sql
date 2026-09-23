@@ -44,7 +44,7 @@ insert into people values
 (1,'bc','bc','activ'),(2,'bce_edu','bce','activ'),(3,'bce_foreign','bce','activ'),
 (4,'coord','voluntar','activ'),(5,'resp','voluntar','activ'),(6,'ordinary_edu','voluntar','activ'),
 (7,'ordinary_proj','voluntar','activ'),(8,'ind_a','voluntar','activ'),(9,'ind_b','voluntar','activ'),
-(10,'dt_member','voluntar','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
+(10,'dt_member','vot','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
 (13,'claimless','voluntar','activ'),(14,'moderator','moderator','activ');
 insert into auth.users(id,email)
 select ('52000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid, name || '.520@test.local' from people;
@@ -66,8 +66,32 @@ select id,'52000000-0000-0000-0000-000000000005','responsible' from public.proje
 insert into public.project_members(project_id,member_id,project_role)
 select id,'52000000-0000-0000-0000-000000000007','member' from public.projects where name='Project #520';
 update public.projects set status='archived' where name='Archived #520';
--- Wave 2 OD9 exception: gated/native fixtures only, rolled back with this suite.
-update public.groups set min_level=3, application_level=3 where legacy_team_id='t-520-dt';
+-- The retired mirror no longer creates these rows: build the Group tree and
+-- roster explicitly so this suite exercises native authority.
+insert into public.groups(name,category,parent_id,min_level,application_level,legacy_team_id)
+values ('Child #520','team',(select id from public.groups where legacy_dept_id='edu'),3,3,'t-520-dt'),
+       ('Independent #520','team',null,0,0,'t-520-ind');
+insert into public.groups(name,category,status,legacy_project_id)
+select p.name,'project',p.status,p.id from public.projects p
+ where p.name in ('Project #520','Archived #520');
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+  from public.member_departments md
+  join public.groups g on g.legacy_dept_id=md.dept_id
+  join public.profiles p on p.id=md.member_id
+ where md.member_id::text like '52000000-%';
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,tm.member_id,case when tm.team_id='t-520-ind' then 'responsible' else 'member' end
+  from public.team_members tm join public.groups g on g.legacy_team_id=tm.team_id
+ where tm.team_id in ('t-520-dt','t-520-ind');
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,p.leader_id,'manager' from public.projects p
+  join public.groups g on g.legacy_project_id=p.id
+ where p.name in ('Project #520','Archived #520');
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,pm.member_id,pm.project_role from public.project_members pm
+  join public.groups g on g.legacy_project_id=pm.project_id
+  join public.projects p on p.id=pm.project_id where p.name='Project #520';
 insert into public.groups(name,category,min_level,automatic_membership) values ('AG #520','team',3,true);
 create temp table fx as
 select id, case when legacy_dept_id='edu' then 'edu' when legacy_dept_id='org' then 'org'
@@ -232,9 +256,12 @@ rollback to inactive_native;
 -- Both setup and cleanup are idempotent so an interrupted run can be retried.
 select extensions.dblink_connect('group_520_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres', current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('group_520_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('group_520_setup', $setup$
   drop function if exists public.test_520_require();
   drop function if exists public.test_520_revoke();
+  delete from public.groups where name = 'Race #520';
   delete from public.projects where name = 'Race #520';
   delete from auth.users where id in ('52000000-0000-0000-0000-000000000090',
     '52000000-0000-0000-0000-000000000091','52000000-0000-0000-0000-000000000092');
@@ -250,6 +277,12 @@ select extensions.dblink_exec('group_520_setup', $setup$
     ('Race #520','52000000-0000-0000-0000-000000000090','52000000-0000-0000-0000-000000000092');
   insert into public.project_members(project_id,member_id,project_role)
     select id,'52000000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #520';
+  insert into public.groups(name,category,legacy_project_id)
+    select name,'project',id from public.projects where name='Race #520';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52000000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #520';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52000000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #520';
   -- Test-only callable bridge to the owner-only gate, never a production grant.
   create function public.test_520_require() returns text
   language sql security definer set search_path = '' as $$
@@ -259,8 +292,9 @@ select extensions.dblink_exec('group_520_setup', $setup$
   language plpgsql security definer set search_path = '' as $$
   begin
     perform set_config('request.jwt.claims', '{"sub":"52000000-0000-0000-0000-000000000092","role":"authenticated","app_metadata":{"member_role":"bc","member_level":6}}', true);
-    return public.remove_project_member((select id from public.projects where name='Race #520'),
-      '52000000-0000-0000-0000-000000000091')::text;
+    perform public.set_group_role((select id from public.groups where name='Race #520'),
+      '52000000-0000-0000-0000-000000000091', 'member');
+    return 'true';
   end;
   $$;
   revoke execute on function public.test_520_require(), public.test_520_revoke() from public,anon,authenticated,service_role;
