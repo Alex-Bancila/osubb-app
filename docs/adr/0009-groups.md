@@ -4,7 +4,8 @@
 - **Date:** 2026-09-18
 - **Amended:** 2026-09-20 — Wave 2 as built: `create_event`'s Group signature, `update_event` / `cancel_event`, Campaign ownership by any Group, and the retirement of the level-4 Calendar gate
 - **Amended:** 2026-09-20 — Wave 3 grilling: Group Audience; Announcements carry an Origin Group and an Announcement Audience; Membership Status never edits rosters; a Member below a Group's Minimum Level leaves it; archiving refuses on open work; a Group's parent is fixed at creation; colour and short name are settings; `my_groups()` reports effective Group Roles
-- **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18 and 2026-09-20)
+- **Amended:** 2026-09-21 — profile grilling: the Promotion hooks read as ADR-0004's amendment of the same date (two doors behind one tenure gate, the Promotion Threshold, Retention Signals, AG Eligibility by the Voluntar Activ Role alone)
+- **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18, 2026-09-20, and 2026-09-21)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
 - **Related:** ADR-0003, ADR-0004, ADR-0007, ADR-0008, `CONTEXT.md`, `docs/backend/conventions.md`
@@ -100,6 +101,8 @@ An Event is owned by one Group. Wave 2 stores `events.group_id`; the origin-sync
 ### Promotion hooks
 
 Promotion rules are deferred behind the Tracker and Calendar, but the schema leaves these hooks. BC opens and closes named **Evaluation Periods**, typically AGO to AGO. Recrut → Voluntar stays ADR-0004's automatic tenure rule. Voluntar → Voluntar Activ is automatic when a Member is in the top x% of the Period's Leaderboard and has at least the required tenure, measured from the exact join date (#160). Voluntar Activ → Voluntar cu Drept de Vot is human-confirmed: reaching the threshold sends the adherence form to BC, and only BC's confirmation grants the Role, which through Automatic Membership seats the Member in the Adunarea Generală. When a Period closes, the top y% ranking is shown to BC, who withdraws Drept de Vot by hand; nobody is demoted automatically, as ADR-0004 already rules.
+
+> **Amended 2026-09-21 by ADR-0004.** Read the Voluntar → Voluntar Activ sentence as two doors behind one tenure gate: the top x% at a Period's close, or the **Promotion Threshold** fixed at that close during the following Period. Read "reaching the threshold sends the adherence form" as: the Voluntar Activ Role alone is the AG Eligibility, and its promotion notification carries the adherence form; there is no second threshold. Read the close-time ranking as **Retention Signals** to BC for both Voluntar Activ and Drept de Vot holders below their Role's share.
 
 ### Management surface
 

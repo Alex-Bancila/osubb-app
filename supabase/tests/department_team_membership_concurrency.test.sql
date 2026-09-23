@@ -12,6 +12,8 @@ select plan(10);
 select extensions.dblink_connect('team_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('team_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('team_setup', $$
   delete from public.teams where id = 'concurrent-department-team-279';
   delete from public.member_departments where member_id = '27900000-0000-0000-0000-000000000020';
