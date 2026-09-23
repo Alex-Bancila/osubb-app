@@ -13,7 +13,7 @@
 
 > **Amended 2026-09-18 by ADR-0009.** Event Scope is the owning Group; organization-wide Events belong to the Organization Group. Read the Event management table as: a Group's Managers and Responsibles, and its ancestors', manage its Events; anyone holding a Group Role may create an Organization Group Event, which only its creator or BC/Moderator edits. `create_event`, `update_event`, and `cancel_event` enforce these Group rules; update and cancellation preserve the creator-only Organization Event rule with BC/Moderator override. "Responsible+" (level 4) is retired as a Minimum Level choice. Visibility, relevance, RSVP, capacity, and notification rules stand, with "the member's Departments, Teams, and Projects" read as "the member's Groups".
 
-> **Amended 2026-09-20 — the enforced shape.** `events_min_level_ck` now admits only `{0, 3, 5, 6}`, and the rows that stood at 4 were moved **up** to 5, never down. An Event's Minimum Level may not fall below its Group's, and a creator may not set one above their own Level. No Calendar command reads a level-4 rank any more; `events` carries a read policy and no client write policy at all, so `create_event`, `update_event`, and `cancel_event` are the only ways in. The `event_scope` enum and the legacy scope columns survive only as trigger-derived values until ADR-0009 Wave 3 drops them.
+> **Amended 2026-09-20 — the enforced shape.** `events_min_level_ck` now admits only `{0, 3, 5, 6}`, and the rows that stood at 4 were moved **up** to 5, never down. An Event's Minimum Level may not fall below its Group's, and a creator may not set one above their own Level. No Calendar command reads a level-4 rank any more; `events` carries a read policy and no client write policy at all, so `create_event`, `update_event`, and `cancel_event` are the only ways in. Wave 3 removed the old scope enum and derived columns; `events.group_id` is the sole Origin.
 
 ## Context
 
@@ -107,3 +107,7 @@ Member Web Push delivery is a later architecture decision. Calendar commands wri
 **An Event may carry one Campaign.** `events.campaign_id` is nullable and, like a Task's, must name a Campaign owned by the Event's Group or by a Group above it on its path; `create_event` and `update_event` set it, and a Campaign change alone is not an important change. Campaigns remain labels: they earn points only through Tasks and never decide who may see or manage an Event.
 
 **Month view and filter.** The Calendar offers a month grid beside the agenda. A day shows the Events the Member may read and the deadlines of the Member's own Tasks (Executor or pending Candidate), with a manager-only toggle adding the Tasks they manage. The Work Filter (`CONTEXT.md`) narrows both, with its date range on the Event start. Colours follow the Tracker's rule: the Member's own Groups in their colour, the Organization Group in OSUBB red, Other OSUBB Events grey (grilling of 2026-09-23).
+
+## Amendment (2026-09-24) — Wave 3 cleanup
+
+An Event belongs to one Group. Organization behavior comes from `groups.is_organization`, and Group Audience drives notification recipients. The attendance read threshold for other Members is level 5; self attendance still requires that the Event itself is visible.

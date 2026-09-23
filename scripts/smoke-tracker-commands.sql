@@ -23,7 +23,7 @@
 --
 -- The whole script runs inside ONE transaction and ends in ROLLBACK, so it
 -- leaves the seeded database byte-identical. Work changes use public wrappers;
--- step 23 alone prepares a rolled-back Group setting fixture under OD9.
+-- every successful structure, roster and work change uses a public command.
 --
 -- It is deliberately NOT a pgTAP suite: every check is a `raise exception` via
 -- pg_temp.smoke_assert, so the FIRST wrong step aborts with a named message
@@ -63,7 +63,7 @@
 --                          account is the only manager an `edu` Task has.
 --   d0000000-...-0002  voluntar@demo.osubb   Ioana Popescu     voluntar, edu
 --                       -> first-come Executor.
---   d0000000-...-0005  responsabil@demo.osubb Raluca Ionescu   responsabil, edu
+--   d0000000-...-0005  responsabil@demo.osubb Raluca Ionescu   Voluntar cu Drept de Vot, edu
 --                       -> the second interested member (queue), and the
 --                          Executor of the Subtask that gets cancelled.
 --
@@ -183,14 +183,14 @@ select pg_temp.smoke_assert(
 select pg_temp.smoke_assert(
   (select count(*) = 2 from public.group_members gm
     join public.groups g on g.id = gm.group_id
-    where g.legacy_dept_id = 'edu'
+    where g.name = 'Educațional'
       and gm.member_id in ('d0000000-0000-0000-0000-000000000002',
                            'd0000000-0000-0000-0000-000000000005')),
   'step 0: both interested members belong to edu (the local-Audience eligibility rule)');
 
 select pg_temp.smoke_points('d0000000-0000-0000-0000-000000000002') as base_02 \gset
 -- The Group is the only Origin a command takes. Educațional is reference data.
-select id as edu_group from public.groups where legacy_dept_id = 'edu' \gset
+select id as edu_group from public.groups where name = 'Educațional' \gset
 
 -- ==================== step 1: manager creates a public Task ====================
 
@@ -678,7 +678,7 @@ select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
 select pg_temp.smoke_denied(
   $$ insert into public.tasks (title, group_id, audience, assignment_mode, status)
      select 'SMOKE direct insert', id, 'local', 'direct', 'todo'::public.task_status
-       from public.groups where legacy_dept_id = 'edu' $$,
+       from public.groups where name = 'Educațional' $$,
   'step 19: direct INSERT into public.tasks');
 
 select pg_temp.smoke_denied(
@@ -723,22 +723,22 @@ select pg_temp.smoke_denied(
 select pg_temp.smoke_denied(
   $$ insert into public.campaigns (group_id, name, created_by)
      select id, 'SMOKE campanie', 'd0000000-0000-0000-0000-000000000002'::uuid
-       from public.groups where legacy_dept_id = 'edu' $$,
+       from public.groups where name = 'Educațional' $$,
   'step 19: direct INSERT into public.campaigns');
 
 select pg_temp.smoke_denied(
   $$ insert into public.groups (name, category) values ('SMOKE forged Group', 'team') $$,
   'step 19: direct INSERT into public.groups');
 select pg_temp.smoke_denied(
-  $$ update public.groups set name = 'SMOKE forged rename' where legacy_dept_id = 'edu' $$,
+  $$ update public.groups set name = 'SMOKE forged rename' where name = 'Educațional' $$,
   'step 19: direct UPDATE of public.groups');
 select pg_temp.smoke_denied(
-  $$ delete from public.groups where legacy_dept_id = 'edu' $$,
+  $$ delete from public.groups where name = 'Educațional' $$,
   'step 19: direct DELETE from public.groups');
 select pg_temp.smoke_denied(
   $$ insert into public.group_members (group_id, member_id, group_role)
      select id, 'd0000000-0000-0000-0000-000000000002', 'manager'
-     from public.groups where legacy_dept_id = 'edu' $$,
+     from public.groups where name = 'Educațional' $$,
   'step 19: direct INSERT into public.group_members');
 select pg_temp.smoke_denied(
   $$ update public.group_members set group_role = 'manager'
@@ -975,9 +975,10 @@ where name = 'Festivalul Studențesc 2026'
 select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
 select id as below_minimum from public.profiles where email = 'voluntar@demo.osubb' \gset
 select id as eligible from public.profiles where email = 'vot@demo.osubb' \gset
--- OD9: only fixture setup changes a Group setting directly, as owner, inside this rollback.
--- Wave 3 owns the public Group settings commands; all work below uses existing public commands.
-update public.groups set min_level = 3, application_level = 3 where id = :gated_group;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select public.update_group(id,name,manager_title,accepts_applications,3,shared_work_visibility,3,true)
+from public.groups where id=:gated_group;
+reset role;
 select pg_temp.test_login_leadership(:'coordinator');
 select public.create_task('SMOKE Gated org Opportunity', 'Minimum Level proof', now() + interval '5 days',
   'org', 'public', p_group_id => :gated_group);
@@ -1017,18 +1018,17 @@ select pg_temp.smoke_assert(
 
 -- ---- step 23, continued: it really is the Minimum Level doing the hiding ----
 -- Two facts turn "one member saw nothing" into a proof about the setting:
--- the member who sees nothing is an explicit member of the owning Group (so
--- membership is not what is missing), and the member who sees it is NOT
--- (so it is the org Audience, at or above the Minimum Level, that opens it).
+-- the settings command removed the ineligible membership, and the eligible
+-- outsider still sees the Opportunity through its organization-wide Audience.
 select pg_temp.smoke_assert(
-  exists (select 1 from public.group_members
+  not exists (select 1 from public.group_members
            where group_id = :gated_group and member_id = :'below_minimum'),
-  'step 23: the member who cannot see the Opportunity belongs to the owning Group');
+  'step 23: confirmed Minimum-Level raise removed the ineligible membership');
 select pg_temp.smoke_assert(
   not exists (select 1 from public.group_members
                where group_id = :gated_group and member_id = :'eligible'),
   'step 23: the member who can see it belongs to the Group only through the org Audience');
--- The brief's own persona: a Recrut, level 0, four levels under the fixture.
+-- A Recrut remains below this Group's Minimum Level.
 select id as recruit from public.profiles where email = 'recrut@demo.osubb' \gset
 select pg_temp.test_login_leadership(:'recruit');
 select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 0,
@@ -1039,15 +1039,52 @@ select pg_temp.smoke_refused(
   'step 23: a Recrut''s interest is refused as task_not_found, not as a denial');
 reset role;
 
+-- ==================== step 24: a native Group end to end ====================
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select (public.create_group('SMOKE native root','department')).id as native_root \gset
+select public.set_group_role(:native_root,'d0000000-0000-0000-0000-000000000005','manager');
+reset role;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
+select (public.create_group('SMOKE native child','team',:native_root,1)).id as native_child \gset
+select public.update_group(:native_child,'SMOKE native child','Coordonator',true,1,true,1);
+reset role;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
+select (public.apply_to_group(:native_child,'SMOKE application')).id as native_application \gset
+reset role;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
+select public.decide_group_application(:native_application,true,'SMOKE accepted');
+select (public.create_task('SMOKE native Group Task','Created through native wrappers',now()+interval '7 days',
+ 'local','direct',p_executor_id=>'d0000000-0000-0000-0000-000000000002',p_group_id=>:native_child)).id as native_task \gset
+reset role;
+select pg_temp.smoke_assert(
+ exists(select 1 from public.group_members where group_id=:native_root and member_id='d0000000-0000-0000-0000-000000000005' and group_role='manager')
+ and exists(select 1 from public.groups where id=:native_child and parent_id=:native_root)
+ and exists(select 1 from public.group_applications where id=:native_application and status='accepted')
+ and exists(select 1 from public.group_members where group_id=:native_child and member_id='d0000000-0000-0000-0000-000000000002')
+ and exists(select 1 from public.tasks where id=:native_task and group_id=:native_child),
+ 'step 24: native Group, Manager, Child Group, accepted Application and Task all use public wrappers');
+
+select pg_temp.smoke_eq((select count(*)::int from public.groups where is_organization),1,
+ 'Wave 3: exactly one Organization marker');
+select pg_temp.smoke_assert(not exists(select 1 from information_schema.tables
+ where table_schema='public' and table_name in ('departments','teams','projects','member_departments','team_members','project_members')),
+ 'Wave 3: former structure and roster storage is absent');
+select pg_temp.smoke_assert(not exists(select 1 from information_schema.columns
+ where table_schema='public' and table_name='groups' and column_name like 'legacy_%'),
+ 'Wave 3: Group backfill keys are absent');
+select pg_temp.smoke_assert(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+ where n.nspname in ('public','private') and p.prosrc ~* 'update[[:space:]]+public[.]groups[[:space:]]+(as[[:space:]]+[a-z_]+[[:space:]]+)?set[[:space:]]+parent_id'),
+ 'Wave 3: no live function reparents a Group');
+
 -- ==================== done ====================
 
 do $$
 begin
   raise notice '';
   raise notice '================ SMOKE TEST PASSED ================';
-  raise notice 'All 23 work scenarios ran through public wrappers;';
+  raise notice 'All 24 work scenarios ran through public wrappers;';
   raise notice 'authenticated could not write Task or Group tables directly.';
-  raise notice 'Only the step 23 OD9 fixture used an owner-written Group setting.';
+  raise notice 'All successful Group, roster, Application and work writes used public wrappers.';
   raise notice 'Rolling back -- the database is unchanged.';
 end;
 $$;
