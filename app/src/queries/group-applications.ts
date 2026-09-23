@@ -122,3 +122,27 @@ export function useGroupUpcomingEvents(groupId: number) {
         : skipToken,
   });
 }
+
+/** Same safe identity/position fields as Member Card; no ordinary roster rows. */
+export async function fetchGroupCoordination(groupId: number) {
+  const { data, error } = await supabase.rpc('group_coordination', {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+  return data.map((row) => ({
+    memberId: row.member_id,
+    name: row.nickname ?? row.full_name,
+    groupRole: row.group_role,
+    positionTitle: row.position_title,
+  }));
+}
+export function useGroupCoordination(groupId: number) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: ['groups', 'coordination', { memberId, groupId }],
+    queryFn:
+      memberId && Number.isSafeInteger(groupId) && groupId > 0
+        ? () => fetchGroupCoordination(groupId)
+        : skipToken,
+  });
+}

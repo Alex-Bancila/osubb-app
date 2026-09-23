@@ -28,10 +28,10 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAdminGroups: api.groups,
   useMyGroupRoles: api.mine,
-  useGroupRoster: api.roster,
 }));
 vi.mock('../../queries/group-applications', () => ({
   useGroupApplications: api.applications,
+  useGroupCoordination: api.roster,
   useApplicationCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
   useGroupUpcomingEvents: api.events,
 }));

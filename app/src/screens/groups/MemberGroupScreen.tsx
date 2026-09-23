@@ -5,11 +5,11 @@ import { useCapabilities } from '../../lib/capabilities';
 import {
   useAdminGroups,
   useMyGroupRoles,
-  useGroupRoster,
   groupAuthority,
 } from '../../queries/groups-admin';
 import {
   useGroupApplications,
+  useGroupCoordination,
   useGroupUpcomingEvents,
 } from '../../queries/group-applications';
 import { categoryLabel } from '../administrare/group-tree';
@@ -21,7 +21,7 @@ export default function MemberGroupScreen() {
   const groups = useAdminGroups();
   const mine = useMyGroupRoles();
   const applications = useGroupApplications();
-  const roster = useGroupRoster(Number.isSafeInteger(id) && id > 0 ? id : null);
+  const roster = useGroupCoordination(id);
   const events = useGroupUpcomingEvents(id);
   const capabilities = useCapabilities();
   const auth = useAuth();
@@ -110,7 +110,7 @@ export default function MemberGroupScreen() {
         ) : roster.isError ? (
           <p role="alert">Nu am putut încărca funcțiile din grup.</p>
         ) : !roster.data.some((row) => row.groupRole !== 'member') ? (
-          <p>Nu există funcții de coordonare vizibile pentru contul tău.</p>
+          <p>Nu sunt numite funcții de coordonare în acest grup.</p>
         ) : (
           <ul className="space-y-2">
             {roster.data

@@ -1,7 +1,10 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('../lib/supabase', () => ({ supabase: { rpc } }));
-import { runApplicationCommand } from './group-applications';
+import {
+  fetchGroupCoordination,
+  runApplicationCommand,
+} from './group-applications';
 beforeEach(() =>
   rpc.mockResolvedValue({ data: { id: 7, status: 'pending' }, error: null }),
 );
@@ -54,4 +57,46 @@ it.each([
   await expect(
     runApplicationCommand({ kind: 'withdraw', applicationId: 7 }),
   ).rejects.toThrow(copy);
+});
+
+it('reads coordinator identities with nickname and full-name fallback', async () => {
+  rpc.mockResolvedValue({
+    data: [
+      {
+        member_id: 'a',
+        full_name: 'Full name',
+        nickname: 'Nickname',
+        group_role: 'manager',
+        position_title: null,
+      },
+      {
+        member_id: 'b',
+        full_name: 'Second name',
+        nickname: null,
+        group_role: 'responsible',
+        position_title: 'Editor',
+      },
+    ],
+    error: null,
+  });
+  await expect(fetchGroupCoordination(3)).resolves.toEqual([
+    {
+      memberId: 'a',
+      name: 'Nickname',
+      groupRole: 'manager',
+      positionTitle: null,
+    },
+    {
+      memberId: 'b',
+      name: 'Second name',
+      groupRole: 'responsible',
+      positionTitle: 'Editor',
+    },
+  ]);
+  expect(rpc).toHaveBeenCalledWith('group_coordination', { p_group_id: 3 });
+});
+it('reports a failed coordination read rather than displaying an empty list', async () => {
+  const error = { message: 'unavailable' };
+  rpc.mockResolvedValue({ data: null, error });
+  await expect(fetchGroupCoordination(3)).rejects.toEqual(error);
 });
