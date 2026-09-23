@@ -19,16 +19,14 @@ import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import CampaignsScreen from './screens/campaigns/CampaignsScreen';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
-import CalendarScreen from './screens/calendar/CalendarScreen';
 import CompletedWorkRequestScreen from './screens/requests/CompletedWorkRequestScreen';
 import AnnouncementsScreen from './screens/announcements/AnnouncementsScreen';
 import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import ProfileScreen from './screens/profile/ProfileScreen';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
-// Larger member screens load on visit so the Realtime-enabled shell stays
-// within the PWA's first-load precache budget.
 const TrackerScreen = lazy(() => import('./screens/tracker/TrackerScreen'));
+const CalendarScreen = lazy(() => import('./screens/calendar/CalendarScreen'));
 const AdministrareScreen = lazy(
   () => import('./screens/administrare/AdministrareScreen'),
 );
@@ -44,6 +42,18 @@ function Splash() {
       <SessionLoader label="Se încarcă" />
     </SessionScreen>
   );
+}
+
+function RouteLoader() {
+  return (
+    <div className="page">
+      <SessionLoader label="Se încarcă pagina" />
+    </div>
+  );
+}
+
+function DeferredRoute({ children }: { children: ReactElement }) {
+  return <Suspense fallback={<RouteLoader />}>{children}</Suspense>;
 }
 
 /**
@@ -183,9 +193,9 @@ export default function App() {
             <Route
               path="/tracker"
               element={
-                <Suspense fallback={<Splash />}>
+                <DeferredRoute>
                   <TrackerScreen />
-                </Suspense>
+                </DeferredRoute>
               }
             />
             <Route
@@ -220,7 +230,14 @@ export default function App() {
                 </RequireCapability>
               }
             />
-            <Route path="/calendar" element={<CalendarScreen />} />
+            <Route
+              path="/calendar"
+              element={
+                <DeferredRoute>
+                  <CalendarScreen />
+                </DeferredRoute>
+              }
+            />
             <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
             <Route path="/anunturi" element={<AnnouncementsScreen />} />
             <Route path="/notificari" element={<NotificationsScreen />} />
@@ -237,9 +254,9 @@ export default function App() {
               path="/administrare"
               element={
                 <RequireCapability capability="administer">
-                  <Suspense fallback={<Splash />}>
+                  <DeferredRoute>
                     <AdministrareScreen />
-                  </Suspense>
+                  </DeferredRoute>
                 </RequireCapability>
               }
             />
@@ -247,9 +264,9 @@ export default function App() {
               path="/administrare/grupuri/:groupId"
               element={
                 <RequireCapability capability="administer">
-                  <Suspense fallback={<Splash />}>
+                  <DeferredRoute>
                     <GroupScreen />
-                  </Suspense>
+                  </DeferredRoute>
                 </RequireCapability>
               }
             />
