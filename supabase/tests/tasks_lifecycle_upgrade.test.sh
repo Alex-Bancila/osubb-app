@@ -8,6 +8,10 @@ migration="supabase/migrations/20260911102000_tasks_six_state_lifecycle.sql"
   cat <<'SQL'
 begin;
 set local client_min_messages = warning;
+-- #591 retired the helpers referenced by the historical read policy below.
+-- Restore them only in this rollback-only replay.
+create function public.auth_in_dept(d text) returns boolean language sql stable as $$select coalesce(auth.jwt()->'app_metadata'->'dept_ids' ? d,false)$$;
+create function public.auth_in_team(t text) returns boolean language sql stable as $$select coalesce(auth.jwt()->'app_metadata'->'team_ids' ? t,false)$$;
 
 drop view public.tasks_with_overdue;
 alter table public.tasks
