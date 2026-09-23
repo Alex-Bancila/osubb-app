@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Listener = (event: string, session: unknown) => void;
@@ -334,7 +340,11 @@ describe('refresh a stale session on window focus (#598)', () => {
     );
     await waitFor(() => expect(auth.listener()).not.toBeNull());
 
-    notifyListener()('SIGNED_IN', sessionFor('a', { issuedAtMs }));
+    // Flush the session update and the provider's sessionRef effect before
+    // simulating focus, which reads that ref synchronously.
+    await act(async () => {
+      notifyListener()('SIGNED_IN', sessionFor('a', { issuedAtMs }));
+    });
     await waitFor(() =>
       expect(screen.getByTestId('session-user').textContent).toBe('a'),
     );
