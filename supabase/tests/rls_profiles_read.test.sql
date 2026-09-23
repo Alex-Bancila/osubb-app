@@ -39,7 +39,7 @@ insert into auth.users (id, email) values
   ('d2000000-0000-0000-0000-0000000000d2', 'dinu.prof@test.local'),
   ('d3000000-0000-0000-0000-0000000000d3', 'delia.bce@test.local');
 insert into profiles (id, full_name, email, phone, role) values
-  ('d1000000-0000-0000-0000-0000000000d1', 'Dora Voluntar', 'dora.prof@test.local', '0700111222', 'voluntar'),
+  ('d1000000-0000-0000-0000-0000000000d1', 'Dora Voluntar', 'dora.prof@test.local', '+40700111222', 'voluntar'),
   ('d2000000-0000-0000-0000-0000000000d2', 'Dinu Voluntar', 'dinu.prof@test.local', '0700333444', 'voluntar'),
   ('d3000000-0000-0000-0000-0000000000d3', 'Delia BCE',     'delia.bce@test.local', '0700555666', 'bce');
 
@@ -88,7 +88,7 @@ select ok((select count(*) from profiles_contact) >= 3,
   'level >= 5 reads everyone''s contact details (volunteers directory)');
 select is(
   (select phone from profiles_contact where id = 'd1000000-0000-0000-0000-0000000000d1'),
-  '0700111222', 'level >= 5 reads a specific member''s phone');
+  '+40700111222', 'level >= 5 reads a specific member''s phone');
 
 reset role;
 

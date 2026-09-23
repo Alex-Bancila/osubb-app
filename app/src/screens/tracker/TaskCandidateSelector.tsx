@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { MemberProfileButton } from '../../components/member/MemberProfileDialog';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import {
   RadioCard,
@@ -93,7 +93,9 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
         candidateId: selected.id,
         ...(hasRemaining ? { closeRemaining: queueDecision === 'close' } : {}),
       });
-      setMessage(`${selected.memberName} este acum executorul taskului.`);
+      setMessage(
+        `${selected.memberNickname || selected.memberName} este acum executorul taskului.`,
+      );
       // The chosen person leaves the queue; a stale choice must not linger.
       setCandidateId(null);
       setQueueDecision(null);
@@ -132,28 +134,35 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
           onValueChange={(value: number) => setCandidateId(value)}
           disabled={selection.isPending}
         >
-          {candidates.data.map((candidate, index) => (
-            <div key={candidate.id} className="flex items-center gap-2">
-              <RadioCard className="min-w-0 flex-1">
-                <RadioGroupItem value={candidate.id} />
-                <span className="min-w-0 flex-1 text-sm">
-                  <span className="block truncate font-medium">
-                    {candidate.memberName}
-                  </span>
-                  <span className="text-muted-foreground">
+          {candidates.data.map((candidate, index) => {
+            const name = candidate.memberNickname || candidate.memberName;
+            // The name opens the Member Card; the radio beside it chooses.
+            // A button cannot sit inside the radio's label, so the radio
+            // carries the name in its own accessible name.
+            return (
+              <div
+                key={candidate.id}
+                className="flex items-center gap-2 rounded-lg border border-input px-2"
+              >
+                <MemberName
+                  className="min-w-0 flex-1"
+                  memberId={candidate.memberId}
+                  nickname={candidate.memberNickname}
+                  fullName={candidate.memberName}
+                  avatarColor={candidate.avatarColor}
+                />
+                <RadioCard className="shrink-0 border-transparent">
+                  <RadioGroupItem
+                    value={candidate.id}
+                    aria-label={`Alege pe ${name} (locul ${index + 1})`}
+                  />
+                  <span className="text-sm text-muted-foreground">
                     Locul {index + 1}
                   </span>
-                </span>
-              </RadioCard>
-              <MemberProfileButton
-                memberId={candidate.memberId}
-                name={candidate.memberName}
-                avatarColor={candidate.avatarColor}
-              >
-                <span className="hidden sm:inline">Profil</span>
-              </MemberProfileButton>
-            </div>
-          ))}
+                </RadioCard>
+              </div>
+            );
+          })}
         </RadioGroup>
       </div>
       {hasRemaining && (

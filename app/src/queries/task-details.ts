@@ -52,7 +52,10 @@ export async function fetchTaskDetails(
     throw new Error('Task Executor enrichment returned no Task.');
   return {
     task: taskWithExecutor,
-    executorName: taskWithExecutor.visibleExecutor?.fullName ?? null,
+    executorName:
+      taskWithExecutor.visibleExecutor?.nickname ??
+      taskWithExecutor.visibleExecutor?.fullName ??
+      null,
     subtasks,
   };
 }

@@ -44,6 +44,10 @@ vi.mock('@ionic/react', () => ({
 }));
 
 import DashboardScreen from './DashboardScreen';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
 
 function claims(level: number) {
   return {

@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(61);
 insert into auth.users(id,email)
 select ('24800000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid, 'event248-'||n||'@test.local'
 from generate_series(1,9) n;
@@ -210,5 +210,17 @@ select throws_ok($q$select public.update_event((select id from ex2 where title='
 -- only cancelled, since cancel_event has no target argument and no such check.
 select lives_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Archived-group edit','sedinta',(select id from gx where name='b'),'2026-10-01 12:00+00',null,null,null,null,3)$q$,'BC still edits an Event whose own Group has been archived');
 reset role;
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.update_event(0, 'ab', 'sedinta', 0, now() + interval '1 day', null, null, null, null, 0) $$,
+  'PT400', 'title_too_short', 'an Event title under 3 characters is refused before the gate');
+select throws_ok($$ select public.update_event(0, 'Eveniment #673', 'sedinta', 0, now() + interval '1 day', null, null, null, repeat('d', 2001), 0) $$,
+  'PT400', 'description_too_long', 'an Event description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.update_event(0, 'Eveniment #673', 'sedinta', 0, now() + interval '1 day', null, null, 1001, null, 0) $$,
+  'PT400', 'invalid_event_capacity', 'a capacity above 1000 is invalid_event_capacity on update too');
+reset role;
+
 select * from finish();
 rollback;

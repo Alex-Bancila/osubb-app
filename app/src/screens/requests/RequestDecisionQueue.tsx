@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import { EvaluationFields } from '../../components/tasks/EvaluationFields';
 import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
@@ -9,6 +10,21 @@ import {
   type PendingDecision,
   type RequestDecision,
 } from '../../queries/request-decisions';
+/** Who asked, as a Member Card button, and the Group the work was done for. */
+function RequesterLine({ request }: { request: PendingDecision }) {
+  return (
+    <p className="flex min-w-0 flex-wrap items-center gap-x-2 font-semibold">
+      <MemberName
+        memberId={request.requester_id}
+        nickname={request.requester_nickname}
+        fullName={request.requester_name}
+      />
+      <span aria-hidden="true">·</span>
+      <span className="min-w-0 wrap-anywhere">{request.group_name}</span>
+    </p>
+  );
+}
+
 export function RequestDecisionQueue() {
   const queue = usePendingDecisions();
   const mutation = useRequestDecision();
@@ -77,16 +93,17 @@ export function RequestDecisionQueue() {
       {receipt && <TaskActionSuccess>{receipt}</TaskActionSuccess>}
       {selected ? (
         <div className="space-y-3">
-          <p className="font-semibold">
-            {selected.request.requester_name} · {selected.request.group_name}
-          </p>
+          <RequesterLine request={selected.request} />
           <p className="whitespace-pre-wrap wrap-anywhere">
             {selected.request.description}
           </p>
           {selected.kind === 'approve' ? (
             <EvaluationFields
               request
-              executorName={selected.request.requester_name}
+              executorName={
+                selected.request.requester_nickname ||
+                selected.request.requester_name
+              }
               isPending={mutation.isPending}
               onEvaluate={(values) =>
                 decide({
@@ -148,9 +165,7 @@ export function RequestDecisionQueue() {
               key={request.id}
               className="space-y-2 rounded-lg border bg-card p-4"
             >
-              <p className="font-semibold">
-                {request.requester_name} · {request.group_name}
-              </p>
+              <RequesterLine request={request} />
               <p className="whitespace-pre-wrap wrap-anywhere">
                 {request.description}
               </p>
