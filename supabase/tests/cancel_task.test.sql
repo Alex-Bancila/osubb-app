@@ -869,6 +869,8 @@ select is((select format('%s|%s',
 select extensions.dblink_connect('ct_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('ct_setup', 'set lock_timeout = ''2s''');
 
 -- Clean first (the #336/#338 precedent): these fixtures are COMMITTED, so an
 -- earlier aborted run would otherwise leave them behind and every later run

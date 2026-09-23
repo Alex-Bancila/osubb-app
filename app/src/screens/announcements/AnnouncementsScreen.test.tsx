@@ -26,6 +26,7 @@ vi.mock('../../queries/announcements', () => ({
 vi.mock('../../queries/reference', () => ({
   useGroups: hooks.useGroups,
 }));
+vi.mock('./AnnouncementComposeSheet', () => ({ default: () => null }));
 
 import AnnouncementsScreen from './AnnouncementsScreen';
 

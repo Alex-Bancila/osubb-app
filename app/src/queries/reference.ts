@@ -28,10 +28,8 @@ type GroupRow = Database['public']['Tables']['groups']['Row'];
  * `path.length` is the depth — that is how a Child Group finds its Department
  * without a second request.
  *
- * `legacy_dept_id` is a Wave 1/2 bridge, not part of the Group model: it is
- * here only so the Announcements feed can join `announcements.dept_id` onto its
- * Group until announcements carry `group_id` (#581). It goes with the column,
- * in the Wave 3 task that drops `public.departments`.
+ * `legacy_dept_id` is a Wave 1/2 bridge retained until the Wave 3 task that
+ * drops `public.departments`; new Announcement reads use `group_id` directly.
  */
 export type Group = Pick<
   GroupRow,

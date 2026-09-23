@@ -10,9 +10,9 @@ import {
   type RawAnnouncementRow,
 } from './announcements-presentation';
 
-const groupsByDeptId = new Map<string, Group>([
+const groupsById = new Map<number, Group>([
   [
-    'edu',
+    1,
     {
       id: 1,
       name: 'Educațional',
@@ -28,7 +28,7 @@ const groupsByDeptId = new Map<string, Group>([
     },
   ],
   [
-    'pr',
+    2,
     {
       id: 2,
       name: 'Imagine & PR',
@@ -70,67 +70,32 @@ function rawRow(
 
 describe('announcements-presentation', () => {
   describe('toAnnouncementPresentation', () => {
-    it('maps database row to presentation object for org-wide announcement', () => {
-      const item = toAnnouncementPresentation(rawRow(), groupsByDeptId);
-
-      expect(item.id).toBe(1);
-      expect(item.title).toBe('Ședință extraordinară BC');
-      expect(item.body).toBe('Vineri la ora 18:00 în Aula Magna.');
-      expect(item.deptId).toBeNull();
-      expect(item.department).toBeNull();
-      expect(item.departmentLabel).toBe('OSUBB');
-      expect(item.author).toBe('BC');
-      expect(item.priority).toBe('critical');
-      expect(item.category).toBe('organizatoric');
-      expect(item.pinned).toBe(true);
-      expect(item.formLabel).toBeNull();
-      expect(item.formUrl).toBeNull();
-      expect(item.isRead).toBe(false);
-      expect(item.publishedLabel).toBeTruthy();
-    });
-
-    it('maps department identity when dept_id is provided', () => {
-      const item = toAnnouncementPresentation(
-        rawRow({ dept_id: 'edu', author: 'Educational', priority: 'normal' }),
-        groupsByDeptId,
-      );
-
-      expect(item.deptId).toBe('edu');
-      expect(item.department).toEqual({
-        id: 'edu',
+    it('keeps Group Origin distinct from an organization-wide Audience', () => {
+      const item = toAnnouncementPresentation(rawRow(), groupsById);
+      expect(item.groupId).toBe(1);
+      expect(item.group).toEqual({
+        id: 1,
         name: 'Educațional',
         short: 'EDU',
         color: '#284C93',
       });
-      expect(item.departmentLabel).toBe('Educațional');
+      expect(item.audience).toBe('org');
+      expect(item.audienceLabel).toBe('Toată organizația');
+      expect(item.isRead).toBe(false);
     });
 
-    it('maps unresolved non-null dept_id to neutral fallback department and never labels it OSUBB', () => {
-      const itemWithUnknownDept = toAnnouncementPresentation(
-        rawRow({ dept_id: 'unknown-dept' }),
-        groupsByDeptId,
+    it('uses group_id even when the historical dept_id is null', () => {
+      const item = toAnnouncementPresentation(
+        rawRow({ group_id: 2, dept_id: null, audience: 'local' }),
+        groupsById,
       );
-      expect(itemWithUnknownDept.deptId).toBe('unknown-dept');
-      expect(itemWithUnknownDept.department).toEqual({
-        id: 'unknown-dept',
-        name: 'Departament',
-        short: 'DEP',
-      });
-      expect(itemWithUnknownDept.departmentLabel).toBe('Departament');
-      expect(itemWithUnknownDept.departmentLabel).not.toBe('OSUBB');
+      expect(item.group.name).toBe('Imagine & PR');
+      expect(item.audienceLabel).toBe('Doar grupul');
+    });
 
-      const itemWithLoadingDept = toAnnouncementPresentation(
-        rawRow({ dept_id: 'edu' }),
-        undefined,
-      );
-      expect(itemWithLoadingDept.deptId).toBe('edu');
-      expect(itemWithLoadingDept.department).toEqual({
-        id: 'edu',
-        name: 'Departament',
-        short: 'DEP',
-      });
-      expect(itemWithLoadingDept.departmentLabel).toBe('Departament');
-      expect(itemWithLoadingDept.departmentLabel).not.toBe('OSUBB');
+    it('uses a neutral Group fallback when its reference row is unavailable', () => {
+      const item = toAnnouncementPresentation(rawRow({ group_id: 99 }));
+      expect(item.group).toEqual({ id: 99, name: 'Grup', short: 'GRUP' });
     });
 
     it('detects read status from announcement_reads relation', () => {

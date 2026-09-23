@@ -64,6 +64,15 @@ when B fails, so failure paths need that cleanup too. See
 `independent_team_membership_concurrency.test.sql` and the race section in
 `project_membership_commands.test.sql`.
 
+Fixture setup connections set a session-level `lock_timeout = '2s'` (#621).
+An interrupted run can leave committed rows that the next suite transaction
+locks before its side connection reaches cleanup. In that case cleanup fails
+quickly with PostgreSQL's relation/tuple context and the named dblink connection,
+instead of waiting forever on its own suite. This is the issue's fail-fast option:
+it does not promise automatic recovery or delete another session's fixtures.
+The timeout applies to setup/cleanup connections only; the competing race
+sessions retain their existing timeouts and assertions.
+
 ## Seed-independent runs
 
 All SQL files except `demo_seed.test.sql` must pass without demo data:

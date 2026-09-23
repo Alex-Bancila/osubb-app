@@ -516,6 +516,8 @@ reset role;
 select extensions.dblink_connect('campaign_lock_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('campaign_lock_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_lock_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000021';
@@ -638,6 +640,8 @@ select throws_ok(
 select extensions.dblink_connect('campaign_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('campaign_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_setup', $$
   delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
   delete from public.member_departments where member_id = '34300000-0000-0000-0000-000000000020';
