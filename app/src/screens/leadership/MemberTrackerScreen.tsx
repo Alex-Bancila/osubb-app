@@ -1,11 +1,12 @@
 import { formatPoints } from '../../lib/format';
 import { Link, useParams } from 'react-router';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import { formatBucharestDay } from '../../lib/calendar-time';
 import type { Json } from '../../lib/database.types';
 import {
   useLeadershipMemberTasks,
-  useLeadershipMemberName,
+  useLeadershipMember,
 } from '../../queries/leadership';
 import { LeadershipAccess } from './LeadershipAccess';
 
@@ -42,7 +43,7 @@ function day(value: string | null | undefined) {
 }
 function MemberHistory({ memberId }: { memberId: string }) {
   const query = useLeadershipMemberTasks(memberId);
-  const name = useLeadershipMemberName(memberId);
+  const member = useLeadershipMember(memberId);
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <Link
@@ -52,9 +53,15 @@ function MemberHistory({ memberId }: { memberId: string }) {
         Înapoi la clasament
       </Link>
       <header>
-        {name.data && (
-          <p className="mb-2 font-semibold text-muted-foreground">
-            {name.data}
+        {member.data && (
+          <p className="mb-2">
+            <MemberName
+              memberId={memberId}
+              nickname={member.data.nickname}
+              fullName={member.data.fullName}
+              avatarColor={member.data.avatarColor}
+              showFullName
+            />
           </p>
         )}
         <h1 className="text-3xl font-bold tracking-tight">
