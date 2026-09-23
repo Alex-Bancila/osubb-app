@@ -11,14 +11,17 @@ import VolunteersScreen from './VolunteersScreen';
 const mock = vi.hoisted(() => ({
   useMemberDirectory: vi.fn(),
   useGroups: vi.fn(),
-  useMemberProfile: vi.fn(),
+  useMemberCard: vi.fn(),
 }));
 vi.mock('../../queries/member-directory', () => ({
   useMemberDirectory: mock.useMemberDirectory,
 }));
 vi.mock('../../queries/reference', () => ({ useGroups: mock.useGroups }));
-vi.mock('../../queries/member-profile', () => ({
-  useMemberProfile: mock.useMemberProfile,
+vi.mock('../../queries/member-card', () => ({
+  useMemberCard: mock.useMemberCard,
+}));
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
 }));
 
 // Group tree: Educațional ⟶ Logistică, Mentorat; Imagine & PR ⟶ Foto;
@@ -50,6 +53,7 @@ const members: DirectoryMember[] = [
   {
     id: 'a',
     name: 'Ștefan Pop',
+    nickname: null,
     avatarColor: null,
     roleId: 'voluntar',
     role: 'Voluntar',
@@ -62,6 +66,7 @@ const members: DirectoryMember[] = [
   {
     id: 'b',
     name: 'Ana Ionescu',
+    nickname: null,
     avatarColor: '#284C93',
     roleId: 'bc',
     role: 'BC',
@@ -75,6 +80,7 @@ const members: DirectoryMember[] = [
     // A member in many Groups: the row must stay one readable line.
     id: 'c',
     name: 'Maria Dobre',
+    nickname: null,
     avatarColor: null,
     roleId: 'vot',
     role: 'Membru cu Drept de Vot',
@@ -95,7 +101,9 @@ function result(overrides = {}) {
   };
 }
 function rowOf(name: string) {
-  return screen.getByRole('button', { name }).closest('tr') as HTMLElement;
+  return screen
+    .getByRole('button', { name: `Profilul membrului ${name}` })
+    .closest('tr') as HTMLElement;
 }
 function names() {
   return screen
@@ -108,25 +116,26 @@ beforeEach(() => {
   vi.clearAllMocks();
   mock.useMemberDirectory.mockReturnValue(result());
   mock.useGroups.mockReturnValue({ data: byId, isError: false });
-  mock.useMemberProfile.mockImplementation((id: string) => ({
+  mock.useMemberCard.mockImplementation((id: string) => ({
     data: {
-      id,
+      memberId: id,
+      nickname: null,
       fullName: members.find((member) => member.id === id)?.name ?? '',
       avatarColor: null,
       roleLabel: null,
-      joinedYear: null,
+      joinedAt: null,
+      primaryGroup: null,
+      otherMemberships: 0,
       groups: (members.find((member) => member.id === id)?.groups ?? []).map(
         (group) => ({
-          ...group,
-          short: null,
+          id: group.id,
+          name: group.name,
+          label: group.label,
           color: null,
-          group_role: 'member',
-          position_title: null,
-          role_label: 'Membru',
+          roleLabel: 'Membru',
         }),
       ),
-      email: null,
-      phone: null,
+      contact: null,
     },
     isPending: false,
     isError: false,
@@ -168,17 +177,30 @@ describe('Member directory', () => {
     await user.click(more);
     const dialog = await screen.findByRole('dialog', { name: 'Maria Dobre' });
     expect(within(dialog).getAllByRole('listitem')).toHaveLength(7);
-    expect(dialog).toHaveTextContent('40 puncte');
+    // The row shows 40 points; the Member Card never does.
+    expect(dialog).not.toHaveTextContent('puncte');
   });
 
-  it('opens a member’s profile from their name', async () => {
+  it('opens the Member Card from the name, with the full name under a Nickname', async () => {
     const user = userEvent.setup();
+    mock.useMemberDirectory.mockReturnValue(
+      result({
+        data: members.map((member) =>
+          member.id === 'b' ? { ...member, nickname: 'Ani' } : member,
+        ),
+      }),
+    );
     render(<VolunteersScreen />);
-    await user.click(screen.getByRole('button', { name: 'Ana Ionescu' }));
-    expect(
-      await screen.findByRole('dialog', { name: 'Ana Ionescu' }),
-    ).toBeVisible();
-    expect(mock.useMemberProfile).toHaveBeenCalledWith('b');
+    const button = screen.getByRole('button', {
+      name: 'Profilul membrului Ani',
+    });
+    // Ruling R5: Voluntari shows the full name underneath the Nickname.
+    expect(button).toHaveTextContent('AniAna Ionescu');
+    await user.click(button);
+    expect(await screen.findByRole('dialog', { name: 'Ana Ionescu' })).toBe(
+      screen.getByRole('dialog'),
+    );
+    expect(mock.useMemberCard).toHaveBeenCalledWith('b');
   });
 
   it('adds Group, role and status filters in a Dialog and shows them as removable chips', async () => {
@@ -263,8 +285,12 @@ describe('Member directory', () => {
       screen.getByRole('searchbox', { name: 'Caută un membru' }),
       'ana',
     );
-    expect(screen.getByRole('button', { name: 'Ana Ionescu' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Maria Dobre' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Profilul membrului Ana Ionescu' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Profilul membrului Maria Dobre' }),
+    ).toBeNull();
   });
 
   it('shows negative and zero Task points and view-provided contacts', () => {

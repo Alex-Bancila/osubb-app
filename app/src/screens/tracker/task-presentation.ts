@@ -42,6 +42,7 @@ export type TaskPresentationRow = Pick<
   visibleExecutor?: {
     memberId: string;
     fullName: string | null;
+    nickname?: string | null;
   } | null;
   evaluations?: Pick<
     Tables['task_evaluations']['Row'],
@@ -69,6 +70,7 @@ export type TaskPresentation = {
     memberId: string;
     assignmentId: number | null;
     name: string | null;
+    nickname: string | null;
   } | null;
   candidature: {
     status: 'pending' | 'selected' | 'withdrawn' | 'closed';
@@ -195,6 +197,7 @@ export function toTaskPresentation(
                 ? activeAssignment.id
                 : null,
             name: visibleExecutor.fullName?.trim() || null,
+            nickname: visibleExecutor.nickname?.trim() || null,
           }
         : null,
     candidature: kind === 'task' ? candidature : null,

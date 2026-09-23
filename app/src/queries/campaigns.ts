@@ -90,6 +90,7 @@ export type CampaignReport = {
   members: {
     memberId: string;
     name: string;
+    nickname: string | null;
     points: number;
     tasksCompleted: number;
   }[];
@@ -114,6 +115,7 @@ export async function fetchCampaignReport(
     members: (members.data ?? []).map((row) => ({
       memberId: row.member_id,
       name: row.full_name ?? 'Membru',
+      nickname: row.nickname?.trim() || null,
       points: row.points,
       tasksCompleted: row.tasks_completed,
     })),
