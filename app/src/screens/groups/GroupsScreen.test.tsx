@@ -1,0 +1,229 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { beforeEach, expect, it, vi } from 'vitest';
+import * as axe from 'axe-core';
+import type { AdminGroup } from '../../queries/groups-admin';
+import type { GroupApplication } from '../../queries/group-applications';
+const api = vi.hoisted(() => ({
+  groups: vi.fn(),
+  mine: vi.fn(),
+  applications: vi.fn(),
+  mutate: vi.fn(),
+  roster: vi.fn(),
+  events: vi.fn(),
+  level: 1,
+}));
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock('../../lib/auth', () => ({
+  useAuth: () => ({
+    claims: { member_level: api.level },
+    session: { user: { id: 'me' } },
+  }),
+}));
+vi.mock('../../lib/capabilities', () => ({
+  useCapabilities: () => ({ data: { createTopLevelGroups: false } }),
+}));
+vi.mock('../../queries/groups-admin', async (original) => ({
+  ...(await original<object>()),
+  useAdminGroups: api.groups,
+  useMyGroupRoles: api.mine,
+  useGroupRoster: api.roster,
+}));
+vi.mock('../../queries/group-applications', () => ({
+  useGroupApplications: api.applications,
+  useApplicationCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
+  useGroupUpcomingEvents: api.events,
+}));
+import GroupsScreen from './GroupsScreen';
+import MemberGroupScreen from './MemberGroupScreen';
+import { GroupApplicationsTab } from '../administrare/GroupApplicationsTab';
+function group(
+  id: number,
+  name: string,
+  extra: Partial<AdminGroup> = {},
+): AdminGroup {
+  return {
+    id,
+    name,
+    parent_id: null,
+    path: [id],
+    category: 'team',
+    color: '#284C93',
+    short: null,
+    status: 'active',
+    is_organization: false,
+    min_level: 0,
+    application_level: 1,
+    accepts_applications: true,
+    automatic_membership: false,
+    shared_work_visibility: true,
+    manager_title: 'Coordonator',
+    competes_in_cup: false,
+    counts_toward_parent_cup: false,
+    memberCount: 1,
+    ...extra,
+  };
+}
+const application: GroupApplication = {
+  id: 7,
+  group_id: 2,
+  member_id: 'me',
+  memberName: 'Ana Pop',
+  status: 'pending',
+  note: 'Vreau să ajut',
+  created_at: '2026-09-24T12:00:00Z',
+  decided_at: null,
+  decided_by: null,
+  decision_note: null,
+};
+function ready(data: unknown) {
+  return { data, isPending: false, isError: false };
+}
+beforeEach(() => {
+  api.level = 1;
+  api.groups.mockReturnValue(
+    ready([
+      group(1, 'Educațional', { accepts_applications: false }),
+      group(2, 'Echipa Evenimente', { parent_id: 1, path: [1, 2] }),
+      group(3, 'Doar AG', { application_level: 3 }),
+      group(4, 'Arhivat', { status: 'archived' }),
+      group(5, 'Automat', { automatic_membership: true }),
+    ]),
+  );
+  api.mine.mockReturnValue(ready([]));
+  api.applications.mockReturnValue(ready([]));
+  api.roster.mockReturnValue(
+    ready([{ memberId: 'manager', name: 'Ioana', groupRole: 'manager' }]),
+  );
+  api.events.mockReturnValue(ready([]));
+  api.mutate.mockReset().mockResolvedValue({});
+});
+function list() {
+  return render(
+    <MemoryRouter>
+      <GroupsScreen />
+    </MemoryRouter>,
+  );
+}
+function detail() {
+  return render(
+    <MemoryRouter initialEntries={['/grupuri/2']}>
+      <Routes>
+        <Route path="/grupuri/:groupId" element={<MemberGroupScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+it('lists only eligible active Groups and searches by name, with their first ancestor', async () => {
+  list();
+  expect(
+    screen.getByRole('link', { name: 'Echipa Evenimente' }),
+  ).toHaveAttribute('href', '/grupuri/2');
+  expect(screen.getByText(/Echipă · Educațional/)).toBeInTheDocument();
+  expect(screen.queryByText('Doar AG')).not.toBeInTheDocument();
+  expect(screen.queryByText('Arhivat')).not.toBeInTheDocument();
+  expect(screen.queryByText('Automat')).not.toBeInTheDocument();
+  await userEvent.type(screen.getByRole('searchbox'), 'inexistent');
+  expect(screen.getByRole('status')).toHaveTextContent('Nu sunt grupuri');
+});
+it('applies in a dialog and renders the pending server state with withdrawal', async () => {
+  const view = list();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Aplică' }));
+  await user.type(screen.getByLabelText('Mesaj (opțional)'), 'Bună');
+  await user.click(screen.getByRole('button', { name: 'Confirmă' }));
+  expect(api.mutate).toHaveBeenCalledWith({
+    kind: 'apply',
+    groupId: 2,
+    note: 'Bună',
+  });
+  api.applications.mockReturnValue(ready([application]));
+  view.rerender(
+    <MemoryRouter>
+      <GroupsScreen />
+    </MemoryRouter>,
+  );
+  expect(screen.getByText('Cerere în așteptare')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Retrage aplicația' }));
+  await user.click(screen.getByRole('button', { name: 'Confirmă' }));
+  expect(api.mutate).toHaveBeenLastCalledWith({
+    kind: 'withdraw',
+    applicationId: 7,
+  });
+  api.applications.mockReturnValue(ready([]));
+  view.rerender(
+    <MemoryRouter>
+      <GroupsScreen />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('button', { name: 'Aplică' })).toBeInTheDocument();
+});
+it.each([true, false])(
+  'manager decides an Application: accept=%s',
+  async (accept) => {
+    api.applications.mockReturnValue(ready([application]));
+    const view = render(<GroupApplicationsTab groupId={2} canDecide />);
+    const user = userEvent.setup();
+    expect(screen.getByText('Ana Pop')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: accept ? 'Acceptă' : 'Respinge' }),
+    );
+    await user.type(screen.getByLabelText('Mesaj (opțional)'), 'Decizie');
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Confirmă',
+      }),
+    );
+    expect(api.mutate).toHaveBeenCalledWith({
+      kind: 'decide',
+      applicationId: 7,
+      accept,
+      note: 'Decizie',
+    });
+    api.applications.mockReturnValue(ready([]));
+    view.rerender(<GroupApplicationsTab groupId={2} canDecide />);
+    expect(
+      screen.getByText('Nu sunt cereri în așteptare.'),
+    ).toBeInTheDocument();
+  },
+);
+it('ordinary Member sees Group details, role titles and upcoming empty state', () => {
+  detail();
+  expect(
+    screen.getByRole('heading', { name: 'Echipa Evenimente' }),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Ioana')).toBeInTheDocument();
+  expect(screen.getByText('Nu sunt evenimente viitoare.')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('link', { name: 'Administrare' }),
+  ).not.toBeInTheDocument();
+});
+it('applicant sees pending status and can withdraw on the Group page', () => {
+  api.applications.mockReturnValue(ready([application]));
+  detail();
+  expect(screen.getByText('Cerere în așteptare')).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Retrage aplicația' }),
+  ).toBeInTheDocument();
+});
+it('Manager sees the Administrare link and their own effective Role', () => {
+  api.mine.mockReturnValue(
+    ready([{ id: 2, group_role: 'manager', explicit: true, automatic: false }]),
+  );
+  detail();
+  expect(screen.getByRole('link', { name: 'Administrare' })).toHaveAttribute(
+    'href',
+    '/administrare/grupuri/2',
+  );
+  expect(
+    screen.getByText('Coordonator', { selector: 'strong' }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Aplică' }),
+  ).not.toBeInTheDocument();
+});
+it('has no automated accessibility violations', async () => {
+  const { container } = list();
+  expect((await axe.run(container)).violations).toEqual([]);
+});

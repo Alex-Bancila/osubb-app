@@ -18,6 +18,7 @@ import {
   type GroupCommand,
 } from '../../queries/groups-admin';
 import { CampaignsPanel } from '../campaigns/CampaignsPanel';
+import { GroupApplicationsTab } from './GroupApplicationsTab';
 import { GroupChildrenTab } from './GroupChildrenTab';
 import { GroupRolesTab } from './GroupRolesTab';
 import { GroupRosterTab } from './GroupRosterTab';
@@ -313,9 +314,7 @@ export default function GroupScreen() {
           </div>
         )}
         {tab === 'cereri' && (
-          <p className="text-muted-foreground">
-            Cererile de înscriere apar aici în curând.
-          </p>
+          <GroupApplicationsTab groupId={id} canDecide={authority.manageWork} />
         )}
       </div>
 

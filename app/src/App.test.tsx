@@ -56,6 +56,12 @@ vi.mock('./screens/volunteers/VolunteersScreen', () => ({
 vi.mock('./screens/administrare/AdministrareScreen', () => ({
   default: () => <h1>Administrare</h1>,
 }));
+vi.mock('./screens/groups/GroupsScreen', () => ({
+  default: () => <h1>Grupuri screen</h1>,
+}));
+vi.mock('./screens/groups/MemberGroupScreen', () => ({
+  default: () => <h1>Member Group screen</h1>,
+}));
 vi.mock('./screens/administrare/GroupScreen', () => ({
   default: () => <h1>Grup screen</h1>,
 }));
@@ -403,6 +409,18 @@ describe('route guards', () => {
 
     expect(
       screen.getByRole('heading', { name: 'Anunțuri screen' }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['/grupuri', 'Grupuri screen'],
+    ['/grupuri/2', 'Member Group screen'],
+  ])('opens member Group route %s', async (path, title) => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', path);
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: title }),
     ).toBeInTheDocument();
   });
 
