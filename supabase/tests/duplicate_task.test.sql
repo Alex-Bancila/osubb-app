@@ -633,6 +633,8 @@ reset role;
 select extensions.dblink_connect('dt_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('dt_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('dt_setup', $$
   delete from public.tasks where title like '%#341 committed%';
   delete from public.campaigns where name = 'Campanie blocaj #341 committed';

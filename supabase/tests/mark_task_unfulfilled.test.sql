@@ -735,6 +735,8 @@ select is((select count(*) from public.task_evaluations
 select extensions.dblink_connect('ctr_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('ctr_setup', 'set lock_timeout = ''2s''');
 
 select extensions.dblink_exec('ctr_setup', $$
   insert into auth.users (id, email) values

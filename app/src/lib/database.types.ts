@@ -659,6 +659,134 @@ export type Database = {
           },
         ]
       }
+      group_applications: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
+          member_id: string
+          note: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          group_id: number
+          id?: never
+          member_id: string
+          note?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          group_id?: number
+          id?: never
+          member_id?: string
+          note?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_applications_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_members: {
         Row: {
           created_at: string
@@ -2874,6 +3002,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      apply_to_group: {
+        Args: { p_group_id: number; p_note?: string }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
+          member_id: string
+          note: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       approve_completed_work_request: {
         Args: {
           p_difficulty: number
@@ -3393,6 +3541,26 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      decide_group_application: {
+        Args: { p_accept: boolean; p_application_id: number; p_note?: string }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
+          member_id: string
+          note: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       department_cup: {
         Args: { p_campaign_id?: number }
         Returns: {
@@ -3703,11 +3871,11 @@ export type Database = {
       }
       provision_profile: {
         Args: {
-          p_dept_ids?: string[]
+          p_appointed_by?: string
           p_email: string
           p_full_name: string
+          p_group_ids?: number[]
           p_role?: Database["public"]["Enums"]["member_role"]
-          p_team_ids?: string[]
           p_user_id: string
         }
         Returns: string
@@ -4355,6 +4523,26 @@ export type Database = {
           member_id: string
           task_id: number
         }[]
+      }
+      withdraw_group_application: {
+        Args: { p_application_id: number }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          group_id: number
+          id: number
+          member_id: string
+          note: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       withdraw_task_interest: {
         Args: { p_task_id: number }

@@ -9,6 +9,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { InviteDeps } from "../_shared/member-invite.ts";
+import { allActiveGroups, type GroupReference } from "../_shared/groups.ts";
 
 export type {
   DbError,
@@ -17,8 +18,8 @@ export type {
 } from "../_shared/member-invite.ts";
 
 export interface InviteAdminDeps extends InviteDeps {
-  /** All currently valid ids, loaded once for CSV validation. */
-  referenceIds(table: "departments" | "teams"): Promise<string[]>;
+  /** Every active Group, loaded once per CSV import for name resolution. */
+  activeGroups(): Promise<GroupReference[]>;
 }
 
 export function realDeps(req: Request): InviteAdminDeps {
@@ -54,9 +55,12 @@ export function realDeps(req: Request): InviteAdminDeps {
       return data ?? 0;
     },
 
-    async missingIds(table, ids) {
+    async missingGroupIds(ids) {
       if (ids.length === 0) return [];
-      const { data, error } = await admin.from(table).select("id").in(
+      // Archived Groups are deliberately NOT filtered out here: the
+      // Appointment core answers an archived Group with its own reason, and
+      // reporting it as "inexistent" would tell a BC to fix the wrong thing.
+      const { data, error } = await admin.from("groups").select("id").in(
         "id",
         ids,
       );
@@ -64,10 +68,21 @@ export function realDeps(req: Request): InviteAdminDeps {
       return ids.filter((id) => !data?.some((row) => row.id === id));
     },
 
-    async referenceIds(table) {
-      const { data, error } = await admin.from(table).select("id");
-      if (error) throw error;
-      return data?.map((row) => row.id) ?? [];
+    activeGroups() {
+      return allActiveGroups(async (from, to) => {
+        const { data, error } = await admin.from("groups")
+          .select("id, name, short, path")
+          .eq("status", "active")
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw error;
+        return (data ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          short: row.short,
+          path: row.path ?? [row.id],
+        }));
+      });
     },
 
     async profileExists(email) {
@@ -96,8 +111,8 @@ export function realDeps(req: Request): InviteAdminDeps {
         p_full_name: args.fullName,
         p_email: args.email,
         p_role: args.role,
-        p_dept_ids: args.deptIds,
-        p_team_ids: args.teamIds,
+        p_group_ids: args.groupIds,
+        p_appointed_by: args.appointedBy,
       });
       return { error: error ?? undefined };
     },

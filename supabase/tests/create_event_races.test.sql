@@ -11,6 +11,8 @@ select plan(8);
 -- Both setup and cleanup are idempotent so an interrupted run can be retried.
 select extensions.dblink_connect('commands_370_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres', current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('commands_370_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('commands_370_setup', $setup$
   drop function if exists public.test_370_event();
   drop function if exists public.test_370_revoke();
