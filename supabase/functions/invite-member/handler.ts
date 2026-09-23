@@ -80,22 +80,39 @@ export async function handleInvite(
     return json({ error: "Doar BC poate invita membri." }, 403, origin);
   }
 
-  let body: InviteRequest;
+  let parsed: unknown;
   try {
-    body = await req.json();
+    parsed = await req.json();
   } catch {
     return json({ error: "Corp de cerere invalid (JSON)." }, 400, origin);
   }
 
-  if (
-    typeof body !== "object" || body === null ||
-    "dept_ids" in body || "team_ids" in body
-  ) {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return json(
+      { error: "Corpul cererii trebuie să fie un obiect." },
+      400,
+      origin,
+    );
+  }
+  if ("dept_ids" in parsed || "team_ids" in parsed) {
     return json(
       {
         error:
           "Câmpurile dept_ids și team_ids nu mai există. Trimite group_ids.",
       },
+      400,
+      origin,
+    );
+  }
+
+  const body = parsed as InviteRequest;
+  if (
+    (body.email !== undefined && typeof body.email !== "string") ||
+    (body.full_name !== undefined && typeof body.full_name !== "string") ||
+    (body.role !== undefined && typeof body.role !== "string")
+  ) {
+    return json(
+      { error: "Câmpurile email, full_name și role trebuie să fie text." },
       400,
       origin,
     );
