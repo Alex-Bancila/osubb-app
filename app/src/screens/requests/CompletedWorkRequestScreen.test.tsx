@@ -1,4 +1,11 @@
-vi.mock('./RequestDecisionQueue', () => ({ RequestDecisionQueue: () => null }));
+vi.mock('./RequestDecisionQueue', () => ({
+  // A visible stub, not `null`: tests below need to see it render regardless
+  // of whether the submission form is showing (#631's decision queue stays
+  // untouched by the level gate).
+  RequestDecisionQueue: () => (
+    <div role="region" aria-label="Coadă decizii stub" />
+  ),
+}));
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,9 +14,14 @@ const hooks = vi.hoisted(() => ({
   useRequestOrigins: vi.fn(),
   useMyCompletedWorkRequests: vi.fn(),
   useSubmitCompletedWork: vi.fn(),
+  useAuth: vi.fn(),
 }));
 
 vi.mock('../../queries/completed-work-requests', () => hooks);
+vi.mock('../../lib/auth', () => ({ useAuth: hooks.useAuth }));
+// capabilities.ts (submitsWorkRequests) pulls in the shared client transitively;
+// it is never called by this screen, so an inert stub is enough to satisfy it.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 // Readable Groups name each option's parent: Echipa Media sits under
 // Educațional; OSUBB Fest is top-level.
 vi.mock('../../queries/reference', () => ({
@@ -38,6 +50,9 @@ describe('CompletedWorkRequestScreen', () => {
 
   beforeEach(() => {
     mutateAsync.mockReset().mockResolvedValue({ id: 1 });
+    hooks.useAuth.mockReturnValue({
+      claims: { member_role: 'voluntar', member_level: 1 },
+    });
     hooks.useRequestOrigins.mockReturnValue({
       data: [
         { id: 21, name: 'Echipa Media', path: [4, 21] },
@@ -176,4 +191,55 @@ describe('CompletedWorkRequestScreen', () => {
       'Descrierea este obligatorie.',
     );
   });
+
+  it.each([1, 4])(
+    'shows the submission form and Cererile mele at level %i (#631)',
+    (level) => {
+      hooks.useAuth.mockReturnValue({
+        claims: { member_role: 'voluntar', member_level: level },
+      });
+      render(<CompletedWorkRequestScreen />);
+
+      expect(
+        screen.getByRole('combobox', { name: 'Grup' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Trimite cererea' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Cererile mele' }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Descrie contribuția/)).toBeInTheDocument();
+      // The decision queue is unrelated to the level gate and still renders.
+      expect(
+        screen.getByRole('region', { name: 'Coadă decizii stub' }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each([5, 6, 9])(
+    'hides the submission form and Cererile mele at level %i, keeping the decision queue (#631)',
+    (level) => {
+      hooks.useAuth.mockReturnValue({
+        claims: { member_role: 'bc', member_level: level },
+      });
+      render(<CompletedWorkRequestScreen />);
+
+      expect(
+        screen.queryByRole('combobox', { name: 'Grup' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Trimite cererea' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'Cererile mele' }),
+      ).not.toBeInTheDocument();
+      // No sentence invites a Request nobody at this level can submit.
+      expect(screen.queryByText(/Descrie contribuția/)).not.toBeInTheDocument();
+      // The decision queue is unrelated to the level gate and still renders.
+      expect(
+        screen.getByRole('region', { name: 'Coadă decizii stub' }),
+      ).toBeInTheDocument();
+    },
+  );
 });
