@@ -36,7 +36,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(113);
+select plan(116);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1203,6 +1203,18 @@ select is((select count(*) from public.points_ledger
             where member_id in ('34400000-0000-0000-0000-000000000052',
                                 '34400000-0000-0000-0000-000000000053')), 0::bigint,
   'including every point the committed race actually credited');
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_completed_work_request(repeat('d', 2001), 0) $$,
+  'PT400', 'description_too_long', 'a Request description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.approve_completed_work_request(0, 3, 3, repeat('n', 1001)) $$,
+  'PT400', 'note_too_long', 'an approval note over 1000 characters is refused before the gate');
+select throws_ok($$ select public.reject_completed_work_request(0, repeat('n', 1001)) $$,
+  'PT400', 'note_too_long', 'a rejection note over 1000 characters is refused before the gate');
+reset role;
 
 select * from finish();
 rollback;
