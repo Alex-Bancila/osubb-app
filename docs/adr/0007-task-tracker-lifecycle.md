@@ -5,6 +5,7 @@
 - **Amended:** 2026-09-10 — `unfulfilled` outcome, Feedback-pending sub-state, Campaigns, Umbrella Tasks, any-active-member direct assignment and self-selection, evaluation-time Difficulty, notification recipients, Leaderboard filters, coordination departments, BC/Moderator Project roster override
 - **Amended:** 2026-09-18 — ADR-0009: Origins are Groups; the Work origins, Campaigns, and Authorization sections are read through ADR-0009's settings and Group Roles
 - **Amended:** 2026-09-21 — the edit window: every Task field is editable until review, Group changes with accepted consequences, Public → Direct closes the queue; Campaigns report points and contributors
+- **Amended:** 2026-09-23 — the Candidate Queue never promotes by arrival: interest only queues, the Task Manager selects, and give-up or an edit that removes the Executor returns the Task to To do with its queue intact
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -147,3 +148,13 @@ Approval creates the completed Task, requester Assignment, Evaluation, and Task-
 - Departments reference data changes in a migration: `diverse` (with Department Teams IT and Interne) and `secretariat` are added as coordination structures outside the Cup, and the legacy `it` department is retired with its members moved to the IT team.
 - Project roster commands accept BC/Moderator as well as the active lead.
 - The 2026-09-10 amendment adds no stored state beyond `unfulfilled`, the review-round marker, `campaign_id`, `parent_task_id`, and the Campaign and Completed-work Request tables; everything else in it is command behavior or derived presentation.
+
+## Amendment (2026-09-23) — the manager selects every Executor of a public Task
+
+Read §Assignment and candidate queue as follows. Expressing interest in a public Task always adds a pending Candidate at the end of the arrival-ordered Candidate Queue; nobody becomes Executor by arriving first. The Task Manager selects the Executor from the queue with `select_task_candidate`, choosing anyone in it and deciding whether the remaining Candidates stay pending or are closed. When an Executor gives up, or an edit removes the Executor, no Candidate is promoted: the Task returns to `todo` with its queue intact, the managers are notified, and the manager selects again. Direct Tasks are unchanged. The `first_come` assignment path is retired.
+
+Managers learn of new Candidates through the coalesced queue-count notification; a selected Candidate receives the ordinary "Task nou" notification. The trade-off is one more manager action per public Task in exchange for the manager always choosing who does the work (grilling of 2026-09-23).
+
+## Amendment (2026-09-23) — every open Opportunity is visible at its Group's Minimum Level
+
+Read §Authorization's "eligible public Opportunities" as: every open Opportunity (public, queue open, not terminal) of a Group whose Minimum Level the Member satisfies, whatever its Audience. Audience decides only who may express interest: a local-Audience Opportunity of a Group the Member is not in is visible but not joinable. The Tracker presents the Opportunities of the Member's own Groups in the Group's colour and the rest greyed as **Other OSUBB Opportunities**, each band in deadline order, mirroring ADR-0008's Relevant / Other OSUBB Event treatment; Opportunities of the Organization Group are everyone's and take the OSUBB colour. Direct Tasks and Tasks with a closed queue stay invisible to non-participants. This widens the read policy on purpose so Members can see what other Groups do and apply to them (grilling of 2026-09-23).
