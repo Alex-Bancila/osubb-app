@@ -382,6 +382,8 @@ reset role;
 select extensions.dblink_connect('ctm_lock_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('ctm_lock_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('ctm_lock_setup', $$
   delete from public.tasks where title = 'Lock Probe Task #329';
   delete from public.member_departments where member_id = '32900000-0000-0000-0000-000000000021';

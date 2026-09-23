@@ -87,6 +87,8 @@ select ok(exists (select 1 from pg_trigger
 select extensions.dblink_connect('race_setup_509', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
+-- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('race_setup_509', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('race_setup_509', $$
   -- Plain `set`, not `set local`: this connection runs in autocommit, so the
   -- timeouts have to outlive the statement that sets them and cover the
