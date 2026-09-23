@@ -13,7 +13,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(93);
+select plan(119);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u(n integer) returns uuid language sql immutable as $$
@@ -132,10 +132,10 @@ select pg_temp.mk('r8:alone', 'in_progress', 'public', 'org', pg_temp.u(3));
 create function pg_temp.args(p_name text,
   p_title text default null, p_clear_description boolean default false,
   p_deadline timestamptz default null, p_campaign bigint default null,
-  p_mode text default null, p_audience text default null)
+  p_mode text default null, p_audience text default null, p_group bigint default null)
 returns text language sql stable as $$
-  select format('%s, %L, %L, %L::timestamptz, %s, %L, %L',
-    task.id,
+  select format('%s, %s, %L, %L, %L::timestamptz, %s, %L, %L',
+    task.id, coalesce(p_group, task.group_id),
     coalesce(p_title, task.title),
     case when p_clear_description then null else task.description end,
     coalesce(p_deadline, task.deadline),
@@ -144,13 +144,13 @@ returns text language sql stable as $$
     coalesce(p_audience, task.audience))
     from public.tasks as task where task.id = pg_temp.t(p_name)
 $$;
-grant execute on function pg_temp.args(text, text, boolean, timestamptz, bigint, text, text) to authenticated;
+grant execute on function pg_temp.args(text, text, boolean, timestamptz, bigint, text, text, bigint) to authenticated;
 
 create function pg_temp.preview(p_args text) returns text[] language plpgsql as $$
 declare
   v text[];
 begin
-  execute format('select coalesce(array_agg(c.consequence || '':'' || c.member_id order by c.ord), ''{}'')
+  execute format('select coalesce(array_agg(c.consequence || '':'' || coalesce(c.member_id::text, '''') order by c.ord), ''{}'')
                     from public.preview_task_update(%s) with ordinality as c (consequence, member_id, ord)', p_args)
     into v;
   return v;
@@ -178,37 +178,37 @@ grant select, insert on previews to authenticated;
 
 -- ==================== 1. API shape and privileges ====================
 select has_function('public', 'update_task',
-  array['bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'boolean'],
+  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'boolean'],
   'public.update_task exists with the full-state signature plus p_accept_consequences');
 select is(pg_get_function_arguments(
-    'public.update_task(bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure),
-  'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean DEFAULT false',
+    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure),
+  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean DEFAULT false',
   'update_task takes no actor parameter and p_accept_consequences defaults to false');
 select is(pg_get_function_result(
-    'public.preview_task_update(bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
   'TABLE(consequence text, member_id uuid)',
   'preview_task_update takes the same value arguments and returns (consequence, member_id) rows');
 select is((select provolatile::text from pg_proc
-            where oid = 'public.preview_task_update(bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
   's', 'preview_task_update is stable');
 select ok(not (select prosecdef from pg_proc
-                where oid = 'public.update_task(bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure)
+                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure)
           and not (select prosecdef from pg_proc
-                    where oid = 'public.preview_task_update(bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
   'both public functions are security invoker wrappers');
 select ok(has_function_privilege('authenticated',
-            'public.update_task(bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
           and has_function_privilege('authenticated',
-            'public.preview_task_update(bigint,text,text,timestamptz,bigint,text,text)', 'execute')
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)', 'execute')
           and not has_function_privilege('anon',
-            'public.update_task(bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
           and not has_function_privilege('anon',
-            'public.preview_task_update(bigint,text,text,timestamptz,bigint,text,text)', 'execute'),
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)', 'execute'),
   'authenticated may call both, anon neither');
 select ok(not has_function_privilege('authenticated',
-            'private.task_update_consequences(bigint,text,text)', 'execute')
+            'private.task_update_consequences(bigint,bigint,bigint,text,text)', 'execute')
           and not has_function_privilege('authenticated',
-            'private.plan_task_update(public.tasks,text,text,timestamptz,bigint,text,text)', 'execute'),
+            'private.plan_task_update(public.tasks,bigint,text,text,timestamptz,bigint,text,text)', 'execute'),
   'the two shared helpers are callable only from inside the definer bodies');
 
 -- ==================== 2. Every field, in todo / in_progress / Feedback pending ====================
@@ -296,12 +296,12 @@ select lives_ok(format('select public.update_task(%s)', pg_temp.args('x:umbrella
   'an Umbrella''s title is editable with null mode and Audience');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => '   ')),
   'PT400', 'title_required', 'a blank title is refused');
-select throws_ok(format('select public.update_task(%s, %L, %L, null, null, %L, %L)', pg_temp.t('x:input'),
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, null, null, %L, %L)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
     'T626 x:input', 'd', 'direct', 'org'),
   'PT400', 'deadline_required', 'an ordinary Task needs a deadline');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_audience => 'world')),
   'PT400', 'invalid_audience', 'an Audience outside local/org is refused');
-select throws_ok(format('select public.update_task(%s, %L, %L, %L::timestamptz, null, null, %L)', pg_temp.t('x:input'),
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, %L::timestamptz, null, null, %L)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
     'T626 x:input', 'd', '2027-03-01 09:00:00+00', 'org'),
   'PT400', 'invalid_assignment_mode', 'a null Assignment Mode on an ordinary Task is refused (full state, never a patch)');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_campaign => (select pr_campaign from f626))),
@@ -497,6 +497,125 @@ select is((select format('%s|%s|%s|%s|%s', task.title, task.assignment_mode,
                          (select count(*) from public.notifications as n where n.task_id = task.id))
              from public.tasks as task where task.id = pg_temp.t('pv')),
   'T626 pv|public|1|0|0', 'the preview changed nothing, logged nothing and notified nobody');
+
+
+-- ==================== 9. #627 Group moves and combined edits ====================
+insert into auth.users (id, email) values
+  (pg_temp.u(9), 'bc.627@test.local'), (pg_temp.u(10), 'eligible.627@test.local'),
+  (pg_temp.u(11), 'eligible2.627@test.local');
+insert into public.profiles (id, full_name, email, role, status) values
+  (pg_temp.u(9), 'BC 627', 'bc.627@test.local', 'bc', 'activ'),
+  (pg_temp.u(10), 'Eligible 627', 'eligible.627@test.local', 'bce', 'activ'),
+  (pg_temp.u(11), 'Eligible 627 B', 'eligible2.627@test.local', 'bce', 'activ');
+update public.groups set min_level = 2, application_level = greatest(application_level, 2)
+ where id = pg_temp.dept_group('pr');
+select pg_temp.mk('627:add', 'in_progress', 'direct', 'org', pg_temp.u(10));
+select pg_temp.mk('627:remove', 'in_progress', 'public', 'org', pg_temp.u(2));
+select pg_temp.cand('627:remove', pg_temp.u(4), '2 hours');
+select pg_temp.cand('627:remove', pg_temp.u(10), '1 hour');
+select pg_temp.mk('627:campaign', 'todo', 'direct', 'org', null);
+update public.tasks set campaign_id = (select edu_campaign from f626) where id = pg_temp.t('627:campaign');
+select pg_temp.mk('627:combined', 'in_progress', 'public', 'org', pg_temp.u(11));
+select pg_temp.cand('627:combined', pg_temp.u(1), '1 hour');
+
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select throws_ok(format('select * from public.preview_task_update(%s)',
+  pg_temp.args('627:add', p_group => pg_temp.dept_group('pr'))),
+  '42501', 'group_manage_forbidden', 'source manager cannot preview an unauthorized target Group');
+select throws_ok(format('select public.update_task(%s, true)',
+  pg_temp.args('627:add', p_group => pg_temp.dept_group('pr'))),
+  '42501', 'group_manage_forbidden', 'source manager cannot move into an unauthorized target Group');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u(9));
+select is(pg_temp.preview(pg_temp.args('627:add', p_group => pg_temp.dept_group('pr'))),
+  array['executor_added_to_group:' || pg_temp.u(10)], 'eligible Executor previews an appointment');
+insert into previews values ('627:add', pg_temp.preview_json(pg_temp.args('627:add', p_group => pg_temp.dept_group('pr'))));
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('627:add', p_group => pg_temp.dept_group('pr'))),
+  'PT409', 'task_update_needs_confirmation', 'appointment refuses without acceptance');
+select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('627:add', p_group => pg_temp.dept_group('pr'))),
+  'accepted appointment and Group move succeed');
+reset role;
+select is((select count(*)::integer from public.group_members where group_id = pg_temp.dept_group('pr') and member_id = pg_temp.u(10)),
+  1, 'appointment core added the eligible Executor to target Group');
+select is(pg_temp.activity_consequences('627:add'), (select consequences from previews where name = '627:add'),
+  'appointment command records exactly the previewed consequence');
+select is((select group_id from public.tasks where id = pg_temp.t('627:add')),
+  pg_temp.dept_group('pr'), 'Task moved to target Group');
+
+select pg_temp.test_login_leadership(pg_temp.u(9));
+select is(pg_temp.preview(pg_temp.args('627:remove', p_group => pg_temp.dept_group('pr'))),
+  array['executor_removed:' || pg_temp.u(2), 'candidate_removed:' || pg_temp.u(4)],
+  'move previews below-Minimum-Level Executor and Candidate, but retains eligible outsider Candidate');
+insert into previews values ('627:remove', pg_temp.preview_json(pg_temp.args('627:remove', p_group => pg_temp.dept_group('pr'))));
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('627:remove', p_group => pg_temp.dept_group('pr'))),
+  'PT409', 'task_update_needs_confirmation', 'Executor and Candidate removal refuse without acceptance');
+select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('627:remove', p_group => pg_temp.dept_group('pr'))),
+  'accepted removal and move succeed');
+reset role;
+select is((select end_reason from public.task_assignments where task_id = pg_temp.t('627:remove') and ended_at is not null),
+  'group_changed', 'displaced Executor Assignment ends with group_changed');
+select is((select format('%s|%s|%s', task.status,
+  (select count(*) from public.task_assignments a where a.task_id = task.id and a.ended_at is null),
+  (select count(*) from public.task_candidates c where c.task_id = task.id and c.status = 'pending'))
+  from public.tasks task where task.id = pg_temp.t('627:remove')),
+  'todo|0|1', 'Task returns to todo and eligible Candidate stays pending without promotion');
+select is(pg_temp.activity_consequences('627:remove'), (select consequences from previews where name = '627:remove'),
+  'removal command records exactly the previewed consequences');
+
+select pg_temp.test_login_leadership(pg_temp.u(9));
+select is(pg_temp.preview(pg_temp.args('627:campaign', p_group => pg_temp.dept_group('pr'))),
+  array['campaign_cleared:'], 'incompatible existing Campaign previews clearing');
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('627:campaign', p_group => pg_temp.dept_group('pr'))),
+  'PT409', 'task_update_needs_confirmation', 'Campaign clearing refuses without acceptance');
+select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('627:campaign', p_group => pg_temp.dept_group('pr'))),
+  'accepted move clears incompatible Campaign');
+reset role;
+select is((select campaign_id from public.tasks where id = pg_temp.t('627:campaign')),
+  null::bigint, 'Campaign was cleared on target Group');
+
+select pg_temp.test_login_leadership(pg_temp.u(9));
+select is(pg_temp.preview(pg_temp.args('627:combined', p_group => pg_temp.dept_group('pr'), p_audience => 'local')),
+  array['executor_added_to_group:' || pg_temp.u(11), 'candidate_removed:' || pg_temp.u(1)],
+  'simultaneous move and narrowing appoints eligible Executor but closes outsider Candidate');
+select lives_ok(format('select public.update_task(%s, true)',
+  pg_temp.args('627:combined', p_group => pg_temp.dept_group('pr'), p_audience => 'local')),
+  'combined edit applies both consequences');
+reset role;
+select is((select format('%s|%s', task.status,
+  (select count(*) from public.task_assignments a where a.task_id = task.id and a.ended_at is null))
+  from public.tasks task where task.id = pg_temp.t('627:combined')),
+  'in_progress|1', 'eligible Executor remains assigned on combined edit');
+
+
+-- Structural restrictions apply to a real move, not an ordinary edit.
+select pg_temp.mk('627:umbrella', 'todo', null, null, null, 0, 'umbrella');
+with child as (
+  insert into public.tasks (title, deadline, group_id, status, audience, assignment_mode,
+    kind, parent_task_id, created_by)
+  values ('T627 child', '2027-03-01 09:00:00+00', pg_temp.dept_group('edu'),
+    'todo', 'org', 'direct', 'task', pg_temp.t('627:umbrella'), pg_temp.u(9))
+  returning id)
+insert into t626 select '627:child', id from child;
+select pg_temp.test_login_leadership(pg_temp.u(9));
+select throws_ok(format('select * from public.preview_task_update(%s)',
+  pg_temp.args('627:umbrella', p_group => pg_temp.dept_group('pr'))),
+  'PT409', 'umbrella_has_subtasks', 'Umbrella with Subtasks cannot move');
+select throws_ok(format('select public.update_task(%s, true)',
+  pg_temp.args('627:child', p_group => pg_temp.dept_group('pr'))),
+  'PT409', 'subtask_origin_immutable', 'Subtask cannot leave its Umbrella Group');
+select lives_ok(format('select public.update_task(%s)',
+  pg_temp.args('627:child', p_title => 'T627 child edited')),
+  'same-Group Subtask edit stays valid');
+select lives_ok(format('select public.update_task(%s)',
+  pg_temp.args('627:umbrella', p_title => 'T627 umbrella edited')),
+  'same-Group Umbrella edit stays valid with children');
+reset role;
+update public.groups set status = 'archived' where id = pg_temp.dept_group('edu');
+select pg_temp.test_login_leadership(pg_temp.u(9));
+select lives_ok(format('select public.update_task(%s)',
+  pg_temp.args('627:child', p_title => 'T627 child archived edit')),
+  'BC may still edit an unchanged Group on an archived Group');
+reset role;
 
 select * from finish();
 rollback;

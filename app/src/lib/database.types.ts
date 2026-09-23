@@ -3769,6 +3769,7 @@ export type Database = {
           p_campaign_id: number
           p_deadline: string
           p_description: string
+          p_group_id: number
           p_task_id: number
           p_title: string
         }
@@ -4316,6 +4317,7 @@ export type Database = {
           p_campaign_id: number
           p_deadline: string
           p_description: string
+          p_group_id: number
           p_task_id: number
           p_title: string
         }

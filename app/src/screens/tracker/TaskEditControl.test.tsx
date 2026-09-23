@@ -98,6 +98,7 @@ it('edits every field through update_task after a preview with no consequences',
   );
   const values = {
     taskId: 1,
+    groupId: 2,
     title: 'Titlu nou',
     description: null,
     deadline: '2026-09-20T12:00:37Z',
@@ -173,10 +174,32 @@ it('describes a removed Executor and a promoted Candidate', async () => {
   );
   const dialog = await screen.findByRole('dialog');
   expect(dialog).toHaveTextContent(
-    'Ana Șerban nu mai este executor: nu face parte din grupul de origine',
+    'Ana Șerban nu mai este executor. Taskul revine la „De făcut”.',
   );
   expect(dialog).toHaveTextContent('Bianca Pop devine executor');
 });
+it('explains Group appointment and Campaign clearing in confirmation', async () => {
+  state.preview.mockResolvedValue([
+    {
+      kind: 'executor_added_to_group',
+      memberId: 'a',
+      memberName: 'Ana Șerban',
+    },
+    { kind: 'campaign_cleared', memberId: null, memberName: 'Un membru' },
+  ]);
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  await user.clear(screen.getByLabelText('Titlu'));
+  await user.type(screen.getByLabelText('Titlu'), 'Titlu nou');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog).toHaveTextContent('Ana Șerban va fi adăugat în grupul nou.');
+  expect(dialog).toHaveTextContent('Campania va fi eliminată');
+  expect(dialog).toHaveTextContent('Salvarea are următoarele consecințe:');
+});
+
 it('shows the new consequences when the Task changed after the preview', async () => {
   state.mutate.mockRejectedValueOnce(
     new TaskEditNeedsConfirmation('confirmă din nou'),

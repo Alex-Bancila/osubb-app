@@ -6,6 +6,7 @@ import { keys } from './keys';
 /** The full new state of every editable Task field (never a patch). */
 export type TaskUpdateInput = {
   taskId: number;
+  groupId: number;
   title: string;
   description: string | null;
   deadline: string | null;
@@ -16,10 +17,11 @@ export type TaskUpdateInput = {
 };
 
 export type TaskUpdateConsequence = {
-  /** executor_removed, candidate_removed or candidate_promoted; a kind the
-   *  server adds later is still shown, so it can never be accepted unseen. */
+  /** Includes Group move effects and campaign_cleared; unknown server kinds
+   *  are still shown so they cannot be accepted unseen. */
   kind: string;
-  memberId: string;
+  /** Null for a consequence that affects the Task rather than a member. */
+  memberId: string | null;
   memberName: string;
 };
 
@@ -56,6 +58,7 @@ function commandArgs(input: TaskUpdateInput) {
   // argument types omit PostgreSQL parameter nullability; keep this boundary local.
   return {
     p_task_id: input.taskId,
+    p_group_id: input.groupId,
     p_title: input.title.trim(),
     p_description: input.description?.trim() || null,
     p_deadline: input.deadline,
@@ -90,11 +93,21 @@ export async function previewTaskUpdate(
   if (error) throw editError(error);
   const rows = data ?? [];
   if (!rows.length) return [];
-  const ids = [...new Set(rows.map((row) => row.member_id))];
-  const { data: people } = await supabase
-    .from('profiles_directory')
-    .select('id, full_name')
-    .in('id', ids);
+  const ids = [
+    ...new Set(
+      rows
+        .map((row) => row.member_id)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const people = ids.length
+    ? (
+        await supabase
+          .from('profiles_directory')
+          .select('id, full_name')
+          .in('id', ids)
+      ).data
+    : [];
   const names = new Map(
     (people ?? []).map((person) => [person.id, person.full_name]),
   );

@@ -81,7 +81,11 @@ export function TaskEditControl({
 function consequenceText(consequence: TaskUpdateConsequence) {
   switch (consequence.kind) {
     case 'executor_removed':
-      return `${consequence.memberName} nu mai este executor: nu face parte din grupul de origine. Taskul revine la „De făcut”.`;
+      return `${consequence.memberName} nu mai este executor. Taskul revine la „De făcut”.`;
+    case 'executor_added_to_group':
+      return `${consequence.memberName} va fi adăugat în grupul nou.`;
+    case 'campaign_cleared':
+      return 'Campania va fi eliminată deoarece nu aparține grupului nou.';
     case 'candidate_removed':
       return `${consequence.memberName} iese din lista de candidați.`;
     case 'candidate_promoted':
@@ -139,6 +143,7 @@ function TaskEditForm({
   }
   const input: TaskUpdateInput = {
     taskId: task.id,
+    groupId: task.group_id,
     title,
     description: description || null,
     deadline: instantFor(deadline),
@@ -384,8 +389,7 @@ function TaskEditForm({
           <DialogHeader>
             <DialogTitle>Confirmă modificarea</DialogTitle>
             <DialogDescription>
-              Salvarea îi afectează pe acești membri. Fiecare primește o
-              notificare.
+              Salvarea are următoarele consecințe:
             </DialogDescription>
           </DialogHeader>
           <ul className="list-disc space-y-1 pl-5">
