@@ -371,7 +371,14 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
    'p_group_id bigint, p_member_id uuid, p_group_role text, p_position_title text',
                                                                      false, true,  false, false),
   ('add_group_member',       'p_group_id bigint, p_member_id uuid',  false, true,  false, false),
-  ('remove_group_member',    'p_group_id bigint, p_member_id uuid',  false, true,  false, false);
+  ('remove_group_member',    'p_group_id bigint, p_member_id uuid',  false, true,  false, false),
+  -- #584: the three Application command wrappers. Same grant shape again --
+  -- authenticated only -- even though apply_to_group is the one Group command
+  -- an ordinary Member without any position may actually get past.
+  ('apply_to_group',         'p_group_id bigint, p_note text',       false, true,  false, false),
+  ('withdraw_group_application', 'p_application_id bigint',          false, true,  false, false),
+  ('decide_group_application',
+   'p_application_id bigint, p_accept boolean, p_note text',         false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -658,11 +665,21 @@ insert into pinned_private_functions (proname, args, category) values
    'p_group_id bigint, p_member_id uuid, p_group_role text, p_position_title text',
    'impl'),
   ('add_group_member_impl',    'p_group_id bigint, p_member_id uuid', 'impl'),
-  ('remove_group_member_impl', 'p_group_id bigint, p_member_id uuid', 'impl');
+  ('remove_group_member_impl', 'p_group_id bigint, p_member_id uuid', 'impl'),
+  -- #584: the three Application command bodies, the shared recipient set (no
+  -- client role may reach it -- it decides no authority and answers to no
+  -- caller) and the groups_read limb predicate, which must stay callable by
+  -- authenticated because it runs inside the policy.
+  ('apply_to_group_impl',               'p_group_id bigint, p_note text', 'impl'),
+  ('withdraw_group_application_impl',   'p_application_id bigint',        'impl'),
+  ('decide_group_application_impl',
+   'p_application_id bigint, p_accept boolean, p_note text',              'impl'),
+  ('group_application_recipients',      'p_application_id bigint',        'none'),
+  ('has_pending_group_application',     'p_group_id bigint',              'predicate');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 146,
-  'the audited roster includes #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
+  (select count(*) from pinned_private_functions)::int, 151,
+  'the audited roster includes #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
