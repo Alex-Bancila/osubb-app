@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import {
+  allActiveGroups,
   buildGroupLookup,
   type GroupReference,
   normalizeGroupKey,
@@ -13,6 +14,23 @@ Deno.test("normalizing folds case, diacritics and runs of whitespace", () => {
   assertEquals(normalizeGroupKey("  IMAGINE   &   PR "), "imagine & pr");
   assertEquals(normalizeGroupKey("Tineret"), "tineret");
   assertEquals(normalizeGroupKey("Întâlniri"), "intalniri");
+});
+
+Deno.test("active Group lookup loads every ordered page once per import", async () => {
+  const records = Array.from({ length: 1002 }, (_, index) => ({
+    id: index + 1,
+    name: `Group ${index + 1}`,
+    short: null,
+    path: [index + 1],
+  }));
+  const ranges: Array<[number, number]> = [];
+  const loaded = await allActiveGroups((from, to) => {
+    ranges.push([from, to]);
+    return Promise.resolve(records.slice(from, to + 1));
+  });
+  assertEquals(ranges, [[0, 999], [1000, 1999]]);
+  assertEquals(loaded.length, 1002);
+  assertEquals(buildGroupLookup(loaded).resolve("Group 1002"), [1002]);
 });
 
 const groups: GroupReference[] = [

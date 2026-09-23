@@ -112,6 +112,6 @@ comment on function public.provision_profile(uuid, text, text, public.member_rol
 -- Clients must never provision themselves — this runs as its owner and
 -- bypasses RLS by design, so execute stays with the server identity only.
 revoke execute on function public.provision_profile(uuid, text, text, public.member_role, bigint[], uuid)
-  from public, anon, authenticated;
+  from public, anon, authenticated, service_role;
 grant execute on function public.provision_profile(uuid, text, text, public.member_role, bigint[], uuid)
   to service_role;

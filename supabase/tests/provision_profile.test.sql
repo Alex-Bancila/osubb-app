@@ -19,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(35);
 
 -- ==================== Privileges ====================
 select has_function('public', 'provision_profile', 'provision_profile() exists');
@@ -193,12 +193,18 @@ select is(
 
 select throws_ok(
   format($$ select provision_profile(%L::uuid, 'Arhiva Test', 'arhiva.602@test.local',
-                                     'voluntar', array[%s::bigint], %L::uuid) $$,
-         pg_temp.g602_uid(6), pg_temp.g602_group('Arhivat #602'), pg_temp.g602_uid(1)),
+                                     'voluntar', array[%s::bigint, %s::bigint], %L::uuid) $$,
+         pg_temp.g602_uid(6), pg_temp.g602_group('Grup #602'),
+         pg_temp.g602_group('Arhivat #602'), pg_temp.g602_uid(1)),
   'PT400', 'group_archived', 'an archived Group refuses the whole provisioning');
 select is(
   (select count(*) from profiles where id = pg_temp.g602_uid(6)),
   0::bigint, 'no half-created Member survives an archived Group');
+select is(
+  (select count(*) from group_members where member_id = pg_temp.g602_uid(6)),
+  0::bigint, 'the successful first Appointment is rolled back with the failed second Group');
+select is(pg_temp.g602_notifications(6), 0,
+  'the first Appointment Notification is rolled back too');
 
 select throws_ok(
   format($$ select provision_profile(%L::uuid, 'Automat Test', 'automat.602@test.local',

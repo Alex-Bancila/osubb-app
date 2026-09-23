@@ -175,6 +175,21 @@ Deno.test("malformed JSON is refused", async () => {
   assertEquals(res.status, 400);
 });
 
+Deno.test("malformed field types are refused before Auth invitation or provisioning", async () => {
+  const { deps, calls } = fakeDeps();
+  for (
+    const bad of [null, [], 7, { ...validBody, email: 7 }, {
+      ...validBody,
+      full_name: 7,
+    }, { ...validBody, role: 7 }]
+  ) {
+    const res = await handleInvite(request(bad), deps);
+    assertEquals(res.status, 400);
+  }
+  assertEquals(calls.includes("inviteByEmail"), false);
+  assertEquals(calls.includes("provision"), false);
+});
+
 // ==================== the Groups body (#602) ====================
 
 Deno.test("dept_ids and team_ids are refused as unknown fields, never ignored", async () => {

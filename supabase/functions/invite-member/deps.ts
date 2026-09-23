@@ -9,7 +9,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { InviteDeps } from "../_shared/member-invite.ts";
-import type { GroupReference } from "../_shared/groups.ts";
+import { allActiveGroups, type GroupReference } from "../_shared/groups.ts";
 
 export type {
   DbError,
@@ -68,16 +68,21 @@ export function realDeps(req: Request): InviteAdminDeps {
       return ids.filter((id) => !data?.some((row) => row.id === id));
     },
 
-    async activeGroups() {
-      const { data, error } = await admin
-        .from("groups").select("id, name, short, path").eq("status", "active");
-      if (error) throw error;
-      return (data ?? []).map((row) => ({
-        id: row.id,
-        name: row.name,
-        short: row.short,
-        path: row.path ?? [row.id],
-      }));
+    activeGroups() {
+      return allActiveGroups(async (from, to) => {
+        const { data, error } = await admin.from("groups")
+          .select("id, name, short, path")
+          .eq("status", "active")
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw error;
+        return (data ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          short: row.short,
+          path: row.path ?? [row.id],
+        }));
+      });
     },
 
     async profileExists(email) {

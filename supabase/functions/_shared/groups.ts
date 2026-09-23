@@ -29,6 +29,19 @@ export interface GroupLookup {
   has(groupId: number): boolean;
 }
 
+/** PostgREST caps rows per request; walk ordered pages before resolving a CSV. */
+export async function allActiveGroups(
+  fetchPage: (from: number, to: number) => Promise<GroupReference[]>,
+  pageSize = 1000,
+): Promise<GroupReference[]> {
+  const result: GroupReference[] = [];
+  for (let from = 0;; from += pageSize) {
+    const page = await fetchPage(from, from + pageSize - 1);
+    result.push(...page);
+    if (page.length < pageSize) return result;
+  }
+}
+
 /** Case-folded, diacritic-free, whitespace-collapsed form of a name. */
 export function normalizeGroupKey(value: string): string {
   return value
