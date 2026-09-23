@@ -33,6 +33,9 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useAppointableMembers: api.members,
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
 }));
+vi.mock('./RolePanel', () => ({
+  RolePanel: () => <section aria-label="Role panel" />,
+}));
 import AdministrareScreen from './AdministrareScreen';
 
 vi.setConfig({ testTimeout: 15_000 });
@@ -103,6 +106,19 @@ beforeEach(() => {
     ]),
   });
   capabilities({ createTopLevelGroups: true });
+});
+
+it('mounts the Role panel only from the live server capability', () => {
+  capabilities({ manageRoles: false });
+  const view = show();
+  expect(screen.queryByRole('region', { name: 'Role panel' })).toBeNull();
+  capabilities({ manageRoles: true });
+  view.rerender(
+    <MemoryRouter>
+      <AdministrareScreen />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('region', { name: 'Role panel' })).toBeVisible();
 });
 
 function show() {

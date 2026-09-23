@@ -260,6 +260,22 @@ describe('AppShell', () => {
     ).toBeVisible();
   });
 
+  it('keeps the Cereri nav item at level 5, where the submission form is hidden (#631)', () => {
+    auth.useAuth.mockReturnValue({
+      claims: { ...ordinaryClaims, member_role: 'bce', member_level: 5 },
+      session: { user: { email: 'mara@osubb.ro' } },
+      signOut: auth.signOut,
+    });
+    renderShell();
+
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', { name: 'Cereri' }),
+    ).toHaveAttribute('href', '/cereri');
+  });
+
   it('opens a keyboard-safe mobile menu and returns focus when Escape closes it', async () => {
     const user = userEvent.setup();
     renderShell();
