@@ -55,6 +55,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('33000000-0000-0000-0000-000000000003', 'edu'),
   ('33000000-0000-0000-0000-000000000004', 'edu'),
   ('33000000-0000-0000-0000-000000000006', 'pr');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- Public, org-audience Opportunities: readable by every live Member (R6).
 insert into public.tasks
@@ -591,6 +594,13 @@ select extensions.dblink_exec('ti_setup', $$
     ('33000000-0000-0000-0000-000000000021', 'edu'),
     ('33000000-0000-0000-0000-000000000022', 'edu'),
     ('33000000-0000-0000-0000-000000000023', 'edu');
+  -- #586: committed race fixtures require native Group roster rows.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33000000-%'
+  on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values

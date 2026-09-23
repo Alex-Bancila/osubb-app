@@ -13,6 +13,7 @@ select extensions.dblink_exec('events_248_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('events_248_setup',$setup$
  delete from public.notifications where member_id::text like '24800000-%';
  delete from public.events where title='Race #248';
+ delete from public.groups where name='Race #248';
  delete from public.projects where name='Race #248';
  delete from auth.users where id in ('24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000091','24800000-0000-0000-0000-000000000092');
  insert into auth.users(id,email) values
@@ -28,6 +29,12 @@ select extensions.dblink_exec('events_248_setup',$setup$
  insert into public.project_members(project_id,member_id,project_role)
  select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
   on conflict (project_id, member_id) do update set project_role = excluded.project_role;
+ insert into public.groups(name,category,legacy_project_id)
+ select name,'project',id from public.projects where name='Race #248';
+ insert into public.group_members(group_id,member_id,group_role)
+ select id,'24800000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #248';
+ insert into public.group_members(group_id,member_id,group_role)
+ select id,'24800000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #248';
  insert into public.events(title,type,group_id,starts_at,created_by)
  select 'Race #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000090' from public.groups where name='Race #248';
  create or replace function public.test_248_edit() returns text language plpgsql security definer set search_path='' as $$
@@ -57,18 +64,18 @@ select is((select result_a from edit_race),'Race #248','authorized edit succeeds
 select ok((select b_waited from edit_race),'revocation waits for edit authority lock');
 select is((select result_b from edit_race),'true','revocation completes after edit');
 select extensions.dblink_exec('events_248_setup',$setup$
- insert into public.project_members(project_id,member_id,project_role)
- select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
-  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
+ update public.group_members set group_role='responsible'
+ where group_id=(select id from public.groups where name='Race #248')
+   and member_id='24800000-0000-0000-0000-000000000091';
 $setup$);
 create temp table cancel_race as select * from pg_temp.test_race('select public.test_248_cancel()','select public.test_248_revoke()');
 select is((select result_a from cancel_race),'Race reason','authorized cancellation succeeds');
 select ok((select b_waited from cancel_race),'revocation waits for cancellation authority lock');
 select extensions.dblink_exec('events_248_setup',$setup$
  update public.events set cancelled_at=null,cancel_reason=null where title='Race #248';
- insert into public.project_members(project_id,member_id,project_role)
- select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
-  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
+ update public.group_members set group_role='responsible'
+ where group_id=(select id from public.groups where name='Race #248')
+   and member_id='24800000-0000-0000-0000-000000000091';
 $setup$);
 create temp table terminal_race as select * from pg_temp.test_race('select public.test_248_cancel()','select public.test_248_edit()');
 select is((select result_a from terminal_race),'Race reason','cancellation wins before concurrent edit');
@@ -80,6 +87,7 @@ select extensions.dblink_exec('events_248_setup',$cleanup$
  drop function public.test_248_revoke();
  delete from public.notifications where member_id::text like '24800000-%';
  delete from public.events where title='Race #248';
+ delete from public.groups where name='Race #248';
  delete from public.projects where name='Race #248';
  delete from auth.users where id in ('24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000091','24800000-0000-0000-0000-000000000092');
 $cleanup$);

@@ -41,14 +41,16 @@ $$;
 insert into auth.users (id, email)
 select pg_temp.g584_uid(n), 'member.' || n || '.584@test.local' from generate_series(1, 10) n;
 
--- 1 BC, 2 Group Manager of the open root, 3 its Group Responsible, 4 the
--- applicant, 5 a Recrut (level 0 — below the open Group's Application Level),
--- 6 Drept de Vot (level 3), 7 inactive, 8 Group Manager of the Child Group,
--- 9 already a member of the open root, 10 a Member with no relationship
--- anywhere.
+-- 1 BC, 2 Group Manager of the open root (and of 'Înalt #584', min_level 3 --
+-- #586's validate_group_member enforces the Minimum Level on every roster
+-- row, so its Manager needs Drept de Vot or above), 3 its Group Responsible,
+-- 4 the applicant, 5 a Recrut (level 0 — below the open Group's Application
+-- Level), 6 Drept de Vot (level 3), 7 inactive, 8 Group Manager of the Child
+-- Group, 9 already a member of the open root, 10 a Member with no
+-- relationship anywhere.
 insert into public.profiles (id, full_name, email, role, status)
 select pg_temp.g584_uid(n), 'Membru #584 ' || n, 'member.' || n || '.584@test.local',
-  (case n when 1 then 'bc' when 5 then 'recrut' when 6 then 'vot' else 'voluntar' end)::public.member_role,
+  (case n when 1 then 'bc' when 2 then 'vot' when 5 then 'recrut' when 6 then 'vot' else 'voluntar' end)::public.member_role,
   (case n when 7 then 'inactiv' else 'activ' end)::public.member_status
 from generate_series(1, 10) n;
 

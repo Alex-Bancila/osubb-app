@@ -10,7 +10,6 @@ const hooks = vi.hoisted(() => ({
   useNotifications: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
   useMarkNotificationRead: vi.fn(),
-  useMarkAllNotificationsRead: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -23,7 +22,6 @@ vi.mock('../../queries/notifications', () => ({
   useNotifications: hooks.useNotifications,
   useUnreadNotificationCount: hooks.useUnreadNotificationCount,
   useMarkNotificationRead: hooks.useMarkNotificationRead,
-  useMarkAllNotificationsRead: hooks.useMarkAllNotificationsRead,
 }));
 
 import NotificationsScreen from './NotificationsScreen';
@@ -51,7 +49,6 @@ function notificationRow(
 }
 
 const markRead = vi.fn();
-const markAll = vi.fn();
 
 function feed(
   rows: NotificationRow[],
@@ -88,11 +85,6 @@ describe('NotificationsScreen', () => {
     hooks.useMarkNotificationRead.mockReturnValue({
       mutate: markRead,
       isPending: false,
-    });
-    hooks.useMarkAllNotificationsRead.mockReturnValue({
-      mutate: markAll,
-      isPending: false,
-      isError: false,
     });
     hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
     hooks.useNotifications.mockReturnValue(feed([]));
@@ -154,6 +146,8 @@ describe('NotificationsScreen', () => {
       screen.getByRole('button', { name: /Task nou: Afiș pentru AGO/ }),
     );
 
+    // Opening issues exactly one single-row update, never a bulk one (#695).
+    expect(markRead).toHaveBeenCalledTimes(1);
     expect(markRead).toHaveBeenCalledWith(12);
     expect(
       screen.getByRole('heading', { name: 'Detalii task' }),
@@ -204,33 +198,18 @@ describe('NotificationsScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('marks everything read from one action, and offers it only when something is unread', async () => {
-    const user = userEvent.setup();
+  it('has no "Marchează tot ca citit" control (#695)', () => {
     hooks.useUnreadNotificationCount.mockReturnValue({ data: 2 });
     hooks.useNotifications.mockReturnValue(
       feed([notificationRow({ id: 2 }), notificationRow({ id: 1 })]),
     );
 
-    const view = renderScreen();
-
-    await user.click(
-      screen.getByRole('button', { name: 'Marchează tot ca citit' }),
-    );
-    expect(markAll).toHaveBeenCalledTimes(1);
-
-    hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
-    view.rerender(
-      <MemoryRouter initialEntries={['/notificari']}>
-        <Routes>
-          <Route path="/notificari" element={<NotificationsScreen />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderScreen();
 
     expect(
-      screen.getByRole('button', { name: 'Marchează tot ca citit' }),
-    ).toBeDisabled();
-    expect(screen.getByText('Necitite: 0')).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Marchează tot ca citit' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Necitite: 2')).toBeInTheDocument();
   });
 
   it('pages through older notifications on request', async () => {

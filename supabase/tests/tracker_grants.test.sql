@@ -274,8 +274,8 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #580: the two Member command wrappers. Same grant shape as every other
   -- wrapper -- authenticated only, never anon, service_role or PUBLIC -- even
   -- though only BC and the Moderator can get past their gate.
-  ('set_member_role',    'p_member_id uuid, p_role member_role',     false, true,  false, false),
-  ('set_member_status',  'p_member_id uuid, p_status member_status', false, true,  false, false),
+  ('set_member_role',    'p_member_id uuid, p_role member_role, p_reason text',     false, true,  false, false),
+  ('set_member_status',  'p_member_id uuid, p_status member_status, p_reason text', false, true,  false, false),
   -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
   -- adds its own row here the same way.
   ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
@@ -343,9 +343,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('campaign_report',                'p_campaign_id bigint',         false, true,  false, false),
   ('campaign_totals',                'p_campaign_id bigint',         false, true,  false, false),
   -- #626: the full-state Task edit and its read-only consequence preview.
-  ('update_task',            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean',
+  ('update_task',            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean',
                                                                      false, true,  false, false),
-  ('preview_task_update',    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text',
+  ('preview_task_update',    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text',
                                                                      false, true,  false, false),
   -- #576: the capability row and the caller's effective Groups. Read-only
   -- wrappers with the same grant shape as every other wrapper.
@@ -492,12 +492,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- because the legacy writes they observe arrive from `authenticated`
   -- sessions (member_departments_manage, teams_create, profiles_update_self)
   -- that hold no write grant on `groups`/`group_members` at all.
-  ('mirror_department_group',                     '',                                                                                                                   'trigger'),
-  ('mirror_department_membership',                '',                                                                                                                   'trigger'),
-  ('mirror_project_group',                        '',                                                                                                                   'trigger'),
-  ('mirror_project_membership',                   '',                                                                                                                   'trigger'),
-  ('mirror_team_group',                           '',                                                                                                                   'trigger'),
-  ('mirror_team_membership',                      '',                                                                                                                   'trigger'),
   -- #50: internal trigger function; no client execution.
   ('guard_role_history', '', 'trigger'),
   -- #69: scheduler-only job.
@@ -509,7 +503,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- #509: rank BCE *is* a Department Group's Group Manager, so a promotion or
   -- demotion re-derives that Group Role. Same `trigger` category and the same
   -- definer reasoning as the six mirrors above.
-  ('rederive_department_group_roles',             '',                                                                                                                   'trigger'),
   -- #344: rejecting a Completed-work Request -- a reason, and no Task.
   ('reject_completed_work_request_impl',          'p_request_id bigint, p_note text',                                                                                   'impl'),
   ('reject_legacy_evaluation_source',             '',                                                                                                                   'trigger'),
@@ -542,8 +535,8 @@ insert into pinned_private_functions (proname, args, category) values
   -- #580: the two audited Member commands. `impl` like every other command
   -- body -- the level-6 gate, the Moderator-only branch and the self-target
   -- refusal live inside the function, not in the grant.
-  ('set_member_role_impl',                        'p_member_id uuid, p_role member_role',                                                                               'impl'),
-  ('set_member_status_impl',                      'p_member_id uuid, p_status member_status',                                                                           'impl'),
+  ('set_member_role_impl',                        'p_member_id uuid, p_role member_role, p_reason text',                                                                               'impl'),
+  ('set_member_status_impl',                      'p_member_id uuid, p_status member_status, p_reason text',                                                                           'impl'),
   ('set_task_queue_impl',                         'p_task_id bigint, p_open boolean',                                                                                   'impl'),
   ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),
@@ -556,13 +549,6 @@ insert into pinned_private_functions (proname, args, category) values
   -- are the only callers, and both run as the table owner. Granting any of
   -- these back would hand a client a write path into `groups`/`group_members`,
   -- which #507 deliberately left read-only for every role.
-  ('sync_department_groups',                      'p_dept_id text',                                                                                                     'none'),
-  ('sync_team_groups',                            'p_team_id text',                                                                                                     'none'),
-  ('sync_project_groups',                         'p_project_id bigint',                                                                                                'none'),
-  ('sync_department_memberships',                 'p_member_id uuid, p_dept_id text',                                                                                   'none'),
-  ('sync_team_memberships',                       'p_team_id text, p_member_id uuid',                                                                                   'none'),
-  ('sync_project_memberships',                    'p_project_id bigint, p_member_id uuid',                                                                              'none'),
-  ('sync_groups_from_legacy',                     '',                                                                                                                   'none'),
   -- #345 dropped private.task_is_unassigned with the legacy task table it
   -- queried and the claim command that was its last caller.
   ('task_managers',                               'p_task_id bigint, p_actor uuid',                                                                                     'none'),
@@ -570,10 +556,10 @@ insert into pinned_private_functions (proname, args, category) values
   -- #626: the full-state Task edit body, its preview body, and the two shared
   -- helpers both bodies read (validation/diff and the one consequence
   -- definition) -- callable only from inside those definer bodies.
-  ('update_task_impl',                            'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean', 'impl'),
-  ('preview_task_update_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'impl'),
-  ('plan_task_update',                            'p_task tasks, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
-  ('task_update_consequences',                    'p_task_id bigint, p_assignment_mode text, p_audience text', 'none'),
+  ('update_task_impl',                            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean', 'impl'),
+  ('preview_task_update_impl',                    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'impl'),
+  ('plan_task_update',                            'p_task tasks, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
+  ('task_update_consequences',                    'p_task_id bigint, p_group_id bigint, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
   ('update_task_content_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',        'impl'),
   -- #507: the two Group invariant triggers — the hierarchy/path/Minimum Level
   -- rules on `groups`, and the immutable-identity rule on `group_members`.
@@ -660,8 +646,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('has_pending_group_application',     'p_group_id bigint',              'predicate');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 130,
-  'the audited roster includes #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager) and less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions)');
+  (select count(*) from pinned_private_functions)::int, 116,
+  'the audited roster includes #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

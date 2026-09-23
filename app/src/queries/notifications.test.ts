@@ -12,13 +12,13 @@ vi.mock('../lib/supabase', async () => {
 import {
   fetchNotificationsPage,
   fetchUnreadNotificationCount,
-  markAllNotificationsRead,
   markNotificationRead,
   notificationsQueryOptions,
   unreadNotificationCountQueryOptions,
   type NotificationRow,
 } from './notifications';
 import { keys } from './keys';
+import * as notificationsModule from './notifications';
 
 const MEMBER = '11111111-1111-4111-8111-111111111111';
 
@@ -169,30 +169,12 @@ describe('notifications query layer', () => {
     });
   });
 
-  describe('markAllNotificationsRead', () => {
-    it('is a single self-scoped update over the unread rows', async () => {
-      supabaseMock.eq
-        .mockReturnValueOnce(supabaseMock)
-        .mockResolvedValueOnce({ error: null });
-
-      await markAllNotificationsRead(MEMBER);
-
-      expect(supabaseMock.update).toHaveBeenCalledTimes(1);
-      expect(supabaseMock.update).toHaveBeenCalledWith({ read: true });
-      expect(supabaseMock.eq).toHaveBeenNthCalledWith(1, 'member_id', MEMBER);
-      expect(supabaseMock.eq).toHaveBeenNthCalledWith(2, 'read', false);
-    });
-
-    it('throws when the update is refused', async () => {
-      supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockResolvedValueOnce({
-        error: { code: '42501', message: 'permission denied' },
-      });
-
-      await expect(markAllNotificationsRead(MEMBER)).rejects.toEqual({
-        code: '42501',
-        message: 'permission denied',
-      });
-    });
+  it('no longer exports the bulk mark-all-read mutation (#695)', () => {
+    expect('markAllNotificationsRead' in notificationsModule).toBe(false);
+    expect(
+      'markAllNotificationsReadMutationOptions' in notificationsModule,
+    ).toBe(false);
+    expect('useMarkAllNotificationsRead' in notificationsModule).toBe(false);
   });
 
   describe('query options', () => {

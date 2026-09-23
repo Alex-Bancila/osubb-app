@@ -51,7 +51,7 @@ const GROUP_FIELDS =
 
 /* Supabase caps a response at 1,000 rows; rosters pass that before the Group
    tree does, so every projection here is read in stable pages. */
-async function readAllRows<T>(
+export async function readAllRows<T>(
   readPage: (
     from: number,
     to: number,
@@ -201,6 +201,7 @@ export type AppointableMember = {
   name: string;
   avatarColor: string | null;
   status: string;
+  roleId: string | null;
   roleLabel: string;
   level: number;
 };
@@ -233,6 +234,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
           name: profile.full_name ?? 'Membru',
           avatarColor: profile.avatar_color,
           status: profile.status ?? '—',
+          roleId: profile.role,
           roleLabel: role?.name ?? '—',
           level: role?.level ?? 0,
         },

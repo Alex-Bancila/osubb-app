@@ -3769,6 +3769,7 @@ export type Database = {
           p_campaign_id: number
           p_deadline: string
           p_description: string
+          p_group_id: number
           p_task_id: number
           p_title: string
         }
@@ -4001,6 +4002,7 @@ export type Database = {
       set_member_role: {
         Args: {
           p_member_id: string
+          p_reason?: string
           p_role: Database["public"]["Enums"]["member_role"]
         }
         Returns: {
@@ -4026,6 +4028,7 @@ export type Database = {
       set_member_status: {
         Args: {
           p_member_id: string
+          p_reason?: string
           p_status: Database["public"]["Enums"]["member_status"]
         }
         Returns: {
@@ -4314,6 +4317,7 @@ export type Database = {
           p_campaign_id: number
           p_deadline: string
           p_description: string
+          p_group_id: number
           p_task_id: number
           p_title: string
         }

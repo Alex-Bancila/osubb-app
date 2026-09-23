@@ -65,8 +65,7 @@ truncate public.groups cascade;
 create temp table before_b as
   select (select count(*) from public.departments)
        + (select count(*) from public.teams)
-       + (select count(*) from public.projects) as expected_groups,
-         exists (select 1 from public.profiles where email = 'bce@demo.osubb') as seeded;
+       + (select count(*) from public.projects) as expected_groups;
 -- The migration ends with `select private.sync_groups_from_legacy();`; its empty result
 -- row is noise here, not evidence. Errors still reach stderr and still stop the run.
 \o /dev/null
@@ -178,37 +177,8 @@ begin
     raise exception 'groups backfill hierarchy: the Department Team Group has the wrong ancestor path';
   end if;
 
-  -- With the demo seed present (CI and a local reset), the same three rules are
-  -- re-proven over data nobody wrote for this harness.
-  if (select seeded from before_b) then
-    if (select membership.group_role
-          from public.group_members as membership
-          join public.groups as grp on grp.id = membership.group_id
-          join public.profiles as member on member.id = membership.member_id
-         where grp.legacy_dept_id = 'diverse' and member.email = 'bce@demo.osubb')
-       is distinct from 'manager' then
-      raise exception 'groups backfill seed BCE rule: the demo BCE is not Group Manager of Diverse';
-    end if;
-    if exists (
-      select 1 from public.group_members as membership
-        join public.groups as grp on grp.id = membership.group_id
-       where grp.legacy_team_id = 't-logistica' and membership.group_role <> 'responsible')
-       or not exists (
-      select 1 from public.group_members as membership
-        join public.groups as grp on grp.id = membership.group_id
-       where grp.legacy_team_id = 't-logistica') then
-      raise exception 'groups backfill seed Independent Team rule: t-logistica members are not all Group Responsibles';
-    end if;
-    if (select membership.group_role
-          from public.group_members as membership
-          join public.groups as grp on grp.id = membership.group_id
-          join public.projects as project on project.id = grp.legacy_project_id
-         where project.name = 'Festivalul Studențesc 2026'
-           and membership.member_id = project.leader_id)
-       is distinct from 'manager' then
-      raise exception 'groups backfill seed Project leader rule: the Festivalul leader is not its Group Manager';
-    end if;
-  end if;
+  -- Native demo appointments are checked by demo_seed.test.sql; this replay
+  -- proves the historical backfill solely through the planted legacy rows.
 end
 $assert$;
 
@@ -218,11 +188,9 @@ SQL
 
 # The truncate must not have survived. Deviation from the plan sketch, recorded here
 # rather than silently: comparing live `groups` against departments + teams + projects
-# is only true once #509's triggers exist, because a fresh `db reset` applies this
-# migration *before* seed.sql and nothing mirrors the demo Teams and Projects it then
-# inserts. What is true in both worlds is that the rollback changed nothing and that
-# the reference Departments -- all of them created by migrations, before the backfill
-# statement runs -- still have their Groups.
+# was only true once #509's triggers existed. The current demo uses native
+# Groups; this rollback must change nothing, while reference Departments,
+# created by migrations before the backfill, still retain their Groups.
 live_after=$(docker exec "$db_container" psql -X -At -U postgres -d postgres -c \
   "select count(*) from public.groups")
 if [ "$live_before" != "$live_after" ]; then

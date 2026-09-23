@@ -21,6 +21,8 @@ import {
   type GroupCommand,
 } from '../../queries/groups-admin';
 import { GroupCreateDialog } from './GroupCreateDialog';
+import { RolePanel } from './RolePanel';
+import { CsvImportPanel } from './CsvImportPanel';
 import {
   buildTree,
   categoryLabel,
@@ -351,6 +353,8 @@ export default function AdministrareScreen() {
         </p>
       )}
 
+      {capabilities.data?.manageRoles === true && <RolePanel />}
+
       {pending ? (
         <p role="status">Se încarcă grupurile…</p>
       ) : failed ? (
@@ -375,6 +379,7 @@ export default function AdministrareScreen() {
           <MyGroupsTable groups={myGroupsQuery.data ?? []} />
         </>
       )}
+      {capabilities.data?.provisionMembers === true && <CsvImportPanel />}
     </section>
   );
 }

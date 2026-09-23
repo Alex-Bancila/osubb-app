@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -31,6 +32,9 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useMyGroupRoles: api.myGroups,
   useAppointableMembers: api.members,
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
+}));
+vi.mock('./RolePanel', () => ({
+  RolePanel: () => <section aria-label="Role panel" />,
 }));
 import AdministrareScreen from './AdministrareScreen';
 
@@ -104,13 +108,37 @@ beforeEach(() => {
   capabilities({ createTopLevelGroups: true });
 });
 
-function show() {
-  return render(
+it('mounts the Role panel only from the live server capability', () => {
+  capabilities({ manageRoles: false });
+  const view = show();
+  expect(screen.queryByRole('region', { name: 'Role panel' })).toBeNull();
+  capabilities({ manageRoles: true });
+  view.rerender(
     <MemoryRouter>
       <AdministrareScreen />
     </MemoryRouter>,
   );
+  expect(screen.getByRole('region', { name: 'Role panel' })).toBeVisible();
+});
+
+function show() {
+  const client = new QueryClient();
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <AdministrareScreen />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
+
+it('shows CSV provisioning only when the server capability allows it', () => {
+  show();
+  expect(screen.queryByRole('heading', { name: 'Import CSV' })).toBeNull();
+  capabilities({ provisionMembers: true });
+  show();
+  expect(screen.getByRole('heading', { name: 'Import CSV' })).toBeVisible();
+});
 
 it('shows BC the whole tree, collapsed, and expands one Group at a time', async () => {
   const user = userEvent.setup();

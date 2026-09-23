@@ -23,6 +23,7 @@ insert into member_departments (member_id, dept_id)
 insert into teams (id, name, dept_id) values ('t-ref', 'Echipa Referință', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-ref', 'c1000000-0000-0000-0000-0000000000c1');
+select pg_temp.materialize_legacy_groups();
 
 -- ==================== A voluntar reads the vocabulary (AC) ====================
 select pg_temp.test_login('c1000000-0000-0000-0000-0000000000c1', jsonb_build_object(

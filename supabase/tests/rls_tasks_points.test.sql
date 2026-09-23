@@ -45,6 +45,9 @@ insert into member_departments (member_id, dept_id) values
 insert into teams (id, name, dept_id) values ('t-x', 'Team X', 'pr');
 insert into team_members (team_id, member_id)
   values ('t-x', 'b0000000-0000-0000-0000-000000000012');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into tasks (title, difficulty, group_id)          values ('t-edu',  3, pg_temp.dept_group('edu'));
 insert into tasks (title, difficulty, group_id)          values ('t-edu2', 2, pg_temp.dept_group('edu'));

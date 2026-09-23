@@ -35,6 +35,7 @@ insert into member_departments (member_id, dept_id)
 insert into teams (id, name, dept_id) values ('t-test', 'Test Team', 'edu');
 insert into team_members (team_id, member_id)
   values ('t-test', 'cccccccc-0000-0000-0000-000000000003');
+select pg_temp.materialize_legacy_groups();
 
 -- ==================== Hook: provisioned BCE member ====================
 create temp table hook_result as

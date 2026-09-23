@@ -102,6 +102,9 @@ insert into public.member_departments (member_id, dept_id) values
   ('33200000-0000-0000-0000-000000000012', 'edu'),
   ('33200000-0000-0000-0000-000000000013', 'edu'),
   ('33200000-0000-0000-0000-000000000014', 'edu');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T1: the promotion happy path -- a public Task in progress, one
 -- Executor, two pending Candidates in a known order.

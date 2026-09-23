@@ -74,212 +74,106 @@ select is(
         or phone_change_token is null or reauthentication_token is null)),
   0::bigint, 'no demo account has null auth token columns (GoTrue reads them as text)');
 
--- ==================== The eight accounts, in full (#296 AC) ====================
--- Spelled out rather than spot-checked: the #296 remap moved `bce@` and
--- `moderator@` to Diverse + Team `it`, which changes who can manage and
--- evaluate which Origin. A silent drift here would quietly re-shape half the
--- scenarios below.
-select is(
-  (select count(*) from (
-     select p.email,
-            p.role::text as member_role,
-            (select string_agg(md.dept_id, ',' order by md.dept_id)
-               from member_departments md where md.member_id = p.id) as depts,
-            (select string_agg(tm.team_id, ',' order by tm.team_id)
-               from team_members tm where tm.member_id = p.id) as teams
-       from profiles p
-      where p.email like '%@demo.osubb'
-     intersect
-     select * from (values
-       ('recrut@demo.osubb'::text,      'recrut'::text,      'edu'::text,               null::text),
-       ('voluntar@demo.osubb',          'voluntar',          'edu',                     't-recruti'),
-       ('activ@demo.osubb',             'activ',             'pr',                      null),
-       ('vot@demo.osubb',               'vot',               'secretariat,youth',       't-logistica'),
-       ('responsabil@demo.osubb',       'responsabil',       'edu,hr',                  't-recruti'),
-       ('bce@demo.osubb',               'bce',               'diverse',                 'it,t-app'),
-       ('bc@demo.osubb',                'bc',                'fin,org',                 't-logistica'),
-       ('moderator@demo.osubb',         'moderator',         'diverse',                 'it,t-app')
-     ) as expected (email, member_role, depts, teams)
-   ) as matched),
-  8::bigint,
-  'each demo account carries the role, departments and teams the demo scripts assume');
-
--- ==================== Shape the screens need ====================
-select ok(
-  not exists (select 1 from profiles p
-               where p.email like '%@demo.osubb'
-                 and not exists (select 1 from member_departments md
-                                  where md.member_id = p.id)),
-  'every demo member belongs to at least one department');
-
-select is(
-  (select count(distinct dept_id) from member_departments md
-     join profiles p on p.id = md.member_id
-    where p.email like '%@demo.osubb'
-      and md.dept_id in (select id from departments where kind = 'department')),
-  5::bigint,
-  'all five real departments have a demo member (dept_cup''s members column counts them through member_departments)');
-
-select ok(
-  exists (select 1 from member_departments md join profiles p on p.id = md.member_id
-           where p.email like '%@demo.osubb' and md.dept_id = 'diverse')
-  and exists (select 1 from member_departments md join profiles p on p.id = md.member_id
-               where p.email like '%@demo.osubb' and md.dept_id = 'secretariat'),
-  'both coordination structures (#310) have a demo member');
-
-select is((select count(*) from teams where id in ('t-app', 't-recruti', 't-logistica')), 3::bigint,
-  'all representative demo teams exist');
-
-select is((select count(*) from teams where id = 't-logistica' and dept_id is null), 1::bigint,
-  'the demo cohort includes an Independent Team');
-
-select is((select min_level from events where title = 'Training pentru recruți'), 0,
-  't-recruti''s own event stays min_level 0 — the branch the calendar rule turns on');
-
--- ==================== The demo, seen as Groups (#509) ====================
--- `groups`/`group_members` are mirrored from the legacy structure tables by
--- the #509 triggers, so the demo Departments, Teams, Projects and rosters have
--- to show up there too — the seed never writes a Group itself. These six are
--- seed-dependent by design: they are what a Wave 2 screen reading the Group
--- model will actually find after `db reset`. Mutation they catch: drop any of
--- the six mirror triggers and the Group or the roster role it owns is missing.
-
-select is(
-  (select count(*) from groups),
-  (select count(*) from departments) + (select count(*) from teams) + (select count(*) from projects),
-  'every Department, Team and Project of the seeded database is mirrored as exactly one Group, and nothing else is');
-
-select is(
-  (select string_agg(format('%s=%s', grp.legacy_dept_id, membership.group_role), ',' order by grp.legacy_dept_id)
-     from group_members membership
-     join groups grp on grp.id = membership.group_id
-    where membership.member_id = (select id from profiles where email = 'bce@demo.osubb')
-      and grp.legacy_dept_id is not null),
-  'diverse=manager',
-  'the demo BCE is Group Manager of the one Department Group they belong to — Diverse — and of no other (#296 put them in a coordination structure on purpose)');
-
-select is(
-  (select format('%s|%s',
-                 (select string_agg(format('%s=%s', grp.legacy_dept_id, membership.group_role), ',' order by grp.legacy_dept_id)
-                    from group_members membership
-                    join groups grp on grp.id = membership.group_id
-                   where membership.member_id = (select id from profiles where email = 'bc@demo.osubb')
-                     and grp.legacy_dept_id is not null),
-                 (select count(*) from group_members membership
-                    join groups grp on grp.id = membership.group_id
-                   where grp.category = 'organization'))),
-  'fin=member|0',
-  'the demo BC is an ordinary member of Financiar, and the OSUBB Group carries no roster row at all — Automatic Membership derives it, `org` is never mirrored');
-
-select is(
-  (select string_agg(membership.group_role, ',' order by member.email)
-     from group_members membership
-     join groups grp on grp.id = membership.group_id
-     join profiles member on member.id = membership.member_id
-    where grp.legacy_team_id = 't-logistica'),
-  'responsible,responsible',
-  'the Independent Team''s two members are both Group Responsibles — ADR-0007''s joint management, with no special case in the model');
-
-select is(
-  (select format('%s|%s', grp.status,
-                 string_agg(format('%s=%s', member.email, membership.group_role), ',' order by member.email))
-     from groups grp
-     join projects project on project.id = grp.legacy_project_id
-     join group_members membership on membership.group_id = grp.id
-     join profiles member on member.id = membership.member_id
-    where project.name = 'Festivalul Studențesc 2026'
-    group by grp.status),
-  'active|activ@demo.osubb=responsible,responsabil@demo.osubb=manager,voluntar@demo.osubb=member',
-  'the active demo Project is an active Group whose lead is its Group Manager, its Project Responsible a Group Responsible, and its ordinary member an ordinary member');
-
-select is(
-  (select format('%s|%s', grp.status,
-                 (select membership.group_role from group_members membership
-                   where membership.group_id = grp.id
-                     and membership.member_id = (select id from profiles where email = 'vot@demo.osubb')))
-     from groups grp
-     join projects project on project.id = grp.legacy_project_id
-    where project.name = 'Gala Voluntarilor 2025'),
-  'archived|manager',
-  'and the archived demo Project is an archived Group that keeps its lead as Group Manager — archiving carries the lifecycle, it does not dissolve the roster');
-
--- ==================== Project authorization scenarios ====================
--- These rows are local/staging fixtures for Project policy and Task origin
--- work. Test the relationships by stable names and demo identities;
--- generated Project ids may advance when staging is seeded again.
-select is(
-  (select count(*) from projects
-    where name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025')),
-  2::bigint,
-  'the demo contains one active and one historical Project');
-
-select ok(
-  exists (select 1 from projects
-           where name = 'Festivalul Studențesc 2026' and status = 'active')
-  and exists (select 1 from projects
-               where name = 'Gala Voluntarilor 2025' and status = 'archived'),
-  'active and archived Project lifecycles are both represented');
-
-select is(
-  (select count(*)
-     from projects p
-     join groups g on g.legacy_project_id = p.id
-     join group_members gm
-       on gm.group_id = g.id
-      and gm.member_id = p.leader_id
-      and gm.group_role = 'manager'
-    where p.name in ('Festivalul Studențesc 2026', 'Gala Voluntarilor 2025')),
-  2::bigint,
-  'each demo Project lead is mirrored as its Group Manager');
-
-select ok(
-  exists (
-    select 1
-      from projects p
-      join project_members pm on pm.project_id = p.id
-     where p.name = 'Festivalul Studențesc 2026'
-       and pm.member_id = 'd0000000-0000-0000-0000-000000000003'
-       and pm.project_role = 'responsible'
-  )
-  and exists (
-    select 1
-      from projects p
-      join project_members pm on pm.project_id = p.id
-     where p.name = 'Festivalul Studențesc 2026'
-       and pm.member_id = 'd0000000-0000-0000-0000-000000000002'
-       and pm.project_role = 'member'
-  ),
-  'the active Project has a Responsible and an ordinary member');
-
-select ok(
-  exists (
-    select 1
-      from projects p
-      join project_members pm on pm.project_id = p.id
-     where p.name = 'Gala Voluntarilor 2025'
-       and pm.member_id = 'd0000000-0000-0000-0000-000000000006'
-       and pm.project_role = 'responsible'
-  )
-  and exists (
-    select 1
-      from projects p
-      join project_members pm on pm.project_id = p.id
-     where p.name = 'Gala Voluntarilor 2025'
-       and pm.member_id = 'd0000000-0000-0000-0000-000000000001'
-       and pm.project_role = 'member'
-  ),
-  'the archived Project preserves a representative historical roster');
-
-select is(
-  (select count(*)
-     from projects p
-     left join project_members pm
-       on pm.project_id = p.id
-      and pm.member_id = 'd0000000-0000-0000-0000-000000000001'
-    where p.name = 'Festivalul Studențesc 2026'
-      and pm.member_id is null),
-  1::bigint,
-  'the active Project has a known outsider for authorization checks');
+-- ==================== Native Group demo shape (#587) ====================
+-- The demo roster is written by Group commands, including the reference
+-- Departments and Interne Team; no demo Team or Project legacy row is seeded.
+select is((select count(*) from (
+  select p.email, p.role::text as member_role,
+    (select string_agg(g.legacy_dept_id,',' order by g.legacy_dept_id)
+       from group_members gm join groups g on g.id=gm.group_id
+      where gm.member_id=p.id and g.legacy_dept_id is not null) as depts,
+    (select string_agg(coalesce(g.legacy_team_id,g.name),','
+                       order by coalesce(g.legacy_team_id,g.name))
+       from group_members gm join groups g on g.id=gm.group_id
+      where gm.member_id=p.id and g.category='team'
+        and g.name <> 'Adunarea Generală') as teams
+  from profiles p where p.email like '%@demo.osubb'
+  intersect
+  select * from (values
+    ('recrut@demo.osubb','recrut','edu',null),
+    ('voluntar@demo.osubb','voluntar','edu','Echipa Recruți'),
+    ('activ@demo.osubb','activ','pr',null),
+    ('vot@demo.osubb','vot','secretariat,youth','Echipa Logistică'),
+    ('responsabil@demo.osubb','responsabil','edu,hr','Echipa Recruți'),
+    ('bce@demo.osubb','bce','diverse','Echipa Aplicație,it'),
+    ('bc@demo.osubb','bc','fin','Echipa Logistică'),
+    ('moderator@demo.osubb','moderator','diverse','Echipa Aplicație,it')
+  ) expected(email,member_role,depts,teams)
+) matched), 8::bigint,
+  'all eight roles and Department/Team Group placements match the demo personas');
+select is((select count(distinct g.legacy_dept_id) from group_members gm
+  join groups g on g.id=gm.group_id join profiles p on p.id=gm.member_id
+  where p.email like '%@demo.osubb' and g.legacy_dept_id in
+    (select id from departments where kind='department')), 5::bigint,
+  'all five delivery Departments have a demo member');
+select ok(exists (select 1 from group_members gm join groups g on g.id=gm.group_id
+  where g.legacy_dept_id='diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006')
+  and exists (select 1 from group_members gm join groups g on g.id=gm.group_id
+  where g.legacy_dept_id='secretariat' and gm.member_id='d0000000-0000-0000-0000-000000000004'),
+  'both coordination Departments have a demo member');
+select is((select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'
+  and category='team'), 4::bigint, 'BC creates three Teams and the General Assembly');
+select ok(exists (select 1 from groups where name='Echipa Logistică'
+  and created_by='d0000000-0000-0000-0000-000000000007' and parent_id is null),
+  'Logistică remains an independent Team');
+select is((select min_level from events where title='Training pentru recruți'), 0,
+  'recruit training remains visible at Minimum Level zero');
+select is((select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'),
+  6::bigint, 'six native demo Groups exist');
+select is((select count(*) from teams where id in ('t-app','t-recruti','t-logistica')),
+  0::bigint, 'no demo legacy Team rows remain');
+select is((select count(*) from projects where created_by='d0000000-0000-0000-0000-000000000007'),
+  0::bigint, 'no demo legacy Project rows remain');
+select is((select count(*) from member_departments md join profiles p on p.id=md.member_id
+  where p.email like '%@demo.osubb'), 0::bigint,
+  'no demo legacy Department roster rows remain');
+select is((select gm.group_role from group_members gm join groups g on g.id=gm.group_id
+  where g.legacy_dept_id='diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006'),
+  'manager', 'BCE manages Diverse explicitly');
+select ok(exists (select 1 from group_members gm join groups g on g.id=gm.group_id
+  where g.legacy_dept_id='fin' and gm.member_id='d0000000-0000-0000-0000-000000000007'
+    and gm.group_role='member')
+  and not exists (select 1 from group_members gm join groups g on g.id=gm.group_id
+    where g.category='organization' and gm.member_id='d0000000-0000-0000-0000-000000000007'),
+  'BC is a Financiar member; Organization membership is automatic');
+select is((select string_agg(gm.group_role,',' order by gm.member_id)
+  from group_members gm join groups g on g.id=gm.group_id
+  where g.name='Echipa Logistică' and g.created_by='d0000000-0000-0000-0000-000000000007'),
+  'responsible,responsible', 'both Logistică peers are Group Responsibles');
+select is((select string_agg(p.email||'='||gm.group_role,',' order by p.email)
+  from group_members gm join groups g on g.id=gm.group_id
+  join profiles p on p.id=gm.member_id
+  where g.name='Festivalul Studențesc 2026'
+    and g.created_by='d0000000-0000-0000-0000-000000000007'),
+  'activ@demo.osubb=responsible,responsabil@demo.osubb=manager,voluntar@demo.osubb=member',
+  'active Project keeps Manager, Responsible and ordinary member');
+select is((select g.status||'|'||string_agg(p.email||'='||gm.group_role,',' order by p.email)
+  from groups g join group_members gm on gm.group_id=g.id
+  join profiles p on p.id=gm.member_id
+  where g.name='Gala Voluntarilor 2025'
+    and g.created_by='d0000000-0000-0000-0000-000000000007'
+  group by g.status),
+  'archived|bce@demo.osubb=responsible,recrut@demo.osubb=member,vot@demo.osubb=manager',
+  'archived Project preserves its exact Manager, Responsible and member roster');
+select ok(exists (select 1 from groups g where g.name='Adunarea Generală'
+  and g.created_by='d0000000-0000-0000-0000-000000000007'
+  and g.automatic_membership and g.min_level=3 and not g.competes_in_cup
+  and not g.accepts_applications),
+  'General Assembly follows Level 3 automatically, without Cup or Applications');
+select is((select string_agg(gm.member_id::text||'='||gm.group_role,',' order by gm.member_id)
+  from group_members gm join groups g on g.id=gm.group_id
+  where g.name='Adunarea Generală'
+    and g.created_by='d0000000-0000-0000-0000-000000000007'),
+  'd0000000-0000-0000-0000-000000000006=responsible,d0000000-0000-0000-0000-000000000008=responsible',
+  'the Assembly roster is exactly Interne''s two Responsibles');
+select ok(not exists (select 1 from group_members gm join groups g on g.id=gm.group_id
+  where g.name='Festivalul Studențesc 2026'
+    and g.created_by='d0000000-0000-0000-0000-000000000007'
+    and gm.member_id='d0000000-0000-0000-0000-000000000001'),
+  'recruit remains an outsider to the active Project');
+select ok(not exists (select 1 from group_members gm join groups g on g.id=gm.group_id
+  join profiles p on p.id=gm.member_id join roles r on r.id=p.role
+  where r.level < g.min_level), 'every roster row meets its Group Minimum Level');
 
 -- ==================== #296 scenario matrix ====================
 -- One assertion per row of the matrix: the Task exists in the state named,
@@ -359,7 +253,8 @@ select ok(
      where task.title = 'Raport parteneriate pentru festival'
        and task.status = 'in_review'
        and exists (select 1 from groups grp
-                    where grp.id = task.group_id and grp.legacy_project_id is not null)
+                    where grp.id = task.group_id and grp.category = 'project'
+                      and grp.created_by='d0000000-0000-0000-0000-000000000007')
        and task.review_round = 1
        and task.returned_to_progress_at is not null
        and task.submitted_at is not null
@@ -376,10 +271,10 @@ select ok(
   exists (
     select 1 from tasks task
       join groups task_group on task_group.id = task.group_id
-      join teams team on team.id = task_group.legacy_team_id
+      join groups parent on parent.id = task_group.parent_id
      where task.title = 'Migrare bază de date'
        and task.status = 'completed'
-       and team.dept_id is not null
+       and parent.legacy_dept_id is not null
        and task.completed_at <= task.deadline
        and exists (select 1 from task_evaluations e
                     where e.task_id = task.id and e.source = 'command'
@@ -450,10 +345,10 @@ select ok(
   exists (
     select 1 from tasks task
       join groups task_group on task_group.id = task.group_id
-      join teams team on team.id = task_group.legacy_team_id
      where task.title = 'Inventar materiale pentru depozit'
        and task.status = 'cancelled'
-       and team.dept_id is null
+       and task_group.name = 'Echipa Logistică'
+       and task_group.created_by='d0000000-0000-0000-0000-000000000007'
        and task.cancel_reason ~ '[^[:space:]]'
        and task.queue_closed_at is not null
        and exists (select 1 from task_assignments a

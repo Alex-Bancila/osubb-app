@@ -118,6 +118,7 @@ const members: AppointableMember[] = [
     name: 'Carmen Radu',
     avatarColor: null,
     status: 'activ',
+    roleId: 'voluntar',
     roleLabel: 'Voluntar',
     level: 1,
   },

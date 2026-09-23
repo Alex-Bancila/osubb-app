@@ -10,6 +10,7 @@ import {
 
 const input: TaskUpdateInput = {
   taskId: 1,
+  groupId: 2,
   title: ' Titlu ',
   description: ' ',
   deadline: null,
@@ -19,6 +20,7 @@ const input: TaskUpdateInput = {
 };
 const args = {
   p_task_id: 1,
+  p_group_id: 2,
   p_title: 'Titlu',
   p_description: null,
   p_deadline: null,
@@ -67,6 +69,34 @@ it('previews with the same values and names each affected member', async () => {
   expect(api.rpc).toHaveBeenCalledWith('preview_task_update', args);
   expect(api.from).toHaveBeenCalledWith('profiles_directory');
   expect(inIds).toHaveBeenCalledWith('id', ['a', 'b', 'z']);
+});
+
+it('shows a campaign-only consequence without querying member names', async () => {
+  api.rpc.mockResolvedValue({
+    data: [{ consequence: 'campaign_cleared', member_id: null }],
+    error: null,
+  });
+  expect(await previewTaskUpdate(input)).toEqual([
+    { kind: 'campaign_cleared', memberId: null, memberName: 'Un membru' },
+  ]);
+  expect(api.from).not.toHaveBeenCalled();
+});
+
+it('falls back when directory lookup returns no data', async () => {
+  api.rpc.mockResolvedValue({
+    data: [{ consequence: 'executor_added_to_group', member_id: 'a' }],
+    error: null,
+  });
+  api.from.mockReturnValue({
+    select: () => ({
+      in: vi
+        .fn()
+        .mockResolvedValue({ data: null, error: { message: 'offline' } }),
+    }),
+  });
+  expect(await previewTaskUpdate(input)).toEqual([
+    { kind: 'executor_added_to_group', memberId: 'a', memberName: 'Un membru' },
+  ]);
 });
 
 it('reads no names when the edit affects nobody', async () => {

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import * as axe from 'axe-core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -17,9 +16,6 @@ vi.mock('../../lib/supabase', () => ({ supabase: { auth } }));
    the front-door guard — not a stand-in — decides where a fresh session lands.
    Everything the guard may route to is stubbed; the login screen itself is
    deliberately NOT stubbed, because it is what is under test. */
-vi.mock('@ionic/react', () => ({
-  IonApp: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
 vi.mock('../../components/shell/AppShell', async () => {
   const { Outlet } =
     await vi.importActual<typeof import('react-router')>('react-router');
