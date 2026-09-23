@@ -114,8 +114,6 @@ const member = {
   claims: {
     member_role: 'bc',
     member_level: 6,
-    dept_ids: [],
-    team_ids: [],
     group_ids: [],
   },
   loading: false,

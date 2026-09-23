@@ -7,6 +7,10 @@ db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
   cat <<'SQL'
 begin;
 set local client_min_messages = warning;
+-- #591 removed these helpers; the historical view being replayed referenced
+-- them. Stand-ins live only in this rollback and do not affect date conversion.
+create function public.auth_in_dept(text) returns boolean language sql as 'select false';
+create function public.auth_in_team(text) returns boolean language sql as 'select false';
 
 -- Reconstruct the pre-#283 column and load dates on both sides of DST.
 drop view public.tasks_with_overdue;
@@ -16,9 +20,9 @@ alter table public.tasks
   using (deadline at time zone 'Europe/Bucharest')::date;
 
 insert into public.tasks (title, difficulty, deadline, group_id) values
-  ('Legacy winter deadline', 1, date '2026-01-15', (select id from public.groups where legacy_dept_id = 'edu')),
-  ('Legacy summer deadline', 1, date '2026-07-15', (select id from public.groups where legacy_dept_id = 'edu')),
-  ('Legacy null deadline', 1, null, (select id from public.groups where legacy_dept_id = 'edu'));
+  ('Legacy winter deadline', 1, date '2026-01-15', (select id from public.groups where name = 'Educațional')),
+  ('Legacy summer deadline', 1, date '2026-07-15', (select id from public.groups where name = 'Educațional')),
+  ('Legacy null deadline', 1, null, (select id from public.groups where name = 'Educațional'));
 SQL
 
   cat supabase/migrations/20260911090000_tasks_precise_deadlines.sql

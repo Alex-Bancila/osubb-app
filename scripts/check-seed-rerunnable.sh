@@ -168,7 +168,7 @@ insert into tasks (
 )
 values ('Non-demo local opportunity', 1, 'todo', 'local', 'direct',
         'e2750000-0000-0000-0000-000000000001',
-        (select id from groups where legacy_dept_id = 'edu'));
+        (select id from groups where name = 'Educațional'));
 insert into task_assignments (task_id, member_id, assigned_by)
 select id,
        'e2750000-0000-0000-0000-000000000001',

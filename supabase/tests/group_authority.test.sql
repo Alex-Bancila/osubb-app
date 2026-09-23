@@ -68,34 +68,31 @@ select id,'52000000-0000-0000-0000-000000000007','member' from pg_temp.fixture_p
 update pg_temp.fixture_projects set status='archived' where name='Archived #520';
 -- The retired mirror no longer creates these rows: build the Group tree and
 -- roster explicitly so this suite exercises native authority.
-insert into public.groups(name,category,parent_id,min_level,application_level,legacy_team_id)
-values ('Child #520','team',(select id from public.groups where legacy_dept_id='edu'),3,3,'t-520-dt'),
-       ('Independent #520','team',null,0,0,'t-520-ind');
-insert into public.groups(name,category,status,legacy_project_id)
-select p.name,'project',p.status,p.id from pg_temp.fixture_projects p
+insert into public.groups(name,category,parent_id,min_level,application_level) values ('Child #520','team',(select id from public.groups where name = 'Educațional'),3,3),('Independent #520','team',null,0,0);
+insert into public.groups(name,category,status) select p.name,'project',p.status from pg_temp.fixture_projects p
  where p.name in ('Project #520','Archived #520');
 insert into public.group_members(group_id,member_id,group_role)
 select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
   from pg_temp.fixture_member_departments md
-  join public.groups g on g.legacy_dept_id=md.dept_id
+  join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
   join public.profiles p on p.id=md.member_id
  where md.member_id::text like '52000000-%';
 insert into public.group_members(group_id,member_id,group_role)
 select g.id,tm.member_id,case when tm.team_id='t-520-ind' then 'responsible' else 'member' end
-  from pg_temp.fixture_team_members tm join public.groups g on g.legacy_team_id=tm.team_id
+  from pg_temp.fixture_team_members tm join public.groups g on g.id = pg_temp.team_group(tm.team_id)
  where tm.team_id in ('t-520-dt','t-520-ind');
 insert into public.group_members(group_id,member_id,group_role)
 select g.id,p.leader_id,'manager' from pg_temp.fixture_projects p
-  join public.groups g on g.legacy_project_id=p.id
+  join public.groups g on g.id = pg_temp.project_group(p.id)
  where p.name in ('Project #520','Archived #520');
 insert into public.group_members(group_id,member_id,group_role)
 select g.id,pm.member_id,pm.project_role from pg_temp.fixture_project_members pm
-  join public.groups g on g.legacy_project_id=pm.project_id
+  join public.groups g on g.id = pg_temp.project_group(pm.project_id)
   join pg_temp.fixture_projects p on p.id=pm.project_id where p.name='Project #520';
 insert into public.groups(name,category,min_level,automatic_membership) values ('AG #520','team',3,true);
 create temp table fx as
-select id, case when legacy_dept_id='edu' then 'edu' when legacy_dept_id='org' then 'org'
-when legacy_team_id='t-520-dt' then 'dt' when legacy_team_id='t-520-ind' then 'ind'
+select id, case when name = 'Educațional' then 'edu' when name = 'OSUBB' then 'org'
+when id = pg_temp.team_group('t-520-dt') then 'dt' when id = pg_temp.team_group('t-520-ind') then 'ind'
 when name='Project #520' then 'project' when name='Archived #520' then 'archived'
 when name='AG #520' then 'ag' end as name from public.groups;
 grant select on fx to authenticated,anon;

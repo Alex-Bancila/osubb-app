@@ -111,10 +111,7 @@ select throws_ok($$ insert into public.groups (name, category, status)
   '23514', 'new row for relation "groups" violates check constraint "groups_status_ck"',
   'the lifecycle vocabulary is active/archived — archiving keeps history, nothing else exists');
 
-select throws_ok($$ insert into public.groups (name, category, legacy_dept_id, legacy_team_id)
-    values ('Doua Origini #507', 'team', 'edu-507', 't-507') $$,
-  '23514', 'new row for relation "groups" violates check constraint "groups_legacy_one_ck"',
-  'a shadow row names at most one legacy table as its write master');
+select ok(not exists(select 1 from information_schema.columns where table_schema='public' and table_name='groups' and column_name like 'legacy_%'), 'Group backfill keys are absent');
 
 select throws_ok($$ insert into public.group_members (group_id, member_id, group_role)
     values ((select grp.id from public.groups as grp where grp.name = 'Constrangeri #507'),
@@ -128,13 +125,7 @@ select throws_ok($$ insert into public.groups (name, category)
   '23505', 'duplicate key value violates unique constraint "groups_parent_name_uidx"',
   'two native sibling Groups cannot share a name, case-insensitively');
 
--- Deviation 1 (plan): the sibling-name index is PARTIAL — native Groups only —
--- because the legacy Departments, Teams and Projects it will shadow are not
--- yet deduplicated. Delete this assertion when Wave 3 makes the index total.
-select lives_ok($$ insert into public.groups (name, category, legacy_team_id) values
-    ('Echipa Y #507', 'team', 't-507-a'),
-    ('echipa y #507', 'team', 't-507-b') $$,
-  'the sibling-name rule binds native Groups only: two mirrored rows may still share a legacy name');
+select ok((select indpred is null from pg_index where indexrelid='public.groups_parent_name_uidx'::regclass), 'sibling name uniqueness covers every Group');
 
 -- The Organization marker (Wave 3 T1, ADR-0009 R1). The reference Organization
 -- Group — the one the backfill marked — is already in this database, so the row

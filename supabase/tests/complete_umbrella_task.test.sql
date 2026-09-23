@@ -593,26 +593,26 @@ select extensions.dblink_exec('cu_setup', $$
   -- #586: committed race fixtures require native Group roster rows.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from (values ('34000000-0000-0000-0000-000000000051'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34000000-0000-0000-0000-000000000051'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34000000-%'
   on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
-  values ('Umbrela sonda #340 committed', 'Umbrela', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, 'todo',
+  values ('Umbrela sonda #340 committed', 'Umbrela', (select id from public.groups where name = 'Educațional'), 'umbrella', null, null, 'todo',
           now() - interval '5 days', '34000000-0000-0000-0000-000000000051');
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      cancelled_at, cancel_reason, created_at, created_by)
-  select 'Sonda subtask A #340 committed', 'Primul', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'cancelled',
+  select 'Sonda subtask A #340 committed', 'Primul', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'cancelled',
          parent.id, now() - interval '1 day', 'Sonda', now() - interval '5 days', '34000000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #340 committed';
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      cancelled_at, cancel_reason, created_at, created_by)
-  select 'Sonda subtask B #340 committed', 'Al doilea', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'cancelled',
+  select 'Sonda subtask B #340 committed', 'Al doilea', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'cancelled',
          parent.id, now() - interval '1 day', 'Sonda', now() - interval '5 days', '34000000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #340 committed';
 $$);

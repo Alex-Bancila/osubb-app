@@ -263,8 +263,6 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('rating_mult',        'r integer',                                false, true,  true,  false),
   ('auth_level',         '',                                         false, true,  true,  false),
   ('auth_role',          '',                                         false, true,  true,  false),
-  ('auth_in_dept',       'd text',                                   false, true,  true,  false),
-  ('auth_in_team',       't text',                                   false, true,  true,  false),
   ('auth_is_member',     '',                                         false, true,  true,  false),
   -- #510: the Group Wave 1 JWT helper, same grant shape as auth_in_team.
   ('auth_in_group',      'g bigint',                                 false, true,  true,  false),

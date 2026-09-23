@@ -28,8 +28,6 @@ type GroupRow = Database['public']['Tables']['groups']['Row'];
  * `path.length` is the depth — that is how a Child Group finds its Department
  * without a second request.
  *
- * `legacy_dept_id` is a Wave 1/2 bridge retained until the Wave 3 task that
- * drops `public.departments`; new Announcement reads use `group_id` directly.
  */
 export type Group = Pick<
   GroupRow,
@@ -43,14 +41,13 @@ export type Group = Pick<
   | 'min_level'
   | 'status'
   | 'is_organization'
-  | 'legacy_dept_id'
 > & {
   manager_title?: string | null;
   automatic_membership?: boolean;
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership, legacy_dept_id';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership';
 
 /**
  * Every Group this member may read. RLS is the only filter — the browser asks

@@ -96,7 +96,6 @@ function group(overrides: Partial<Group>): Group {
     min_level: 0,
     status: 'active',
     is_organization: false,
-    legacy_dept_id: 'edu',
     ...overrides,
   };
 }

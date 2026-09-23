@@ -418,14 +418,14 @@ select extensions.dblink_exec('stq_setup', $$
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
     from (values ('33100000-0000-0000-0000-000000000021'::uuid, 'edu'),
-    ('33100000-0000-0000-0000-000000000022'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    ('33100000-0000-0000-0000-000000000022'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33100000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #331 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Lock probe #331 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      now(), '33100000-0000-0000-0000-000000000021');
   insert into public.task_candidates (task_id, member_id, status, joined_at)
   select id, '33100000-0000-0000-0000-000000000022', 'pending', now()
@@ -473,7 +473,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33100000-0000-0000-0000-000000000021'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'set_task_queue holds the manager''s Group roster row FOR SHARE too (require_group_work_manager''s discipline)');
 
 select extensions.dblink_exec('stq_lock', 'rollback');

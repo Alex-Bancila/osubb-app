@@ -189,7 +189,7 @@ reset role;
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');
 select results_eq(
   $$select distinct group_id,group_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002') where title='Historical Subtask 260'$$,
-  $$select id,name from public.groups where legacy_dept_id='edu'$$,
+  $$select id,name from public.groups where name = 'Educațional'$$,
   'the fixture Subtask carries its owning Group id and name');
 
 -- #523: `group_name` has to come from the Group, not from the legacy Origin
@@ -200,7 +200,7 @@ select results_eq(
 -- Group alone -- inside this rolled-back transaction, leaving
 -- `pg_temp.fixture_departments` untouched -- is what separates the two columns.
 reset role;
-update public.groups set name = 'Grup Redenumit 523' where legacy_dept_id = 'edu';
+update public.groups set name = 'Grup Redenumit 523' where name = 'Educațional';
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');
 select is(
   (select distinct group_name from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')

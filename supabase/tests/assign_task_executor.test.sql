@@ -434,11 +434,11 @@ select extensions.dblink_exec('ate_setup', $$
     ('34200000-0000-0000-0000-000000000022', 'Lock Assignee 342', 'lock.assignee.342@test.local', 'voluntar', 'activ');
   insert into public.group_members (group_id, member_id, group_role)
   select id, '34200000-0000-0000-0000-000000000021', 'manager'
-    from public.groups where legacy_dept_id = 'edu';
+    from public.groups where name = 'Educațional';
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
   values
-    ('Lock probe #342 committed', 'Sonda', '2027-06-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
+    ('Lock probe #342 committed', 'Sonda', '2027-06-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'todo',
      '34200000-0000-0000-0000-000000000021');
 $$);
 
@@ -483,7 +483,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '34200000-0000-0000-0000-000000000021'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'assign_task_executor holds the manager''s Group roster row FOR SHARE too (require_group_work_manager''s discipline)');
 
 select ok(coalesce((

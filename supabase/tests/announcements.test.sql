@@ -15,9 +15,9 @@ select has_index('public', 'announcements', 'announcements_group_idx', 'Origin l
 truncate announcements, announcement_reads cascade;
 insert into announcements(title,body,group_id,audience) values
 ('Organization #581','Org.',(select id from groups where is_organization),'org'),
-('EDU #581','EDU.',(select id from groups where legacy_dept_id='edu'),'local');
+('EDU #581','EDU.',(select id from groups where name = 'Educațional'),'local');
 insert into announcements(title,body,group_id,audience)
-select 'Wide EDU #581','All.',id,'org' from groups where legacy_dept_id='edu';
+select 'Wide EDU #581','All.',id,'org' from groups where name = 'Educațional';
 select is((select count(*) from announcements),3::bigint,'three announcements can be created');
 select is((select group_id from announcements where title='Organization #581'),
 (select id from groups where is_organization),'organization announcement has Organization Origin');
@@ -27,10 +27,10 @@ select is((select audience from announcements where title='Wide EDU #581'),'org'
 select throws_ok($$insert into announcements(title,body) values('No Origin #581','x')$$,
 '23502',null,'an announcement requires a Group Origin');
 select throws_ok($$insert into announcements(title,body,group_id,audience)
-select 'Bad Audience #581','x',id,'elsewhere' from groups where legacy_dept_id='edu'$$,
+select 'Bad Audience #581','x',id,'elsewhere' from groups where name = 'Educațional'$$,
 '23514',null,'announcements_audience_ck rejects an unknown Audience');
 select throws_ok($$insert into announcements(title,body,group_id,form_label)
-select 'Dead link #581','x',id,'Form' from groups where legacy_dept_id='edu'$$,
+select 'Dead link #581','x',id,'Form' from groups where name = 'Educațional'$$,
 '23514',null,'form button still requires a URL');
 select * from finish();
 rollback;

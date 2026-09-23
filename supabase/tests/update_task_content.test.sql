@@ -538,12 +538,12 @@ select extensions.dblink_exec('utc_lock_setup', $$
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from (values ('32800000-0000-0000-0000-000000000021'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('32800000-0000-0000-0000-000000000021'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '32800000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.tasks (title, description, deadline, group_id, status, created_by) values
-    ('Lock Probe Task #328', 'Descriere lock', '2027-02-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'todo',
+    ('Lock Probe Task #328', 'Descriere lock', '2027-02-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'todo',
      '32800000-0000-0000-0000-000000000021');
 $$);
 
@@ -586,7 +586,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '32800000-0000-0000-0000-000000000021'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'update_task_content holds the Group roster row its authority rests on FOR SHARE');
 
 select extensions.dblink_exec('utc_lock', 'rollback');

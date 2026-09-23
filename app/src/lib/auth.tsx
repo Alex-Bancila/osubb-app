@@ -15,9 +15,6 @@ import { supabase } from './supabase';
 export type MemberClaims = {
   member_role: string;
   member_level: number;
-  /** Legacy structure claims: nothing reads them; removed in #591. */
-  dept_ids?: string[];
-  team_ids?: string[];
   /**
    * Explicit Group memberships (ADR-0009 Wave 1); the Organization Group is
    * automatic and never listed. Stamped at token issue, so it can be up to an
@@ -96,8 +93,6 @@ function decodeClaims(accessToken: string): MemberClaims | null {
     return {
       member_role: meta.member_role,
       member_level: Number(meta.member_level ?? 0),
-      dept_ids: Array.isArray(meta.dept_ids) ? (meta.dept_ids as string[]) : [],
-      team_ids: Array.isArray(meta.team_ids) ? (meta.team_ids as string[]) : [],
       group_ids: Array.isArray(meta.group_ids)
         ? (meta.group_ids as number[])
         : [],

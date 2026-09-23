@@ -6,11 +6,10 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(32);
+select plan(27);
 
 -- ==================== Helper defaults (no JWT in this session) ====================
 select is(auth_level(), 0, 'auth_level() defaults to 0 without a JWT');
-select is(auth_in_dept('edu'), false, 'auth_in_dept() defaults to false without a JWT');
 select is(auth_in_group(1), false, 'auth_in_group() defaults to false without a JWT');
 
 -- ==================== Fixtures ====================
@@ -44,7 +43,7 @@ select custom_access_token_hook(jsonb_build_object(
   'claims',  jsonb_build_object(
                'sub', 'cccccccc-0000-0000-0000-000000000003',
                'role', 'authenticated',
-               'app_metadata', jsonb_build_object('provider', 'email'))
+               'app_metadata', jsonb_build_object('provider', 'email', 'dept_ids', jsonb_build_array('stale'), 'team_ids', jsonb_build_array('stale')))
 )) as ev;
 
 select is(
@@ -56,12 +55,12 @@ select is(
   'bce', 'member_role claim is injected');
 
 select ok(
-  (select ev -> 'claims' -> 'app_metadata' -> 'dept_ids' ? 'edu' from hook_result),
-  'dept_ids carries the member''s departments (AC)');
+  (select not (ev -> 'claims' -> 'app_metadata' ? 'dept_ids') from hook_result),
+  'legacy Department claims are absent');
 
 select ok(
-  (select ev -> 'claims' -> 'app_metadata' -> 'team_ids' ? 't-test' from hook_result),
-  'team_ids carries the member''s teams');
+  (select not (ev -> 'claims' -> 'app_metadata' ? 'team_ids') from hook_result),
+  'legacy Team claims are absent');
 
 select is(
   (select ev -> 'claims' -> 'app_metadata' ->> 'provider' from hook_result),
@@ -70,19 +69,19 @@ select is(
 -- ==================== Hook: group_ids (#510, ADR-0009 Wave 1) ====================
 select ok(
   (select ev -> 'claims' -> 'app_metadata' -> 'group_ids'
-     @> to_jsonb((select grp.id from groups grp where grp.legacy_dept_id = 'edu'))
+     @> to_jsonb((select grp.id from groups grp where grp.name = 'Educațional'))
      from hook_result),
   'group_ids carries the Group mirrored from the member''s Department (AC)');
 
 select ok(
   (select ev -> 'claims' -> 'app_metadata' -> 'group_ids'
-     @> to_jsonb((select grp.id from groups grp where grp.legacy_team_id = 't-test'))
+     @> to_jsonb((select grp.id from groups grp where grp.id = pg_temp.team_group('t-test')))
      from hook_result),
   'group_ids carries the Group mirrored from the member''s Team');
 
 select ok(
   not (select coalesce(ev -> 'claims' -> 'app_metadata' -> 'group_ids'
-         @> to_jsonb((select grp.id from groups grp where grp.legacy_dept_id = 'org')), false)
+         @> to_jsonb((select grp.id from groups grp where grp.name = 'OSUBB')), false)
          from hook_result),
   'group_ids excludes the OSUBB Group even though Carmen also holds the Organization Department -- Automatic Membership is never a claim (a hook reading member_departments instead of the roster would fail this)');
 
@@ -140,10 +139,6 @@ select is(
   'bce',
   'auth_role() resolves member_role beneath an empty caller search_path');
 
-select is(auth_in_dept('edu'), true,  'auth_in_dept() true for the member''s department');
-select is(auth_in_dept('fin'), false, 'auth_in_dept() false for other departments');
-select is(auth_in_team('t-test'), true,  'auth_in_team() true for the member''s team');
-select is(auth_in_team('t-nope'), false, 'auth_in_team() false for other teams');
 
 select is(auth_in_group(42), true,  'auth_in_group() true for a Group id listed in the token');
 select is(auth_in_group(43), false, 'auth_in_group() false for a Group id absent from the token');

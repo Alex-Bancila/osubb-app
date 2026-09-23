@@ -530,9 +530,9 @@ select ok(
 select is((select status from public.groups where name = 'Părinte viu #582'), 'active',
   'and archiving a child leaves its parent active');
 
--- ==================== 9 · the Organization marker replaces legacy_dept_id = 'org' ====================
+-- ==================== 9 · the Organization marker replaces name = 'OSUBB' ====================
 -- The marker moves off the mirrored OSUBB row onto a native Group. That row
--- keeps legacy_dept_id = 'org', so every assertion below inverts if a reader
+-- keeps name = 'OSUBB', so every assertion below inverts if a reader
 -- still asks for the legacy id instead of groups.is_organization.
 
 create function pg_temp.g582_clear_org() returns void language plpgsql as $$

@@ -17,7 +17,7 @@ create extension if not exists pgtap with schema extensions;
 select plan(60);
 create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
 returns bigint language sql stable as $$
-  select coalesce((select id from public.groups where legacy_dept_id=p_dept or legacy_team_id=p_team or legacy_project_id=p_project),-1)
+  select coalesce((select id from public.groups where id = pg_temp.dept_group(p_dept) or id = pg_temp.team_group(p_team) or id = pg_temp.project_group(p_project)),-1)
 $$;
 
 -- ==================== 1. Surface, shape and grants ====================

@@ -618,7 +618,7 @@ select is((select count(*) from public.task_activity where task_id=(select id fr
   'a Department member reads none of a Child Team Task''s activity while the Department Group''s Shared Work Visibility is off');
 reset role;
 -- ADR-0009 settings fixture, rolled back with the suite; no production Group write.
-update public.groups set shared_work_visibility=true where legacy_dept_id='d521';
+update public.groups set shared_work_visibility=true where id = pg_temp.dept_group('d521');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
 select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='team')),1::bigint,

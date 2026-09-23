@@ -64,9 +64,9 @@ alter table public.tasks
 alter table public.tasks drop column assignment_mode;
 
 insert into public.tasks (title, difficulty, status, group_id) values
-  ('Legacy open Task', 1, 'open', (select id from public.groups where legacy_dept_id = 'edu')),
-  ('Legacy todo Task', 1, 'todo', (select id from public.groups where legacy_dept_id = 'edu')),
-  ('Legacy assigned Task', 1, 'progress', (select id from public.groups where legacy_dept_id = 'edu'));
+  ('Legacy open Task', 1, 'open', (select id from public.groups where name = 'Educațional')),
+  ('Legacy todo Task', 1, 'todo', (select id from public.groups where name = 'Educațional')),
+  ('Legacy assigned Task', 1, 'progress', (select id from public.groups where name = 'Educațional'));
 SQL
 
   cat supabase/migrations/20260911092000_tasks_assignment_mode.sql
@@ -87,7 +87,7 @@ begin
     raise exception 'legacy non-open Task did not become direct';
   end if;
 
-  insert into public.tasks (title, difficulty, group_id) values ('New Task', 1, (select id from public.groups where legacy_dept_id = 'edu'));
+  insert into public.tasks (title, difficulty, group_id) values ('New Task', 1, (select id from public.groups where name = 'Educațional'));
   if (select assignment_mode from public.tasks where title = 'New Task')
        is distinct from 'direct' then
     raise exception 'new Task did not default to direct';

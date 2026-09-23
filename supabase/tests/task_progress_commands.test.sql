@@ -612,7 +612,7 @@ select extensions.dblink_exec('tp_setup', $$
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
   values
-    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
+    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'todo',
      '33400000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)

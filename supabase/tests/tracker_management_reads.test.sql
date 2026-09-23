@@ -85,14 +85,14 @@ reset role;
 -- distinguish the Groups sweep from the legacy departments/teams/projects sweep, and the
 -- reason is NOT that root authority flows down the path. It does not: the Organization
 -- Group's path is {itself} and it is nobody's ancestor. The reason is that the `org`
--- pseudo-department row is still there, so groups.legacy_dept_id = 'org' mirrors
+-- pseudo-department row is still there, so groups.name = 'OSUBB' mirrors
 -- departments.id = 'org' and the legacy sweep reaches the very same Group. Reverting
 -- can_manage_tasks() to the legacy sweep therefore survives this suite; reverting it to that
 -- same sweep with `d.id <> 'org'` excluded fails on exactly this assertion. Wave 3 drops the
 -- pseudo-department, and that is what makes this row load-bearing.
 -- The Group is picked by `category` deliberately (review D6): it is the Wave-3 spelling, and
 -- a test file is outside conventions.test.sql's function/policy sweep. Every consumer in the
--- wave says legacy_dept_id = 'org' instead, and must keep saying it.
+-- wave says name = 'OSUBB' instead, and must keep saying it.
 -- Rolled back with the suite; no production roster write.
 insert into public.group_members(group_id,member_id,group_role)
 select grp.id,pg_temp.g521_uid(12),'manager' from public.groups as grp where grp.category='organization';

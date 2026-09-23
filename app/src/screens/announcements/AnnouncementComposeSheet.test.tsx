@@ -43,7 +43,6 @@ function group(
     min_level: 0,
     status: 'active',
     is_organization: organization,
-    legacy_dept_id: null,
   };
 }
 function role(g: Group, groupRole: string): MyGroup {

@@ -63,8 +63,8 @@ alter table public.tasks
 
 alter table public.tasks drop column audience;
 insert into public.tasks (title, difficulty, status, group_id) values
-  ('Legacy open Task', 1, 'open', (select id from public.groups where legacy_dept_id = 'edu')),
-  ('Legacy direct Task', 1, 'todo', (select id from public.groups where legacy_dept_id = 'edu'));
+  ('Legacy open Task', 1, 'open', (select id from public.groups where name = 'Educațional')),
+  ('Legacy direct Task', 1, 'todo', (select id from public.groups where name = 'Educațional'));
 SQL
 
   cat supabase/migrations/20260911091000_tasks_audience.sql

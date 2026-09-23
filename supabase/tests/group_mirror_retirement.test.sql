@@ -61,18 +61,18 @@ select public.set_member_role('58600000-0000-0000-0000-000000000001','bce');
 reset role;
 select is((select count(*) from public.group_members gm
   join public.groups g on g.id=gm.group_id
-  where g.legacy_dept_id='edu'
+  where g.name = 'Educațional'
     and gm.member_id='58600000-0000-0000-0000-000000000001'),
   0::bigint, 'promotion to BCE does not derive a Department Group Manager');
 
 select pg_temp.test_login_leadership('58600000-0000-0000-0000-000000000002');
-select public.set_group_role((select id from public.groups where legacy_dept_id='edu'),
+select public.set_group_role((select id from public.groups where name = 'Educațional'),
   '58600000-0000-0000-0000-000000000001','manager');
 select public.set_member_role('58600000-0000-0000-0000-000000000001','voluntar');
 reset role;
 select is((select gm.group_role from public.group_members gm
   join public.groups g on g.id=gm.group_id
-  where g.legacy_dept_id='edu'
+  where g.name = 'Educațional'
     and gm.member_id='58600000-0000-0000-0000-000000000001'),
   'manager', 'demotion does not remove a separately appointed Group Manager');
 select is((select count(*) from public.group_members gm

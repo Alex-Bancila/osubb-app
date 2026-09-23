@@ -304,8 +304,6 @@ describe('decodeClaims', () => {
       access_token: tokenWithAppMetadata({
         member_role: 'bc',
         member_level: 6,
-        dept_ids: [],
-        team_ids: [],
         group_ids: [3, 9],
       }),
     });

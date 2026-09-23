@@ -40,7 +40,7 @@ select extensions.dblink_exec('task_627_setup', $setup$
       '62700000-0000-0000-0000-000000000091','member');
   insert into public.tasks(title,description,deadline,group_id,status,started_at,audience,assignment_mode,kind,created_by,created_at)
     values ('Race task #627','Before move',now()+interval '2 days',
-      (select id from public.groups where legacy_dept_id='edu'),
+      (select id from public.groups where name = 'Educațional'),
       'in_progress',now()-interval '1 hour','org','direct','task','62700000-0000-0000-0000-000000000090',now()-interval '2 hours');
   insert into public.task_assignments(task_id,member_id,assigned_by)
     values ((select id from public.tasks where title='Race task #627'),

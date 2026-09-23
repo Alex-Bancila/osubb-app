@@ -519,7 +519,7 @@ select extensions.dblink_connect('campaign_lock_setup', format(
 -- #621: committed fixtures from an interrupted run must not hang cleanup.
 select extensions.dblink_exec('campaign_lock_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_lock_setup', $$
-  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where name = 'Educațional') and name = 'Lock Probe Campaign #343';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
   insert into auth.users (id, email) values
     ('34300000-0000-0000-0000-000000000021', 'lock.probe.bce.campaign@test.local');
@@ -529,12 +529,12 @@ select extensions.dblink_exec('campaign_lock_setup', $$
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from (values ('34300000-0000-0000-0000-000000000021'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34300000-0000-0000-0000-000000000021'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34300000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.campaigns (group_id, name, is_active, created_by) values
-    ((select id from public.groups where legacy_dept_id = 'edu'), 'Lock Probe Campaign #343', true, '34300000-0000-0000-0000-000000000021');
+    ((select id from public.groups where name = 'Educațional'), 'Lock Probe Campaign #343', true, '34300000-0000-0000-0000-000000000021');
 $$);
 
 select extensions.dblink_connect('campaign_lock', format(
@@ -555,7 +555,7 @@ select extensions.dblink_exec('campaign_lock', 'set local role authenticated');
 select * from extensions.dblink('campaign_lock', $$
   select (public.set_campaign_active(
     (select id from public.campaigns
-      where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343'),
+      where group_id = (select id from public.groups where name = 'Educațional') and name = 'Lock Probe Campaign #343'),
     true
   )).is_active
 $$) as no_op_set(is_active boolean);
@@ -577,7 +577,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.group_members') as row_lock
     join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '34300000-0000-0000-0000-000000000021'
-     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+     and membership.group_id = (select id from public.groups where name = 'Educațional')
 ), false), 'a BCE no-op holds their Group membership row FOR SHARE');
 
 select extensions.dblink_exec('campaign_lock', 'rollback');
@@ -592,10 +592,10 @@ create temp table lock_probe_race as
 select * from pg_temp.test_race(
   format($$ select (public.set_campaign_active(%L, false)).is_active::text $$,
     (select id from public.campaigns
-      where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343')),
+      where group_id = (select id from public.groups where name = 'Educațional') and name = 'Lock Probe Campaign #343')),
   format($$ select (public.set_campaign_active(%L, false)).is_active::text $$,
     (select id from public.campaigns
-      where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343'))
+      where group_id = (select id from public.groups where name = 'Educațional') and name = 'Lock Probe Campaign #343'))
 );
 reset role;
 select is((select result_a from lock_probe_race), 'false',
@@ -606,7 +606,7 @@ select is((select result_b from lock_probe_race), 'false',
   'the waiting deactivate reports the already-deactivated Campaign');
 
 select extensions.dblink_exec('campaign_lock_setup', $$
-  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Lock Probe Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where name = 'Educațional') and name = 'Lock Probe Campaign #343';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000021';
 $$);
 select extensions.dblink_disconnect('campaign_lock_setup');
@@ -639,7 +639,7 @@ select extensions.dblink_connect('campaign_setup', format(
 -- #621: committed fixtures from an interrupted run must not hang cleanup.
 select extensions.dblink_exec('campaign_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('campaign_setup', $$
-  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where name = 'Educațional') and name = 'Concurrent Campaign #343';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000020';
   insert into auth.users (id, email) values
     ('34300000-0000-0000-0000-000000000020', 'concurrent.bce.campaign@test.local');
@@ -649,7 +649,7 @@ select extensions.dblink_exec('campaign_setup', $$
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from (values ('34300000-0000-0000-0000-000000000020'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34300000-0000-0000-0000-000000000020'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34300000-%'
   on conflict (group_id,member_id) do nothing;
@@ -663,20 +663,20 @@ reset role;
 
 select throws_ok($outer$
   select * from pg_temp.test_race(
-    $$ select (public.create_campaign((select id from public.groups where legacy_dept_id = 'edu'), 'Concurrent Campaign #343')).name $$,
-    $$ select (public.create_campaign((select id from public.groups where legacy_dept_id = 'edu'), 'Concurrent Campaign #343')).name $$
+    $$ select (public.create_campaign((select id from public.groups where name = 'Educațional'), 'Concurrent Campaign #343')).name $$,
+    $$ select (public.create_campaign((select id from public.groups where name = 'Educațional'), 'Concurrent Campaign #343')).name $$
   )
 $outer$, 'PT409', 'campaign_name_taken',
   'exactly one concurrent create succeeds; the other reports campaign_name_taken, not a raw unique_violation');
 
 select is((select campaign_count from extensions.dblink('campaign_setup', $$
   select count(*) from public.campaigns
-   where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343'
+   where group_id = (select id from public.groups where name = 'Educațional') and name = 'Concurrent Campaign #343'
 $$) as result(campaign_count bigint)), 1::bigint,
   'concurrent duplicate creates commit exactly one Campaign');
 
 select extensions.dblink_exec('campaign_setup', $$
-  delete from public.campaigns where group_id = (select id from public.groups where legacy_dept_id = 'edu') and name = 'Concurrent Campaign #343';
+  delete from public.campaigns where group_id = (select id from public.groups where name = 'Educațional') and name = 'Concurrent Campaign #343';
   delete from auth.users where id = '34300000-0000-0000-0000-000000000020';
 $$);
 select extensions.dblink_disconnect('campaign_setup');

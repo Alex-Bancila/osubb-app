@@ -745,7 +745,7 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 select ok(private.can_read_task((select id from g521_tasks where name='private')) and private.can_read_task((select id from g521_tasks where name='archived')),'low-rank Group Manager reads active work and archived history');
 reset role;
 -- OD9 rolled-back settings fixture; no production Group write.
-update public.groups set min_level=3,application_level=3 where legacy_team_id='dt521';
+update public.groups set min_level=3,application_level=3 where id = pg_temp.team_group('dt521');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select results_eq($$select t.name from g521_tasks t where t.name like 'dt%' and private.can_read_task(t.id) order by 1$$,$$values ('dtown'::text)$$,'below-Minimum-Level Member reads only their Assignment, not shared or org Opportunities');

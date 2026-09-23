@@ -49,7 +49,7 @@ insert into pg_temp.fixture_team_members (team_id, member_id)
 select pg_temp.materialize_legacy_groups();
 update public.group_members set group_role = 'responsible'
 where member_id = '03000000-0000-0000-0000-000000000003'
-  and group_id = (select id from public.groups where legacy_dept_id = 'edu');
+  and group_id = (select id from public.groups where name = 'Educațional');
 
 
 -- One event per (scope, Minimum Level) combination that matters: 0 spread
@@ -125,7 +125,7 @@ select lives_ok(
   $$ select public.create_event(
        p_title := 'Workshop CV',
        p_type := 'activitate',
-       p_group_id := (select id from public.groups where legacy_dept_id = 'edu'),
+       p_group_id := (select id from public.groups where name = 'Educațional'),
        p_starts_at := now()) $$,
   'a Group Responsible creates Events through the validated command');
 select throws_ok(

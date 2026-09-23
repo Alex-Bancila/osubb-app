@@ -141,8 +141,8 @@ select is(
 
 insert into public.campaigns(group_id,name,created_by) select id,'Project Campaign 522','31400000-0000-0000-0000-000000000001'::uuid from public.groups where name='Origin Project 314';
 select lives_ok($$insert into public.tasks(title,group_id,campaign_id) select 'Project own campaign 522',group_id,id from public.campaigns where name='Project Campaign 522'$$,'Project Task accepts its own Group Campaign');
-insert into public.campaigns(group_id,name,created_by) select id,'Independent Campaign 522','31400000-0000-0000-0000-000000000001'::uuid from public.groups where legacy_team_id='t-logistica';
+insert into public.campaigns(group_id,name,created_by) select id,'Independent Campaign 522','31400000-0000-0000-0000-000000000001'::uuid from public.groups where id = pg_temp.team_group('t-logistica');
 select lives_ok($$insert into public.tasks(title,group_id,campaign_id) select 'Independent own campaign 522',group_id,id from public.campaigns where name='Independent Campaign 522'$$,'Independent Team accepts its own Group Campaign');
-select throws_ok($$update public.tasks set group_id=(select id from public.groups where legacy_dept_id='pr') where title='Dept campaign task 314'$$,'23514','task_campaign_origin_mismatch','Group-only updates revalidate Campaign ownership');
+select throws_ok($$update public.tasks set group_id=(select id from public.groups where name = 'Imagine & PR') where title='Dept campaign task 314'$$,'23514','task_campaign_origin_mismatch','Group-only updates revalidate Campaign ownership');
 select * from finish();
 rollback;

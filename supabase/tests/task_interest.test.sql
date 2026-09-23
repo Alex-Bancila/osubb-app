@@ -591,21 +591,21 @@ select extensions.dblink_exec('ti_setup', $$
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
     from (values ('33000000-0000-0000-0000-000000000021'::uuid, 'edu'),
     ('33000000-0000-0000-0000-000000000022'::uuid, 'edu'),
-    ('33000000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    ('33000000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33000000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
-    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Local audience lock probe #330 committed', 'Sonda audienta locala', '2027-04-03 09:00:00+00',
-     (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
+     (select id from public.groups where name = 'Educațional'), 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Withdraw lock probe #330 committed', 'Sonda retragere', '2027-04-04 09:00:00+00',
-     (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
+     (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
 
   -- Directly fixtured (never through the command) so the held withdraw call
   -- below has a real live pending Candidature to resolve: withdraw's only
@@ -684,7 +684,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.group_members') as row_lock
     join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '33000000-0000-0000-0000-000000000022'
-     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+     and membership.group_id = (select id from public.groups where name = 'Educațional')
 ), false), 'a local-Audience express_task_interest holds the actor''s Group roster row FOR SHARE too');
 
 select extensions.dblink_exec('ti_lock', 'rollback');

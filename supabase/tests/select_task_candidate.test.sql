@@ -791,7 +791,7 @@ select extensions.dblink_exec('stc_setup', $$
     ('33300000-0000-0000-0000-000000000027'::uuid, 'edu'),
     ('33300000-0000-0000-0000-000000000028'::uuid, 'edu'),
     ('33300000-0000-0000-0000-000000000029'::uuid, 'edu'),
-    ('33300000-0000-0000-0000-000000000030'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    ('33300000-0000-0000-0000-000000000030'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33300000-%'
   on conflict (group_id,member_id) do nothing;
@@ -799,13 +799,13 @@ select extensions.dblink_exec('stc_setup', $$
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #333 committed', 'Sonda', '2027-10-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Lock probe #333 committed', 'Sonda', '2027-10-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race conflict #333 committed', 'Cursa cu conflict', '2027-10-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race conflict #333 committed', 'Cursa cu conflict', '2027-10-02 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race bystander #333 committed', 'Cursa fara conflict', '2027-10-03 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race bystander #333 committed', 'Cursa fara conflict', '2027-10-03 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race twoselect #333 committed', 'Doi manageri, un loc gol', '2027-10-04 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race twoselect #333 committed', 'Doi manageri, un loc gol', '2027-10-04 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)

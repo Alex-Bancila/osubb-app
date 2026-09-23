@@ -114,12 +114,12 @@ insert into public.profiles (id, full_name, email, role) values
 insert into public.tasks
   (title, difficulty, rating, group_id, status, audience, assignment_mode)
 values
-  ('Legacy todo 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', 'local', 'direct'),
-  ('Legacy progress 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'progress', 'local', 'direct'),
-  ('Legacy done 287', 3, 4, (select id from public.groups where legacy_dept_id = 'edu'), 'done', 'local', 'direct'),
-  ('Legacy overdue unassigned 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'overdue', 'local', 'direct'),
-  ('Legacy overdue assigned 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'overdue', 'local', 'direct'),
-  ('Legacy open 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'open', 'org', 'public');
+  ('Legacy todo 287', 1, null, (select id from public.groups where name = 'Educațional'), 'todo', 'local', 'direct'),
+  ('Legacy progress 287', 1, null, (select id from public.groups where name = 'Educațional'), 'progress', 'local', 'direct'),
+  ('Legacy done 287', 3, 4, (select id from public.groups where name = 'Educațional'), 'done', 'local', 'direct'),
+  ('Legacy overdue unassigned 287', 1, null, (select id from public.groups where name = 'Educațional'), 'overdue', 'local', 'direct'),
+  ('Legacy overdue assigned 287', 1, null, (select id from public.groups where name = 'Educațional'), 'overdue', 'local', 'direct'),
+  ('Legacy open 287', 1, null, (select id from public.groups where name = 'Educațional'), 'open', 'org', 'public');
 
 insert into public.task_assignees (task_id, member_id)
 select id, '28700000-0000-0000-0000-000000000001'::uuid
