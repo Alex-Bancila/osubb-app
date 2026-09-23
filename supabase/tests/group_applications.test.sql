@@ -30,7 +30,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(77);
+select plan(79);
 
 -- ==================== Fixtures ====================
 
@@ -225,6 +225,9 @@ select is(
 
 -- The union earns its keep here: private.group_managers stops at the Child
 -- Group's own Manager and never reaches the parent's Responsible.
+-- #675: member 10 carries a Nickname; member 4 (above) does not.
+update public.profiles set nickname = 'Aplicant 584'
+ where id = pg_temp.g584_uid(10);
 select pg_temp.g584_as(10);
 create temp table fx584_child as
   select pg_temp.g584_apply(pg_temp.g584_group('Copil #584')) as child_id;
@@ -252,6 +255,18 @@ select is(
     where member_id = pg_temp.g584_uid(4)
       and dedupe_key = 'application:' || (select first_id from fx584)::text),
   0::bigint, 'the applicant is never told about their own Application (ruling R25)');
+select is(
+  (select body from public.notifications
+    where member_id = pg_temp.g584_uid(2)
+      and dedupe_key = 'application:' || (select first_id from fx584)::text),
+  'Membru #584 4 vrea să intre în grupul Deschis #584. „Vreau să ajut”',
+  'the "Cerere de înscriere" body names an applicant with no Nickname by their full name (#675)');
+select is(
+  (select body from public.notifications
+    where member_id = pg_temp.g584_uid(8)
+      and dedupe_key = 'application:' || (select child_id from fx584_child)::text),
+  'Aplicant 584 vrea să intre în grupul Copil #584.',
+  'and an applicant with a Nickname by the Nickname, read at write time (#675)');
 
 -- ==================== 6 · ruling R17: the groups_read pending limb ====================
 -- The Minimum Level is raised underneath the applicant as an owner fixture

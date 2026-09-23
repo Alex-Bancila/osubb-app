@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(59);
+select plan(60);
 create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
 returns bigint language sql stable as $$
   select coalesce((select id from public.groups where legacy_dept_id=p_dept or legacy_team_id=p_team or legacy_project_id=p_project),-1)
@@ -34,8 +34,8 @@ select has_function('private', 'leadership_leaderboard_impl',
 -- commit from adding role, email or Department to a leadership export.
 select is(
   pg_get_function_result('public.leadership_leaderboard(bigint, bigint)'::regprocedure),
-  'TABLE(member_id uuid, full_name text, points integer, rank integer)',
-  'the board returns member id, name, points and rank -- no role, no email, no Department');
+  'TABLE(member_id uuid, full_name text, nickname text, points integer, rank integer)',
+  'the board returns member id, full name, Nickname (#675), points and rank -- no role, no email, no Department');
 
 select is(
   (select prosecdef from pg_proc where oid = 'public.leadership_leaderboard(bigint, bigint)'::regprocedure),
@@ -302,6 +302,16 @@ select is((select count(*) from public.leadership_leaderboard(-1)), 0::bigint,
   'an unknown Group id returns no work');
 
 -- ==================== 4. The Department filter ====================
+
+-- #675: the board names a Member by Nickname beside the full name.
+select pg_temp.test_clear_jwt();
+reset role;
+update public.profiles set nickname = 'Mihai 258'
+ where id = '25800000-0000-0000-0000-000000000002';
+select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000001');
+select is((select nickname from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))
+            where member_id = '25800000-0000-0000-0000-000000000002'), 'Mihai 258',
+  'the board returns the Member''s Nickname beside the full name (#675)');
 -- ADR-0007: the filters apply to the Task that produced the points, never to
 -- the member's current memberships. None of these fixtures belongs to 258-dept.
 

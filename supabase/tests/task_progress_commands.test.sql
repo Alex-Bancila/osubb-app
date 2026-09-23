@@ -43,7 +43,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(65);
+select plan(66);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -362,12 +362,25 @@ select is((select format('%s|%s', notification.title, notification.body)
 -- ==================== 4. Resubmission after a return leaves review_round and
 -- returned_to_progress_at untouched ====================
 
+-- #675: the same Executor now carries a Nickname. The first submission above
+-- named them by full name (no Nickname); the resubmission names them by it.
+reset role;
+update public.profiles set nickname = 'Exec 334'
+ where id = '33400000-0000-0000-0000-000000000002';
+
 select pg_temp.test_login('33400000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.submit_task_for_review(%s) $$,
   (select resubmit_task_id from f334)),
   'the Executor may resubmit a Task that was previously returned to progress');
 reset role;
+
+select is((select notification.body from public.notifications as notification
+            where notification.task_id = (select resubmit_task_id from f334)
+              and notification.title like 'De verificat:%'
+            order by notification.id desc limit 1),
+  'Exec 334 a trimis taskul spre verificare.',
+  'with a Nickname set, the "De verificat" body names the Executor by it, read at write time (#675)');
 
 select is((select format('%s|%s|%s|%s', task.status, (task.submitted_at is not null)::text,
                          task.review_round, (task.returned_to_progress_at = (select resubmit_returned_at from f334))::text)
