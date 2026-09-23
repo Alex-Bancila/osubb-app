@@ -3858,11 +3858,11 @@ export type Database = {
       }
       provision_profile: {
         Args: {
-          p_dept_ids?: string[]
+          p_appointed_by?: string
           p_email: string
           p_full_name: string
+          p_group_ids?: number[]
           p_role?: Database["public"]["Enums"]["member_role"]
-          p_team_ids?: string[]
           p_user_id: string
         }
         Returns: string

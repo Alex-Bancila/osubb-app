@@ -4,12 +4,12 @@ How an OSUBB account comes into existence. There is no other way — public sign
 
 ## What happens when you invite someone
 
-1. BC calls the `invite-member` Edge Function with an email, a name, and optionally a role, departments and teams.
+1. BC calls the `invite-member` Edge Function with an email, a name, and optionally a role and a list of **Group ids** — the Groups the new member starts in.
 2. The function checks **you** are BC (level ≥ 6), reading your level from the database rather than your token — a token issued before a demotion still carries the old level for up to an hour.
-3. It checks the departments and teams exist, and that the address doesn't already have an account. Both checks happen **before** anything is sent, so a typo never emails a real person.
+3. It checks the Groups exist, and that the address doesn't already have an account. Both checks happen **before** anything is sent, so a typo never emails a real person.
 4. Supabase sends a **magic link** and, in the same email, the **six-digit code** that is the same one-time password. No password is created, distributed, or stored.
-5. `provision_profile()` creates the profile plus department and team links in one atomic call — the member is complete or doesn't exist.
-6. The member clicks the link — or types the code, when the link would land in the wrong browser — and is signed in. Their token is stamped with role, level, departments and teams, which is what every permission rule reads.
+5. `provision_profile()` creates the profile and then **appoints** the member into each Group, in one atomic call — the member is complete or doesn't exist. Appointment goes through the same shared roster path (`private.appoint_group_member`) that `add_group_member` uses, so every rule applies here too: an archived Group, an Automatic-Membership Group, or a Group whose Minimum Level is above the new member's role refuses the whole invitation, and nothing is created. The new member is notified of each Group, with **you** recorded as the person who appointed them.
+6. The member clicks the link — or types the code, when the link would land in the wrong browser — and is signed in. Their token is stamped with role, level, departments, teams and groups, which is what every permission rule reads.
 
 The member appears in the app immediately; the invitation stays valid until they click it.
 
@@ -26,12 +26,13 @@ curl -X POST "$SUPABASE_URL/functions/v1/invite-member" \
         "email": "ioana.popescu@gmail.com",
         "full_name": "Ioana Popescu",
         "role": "recrut",
-        "dept_ids": ["edu"],
-        "team_ids": []
+        "group_ids": [3]
       }'
 ```
 
-`role` defaults to `recrut`; `dept_ids` and `team_ids` may be omitted. Valid roles and department ids come from the `roles` and `departments` tables — a recruit with no team yet is normal, not an error.
+`role` defaults to `recrut` and `group_ids` may be omitted — a recruit with no Group yet is normal, not an error. Valid roles come from the `roles` table; Group ids come from `groups` (`select id, name, short from groups where status = 'active'`).
+
+**`dept_ids` and `team_ids` are gone.** Sending either is a `400` rather than a silently ignored field, because a dropped placement would create a member who belongs nowhere.
 
 Success is `201` with the new member's id:
 
@@ -51,29 +52,29 @@ The file must be UTF-8 and its first row must be exactly:
 name,email,dept,team
 ```
 
-| Column  | Required | Meaning                                                          |
-| ------- | -------- | ---------------------------------------------------------------- |
-| `name`  | yes      | The member's full name                                           |
-| `email` | yes      | The invitation address; it is trimmed and converted to lowercase |
-| `dept`  | no       | One department id                                                |
-| `team`  | no       | One team id                                                      |
+| Column  | Required | Meaning                                                                 |
+| ------- | -------- | ----------------------------------------------------------------------- |
+| `name`  | yes      | The member's full name                                                  |
+| `email` | yes      | The invitation address; it is trimmed and converted to lowercase        |
+| `dept`  | no       | One Department **Group**, by its short name or its display name         |
+| `team`  | no       | One Team **Group** below that Department, by short name or display name |
 
-Blank department and team cells are valid. A row can currently contain at most one department and one team; additional memberships can be added later through member management. Quoted values follow normal CSV rules, so a name containing a comma can be written as `"Popescu, Ana"`.
+Blank `dept` and `team` cells are valid. A row can currently name at most one Department and one Team; further Groups can be added later through member management. Quoted values follow normal CSV rules, so a name containing a comma can be written as `"Popescu, Ana"`.
 
-Valid local/demo department ids are:
+### How `dept` and `team` are matched
 
-| Id            | Display name  |
-| ------------- | ------------- |
-| `edu`         | Educațional   |
-| `hr`          | Resurse Umane |
-| `fin`         | Financiar     |
-| `pr`          | Imagine & PR  |
-| `youth`       | Tineret       |
-| `diverse`     | Diverse       |
-| `secretariat` | Secretariat   |
-| `org`         | Organizație   |
+Since #602 the two columns name **Groups**, not the old `departments`/`teams` ids, and the match is forgiving on purpose — BC's spreadsheets are typed by hand, months apart:
 
-Valid local/demo team ids are `interne`, `it`, `t-app`, `t-logistica`, and `t-recruti`. These ids are reference data, not labels invented by the CSV. For a hosted project, verify the current lists in the `departments` and `teams` tables before preparing a large import.
+- a value matches a Group's **short name** (`EDU`) or its **display name** (`Educational`);
+- **case is ignored** and **diacritics are stripped**, so `Educational`, `educațional`, `Educaţional` and `EDU` all name the same Group;
+- runs of spaces are collapsed, and leading/trailing spaces are trimmed;
+- only **active** Groups are matched — an archived Group is not a valid destination.
+
+The `team` value is matched **inside the row's Department**: it must name a Group that lies below the `dept` Group. Two Departments may therefore have a Team of the same name without ambiguity. A Team that is not below that row's Department is reported as `unknown_team` on that row — from the spreadsheet's point of view there is no such Team in that Department.
+
+A value that matches **two** Groups is reported rather than guessed (`Departament ambiguu:` / `Echipă ambiguă:`), because picking one would put a recruit in the wrong place silently.
+
+Run `select id, short, name from groups where status = 'active' order by path;` to see the current spellings before preparing a large import. The old `edu` / `t-app`-style ids are no longer accepted unless they happen to be a Group's short name.
 
 One request accepts at most 100 data rows and 256 KB. Every valid row is invited as `recrut`; the CSV cannot grant a higher role.
 
@@ -166,14 +167,16 @@ Tell them to check spam on first contact, that the link signs them in on the dev
 
 ## When something goes wrong
 
-| Response                                        | What it means                                         | What to do                                                                                                  |
-| ----------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `401`                                           | Your session expired                                  | Sign in again and retry                                                                                     |
-| `403 Doar BC poate invita membri`               | You are below level 6, or your profile is not `activ` | Ask BC to invite, or check your own status                                                                  |
-| `409 … are deja cont`                           | That address already has an account                   | Nothing to do. **Re-inviting is refused on purpose** — it must never overwrite or delete an existing member |
-| `400 Departament inexistent: x`                 | A department or team id doesn't exist                 | Fix the id. Nothing was sent — no email went out                                                            |
-| `400 Email invalid` / `Numele este obligatoriu` | Missing or malformed input                            | Fix and retry                                                                                               |
-| `502`                                           | Supabase couldn't send the email                      | Check the email provider is enabled (below), then retry                                                     |
+| Response                                        | What it means                                                                                                        | What to do                                                                                                  |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `401`                                           | Your session expired                                                                                                 | Sign in again and retry                                                                                     |
+| `403 Doar BC poate invita membri`               | You are below level 6, or your profile is not `activ`                                                                | Ask BC to invite, or check your own status                                                                  |
+| `409 … are deja cont`                           | That address already has an account                                                                                  | Nothing to do. **Re-inviting is refused on purpose** — it must never overwrite or delete an existing member |
+| `400 Grup inexistent: 12`                       | A `group_ids` entry doesn't name a Group                                                                             | Fix the id. Nothing was sent — no email went out                                                            |
+| `400 Câmpurile dept_ids și team_ids …`          | The old field names were sent                                                                                        | Send `group_ids` instead                                                                                    |
+| `400 Datele membrului nu sunt valide …`         | A Group refused the Appointment: archived, Automatic-Membership, or its Minimum Level is above the new member's role | Pick a different Group, or invite at a higher role. The invitation was rolled back and the account deleted  |
+| `400 Email invalid` / `Numele este obligatoriu` | Missing or malformed input                                                                                           | Fix and retry                                                                                               |
+| `502`                                           | Supabase couldn't send the email                                                                                     | Check the email provider is enabled (below), then retry                                                     |
 
 **No email arrived?** Locally, mail never leaves your machine — open **Mailpit** at http://127.0.0.1:54324. On a hosted project, check Authentication → Logs, and confirm the **email provider is enabled** (see below).
 
@@ -217,7 +220,7 @@ Then, with a BC access token, run the `curl` above and:
 
 1. Open http://127.0.0.1:54324 — the invitation is there.
 2. Open the link in it. You land on the redirect URL with an `access_token` in the fragment.
-3. Paste that token into jwt.io. It must contain `app_metadata.member_role`, `member_level`, `dept_ids`, `team_ids`. **If those are missing, the JWT claims hook is off** and every screen will look empty.
+3. Paste that token into jwt.io. It must contain `app_metadata.member_role`, `member_level`, `dept_ids`, `team_ids`, `group_ids`. **If those are missing, the JWT claims hook is off** and every screen will look empty.
 4. Query the API with it and confirm the permission model answers correctly:
 
 ```bash
@@ -233,7 +236,7 @@ curl "$SUPABASE_URL/rest/v1/departments?select=id" -H "apikey: $ANON_KEY"
 
 Last verified end to end on 2026-08-23: BC invited a member, the magic link produced a session carrying `member_role: voluntar`, `member_level: 1`, `dept_ids: ["edu"]`, and the four checks above answered exactly as written.
 
-CSV import last verified end to end on 2026-09-15 from a fresh local database: three valid rows created three Auth users, three complete recruit profiles, the expected department/team memberships, and exactly three Mailpit invitations. A fourth row with an unknown department was reported without blocking the valid rows. Re-importing the same file skipped all three existing members and sent no additional email.
+CSV import last verified end to end on 2026-09-15 from a fresh local database: three valid rows created three Auth users, three complete recruit profiles, the expected department/team memberships, and exactly three Mailpit invitations. A fourth row with an unknown department was reported without blocking the valid rows. Re-importing the same file skipped all three existing members and sent no additional email. **That run predates #602**, which moved both columns onto Groups; the next end-to-end run should confirm the Group roster rows rather than `member_departments`/`team_members`, which provisioning no longer writes at all (they are dropped by #590).
 
 ## Related
 

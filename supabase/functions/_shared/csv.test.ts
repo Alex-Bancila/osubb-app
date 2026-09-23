@@ -1,14 +1,22 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { parseRecruitsCsv, ParseRecruitsCsvError } from "./csv.ts";
+import { buildGroupLookup, type GroupReference } from "./groups.ts";
 
-const references = {
-  departmentIds: new Set(["edu", "pr"]),
-  teamIds: new Set(["t-app"]),
-};
+// A miniature Group tree with the two shapes that make resolution interesting:
+// a Team name repeated under two Departments, and a Team that is under no
+// Department at all.
+const groups: GroupReference[] = [
+  { id: 1, name: "Educațional", short: "EDU", path: [1] },
+  { id: 2, name: "Imagine & PR", short: "PR", path: [2] },
+  { id: 3, name: "Echipa App", short: "APP", path: [1, 3] },
+  { id: 4, name: "Echipa App", short: null, path: [2, 4] },
+  { id: 5, name: "Interne", short: null, path: [5] },
+];
+const references = buildGroupLookup(groups);
 
-Deno.test("a valid recruit row is normalized for provisioning", () => {
+Deno.test("a valid recruit row resolves both columns to Groups", () => {
   const result = parseRecruitsCsv(
-    "name,email,dept,team\n  Ana Pop  ,  ANA@EXAMPLE.COM  ,edu,t-app\n",
+    "name,email,dept,team\n  Ana Pop  ,  ANA@EXAMPLE.COM  ,edu,APP\n",
     references,
   );
 
@@ -18,18 +26,95 @@ Deno.test("a valid recruit row is normalized for provisioning", () => {
         row: 2,
         fullName: "Ana Pop",
         email: "ana@example.com",
-        deptIds: ["edu"],
-        teamIds: ["t-app"],
+        groupIds: [1, 3],
       },
     ],
     errors: [],
   });
 });
 
+Deno.test("short name, display name, diacritics and case all reach the same Group", () => {
+  for (
+    const spelling of [
+      "EDU",
+      "edu",
+      "Educațional",
+      "educational",
+      "EDUCAȚIONAL",
+      "  Educaţional  ",
+    ]
+  ) {
+    const result = parseRecruitsCsv(
+      `name,email,dept,team\nAna,ana@example.com,${spelling},`,
+      references,
+    );
+    assertEquals(result.errors, [], `${spelling} must resolve`);
+    assertEquals(result.valid[0].groupIds, [1], `${spelling} must be Group 1`);
+  }
+});
+
+Deno.test("a Team is resolved inside its row's Department", () => {
+  const result = parseRecruitsCsv(
+    [
+      "name,email,dept,team",
+      "Ana,ana@example.com,edu,Echipa App",
+      "Mihai,mihai@example.com,PR,echipa app",
+    ].join("\n"),
+    references,
+  );
+
+  assertEquals(result.errors, []);
+  assertEquals(result.valid.map((row) => row.groupIds), [[1, 3], [2, 4]]);
+});
+
+Deno.test("a Team that is not below its row's Department is reported on that row", () => {
+  const result = parseRecruitsCsv(
+    "name,email,dept,team\nAna,ana@example.com,PR,Interne\n",
+    references,
+  );
+
+  assertEquals(result.valid, []);
+  assertEquals(result.errors, [
+    {
+      row: 2,
+      field: "team",
+      code: "unknown_team",
+      message: "Echipă inexistentă: Interne.",
+    },
+  ]);
+});
+
+Deno.test("a Team name that two Departments share is ambiguous without a Department", () => {
+  const result = parseRecruitsCsv(
+    "name,email,dept,team\nAna,ana@example.com,,Echipa App\n",
+    references,
+  );
+
+  assertEquals(result.valid, []);
+  assertEquals(result.errors, [
+    {
+      row: 2,
+      field: "team",
+      code: "unknown_team",
+      message: "Echipă ambiguă: Echipa App.",
+    },
+  ]);
+});
+
+Deno.test("the same Group in both columns is appointed once", () => {
+  const result = parseRecruitsCsv(
+    "name,email,dept,team\nAna,ana@example.com,edu,Educațional\n",
+    references,
+  );
+
+  assertEquals(result.errors, []);
+  assertEquals(result.valid[0].groupIds, [1]);
+});
+
 Deno.test("BOM, CRLF, quoted fields and blank memberships are supported", () => {
   const result = parseRecruitsCsv(
-    '\uFEFFname,email,dept,team\r\n"Pop, Ana","ANA@Example.com",,\r\n' +
-      '"Ionescu\nMihai",mihai@example.com,pr,t-app\r\n\r\n',
+    '﻿name,email,dept,team\r\n"Pop, Ana","ANA@Example.com",,\r\n' +
+      '"Ionescu\nMihai",mihai@example.com,pr,\r\n\r\n',
     references,
   );
 
@@ -39,15 +124,13 @@ Deno.test("BOM, CRLF, quoted fields and blank memberships are supported", () => 
         row: 2,
         fullName: "Pop, Ana",
         email: "ana@example.com",
-        deptIds: [],
-        teamIds: [],
+        groupIds: [],
       },
       {
         row: 3,
         fullName: "Ionescu\nMihai",
         email: "mihai@example.com",
-        deptIds: ["pr"],
-        teamIds: ["t-app"],
+        groupIds: [2],
       },
     ],
     errors: [],
@@ -73,8 +156,7 @@ Deno.test("bad rows are collected while valid rows survive", () => {
       row: 2,
       fullName: "Ana Pop",
       email: "ana@example.com",
-      deptIds: ["edu"],
-      teamIds: [],
+      groupIds: [1],
     },
   ]);
   assertEquals(result.errors, [
@@ -153,8 +235,7 @@ Deno.test("whitespace-only records are ignored without renumbering later records
         row: 4,
         fullName: 'Ana "Anuța" Pop',
         email: "ana@example.com",
-        deptIds: ["edu"],
-        teamIds: [],
+        groupIds: [1],
       },
     ],
     errors: [],
