@@ -335,7 +335,7 @@ $$;
 -- roster appointed as its Responsibles. It accepts no applications or Cup.
 select public.create_group('Adunarea Generală','team');
 select public.update_group_structure(pg_temp.seed_group_id('Adunarea Generală'),
-  'team', false, false, true, 3, null, null, false);
+  'team', false, false, true, 3, null, null, false, false);
 select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
   'd0000000-0000-0000-0000-000000000006','responsible','Responsabil Adunarea Generală');
 select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),

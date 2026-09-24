@@ -34,6 +34,7 @@ export type AdminGroup = Pick<
   | 'min_level'
   | 'status'
   | 'is_organization'
+  | 'is_private'
   | 'manager_title'
   | 'automatic_membership'
   | 'accepts_applications'
@@ -49,7 +50,7 @@ export type AdminGroup = Pick<
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility, application_form_label, application_form_url';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility, application_form_label, application_form_url';
 
 /* Supabase caps a response at 1,000 rows; rosters pass that before the Group
    tree does, so every projection here is read in stable pages. */
@@ -295,6 +296,9 @@ export type GroupCommand =
       color: string | null;
       short: string | null;
       isOrganization: boolean;
+      /** The Private Group setting (#756). A full-state replace: a save that
+       *  does not mean to change it sends the stored value. */
+      isPrivate: boolean;
       confirmRemovals: boolean;
     }
   | { kind: 'archive'; groupId: number }
@@ -379,6 +383,7 @@ function callCommand(command: GroupCommand) {
         p_color: trimmed(command.color),
         p_short: trimmed(command.short),
         p_is_organization: command.isOrganization,
+        p_is_private: command.isPrivate,
         p_confirm_removals: command.confirmRemovals,
       } as never);
     case 'archive':

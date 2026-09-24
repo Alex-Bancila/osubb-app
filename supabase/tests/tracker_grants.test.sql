@@ -355,13 +355,13 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- every other wrapper -- authenticated only -- even though only BC, the
   -- Moderator and a Group's own Managers get past their gates.
   ('create_group',
-   'p_name text, p_category text, p_parent_id bigint, p_min_level integer, p_manager_id uuid, p_color text, p_short text',
+   'p_name text, p_category text, p_parent_id bigint, p_min_level integer, p_manager_id uuid, p_color text, p_short text, p_is_private boolean',
                                                                      false, true,  false, false),
   ('update_group',
    'p_group_id bigint, p_name text, p_manager_title text, p_accepts_applications boolean, p_application_level integer, p_shared_work_visibility boolean, p_min_level integer, p_application_form_label text, p_application_form_url text, p_confirm_removals boolean',
                                                                      false, true,  false, false),
   ('update_group_structure',
-   'p_group_id bigint, p_category text, p_competes_in_cup boolean, p_counts_toward_parent_cup boolean, p_automatic_membership boolean, p_min_level integer, p_color text, p_short text, p_is_organization boolean, p_confirm_removals boolean',
+   'p_group_id bigint, p_category text, p_competes_in_cup boolean, p_counts_toward_parent_cup boolean, p_automatic_membership boolean, p_min_level integer, p_color text, p_short text, p_is_organization boolean, p_is_private boolean, p_confirm_removals boolean',
                                                                      false, true,  false, false),
   ('archive_group',          'p_group_id bigint',                    false, true,  false, false),
   -- #583: the three Group roster command wrappers. Same grant shape again --
@@ -605,7 +605,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('group_audience', 'p_group_id bigint', 'none'),
   -- #601: the Event visibility rule, one definition read by the events_read
   -- policy (for the caller) and by event_notification_recipients (per recipient).
-  ('can_read_event', 'p_min_level integer, p_member uuid', 'predicate'),
+  ('can_read_event', 'p_group_id bigint, p_min_level integer, p_member uuid', 'predicate'),
   -- #581: the live announcement visibility predicate called by announcements_read.
   ('can_read_announcement', 'p_group_id bigint, p_audience text', 'predicate'),
   -- #68: the trigger body has no client execute grant; it fans out through
@@ -617,13 +617,13 @@ insert into pinned_private_functions (proname, args, category) values
   -- update_group_structure / archive_group.
   ('require_group_manager', 'p_group_id bigint', 'require'),
   ('create_group_impl',
-   'p_name text, p_category text, p_parent_id bigint, p_min_level integer, p_manager_id uuid, p_color text, p_short text',
+   'p_name text, p_category text, p_parent_id bigint, p_min_level integer, p_manager_id uuid, p_color text, p_short text, p_is_private boolean',
    'impl'),
   ('update_group_impl',
    'p_group_id bigint, p_name text, p_manager_title text, p_accepts_applications boolean, p_application_level integer, p_shared_work_visibility boolean, p_min_level integer, p_application_form_label text, p_application_form_url text, p_confirm_removals boolean',
    'impl'),
   ('update_group_structure_impl',
-   'p_group_id bigint, p_category text, p_competes_in_cup boolean, p_counts_toward_parent_cup boolean, p_automatic_membership boolean, p_min_level integer, p_color text, p_short text, p_is_organization boolean, p_confirm_removals boolean',
+   'p_group_id bigint, p_category text, p_competes_in_cup boolean, p_counts_toward_parent_cup boolean, p_automatic_membership boolean, p_min_level integer, p_color text, p_short text, p_is_organization boolean, p_is_private boolean, p_confirm_removals boolean',
    'impl'),
   ('archive_group_impl', 'p_group_id bigint', 'impl'),
   -- #582: the Event cancellation EFFECT, with no gate of its own. Two definer
@@ -682,11 +682,15 @@ insert into pinned_private_functions (proname, args, category) values
   ('set_org_setting_impl',      'p_key text, p_value text', 'impl'),
   -- #703: the Web Push enqueue trigger body on notifications. Granted to
   -- nobody; the claim/settle commands send-push calls live in public.
-  ('enqueue_push_deliveries',   '',                         'trigger');
+  ('enqueue_push_deliveries',   '',                         'trigger'),
+  -- #756: the Private Group visibility rule, read by groups_read,
+  -- group_members_read, can_read_task, can_read_event and the Announcement
+  -- predicate inside policies, so authenticated keeps execute.
+  ('can_see_group',             'p_group_id bigint, p_member uuid', 'predicate');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 130,
-  'the audited roster includes #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies)');
+  (select count(*) from pinned_private_functions)::int, 131,
+  'the audited roster includes #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

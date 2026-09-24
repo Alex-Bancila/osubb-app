@@ -93,6 +93,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     color: '#C8102E',
     short: 'EDU',
     isOrganization: false,
+    isPrivate: false,
     confirmRemovals: false,
   });
   expect(api.rpc).toHaveBeenLastCalledWith('update_group_structure', {
@@ -105,6 +106,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_color: '#C8102E',
     p_short: 'EDU',
     p_is_organization: false,
+    p_is_private: false,
     p_confirm_removals: false,
   });
 

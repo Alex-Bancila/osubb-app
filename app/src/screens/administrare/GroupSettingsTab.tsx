@@ -303,6 +303,7 @@ export function GroupSettingsTab({
         color: values.color,
         short: values.short,
         isOrganization,
+        isPrivate: group.is_private,
         confirmRemovals: false,
       },
       (failure) => structureForm.fail(failure, SAVE_FAILED),
@@ -359,7 +360,7 @@ export function GroupSettingsTab({
             label="Primește cereri de înscriere"
             hint="Membrii pot cere să intre în grup."
             checked={accepts}
-            disabled={busy}
+            disabled={busy || group.is_private}
             onChange={setAccepts}
           />
 

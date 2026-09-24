@@ -886,6 +886,7 @@ export type Database = {
           created_by: string | null
           id: number
           is_organization: boolean
+          is_private: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -913,6 +914,7 @@ export type Database = {
           created_by?: string | null
           id?: never
           is_organization?: boolean
+          is_private?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -940,6 +942,7 @@ export type Database = {
           created_by?: string | null
           id?: never
           is_organization?: boolean
+          is_private?: boolean
           legacy_dept_id?: string | null
           legacy_project_id?: number | null
           legacy_team_id?: string | null
@@ -3176,6 +3179,7 @@ export type Database = {
           created_by: string | null
           id: number
           is_organization: boolean
+          is_private: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -3557,6 +3561,7 @@ export type Database = {
         Args: {
           p_category: string
           p_color?: string
+          p_is_private?: boolean
           p_manager_id?: string
           p_min_level?: number
           p_name: string
@@ -3577,6 +3582,7 @@ export type Database = {
           created_by: string | null
           id: number
           is_organization: boolean
+          is_private: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -4515,6 +4521,7 @@ export type Database = {
           created_by: string | null
           id: number
           is_organization: boolean
+          is_private: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
@@ -4545,6 +4552,7 @@ export type Database = {
           p_counts_toward_parent_cup: boolean
           p_group_id: number
           p_is_organization: boolean
+          p_is_private: boolean
           p_min_level: number
           p_short: string
         }
@@ -4562,6 +4570,7 @@ export type Database = {
           created_by: string | null
           id: number
           is_organization: boolean
+          is_private: boolean
           legacy_dept_id: string | null
           legacy_project_id: number | null
           legacy_team_id: string | null
