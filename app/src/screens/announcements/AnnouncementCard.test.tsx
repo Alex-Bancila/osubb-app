@@ -155,7 +155,7 @@ describe('AnnouncementCard', () => {
     expect(screen.queryByText('Necitit')).not.toBeInTheDocument();
   });
 
-  it('renders external form button with safe attributes when form_url is present', () => {
+  it('renders the Attached Link button with safe attributes when form_url is present', () => {
     render(
       <AnnouncementCard
         announcement={presentation({
@@ -166,13 +166,26 @@ describe('AnnouncementCard', () => {
       />,
     );
 
+    // AttachedLinkButton's own accessible name (#679): the label plus the
+    // new-tab hint, not the card's old "Deschide formular:" prefix.
     const formLink = screen.getByRole('link', {
-      name: /Completează formularul/,
+      name: 'Completează formularul (se deschide într-o filă nouă)',
     });
     expect(formLink).toBeInTheDocument();
     expect(formLink).toHaveAttribute('href', 'https://forms.gle/exemplu');
     expect(formLink).toHaveAttribute('target', '_blank');
     expect(formLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('renders no Attached Link button when form_url is absent', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({ formLabel: null, formUrl: null })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('calls onOpen when read button is clicked', async () => {

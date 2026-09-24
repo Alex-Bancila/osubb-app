@@ -182,10 +182,10 @@ describe('Announcement composer', () => {
     const title = within(dialog).getByRole('textbox', { name: 'Titlu' });
     const message = within(dialog).getByRole('textbox', { name: 'Mesaj' });
     const formName = within(dialog).getByRole('textbox', {
-      name: 'Nume formular',
+      name: 'Etichetă link',
     });
     const formUrl = within(dialog).getByRole('textbox', {
-      name: 'Adresă formular',
+      name: 'Adresă link',
     });
     const publish = within(dialog).getByRole('button', {
       name: 'Publică anunțul',
