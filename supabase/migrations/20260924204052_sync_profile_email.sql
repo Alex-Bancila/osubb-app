@@ -29,8 +29,10 @@ $$;
 comment on function private.sync_profile_email() is
   'After Auth confirms an email change, sync the normalized address into profiles.email (#632).';
 
--- House rule 4: executable by nobody except the trigger machinery (postgres).
+-- House rule 4: executable by nobody except the trigger machinery (postgres)
+-- and supabase_auth_admin, which is the role GoTrue uses to update auth.users.
 revoke all on function private.sync_profile_email() from public, anon, authenticated, service_role;
+grant execute on function private.sync_profile_email() to supabase_auth_admin;
 
 create trigger users_sync_profile_email
   after update of email on auth.users
