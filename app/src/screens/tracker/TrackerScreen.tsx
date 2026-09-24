@@ -14,14 +14,11 @@ import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
 import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
-import { ManagerTaskTable } from './ManagerTaskTable';
+import { ManagerTaskList } from './ManagerTaskList';
 import { NewTaskControl } from './NewTaskControl';
 import { TaskCardGrid } from './TaskCardGrid';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
-import {
-  toTaskPresentation,
-  type TaskPresentationRow,
-} from './task-presentation';
+import type { TaskPresentationRow } from './task-presentation';
 
 /** The loading and retry states every Tracker list shares. */
 function TaskQueryStates<Row>({
@@ -73,10 +70,7 @@ function TaskQueryPanel({
             </EmptyHeader>
           </Empty>
         ) : manager ? (
-          <ManagerTaskTable
-            tasks={rows.map((row) => toTaskPresentation(row, now))}
-            onOpenTask={onOpenTask}
-          />
+          <ManagerTaskList rows={rows} now={now} onOpenTask={onOpenTask} />
         ) : (
           <TaskCardGrid
             rows={rows}
