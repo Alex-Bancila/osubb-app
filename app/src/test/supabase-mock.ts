@@ -14,6 +14,8 @@ export function createSupabaseMock() {
     limit: vi.fn(),
     range: vi.fn(),
     update: vi.fn(),
+    insert: vi.fn(),
+    delete: vi.fn(),
     maybeSingle: vi.fn(),
     channel: vi.fn(),
     on: vi.fn(),
@@ -41,6 +43,7 @@ export function createSupabaseMock() {
     mocks.limit.mockReturnValue(mocks);
     mocks.range.mockReturnValue(mocks);
     mocks.update.mockReturnValue(mocks);
+    mocks.delete.mockReturnValue(mocks);
     mocks.channel.mockReturnValue(mocks);
     mocks.on.mockReturnValue(mocks);
     mocks.subscribe.mockReturnValue(mocks);
