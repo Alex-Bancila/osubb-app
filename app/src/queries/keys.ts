@@ -65,6 +65,9 @@ export const keys = {
     /** Avatar colour and Voluntari chip for a set of Members (sorted ids). */
     identities: (viewerId: string | undefined, memberIds: readonly string[]) =>
       ['members', 'identities', { viewerId, memberIds }] as const,
+    /** Nickname, full name and avatar colour for a set of Members (sorted ids). */
+    names: (viewerId: string | undefined, memberIds: readonly string[]) =>
+      ['members', 'names', { viewerId, memberIds }] as const,
   },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare
@@ -172,6 +175,12 @@ export const keys = {
     all: ['announcements'] as const,
     feed: (memberId?: string) =>
       ['announcements', 'feed', { memberId }] as const,
+    /* The Anunțuri badge. Under `['announcements']`, so marking one read
+       refreshes the feed and the badge from the same invalidation. */
+    unread: (memberId: string | undefined) =>
+      ['announcements', 'unread', { memberId }] as const,
+    readers: (announcementId: number, memberId: string | undefined) =>
+      ['announcements', 'readers', { announcementId, memberId }] as const,
   },
   /* Leadership page support reads (the metrics themselves live under points
      and tasks, so evaluations refresh them). */
