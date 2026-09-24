@@ -381,7 +381,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
    'p_application_id bigint, p_accept boolean, p_note text',         false, true,  false, false),
   -- #693: the Announcement readers list and the unread badge count.
   ('announcement_readers',          'p_announcement_id bigint',      false, true,  false, false),
-  ('my_unread_announcements_count', '',                              false, true,  false, false);
+  ('my_unread_announcements_count', '',                              false, true,  false, false),
+  -- #681: the organization settings command. Same wrapper shape -- only BC
+  -- and the Moderator get past its gate.
+  ('set_org_setting',               'p_key text, p_value text',      false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -673,11 +676,14 @@ insert into pinned_private_functions (proname, args, category) values
   -- #693: the Announcement readers list body behind public.announcement_readers.
   -- Same read-body shape as member_card_impl: gated inside (PT404 for
   -- anyone the author / BC-Moderator / local Origin Role rule excludes).
-  ('announcement_readers_impl', 'p_announcement_id bigint', 'impl');
+  ('announcement_readers_impl', 'p_announcement_id bigint', 'impl'),
+  -- #681: the organization settings command body behind public.set_org_setting,
+  -- gated inside (BC/Moderator only).
+  ('set_org_setting_impl',      'p_key text, p_value text', 'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 128,
-  'the audited roster includes #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies)');
+  (select count(*) from pinned_private_functions)::int, 129,
+  'the audited roster includes #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
