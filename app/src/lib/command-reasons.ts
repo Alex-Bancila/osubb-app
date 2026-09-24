@@ -120,6 +120,10 @@ const REASON_COPY = new Map<string, string>([
   ['link_url_invalid', 'Adresa trebuie să înceapă cu http:// sau https://.'],
   ['link_url_too_long', 'Adresa are cel mult 2048 de caractere.'],
   [
+    'link_incomplete',
+    'Completează și numele, și adresa linkului, sau lasă-le pe amândouă goale.',
+  ],
+  [
     'phone_invalid',
     'Scrie un număr de telefon valid (de exemplu 0730 655 145).',
   ],

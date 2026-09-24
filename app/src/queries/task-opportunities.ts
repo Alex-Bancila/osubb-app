@@ -3,7 +3,7 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { fetchMyGroups, memberGroupIds } from './my-groups';
-import { TASK_PRESENTATION_FIELDS } from './tasks';
+import { latestSubmissionOnly, TASK_PRESENTATION_FIELDS } from './tasks';
 import { attachVisibleTaskExecutors } from './task-executors';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
@@ -68,9 +68,9 @@ export async function fetchTaskOpportunities(
   const participatedTaskIds = new Set(
     (candidatures.data ?? []).map((candidate) => candidate.task_id),
   );
-  const openTasks = supabase
-    .from('tasks')
-    .select(TASK_PRESENTATION_FIELDS)
+  const openTasks = latestSubmissionOnly(
+    supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+  )
     .eq('kind', 'task')
     .eq('assignment_mode', 'public')
     .is('queue_closed_at', null)
@@ -80,9 +80,9 @@ export async function fetchTaskOpportunities(
   const participatedTasks: TaskPresentationRow[] = [];
   const participatedIds = [...participatedTaskIds];
   for (let offset = 0; offset < participatedIds.length; offset += 100) {
-    const result = await supabase
-      .from('tasks')
-      .select(TASK_PRESENTATION_FIELDS)
+    const result = await latestSubmissionOnly(
+      supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+    )
       .eq('kind', 'task')
       .eq('assignment_mode', 'public')
       .in('id', participatedIds.slice(offset, offset + 100));

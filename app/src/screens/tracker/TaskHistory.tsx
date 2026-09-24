@@ -1,3 +1,4 @@
+import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
 import { Button } from '../../components/ui/button';
 import {
   formatBucharestDay,
@@ -48,6 +49,8 @@ const fields: Record<string, string> = {
   audience: 'Audiență',
   assignment_mode: 'Atribuire',
   campaign_id: 'Campanie',
+  link_label: 'Etichetă link',
+  link_url: 'Adresă link',
 };
 // #626's task_updated activity carries `details.changed`: the raw field
 // names an edit touched, in server order. Reused as the sentence's field
@@ -98,6 +101,15 @@ function taskUpdatedConsequences(details: Json): string[] {
       : (consequenceLabels[kind] ?? kind),
   );
 }
+// A submission's Attached Link (#684) rides in details.link_label/link_url.
+function submittedLink(details: Json) {
+  if (!details || typeof details !== 'object' || Array.isArray(details))
+    return null;
+  const { link_label: label, link_url: url } = details;
+  return typeof label === 'string' && typeof url === 'string'
+    ? { label, url }
+    : null;
+}
 function changes(details: Json, side: 'before' | 'after') {
   if (!details || typeof details !== 'object' || Array.isArray(details))
     return [];
@@ -129,6 +141,16 @@ function changes(details: Json, side: 'before' | 'after') {
               : String(value ?? '—');
     return [`${fields[field]}: ${text}`];
   });
+}
+function SubmittedLink({ details }: { details: Json }) {
+  const link = submittedLink(details);
+  return link ? (
+    <AttachedLinkButton
+      label={link.label}
+      url={link.url}
+      className="max-w-full text-left wrap-anywhere"
+    />
+  ) : null;
 }
 export function TaskTimeline({ activity }: { activity: TaskActivity[] }) {
   if (!activity.length)
@@ -175,6 +197,9 @@ export function TaskTimeline({ activity }: { activity: TaskActivity[] }) {
               )}
               {entry.note && (
                 <p className="whitespace-pre-wrap">{entry.note}</p>
+              )}
+              {entry.kind === 'submitted' && (
+                <SubmittedLink details={entry.details} />
               )}
               {entry.kind === 'task_updated' &&
                 taskUpdatedConsequences(entry.details).map((line) => (
