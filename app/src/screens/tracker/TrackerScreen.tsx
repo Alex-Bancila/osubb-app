@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useMyTasks } from '../../queries/tasks';
@@ -17,6 +18,7 @@ import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskTable } from './ManagerTaskTable';
 import { NewTaskControl } from './NewTaskControl';
 import { TaskCard } from './TaskCard';
+import { PersonalScoreHeader } from './PersonalScoreHeader';
 import {
   toTaskPresentation,
   type TaskPresentationRow,
@@ -29,6 +31,7 @@ function TaskQueryPanel({
   available = false,
   now,
   onOpenTask,
+  highlightedId = null,
 }: {
   query: UseQueryResult<TaskPresentationRow[], Error>;
   empty: string;
@@ -36,6 +39,7 @@ function TaskQueryPanel({
   available?: boolean;
   now: Date;
   onOpenTask: (id: number) => void;
+  highlightedId?: number | null;
 }) {
   const progress = useTaskProgress();
   const { session } = useAuth();
@@ -83,15 +87,23 @@ function TaskQueryPanel({
             pending={
               progress.isPending && progress.variables?.taskId === row.id
             }
-            onProgress={(taskId, action) =>
-              progress.mutateAsync({ taskId, action })
-            }
+            onProgress={(input) => progress.mutateAsync(input)}
+            highlighted={row.id === highlightedId}
           />
         </li>
       ))}
     </ul>
   );
 }
+/** `?task=<id>`: a positive whole Task id, or nothing. */
+function linkedTaskId(value: string | null): number | null {
+  if (!value || !/^[1-9][0-9]*$/.test(value)) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
+const HIGHLIGHT_MS = 4000;
+
 export default function TrackerScreen() {
   const mine = useMyTasks();
   const available = useTaskOpportunities();
@@ -102,6 +114,50 @@ export default function TrackerScreen() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [tab, setTab] = useState('mine');
+  // The deep link Acasă and the notifications use (#685): `/tracker?task=<id>`
+  // opens Taskurile mele on that card. Only `task` is read here.
+  const [params] = useSearchParams();
+  const linkedId = linkedTaskId(params.get('task'));
+  const [linkFor, setLinkFor] = useState<number | null>(null);
+  const [expiredFor, setExpiredFor] = useState<number | null>(null);
+  // Counts link changes, so a later link back to the same card lands afresh.
+  const [linkVisit, setLinkVisit] = useState(0);
+  if (linkedId !== linkFor) {
+    // A new link: open Taskurile mele and allow a fresh highlight.
+    setLinkFor(linkedId);
+    setExpiredFor(null);
+    setLinkVisit((visit) => visit + 1);
+    if (linkedId !== null) setTab('mine');
+  }
+  // The card is highlighted once the list has loaded with it in it, until
+  // the highlight expires. An id that is not one of mine leaves the plain list.
+  const landing =
+    linkedId !== null && mine.data?.some((task) => task.id === linkedId)
+      ? linkedId
+      : null;
+  const highlightedId = landing !== expiredFor ? landing : null;
+  const landed = useRef<string | null>(null);
+  useEffect(() => {
+    // Once per link: a refetch must not pull the page back, but every new
+    // link lands, even on a card an earlier link landed on.
+    const visit = `${linkVisit}:${landing}`;
+    if (landing === null || landed.current === visit) return;
+    landed.current = visit;
+    const card = document.getElementById(`task-${landing}`);
+    card?.scrollIntoView({ block: 'center' });
+    const title = card?.querySelector<HTMLElement>('[data-slot="task-title"]');
+    (title?.querySelector<HTMLElement>('button') ?? title)?.focus({
+      preventScroll: true,
+    });
+  }, [landing, linkVisit]);
+  useEffect(() => {
+    if (highlightedId === null) return;
+    const timer = window.setTimeout(
+      () => setExpiredFor(highlightedId),
+      HIGHLIGHT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [highlightedId]);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -190,12 +246,14 @@ export default function TrackerScreen() {
               </Tabs.Tab>
             )}
           </Tabs.List>
-          <Tabs.Panel value="mine">
+          <Tabs.Panel value="mine" className="space-y-5">
+            <PersonalScoreHeader />
             <TaskQueryPanel
               query={mine}
               empty="Nu ai niciun task atribuit încă."
               now={now}
               onOpenTask={setDetailId}
+              highlightedId={highlightedId}
             />
           </Tabs.Panel>
           <Tabs.Panel value="available">

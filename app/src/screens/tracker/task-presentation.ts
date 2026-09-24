@@ -32,8 +32,17 @@ export type TaskPresentationRow = Pick<
   /** The Task's Origin Group; null when RLS withholds it. */
   group?: Pick<
     Tables['groups']['Row'],
-    'name' | 'short' | 'color' | 'category' | 'path'
+    'name' | 'short' | 'color' | 'category' | 'path' | 'is_organization'
   > | null;
+  /**
+   * The latest `submitted` history row (#685), embedded through
+   * `task_activity`'s own RLS: at most one row, empty when the Task was never
+   * submitted or the reader may not see its history.
+   */
+  submission?: Pick<
+    Tables['task_activity']['Row'],
+    'id' | 'kind' | 'note' | 'details' | 'occurred_at'
+  >[];
   campaign?: Pick<Tables['campaigns']['Row'], 'name'> | null;
   parent?: Pick<Task, 'title'> | null;
   assignments?: Pick<
@@ -94,6 +103,18 @@ export type TaskPresentation = {
   parent: { id: number; title: string } | null;
   campaign: { id: number; name: string } | null;
   duplicatedFromTaskId: number | null;
+  /** The Task's one Attached Link (#684), or null. */
+  link: { label: string; url: string } | null;
+  /**
+   * The latest Submission Note (CONTEXT.md, ruling R7): what the Executor
+   * wrote and linked when they last submitted. Null when there is none, or
+   * the last submission carried neither a note nor a link.
+   */
+  submission: {
+    note: string | null;
+    link: { label: string; url: string } | null;
+    submittedAt: string;
+  } | null;
 };
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -136,8 +157,38 @@ export function taskOrigin(
   return {
     id: row.group_id,
     label: noun ? `${noun} · ${name}` : name,
-    color: group.color ?? null,
+    // The Organization Group is always OSUBB red (ruling R10), whatever its
+    // row stores; `is_organization` says which Group that is.
+    color: group.is_organization ? 'var(--scope-org)' : (group.color ?? null),
   };
+}
+
+function linkPair(label: unknown, url: unknown) {
+  const text = typeof label === 'string' ? label.trim() : '';
+  const address = typeof url === 'string' ? url.trim() : '';
+  return text && address ? { label: text, url: address } : null;
+}
+
+/** The newest `submitted` row, as the Submission Note it carries. */
+function latestSubmission(
+  rows: TaskPresentationRow['submission'],
+): TaskPresentation['submission'] {
+  const latest = rows
+    ?.filter((row) => row.kind === 'submitted')
+    .reduce<NonNullable<typeof rows>[number] | null>(
+      (newest, row) => (!newest || row.id > newest.id ? row : newest),
+      null,
+    );
+  if (!latest) return null;
+  const details =
+    latest.details &&
+    typeof latest.details === 'object' &&
+    !Array.isArray(latest.details)
+      ? latest.details
+      : {};
+  const note = latest.note?.trim() || null;
+  const link = linkPair(details.link_label, details.link_url);
+  return note || link ? { note, link, submittedAt: latest.occurred_at } : null;
 }
 
 /** Pure mapping: the caller supplies the clock and their own queue state. */
@@ -246,5 +297,7 @@ export function toTaskPresentation(
             name: row.campaign?.name?.trim() || 'Campanie',
           },
     duplicatedFromTaskId: row.duplicated_from_task_id,
+    link: linkPair(row.link_label, row.link_url),
+    submission: kind === 'task' ? latestSubmission(row.submission) : null,
   };
 }

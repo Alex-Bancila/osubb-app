@@ -31,6 +31,7 @@ const tasks = [
         color: null,
         category: 'project',
         path: [30],
+        is_organization: false,
       },
     }),
     now,

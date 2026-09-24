@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { UserRound } from 'lucide-react';
+import { useId, useState, type CSSProperties } from 'react';
+import { CalendarClock, UserRound } from 'lucide-react';
+import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
 import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -11,11 +12,14 @@ import {
 } from '../../components/ui/card';
 import { formatPoints } from '../../lib/format';
 import type { TaskPresentation } from './task-presentation';
-import type { TaskProgressAction } from '../../queries/task-progress';
+import type { TaskProgressInput } from '../../queries/task-progress';
+import { TaskActionSuccess } from './TaskActionSuccess';
 import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
 import { TaskGiveUpControl } from './TaskGiveUpControl';
+import { SubmitForReviewDialog } from './SubmitForReviewDialog';
+import { SubmissionNote } from './SubmissionNote';
 
 type TaskCardProps = {
   task: TaskPresentation;
@@ -23,8 +27,23 @@ type TaskCardProps = {
   onOpenTask?: (id: number) => void;
   memberId: string | undefined;
   pending: boolean;
-  onProgress: (taskId: number, action: TaskProgressAction) => Promise<unknown>;
+  onProgress: (input: TaskProgressInput) => Promise<unknown>;
+  /**
+   * The list's copy of a card carries `id="task-<id>"`, the target of
+   * `/tracker?task=<id>`; the details sheet's copy must not repeat it.
+   */
+  anchor?: boolean;
+  /** Set briefly when a deep link lands on this card. */
+  highlighted?: boolean;
+  /**
+   * The card shows the latest Submission Note while the Task is in review;
+   * the details sheet shows it on its own, whenever one exists.
+   */
+  showSubmissionNote?: boolean;
 };
+
+const chipClass =
+  'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-medium text-foreground';
 
 export function TaskCard({
   task,
@@ -33,30 +52,36 @@ export function TaskCard({
   memberId,
   pending,
   onProgress,
+  anchor = true,
+  highlighted = false,
+  showSubmissionNote = true,
 }: TaskCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const titleId = `task-${task.id}-title`;
-  const action =
-    task.kind === 'task' && memberId && task.executor?.memberId === memberId
-      ? task.status === 'todo'
-        ? 'start'
-        : task.status === 'in_progress'
-          ? 'submit'
-          : null
-      : null;
-  const canGiveUp =
+  const [notice, setNotice] = useState<string | null>(null);
+  const titleId = useId();
+  const isExecutor =
     task.kind === 'task' &&
     memberId !== undefined &&
-    task.executor?.memberId === memberId &&
-    (task.status === 'todo' || task.status === 'in_progress');
+    task.executor?.memberId === memberId;
+  const action = isExecutor
+    ? task.status === 'todo'
+      ? 'start'
+      : task.status === 'in_progress'
+        ? 'submit'
+        : null
+    : null;
+  const canGiveUp =
+    isExecutor && (task.status === 'todo' || task.status === 'in_progress');
+  // Colour is never the only carrier: the first chip names the Group.
+  const stripe = task.origin.color ?? 'var(--ink-400)';
 
-  async function progress() {
-    if (!action || pending || saving) return;
+  async function start() {
+    if (pending || saving) return;
     setSaving(true);
     setError(null);
     try {
-      await onProgress(task.id, action);
+      await onProgress({ taskId: task.id, action: 'start' });
     } catch (failure) {
       setError(
         failure instanceof Error
@@ -69,26 +94,58 @@ export function TaskCard({
   }
 
   return (
-    <article aria-labelledby={titleId} className="h-full min-w-0">
+    <article
+      id={anchor ? `task-${task.id}` : undefined}
+      aria-labelledby={titleId}
+      data-highlighted={highlighted || undefined}
+      className="h-full min-w-0 scroll-mt-24 rounded-xl data-highlighted:ring-3 data-highlighted:ring-primary data-highlighted:ring-offset-2 data-highlighted:ring-offset-background motion-safe:transition-shadow motion-safe:duration-300"
+    >
       <Card
-        className={
-          task.overdue ? 'h-full border-l-4 border-l-destructive' : 'h-full'
-        }
+        className="relative h-full pl-1.5"
+        style={{ '--task-stripe': stripe } as CSSProperties}
       >
+        <span
+          aria-hidden="true"
+          data-slot="task-stripe"
+          className="absolute inset-y-0 left-0 w-1.5 bg-(--task-stripe)"
+        />
         <CardHeader className="min-w-0 gap-3">
-          <p className="flex min-w-0 items-start gap-2 text-sm text-muted-foreground">
-            <span
-              aria-hidden="true"
-              className="mt-1 size-3 shrink-0 rounded-full"
-              style={{ backgroundColor: task.origin.color ?? 'var(--red)' }}
-            />
-            <span className="min-w-0 wrap-anywhere">{task.origin.label}</span>
-          </p>
-          <h2 id={titleId} className="text-lg font-semibold wrap-anywhere">
+          <div className="flex min-w-0 flex-wrap gap-1.5">
+            <span className={chipClass}>
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full bg-(--task-stripe)"
+              />
+              <span className="min-w-0 wrap-anywhere">{task.origin.label}</span>
+            </span>
+            {task.audience === 'org' && (
+              <span className={chipClass}>OSUBB</span>
+            )}
+            {task.campaign && (
+              <span className={chipClass}>
+                <span className="min-w-0 wrap-anywhere">
+                  Campanie: {task.campaign.name}
+                </span>
+              </span>
+            )}
+            {task.parent && (
+              <span className={chipClass}>
+                <span className="min-w-0 wrap-anywhere">
+                  Subtask din: {task.parent.title}
+                </span>
+              </span>
+            )}
+          </div>
+          <h2
+            id={titleId}
+            data-slot="task-title"
+            tabIndex={-1}
+            className="text-lg leading-snug font-semibold wrap-anywhere outline-none focus-visible:outline-2 focus-visible:outline-ring"
+          >
             {onOpenTask ? (
               <Button
                 variant="link"
-                className="min-h-11 min-w-11 h-auto p-0 text-left text-lg font-semibold whitespace-normal wrap-anywhere text-foreground"
+                className="h-auto min-h-11 min-w-11 p-0 text-left text-lg leading-snug font-semibold whitespace-normal wrap-anywhere text-foreground"
                 onClick={() => onOpenTask(task.id)}
               >
                 {task.title}
@@ -97,17 +154,7 @@ export function TaskCard({
               task.title
             )}
           </h2>
-          {task.parent && (
-            <p className="text-sm wrap-anywhere">
-              Subtask din: {task.parent.title}
-            </p>
-          )}
-          {task.campaign && (
-            <p className="text-sm wrap-anywhere">
-              Campanie: {task.campaign.name}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <Badge
               variant={
                 task.status === 'unfulfilled' ? 'destructive' : 'outline'
@@ -126,40 +173,53 @@ export function TaskCard({
             )}
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {task.kind === 'task' && (
-            <p className="flex min-w-0 items-center gap-2 text-sm">
-              <UserRound
+        <CardContent className="min-w-0 space-y-3">
+          <div className="grid gap-1.5 text-sm">
+            <p className="flex min-w-0 items-center gap-2">
+              <CalendarClock
                 aria-hidden="true"
                 className="size-4 shrink-0 text-muted-foreground"
               />
-              <span className="font-medium">Responsabil:</span>
-              {/* Only an identity #499's lookup returned becomes a name
-                  button; an Executor known by id alone stays anonymous. */}
-              {task.executor?.name ? (
-                <MemberName
-                  size="sm"
-                  memberId={task.executor.memberId}
-                  nickname={task.executor.nickname}
-                  fullName={task.executor.name}
-                />
-              ) : (
-                <span className="min-w-0 wrap-anywhere">
-                  {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
-                </span>
-              )}
+              <span className="min-w-0">
+                <span className="font-medium">Termen: </span>
+                {task.deadline ? (
+                  <time
+                    dateTime={task.deadline}
+                    className={
+                      task.overdue ? 'font-semibold text-destructive' : ''
+                    }
+                  >
+                    {task.deadlineLabel} (ora României)
+                  </time>
+                ) : (
+                  task.deadlineLabel
+                )}
+              </span>
             </p>
-          )}
-          <p className="text-sm">
-            <span className="font-medium">Termen: </span>
-            {task.deadline ? (
-              <time dateTime={task.deadline}>
-                {task.deadlineLabel} (ora României)
-              </time>
-            ) : (
-              task.deadlineLabel
+            {task.kind === 'task' && (
+              <p className="flex min-w-0 flex-wrap items-center gap-x-2">
+                <UserRound
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+                <span className="font-medium">Executor:</span>
+                {/* Only an identity #499's lookup returned becomes a name
+                    button; an Executor known by id alone stays anonymous. */}
+                {task.executor?.name ? (
+                  <MemberName
+                    size="sm"
+                    memberId={task.executor.memberId}
+                    nickname={task.executor.nickname}
+                    fullName={task.executor.name}
+                  />
+                ) : (
+                  <span className="min-w-0 wrap-anywhere">
+                    {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
+                  </span>
+                )}
+              </p>
             )}
-          </p>
+          </div>
           {task.description && (
             <p className="text-sm whitespace-pre-wrap wrap-anywhere">
               {task.description}
@@ -174,12 +234,23 @@ export function TaskCard({
             ) : (
               <TaskQueueStatus taskId={task.id} task={task} />
             ))}
+          {showSubmissionNote &&
+            task.status === 'in_review' &&
+            task.submission && <SubmissionNote submission={task.submission} />}
+          {task.link && (
+            <AttachedLinkButton
+              label={task.link.label}
+              url={task.link.url}
+              className="max-w-full text-left wrap-anywhere"
+            />
+          )}
           {task.points !== null && (
-            <p className="text-sm">
+            <p className="text-sm font-medium tabular-nums">
               {formatPoints(task.points)} puncte · Dificultate {task.difficulty}{' '}
               · Nota {task.rating}
             </p>
           )}
+          {notice && <TaskActionSuccess>{notice}</TaskActionSuccess>}
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
@@ -188,18 +259,29 @@ export function TaskCard({
         </CardContent>
         {(action || canGiveUp) && (
           <CardFooter className="mt-auto flex flex-wrap gap-2">
-            {action && (
+            {action === 'start' && (
               <Button
                 className="min-h-11 min-w-11 w-full whitespace-normal sm:w-auto"
                 disabled={pending || saving}
-                onClick={progress}
+                onClick={start}
               >
-                {pending || saving
-                  ? 'Se salvează…'
-                  : action === 'start'
-                    ? 'Începe taskul'
-                    : 'Trimite la verificare'}
+                {pending || saving ? 'Se salvează…' : 'Începe taskul'}
               </Button>
+            )}
+            {action === 'submit' && (
+              <SubmitForReviewDialog
+                pending={pending}
+                onSubmit={(submission) =>
+                  onProgress({
+                    taskId: task.id,
+                    action: 'submit',
+                    ...submission,
+                  })
+                }
+                onSuccess={() =>
+                  setNotice('Taskul a fost trimis la verificare.')
+                }
+              />
             )}
             {canGiveUp && <TaskGiveUpControl taskId={task.id} />}
           </CardFooter>

@@ -80,6 +80,6 @@ describe('Withdraw and rejoin', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Taskul s-a schimbat.',
     );
-    expect(screen.getByText('Locul 2 în lista de așteptare')).toBeVisible();
+    expect(screen.getByText('Te-ai înscris pe locul 2.')).toBeVisible();
   });
 });
