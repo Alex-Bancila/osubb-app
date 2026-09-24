@@ -437,6 +437,9 @@ select is(
 --   D1 -- 2 x 3 = 6 awarded to Xenia at T1, kept.
 --   D2 -- 1 x 3 = 3 awarded to Yannis at T1, reversed at T2 (the reversal's
 --         own ledger row dated T2), re-awarded to him at T3.
+--   D3 -- an Umbrella tagged with the Campaign and completed now(): never
+--         evaluated, so it has no award instant -- a completion only while
+--         no bound is set.
 -- points / tasks_completed follow the award instant; tasks_total never does.
 reset role;
 insert into auth.users (id, email) values
@@ -456,6 +459,12 @@ values
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
   ('D2 Dated Reopened 625', pg_temp.dept_group('625-dept'), 6250002, 'completed', 1, 5,
    '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now());
+insert into public.tasks
+  (title, group_id, campaign_id, kind, audience, assignment_mode, status,
+   created_by, created_at, completed_at)
+values
+  ('D3 Dated Umbrella 625', pg_temp.dept_group('625-dept'), 6250002, 'umbrella', null, null,
+   'completed', '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now());
 select pg_temp.test_credit_task(task.id, credit.member_id, '62500000-0000-0000-0000-000000000001',
                                 p_awarded_at => '2001-03-10 10:00:00+00')
   from (values
@@ -487,15 +496,15 @@ $$;
 
 select pg_temp.test_login_leadership('62500000-0000-0000-0000-000000000001');
 
-select is(pg_temp.totals625(null, null), '2/2/9',
-  'with no range the dated Campaign''s totals are the whole story: two Tasks, both completed, 6 + (3 - 3 + 3)');
-select is(pg_temp.totals625('2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00'), '2/1/6',
+select is(pg_temp.totals625(null, null), '3/3/9',
+  'with no range the dated Campaign''s totals are the whole story: three Tasks, all completed (the Umbrella included), 6 + (3 - 3 + 3)');
+select is(pg_temp.totals625('2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00'), '3/1/6',
   'in [T1, T2): D1''s 6 and D2''s reversed award netting to zero; only D1''s completion was awarded there; tasks_total ignores the range');
-select is(pg_temp.totals625('2001-04-10 10:00:00+00', null), '2/1/3',
-  'in [T2, open): only the re-award at T3 -- the reversal is dated by its Evaluation, so no phantom -3 cancels it');
-select is(pg_temp.totals625(null, '2001-03-10 10:00:00+00'), '2/0/0',
+select is(pg_temp.totals625('2001-04-10 10:00:00+00', null), '3/1/3',
+  'in [T2, open): only the re-award at T3 -- no phantom -3 cancels it, and the Umbrella completed now() is not counted: it has no award instant, and its completed_at is never read');
+select is(pg_temp.totals625(null, '2001-03-10 10:00:00+00'), '3/0/0',
   'in [open, T1): nothing awarded, nothing completed -- the to bound is exclusive and filters both counters');
-select is(pg_temp.totals625('2001-03-10 10:00:00.000001+00', '2001-04-10 10:00:00+00'), '2/0/0',
+select is(pg_temp.totals625('2001-03-10 10:00:00.000001+00', '2001-04-10 10:00:00+00'), '3/0/0',
   'in [T1 + 1us, T2): nothing either -- the from bound filters both counters');
 
 select results_eq(

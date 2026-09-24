@@ -371,22 +371,22 @@ begin
 
   return query
   with campaign_tasks as (
-    select task.id, task.status, task.completed_at
+    select task.id, task.status
       from public.tasks as task
      where task.campaign_id = p_campaign_id
   ),
   -- The instant a completed Task's completion was awarded: its live
-  -- (un-reversed) completed Evaluation, or -- for an Umbrella, which
-  -- completes without an Evaluation -- its own completion instant.
+  -- (un-reversed) completed Evaluation. A completed Task without one -- an
+  -- Umbrella, which is never evaluated -- has no award instant: it counts
+  -- when no bound is set (the unbounded result is unchanged) and never
+  -- inside a bounded range, whose predicates a null instant cannot satisfy.
   completed_tasks as (
     select ct.id,
-           coalesce((
-             select max(evaluation.evaluated_at)
-               from public.task_evaluations as evaluation
-              where evaluation.task_id = ct.id
-                and evaluation.outcome = 'completed'
-                and evaluation.reversed_at is null
-           ), ct.completed_at) as awarded_at
+           (select max(evaluation.evaluated_at)
+              from public.task_evaluations as evaluation
+             where evaluation.task_id = ct.id
+               and evaluation.outcome = 'completed'
+               and evaluation.reversed_at is null) as awarded_at
       from campaign_tasks as ct
      where ct.status = 'completed'
   ),
@@ -410,7 +410,7 @@ end;
 $$;
 
 comment on function private.campaign_totals_impl(bigint, timestamptz, timestamptz) is
-  'tasks_total/tasks_completed/points_total for one Campaign -- every Task (any kind) carrying campaign_id = p_campaign_id, points summed off the points_ledger rows private.evaluate_task writes exactly as private.campaign_report_impl does. The date range (#677) follows the award instant: points_total sums ledger rows whose Evaluation (task_evaluations.evaluated_at via points_ledger.evaluation_id) falls in [p_from, p_to); tasks_completed counts completed Tasks whose live completed Evaluation -- or, for an Umbrella, whose completion -- falls in it; tasks_total ignores the range and stays the whole Campaign (R13 speaks of points only). PT400 invalid_date_range first when p_to < p_from; then the same PT404/42501 preamble as private.campaign_report_impl -- both share private.require_campaign_report_access.';
+  'tasks_total/tasks_completed/points_total for one Campaign -- every Task (any kind) carrying campaign_id = p_campaign_id, points summed off the points_ledger rows private.evaluate_task writes exactly as private.campaign_report_impl does. The date range (#677) follows the award instant: points_total sums ledger rows whose Evaluation (task_evaluations.evaluated_at via points_ledger.evaluation_id) falls in [p_from, p_to); tasks_completed counts completed Tasks whose live completed Evaluation falls in it (a completed Umbrella, never evaluated, counts only when no bound is set); tasks_total ignores the range and stays the whole Campaign (R13 speaks of points only). PT400 invalid_date_range first when p_to < p_from; then the same PT404/42501 preamble as private.campaign_report_impl -- both share private.require_campaign_report_access.';
 
 create function public.campaign_totals(
   p_campaign_id bigint,
