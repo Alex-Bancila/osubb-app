@@ -11,8 +11,11 @@ export type TaskFormOptions = {
   groups: ManagedWorkGroup[];
   campaigns: { id: number; name: string; group_id: number }[];
   umbrellas: { id: number; title: string; group_id: number }[];
-  /** Names of readable Groups, so a Child Group can be shown with its parent. */
-  groupNames?: { id: number; name: string }[];
+  /**
+   * Names of readable Groups, so a Child Group can be shown with its parent,
+   * and whether each is a Private Group (#757).
+   */
+  groupNames?: { id: number; name: string; is_private?: boolean }[];
 };
 export type TaskDraft = {
   title: string;
@@ -94,6 +97,27 @@ export function groupLookup(options: TaskFormOptions) {
   return names;
 }
 
+/** Why the organization-wide Audience is not offered for a Private Group. */
+export const PRIVATE_GROUP_AUDIENCE_HINT =
+  'Grupul este privat: taskurile lui sunt doar pentru membrii grupului.';
+
+/**
+ * A Private Group's Tasks are for its members only (ruling R25): the
+ * organization-wide Audience is refused (`private_group_local_only`), so the
+ * form does not offer it.
+ */
+export function isPrivateGroup(
+  groupId: number | null | undefined,
+  options: TaskFormOptions,
+) {
+  return (
+    groupId != null &&
+    options.groupNames?.some(
+      (group) => group.id === groupId && group.is_private === true,
+    ) === true
+  );
+}
+
 /** Umbrellas a Subtask may join: only those whose Origin is the chosen Group. */
 export function umbrellasFor(groupId: number | null, options: TaskFormOptions) {
   return groupId === null
@@ -150,7 +174,13 @@ export function taskDraftInput(
     groupId: origin?.id ?? values.groupId ?? 0,
     kind: values.kind,
     parentTaskId: values.kind === 'subtask' ? values.parentTaskId : null,
-    audience: umbrella ? null : values.audience,
+    // A Private Group's Task is local whatever was picked before the Group
+    // was (#757); the form shows the same.
+    audience: umbrella
+      ? null
+      : isPrivateGroup(origin?.id, options)
+        ? 'local'
+        : values.audience,
     assignmentMode: umbrella ? null : values.assignmentMode,
     executorId:
       !umbrella && values.assignmentMode === 'direct'

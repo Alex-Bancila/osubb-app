@@ -269,6 +269,9 @@ export type GroupCommand =
       managerId: string | null;
       color: string | null;
       short: string | null;
+      /** A Private Group (#757, ruling R25). A Child Group of a private
+       *  parent is private whatever this says; the server copies it down. */
+      isPrivate: boolean;
     }
   | {
       kind: 'settings';
@@ -358,6 +361,7 @@ function callCommand(command: GroupCommand) {
         p_manager_id: command.managerId,
         p_color: trimmed(command.color),
         p_short: trimmed(command.short),
+        p_is_private: command.isPrivate,
       } as never);
     case 'settings':
       return supabase.rpc('update_group', {

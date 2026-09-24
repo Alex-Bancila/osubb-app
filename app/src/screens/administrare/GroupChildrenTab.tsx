@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -148,6 +149,7 @@ export function GroupChildrenTab({
             actorLevel={actorLevel}
             members={members}
             disabled={busy}
+            choosePrivate={authority.editStructure}
             onCreate={onRun}
           />
         )}
@@ -171,6 +173,7 @@ export function GroupChildrenTab({
                 {child.name}
               </Link>
               <Badge variant="outline">{categoryLabel(child.category)}</Badge>
+              <PrivateGroupBadge isPrivate={child.is_private} />
               {child.status !== 'active' && (
                 <Badge variant="secondary">
                   {groupStatusLabel(child.status)}

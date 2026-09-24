@@ -121,6 +121,7 @@ describe('TaskPresentation', () => {
       id: 1,
       label: 'Departament · Educațional',
       color: 'var(--dept-edu)',
+      isPrivate: false,
     });
     expect(
       taskOrigin({
@@ -134,7 +135,22 @@ describe('TaskPresentation', () => {
           is_organization: false,
         },
       }),
-    ).toEqual({ id: 21, label: 'Echipă · IT', color: null });
+    ).toEqual({ id: 21, label: 'Echipă · IT', color: null, isPrivate: false });
+    // A Private Group's chip carries the lock (#757).
+    expect(
+      taskOrigin({
+        group_id: 22,
+        group: {
+          name: 'Audit',
+          short: null,
+          color: null,
+          category: 'team',
+          path: [4, 22],
+          is_organization: false,
+          is_private: true,
+        },
+      }).isPrivate,
+    ).toBe(true);
     expect(
       taskOrigin({
         group_id: 30,
@@ -162,7 +178,12 @@ describe('TaskPresentation', () => {
           is_organization: true,
         },
       }),
-    ).toEqual({ id: 5, label: 'OSUBB', color: 'var(--scope-org)' });
+    ).toEqual({
+      id: 5,
+      label: 'OSUBB',
+      color: 'var(--scope-org)',
+      isPrivate: false,
+    });
   });
 
   it('never leaks an id when RLS withholds the Origin Group', () => {
@@ -170,6 +191,7 @@ describe('TaskPresentation', () => {
       id: 1,
       label: 'Origine indisponibilă',
       color: null,
+      isPrivate: false,
     });
     expect(
       taskOrigin({

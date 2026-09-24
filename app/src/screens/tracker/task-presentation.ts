@@ -30,10 +30,15 @@ export type TaskPresentationRow = Pick<
   | 'link_url'
 > & {
   /** The Task's Origin Group; null when RLS withholds it. */
-  group?: Pick<
-    Tables['groups']['Row'],
-    'name' | 'short' | 'color' | 'category' | 'path' | 'is_organization'
-  > | null;
+  group?:
+    | (Pick<
+        Tables['groups']['Row'],
+        'name' | 'short' | 'color' | 'category' | 'path' | 'is_organization'
+      > & {
+        /** A Private Group (#757); absent from reads that do not embed it. */
+        is_private?: boolean;
+      })
+    | null;
   /**
    * The latest `submitted` history row (#685), embedded through
    * `task_activity`'s own RLS: at most one row, empty when the Task was never
@@ -73,6 +78,8 @@ export type TaskPresentation = {
     id: number;
     label: string;
     color: string | null;
+    /** A Private Group: its chip carries the lock (#757, ruling R25). */
+    isPrivate: boolean;
   };
   audience: 'local' | 'org' | null;
   audienceLabel: string;
@@ -157,7 +164,12 @@ export function taskOrigin(
   const name = group?.name?.trim();
   // No embed means RLS withheld the Group; never show an id in its place.
   if (!group || !name)
-    return { id: row.group_id, label: 'Origine indisponibilă', color: null };
+    return {
+      id: row.group_id,
+      label: 'Origine indisponibilă',
+      color: null,
+      isPrivate: false,
+    };
   const noun = GROUP_CATEGORY_NOUNS[group.category];
   return {
     id: row.group_id,
@@ -165,6 +177,7 @@ export function taskOrigin(
     // The Organization Group is always OSUBB red (ruling R10), whatever its
     // row stores; `is_organization` says which Group that is.
     color: group.is_organization ? 'var(--scope-org)' : (group.color ?? null),
+    isPrivate: group.is_private === true,
   };
 }
 
