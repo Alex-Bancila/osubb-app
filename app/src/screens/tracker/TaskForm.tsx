@@ -1,4 +1,5 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
+import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
@@ -10,8 +11,6 @@ import {
   ComboboxList,
   ComboboxTrigger,
   ComboboxValue,
-  GroupOption,
-  groupOptionLabel,
 } from '../../components/ui/combobox';
 import {
   RadioCard,
@@ -21,11 +20,12 @@ import {
 import { fieldForReason, taskDraftSchema } from '../../lib/schemas/task';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { DirectExecutorSelector } from './DirectExecutorSelector';
+import { TaskGroupCascade } from './TaskGroupCascade';
 import {
   campaignsFor,
   groupLookup,
-  groupOptions,
   originFor,
+  rootGroups,
   taskDraftInput,
   umbrellasFor,
   type ManagedWorkGroup,
@@ -81,17 +81,22 @@ export function TaskForm({
   submitLabel?: string;
 }) {
   const id = useId();
-  const [values, setValues] = useState<TaskFormValues>({
-    title: '',
-    description: '',
-    deadline: '',
-    groupId: null,
-    kind: parentTaskId ? 'subtask' : 'task',
-    parentTaskId,
-    audience: 'local',
-    assignmentMode: 'direct',
-    executorId: null,
-    campaignId: null,
+  const [values, setValues] = useState<TaskFormValues>(() => {
+    // One root and nothing else to choose between: start there.
+    const roots = rootGroups(options.groups);
+    return {
+      title: '',
+      description: '',
+      deadline: '',
+      groupId: roots.length === 1 && roots[0] ? roots[0].id : null,
+      kind: parentTaskId ? 'subtask' : 'task',
+      parentTaskId,
+      audience: 'local',
+      assignmentMode: 'direct',
+      executorId: null,
+      campaignId: null,
+      link: { label: '', url: '' },
+    };
   });
   const schema = useMemo(() => taskDraftSchema(options), [options]);
   const form = useFormValidation(
@@ -100,7 +105,6 @@ export function TaskForm({
     fieldForReason,
   );
   const groupsById = useMemo(() => groupLookup(options), [options]);
-  const groups = useMemo(() => groupOptions(options.groups), [options.groups]);
   const origin = originFor(values, options);
   const campaigns = campaignsFor(origin, options);
   const parents = umbrellasFor(origin?.id ?? null, options);
@@ -115,13 +119,17 @@ export function TaskForm({
   function update(patch: Partial<TaskFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
   }
-  function chooseGroup(group: ManagedWorkGroup | null) {
-    const groupId = group?.id ?? null;
+  function chooseGroup(group: ManagedWorkGroup) {
+    const groupId = group.id;
+    const campaignStays = campaignsFor(group, options).some(
+      (campaign) => campaign.id === values.campaignId,
+    );
     update({
       groupId,
-      // Choices that belong to another Group no longer apply.
-      campaignId: null,
-      executorId: null,
+      // Choices that belong to another Group no longer apply; a Campaign
+      // that can still tag the new Group stays.
+      campaignId: campaignStays ? values.campaignId : null,
+      executorId: group.id === origin?.id ? values.executorId : null,
       parentTaskId: parent && parent.group_id === groupId ? parent.id : null,
     });
   }
@@ -145,8 +153,6 @@ export function TaskForm({
   }
   if (!options.groups.length)
     return <p>Nu ai grupuri în care poți pregăti taskuri.</p>;
-  const groupLabel = (group: ManagedWorkGroup) =>
-    groupOptionLabel(group, groupsById);
   const parentGroupName = (item: Umbrella) =>
     groupsById.get(item.group_id)?.name;
   return (
@@ -205,43 +211,17 @@ export function TaskForm({
         <FieldError {...form.errorProps('kind')} />
       </div>
       <div className="grid gap-1.5" {...form.slot('groupId')}>
-        <span id={`${id}-group`} className="text-sm font-medium">
-          Grup de origine (obligatoriu)
-        </span>
-        <Combobox<ManagedWorkGroup>
-          items={groups}
-          value={origin ?? null}
-          onValueChange={chooseGroup}
-          itemToStringLabel={groupLabel}
-          isItemEqualToValue={(a, b) => a.id === b.id}
+        <TaskGroupCascade
+          groups={options.groups}
+          groupsById={groupsById}
+          value={origin?.id ?? values.groupId}
+          onChange={chooseGroup}
           disabled={lockedToParent}
-        >
-          <ComboboxTrigger aria-labelledby={`${id}-group`}>
-            <ComboboxValue placeholder="Alege un grup">
-              {(group: ManagedWorkGroup | null) =>
-                group ? (
-                  <GroupOption group={group} groupsById={groupsById} />
-                ) : (
-                  'Alege un grup'
-                )
-              }
-            </ComboboxValue>
-          </ComboboxTrigger>
-          <ComboboxContent>
-            <ComboboxInput
-              aria-label="Caută un grup"
-              placeholder="Caută un grup"
-            />
-            <ComboboxEmpty />
-            <ComboboxList>
-              {(group: ManagedWorkGroup) => (
-                <ComboboxItem key={group.id} value={group}>
-                  <GroupOption group={group} groupsById={groupsById} />
-                </ComboboxItem>
-              )}
-            </ComboboxList>
-          </ComboboxContent>
-        </Combobox>
+          describedBy={
+            form.error('groupId') ? form.errorId('groupId') : undefined
+          }
+          invalid={form.error('groupId') !== undefined}
+        />
         <FieldError {...form.errorProps('groupId')} />
         {subtask && (
           <p className="text-sm text-muted-foreground">
@@ -448,6 +428,15 @@ export function TaskForm({
           </div>
         </>
       )}
+      <fieldset className="grid min-w-0 gap-3 border-t border-border pt-4">
+        <legend className="text-sm font-medium">Link atașat (opțional)</legend>
+        <AttachedLinkFields
+          value={values.link}
+          onChange={(link) => update({ link })}
+          form={form}
+          name="link"
+        />
+      </fieldset>
       <FieldError>{form.formError}</FieldError>
       <Button className="min-h-11" type="submit">
         {submitLabel}

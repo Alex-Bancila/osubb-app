@@ -13,10 +13,15 @@ vi.mock('../../queries/task-form-options', () => ({
   useTaskFormOptions: state.query,
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// One managed Group is chosen up front, so the Executor picker renders at
+// once; its own reads are DirectExecutorSelector's tests' business.
+vi.mock('./DirectExecutorSelector', () => ({
+  DirectExecutorSelector: () => null,
+}));
 import { ManagedTaskForm } from './ManagedTaskForm';
 async function pickOrigin(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
-    screen.getByRole('combobox', { name: 'Grup de origine (obligatoriu)' }),
+    screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' }),
   );
   await user.click(await screen.findByRole('option', { name: 'Origin' }));
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());

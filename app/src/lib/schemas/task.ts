@@ -4,6 +4,10 @@ import type {
   TaskDraft,
   TaskFormOptions,
 } from '../../screens/tracker/task-form-model';
+import {
+  attachedLinkSchema,
+  fieldForReason as linkFieldForReason,
+} from './attached-link';
 import { isId, optionalText, requiredText } from './text';
 
 /**
@@ -32,8 +36,10 @@ export const taskDescription = optionalText({
  * `deadline` is an ISO instant, `null` for none, or `''` for a wall-clock time
  * that does not exist in Romania.
  */
-export type TaskDraftInput = Omit<TaskDraft, 'kind'> & {
+export type TaskDraftInput = Omit<TaskDraft, 'kind' | 'link'> & {
   kind: TaskDraft['kind'] | 'subtask';
+  /** The Attached Link as typed; blank means none (#684). */
+  link: { label?: string | null; url?: string | null };
 };
 
 type When = {
@@ -74,6 +80,7 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
       assignmentMode: z.enum(['direct', 'public']).nullable(),
       executorId: z.string().nullable(),
       campaignId: z.number().nullable(),
+      link: attachedLinkSchema,
     })
     .superRefine((draft, ctx) => {
       const issue = (path: keyof TaskDraft, message: string) =>
@@ -136,38 +143,51 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
 
 /** The editable fields `update_task` replaces, all of them at once. */
 export type TaskUpdateValues = {
+  /** The Origin; a different one moves the Task (#627). */
+  groupId: number;
   title: string;
   description: string | null;
   deadline: string | null;
   campaignId: number | null;
   assignmentMode: 'direct' | 'public' | null;
   audience: 'local' | 'org' | null;
+  /** The Attached Link as typed; blank means none (#684). */
+  link: { label?: string | null; url?: string | null };
 };
 
 /**
  * An edit (ADR-0007, amended 2026-09-21): the same text limits, a deadline an
- * ordinary Task cannot drop (a past one is allowed), and a Campaign the Task
- * may carry — one offered for its Group, or the one it already has.
+ * ordinary Task cannot drop (a past one is allowed), a Campaign the Task may
+ * carry — one offered for the chosen Group, or the one it already has — a
+ * Group the caller manages (`groupIds`, when a fresh read is at hand) and an
+ * Attached Link, both or neither.
  */
 export function taskUpdateSchema({
   umbrella,
   campaignIds,
+  groupIds,
 }: {
   umbrella: boolean;
   campaignIds: readonly number[];
+  groupIds?: readonly number[];
 }) {
   return z
     .object({
+      groupId: z.number(),
       title: taskTitle,
       description: taskDescription,
       deadline: z.string().nullable(),
       campaignId: z.number().nullable(),
       assignmentMode: z.enum(['direct', 'public']).nullable(),
       audience: z.enum(['local', 'org']).nullable(),
+      link: attachedLinkSchema,
     })
     .superRefine((values, ctx) => {
       const issue = (path: keyof TaskUpdateValues, message: string) =>
         ctx.addIssue({ code: 'custom', path: [path], message });
+      if (!isId(values.groupId)) issue('groupId', 'task_group_required');
+      else if (groupIds && !groupIds.includes(values.groupId))
+        issue('groupId', 'task_group_unavailable');
       const deadline = deadlineIssue(values.deadline, { creating: false });
       if (deadline) issue('deadline', deadline);
       if (umbrella) {
@@ -212,8 +232,13 @@ export function taskDuplicateSchema(when: Omit<When, 'creating'> = {}) {
   });
 }
 
-/** Where each reason a Task command (or this schema) raises is shown. */
-export const fieldForReason: Readonly<Record<string, keyof TaskDraft>> = {
+/**
+ * Where each reason a Task command (or these schemas) raises is shown: the
+ * create form, the edit form and the duplicate dialog share it. The Attached
+ * Link's reasons land under `link.label` / `link.url`, the names
+ * `AttachedLinkFields` gets with `name="link"`.
+ */
+export const fieldForReason: Readonly<Record<string, string>> = {
   title_required: 'title',
   title_too_short: 'title',
   title_too_long: 'title',
@@ -223,6 +248,10 @@ export const fieldForReason: Readonly<Record<string, keyof TaskDraft>> = {
   deadline_invalid: 'deadline',
   task_group_required: 'groupId',
   task_group_unavailable: 'groupId',
+  // #627: moving a Task to another Group.
+  invalid_group: 'groupId',
+  subtask_origin_immutable: 'groupId',
+  umbrella_has_subtasks: 'groupId',
   invalid_task_kind: 'kind',
   subtask_cannot_be_umbrella: 'kind',
   umbrella_has_no_mode: 'kind',
@@ -236,4 +265,13 @@ export const fieldForReason: Readonly<Record<string, keyof TaskDraft>> = {
   executor_not_allowed_for_public: 'executorId',
   invalid_campaign: 'campaignId',
   umbrella_has_no_campaign: 'campaignId',
+  ...Object.fromEntries(
+    Object.entries(linkFieldForReason).map(([reason, field]) => [
+      reason,
+      `link.${field}`,
+    ]),
+  ),
+  // The server's one both-or-neither reason (#684); the browser says which
+  // half is missing, so this only arrives from a caller that skipped it.
+  link_incomplete: 'link.url',
 };

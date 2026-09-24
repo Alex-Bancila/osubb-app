@@ -171,6 +171,15 @@ const REASON_COPY = new Map<string, string>([
     'Subtaskul trebuie să păstreze grupul de origine al taskului-umbrelă.',
   ],
   ['subtask_cannot_be_umbrella', 'Un task-umbrelă nu poate fi Subtask.'],
+  ['invalid_group', 'Grupul ales nu mai este activ. Alege alt grup.'],
+  [
+    'subtask_origin_immutable',
+    'Un subtask rămâne în grupul taskului-umbrelă. Nu îi poți schimba grupul.',
+  ],
+  [
+    'umbrella_has_subtasks',
+    'Un task-umbrelă cu subtaskuri nu își poate schimba grupul.',
+  ],
   [
     'task_in_review',
     'Taskul este în verificare și nu mai poate fi editat. Verifică starea actuală.',
