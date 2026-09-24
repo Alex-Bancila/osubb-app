@@ -406,12 +406,13 @@ select is((select format('%s|%s|%s', task.assignment_mode, task.queue_opened_at 
 select is(pg_temp.activity_consequences('d2p'), '[]'::jsonb, 'and records an empty consequence set');
 
 -- ==================== 7. R-E8: Audience narrowing ====================
--- (a) public, outsider Executor, mixed queue: Executor removed, outsiders removed, head member promoted.
+-- (a) public, outsider Executor, mixed queue: Executor removed, outsiders removed,
+-- and (#682) the member Candidates stay queued -- nobody is promoted.
 select pg_temp.test_login_leadership(pg_temp.u(1));
 select is(pg_temp.preview(pg_temp.args('r8:narrow', p_audience => 'local')),
   array['executor_removed:' || pg_temp.u(3), 'candidate_removed:' || pg_temp.u(5),
-        'candidate_removed:' || pg_temp.u(6), 'candidate_promoted:' || pg_temp.u(4)],
-  'local Audience on a public Task: the non-member Executor and non-member Candidates go, the head member Candidate is promoted');
+        'candidate_removed:' || pg_temp.u(6)],
+  'local Audience on a public Task: the non-member Executor and non-member Candidates go, and no Candidate is promoted');
 insert into previews values ('r8:narrow', pg_temp.preview_json(pg_temp.args('r8:narrow', p_audience => 'local')));
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('r8:narrow', p_audience => 'local')),
   'PT409', 'task_update_needs_confirmation', 'removing an Executor needs acceptance');
@@ -426,15 +427,14 @@ select is((select format('%s|%s|%s', task.status, task.started_at is null, task.
   'todo|t|local', 'the Task returned to todo with started_at cleared');
 select is((select string_agg(right(c.member_id::text, 1) || ':' || c.status, ',' order by c.joined_at)
              from public.task_candidates as c where c.task_id = pg_temp.t('r8:narrow')),
-  '5:closed,4:selected,6:closed,7:pending', 'non-members closed, the head member selected, the rest still queued');
-select is((select format('%s|%s', a.member_id, (select c.assignment_id from public.task_candidates as c
-                                                  where c.task_id = a.task_id and c.status = 'selected') = a.id)
-             from public.task_assignments as a where a.task_id = pg_temp.t('r8:narrow') and a.ended_at is null),
-  format('%s|t', pg_temp.u(4)), 'the promoted Candidate holds the one active Assignment');
+  '5:closed,4:pending,6:closed,7:pending', 'non-members closed, every member Candidate still queued in order');
+select is((select count(*) from public.task_assignments as a
+            where a.task_id = pg_temp.t('r8:narrow') and a.ended_at is null), 0::bigint,
+  'no Assignment is opened -- the queue waits for the manager''s selection');
 select is((select string_agg(right(n.member_id::text, 1) || ':' || split_part(n.title, ':', 1), ',' order by n.member_id)
              from public.notifications as n where n.task_id = pg_temp.t('r8:narrow')),
-  '3:Task actualizat,4:Task nou,5:Coadă închisă,6:Coadă închisă',
-  'the removed Executor, the removed Candidates and the promoted Candidate are notified; the still-queued member is not');
+  '3:Task actualizat,5:Coadă închisă,6:Coadă închisă',
+  'the removed Executor and the removed Candidates are notified; the still-queued members are not');
 select is((select n.body from public.notifications as n
             where n.task_id = pg_temp.t('r8:narrow') and n.member_id = pg_temp.u(3)),
   'Nu mai ești executorul acestui task: audiența lui s-a schimbat.', 'the removed Executor is told why');
@@ -444,10 +444,10 @@ select is((select format('%s|%s|%s', a.from_status, a.to_status,
                              where x.task_id = a.task_id and x.member_id = pg_temp.u(3)))
              from public.task_activity as a where a.task_id = pg_temp.t('r8:narrow') and a.kind = 'task_updated'),
   'in_progress|todo|t', 'the task_updated row records the return to todo and the ended Assignment');
-select is((select string_agg(a.kind || ':' || coalesce(a.details ->> 'via', a.details ->> 'promoted', ''), ',' order by a.id)
+select is((select string_agg(a.kind, ',' order by a.id)
              from public.task_activity as a where a.task_id = pg_temp.t('r8:narrow')),
-  'task_updated:,executor_assigned:queue_promotion,candidate_selected:true',
-  'the promotion is recorded as in give_up_task');
+  'task_updated',
+  'task_updated is the only activity row -- no executor_assigned, no candidate_selected');
 select is(pg_temp.activity_consequences('r8:narrow'), (select consequences from previews where name = 'r8:narrow'),
   'the command applied exactly the consequence set the preview showed');
 

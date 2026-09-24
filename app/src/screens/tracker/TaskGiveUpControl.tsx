@@ -25,7 +25,7 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
       setReason('');
       setOpen(false);
       setMessage(
-        'Ai renunțat la task. Dacă exista o coadă, următoarea persoană a fost atribuită automat.',
+        'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.',
       );
     } catch (failure) {
       setError(

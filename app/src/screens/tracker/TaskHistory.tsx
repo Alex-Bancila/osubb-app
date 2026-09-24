@@ -74,10 +74,9 @@ function taskUpdatedLabel(details: Json): string {
 const consequenceLabels: Record<string, string> = {
   executor_removed: 'executorul a fost eliminat',
   candidate_removed: 'o candidatură a fost închisă',
-  candidate_promoted: 'un candidat a fost promovat',
 };
 // details.consequences (private.task_update_consequences, #626/#627) is one
-// row per Candidate closed or per Executor removed/promoted -- named here by
+// row per Candidate closed or per Executor removed -- named here by
 // kind and count, never by member id, since the history feed does not
 // resolve those ids to names (only actor_id is joined against the
 // directory).

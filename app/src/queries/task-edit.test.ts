@@ -48,7 +48,7 @@ it('previews with the same values and names each affected member', async () => {
   api.rpc.mockResolvedValue({
     data: [
       { consequence: 'executor_removed', member_id: 'a' },
-      { consequence: 'candidate_promoted', member_id: 'b' },
+      { consequence: 'executor_added_to_group', member_id: 'b' },
       { consequence: 'candidate_removed', member_id: 'z' },
     ],
     error: null,
@@ -63,7 +63,11 @@ it('previews with the same values and names each affected member', async () => {
   api.from.mockReturnValue({ select: () => ({ in: inIds }) });
   expect(await previewTaskUpdate(input)).toEqual([
     { kind: 'executor_removed', memberId: 'a', memberName: 'Ana Șerban' },
-    { kind: 'candidate_promoted', memberId: 'b', memberName: 'Bianca Pop' },
+    {
+      kind: 'executor_added_to_group',
+      memberId: 'b',
+      memberName: 'Bianca Pop',
+    },
     { kind: 'candidate_removed', memberId: 'z', memberName: 'Un membru' },
   ]);
   expect(api.rpc).toHaveBeenCalledWith('preview_task_update', args);
