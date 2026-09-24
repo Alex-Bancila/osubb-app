@@ -6,8 +6,9 @@ import { describe, expect, it } from 'vitest';
 import type {
   WorkFilterCampaign,
   WorkFilterGroup,
+  WorkFilterLevels,
 } from '../../lib/work-filter';
-import { WorkFilter, type WorkFilterLevels } from './WorkFilter';
+import { WorkFilter } from './WorkFilter';
 
 const groups: WorkFilterGroup[] = [
   {

@@ -7,6 +7,7 @@ import {
   rootGroups,
   serializeWorkFilter,
   setWorkFilterLevel,
+  visibleWorkFilter,
   workFilterParams,
   type WorkFilterCampaign,
   type WorkFilterGroup,
@@ -215,5 +216,26 @@ describe('workFilterParams', () => {
         to: '2026-09-01',
       }),
     ).toBeNull();
+  });
+});
+
+describe('visibleWorkFilter', () => {
+  it('drops the levels a page hides and keeps the rest', () => {
+    const value = {
+      rootGroupId: 1,
+      campaignId: 10,
+      from: '2026-09-01',
+      to: '2026-09-30',
+    };
+    expect(visibleWorkFilter(value)).toEqual(value);
+    expect(visibleWorkFilter(value, { campaign: false })).toEqual({
+      rootGroupId: 1,
+      from: '2026-09-01',
+      to: '2026-09-30',
+    });
+    expect(visibleWorkFilter(value, { dates: false })).toEqual({
+      rootGroupId: 1,
+      campaignId: 10,
+    });
   });
 });

@@ -31,13 +31,11 @@ import {
   type WorkFilterCampaign,
   type WorkFilterGroup,
   type WorkFilterLevel,
+  type WorkFilterLevels,
 } from '../../lib/work-filter';
 
 const dateControl =
   'min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20';
-
-/** Which optional levels a page shows; the two Group levels always show. */
-export type WorkFilterLevels = { campaign?: boolean; dates?: boolean };
 
 type Chip = {
   /** The level whose removal this chip stands for. */
@@ -55,7 +53,8 @@ type Chip = {
  * for its RPC arguments, so the control and the data never disagree.
  *
  * The page passes the options it may offer — Campanii limits them to the
- * Groups the caller manages — and hides the levels it does not filter by.
+ * Groups the caller manages — and hides the levels it does not filter by,
+ * giving `useWorkFilter` the same `levels`.
  */
 export function WorkFilter({
   groups,
@@ -71,7 +70,7 @@ export function WorkFilter({
 }) {
   const showCampaign = levels.campaign ?? true;
   const showDates = levels.dates ?? true;
-  const filter = useWorkFilter();
+  const filter = useWorkFilter(levels);
   const { value, set, clear } = filter;
   const id = useId();
   const rootLabel = `${id}-root`;

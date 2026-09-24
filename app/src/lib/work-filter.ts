@@ -114,6 +114,30 @@ export function setWorkFilterLevel<L extends WorkFilterLevel>(
   return result;
 }
 
+/**
+ * Which optional levels a page filters by; the two Group levels always count.
+ * The page passes the same value to `useWorkFilter` and `<WorkFilter>`.
+ */
+export type WorkFilterLevels = { campaign?: boolean; dates?: boolean };
+
+/**
+ * The filter a page actually applies: a level it hides is dropped even when
+ * the URL carries it (a shared link from a page that shows it), so no hidden
+ * key ever reaches the server or counts as active.
+ */
+export function visibleWorkFilter(
+  value: WorkFilterValue,
+  levels: WorkFilterLevels = {},
+): WorkFilterValue {
+  const visible = { ...value };
+  if (levels.campaign === false) delete visible.campaignId;
+  if (levels.dates === false) {
+    delete visible.from;
+    delete visible.to;
+  }
+  return visible;
+}
+
 /** Whether any level is set. */
 export function isWorkFilterActive(value: WorkFilterValue): boolean {
   return LEVELS.some((level) => value[level] !== undefined);

@@ -7,8 +7,10 @@ import {
   parseWorkFilter,
   serializeWorkFilter,
   setWorkFilterLevel,
+  visibleWorkFilter,
   workFilterParams,
   type WorkFilterLevel,
+  type WorkFilterLevels,
   type WorkFilterParams,
   type WorkFilterValue,
 } from './work-filter';
@@ -43,13 +45,22 @@ export type WorkFilterState = {
  *
  *     const { params } = useWorkFilter();
  *     useQuery({ queryFn: params ? () => read(params) : skipToken, … });
+ *
+ * A page that hides a level passes the same `levels` it gives `<WorkFilter>`,
+ * so a hidden key in a shared URL is neither sent nor counted as active.
  */
-export function useWorkFilter(): WorkFilterState {
+export function useWorkFilter(levels: WorkFilterLevels = {}): WorkFilterState {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.toString();
+  const campaign = levels.campaign ?? true;
+  const dates = levels.dates ?? true;
   const value = useMemo(
-    () => parseWorkFilter(new URLSearchParams(query)),
-    [query],
+    () =>
+      visibleWorkFilter(parseWorkFilter(new URLSearchParams(query)), {
+        campaign,
+        dates,
+      }),
+    [query, campaign, dates],
   );
 
   const set = useCallback(
