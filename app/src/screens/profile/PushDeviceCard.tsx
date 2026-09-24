@@ -2,11 +2,12 @@ import { BellRing } from 'lucide-react';
 import { useId } from 'react';
 import { Switch } from '../../components/ui/switch';
 import { usePushSubscription } from '../../queries/push-subscription';
+import { PushPreferences } from './PushPreferences';
 
 /**
  * **Notificări pe acest dispozitiv** (#704, ADR-0010): whether this browser
- * receives Web Push. Self-contained, so it survives the Profil rebuild (#699),
- * and the card #635 adds its per-kind switches to.
+ * receives Web Push, and below it the Member's per-kind switches (#635).
+ * Self-contained, so it survives the Profil rebuild (#699).
  */
 export function PushDeviceCard() {
   const push = usePushSubscription();
@@ -65,6 +66,8 @@ export function PushDeviceCard() {
           {push.error}
         </p>
       )}
+
+      <PushPreferences />
     </section>
   );
 }

@@ -1096,6 +1096,73 @@ export type Database = {
           },
         ]
       }
+      notification_push_preferences: {
+        Row: {
+          created_at: string
+          kind: Database["public"]["Enums"]["noti_kind"]
+          member_id: string
+          push_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          kind: Database["public"]["Enums"]["noti_kind"]
+          member_id: string
+          push_enabled: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          kind?: Database["public"]["Enums"]["noti_kind"]
+          member_id?: string
+          push_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_push_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notification_push_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notification_push_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notification_push_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_push_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_push_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null

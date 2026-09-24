@@ -16,6 +16,11 @@ vi.mock('../../queries/push-subscription', () => ({
   usePushSubscription: () => hook.state,
 }));
 
+// The per-kind switches have their own suite (PushPreferences.test.tsx).
+vi.mock('./PushPreferences', () => ({
+  PushPreferences: () => null,
+}));
+
 import { PushDeviceCard } from './PushDeviceCard';
 
 function answer(overrides: Partial<PushState> = {}) {

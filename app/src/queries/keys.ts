@@ -204,5 +204,8 @@ export const keys = {
   push: {
     device: (memberId: string | undefined) =>
       ['push', 'device', { memberId }] as const,
+    /* The member's per-kind push preferences (#635), for all their devices. */
+    preferences: (memberId: string | undefined) =>
+      ['push', 'preferences', { memberId }] as const,
   },
 } as const;
