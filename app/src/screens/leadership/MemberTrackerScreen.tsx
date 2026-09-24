@@ -7,6 +7,7 @@ import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { formatBucharestDay } from '../../lib/calendar-time';
 import { formatPoints } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
+import { chosenGroupId } from '../../lib/work-filter';
 import {
   useLeadershipFilters,
   useLeadershipMemberTasks,
@@ -211,6 +212,9 @@ function MemberHistory({ memberId }: { memberId: string }) {
     [query.data, value, groupsById],
   );
   const ranged = Boolean(range?.p_from || range?.p_to);
+  // A Group level can be applied only once the Group tree is known.
+  const groupsReady =
+    chosenGroupId(value) === undefined || options.data !== undefined;
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
@@ -279,6 +283,12 @@ function MemberHistory({ memberId }: { memberId: string }) {
             <p>Nu am putut încărca istoricul.</p>
             <Button onClick={() => query.refetch()}>Reîncarcă istoricul</Button>
           </div>
+        ) : !groupsReady ? (
+          <p role="status">
+            {options.isError
+              ? 'Filtrul de grup se aplică după ce se încarcă filtrele.'
+              : 'Se încarcă filtrele…'}
+          </p>
         ) : !query.data.length && !ranged ? (
           <p>Nu există atribuiri disponibile pentru acest membru.</p>
         ) : !rows.length ? (

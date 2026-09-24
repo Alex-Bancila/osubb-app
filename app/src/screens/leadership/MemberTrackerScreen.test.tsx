@@ -281,3 +281,17 @@ it('shows an ordinary empty history and a safe retriable error', async () => {
   );
   expect(retry).toHaveBeenCalled();
 });
+it('waits for the Group tree before applying a Group level, instead of claiming no match', () => {
+  state.options.mockReturnValue({ isPending: true });
+  const { unmount } = view(uid, '?grup=7');
+  expect(cards()).toHaveLength(0);
+  expect(screen.queryByText(/Nicio atribuire/)).toBeNull();
+  expect(screen.getAllByText('Se încarcă filtrele…')).toHaveLength(2);
+  unmount();
+  state.options.mockReturnValue({ isError: true, refetch: vi.fn() });
+  view(uid, '?grup=7');
+  expect(
+    screen.getByText('Filtrul de grup se aplică după ce se încarcă filtrele.'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/Nicio atribuire/)).toBeNull();
+});

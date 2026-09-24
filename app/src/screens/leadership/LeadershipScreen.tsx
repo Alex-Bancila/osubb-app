@@ -133,6 +133,22 @@ function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
     );
   return (
     <>
+      {identities.isError && (
+        // A failed lookup is not "no Group": say so, and offer the read again.
+        <div
+          role="alert"
+          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/60 p-3 text-sm"
+        >
+          <p>Nu am putut încărca grupurile membrilor.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void identities.refetch()}
+          >
+            Reîncarcă grupurile
+          </Button>
+        </div>
+      )}
       <ol aria-labelledby="members-title" className="space-y-1">
         {rows.map((row, index) => (
           <BoardRow

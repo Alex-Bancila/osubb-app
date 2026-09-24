@@ -416,3 +416,19 @@ it('clearing the filter restores the full board and removes every URL key', asyn
     screen.getByText('Toate campaniile · toată perioada'),
   ).toBeInTheDocument();
 });
+
+it('says when the row Groups failed to load and offers the read again', async () => {
+  const retry = vi.fn();
+  boardWithIdentities();
+  state.identities.mockReturnValue({ isError: true, refetch: retry });
+  renderPage();
+  // The rows stay; only their chips are missing, and the page says why.
+  expect(
+    screen.getByRole('button', { name: 'Profilul membrului Ioana' }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^Grupul / })).toBeNull();
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Reîncarcă grupurile' }),
+  );
+  expect(retry).toHaveBeenCalled();
+});
