@@ -9,9 +9,12 @@ import {
   type Outcome,
   type PushResponse,
   type PushSubscriptionJson,
+  realDeps,
   type SendPushDeps,
   type Settled,
 } from "./deps.ts";
+// @ts-types="npm:@types/web-push@3.6.4"
+import webpush from "web-push";
 
 const SUBSCRIPTION = JSON.stringify({
   endpoint: "https://push.example/device-1",
@@ -30,6 +33,7 @@ const SERVICE = `Bearer ${jwt({ role: "service_role", iss: "supabase" })}`;
 function row(id: number, token = SUBSCRIPTION): ClaimedDelivery {
   return {
     delivery_id: id,
+    attempt: 1,
     token,
     notification_id: 1000 + id,
     title: `Titlu ${id}`,
@@ -40,6 +44,7 @@ function row(id: number, token = SUBSCRIPTION): ClaimedDelivery {
 
 interface Settlement {
   id: number;
+  attempt: number;
   outcome: Outcome;
   error: string | null;
 }
@@ -61,14 +66,14 @@ function fakeDeps(options: {
   let claims = 0;
 
   const deps: SendPushDeps = {
-    missingConfig: () => options.missing ?? [],
+    configProblems: () => options.missing ?? [],
     claim: (limit) => {
       claims++;
       assertEquals(limit, BATCH_SIZE);
       return Promise.resolve(batches.shift() ?? []);
     },
-    settle: (id, outcome, error) => {
-      settled.push({ id, outcome, error });
+    settle: (id, attempt, outcome, error) => {
+      settled.push({ id, attempt, outcome, error });
       const status: Settled = outcome === "retry"
         ? (options.retryBecomesFailed ? "failed" : "pending")
         : outcome;
@@ -125,7 +130,7 @@ Deno.test("a missing VAPID secret answers 500 before claiming anything", async (
   const { deps, claimCount } = fakeDeps({ missing: ["VAPID_PRIVATE_KEY"] });
   const response = await handleSendPush(post(), deps);
   assertEquals(response.status, 500);
-  assertEquals((await response.json()).missing, ["VAPID_PRIVATE_KEY"]);
+  assertEquals((await response.json()).problems, ["VAPID_PRIVATE_KEY"]);
   assertEquals(claimCount(), 0);
 });
 
@@ -135,7 +140,7 @@ Deno.test("201 settles the row sent", async () => {
   });
   const response = await handleSendPush(post(), deps);
   assertEquals(response.status, 200);
-  assertEquals(settled, [{ id: 1, outcome: "sent", error: null }]);
+  assertEquals(settled, [{ id: 1, attempt: 1, outcome: "sent", error: null }]);
   assertEquals(await response.json(), {
     claimed: 1,
     sent: 1,
@@ -150,7 +155,12 @@ Deno.test("410 settles the row dead, which deletes the push token", async () => 
     answer: () => ({ status: 410, body: "Gone" }),
   });
   const summary = await (await handleSendPush(post(), deps)).json();
-  assertEquals(settled, [{ id: 1, outcome: "dead", error: "HTTP 410: Gone" }]);
+  assertEquals(settled, [{
+    id: 1,
+    attempt: 1,
+    outcome: "dead",
+    error: "HTTP 410: Gone",
+  }]);
   assertEquals(summary.dead, 1);
 });
 
@@ -163,7 +173,12 @@ Deno.test("503 settles the row for a retry with backoff", async () => {
     answer: () => ({ status: 503, body: "busy" }),
   });
   const summary = await (await handleSendPush(post(), deps)).json();
-  assertEquals(settled, [{ id: 1, outcome: "retry", error: "HTTP 503: busy" }]);
+  assertEquals(settled, [{
+    id: 1,
+    attempt: 1,
+    outcome: "retry",
+    error: "HTTP 503: busy",
+  }]);
   assertEquals(summary.retried, 1);
 });
 
@@ -183,6 +198,7 @@ Deno.test("a network error is retried", async () => {
   await handleSendPush(post(), deps);
   assertEquals(settled, [{
     id: 1,
+    attempt: 1,
     outcome: "retry",
     error: "network: connection reset",
   }]);
@@ -195,6 +211,7 @@ Deno.test("400 fails the row at once and keeps the push service's answer", async
   const summary = await (await handleSendPush(post(), deps)).json();
   assertEquals(settled, [{
     id: 1,
+    attempt: 1,
     outcome: "failed",
     error: "HTTP 400: bad VAPID",
   }]);
@@ -291,4 +308,47 @@ Deno.test("bearerRole reads the role claim and rejects anything else", () => {
   assertEquals(bearerRole("Basic abc"), null);
   assertEquals(bearerRole("Bearer a.!!!.c"), null);
   assertEquals(bearerRole(`Bearer ${jwt({ sub: "x" })}`), null);
+});
+
+Deno.test("the settle quotes back the attempt the claim leased", async () => {
+  const { deps, settled } = fakeDeps({
+    batches: [[{ ...row(7), attempt: 3 }]],
+  });
+  await handleSendPush(post(), deps);
+  assertEquals(settled[0].attempt, 3);
+});
+
+Deno.test("malformed VAPID settings are a configuration problem, not a subscription one", () => {
+  const names = [
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "VAPID_PUBLIC_KEY",
+    "VAPID_PRIVATE_KEY",
+    "VAPID_SUBJECT",
+  ];
+  const saved = names.map((name) => [name, Deno.env.get(name)] as const);
+  try {
+    const pair = webpush.generateVAPIDKeys();
+    Deno.env.set("SUPABASE_URL", "http://localhost:54321");
+    Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "service-key");
+    Deno.env.set("VAPID_PUBLIC_KEY", pair.publicKey);
+    Deno.env.set("VAPID_PRIVATE_KEY", pair.privateKey);
+    Deno.env.set("VAPID_SUBJECT", "mailto:it@osubb.ro");
+    assertEquals(realDeps().configProblems(), []);
+
+    Deno.env.set("VAPID_PRIVATE_KEY", "too-short");
+    assertEquals(realDeps().configProblems().length, 1);
+
+    Deno.env.set("VAPID_PRIVATE_KEY", pair.privateKey);
+    Deno.env.set("VAPID_SUBJECT", "it@osubb.ro");
+    assertEquals(realDeps().configProblems().length, 1);
+
+    Deno.env.delete("VAPID_SUBJECT");
+    assertEquals(realDeps().configProblems(), ["VAPID_SUBJECT"]);
+  } finally {
+    for (const [name, value] of saved) {
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    }
+  }
 });

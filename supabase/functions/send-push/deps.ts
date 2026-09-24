@@ -9,6 +9,8 @@ import webpush from "web-push";
 /** One claimed outbox row, as public.claim_push_deliveries returns it. */
 export interface ClaimedDelivery {
   delivery_id: number;
+  /** The attempt number this claim leased; settle must quote it back. */
+  attempt: number;
   /** The browser's PushSubscription JSON, stored in push_tokens.token (#704). */
   token: string;
   notification_id: number;
@@ -36,11 +38,22 @@ export interface PushResponse {
 /** Thrown by send() when the subscription's keys cannot be used at all. */
 export class InvalidSubscriptionError extends Error {}
 
+/** How long one push request, response body included, may take. */
+export const SEND_TIMEOUT_MS = 20_000;
+
 export interface SendPushDeps {
-  /** Names of required settings that are missing (never their values). */
-  missingConfig(): string[];
+  /**
+   * What is wrong with the function's configuration: the names of missing
+   * settings, or of VAPID settings that are malformed -- never their values.
+   */
+  configProblems(): string[];
   claim(limit: number): Promise<ClaimedDelivery[]>;
-  settle(id: number, outcome: Outcome, error: string | null): Promise<Settled>;
+  settle(
+    id: number,
+    attempt: number,
+    outcome: Outcome,
+    error: string | null,
+  ): Promise<Settled>;
   send(
     subscription: PushSubscriptionJson,
     payload: string,
@@ -68,8 +81,24 @@ export function realDeps(): SendPushDeps {
     );
 
   return {
-    missingConfig() {
-      return REQUIRED_ENV.filter((name) => env(name) === "");
+    configProblems() {
+      const missing = REQUIRED_ENV.filter((name) => env(name) === "");
+      if (missing.length > 0) return missing;
+      try {
+        // Throws on a subject that is not mailto:/https:, or a key of the
+        // wrong length. Checked before claiming: a malformed pair would
+        // otherwise fail every row it touched.
+        webpush.setVapidDetails(
+          env("VAPID_SUBJECT"),
+          env("VAPID_PUBLIC_KEY"),
+          env("VAPID_PRIVATE_KEY"),
+        );
+      } catch {
+        return [
+          "VAPID_SUBJECT, VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY is malformed",
+        ];
+      }
+      return [];
     },
 
     async claim(limit) {
@@ -80,10 +109,10 @@ export function realDeps(): SendPushDeps {
       return (data ?? []) as ClaimedDelivery[];
     },
 
-    async settle(id, outcome, error) {
+    async settle(id, attempt, outcome, error) {
       const { data, error: rpcError } = await client().rpc(
         "settle_push_delivery",
-        { p_id: id, p_outcome: outcome, p_error: error },
+        { p_id: id, p_attempt: attempt, p_outcome: outcome, p_error: error },
       );
       if (rpcError) throw rpcError;
       return (data ?? null) as Settled;
@@ -104,6 +133,8 @@ export function realDeps(): SendPushDeps {
           },
         });
       } catch (cause) {
+        // configProblems() has already vetted the VAPID settings, so what
+        // is left to reject here is the subscription itself.
         throw new InvalidSubscriptionError(
           cause instanceof Error ? cause.message : String(cause),
         );
@@ -113,6 +144,13 @@ export function realDeps(): SendPushDeps {
         headers: request.headers,
         // A copy typed Uint8Array<ArrayBuffer>, which fetch accepts as BodyInit.
         body: request.body ? new Uint8Array(request.body) : null,
+        // A push service answers directly; following a redirect would send
+        // the signed request somewhere the subscription never named.
+        redirect: "error",
+        // Bounds the request and the body read below, so one hung push
+        // service cannot hold the batch past its lease. A timeout throws and
+        // is retried like any network error.
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       });
       return { status: response.status, body: await response.text() };
     },

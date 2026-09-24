@@ -3337,6 +3337,7 @@ export type Database = {
       claim_push_deliveries: {
         Args: { p_limit: number }
         Returns: {
+          attempt: number
           body: string
           delivery_id: number
           link: string
@@ -4336,7 +4337,12 @@ export type Database = {
         }
       }
       settle_push_delivery: {
-        Args: { p_error?: string; p_id: number; p_outcome: string }
+        Args: {
+          p_attempt: number
+          p_error?: string
+          p_id: number
+          p_outcome: string
+        }
         Returns: string
       }
       start_task: {

@@ -7,7 +7,7 @@
 //   200 { claimed, sent, retried, dead, failed }
 //   401  the bearer is not the service-role key
 //   405  not POST
-//   500  a required secret is missing, or the database refused a claim
+//   500  a required secret is missing or malformed, or a claim failed
 //
 // Outcomes per push service answer (ADR-0010):
 //   2xx                  -> sent
@@ -132,7 +132,12 @@ async function deliver(
   }
 
   try {
-    const settled = await deps.settle(row.delivery_id, outcome, error);
+    const settled = await deps.settle(
+      row.delivery_id,
+      row.attempt,
+      outcome,
+      error,
+    );
     if (settled === "sent") summary.sent++;
     else if (settled === "pending") summary.retried++;
     else if (settled === "dead") summary.dead++;
@@ -153,11 +158,12 @@ export async function handleSendPush(
     return json({ error: "service_role only" }, 401);
   }
 
-  const missing = deps.missingConfig();
-  if (missing.length > 0) {
-    // Checked before claiming, so a missing secret burns no attempts.
-    console.error("send-push is missing configuration", missing);
-    return json({ error: "missing configuration", missing }, 500);
+  const problems = deps.configProblems();
+  if (problems.length > 0) {
+    // Checked before claiming, so a missing or malformed secret burns no
+    // attempts.
+    console.error("send-push configuration", problems);
+    return json({ error: "configuration", problems }, 500);
   }
 
   const summary: SendPushSummary = {

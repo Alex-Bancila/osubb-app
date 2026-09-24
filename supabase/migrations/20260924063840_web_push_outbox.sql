@@ -66,6 +66,7 @@ for each row execute function private.enqueue_push_deliveries();
 create function public.claim_push_deliveries(p_limit integer)
 returns table (
   delivery_id     bigint,
+  attempt         integer,
   token           text,
   notification_id bigint,
   title           text,
@@ -118,9 +119,9 @@ begin
            next_attempt_at = now() + interval '5 minutes'
       from due
      where delivery.id = due.id
-    returning delivery.id, delivery.token_id, delivery.notification_id
+    returning delivery.id, delivery.attempts, delivery.token_id, delivery.notification_id
   )
-  select claimed.id, push_token.token, notification.id,
+  select claimed.id, claimed.attempts, push_token.token, notification.id,
          notification.title, notification.body, notification.link
     from claimed
     join public.push_tokens as push_token on push_token.id = claimed.token_id
@@ -130,9 +131,9 @@ end;
 $$;
 
 comment on function public.claim_push_deliveries(integer) is
-  'send-push only (service_role). Claims up to p_limit due outbox rows (pending, or sending with an expired lease) with for update skip locked, marks them sending, increments attempts and leases them for five minutes; returns each delivery id with the subscription JSON (push_tokens.token) and the Notification id, title, body and link. A lease that expires after the fifth attempt turns the row failed (last_error lease_expired). PT400 invalid_limit outside 1..500.';
+  'send-push only (service_role). Claims up to p_limit due outbox rows (pending, or sending with an expired lease) with for update skip locked, marks them sending, increments attempts and leases them for five minutes; returns each delivery id and its attempt number (the lease the settle must quote back) with the subscription JSON (push_tokens.token) and the Notification id, title, body and link. A lease that expires after the fifth attempt turns the row failed (last_error lease_expired). PT400 invalid_limit outside 1..500.';
 
-create function public.settle_push_delivery(p_id bigint, p_outcome text, p_error text default null)
+create function public.settle_push_delivery(p_id bigint, p_attempt integer, p_outcome text, p_error text default null)
 returns text
 language plpgsql
 security definer
@@ -154,7 +155,9 @@ begin
      where push_token.id = (
        select delivery.token_id
          from public.push_deliveries as delivery
-        where delivery.id = p_id and delivery.status = 'sending'
+        where delivery.id = p_id
+          and delivery.status = 'sending'
+          and delivery.attempts = p_attempt
      );
     return case when found then 'dead' end;
   end if;
@@ -176,20 +179,23 @@ begin
          last_error = case when p_outcome = 'sent' then null else left(p_error, 1000) end
    where delivery.id = p_id
      and delivery.status = 'sending'
+     -- Fenced to the caller's lease: a sender that stalled past five minutes
+     -- cannot overwrite the outcome of the attempt that reclaimed the row.
+     and delivery.attempts = p_attempt
   returning delivery.status into v_status;
 
   return v_status;
 end;
 $$;
 
-comment on function public.settle_push_delivery(bigint, text, text) is
-  'send-push only (service_role). Records the outcome of one claimed (sending) delivery: sent stamps sent_at; retry returns it to pending 1, 2, 4 or 8 minutes ahead after attempts one to four and fails it on the fifth; dead deletes its push_tokens row, cascading every outbox row of that device; failed is terminal. p_error is kept (first 1000 characters) as last_error. Returns the resulting status (pending, sent, failed, or dead), or null when the row is no longer sending -- a sibling''s dead already removed it, or its lease was reclaimed. PT400 invalid_push_outcome for any other outcome.';
+comment on function public.settle_push_delivery(bigint, integer, text, text) is
+  'send-push only (service_role). Records the outcome of one claimed (sending) delivery, fenced to the lease: p_attempt must be the attempt number the claim returned. sent stamps sent_at; retry returns it to pending 1, 2, 4 or 8 minutes ahead after attempts one to four and fails it on the fifth; dead deletes its push_tokens row, cascading every outbox row of that device; failed is terminal. p_error is kept (first 1000 characters) as last_error. Returns the resulting status (pending, sent, failed, or dead), or null when the row is no longer sending under that attempt -- a sibling''s dead already removed it, or its lease expired and another run reclaimed it. PT400 invalid_push_outcome for any other outcome.';
 
 revoke execute on function public.claim_push_deliveries(integer),
-  public.settle_push_delivery(bigint, text, text)
+  public.settle_push_delivery(bigint, integer, text, text)
   from public, anon, authenticated, service_role;
 grant execute on function public.claim_push_deliveries(integer),
-  public.settle_push_delivery(bigint, text, text)
+  public.settle_push_delivery(bigint, integer, text, text)
   to service_role;
 
 -- Every minute, and only when a row is due, POST to send-push. The project

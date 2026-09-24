@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(45);
+select plan(49);
 
 -- ==================== Claim race (committed fixtures) ====================
 -- test_race needs committed rows its two remote sessions can see. Setup and
@@ -113,11 +113,11 @@ select ok(not has_function_privilege('authenticated', 'public.claim_push_deliver
       and not has_function_privilege('anon', 'public.claim_push_deliveries(integer)', 'execute')
       and not has_function_privilege('public', 'public.claim_push_deliveries(integer)', 'execute'),
   'no client role can claim');
-select ok(has_function_privilege('service_role', 'public.settle_push_delivery(bigint, text, text)', 'execute'),
+select ok(has_function_privilege('service_role', 'public.settle_push_delivery(bigint, integer, text, text)', 'execute'),
   'service_role can settle');
-select ok(not has_function_privilege('authenticated', 'public.settle_push_delivery(bigint, text, text)', 'execute')
-      and not has_function_privilege('anon', 'public.settle_push_delivery(bigint, text, text)', 'execute')
-      and not has_function_privilege('public', 'public.settle_push_delivery(bigint, text, text)', 'execute'),
+select ok(not has_function_privilege('authenticated', 'public.settle_push_delivery(bigint, integer, text, text)', 'execute')
+      and not has_function_privilege('anon', 'public.settle_push_delivery(bigint, integer, text, text)', 'execute')
+      and not has_function_privilege('public', 'public.settle_push_delivery(bigint, integer, text, text)', 'execute'),
   'no client role can settle');
 select ok(not has_function_privilege('authenticated', 'private.enqueue_push_deliveries()', 'execute')
       and not has_function_privilege('service_role', 'private.enqueue_push_deliveries()', 'execute'),
@@ -147,6 +147,8 @@ select is((select count(*) from public.claim_push_deliveries(100)), 1::bigint,
 reset role;
 select throws_ok($$select * from public.claim_push_deliveries(0)$$, 'PT400', 'invalid_limit',
   'a claim limit below one is refused');
+select throws_ok($$select * from public.claim_push_deliveries(501)$$, 'PT400', 'invalid_limit',
+  'a claim limit above 500 is refused');
 
 -- A sender that died between claim and settle: its lease runs out.
 update public.push_deliveries set next_attempt_at = now() - interval '1 second'
@@ -155,6 +157,13 @@ select is((select count(*) from public.claim_push_deliveries(100)), 1::bigint,
   'a row whose lease expired is claimed again');
 select is((select attempts from public.push_deliveries where id = (select min(delivery_id) from claim_703)), 2,
   'the reclaim counts as another attempt');
+select is(public.settle_push_delivery((select min(delivery_id) from claim_703), 1, 'sent'), null,
+  'the stalled sender''s settle quotes a stale attempt and answers null');
+select is((select status || ':' || attempts from public.push_deliveries where id = (select min(delivery_id) from claim_703)),
+  'sending:2', 'and leaves the reclaimed row to the run that holds its lease');
+select public.settle_push_delivery((select min(delivery_id) from claim_703), 1, 'dead', 'HTTP 410');
+select ok(exists (select 1 from public.push_deliveries where id = (select min(delivery_id) from claim_703)),
+  'a stale dead settle deletes no device');
 update public.push_deliveries set attempts = 5, next_attempt_at = now() - interval '1 second'
  where id = (select min(delivery_id) from claim_703);
 select is((select count(*) from public.claim_push_deliveries(100)), 0::bigint,
@@ -163,23 +172,23 @@ select is((select status || ':' || last_error from public.push_deliveries where 
   'failed:lease_expired', 'it fails with lease_expired instead');
 
 -- ==================== Settle: sent / failed / invalid ====================
-select is(public.settle_push_delivery((select max(delivery_id) from claim_703), 'sent'), 'sent',
+select is(public.settle_push_delivery((select max(delivery_id) from claim_703), 1, 'sent'), 'sent',
   'sent answers sent');
 select ok(
   (select status = 'sent' and sent_at = now() and last_error is null
      from public.push_deliveries where id = (select max(delivery_id) from claim_703)),
   'sent stamps sent_at');
-select is(public.settle_push_delivery((select max(delivery_id) from claim_703), 'retry', 'late'), null,
+select is(public.settle_push_delivery((select max(delivery_id) from claim_703), 1, 'retry', 'late'), null,
   'settling a row that is no longer sending changes nothing and answers null');
 select is(
   public.settle_push_delivery(
-    (select delivery_id from claim_703 order by delivery_id offset 1 limit 1), 'failed', 'HTTP 400: bad VAPID'),
+    (select delivery_id from claim_703 order by delivery_id offset 1 limit 1), 1, 'failed', 'HTTP 400: bad VAPID'),
   'failed', 'failed answers failed');
 select is(
   (select status || ':' || last_error from public.push_deliveries
     where id = (select delivery_id from claim_703 order by delivery_id offset 1 limit 1)),
   'failed:HTTP 400: bad VAPID', 'failed is terminal and records the push service''s answer');
-select throws_ok($$select public.settle_push_delivery(1, 'maybe')$$, 'PT400', 'invalid_push_outcome',
+select throws_ok($$select public.settle_push_delivery(1, 1, 'maybe')$$, 'PT400', 'invalid_push_outcome',
   'an unknown outcome is refused');
 
 -- ==================== Settle: retry backoff ====================
@@ -190,11 +199,12 @@ create temporary table backoff_703 (attempt integer, outcome text, wait interval
 do $$
 declare
   v_id bigint;
+  v_attempt integer;
   v_outcome text;
 begin
   for attempt in 1..5 loop
-    select delivery_id into strict v_id from public.claim_push_deliveries(100);
-    v_outcome := public.settle_push_delivery(v_id, 'retry', 'HTTP 503');
+    select delivery_id, claimed.attempt into strict v_id, v_attempt from public.claim_push_deliveries(100) as claimed;
+    v_outcome := public.settle_push_delivery(v_id, v_attempt, 'retry', 'HTTP 503');
     insert into backoff_703
     select attempt, v_outcome, delivery.next_attempt_at - now()
       from public.push_deliveries as delivery where delivery.id = v_id;
@@ -225,7 +235,7 @@ select delivery.id, delivery.token_id
  where push_token.token = '{"endpoint":"https://push.example/laptop"}'
  order by delivery.id limit 1;
 select public.claim_push_deliveries(100);
-select is(public.settle_push_delivery((select id from dead_703), 'dead', 'HTTP 410'), 'dead',
+select is(public.settle_push_delivery((select id from dead_703), 1, 'dead', 'HTTP 410'), 'dead',
   'dead answers dead');
 select ok(not exists (select 1 from public.push_tokens where id = (select token_id from dead_703)),
   'dead deletes the push token');
