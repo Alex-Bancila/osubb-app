@@ -1,53 +1,193 @@
-import { formatPoints } from '../../lib/format';
-import { useNavigate } from 'react-router';
-import { Trophy } from 'lucide-react';
-import {
-  DataTable,
-  type DataTableColumn,
-} from '../../components/data-table/DataTable';
+import { useState, type MouseEvent } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { ChevronRight, Trophy } from 'lucide-react';
+import { cn } from 'cn';
+import { MemberCard } from '../../components/member/MemberCard';
 import { MemberName } from '../../components/member/MemberName';
+import { memberDisplayName } from '../../components/member/member-identity';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
+import { useAuth } from '../../lib/auth';
+import { formatDayMonthYear, formatPoints } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
-import { withoutGroup } from '../../lib/work-filter';
+import { withoutGroup, type WorkFilterValue } from '../../lib/work-filter';
 import {
+  useLeaderboardIdentities,
   useLeadershipLeaderboard,
   useLeadershipCup,
   useLeadershipFilters,
+  type LeaderboardIdentity,
   type LeaderboardRow,
 } from '../../queries/leadership';
+import { MemberGroups } from '../volunteers/MemberGroups';
 import { LeadershipAccess } from './LeadershipAccess';
 
-const columns: DataTableColumn<LeaderboardRow>[] = [
-  {
-    id: 'member',
-    accessorFn: (row) => row.nickname || row.full_name,
-    header: 'Membru',
-    // The card carries "Vezi istoricul taskurilor" for leadership viewers.
-    cell: ({ row }) => (
-      <MemberName
-        memberId={row.original.member_id}
-        nickname={row.original.nickname}
-        fullName={row.original.full_name}
-      />
-    ),
-  },
-  {
-    accessorKey: 'points',
-    header: 'Puncte',
-    cell: ({ row }) => (
-      <span className="font-semibold tabular-nums">
-        {formatPoints(row.original.points)}
+const trackerPath = (memberId: string) => `/tracker/membru/${memberId}`;
+
+/**
+ * One Clasament row (R11), Voluntari-style: rank, the Member's name button
+ * (avatar, Nickname) and their first Department chip with "+n" — both open
+ * the Member Card, whose main link is "Vezi trackerul" — then the points and
+ * the row's own link to the tracker. A click anywhere else on the row opens
+ * the tracker too. The chip is the Member's own Group: someone who earned
+ * points in the filtered Group without belonging to it shows where they do
+ * belong (the ranking counts the Task's Group, never the Member's).
+ */
+function BoardRow({
+  row,
+  position,
+  identity,
+  self,
+  onOpenCard,
+}: {
+  row: LeaderboardRow;
+  position: number;
+  identity: LeaderboardIdentity | undefined;
+  self: boolean;
+  onOpenCard: () => void;
+}) {
+  const navigate = useNavigate();
+  const name = memberDisplayName(row.nickname, row.full_name);
+  const rank = row.rank ?? position;
+  function openFromRow(event: MouseEvent<HTMLLIElement>) {
+    // React bubbles clicks from a portal (the Member Card) through the row:
+    // only clicks on the row's own DOM, outside its controls, open it.
+    if (
+      !(event.target instanceof Element) ||
+      !event.currentTarget.contains(event.target) ||
+      event.target.closest('a,button')
+    )
+      return;
+    void navigate(trackerPath(row.member_id));
+  }
+  return (
+    <li
+      onClick={openFromRow}
+      data-self={self || undefined}
+      className={cn(
+        'grid cursor-pointer grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/60 sm:grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] sm:px-3',
+        self && 'bg-primary/5 ring-1 ring-primary/30 hover:bg-primary/10',
+      )}
+    >
+      <span
+        className={cn(
+          'text-center text-lg font-extrabold tabular-nums',
+          rank <= 3 ? 'text-primary' : 'text-muted-foreground',
+        )}
+      >
+        <span className="sr-only">Locul </span>
+        {rank}
       </span>
-    ),
-  },
-];
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <MemberName
+            memberId={row.member_id}
+            nickname={row.nickname}
+            fullName={row.full_name}
+            avatarColor={identity?.avatarColor}
+          />
+          {self && (
+            <Badge variant="secondary" className="shrink-0">
+              tu
+            </Badge>
+          )}
+        </span>
+        {identity && (
+          <MemberGroups
+            primaryGroup={identity.primaryGroup}
+            otherMemberships={identity.otherMemberships}
+            memberName={name}
+            onOpen={onOpenCard}
+          />
+        )}
+      </div>
+      <span className="text-right font-bold whitespace-nowrap tabular-nums">
+        {formatPoints(row.points)}{' '}
+        <span className="text-xs font-medium text-muted-foreground">pct.</span>
+      </span>
+      <Link
+        to={trackerPath(row.member_id)}
+        aria-label={`Vezi trackerul membrului ${name}`}
+        className="col-start-3 inline-flex min-h-11 min-w-11 items-center justify-end gap-1 justify-self-end rounded-md text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:col-start-4 sm:row-start-1 sm:px-2"
+      >
+        <span className="hidden sm:inline">Vezi trackerul</span>
+        <ChevronRight aria-hidden="true" className="size-4" />
+      </Link>
+    </li>
+  );
+}
+
+function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
+  const viewerId = useAuth().session?.user.id;
+  const identities = useLeaderboardIdentities(rows.map((row) => row.member_id));
+  const [card, setCard] = useState<LeaderboardRow | null>(null);
+  if (!rows.length)
+    return (
+      <div className="rounded-lg border border-dashed border-border p-6 text-center">
+        <p className="font-semibold">Nu există puncte pentru filtrele alese</p>
+        <p className="text-sm text-muted-foreground">
+          Încearcă alt grup, altă campanie sau altă perioadă.
+        </p>
+      </div>
+    );
+  return (
+    <>
+      <ol aria-labelledby="members-title" className="space-y-1">
+        {rows.map((row, index) => (
+          <BoardRow
+            key={row.member_id}
+            row={row}
+            position={index + 1}
+            identity={identities.data?.[row.member_id]}
+            self={row.member_id === viewerId}
+            onOpenCard={() => setCard(row)}
+          />
+        ))}
+      </ol>
+      {card && (
+        <MemberCard
+          open
+          onOpenChange={(open) => {
+            if (!open) setCard(null);
+          }}
+          memberId={card.member_id}
+          nickname={card.nickname}
+          fullName={card.full_name}
+          avatarColor={identities.data?.[card.member_id]?.avatarColor}
+        />
+      )}
+    </>
+  );
+}
+
+/** What the Cup counts under the current filter: its Campaign and range. */
+function cupScope(
+  value: WorkFilterValue,
+  campaignName: string | undefined,
+): string {
+  const campaign =
+    value.campaignId === undefined
+      ? 'Toate campaniile'
+      : `Campania ${campaignName ?? `#${value.campaignId}`}`;
+  const from = value.from && formatDayMonthYear(value.from);
+  const to = value.to && formatDayMonthYear(value.to);
+  const period =
+    from && to
+      ? `puncte acordate între ${from} și ${to}`
+      : from
+        ? `puncte acordate din ${from}`
+        : to
+          ? `puncte acordate până la ${to}`
+          : 'toată perioada';
+  return `${campaign} · ${period}`;
+}
+
 // An inverted range sends nothing (#678): the reads wait for a valid one.
 const RANGE_FIRST = 'Corectează perioada din filtre ca să vezi rezultatele.';
 
 function LeadershipContent() {
-  const navigate = useNavigate();
-  const { params } = useWorkFilter();
+  const { value, params } = useWorkFilter();
   const options = useLeadershipFilters();
   const board = useLeadershipLeaderboard(params);
   const cup = useLeadershipCup(params && withoutGroup(params));
@@ -59,8 +199,9 @@ function LeadershipContent() {
         </p>
         <h1 className="text-3xl font-bold tracking-tight">Clasament</h1>
         <p className="text-muted-foreground">
-          Punctele taskurilor, pe membri și grupuri. Alege un membru pentru
-          istoricul său.
+          Punctele taskurilor, pe membri și grupuri. Un membru apare sub grupul
+          în care a lucrat taskul, chiar dacă nu îi aparține. Alege un rând
+          pentru trackerul membrului.
         </p>
       </header>
       <section
@@ -104,15 +245,7 @@ function LeadershipContent() {
               </Button>
             </div>
           ) : (
-            <DataTable
-              columns={columns}
-              onRowClick={(row) => navigate(`/tracker/membru/${row.member_id}`)}
-              rowClassName={() => 'cursor-pointer'}
-              data={board.data}
-              initialSorting={[{ id: 'points', desc: true }]}
-              emptyTitle="Nu există puncte pentru filtrele alese"
-              emptyDescription="Încearcă alt grup sau altă campanie."
-            />
+            <Leaderboard rows={board.data} />
           )}
         </section>
         <section
@@ -125,8 +258,16 @@ function LeadershipContent() {
               Cupa Departamentelor
             </h2>
           </div>
-          <p className="mb-5 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Grupurile înscrise în competiție și punctele care le revin.
+          </p>
+          <p className="mb-5 text-sm font-medium">
+            {cupScope(
+              value,
+              options.data?.campaigns.find(
+                (campaign) => campaign.id === value.campaignId,
+              )?.name,
+            )}
           </p>
           {!params ? (
             <p>{RANGE_FIRST}</p>

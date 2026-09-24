@@ -62,6 +62,9 @@ export const keys = {
     all: ['members'] as const,
     card: (memberId: string, viewerId: string | undefined) =>
       ['members', 'card', { memberId, viewerId }] as const,
+    /** Avatar colour and Voluntari chip for a set of Members (sorted ids). */
+    identities: (viewerId: string | undefined, memberIds: readonly string[]) =>
+      ['members', 'identities', { viewerId, memberIds }] as const,
   },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare
@@ -78,8 +81,12 @@ export const keys = {
       ['tasks', 'form-options', { memberId }] as const,
     directExecutors: (memberId: string | undefined) =>
       ['tasks', 'direct-executors', { memberId }] as const,
-    memberHistory: (memberId: string | undefined, targetId: string) =>
-      ['tasks', 'member-history', memberId, targetId] as const,
+    memberHistory: (
+      memberId: string | undefined,
+      targetId: string,
+      // The deadline range (#677); null while the Work Filter's is inverted.
+      range: { p_from?: string; p_to?: string } | null = {},
+    ) => ['tasks', 'member-history', memberId, targetId, range] as const,
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
@@ -154,8 +161,6 @@ export const keys = {
     all: ['leadership'] as const,
     filters: (memberId: string | undefined) =>
       ['leadership', 'filters', { memberId }] as const,
-    memberName: (memberId: string | undefined, targetId: string) =>
-      ['leadership', 'member-name', { memberId, targetId }] as const,
   },
   notifications: {
     all: ['notifications'] as const,

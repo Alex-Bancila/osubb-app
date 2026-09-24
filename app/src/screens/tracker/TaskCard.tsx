@@ -1,4 +1,4 @@
-import { useId, useState, type CSSProperties } from 'react';
+import { useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { CalendarClock, UserRound } from 'lucide-react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
 import { MemberName } from '../../components/member/MemberName';
@@ -25,9 +25,10 @@ type TaskCardProps = {
   task: TaskPresentation;
   allowInterest?: boolean;
   onOpenTask?: (id: number) => void;
-  memberId: string | undefined;
-  pending: boolean;
-  onProgress: (input: TaskProgressInput) => Promise<unknown>;
+  /** The viewer; the Executor's own card offers Start, Submit and Give up. */
+  memberId?: string | undefined;
+  pending?: boolean;
+  onProgress?: (input: TaskProgressInput) => Promise<unknown>;
   /**
    * The list's copy of a card carries `id="task-<id>"`, the target of
    * `/tracker?task=<id>`; the details sheet's copy must not repeat it.
@@ -40,6 +41,12 @@ type TaskCardProps = {
    * the details sheet shows it on its own, whenever one exists.
    */
   showSubmissionNote?: boolean;
+  /**
+   * The read-only history variant (the Member tracker, R11): the card shows
+   * this Assignment's own record in place of the Executor line, the queue and
+   * every action — nothing on it changes the Task.
+   */
+  history?: ReactNode;
 };
 
 const chipClass =
@@ -50,17 +57,21 @@ export function TaskCard({
   allowInterest = false,
   onOpenTask,
   memberId,
-  pending,
+  pending = false,
   onProgress,
   anchor = true,
   highlighted = false,
   showSubmissionNote = true,
+  history,
 }: TaskCardProps) {
+  const readOnly = history !== undefined;
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const titleId = useId();
   const isExecutor =
+    !readOnly &&
+    onProgress !== undefined &&
     task.kind === 'task' &&
     memberId !== undefined &&
     task.executor?.memberId === memberId;
@@ -77,7 +88,7 @@ export function TaskCard({
   const stripe = task.origin.color ?? 'var(--ink-400)';
 
   async function start() {
-    if (pending || saving) return;
+    if (pending || saving || !onProgress) return;
     setSaving(true);
     setError(null);
     try {
@@ -196,7 +207,7 @@ export function TaskCard({
                 )}
               </span>
             </p>
-            {task.kind === 'task' && (
+            {task.kind === 'task' && !readOnly && (
               <p className="flex min-w-0 flex-wrap items-center gap-x-2">
                 <UserRound
                   aria-hidden="true"
@@ -225,8 +236,11 @@ export function TaskCard({
               {task.description}
             </p>
           )}
-          {task.assignmentMode !== 'public' && <TaskStageSummary task={task} />}
-          {task.assignmentMode === 'public' &&
+          {!readOnly && task.assignmentMode !== 'public' && (
+            <TaskStageSummary task={task} />
+          )}
+          {!readOnly &&
+            task.assignmentMode === 'public' &&
             (allowInterest &&
             !task.queueClosed &&
             ['todo', 'in_progress', 'in_review'].includes(task.status) ? (
@@ -234,7 +248,8 @@ export function TaskCard({
             ) : (
               <TaskQueueStatus taskId={task.id} task={task} />
             ))}
-          {showSubmissionNote &&
+          {!readOnly &&
+            showSubmissionNote &&
             task.status === 'in_review' &&
             task.submission && <SubmissionNote submission={task.submission} />}
           {task.link && (
@@ -250,6 +265,7 @@ export function TaskCard({
               · Nota {task.rating}
             </p>
           )}
+          {history}
           {notice && <TaskActionSuccess>{notice}</TaskActionSuccess>}
           {error && (
             <p role="alert" className="text-sm text-destructive">
@@ -268,7 +284,7 @@ export function TaskCard({
                 {pending || saving ? 'Se salvează…' : 'Începe taskul'}
               </Button>
             )}
-            {action === 'submit' && (
+            {action === 'submit' && onProgress && (
               <SubmitForReviewDialog
                 pending={pending}
                 onSubmit={(submission) =>
