@@ -199,4 +199,10 @@ export const keys = {
     unread: (memberId?: string) =>
       ['notifications', 'unread', { memberId }] as const,
   },
+  /* Whether this browser receives Web Push for the member (#704): its
+     subscription and its `push_tokens` row. "Mine", so keyed by member. */
+  push: {
+    device: (memberId: string | undefined) =>
+      ['push', 'device', { memberId }] as const,
+  },
 } as const;

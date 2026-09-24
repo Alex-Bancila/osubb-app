@@ -53,6 +53,15 @@ vi.mock('./supabase', () => ({
   },
 }));
 
+// The Web Push device (#704): sign-out removes this device's row first.
+const pushDevice = vi.hoisted(() => ({
+  unsubscribeDevice: vi.fn(async (_memberId: string) => undefined),
+}));
+vi.mock('./push-device', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./push-device')>()),
+  unsubscribeDevice: pushDevice.unsubscribeDevice,
+}));
+
 import { AuthProvider, useAuth } from './auth';
 
 // Builds a stored session. Passing `issuedAtMs` also stamps `expires_at` /
@@ -284,6 +293,49 @@ describe('AuthProvider cache hygiene', () => {
     expect(client.getQueryData(['profile', 'me', { memberId: 'a' }])).toEqual({
       full_name: 'A',
     });
+  });
+});
+
+describe('sign-out and this device’s Web Push (#704)', () => {
+  function renderSignedIn() {
+    auth.getSession.mockResolvedValueOnce({
+      data: { session: sessionFor('member-a') },
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <SessionProbe />
+          <SignOutButton />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('removes this device’s push row before signing out', async () => {
+    renderSignedIn();
+    await waitFor(() =>
+      expect(screen.getByTestId('session-user')).toHaveTextContent('member-a'),
+    );
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
+    expect(pushDevice.unsubscribeDevice).toHaveBeenCalledWith('member-a');
+    const [removeOrder] = pushDevice.unsubscribeDevice.mock.invocationCallOrder;
+    const [signOutOrder] = auth.signOut.mock.invocationCallOrder;
+    expect(removeOrder).toBeLessThan(signOutOrder ?? 0);
+  });
+
+  it('still signs out when removing the push row fails', async () => {
+    pushDevice.unsubscribeDevice.mockRejectedValueOnce(new Error('offline'));
+    renderSignedIn();
+    await waitFor(() =>
+      expect(screen.getByTestId('session-user')).toHaveTextContent('member-a'),
+    );
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
   });
 });
 

@@ -21,6 +21,7 @@ import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useMyGroups, useRoles } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
+import { PushDeviceCard } from './PushDeviceCard';
 
 export default function ProfileScreen() {
   const { claims } = useAuth();
@@ -412,6 +413,8 @@ export default function ProfileScreen() {
                   </div>
                 )}
               </section>
+
+              <PushDeviceCard />
             </div>
           </div>
 

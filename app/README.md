@@ -61,6 +61,7 @@ app/
     ├── assets/brand/       # OSUBB mark + wordmark, light/dark (own README)
     ├── lib/
     │   ├── supabase.ts             # the one shared client, env-driven
+    │   ├── push-device.ts          # this browser as a Web Push device: subscription + push_tokens row (#704)
     │   ├── auth.tsx                # session + decoded claims, useAuth() (+ auth.test.tsx)
     │   ├── auth-error-message.ts   # maps GoTrue errors to Romanian copy
     │   ├── capabilities.ts         # useCapabilities(): the server capability row (my_capabilities())
@@ -83,6 +84,7 @@ app/
     │   ├── event-rsvp.ts   # the RSVP mutation (+ event-rsvp.test.tsx)
     │   ├── notifications.ts # my notifications, unread count, mark read / all read (+ test)
     │   ├── profile.ts      # the signed-in member's own profile row
+    │   ├── push-subscription.ts # usePushSubscription(): the Profil push switch (+ test)
     │   └── reference.ts    # departments/roles lookups for display
     ├── components/
     │   ├── ui/             # locally owned shadcn Base UI/Nova primitives
@@ -101,8 +103,15 @@ app/
     │   │                   # NewEventControl (+test), calendar-presentation (+test)
     │   ├── notifications/  # NotificationsScreen (+test), notifications-presentation (+test)
     │   ├── login/          # LoginScreen.tsx, AuthCallback.tsx — magic-link request + landing
-    │   ├── profile/        # ProfileScreen.tsx (+test), EditProfileSheet.tsx (+test) (#108)
+    │   ├── profile/        # ProfileScreen.tsx (+test), EditProfileSheet.tsx (+test) (#108),
+    │   │                   # PushDeviceCard (+test): Notificări pe acest dispozitiv (#704)
     │   └── no-profile/     # signed in, not a member (ADR-0003 gate 2)
+    ├── pwa/
+    │   ├── pwa-config.ts   # vite-plugin-pwa options: injectManifest, precache globs, manifest (+ test)
+    │   ├── sw.ts           # the service worker: precache, fallback, push + notificationclick (ADR-0010)
+    │   ├── sw-routes.ts    # its denylist and network-only Supabase rule (tested in pwa-config.test.ts)
+    │   ├── push-payload.ts # push payload parsing, tap target, focus-or-open (+ test)
+    │   └── PwaUpdatePrompt.tsx # asks before activating a waiting worker (+ test)
     ├── theme/
     │   ├── tokens.css       # Brand Book palette; originated as a copy of mockup/css/tokens.css,
     │   │                    # forked since — check both before assuming they still match
