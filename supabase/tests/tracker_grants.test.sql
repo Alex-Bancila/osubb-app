@@ -328,11 +328,11 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #259: the Campaign-filtered Department Cup read wrapper. Same grant shape
   -- as every command wrapper -- authenticated only -- even though it writes
   -- nothing: the BCE+ gate lives inside the function, not in the grant.
-  ('department_cup',                 'p_campaign_id bigint',         false, true,  false, false),
+  ('department_cup',                 'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',         false, true,  false, false),
   -- #260: the leadership drill-down over one Member's Assignment history.
-  ('leadership_member_tasks',        'p_member_id uuid',             false, true,  false, false),
+  ('leadership_member_tasks',        'p_member_id uuid, p_from timestamp with time zone, p_to timestamp with time zone',             false, true,  false, false),
   -- #258: the Task-Points Leaderboard, filterable by Origin and Campaign.
-  ('leadership_leaderboard',         'p_group_id bigint, p_campaign_id bigint',
+  ('leadership_leaderboard',         'p_group_id bigint, p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',
                                                                      false, true,  false, false),
   -- #499: a deliberately narrow batch read for the current Executor of Tasks
   -- the caller may already read. Assignment history remains behind its RLS.
@@ -340,8 +340,8 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #625: the Campaign reporting reads -- per-volunteer report and
   -- whole-Campaign totals. Same grant shape as every read wrapper --
   -- authenticated only, gated inside the function (private.can_manage_group_work).
-  ('campaign_report',                'p_campaign_id bigint',         false, true,  false, false),
-  ('campaign_totals',                'p_campaign_id bigint',         false, true,  false, false),
+  ('campaign_report',                'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',         false, true,  false, false),
+  ('campaign_totals',                'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',         false, true,  false, false),
   -- #626: the full-state Task edit and its read-only consequence preview.
   ('update_task',            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean',
                                                                      false, true,  false, false),
@@ -436,8 +436,8 @@ insert into pinned_private_functions (proname, args, category) values
   -- worked on it. Same grant shape as every other read body ('impl'):
   -- authenticated only, gated inside the function itself
   -- (private.can_manage_group_work), never a silent empty result.
-  ('campaign_report_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
-  ('campaign_totals_impl',                        'p_campaign_id bigint',                                                                                               'impl'),
+  ('campaign_report_impl',                        'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',                                                                                               'impl'),
+  ('campaign_totals_impl',                        'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',                                                                                               'impl'),
   -- #507: the Group roster predicate behind group_members_read. It walks
   -- groups.path, so a Group Manager or Responsible of an ancestor reads every
   -- Group below it.
@@ -458,7 +458,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text', 'impl'),
   -- #259: the Department Cup body behind both the legacy `dept_cup` view and
   -- the filtered `public.department_cup(p_campaign_id)` wrapper.
-  ('department_cup_rows',                         'p_campaign_id bigint',                                                                                               'authenticated_only'),
+  ('department_cup_rows',                         'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',                                                                                               'authenticated_only'),
   -- #341: clone a Task into a brand-new todo Task with a fresh deadline.
   ('duplicate_task_impl',                         'p_task_id bigint, p_deadline timestamp with time zone',                                                             'impl'),
   ('end_task_assignment',                         'p_assignment_id bigint, p_reason text, p_note text',                                                                 'none'),
@@ -481,8 +481,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('is_task_team_member',                         'p_task_id bigint',                                                                                                   'predicate'),
   -- #258: the Task-Points Leaderboard body behind
   -- `public.leadership_leaderboard(group, campaign)`.
-  ('leadership_leaderboard_impl',                 'p_group_id bigint, p_campaign_id bigint',                                   'authenticated_only'),
-  ('leadership_member_tasks_impl',                'p_member_id uuid',                                                                                                  'impl'),
+  ('leadership_leaderboard_impl',                 'p_group_id bigint, p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',                                   'authenticated_only'),
+  ('leadership_member_tasks_impl',                'p_member_id uuid, p_from timestamp with time zone, p_to timestamp with time zone',                                                                                                  'impl'),
   ('log_task_activity',                           'p_task_id bigint, p_kind text, p_actor uuid, p_assignment_id bigint, p_from task_status, p_to task_status, p_note text, p_details jsonb', 'none'),
   -- #337: the second command over the shared evaluate_task core (#336) --
   -- the `unfulfilled` outcome for overdue, undelivered work.
@@ -661,11 +661,14 @@ insert into pinned_private_functions (proname, args, category) values
   ('normalize_profile_phone', '',             'trigger'),
   -- #684: the step-1 rule for one Attached Link (create_task, update_task,
   -- preview_task_update, submit_task_for_review). Granted to nobody.
-  ('require_attached_link',   'p_label text, p_url text', 'require');
+  ('require_attached_link',   'p_label text, p_url text', 'require'),
+  -- #677: the Work Filter's step-1 range check, called only from the five
+  -- security-definer reader bodies. Granted to nobody.
+  ('require_date_range',      'p_from timestamp with time zone, p_to timestamp with time zone', 'require');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 125,
-  'the audited roster includes #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies)');
+  (select count(*) from pinned_private_functions)::int, 126,
+  'the audited roster includes #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

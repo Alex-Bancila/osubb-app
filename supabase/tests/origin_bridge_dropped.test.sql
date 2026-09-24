@@ -65,12 +65,12 @@ select ok((select 'security_invoker=on' = any (reloptions) from pg_class where o
       and has_table_privilege('authenticated', 'public.dept_cup', 'select')
       and not has_table_privilege('anon', 'public.dept_cup', 'select'),
   'dept_cup is recreated security_invoker with its grants');
-select ok(has_function_privilege('authenticated', 'public.department_cup(bigint)', 'execute')
-      and not has_function_privilege('anon', 'public.department_cup(bigint)', 'execute')
-      and has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid)', 'execute')
-      and not has_function_privilege('anon', 'public.leadership_member_tasks(uuid)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute')
+      and not has_function_privilege('anon', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute')
+      and has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'execute')
+      and not has_function_privilege('anon', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'execute'),
   'department_cup and leadership_member_tasks keep their grants');
-select is(pg_get_function_result('public.department_cup(bigint)'::regprocedure),
+select is(pg_get_function_result('public.department_cup(bigint, timestamptz, timestamptz)'::regprocedure),
   'TABLE(group_id bigint, name text, points integer, members bigint)',
   'department_cup returns (group_id, name, points, members)');
 
