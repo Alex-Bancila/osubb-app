@@ -10,9 +10,14 @@ export type EventFormGroup = {
   isOrganization: boolean;
 };
 
+/** An active Campaign an Event may carry (#691). */
+export type EventFormCampaign = { id: number; name: string; group_id: number };
+
 export type EventFormOptions = {
   groups: EventFormGroup[];
   groupNames: Array<{ id: number; name: string }>;
+  /** Active Campaigns; `eventCampaignsFor` narrows them to the chosen Group. */
+  campaigns: EventFormCampaign[];
 };
 
 export type EventFormValues = {
@@ -25,6 +30,7 @@ export type EventFormValues = {
   capacity: string;
   description: string;
   minLevel: number;
+  campaignId: number | null;
 };
 
 export type EventDraft = {
@@ -37,6 +43,7 @@ export type EventDraft = {
   capacity: number | null;
   description: string | null;
   minLevel: number;
+  campaignId: number | null;
 };
 
 export const EVENT_TYPE_CHOICES: ReadonlyArray<{
@@ -78,4 +85,19 @@ export function groupsAvailableAtLevel(
   return options.groups.filter(
     (group) => minimumLevelChoices(group.minLevel, actorLevel).length > 0,
   );
+}
+
+/**
+ * **Campanie** options for an Event on this Group: the active Campaigns owned
+ * by the Group or by a Group above it on its path — the rule
+ * `private.validate_event_campaign` enforces (#691), and the one
+ * `campaignsFor` applies to a Task's Origin. No Group, no Campaign.
+ */
+export function eventCampaignsFor(
+  group: Pick<EventFormGroup, 'path'> | null | undefined,
+  campaigns: readonly EventFormCampaign[],
+): EventFormCampaign[] {
+  return group
+    ? campaigns.filter((campaign) => group.path.includes(campaign.group_id))
+    : [];
 }

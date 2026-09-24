@@ -97,6 +97,9 @@ export const keys = {
       ['tasks', 'detail', { taskId, memberId }] as const,
     managed: (memberId: string | undefined) =>
       ['tasks', 'managed', { memberId }] as const,
+    /* Tasks where I hold a pending candidature (the Calendar's chips, #692). */
+    candidatures: (memberId: string | undefined) =>
+      ['tasks', 'candidatures', { memberId }] as const,
     leadershipCapability: (memberId: string | undefined) =>
       ['tasks', 'leadership-capability', { memberId }] as const,
     leadership: (memberId: string | undefined) =>
@@ -138,10 +141,19 @@ export const keys = {
     all: ['events'] as const,
     formOptions: (memberId: string | undefined) =>
       ['events', 'form-options', { memberId }] as const,
-    upcoming: (memberId: string) =>
-      ['events', 'upcoming', { memberId }] as const,
+    /* The Calendar's window on `starts_at` (#692), and Acasă's (#700). */
+    range: (memberId: string, range: { from?: string; to?: string }) =>
+      [
+        'events',
+        'range',
+        { memberId, from: range.from, to: range.to },
+      ] as const,
+    detail: (eventId: number, memberId: string) =>
+      ['events', 'detail', { eventId, memberId }] as const,
     rsvp: (eventId: number, memberId: string) =>
       ['events', 'rsvp', { eventId, memberId }] as const,
+    /* The Events I answered "Vin" to: an Other OSUBB Event turns to colour. */
+    going: (memberId: string) => ['events', 'going', { memberId }] as const,
   },
   announcements: {
     all: ['announcements'] as const,

@@ -3,6 +3,7 @@ import { bucharestWallTimeToIso } from '../calendar-time';
 import { emptyToNull, trimText } from '../normalize';
 import {
   EVENT_TYPE_CHOICES,
+  eventCampaignsFor,
   type EventDraft,
   type EventFormOptions,
   type EventFormValues,
@@ -47,6 +48,7 @@ export function eventSchema(
       capacity: z.string(),
       description: optionalText({ max: 2000, tooLong: 'description_too_long' }),
       minLevel: z.number(),
+      campaignId: z.number().nullable(),
     })
     .superRefine((values, ctx) => {
       const issue = (path: keyof EventFormValues, message: string) =>
@@ -83,6 +85,16 @@ export function eventSchema(
         issue('minLevel', 'event_min_level_below_group');
       else if (actorLevel < 9 && values.minLevel > actorLevel)
         issue('minLevel', 'event_min_level_above_actor');
+
+      // #691: a Campaign owned on the Event Group's path, and active — the
+      // server's `invalid_campaign`, said before the round trip.
+      if (
+        values.campaignId !== null &&
+        !eventCampaignsFor(group, options.campaigns).some(
+          (campaign) => campaign.id === values.campaignId,
+        )
+      )
+        issue('campaignId', 'invalid_campaign');
     })
     .transform((values): EventDraft => ({
       title: values.title,
@@ -94,6 +106,7 @@ export function eventSchema(
       capacity: values.capacity.trim() ? Number(values.capacity) : null,
       description: values.description,
       minLevel: values.minLevel,
+      campaignId: values.campaignId,
     }));
 }
 
@@ -114,4 +127,5 @@ export const fieldForReason: Readonly<Record<string, keyof EventFormValues>> = {
   invalid_event_min_level: 'minLevel',
   event_min_level_below_group: 'minLevel',
   event_min_level_above_actor: 'minLevel',
+  invalid_campaign: 'campaignId',
 };

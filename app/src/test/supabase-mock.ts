@@ -8,6 +8,7 @@ export function createSupabaseMock() {
     eq: vi.fn(),
     gt: vi.fn(),
     gte: vi.fn(),
+    lt: vi.fn(),
     neq: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),
@@ -34,6 +35,7 @@ export function createSupabaseMock() {
     mocks.eq.mockReturnValue(mocks);
     mocks.gt.mockReturnValue(mocks);
     mocks.gte.mockReturnValue(mocks);
+    mocks.lt.mockReturnValue(mocks);
     mocks.neq.mockReturnValue(mocks);
     mocks.order.mockReturnValue(mocks);
     mocks.limit.mockReturnValue(mocks);
