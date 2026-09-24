@@ -4,6 +4,7 @@ import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import type { WorkFilterParams } from '../lib/work-filter';
 import { keys } from './keys';
+import { fetchWorkFilterOptions } from './work-filter-options';
 
 type Functions = Database['public']['Functions'];
 export type LeaderboardRow =
@@ -58,25 +59,8 @@ export function fetchLeadershipMemberTasks(memberId: string) {
       .range(from, to),
   );
 }
-export async function fetchLeadershipFilters() {
-  const [groups, campaigns] = await Promise.all([
-    pages((from, to) =>
-      supabase
-        .from('groups')
-        .select('id,name,path,status,is_organization')
-        .order('id')
-        .range(from, to),
-    ),
-    pages((from, to) =>
-      supabase
-        .from('campaigns')
-        .select('id,name,group_id')
-        .order('id')
-        .range(from, to),
-    ),
-  ]);
-  return { groups, campaigns };
-}
+/** The Work Filter's choices; the Tracker reads the same options. */
+export const fetchLeadershipFilters = fetchWorkFilterOptions;
 /** `null` filters (an inverted date range) send nothing. */
 export function useLeadershipLeaderboard(filters: LeadershipFilters | null) {
   const memberId = useAuth().session?.user.id;

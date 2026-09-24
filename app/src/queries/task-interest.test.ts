@@ -41,23 +41,25 @@ function reads(status: string, position: number | null = null) {
   return query;
 }
 describe('Express Task interest', () => {
-  it('sends only the Task id and returns an assigned outcome', async () => {
+  it('sends only the Task id and returns only the queue position — never an Assignment probe (R9)', async () => {
     api.rpc.mockResolvedValue({ error: null });
-    const query = reads('direct');
+    api.from.mockClear();
+    const query = reads('pending', 5);
     await expect(expressTaskInterest(4, 'member')).resolves.toEqual({
-      kind: 'assigned',
+      position: 5,
     });
     expect(api.rpc).toHaveBeenCalledWith('express_task_interest', {
       p_task_id: 4,
     });
     expect(query.eq).toHaveBeenCalledWith('member_id', 'member');
+    expect(api.from).not.toHaveBeenCalledWith('task_assignments');
+    expect(api.from).toHaveBeenCalledWith('task_queue_summary');
   });
-  it('returns the server queue position without counting visible Candidates', async () => {
+  it('treats a Candidature already selected after the join as a conflict, not an Assignment', async () => {
     api.rpc.mockResolvedValue({ error: null });
-    reads('pending', 5);
-    await expect(expressTaskInterest(4, 'member')).resolves.toEqual({
-      kind: 'queued',
-      position: 5,
+    reads('selected');
+    await expect(expressTaskInterest(4, 'member')).rejects.toMatchObject({
+      kind: 'conflict',
     });
   });
   it.each([

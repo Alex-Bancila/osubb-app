@@ -29,33 +29,66 @@ export function hasOwnOrigin(
   return memberships.has(task.group_id);
 }
 
+/**
+ * An Opportunity as Disponibile shows it (ruling R10):
+ * - `relevant` — the Task's Group is one of the Member's own, so it belongs in
+ *   the upper band. The Organization Group is an Automatic Membership of every
+ *   Member, so its Opportunities are always relevant.
+ * - `joinable` — the Task Audience admits the Member: their own Group's Task,
+ *   or an org-Audience Task of any Group. A local-Audience Other OSUBB
+ *   Opportunity is shown but cannot be joined; the server's
+ *   `task_audience_forbidden` remains the rule, this only hides the button.
+ */
+export type Opportunity = TaskPresentationRow & {
+  relevant: boolean;
+  joinable: boolean;
+};
+
+function deadlineTime(task: TaskPresentationRow): number {
+  const time = task.deadline ? Date.parse(task.deadline) : Number.NaN;
+  return Number.isFinite(time) ? time : Infinity;
+}
+
+/** Deadline ascending, undated last, then title (Romanian), then id. */
+export function compareByDeadline(
+  a: TaskPresentationRow,
+  b: TaskPresentationRow,
+): number {
+  const byDeadline = deadlineTime(a) - deadlineTime(b);
+  return (
+    (Number.isNaN(byDeadline) ? 0 : byDeadline) ||
+    a.title.localeCompare(b.title, 'ro') ||
+    a.id - b.id
+  );
+}
+
+/**
+ * Every row the server returned is an Opportunity (#683 decides visibility);
+ * this only classifies them and orders the own band before the other band,
+ * each in deadline order. A Candidature never moves a row between bands.
+ */
 export function orderOpportunities(
   rows: TaskPresentationRow[],
-  scopes: TaskMemberships,
-  participatedTaskIds: ReadonlySet<number> = new Set(),
-): TaskPresentationRow[] {
-  // Managers may read local Tasks outside their memberships; those are not
-  // Opportunities they can join. This narrows the already-authorized rows.
+  memberships: TaskMemberships,
+): Opportunity[] {
   return rows
-    .filter(
-      (task) =>
-        participatedTaskIds.has(task.id) ||
-        task.audience === 'org' ||
-        hasOwnOrigin(task, scopes),
-    )
+    .map((task) => {
+      const relevant = hasOwnOrigin(task, memberships);
+      return {
+        ...task,
+        relevant,
+        joinable: relevant || task.audience === 'org',
+      };
+    })
     .sort(
       (a, b) =>
-        Number(hasOwnOrigin(b, scopes)) - Number(hasOwnOrigin(a, scopes)) ||
-        (a.deadline ? Date.parse(a.deadline) : Infinity) -
-          (b.deadline ? Date.parse(b.deadline) : Infinity) ||
-        a.title.localeCompare(b.title, 'ro') ||
-        a.id - b.id,
+        Number(b.relevant) - Number(a.relevant) || compareByDeadline(a, b),
     );
 }
 
 export async function fetchTaskOpportunities(
   memberId: string,
-): Promise<TaskPresentationRow[]> {
+): Promise<Opportunity[]> {
   const [scopes, candidatures] = await Promise.all([
     fetchTaskMemberships(),
     supabase
@@ -96,7 +129,7 @@ export async function fetchTaskOpportunities(
   for (const task of [...openResult.data, ...participatedTasks])
     tasks.set(task.id, task);
   return attachVisibleTaskExecutors(
-    orderOpportunities([...tasks.values()], scopes, participatedTaskIds),
+    orderOpportunities([...tasks.values()], scopes),
   );
 }
 

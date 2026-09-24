@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  matchesWorkFilter,
   campaignsFor,
   groupsBelow,
   parseWorkFilter,
@@ -237,5 +238,44 @@ describe('visibleWorkFilter', () => {
       rootGroupId: 1,
       campaignId: 10,
     });
+  });
+});
+
+describe('matchesWorkFilter', () => {
+  const task = {
+    group_id: 3,
+    group: { path: [1, 2, 3] },
+    campaign_id: 11,
+    deadline: '2026-09-15T20:59:00Z',
+  };
+  it('matches the chosen Group and every Group above the Task’s own', () => {
+    expect(matchesWorkFilter(task, {})).toBe(true);
+    expect(matchesWorkFilter(task, { p_group_id: 1 })).toBe(true);
+    expect(matchesWorkFilter(task, { p_group_id: 3 })).toBe(true);
+    expect(matchesWorkFilter(task, { p_group_id: 4 })).toBe(false);
+    // A withheld Group embed matches only by its own id.
+    expect(matchesWorkFilter({ ...task, group: null }, { p_group_id: 1 })).toBe(
+      false,
+    );
+    expect(matchesWorkFilter({ ...task, group: null }, { p_group_id: 3 })).toBe(
+      true,
+    );
+  });
+  it('matches the Campaign exactly', () => {
+    expect(matchesWorkFilter(task, { p_campaign_id: 11 })).toBe(true);
+    expect(matchesWorkFilter(task, { p_campaign_id: 12 })).toBe(false);
+  });
+  it('reads the deadline against the half-open Bucharest range; undated is outside', () => {
+    const day = workFilterParams({ from: '2026-09-15', to: '2026-09-15' });
+    expect(day).not.toBeNull();
+    if (!day) return;
+    expect(matchesWorkFilter(task, day)).toBe(true);
+    expect(
+      matchesWorkFilter({ ...task, deadline: '2026-09-15T21:00:00Z' }, day),
+    ).toBe(false);
+    expect(
+      matchesWorkFilter({ ...task, deadline: '2026-09-14T20:59:59Z' }, day),
+    ).toBe(false);
+    expect(matchesWorkFilter({ ...task, deadline: null }, day)).toBe(false);
   });
 });
