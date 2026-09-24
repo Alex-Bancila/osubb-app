@@ -2381,6 +2381,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2410,6 +2412,8 @@ export type Database = {
           group_id: number
           id?: never
           kind?: string
+          link_label?: string | null
+          link_url?: string | null
           parent_task_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2439,6 +2443,8 @@ export type Database = {
           group_id?: number
           id?: never
           kind?: string
+          link_label?: string | null
+          link_url?: string | null
           parent_task_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -3065,6 +3071,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3160,6 +3168,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3203,6 +3213,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3241,6 +3253,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3283,6 +3297,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3431,6 +3447,8 @@ export type Database = {
           p_executor_id?: string
           p_group_id?: number
           p_kind?: string
+          p_link_label?: string
+          p_link_url?: string
           p_parent_task_id?: number
           p_title: string
         }
@@ -3450,6 +3468,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3518,6 +3538,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3556,6 +3578,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3594,6 +3618,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3701,6 +3727,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3795,6 +3823,8 @@ export type Database = {
           p_deadline: string
           p_description: string
           p_group_id: number
+          p_link_label: string
+          p_link_url: string
           p_task_id: number
           p_title: string
         }
@@ -3870,6 +3900,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3908,6 +3940,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3950,6 +3984,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4096,6 +4132,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4134,6 +4172,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4155,7 +4195,12 @@ export type Database = {
         }
       }
       submit_task_for_review: {
-        Args: { p_task_id: number }
+        Args: {
+          p_link_label?: string
+          p_link_url?: string
+          p_note?: string
+          p_task_id: number
+        }
         Returns: {
           assignment_mode: string | null
           audience: string | null
@@ -4172,6 +4217,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4345,6 +4392,8 @@ export type Database = {
           p_deadline: string
           p_description: string
           p_group_id: number
+          p_link_label: string
+          p_link_url: string
           p_task_id: number
           p_title: string
         }
@@ -4364,6 +4413,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4408,6 +4459,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4475,6 +4528,8 @@ export type Database = {
           group_id: number
           id: number
           kind: string
+          link_label: string | null
+          link_url: string | null
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null

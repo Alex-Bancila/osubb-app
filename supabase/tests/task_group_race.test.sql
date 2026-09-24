@@ -65,7 +65,7 @@ create temp table race_627 as select * from pg_temp.test_race(
     (select id from public.groups where name='Race Group #627'),
     'Race task #627', 'Before move',
     (select deadline from public.tasks where title='Race task #627'),
-    null,'direct','org',true)).status::text$q$,
+    null,'direct','org',null,null,true)).status::text$q$,
   'select public.test_627_demote()');
 select is((select result_a from race_627),'in_progress',
   'move keeps already-rostered eligible Executor assigned before demotion');

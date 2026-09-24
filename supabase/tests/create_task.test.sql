@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(138);
+select plan(154);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -174,16 +174,16 @@ grant select on f327 to authenticated;
 
 select has_function('public', 'create_task',
   array['text', 'text', 'timestamptz', 'text', 'text',
-        'uuid', 'bigint', 'bigint', 'text', 'bigint'],
-  'public.create_task exists with the pinned Group-only ten-parameter signature (#579)');
+        'uuid', 'bigint', 'bigint', 'text', 'bigint', 'text', 'text'],
+  'public.create_task exists with the pinned Group-only signature plus the #684 Attached Link pair');
 
 select is(pg_get_function_identity_arguments(
-    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
-  'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure),
+  'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text',
   'create_task exposes no actor parameter — the actor is always auth.uid()');
 
 select is(pg_get_function_result(
-    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure),
   'tasks', 'create_task returns the created Task row');
 
 select ok(not (select procedure.prosecdef
@@ -217,15 +217,15 @@ select ok(coalesce((
 ), false), 'every function in the kit pins an empty search_path');
 
 select ok(has_function_privilege('authenticated',
-  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure,
   'execute'), 'authenticated can execute public.create_task');
 
 select ok(not has_function_privilege('anon',
-  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure,
   'execute'), 'anon cannot execute public.create_task');
 
 select ok(has_function_privilege('authenticated',
-  'private.create_task_impl(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'private.create_task_impl(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure,
   'execute'), 'authenticated can execute private.create_task_impl');
 
 select ok(has_function_privilege('authenticated',
@@ -1139,6 +1139,59 @@ select throws_ok($$ select public.create_task('Titlu bun #673', repeat('d', 2001
   'PT400', 'description_too_long', 'a description over 2000 characters is refused before the gate');
 select throws_ok($$ select public.create_task('Titlu bun #673', 'd', now() - interval '1 day', 'local', 'direct') $$,
   'PT400', 'deadline_in_past', 'a deadline in the past is refused at creation, before the gate');
+reset role;
+
+-- ==================== #684: the Attached Link (R7) ====================
+-- The schema: the pair is held by tasks_link_ck, the rules underneath by
+-- tasks_link_format_ck. Named, never null (Ruling 23).
+select col_type_is('public', 'tasks', 'link_label', 'text', 'tasks.link_label is text');
+select col_type_is('public', 'tasks', 'link_url', 'text', 'tasks.link_url is text');
+select is((select pg_get_constraintdef(oid) from pg_constraint
+            where conrelid = 'public.tasks'::regclass and conname = 'tasks_link_ck'),
+  'CHECK (((link_url IS NULL) = (link_label IS NULL)))',
+  'tasks_link_ck: the label and the address are set together or not at all');
+select throws_ok($$ update public.tasks set link_label = 'Doar eticheta' where title = 'BC dept task #327' $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_link_ck"',
+  'a direct half-set write is refused by tasks_link_ck');
+select throws_ok($$ update public.tasks set link_label = 'FTP', link_url = 'ftp://example.org' where title = 'BC dept task #327' $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_link_format_ck"',
+  'a direct non-http(s) write is refused by tasks_link_format_ck');
+
+select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok($$ select public.create_task('Cu link #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => '  Brief  ', p_link_url => E'\thttps://example.org/brief  ') $$,
+  'create_task accepts both link fields');
+select lives_ok($$ select public.create_task('Fara link #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => '   ', p_link_url => null) $$,
+  'create_task treats a blank label with no address as no link at all');
+select lives_ok($$ select public.create_task('Umbrela cu link #684', 'd', null, null, null, p_kind => 'umbrella',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Plan', p_link_url => 'https://example.org/plan') $$,
+  'an Umbrella may carry a link like any Task');
+select throws_ok($$ select public.create_task('Link incomplet #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Doar eticheta') $$,
+  'PT400', 'link_incomplete', 'one of the two link fields alone is refused');
+select throws_ok($$ select public.create_task('Link ftp #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'FTP', p_link_url => 'ftp://example.org/x') $$,
+  'PT400', 'link_url_invalid', 'a non-http(s) address is refused');
+select throws_ok($$ select public.create_task('Link lung #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 2030)) $$,
+  'PT400', 'link_url_too_long', 'an address over 2048 characters is refused');
+select throws_ok($$ select public.create_task('Eticheta lunga #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => repeat('e', 61), p_link_url => 'https://example.org/x') $$,
+  'PT400', 'link_label_too_long', 'a label over 60 characters is refused');
+reset role;
+select is((select format('%s|%s', task.link_label, task.link_url) from public.tasks as task where task.title = 'Cu link #684'),
+  'Brief|https://example.org/brief', 'both link fields are stored trimmed');
+select is((select format('%s|%s', task.link_label is null, task.link_url is null) from public.tasks as task where task.title = 'Fara link #684'),
+  't|t', 'with neither link field both columns are null');
+select is((select task.link_url from public.tasks as task where task.title = 'Umbrela cu link #684'),
+  'https://example.org/plan', 'the Umbrella keeps its link');
+-- Step 1: the pair rule answers a claimless caller before the gate.
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_task('Titlu bun #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_link_url => 'https://example.org/x') $$,
+  'PT400', 'link_incomplete', 'a half-set link is refused before the gate');
 reset role;
 
 select * from finish();

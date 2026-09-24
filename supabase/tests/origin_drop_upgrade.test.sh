@@ -32,8 +32,10 @@ psql_run() {
 teardown() {
   cat <<'SQL'
 -- The new arities are created with plain `create function` by the migration.
-drop function public.create_task(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint);
-drop function private.create_task_impl(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint);
+-- #684 later widened create_task by the Attached Link pair; the live arity is
+-- the one to clear before the replay recreates #579's Group-only one.
+drop function public.create_task(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint, text, text);
+drop function private.create_task_impl(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint, text, text);
 drop function public.create_completed_work_request(text, bigint);
 drop function private.create_completed_work_request_impl(text, bigint);
 

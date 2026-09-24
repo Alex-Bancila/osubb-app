@@ -34,6 +34,8 @@ const task = taskRow({
   deadline: '2026-09-20T12:00:37Z',
   campaign_id: 9,
   campaign: { name: 'Istoric' },
+  link_label: 'Brief',
+  link_url: 'https://example.org/brief',
 });
 beforeEach(() => {
   state.options.mockReturnValue({ data, refetch: state.refetch });
@@ -105,6 +107,9 @@ it('edits every field through update_task after a preview with no consequences',
     campaignId: 11,
     assignmentMode: 'public',
     audience: 'org',
+    // #684: the form has no link fields yet; the Task's link travels unchanged.
+    linkLabel: 'Brief',
+    linkUrl: 'https://example.org/brief',
   };
   expect(state.refetch).toHaveBeenCalledTimes(1);
   expect(state.preview).toHaveBeenCalledWith(values);

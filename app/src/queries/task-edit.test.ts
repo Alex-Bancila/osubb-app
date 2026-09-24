@@ -17,6 +17,9 @@ const input: TaskUpdateInput = {
   campaignId: null,
   assignmentMode: 'direct',
   audience: 'local',
+  // #684: the Task's current Attached Link travels through unchanged.
+  linkLabel: 'Brief',
+  linkUrl: 'https://example.org/brief',
 };
 const args = {
   p_task_id: 1,
@@ -27,6 +30,8 @@ const args = {
   p_campaign_id: null,
   p_assignment_mode: 'direct',
   p_audience: 'local',
+  p_link_label: 'Brief',
+  p_link_url: 'https://example.org/brief',
 };
 beforeEach(() => vi.resetAllMocks());
 
