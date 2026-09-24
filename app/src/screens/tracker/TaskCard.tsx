@@ -1,6 +1,7 @@
 import { useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { CalendarClock, UserRound } from 'lucide-react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
+import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -79,6 +80,7 @@ export function TaskGroupChip({ task }: { task: TaskPresentation }) {
         className="size-2 shrink-0 rounded-full bg-(--task-stripe)"
       />
       <span className="min-w-0 wrap-anywhere">{task.origin.label}</span>
+      <PrivateGroupBadge isPrivate={task.origin.isPrivate} compact />
     </span>
   );
 }

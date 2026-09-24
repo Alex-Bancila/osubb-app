@@ -40,6 +40,8 @@ import { TaskGroupCascade } from './TaskGroupCascade';
 import {
   campaignsFor,
   groupLookup,
+  isPrivateGroup,
+  PRIVATE_GROUP_AUDIENCE_HINT,
   type ManagedWorkGroup,
   type TaskFormOptions,
 } from './task-form-model';
@@ -185,6 +187,11 @@ function TaskEditForm({
   const submitting = useRef(false);
   const group = options.data?.groups.find((row) => row.id === groupId);
   const campaigns = options.data ? campaignsFor(group, options.data) : [];
+  // A Private Group's Tasks are local only (#757): the form shows and sends
+  // that, whatever the Task carried before.
+  const localOnly = options.data
+    ? isPrivateGroup(groupId, options.data)
+    : false;
   const groupsById = useMemo(
     () => (options.data ? groupLookup(options.data) : new Map()),
     [options.data],
@@ -210,7 +217,11 @@ function TaskEditForm({
     assignmentMode: umbrella
       ? null
       : (assignmentMode as TaskUpdateValues['assignmentMode']),
-    audience: umbrella ? null : (audience as TaskUpdateValues['audience']),
+    audience: umbrella
+      ? null
+      : localOnly
+        ? 'local'
+        : (audience as TaskUpdateValues['audience']),
     link,
   };
   const form = useFormValidation(
@@ -446,15 +457,22 @@ function TaskEditForm({
                 <span>Audiență</span>
                 <select
                   className={control}
-                  value={audience}
+                  value={localOnly ? 'local' : audience}
                   onChange={(event) => setAudience(event.target.value)}
                   {...form.field('audience')}
                 >
                   <option value="local">Membrii grupului de origine</option>
-                  <option value="org">Toți membrii eligibili OSUBB</option>
+                  <option value="org" disabled={localOnly}>
+                    Toți membrii eligibili OSUBB
+                  </option>
                 </select>
               </label>
               <FieldError {...form.errorProps('audience')} />
+              {localOnly && (
+                <p className="text-sm text-muted-foreground">
+                  {PRIVATE_GROUP_AUDIENCE_HINT}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <label htmlFor={`${id}-campaign`}>Campanie (opțional)</label>
