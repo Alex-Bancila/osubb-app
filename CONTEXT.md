@@ -89,6 +89,10 @@ _Avoid_: Team visibility, open board, transparency mode
 A Group setting under which every active Member at or above the Group's Minimum Level belongs to it. The roster follows each Member's Role, is never edited by hand, and accepts no Applications; Group Roles are still appointed.
 _Avoid_: Derived roster, virtual group, implicit membership
 
+**Private Group**:
+A Group setting under which the Group, every Group below it, and their Tasks and Events are visible only to their members, to the Group Managers and Group Responsibles on its path, and to BC and Moderator. A Private Group accepts no Applications and offers no organization-wide Opportunity; a Member enters it by Appointment and sees it from that moment.
+_Avoid_: Hidden group, secret group, invite-only group
+
 **Group Audience**:
 Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership. A Group's Announcements and the important changes to its Events reach its Group Audience, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
 _Avoid_: Recipients, subscribers, the roster when Automatic Membership is meant
