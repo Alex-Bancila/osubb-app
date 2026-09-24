@@ -314,6 +314,24 @@ describe('CalendarScreen', () => {
       });
     });
 
+    // An end alone bounds only the end: the today floor is for no range at
+    // all. Mutation this catches: defaulting `from` to today whenever it is
+    // unset, which makes this window empty.
+    it('reads everything up to an end day when only Până la is set', () => {
+      setEvents([pastEvent]);
+      renderCalendar('/calendar?pana_la=2026-09-01');
+
+      expect(hooks.useEventsInRange).toHaveBeenLastCalledWith({
+        to: '2026-09-01T21:00:00.000Z',
+      });
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Agendă' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('article', { name: 'Ședință de septembrie' }),
+      ).toBeInTheDocument();
+    });
+
     it('sends nothing while the range is inverted', () => {
       renderCalendar('/calendar?de_la=2026-11-10&pana_la=2026-11-01');
       expect(hooks.useEventsInRange).toHaveBeenLastCalledWith(null);

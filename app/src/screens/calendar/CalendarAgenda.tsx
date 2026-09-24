@@ -10,6 +10,7 @@ import {
 import type { Group } from '../../queries/reference';
 import {
   eventCardId,
+  countLabel,
   eventRangeForDays,
   filterEvents,
   groupEventsByDay,
@@ -54,14 +55,15 @@ export function CalendarAgenda({
   const linkedEvent = linkedId !== null ? (linked.data ?? null) : null;
   const waitingForLink = linkedId !== null && linked.isPending;
 
-  const from = filter.value.from ?? todayKey;
   const to = filter.value.to;
+  // No range at all: Ce urmează starts today. An end alone bounds only the end.
+  const from = filter.value.from ?? (to === undefined ? todayKey : undefined);
   const startsToday = from === todayKey;
   const range = useMemo(() => {
     if (!filter.params || waitingForLink) return null;
     const day = linkedEvent?.dayKey;
     return eventRangeForDays(
-      day ? earlier(from, day) : from,
+      day && from ? earlier(from, day) : from,
       day && to ? later(to, day) : to,
     );
   }, [filter.params, waitingForLink, linkedEvent?.dayKey, from, to]);
@@ -144,8 +146,7 @@ export function CalendarAgenda({
                     <time dateTime={day.dayKey}>{day.dayLabel}</time>
                   </h2>
                   <span className="calendar-day-count">
-                    {day.events.length}{' '}
-                    {day.events.length === 1 ? 'eveniment' : 'evenimente'}
+                    {countLabel(day.events.length, 'eveniment', 'evenimente')}
                   </span>
                 </header>
 
