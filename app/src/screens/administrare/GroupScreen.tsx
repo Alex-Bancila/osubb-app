@@ -262,6 +262,8 @@ export default function GroupScreen() {
       >
         {tab === 'setari' && (
           <GroupSettingsTab
+            // A new Group is a new draft: every field starts from its row.
+            key={group.id}
             group={group}
             parent={parent}
             subtree={subtree}
