@@ -607,7 +607,7 @@ values (pg_temp.g584_group('Prag #584'), pg_temp.g584_uid(5), 'Cerere veche');
 
 select pg_temp.g584_bc();
 select lives_ok(
-  format($$select public.update_group(%s, 'Prag #584', null, true, 1, false, 1, true)$$,
+  format($$select public.update_group(%s, 'Prag #584', null, true, 1, false, 1, null, null, true)$$,
          pg_temp.g584_group('Prag #584')),
   'update_group: BC raises the Minimum Level above a Member with p_confirm_removals');
 reset role;

@@ -65,6 +65,8 @@ it('sends every Administrare write through its own command, nulls included', asy
     applicationLevel: 1,
     sharedWorkVisibility: false,
     minLevel: 3,
+    applicationFormLabel: 'Formular de înscriere',
+    applicationFormUrl: 'https://forms.example.org/amfiteatru',
     confirmRemovals: true,
   });
   expect(api.rpc).toHaveBeenLastCalledWith('update_group', {
@@ -75,6 +77,8 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_application_level: 1,
     p_shared_work_visibility: false,
     p_min_level: 3,
+    p_application_form_label: 'Formular de înscriere',
+    p_application_form_url: 'https://forms.example.org/amfiteatru',
     p_confirm_removals: true,
   });
 
@@ -148,6 +152,8 @@ it('raises a translated refusal that still carries the server reason', async () 
     applicationLevel: null,
     sharedWorkVisibility: false,
     minLevel: 3,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
     confirmRemovals: false,
   }).catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(CommandError);

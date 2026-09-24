@@ -70,7 +70,7 @@ select extensions.dblink_exec('races_582_setup', $setup$
   language sql as $fn$
     select (public.update_group(
       (select id from public.groups where name = 'Child #582 race'),
-      'Child #582 race', 'Coordonator', false, null, false, 0)).manager_title;
+      'Child #582 race', 'Coordonator', false, null, false, 0, null, null)).manager_title;
   $fn$;
 
   create function public.test_582_archive() returns text
@@ -83,7 +83,7 @@ select extensions.dblink_exec('races_582_setup', $setup$
   language sql as $fn$
     select (public.update_group(
       (select id from public.groups where name like 'Child #582 race' or name = 'Renamed #582 race'),
-      'Renamed #582 race', null, false, null, false, 0)).name;
+      'Renamed #582 race', null, false, null, false, 0, null, null)).name;
   $fn$;
 
   create function public.test_582_rename_soft() returns text

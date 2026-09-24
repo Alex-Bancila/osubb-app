@@ -74,6 +74,8 @@ function group(
     competes_in_cup: false,
     counts_toward_parent_cup: true,
     shared_work_visibility: false,
+    application_form_label: null,
+    application_form_url: null,
     memberCount: 3,
     ...extra,
   };
@@ -283,6 +285,8 @@ it('names who leaves before it raises the Minimum Level, and only then confirms'
     applicationLevel: null,
     sharedWorkVisibility: false,
     minLevel: 3,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
     confirmRemovals: true,
   });
 });
@@ -334,6 +338,8 @@ it('sends the Minimum Level for "Ca nivelul minim al grupului", following a Mini
     applicationLevel: 0,
     sharedWorkVisibility: false,
     minLevel: 0,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
     confirmRemovals: false,
   });
 });
@@ -358,8 +364,40 @@ it('keeps an explicit Application Level as chosen', async () => {
     applicationLevel: 5,
     sharedWorkVisibility: false,
     minLevel: 1,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
     confirmRemovals: false,
   });
+});
+
+it('sends a stored application form link back, so saving the settings never clears it (#697)', async () => {
+  const user = userEvent.setup();
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? {
+            ...row,
+            application_form_label: 'Formular de înscriere',
+            application_form_url: 'https://forms.example.org/logistica',
+          }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  show();
+  // Lowering the Minimum Level never removes anyone, so this saves directly.
+  await user.selectOptions(screen.getByLabelText('Nivel minim'), '0');
+  await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
+  expect(api.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'settings',
+      groupId: 2,
+      minLevel: 0,
+      applicationFormLabel: 'Formular de înscriere',
+      applicationFormUrl: 'https://forms.example.org/logistica',
+    }),
+  );
 });
 
 it('archives through the command and explains unfinished work in the Group', async () => {
