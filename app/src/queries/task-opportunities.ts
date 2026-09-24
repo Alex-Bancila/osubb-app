@@ -70,6 +70,7 @@ export function compareByDeadline(
 export function orderOpportunities(
   rows: TaskPresentationRow[],
   memberships: TaskMemberships,
+  pendingTaskIds: ReadonlySet<number> = new Set(),
 ): Opportunity[] {
   return rows
     .map((task) => {
@@ -77,7 +78,10 @@ export function orderOpportunities(
       return {
         ...task,
         relevant,
-        joinable: relevant || task.audience === 'org',
+        // A pending Candidate keeps their controls after leaving the Group:
+        // `withdraw_task_interest` checks no Audience, so they can still leave.
+        joinable:
+          relevant || task.audience === 'org' || pendingTaskIds.has(task.id),
       };
     })
     .sort(
@@ -93,13 +97,18 @@ export async function fetchTaskOpportunities(
     fetchTaskMemberships(),
     supabase
       .from('task_candidates')
-      .select('task_id')
+      .select('task_id, status')
       .eq('member_id', memberId),
   ]);
   if (candidatures.error) throw candidatures.error;
 
   const participatedTaskIds = new Set(
     (candidatures.data ?? []).map((candidate) => candidate.task_id),
+  );
+  const pendingTaskIds = new Set(
+    (candidatures.data ?? [])
+      .filter((candidate) => candidate.status === 'pending')
+      .map((candidate) => candidate.task_id),
   );
   const openTasks = latestSubmissionOnly(
     supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
@@ -129,7 +138,7 @@ export async function fetchTaskOpportunities(
   for (const task of [...openResult.data, ...participatedTasks])
     tasks.set(task.id, task);
   return attachVisibleTaskExecutors(
-    orderOpportunities([...tasks.values()], scopes),
+    orderOpportunities([...tasks.values()], scopes, pendingTaskIds),
   );
 }
 

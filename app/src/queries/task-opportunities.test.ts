@@ -150,7 +150,7 @@ describe('Available work ordering (ruling R10)', () => {
 function mockTaskReads(
   openTasks: ReturnType<typeof taskRow>[],
   participated: ReturnType<typeof taskRow>[],
-  candidatures: { task_id: number }[],
+  candidatures: { task_id: number; status?: string }[],
 ) {
   const openQuery = {
     select: vi.fn(),
@@ -282,4 +282,22 @@ it('reads membership live from my_groups(), so a new Appointment counts on the n
   expect(api.from).not.toHaveBeenCalledWith('member_departments');
   expect(api.from).not.toHaveBeenCalledWith('team_members');
   expect(api.from).not.toHaveBeenCalledWith('project_members');
+});
+
+it('keeps the controls on an Other local row the Member is still queued on, so they can withdraw', async () => {
+  const local = taskRow({ id: 6, group_id: 40, audience: 'local' });
+  const closed = taskRow({ id: 7, group_id: 40, audience: 'local' });
+  api.rpc.mockImplementation(() => Promise.resolve({ data: [], error: null }));
+  mockTaskReads(
+    [local, closed],
+    [local, closed],
+    [
+      { task_id: 6, status: 'pending' },
+      { task_id: 7, status: 'withdrawn' },
+    ],
+  );
+  await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
+    { id: 6, relevant: false, joinable: true },
+    { id: 7, relevant: false, joinable: false },
+  ]);
 });
