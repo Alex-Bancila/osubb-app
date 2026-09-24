@@ -21,7 +21,7 @@ import {
 } from '../ui/combobox';
 import { FieldError } from '../ui/field';
 import { formatDayMonthYear } from '../../lib/format';
-import { useWorkFilter } from '../../lib/use-work-filter';
+import { useWorkFilter, type WorkFilterState } from '../../lib/use-work-filter';
 import {
   campaignsFor,
   chosenGroupId,
@@ -32,6 +32,7 @@ import {
   type WorkFilterGroup,
   type WorkFilterLevel,
   type WorkFilterLevels,
+  type WorkFilterRoots,
 } from '../../lib/work-filter';
 
 const dateControl =
@@ -53,24 +54,37 @@ type Chip = {
  * for its RPC arguments, so the control and the data never disagree.
  *
  * The page passes the options it may offer — Campanii limits them to the
- * Groups the caller manages — and hides the levels it does not filter by,
- * giving `useWorkFilter` the same `levels`.
+ * Groups the caller manages, rooted at the topmost of them — and hides the
+ * levels it does not filter by, giving `useWorkFilter` the same `levels`.
  */
 export function WorkFilter({
   groups,
   campaigns,
   levels = {},
+  roots = 'top-level',
+  groupNames,
+  state,
   hint,
 }: {
   groups: readonly WorkFilterGroup[];
   campaigns: readonly WorkFilterCampaign[];
   levels?: WorkFilterLevels;
+  /** Where **Grup principal** starts; `topmost` for a page offering only managed Groups. */
+  roots?: WorkFilterRoots;
+  /** Names of Groups outside `groups` (a managed Team's parent), so an option shows its parent. */
+  groupNames?: readonly { id: number; name: string }[];
+  /**
+   * The filter's state when the page keeps part of it elsewhere (Campanii
+   * keeps the chosen Group in its route); defaults to `useWorkFilter(levels)`.
+   */
+  state?: WorkFilterState;
   /** A sentence under the fields saying what this page's filter narrows. */
   hint?: ReactNode;
 }) {
   const showCampaign = levels.campaign ?? true;
   const showDates = levels.dates ?? true;
-  const filter = useWorkFilter(levels);
+  const own = useWorkFilter(levels);
+  const filter = state ?? own;
   const { value, set, clear } = filter;
   const id = useId();
   const rootLabel = `${id}-root`;
@@ -87,10 +101,14 @@ export function WorkFilter({
     [groups],
   );
   const groupsById = useMemo(
-    () => new Map(named.map((group) => [group.id, group])),
-    [named],
+    () =>
+      new Map<number, { name: string }>([
+        ...(groupNames ?? []).map((group) => [group.id, group] as const),
+        ...named.map((group) => [group.id, group] as const),
+      ]),
+    [named, groupNames],
   );
-  const roots = useMemo(() => rootGroups(named), [named]);
+  const rootOptions = useMemo(() => rootGroups(named, roots), [named, roots]);
   const below = useMemo(
     () => groupsBelow(named, value.rootGroupId),
     [named, value.rootGroupId],
@@ -104,7 +122,8 @@ export function WorkFilter({
     return owner ? `${campaign.name} · ${owner}` : campaign.name;
   };
 
-  const root = roots.find((group) => group.id === value.rootGroupId) ?? null;
+  const root =
+    rootOptions.find((group) => group.id === value.rootGroupId) ?? null;
   const sub = below.find((group) => group.id === value.groupId) ?? null;
   const campaign =
     campaigns.find((option) => option.id === value.campaignId) ?? null;
@@ -206,7 +225,7 @@ export function WorkFilter({
           </span>
           <GroupFilterCombobox
             ariaLabelledBy={rootLabel}
-            groups={roots}
+            groups={rootOptions}
             groupsById={groupsById}
             value={root}
             onValueChange={(group) => set('rootGroupId', group?.id)}

@@ -314,7 +314,7 @@ export default function GroupScreen() {
               subgrupurilor lui. Raportul ei arată punctele obținute și cine a
               lucrat.
             </p>
-            <CampaignsPanel group={group} label={group.name} />
+            <CampaignsPanel group={group} label={group.name} groups={groups} />
           </div>
         )}
         {tab === 'cereri' && (

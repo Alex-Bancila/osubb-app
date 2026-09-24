@@ -3,6 +3,7 @@ import {
   campaignsFor,
   groupsBelow,
   parseWorkFilter,
+  placeGroup,
   rangeBounds,
   rootGroups,
   serializeWorkFilter,
@@ -137,6 +138,31 @@ describe('Group options', () => {
     expect(ids(groupsBelow(groups, 1))).toEqual([2, 3, 4]);
     expect(groupsBelow(groups, 8)).toEqual([]);
     expect(groupsBelow(groups, undefined)).toEqual([]);
+  });
+  it('roots a managed-only list at its topmost Groups (Campanii, R13)', () => {
+    // A Manager of Mentorat and of Comunicare: no top-level Educațional.
+    const managed = groups.filter((group) => [2, 3, 8].includes(group.id));
+    expect(ids(rootGroups(managed))).toEqual([8]);
+    expect(ids(rootGroups(managed, 'topmost'))).toEqual([8, 2]);
+    expect(ids(groupsBelow(managed, 2))).toEqual([3]);
+  });
+});
+
+describe('placeGroup', () => {
+  const managed = groups.filter((group) => [2, 3, 8].includes(group.id));
+
+  it('places a root alone and a Group below it under its root', () => {
+    expect(placeGroup(managed, 2, 'topmost')).toEqual({ rootGroupId: 2 });
+    expect(placeGroup(managed, 3, 'topmost')).toEqual({
+      rootGroupId: 2,
+      groupId: 3,
+    });
+    expect(placeGroup(groups, 3)).toEqual({ rootGroupId: 1, groupId: 3 });
+  });
+
+  it('places nothing for a Group outside the list or no Group', () => {
+    expect(placeGroup(managed, 1, 'topmost')).toEqual({});
+    expect(placeGroup(managed, undefined, 'topmost')).toEqual({});
   });
 });
 
