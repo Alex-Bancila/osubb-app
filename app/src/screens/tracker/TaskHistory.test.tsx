@@ -157,7 +157,9 @@ describe('Authorized Task timeline', () => {
     expect(
       screen.getByText('executorul a devenit membru al grupului nou'),
     ).toBeVisible();
-    expect(screen.getByText('campania a fost ștearsă')).toBeVisible();
+    expect(
+      screen.getByText('campania a fost eliminată din task'),
+    ).toBeVisible();
     expect(screen.getByText('Adresă link: https://b.example')).toBeVisible();
   });
   it('falls back to the bare task_updated label when there is nothing to list', () => {
