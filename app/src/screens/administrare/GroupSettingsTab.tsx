@@ -277,6 +277,9 @@ export function GroupSettingsTab({
         kind: 'settings',
         groupId: group.id,
         ...values,
+        // #697: no fields yet (#698 adds them) -- send the stored link back.
+        applicationFormLabel: group.application_form_label,
+        applicationFormUrl: group.application_form_url,
         confirmRemovals: needsConfirmation,
       },
       (failure) => settingsForm.fail(failure, SAVE_FAILED),

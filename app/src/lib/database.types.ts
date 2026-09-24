@@ -874,6 +874,8 @@ export type Database = {
       groups: {
         Row: {
           accepts_applications: boolean
+          application_form_label: string | null
+          application_form_url: string | null
           application_level: number | null
           automatic_membership: boolean
           category: string
@@ -899,6 +901,8 @@ export type Database = {
         }
         Insert: {
           accepts_applications?: boolean
+          application_form_label?: string | null
+          application_form_url?: string | null
           application_level?: number | null
           automatic_membership?: boolean
           category: string
@@ -924,6 +928,8 @@ export type Database = {
         }
         Update: {
           accepts_applications?: boolean
+          application_form_label?: string | null
+          application_form_url?: string | null
           application_level?: number | null
           automatic_membership?: boolean
           category?: string
@@ -3040,6 +3046,8 @@ export type Database = {
         Args: { p_group_id: number }
         Returns: {
           accepts_applications: boolean
+          application_form_label: string | null
+          application_form_url: string | null
           application_level: number | null
           automatic_membership: boolean
           category: string
@@ -3427,6 +3435,8 @@ export type Database = {
         }
         Returns: {
           accepts_applications: boolean
+          application_form_label: string | null
+          application_form_url: string | null
           application_level: number | null
           automatic_membership: boolean
           category: string
@@ -4326,6 +4336,8 @@ export type Database = {
       update_group: {
         Args: {
           p_accepts_applications: boolean
+          p_application_form_label: string
+          p_application_form_url: string
           p_application_level: number
           p_confirm_removals?: boolean
           p_group_id: number
@@ -4336,6 +4348,8 @@ export type Database = {
         }
         Returns: {
           accepts_applications: boolean
+          application_form_label: string | null
+          application_form_url: string | null
           application_level: number | null
           automatic_membership: boolean
           category: string
@@ -4381,6 +4395,8 @@ export type Database = {
         }
         Returns: {
           accepts_applications: boolean
+          application_form_label: string | null
+          application_form_url: string | null
           application_level: number | null
           automatic_membership: boolean
           category: string

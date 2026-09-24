@@ -41,13 +41,15 @@ export type AdminGroup = Pick<
   | 'competes_in_cup'
   | 'counts_toward_parent_cup'
   | 'shared_work_visibility'
+  | 'application_form_label'
+  | 'application_form_url'
 > & {
   /** Roster rows. An Automatic-Membership Group has none by design. */
   memberCount: number;
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility, application_form_label, application_form_url';
 
 /* Supabase caps a response at 1,000 rows; rosters pass that before the Group
    tree does, so every projection here is read in stable pages. */
@@ -276,6 +278,10 @@ export type GroupCommand =
       applicationLevel: number | null;
       sharedWorkVisibility: boolean;
       minLevel: number;
+      /** The application form link (#697). update_group is a full-state
+       *  replace, so a save that omits it clears it: send the stored pair. */
+      applicationFormLabel: string | null;
+      applicationFormUrl: string | null;
       confirmRemovals: boolean;
     }
   | {
@@ -358,6 +364,8 @@ function callCommand(command: GroupCommand) {
         p_application_level: command.applicationLevel,
         p_shared_work_visibility: command.sharedWorkVisibility,
         p_min_level: command.minLevel,
+        p_application_form_label: command.applicationFormLabel,
+        p_application_form_url: command.applicationFormUrl,
         p_confirm_removals: command.confirmRemovals,
       } as never);
     case 'structure':

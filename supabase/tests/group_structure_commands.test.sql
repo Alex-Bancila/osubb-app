@@ -147,7 +147,7 @@ select throws_ok($$select public.create_group('Rădăcină #582', 'department')$
 reset role;
 select pg_temp.g582_bc();
 select throws_ok(
-  format($$select public.update_group(%s, 'Nivel #582', null, false, null, false, 3, false)$$,
+  format($$select public.update_group(%s, 'Nivel #582', null, false, null, false, 3, null, null, false)$$,
          pg_temp.g582_group('Nivel #582')),
   'PT409', 'group_has_members_below_level',
   'update_group: a raise above existing members refuses without p_confirm_removals (R23)');
@@ -155,7 +155,7 @@ select is(pg_temp.g582_roster('Nivel #582'),
   array[pg_temp.g582_uid(5), pg_temp.g582_uid(6), pg_temp.g582_uid(8)],
   'and it removes nobody when it refuses');
 select lives_ok(
-  format($$select public.update_group(%s, 'Nivel #582', null, false, null, false, 3, true)$$,
+  format($$select public.update_group(%s, 'Nivel #582', null, false, null, false, 3, null, null, true)$$,
          pg_temp.g582_group('Nivel #582')),
   'update_group: with the confirmation, BC raises a top-level Group''s Minimum Level');
 select is(pg_temp.g582_roster('Nivel #582'), array[pg_temp.g582_uid(8)],
@@ -197,20 +197,20 @@ select is(
 
 select pg_temp.test_login(pg_temp.g582_uid(5), '{"provider":"email"}'::jsonb);
 select throws_ok(
-  format($$select public.update_group(%s, '  ', null, false, null, false, 0)$$, pg_temp.g582_group('Copil #582')),
+  format($$select public.update_group(%s, '  ', null, false, null, false, 0, null, null)$$, pg_temp.g582_group('Copil #582')),
   'PT400', 'invalid_group_name', 'update_group: a blank name is malformed for everyone');
 select throws_ok(
-  format($$select public.update_group(%s, 'Copil #582', '  ', false, null, false, 0)$$, pg_temp.g582_group('Copil #582')),
+  format($$select public.update_group(%s, 'Copil #582', '  ', false, null, false, 0, null, null)$$, pg_temp.g582_group('Copil #582')),
   'PT400', 'invalid_position_title', 'update_group: a blank position display name is malformed');
 select throws_ok(
-  format($$select public.update_group(%s, 'Copil #582', null, false, null, false, 4)$$, pg_temp.g582_group('Copil #582')),
+  format($$select public.update_group(%s, 'Copil #582', null, false, null, false, 4, null, null)$$, pg_temp.g582_group('Copil #582')),
   'PT400', 'invalid_group_min_level', 'update_group: level 4 is not a Minimum Level');
 select throws_ok(
-  format($$select public.update_group(%s, 'Copil #582', null, true, null, false, 0)$$, pg_temp.g582_group('Copil #582')),
+  format($$select public.update_group(%s, 'Copil #582', null, true, null, false, 0, null, null)$$, pg_temp.g582_group('Copil #582')),
   'PT400', 'invalid_application_level',
   'update_group: a Group that accepts Applications must name the Application Level');
 select throws_ok(
-  format($$select public.update_group(%s, 'Copil #582', null, true, 1, false, 3)$$, pg_temp.g582_group('Copil #582')),
+  format($$select public.update_group(%s, 'Copil #582', null, true, 1, false, 3, null, null)$$, pg_temp.g582_group('Copil #582')),
   'PT400', 'application_level_below_min_level',
   'update_group: the Application Level never sits below the Minimum Level');
 
@@ -219,14 +219,14 @@ select throws_ok(
 reset role;
 select pg_temp.g582_as(5);
 select throws_ok(
-  format($$select public.update_group(%s, 'Redenumit #582', null, false, null, false, 0)$$,
+  format($$select public.update_group(%s, 'Redenumit #582', null, false, null, false, 0, null, null)$$,
          pg_temp.g582_group('Copil #582')),
   '42501', 'group_manage_forbidden', 'update_group: an ordinary member changes nothing');
 
 reset role;
 select pg_temp.g582_as(4);
 select throws_ok(
-  format($$select public.update_group(%s, 'Redenumit #582', null, false, null, false, 0)$$,
+  format($$select public.update_group(%s, 'Redenumit #582', null, false, null, false, 0, null, null)$$,
          pg_temp.g582_group('Copil #582')),
   '42501', 'group_manage_forbidden',
   'update_group: a Group Responsible is not a Manager (R19) -- refused on a Group whose work they manage');
@@ -234,17 +234,17 @@ select throws_ok(
 reset role;
 select pg_temp.g582_as(3);
 select throws_ok(
-  format($$select public.update_group(%s, 'Copil #582', null, false, null, false, 3, true)$$,
+  format($$select public.update_group(%s, 'Copil #582', null, false, null, false, 3, null, null, true)$$,
          pg_temp.g582_group('Copil #582')),
   'PT400', 'group_min_level_above_actor',
   'update_group: a Manager may not raise a Child Group above their OWN Level');
 select throws_ok(
-  format($$select public.update_group(%s, 'Copil redenumit #582', 'Coordonator #582', true, 1, true, 1, false)$$,
+  format($$select public.update_group(%s, 'Copil redenumit #582', 'Coordonator #582', true, 1, true, 1, null, null, false)$$,
          pg_temp.g582_group('Copil #582')),
   'PT409', 'group_has_members_below_level',
   'update_group: the confirmation flag is demanded of a Group Manager too');
 select lives_ok(
-  format($$select public.update_group(%s, 'Copil redenumit #582', 'Coordonator #582', true, 1, true, 1, true)$$,
+  format($$select public.update_group(%s, 'Copil redenumit #582', 'Coordonator #582', true, 1, true, 1, null, null, true)$$,
          pg_temp.g582_group('Copil #582')),
   'update_group: a Child Group''s Manager owns name, position title, Applications, visibility and Minimum Level');
 select is(
@@ -274,7 +274,7 @@ select ok(
 
 select pg_temp.g582_as(3);
 select lives_ok(
-  format($$select public.update_group(%s, 'Copil redenumit #582', null, false, null, false, 1)$$,
+  format($$select public.update_group(%s, 'Copil redenumit #582', null, false, null, false, 1, null, null)$$,
          pg_temp.g582_group('Copil redenumit #582')),
   'update_group: sending null back CLEARS the nullable columns (OD5)');
 select is(
@@ -283,11 +283,11 @@ select is(
   array[null, null]::text[],
   'and the cleared columns really are null afterwards');
 select throws_ok(
-  format($$select public.update_group(%s, 'Copil redenumit #582', null, false, null, false, 1)$$,
+  format($$select public.update_group(%s, 'Copil redenumit #582', null, false, null, false, 1, null, null)$$,
          pg_temp.g582_group('Copil redenumit #582')),
   'PT409', 'nothing_to_update', 'update_group: the same state sent twice is a state conflict');
 select throws_ok(
-  format($$select public.update_group(%s, 'Rădăcină #582', null, false, null, false, 1, true)$$,
+  format($$select public.update_group(%s, 'Rădăcină #582', null, false, null, false, 1, null, null, true)$$,
          pg_temp.g582_group('Rădăcină #582')),
   '42501', 'group_manage_forbidden',
   'update_group: a TOP-LEVEL Group''s Minimum Level is structural -- a Manager below level 6 is refused (Decision 5)');
@@ -295,25 +295,25 @@ select throws_ok(
 reset role;
 select pg_temp.g582_bc();
 select throws_ok(
-  format($$select public.update_group(%s, 'Rădăcină #582', null, false, null, false, 1, true)$$,
+  format($$select public.update_group(%s, 'Rădăcină #582', null, false, null, false, 1, null, null, true)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT400', 'group_min_level_above_children',
   'update_group: a parent never rises above a child''s Minimum Level -- descendants are never touched');
 select throws_ok(
-  format($$select public.update_group(%s, 'Cu manager #582', null, false, null, false, 0)$$,
+  format($$select public.update_group(%s, 'Cu manager #582', null, false, null, false, 0, null, null)$$,
          pg_temp.g582_group('Cu manager #582')),
   'PT400', 'group_min_level_below_parent',
   'update_group: a Child Group never falls below its parent''s Minimum Level');
 select throws_ok(
-  format($$select public.update_group(%s, 'Altă rădăcină #582', null, false, null, false, 0)$$,
+  format($$select public.update_group(%s, 'Altă rădăcină #582', null, false, null, false, 0, null, null)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT409', 'group_name_taken', 'update_group: a rename onto a sibling''s name is refused');
 select throws_ok(
-  format($$select public.update_group(%s, 'Oricum #582', null, false, null, false, 0)$$,
+  format($$select public.update_group(%s, 'Oricum #582', null, false, null, false, 0, null, null)$$,
          pg_temp.g582_group('Arhivată #582')),
   'PT409', 'group_archived', 'update_group: an archived Group is not edited');
 select throws_ok(
-  format($$select public.update_group(%s, 'Automat #582', null, true, 1, false, 0)$$,
+  format($$select public.update_group(%s, 'Automat #582', null, true, 1, false, 0, null, null)$$,
          pg_temp.g582_group('Automat #582')),
   'PT409', 'automatic_group_accepts_no_applications',
   'update_group: a Group whose roster follows the rank accepts no Applications -- answered, never a raw 23514');
@@ -596,7 +596,7 @@ reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
 select throws_ok($$ select public.create_group(repeat('g', 121), 'team') $$,
   'PT400', 'name_too_long', 'a Group name over 120 characters is refused before the gate');
-select throws_ok($$ select public.update_group(0, 'ab', null, false, null, false, 0) $$,
+select throws_ok($$ select public.update_group(0, 'ab', null, false, null, false, 0, null, null) $$,
   'PT400', 'name_too_short', 'a Group name under 3 characters is refused before the gate');
 reset role;
 
