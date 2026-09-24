@@ -88,8 +88,6 @@ function consequenceText(consequence: TaskUpdateConsequence) {
       return 'Campania va fi eliminată deoarece nu aparține grupului nou.';
     case 'candidate_removed':
       return `${consequence.memberName} iese din lista de candidați.`;
-    case 'candidate_promoted':
-      return `${consequence.memberName} devine executor, ca primul candidat din listă.`;
     default:
       return `Participarea lui ${consequence.memberName} la task se schimbă.`;
   }

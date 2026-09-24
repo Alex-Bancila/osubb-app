@@ -31,7 +31,8 @@
 -- per step and ends with "SMOKE TEST PASSED".
 --
 -- Sequence exercised (the plan's own list, in order):
---   create a public Task -> two members express interest -> the second
+--   create a public Task -> two members express interest -> the manager
+--   selects the first (#682: interest only queues) -> the second
 --   withdraws and rejoins -> manager closes the queue -> Executor starts,
 --   submits -> Reviewer returns with a note -> Executor resubmits -> Reviewer
 --   completes -> member total reflects d x mult -> Reviewer reopens -> total
@@ -62,7 +63,7 @@
 --                          inside `edu` after the #296 remap, so a level-6
 --                          account is the only manager an `edu` Task has.
 --   d0000000-...-0002  voluntar@demo.osubb   Ioana Popescu     voluntar, edu
---                       -> first-come Executor.
+--                       -> the Candidate the manager selects as Executor.
 --   d0000000-...-0005  responsabil@demo.osubb Raluca Ionescu   responsabil, edu
 --                       -> the second interested member (queue), and the
 --                          Executor of the Subtask that gets cancelled.
@@ -219,38 +220,51 @@ select pg_temp.smoke_assert(
     where task_id = :t_main and kind = 'created' and to_status = 'todo'),
   'step 1: exactly one `created` activity row');
 
--- ==================== step 2: first member takes it (first come) ====================
+-- ==================== step 2: two members queue, the manager selects ====================
+-- #682 (ruling R9): interest only queues -- nobody becomes the Executor by
+-- arriving first. The manager picks one with select_task_candidate.
 
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
 select public.express_task_interest(:t_main);
+reset role;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
+select public.express_task_interest(:t_main);
+reset role;
+
+select pg_temp.smoke_assert(
+  (select count(*) = 0 from public.task_assignments where task_id = :t_main),
+  'step 2: expressing interest opened no Assignment -- nobody is Executor by arriving first');
+
+select pg_temp.smoke_eq(
+  (select count(*)::int from public.task_candidates
+    where task_id = :t_main and status = 'pending'), 2,
+  'step 2: both interested members are pending Candidates');
+
+select id as c_first from public.task_candidates
+ where task_id = :t_main and member_id = 'd0000000-0000-0000-0000-000000000002' \gset
+
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select public.select_task_candidate(:t_main, :c_first, false);
 reset role;
 
 select pg_temp.smoke_assert(
   (select count(*) = 1 from public.task_assignments
     where task_id = :t_main and ended_at is null
       and member_id = 'd0000000-0000-0000-0000-000000000002'),
-  'step 2: the first interested member became the one active Executor');
+  'step 2: the manager''s selection made the first Candidate the one active Executor');
 
 select pg_temp.smoke_assert(
-  (select count(*) = 0 from public.task_candidates where task_id = :t_main),
-  'step 2: first-come wrote NO Candidature -- the slot was empty');
-
-select pg_temp.smoke_assert(
-  (select details ->> 'via' = 'first_come' from public.task_activity
+  (select details ->> 'via' = 'select' from public.task_activity
     where task_id = :t_main and kind = 'executor_assigned'),
-  'step 2: the executor_assigned row records details.via = first_come');
+  'step 2: the executor_assigned row records details.via = select');
 
--- ==================== step 3: second member queues ====================
-
-select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
-select public.express_task_interest(:t_main);
-reset role;
+-- ==================== step 3: the second member is still queued ====================
 
 select pg_temp.smoke_assert(
   (select count(*) = 1 from public.task_candidates
     where task_id = :t_main and status = 'pending'
       and member_id = 'd0000000-0000-0000-0000-000000000005'),
-  'step 3: the second interested member queued as a pending Candidate');
+  'step 3: the second interested member stayed a pending Candidate (the queue was kept open)');
 
 select pg_temp.smoke_eq(
   (select count(*)::int from public.task_candidates
@@ -440,7 +454,8 @@ select pg_temp.smoke_assert(
 
 select pg_temp.smoke_assert(
   (select count(*) = 0 from public.task_candidates
-    where task_id = :t_main and member_id = 'd0000000-0000-0000-0000-000000000002'),
+    where task_id = :t_main and member_id = 'd0000000-0000-0000-0000-000000000002'
+      and status = 'pending'),
   'step 13 (cross-command invariant): the reactivated Executor holds no pending Candidature');
 
 -- ==================== step 14: resubmit, then complete again ====================
@@ -1011,9 +1026,10 @@ select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gate
 select public.express_task_interest(:gated_task);
 reset role;
 select pg_temp.smoke_assert(
-  (select count(*) = 1 from public.task_assignments
-   where task_id = :gated_task and member_id = :'eligible' and ended_at is null),
-  'step 23: eligible outsider becomes Executor through the public command');
+  (select count(*) = 1 from public.task_candidates
+   where task_id = :gated_task and member_id = :'eligible' and status = 'pending')
+  and not exists (select 1 from public.task_assignments where task_id = :gated_task),
+  'step 23: eligible outsider joins the Candidate Queue through the public command (#682: no Executor by arrival)');
 
 -- ---- step 23, continued: it really is the Minimum Level doing the hiding ----
 -- Two facts turn "one member saw nothing" into a proof about the setting:

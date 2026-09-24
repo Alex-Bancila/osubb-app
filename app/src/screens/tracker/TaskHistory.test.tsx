@@ -107,7 +107,9 @@ describe('Authorized Task timeline', () => {
     expect(screen.getByText('Task actualizat: titlu, termen')).toBeVisible();
     expect(screen.getByText('executorul a fost eliminat')).toBeVisible();
     expect(screen.getByText('2 candidaturi au fost închise')).toBeVisible();
-    expect(screen.getByText('un candidat a fost promovat')).toBeVisible();
+    // #682 retired queue promotion: an old row's candidate_promoted
+    // consequence is no longer labelled.
+    expect(screen.queryByText('un candidat a fost promovat')).toBeNull();
     // The generic before/after diff still renders underneath the sentence.
     expect(screen.getByText('Titlu: Vechi')).toBeVisible();
     expect(screen.getByText('Titlu: Nou')).toBeVisible();

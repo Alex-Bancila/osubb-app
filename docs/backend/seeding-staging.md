@@ -75,7 +75,7 @@ The job log ends with the leaderboard and a row count per table. It should match
 The demo dataset is built on the normalized Tracker model (ADR-0007) and carries one Task per approved path, so a role-matrix walkthrough never has to invent data:
 
 - **Origins** — Department (all five real ones), Department Team (`it`, under Diverse), Independent Team (`t-logistica`), and the active Project.
-- **Assignment modes** — direct with an Executor from creation; public with an open Queue and nobody in it (in two different Departments — no command leaves a pending Candidate with no Executor); public with a first-come Executor and two Members queued behind them.
+- **Assignment modes** — direct with an Executor from creation; public with an open Queue and nobody in it (in two different Departments); public with a manager-selected Executor and two Members queued behind them (#682: interest only queues, and the manager selects every Executor of a public Task).
 - **Lifecycle** — `todo`, `in_progress`, `in_review` after one round of feedback (`review_round = 1`), `completed` on time, `completed` late, `unfulfilled` at Rating 1 (a **negative** ledger row), and `cancelled` with a reason.
 - **The awkward ones** — a Task evaluated, reopened and evaluated again (a reversed Evaluation, a `task_reversal` ledger row and a second Evaluation on a second Assignment); an Umbrella whose three Subtasks are completed, in progress and cancelled; a Task duplicated from the unfulfilled one (same title, `duplicated_from_task_id` set); and completed-work requests in all three states, the approved one naming the Task its approval created.
 

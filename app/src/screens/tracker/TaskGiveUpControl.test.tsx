@@ -50,8 +50,10 @@ describe('Task give-up control', () => {
       taskId: 17,
       reason: 'Nu mai pot participa',
     });
+    // #682: nobody is promoted -- the Task goes back to "De făcut" and the
+    // manager chooses the next Executor from the queue.
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Ai renunțat la task',
+      'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.',
     );
     expect(
       screen.queryByLabelText('Motivul renunțării'),

@@ -118,13 +118,13 @@ reset role;
 select pg_temp.test_login_leadership('57900000-0000-0000-0000-000000000002');
 select lives_ok(
   $$ select public.express_task_interest((select id from public.tasks where title = 'Org local opportunity 579')) $$,
-  'a Member with no roster row takes a local Organization Opportunity through Automatic Membership');
+  'a Member with no roster row joins a local Organization Opportunity through Automatic Membership');
 reset role;
 select is(
-  (select member_id from public.task_assignments
-    where task_id = (select id from public.tasks where title = 'Org local opportunity 579') and ended_at is null),
+  (select member_id from public.task_candidates
+    where task_id = (select id from public.tasks where title = 'Org local opportunity 579') and status = 'pending'),
   '57900000-0000-0000-0000-000000000002'::uuid,
-  'and becomes its first-come Executor');
+  'and joins its Candidate Queue as a pending Candidate (#682: interest always queues)');
 select pg_temp.test_login_leadership('57900000-0000-0000-0000-000000000002');
 select throws_ok(
   $$ select public.express_task_interest((select id from public.tasks where title = 'Native work 579')) $$,

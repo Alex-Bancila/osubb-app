@@ -156,10 +156,9 @@ it('names every affected member and saves with their consequences accepted only 
   );
   expect(await screen.findByRole('status')).toHaveTextContent('salvate');
 });
-it('describes a removed Executor and a promoted Candidate', async () => {
+it('describes a removed Executor and promotes nobody (#682)', async () => {
   state.preview.mockResolvedValue([
     { kind: 'executor_removed', memberId: 'a', memberName: 'Ana Șerban' },
-    { kind: 'candidate_promoted', memberId: 'b', memberName: 'Bianca Pop' },
   ]);
   render(
     <TaskEditControl
@@ -176,7 +175,7 @@ it('describes a removed Executor and a promoted Candidate', async () => {
   expect(dialog).toHaveTextContent(
     'Ana Șerban nu mai este executor. Taskul revine la „De făcut”.',
   );
-  expect(dialog).toHaveTextContent('Bianca Pop devine executor');
+  expect(dialog).not.toHaveTextContent('devine executor');
 });
 it('explains Group appointment and Campaign clearing in confirmation', async () => {
   state.preview.mockResolvedValue([
