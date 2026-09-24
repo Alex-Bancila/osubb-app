@@ -107,8 +107,11 @@ export const keys = {
     all: ['campaigns'] as const,
     list: (memberId: string | undefined, groupId?: number) =>
       ['campaigns', { memberId, groupId }] as const,
-    report: (memberId: string | undefined, campaignId: number) =>
-      ['campaigns', 'report', { memberId, campaignId }] as const,
+    report: (
+      memberId: string | undefined,
+      campaignId: number,
+      range: { p_from?: string; p_to?: string } = {},
+    ) => ['campaigns', 'report', { memberId, campaignId, ...range }] as const,
   },
   /* Administrare's own reads: the Group tree with its settings and member
      counts, and one Group's roster. They start with `['groups']`, so every
