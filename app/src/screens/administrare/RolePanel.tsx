@@ -11,12 +11,15 @@ import {
   useMemberGroupIds,
   type MemberChange,
 } from '../../queries/member-role-management';
+import { statusLabel, statusLabels } from '../volunteers/directory-filters';
 import type { Database } from '../../lib/database.types';
 
 type MemberRole = Database['public']['Enums']['member_role'];
 type MemberStatus = Database['public']['Enums']['member_status'];
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
+/** `member_status` enum values, in the reference list's canonical order. */
+const statusOptions = Object.keys(statusLabels);
 
 function changeError(error: unknown) {
   const message =
@@ -95,7 +98,7 @@ export function RolePanel() {
   const canSaveStatus =
     canEditMember &&
     nextStatus !== member?.status &&
-    (nextStatus === 'activ' || nextStatus === 'inactiv') &&
+    statusOptions.includes(nextStatus) &&
     !change.isPending;
 
   async function save(next: MemberChange) {
@@ -257,8 +260,7 @@ export function RolePanel() {
               <div className="space-y-3 rounded-lg border p-4">
                 <h3 className="font-semibold">Status</h3>
                 <p className="text-sm text-muted-foreground">
-                  Status actual:{' '}
-                  {member.status === 'activ' ? 'Activ' : 'Inactiv'}
+                  Status actual: {statusLabel(member.status)}
                 </p>
                 <label className="block space-y-1">
                   <span>Status</span>
@@ -268,8 +270,11 @@ export function RolePanel() {
                     disabled={!canEditMember || change.isPending}
                     onChange={(event) => setStatusDraft(event.target.value)}
                   >
-                    <option value="activ">Activ</option>
-                    <option value="inactiv">Inactiv</option>
+                    {statusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {statusLabel(status)}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 {nextStatus === 'inactiv' && nextStatus !== member.status && (
@@ -295,7 +300,9 @@ export function RolePanel() {
                     ? 'Salvează statusul'
                     : nextStatus === 'inactiv'
                       ? 'Dezactivează'
-                      : 'Reactivează'}
+                      : nextStatus === 'activ'
+                        ? 'Reactivează'
+                        : 'Salvează statusul'}
                 </Button>
               </div>
             </div>
