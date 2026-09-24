@@ -202,7 +202,7 @@ export function TaskCard({
                   aria-hidden="true"
                   className="size-4 shrink-0 text-muted-foreground"
                 />
-                <span className="font-medium">Responsabil:</span>
+                <span className="font-medium">Executor:</span>
                 {/* Only an identity #499's lookup returned becomes a name
                     button; an Executor known by id alone stays anonymous. */}
                 {task.executor?.name ? (

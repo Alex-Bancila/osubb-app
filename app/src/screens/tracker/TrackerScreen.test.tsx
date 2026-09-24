@@ -91,6 +91,7 @@ function tree(url: string) {
   return (
     <MemoryRouter initialEntries={[url]}>
       <Link to="/tracker?task=2">Deschide taskul 2</Link>
+      <Link to="/tracker?task=99">Deschide taskul 99</Link>
       <TrackerScreen />
     </MemoryRouter>
   );
@@ -433,6 +434,17 @@ describe('My tasks screen', () => {
       });
       rerender(tree('/tracker?task=2'));
       expect(scrollIntoView).toHaveBeenCalledOnce();
+    });
+
+    it('lands again when a later link returns to the same card', async () => {
+      const user = userEvent.setup();
+      renderAt('/tracker?task=2');
+      expect(scrollIntoView).toHaveBeenCalledOnce();
+      await user.click(
+        screen.getByRole('link', { name: 'Deschide taskul 99' }),
+      );
+      await user.click(screen.getByRole('link', { name: 'Deschide taskul 2' }));
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
     });
 
     it.each(['/tracker?task=99', '/tracker?task=abc'])(

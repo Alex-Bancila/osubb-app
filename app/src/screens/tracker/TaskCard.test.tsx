@@ -97,7 +97,7 @@ describe('Member Task cards', () => {
       visibleExecutor: { memberId: 'member', fullName: 'Ioana Executor' },
     });
 
-    expect(screen.getByText('Responsabil:')).toBeInTheDocument();
+    expect(screen.getByText('Executor:')).toBeInTheDocument();
     expect(screen.getByText('Ioana Executor')).toBeInTheDocument();
   });
 
@@ -119,7 +119,7 @@ describe('Member Task cards', () => {
       visibleExecutor: { memberId: 'member', fullName: 'Nume imposibil' },
     });
 
-    expect(screen.queryByText('Responsabil:')).not.toBeInTheDocument();
+    expect(screen.queryByText('Executor:')).not.toBeInTheDocument();
     expect(screen.queryByText('Nume imposibil')).not.toBeInTheDocument();
   });
 

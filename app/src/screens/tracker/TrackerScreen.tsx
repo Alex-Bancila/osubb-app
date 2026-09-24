@@ -120,10 +120,13 @@ export default function TrackerScreen() {
   const linkedId = linkedTaskId(params.get('task'));
   const [linkFor, setLinkFor] = useState<number | null>(null);
   const [expiredFor, setExpiredFor] = useState<number | null>(null);
+  // Counts link changes, so a later link back to the same card lands afresh.
+  const [linkVisit, setLinkVisit] = useState(0);
   if (linkedId !== linkFor) {
     // A new link: open Taskurile mele and allow a fresh highlight.
     setLinkFor(linkedId);
     setExpiredFor(null);
+    setLinkVisit((visit) => visit + 1);
     if (linkedId !== null) setTab('mine');
   }
   // The card is highlighted once the list has loaded with it in it, until
@@ -133,21 +136,20 @@ export default function TrackerScreen() {
       ? linkedId
       : null;
   const highlightedId = landing !== expiredFor ? landing : null;
-  const landed = useRef<number | null>(null);
+  const landed = useRef<string | null>(null);
   useEffect(() => {
-    if (landing === null || landed.current === landing) return;
-    // Once per link: a refetch must not pull the page back.
-    landed.current = landing;
+    // Once per link: a refetch must not pull the page back, but every new
+    // link lands, even on a card an earlier link landed on.
+    const visit = `${linkVisit}:${landing}`;
+    if (landing === null || landed.current === visit) return;
+    landed.current = visit;
     const card = document.getElementById(`task-${landing}`);
     card?.scrollIntoView({ block: 'center' });
     const title = card?.querySelector<HTMLElement>('[data-slot="task-title"]');
     (title?.querySelector<HTMLElement>('button') ?? title)?.focus({
       preventScroll: true,
     });
-  }, [landing]);
-  useEffect(() => {
-    if (linkedId === null) landed.current = null;
-  }, [linkedId]);
+  }, [landing, linkVisit]);
   useEffect(() => {
     if (highlightedId === null) return;
     const timer = window.setTimeout(
