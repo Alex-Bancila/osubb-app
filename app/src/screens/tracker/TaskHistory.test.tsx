@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/task-history', () => ({ useTaskHistory: vi.fn() }));
 import { TaskTimeline } from './TaskHistory';
 import type { TaskActivity } from '../../queries/task-history';
@@ -113,6 +114,51 @@ describe('Authorized Task timeline', () => {
     // The generic before/after diff still renders underneath the sentence.
     expect(screen.getByText('Titlu: Vechi')).toBeVisible();
     expect(screen.getByText('Titlu: Nou')).toBeVisible();
+  });
+  it('shows a Group move with the Group names, its consequences and the link (#627, #688)', () => {
+    render(
+      <TaskTimeline
+        groupNames={
+          new Map([
+            [2, { name: 'Echipa' }],
+            [4, { name: 'Tineret' }],
+          ])
+        }
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              changed: ['group_id', 'campaign_id', 'link_url'],
+              before: {
+                group_id: 2,
+                campaign_id: 9,
+                link_url: 'https://a.example',
+              },
+              after: {
+                group_id: 4,
+                campaign_id: null,
+                link_url: 'https://b.example',
+              },
+              consequences: [
+                { consequence: 'executor_added_to_group', member_id: 'ana' },
+                { consequence: 'campaign_cleared', member_id: null },
+              ],
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText('Task actualizat: grup, campanie, adresă link'),
+    ).toBeVisible();
+    expect(screen.getByText('Grup: Echipa')).toBeVisible();
+    expect(screen.getByText('Grup: Tineret')).toBeVisible();
+    expect(
+      screen.getByText('executorul a devenit membru al grupului nou'),
+    ).toBeVisible();
+    expect(screen.getByText('campania a fost ștearsă')).toBeVisible();
+    expect(screen.getByText('Adresă link: https://b.example')).toBeVisible();
   });
   it('falls back to the bare task_updated label when there is nothing to list', () => {
     render(

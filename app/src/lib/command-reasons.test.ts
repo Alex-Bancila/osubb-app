@@ -127,6 +127,25 @@ it('keeps the reasons the per-feature tables used to translate (#674)', () => {
     expect(reasonCopy(reason), reason).toBeDefined();
 });
 
+/*
+ * What update_task (#627 moving a Task) and private.require_attached_link
+ * (#684) raise beyond the constraints kit — folded into this table with the
+ * Task form (#688), so the tracker keeps no reason table of its own.
+ */
+it.each([
+  'invalid_group',
+  'subtask_origin_immutable',
+  'umbrella_has_subtasks',
+  'link_incomplete',
+  'task_group_unavailable',
+  'invalid_campaign',
+])('has Romanian copy for the Task form reason %s', (reason) => {
+  const copy = reasonCopy(reason);
+  expect(copy).toBeDefined();
+  expect(copy).not.toMatch(/_/);
+  expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
+});
+
 it('describes a failure for a form: the reason and the copy', () => {
   expect(
     describeFailure({ code: 'PT400', message: 'title_too_long' }, 'fallback'),

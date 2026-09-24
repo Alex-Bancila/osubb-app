@@ -27,6 +27,9 @@ export async function createTask(draft: TaskDraft) {
     p_title: draft.title,
     p_description: draft.description,
     p_deadline: draft.deadline,
+    // #684: the Attached Link, both or neither (null for none).
+    p_link_label: draft.link.label,
+    p_link_url: draft.link.url,
   };
   // PostgreSQL accepts NULL for the optional values (an Umbrella has no mode,
   // audience, Executor or Campaign). Generated RPC argument types omit

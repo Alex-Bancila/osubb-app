@@ -17,7 +17,7 @@ const input: TaskUpdateInput = {
   campaignId: null,
   assignmentMode: 'direct',
   audience: 'local',
-  // #684: the Task's current Attached Link travels through unchanged.
+  // #684: the Attached Link, full state like every other field.
   linkLabel: 'Brief',
   linkUrl: 'https://example.org/brief',
 };
@@ -46,6 +46,38 @@ it('sends every field as a full replacement value to update_task, NULL clears in
   expect(api.rpc).toHaveBeenLastCalledWith('update_task', {
     ...args,
     p_accept_consequences: true,
+  });
+});
+
+it('moves the Task with p_group_id and clears the link with nulls (#627, #684)', async () => {
+  api.rpc.mockResolvedValue({ data: [], error: null });
+  const moved = { ...input, groupId: 7, linkLabel: null, linkUrl: null };
+  await previewTaskUpdate(moved);
+  expect(api.rpc).toHaveBeenCalledWith('preview_task_update', {
+    ...args,
+    p_group_id: 7,
+    p_link_label: null,
+    p_link_url: null,
+  });
+  api.rpc.mockResolvedValue({ data: { id: 1 }, error: null });
+  await updateTask({ ...moved, acceptConsequences: true });
+  expect(api.rpc).toHaveBeenLastCalledWith('update_task', {
+    ...args,
+    p_group_id: 7,
+    p_link_label: null,
+    p_link_url: null,
+    p_accept_consequences: true,
+  });
+});
+
+it('turns a refused move into the shared copy, keeping the reason for its field', async () => {
+  api.rpc.mockResolvedValue({
+    error: { code: 'PT409', message: 'subtask_origin_immutable' },
+  });
+  const refusal = previewTaskUpdate({ ...input, groupId: 7 });
+  await expect(refusal).rejects.toMatchObject({
+    reason: 'subtask_origin_immutable',
+    message: expect.stringMatching(/Un subtask rămâne în grupul/),
   });
 });
 

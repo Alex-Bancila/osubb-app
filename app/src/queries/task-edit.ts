@@ -7,6 +7,7 @@ import { keys } from './keys';
 /** The full new state of every editable Task field (never a patch). */
 export type TaskUpdateInput = {
   taskId: number;
+  /** The Task's Group; a different one moves it (#627). */
   groupId: number;
   title: string;
   description: string | null;
@@ -15,8 +16,8 @@ export type TaskUpdateInput = {
   /** Null for an Umbrella, which has neither. */
   assignmentMode: 'direct' | 'public' | null;
   audience: 'local' | 'org' | null;
-  /** The Attached Link, passed through unchanged until #688's form edits it;
-   *  both null means no link (#684). */
+  /** The Attached Link, full state like every other field: both null means
+   *  no link, so leaving them null clears it (#684). */
   linkLabel: string | null;
   linkUrl: string | null;
 };

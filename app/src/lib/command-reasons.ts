@@ -120,6 +120,10 @@ const REASON_COPY = new Map<string, string>([
   ['link_url_invalid', 'Adresa trebuie să înceapă cu http:// sau https://.'],
   ['link_url_too_long', 'Adresa are cel mult 2048 de caractere.'],
   [
+    'link_incomplete',
+    'Completează și numele, și adresa linkului, sau lasă-le pe amândouă goale.',
+  ],
+  [
     'phone_invalid',
     'Scrie un număr de telefon valid (de exemplu 0730 655 145).',
   ],
@@ -167,6 +171,15 @@ const REASON_COPY = new Map<string, string>([
     'Subtaskul trebuie să păstreze grupul de origine al taskului-umbrelă.',
   ],
   ['subtask_cannot_be_umbrella', 'Un task-umbrelă nu poate fi Subtask.'],
+  ['invalid_group', 'Grupul ales nu mai este activ. Alege alt grup.'],
+  [
+    'subtask_origin_immutable',
+    'Un subtask rămâne în grupul taskului-umbrelă. Nu îi poți schimba grupul.',
+  ],
+  [
+    'umbrella_has_subtasks',
+    'Un task-umbrelă cu subtaskuri nu își poate schimba grupul.',
+  ],
   [
     'task_in_review',
     'Taskul este în verificare și nu mai poate fi editat. Verifică starea actuală.',

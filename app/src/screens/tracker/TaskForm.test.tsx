@@ -62,7 +62,9 @@ const options: TaskFormOptions = {
 };
 type User = ReturnType<typeof userEvent.setup>;
 const groupBox = () =>
-  screen.getByRole('combobox', { name: 'Grup de origine (obligatoriu)' });
+  screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' });
+const subgroupBox = () =>
+  screen.getByRole('combobox', { name: 'Subgrup (opțional)' });
 const parentBox = () =>
   screen.getByRole('combobox', { name: 'Task-umbrelă (obligatoriu)' });
 const optionTexts = () =>
@@ -73,6 +75,11 @@ async function pick(user: User, box: HTMLElement, name: RegExp | string) {
   await user.click(box);
   await user.click(await screen.findByRole('option', { name }));
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+}
+/** The Origin through the cascade: a root, then optionally a Group below. */
+async function chooseOrigin(user: User, root: string, below?: RegExp) {
+  await pick(user, groupBox(), new RegExp(`^${root}`));
+  if (below) await pick(user, subgroupBox(), below);
 }
 async function content() {
   const user = userEvent.setup();
@@ -85,32 +92,40 @@ async function content() {
   });
   return user;
 }
-it('picks the Origin from a searchable Group list showing each parent, and emits a trimmed direct draft', async () => {
+it('picks the Origin as a root Group, then a Group below it, and emits a trimmed direct draft', async () => {
   const onDraft = vi.fn();
   const { container } = render(
     <TaskForm options={options} onDraft={onDraft} />,
   );
   const user = await content();
+  // Only Groups with no managed ancestor are roots; nothing below yet.
+  expect(
+    screen.queryByRole('combobox', { name: 'Subgrup (opțional)' }),
+  ).not.toBeInTheDocument();
   await user.click(groupBox());
   await screen.findByRole('listbox');
-  expect(optionTexts()).toEqual([
-    'Conferință· Educațional',
-    'Echipa afișe· Conferință',
-    'Tineret',
-  ]);
+  expect(optionTexts()).toEqual(['Conferință· Educațional', 'Tineret']);
   await user.type(
-    await screen.findByRole('combobox', { name: 'Caută un grup' }),
+    await screen.findByRole('combobox', { name: 'Caută un grup principal' }),
     'conf',
   );
   await waitFor(() =>
-    expect(optionTexts()).toEqual([
-      'Conferință· Educațional',
-      'Echipa afișe· Conferință',
-    ]),
+    expect(optionTexts()).toEqual(['Conferință· Educațional']),
   );
+  await user.click(screen.getByRole('option', { name: /^Conferință/ }));
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+  expect(groupBox()).toHaveTextContent('Conferință');
+  expect(subgroupBox()).toHaveTextContent('Doar grupul principal');
+  await user.click(subgroupBox());
+  await screen.findByRole('listbox');
+  expect(optionTexts()).toEqual([
+    'Doar grupul principal',
+    'Echipa afișe· Conferință',
+  ]);
   await user.click(screen.getByRole('option', { name: /^Echipa afișe/ }));
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
-  expect(groupBox()).toHaveTextContent('Echipa afișe');
+  expect(subgroupBox()).toHaveTextContent('Echipa afișe');
+  expect(groupBox()).toHaveTextContent('Conferință');
   const campaign = screen.getByLabelText('Campanie (opțional)');
   expect(campaign).toHaveAccessibleDescription(/etichetă pentru raportare/i);
   expect(
@@ -139,13 +154,112 @@ it('picks the Origin from a searchable Group list showing each parent, and emits
     assignmentMode: 'direct',
     executorId: 'ana',
     campaignId: 10,
+    link: { label: null, url: null },
   });
+});
+it('sends only the root when no Group below is chosen, and starts on the one root there is', async () => {
+  const onDraft = vi.fn();
+  const view = render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = await content();
+  await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
+  await pick(user, subgroupBox(), 'Doar grupul principal');
+  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).toHaveBeenLastCalledWith(
+    expect.objectContaining({ groupId: 2 }),
+  );
+  view.unmount();
+
+  // A Responsible of one Team sees that Team as their root, already chosen.
+  const team = {
+    ...options,
+    groups: options.groups.filter((group) => group.id === 3),
+  };
+  render(<TaskForm options={team} onDraft={onDraft} />);
+  expect(groupBox()).toHaveTextContent('Echipa afișe');
+  expect(
+    screen.queryByRole('combobox', { name: 'Subgrup (opțional)' }),
+  ).not.toBeInTheDocument();
+});
+it('keeps a Campaign that can still tag the new Group and clears one that cannot', async () => {
+  const onDraft = vi.fn();
+  render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = await content();
+  await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
+  const campaign = () => screen.getByLabelText('Campanie (opțional)');
+  expect(
+    within(campaign())
+      .getAllByRole('option')
+      .map((option) => option.textContent),
+  ).toEqual(['Fără campanie', 'Campanie părinte', 'Campanie proprie']);
+  await user.selectOptions(campaign(), '10');
+  await pick(user, subgroupBox(), 'Doar grupul principal');
+  expect(campaign()).toHaveValue('10');
+  await pick(user, subgroupBox(), /^Echipa afișe/);
+  await user.selectOptions(campaign(), '11');
+  await pick(user, subgroupBox(), 'Doar grupul principal');
+  expect(campaign()).toHaveValue('');
+});
+it('sends the Attached Link, checks it as a pair on blur and submit, and puts the server’s reason under it', async () => {
+  const onDraft = vi
+    .fn()
+    .mockRejectedValueOnce({ code: 'PT400', message: 'link_url_invalid' })
+    .mockResolvedValue(undefined);
+  const { container } = render(
+    <TaskForm options={options} onDraft={onDraft} />,
+  );
+  const user = await content();
+  await chooseOrigin(user, 'Tineret');
+  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  const label = screen.getByLabelText('Etichetă link');
+  const url = screen.getByLabelText('Adresă link');
+  await user.type(label, 'l'.repeat(61));
+  await user.tab();
+  expect(label).toHaveAccessibleDescription(
+    'Numele linkului are cel mult 60 de caractere.',
+  );
+  await user.clear(label);
+  await user.type(label, 'Brief');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).not.toHaveBeenCalled();
+  expect(url).toHaveAccessibleDescription(
+    /Scrie adresa linkului sau lasă linkul gol./,
+  );
+  expect(url).toHaveFocus();
+  expect(
+    (
+      await axe.run(container, {
+        rules: { 'color-contrast': { enabled: false } },
+      })
+    ).violations,
+  ).toEqual([]);
+  await user.type(url, 'ftp://example.org');
+  await user.tab();
+  expect(url).toHaveAccessibleDescription(
+    /Adresa trebuie să înceapă cu http:\/\/ sau https:\/\//,
+  );
+  await user.clear(url);
+  await user.type(url, 'https://example.org/brief');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      link: { label: 'Brief', url: 'https://example.org/brief' },
+    }),
+  );
+  // The server's refusal of the same rule lands under the same field.
+  await waitFor(() =>
+    expect(url).toHaveAccessibleDescription(
+      /Adresa trebuie să înceapă cu http:\/\/ sau https:\/\//,
+    ),
+  );
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).toHaveBeenCalledTimes(2);
 });
 it('clears the Executor on public mode and clears incompatible Campaigns after Origin changes', async () => {
   const onDraft = vi.fn();
   render(<TaskForm options={options} onDraft={onDraft} />);
   const user = await content();
-  await pick(user, groupBox(), /^Echipa afișe/);
+  await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
   await user.selectOptions(screen.getByLabelText('Campanie (opțional)'), '10');
   await pick(
     user,
@@ -205,7 +319,7 @@ it('offers only the chosen Group’s Umbrellas as Subtask parents, and a parent 
   await user.keyboard('{Escape}');
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 
-  await pick(user, groupBox(), /^Echipa afișe/);
+  await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
   await pick(user, parentBox(), 'Pregătește conferința');
   await pick(user, groupBox(), 'Tineret');
   expect(parentBox()).toHaveTextContent('Alege taskul-umbrelă');
@@ -227,7 +341,9 @@ it('locks Subtask Origin to a live parent and cannot create nested Umbrellas', a
   expect(parentBox()).toBeDisabled();
   expect(parentBox()).toHaveTextContent('Pregătește conferința');
   expect(groupBox()).toBeDisabled();
-  expect(groupBox()).toHaveTextContent('Echipa afișe');
+  expect(groupBox()).toHaveTextContent('Conferință');
+  expect(subgroupBox()).toBeDisabled();
+  expect(subgroupBox()).toHaveTextContent('Echipa afișe');
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledWith(
     expect.objectContaining({ kind: 'task', parentTaskId: 30, groupId: 3 }),
@@ -238,7 +354,7 @@ it('strips assignment and Campaign fields for an Umbrella and allows no deadline
   render(<TaskForm options={options} onDraft={onDraft} />);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Titlu (obligatoriu)'), 'Eveniment');
-  await pick(user, groupBox(), /^Echipa afișe/);
+  await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
   await user.click(screen.getByRole('radio', { name: 'Task-umbrelă' }));
   expect(screen.queryByLabelText('Mod de atribuire')).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
@@ -386,7 +502,7 @@ it('drops a Campaign that a refreshed read no longer offers, instead of refusing
   const onDraft = vi.fn();
   const view = render(<TaskForm options={options} onDraft={onDraft} />);
   const user = await content();
-  await pick(user, groupBox(), /^Echipa afișe/);
+  await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
   await user.selectOptions(screen.getByLabelText('Campanie (opțional)'), '11');
   view.rerender(
     <TaskForm

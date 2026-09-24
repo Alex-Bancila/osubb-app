@@ -4,6 +4,7 @@ import {
   formatBucharestTime,
 } from '../../lib/calendar-time';
 import type { Database, Json } from '../../lib/database.types';
+import { useGroups } from '../../queries/reference';
 import { useTaskHistory, type TaskActivity } from '../../queries/task-history';
 
 const kinds: Record<string, string> = {
@@ -48,6 +49,9 @@ const fields: Record<string, string> = {
   audience: 'Audiență',
   assignment_mode: 'Atribuire',
   campaign_id: 'Campanie',
+  group_id: 'Grup',
+  link_label: 'Etichetă link',
+  link_url: 'Adresă link',
 };
 // #626's task_updated activity carries `details.changed`: the raw field
 // names an edit touched, in server order. Reused as the sentence's field
@@ -72,8 +76,10 @@ function taskUpdatedLabel(details: Json): string {
     : 'Task actualizat';
 }
 const consequenceLabels: Record<string, string> = {
+  executor_added_to_group: 'executorul a devenit membru al grupului nou',
   executor_removed: 'executorul a fost eliminat',
   candidate_removed: 'o candidatură a fost închisă',
+  campaign_cleared: 'campania a fost ștearsă',
 };
 // details.consequences (private.task_update_consequences, #626/#627) is one
 // row per Candidate closed or per Executor removed -- named here by
@@ -98,7 +104,11 @@ function taskUpdatedConsequences(details: Json): string[] {
       : (consequenceLabels[kind] ?? kind),
   );
 }
-function changes(details: Json, side: 'before' | 'after') {
+function changes(
+  details: Json,
+  side: 'before' | 'after',
+  groupNames?: ReadonlyMap<number, { name: string }>,
+) {
   if (!details || typeof details !== 'object' || Array.isArray(details))
     return [];
   const values = details[side] ?? details[side === 'before' ? 'from' : 'to'];
@@ -126,11 +136,20 @@ function changes(details: Json, side: 'before' | 'after') {
                 : '—'
             : field === 'campaign_id' && value !== null
               ? `#${value}`
-              : String(value ?? '—');
+              : field === 'group_id' && typeof value === 'number'
+                ? (groupNames?.get(value)?.name ?? `#${value}`)
+                : String(value ?? '—');
     return [`${fields[field]}: ${text}`];
   });
 }
-export function TaskTimeline({ activity }: { activity: TaskActivity[] }) {
+export function TaskTimeline({
+  activity,
+  groupNames,
+}: {
+  activity: TaskActivity[];
+  /** Readable Group names, so a move (#627) reads as names, not ids. */
+  groupNames?: ReadonlyMap<number, { name: string }>;
+}) {
   if (!activity.length)
     return (
       <p>Nu există activitate vizibilă. Istoricul vechi poate fi incomplet.</p>
@@ -183,7 +202,7 @@ export function TaskTimeline({ activity }: { activity: TaskActivity[] }) {
                   </p>
                 ))}
               {(['before', 'after'] as const).map((side) => {
-                const lines = changes(entry.details, side);
+                const lines = changes(entry.details, side, groupNames);
                 return lines.length ? (
                   <div key={side}>
                     <p className="font-medium">
@@ -205,6 +224,7 @@ export function TaskTimeline({ activity }: { activity: TaskActivity[] }) {
 }
 export function TaskHistory({ taskId }: { taskId: number }) {
   const query = useTaskHistory(taskId);
+  const groups = useGroups();
   if (query.isPending) return <p role="status">Se încarcă istoricul…</p>;
   if (query.isError)
     return (
@@ -219,5 +239,5 @@ export function TaskHistory({ taskId }: { taskId: number }) {
         </Button>
       </div>
     );
-  return <TaskTimeline activity={query.data} />;
+  return <TaskTimeline activity={query.data} groupNames={groups.data} />;
 }

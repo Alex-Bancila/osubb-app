@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
+import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
@@ -28,7 +36,13 @@ import {
 } from '../../queries/task-edit';
 import { useTaskFormOptions } from '../../queries/task-form-options';
 import type { TaskPresentationRow } from './task-presentation';
-import { campaignsFor } from './task-form-model';
+import { TaskGroupCascade } from './TaskGroupCascade';
+import {
+  campaignsFor,
+  groupLookup,
+  type ManagedWorkGroup,
+  type TaskFormOptions,
+} from './task-form-model';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
@@ -85,19 +99,49 @@ export function TaskEditControl({
   );
 }
 
+/**
+ * One line per consequence `preview_task_update` lists (#627), naming the
+ * member. A kind this screen does not know is still listed, in words that
+ * make the manager check before confirming, so nothing is accepted unseen.
+ */
 function consequenceText(consequence: TaskUpdateConsequence) {
+  const name = consequence.memberName;
   switch (consequence.kind) {
-    case 'executor_removed':
-      return `${consequence.memberName} nu mai este executor. Taskul revine la „De făcut”.`;
     case 'executor_added_to_group':
-      return `${consequence.memberName} va fi adăugat în grupul nou.`;
-    case 'campaign_cleared':
-      return 'Campania va fi eliminată deoarece nu aparține grupului nou.';
+      return `${name} devine membru al grupului nou.`;
+    case 'executor_removed':
+      return `${name} nu mai este executor. Taskul revine la „De făcut”.`;
     case 'candidate_removed':
-      return `${consequence.memberName} iese din lista de candidați.`;
+      return `${name} iese din lista de candidați.`;
+    case 'campaign_cleared':
+      return 'Campania se șterge: nu poate eticheta taskuri în grupul nou.';
     default:
-      return `Participarea lui ${consequence.memberName} la task se schimbă.`;
+      return consequence.memberId === null
+        ? 'Salvarea mai are o consecință pe care aplicația nu o poate descrie încă.'
+        : `Participarea lui ${name} la task se schimbă.`;
   }
+}
+
+/** Why the Group cannot change here, or null when it can (#627). */
+function groupLock(task: TaskPresentationRow) {
+  if (task.parent_task_id !== null)
+    return 'Un subtask rămâne în grupul taskului-umbrelă.';
+  if (task.kind === 'umbrella' && (task.subtasks?.length ?? 0) > 0)
+    return 'Un task-umbrelă cu subtaskuri nu își poate schimba grupul.';
+  return null;
+}
+
+/** The Campaigns the chosen Group may carry, plus the Task's own. */
+function campaignIdsFor(
+  groupId: number,
+  task: TaskPresentationRow,
+  options: TaskFormOptions | undefined,
+) {
+  const group = options?.groups.find((row) => row.id === groupId);
+  return [
+    ...(options ? campaignsFor(group, options) : []).map((row) => row.id),
+    ...(task.campaign_id === null ? [] : [task.campaign_id]),
+  ];
 }
 
 function TaskEditForm({
@@ -126,6 +170,12 @@ function TaskEditForm({
   const [audience, setAudience] = useState(
     task.audience === 'org' ? 'org' : 'local',
   );
+  const [groupId, setGroupId] = useState(task.group_id);
+  const [link, setLink] = useState({
+    label: task.link_label ?? '',
+    url: task.link_url ?? '',
+  });
+  const locked = groupLock(task);
   const [checking, setChecking] = useState(false);
   // The values waiting for the manager to accept their consequences.
   const [confirming, setConfirming] = useState<{
@@ -133,8 +183,12 @@ function TaskEditForm({
     consequences: TaskUpdateConsequence[];
   } | null>(null);
   const submitting = useRef(false);
-  const group = options.data?.groups.find((row) => row.id === task.group_id);
+  const group = options.data?.groups.find((row) => row.id === groupId);
   const campaigns = options.data ? campaignsFor(group, options.data) : [];
+  const groupsById = useMemo(
+    () => (options.data ? groupLookup(options.data) : new Map()),
+    [options.data],
+  );
   const pending = checking || mutation.isPending;
 
   function instantFor(value: string) {
@@ -148,6 +202,7 @@ function TaskEditForm({
         : null;
   }
   const values: TaskUpdateValues = {
+    groupId,
     title,
     description,
     deadline: instantFor(deadline),
@@ -156,18 +211,20 @@ function TaskEditForm({
       ? null
       : (assignmentMode as TaskUpdateValues['assignmentMode']),
     audience: umbrella ? null : (audience as TaskUpdateValues['audience']),
+    link,
   };
-  // A Campaign the Task may carry: one offered for its Group, or its own.
-  const allowedCampaigns = (offered: { id: number }[]) => [
-    ...offered.map((row) => row.id),
-    ...(task.campaign_id === null ? [] : [task.campaign_id]),
-  ];
   const form = useFormValidation(
-    taskUpdateSchema({ umbrella, campaignIds: allowedCampaigns(campaigns) }),
+    taskUpdateSchema({
+      umbrella,
+      campaignIds: campaignIdsFor(groupId, task, options.data),
+    }),
     values,
     fieldForReason,
   );
   const changed =
+    groupId !== task.group_id ||
+    (link.label.trim() || null) !== task.link_label ||
+    (link.url.trim() || null) !== task.link_url ||
     title.trim() !== task.title ||
     (description.trim() || null) !== (task.description ?? null) ||
     deadline !== initialDeadline ||
@@ -199,19 +256,32 @@ function TaskEditForm({
     }
   }
 
+  function chooseGroup(next: ManagedWorkGroup) {
+    setGroupId(next.id);
+    // A Campaign picked here that cannot tag the new Group goes. The Task's
+    // own Campaign stays selected: if it cannot follow, the server clears it
+    // and the confirmation says so (campaign_cleared).
+    if (
+      campaignId !== null &&
+      campaignId !== task.campaign_id &&
+      options.data &&
+      !campaignsFor(next, options.data).some((row) => row.id === campaignId)
+    )
+      setCampaignId(null);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (submitting.current) return;
     const parsed = form.validate();
     if (!parsed) return;
+    const { link: parsedLink, ...fields } = parsed;
     const input: TaskUpdateInput = {
       taskId: task.id,
-      groupId: task.group_id,
-      ...parsed,
-      // #684: the form has no link fields yet (#688), so the current link
-      // travels unchanged -- update_task is a full-state replace.
-      linkLabel: task.link_label,
-      linkUrl: task.link_url,
+      ...fields,
+      // update_task is a full-state replace: the link as the form shows it.
+      linkLabel: parsedLink.label,
+      linkUrl: parsedLink.url,
     };
     submitting.current = true;
     setChecking(true);
@@ -229,10 +299,12 @@ function TaskEditForm({
         form.fail({ message: 'task_manage_forbidden' }, SAVE_FAILED);
         return;
       }
-      // The same rules against the fresh read: a Campaign may have gone.
+      // The same rules against the fresh read: a Campaign or the chosen
+      // Group may have gone.
       const recheck = taskUpdateSchema({
         umbrella,
-        campaignIds: allowedCampaigns(campaignsFor(origin, fresh.data)),
+        campaignIds: campaignIdsFor(groupId, task, fresh.data),
+        groupIds: fresh.data.groups.map((row) => row.id),
       }).safeParse(values);
       if (!recheck.success) {
         form.fail({ message: recheck.error.issues[0]?.message }, SAVE_FAILED);
@@ -272,8 +344,43 @@ function TaskEditForm({
       aria-label="Editează taskul"
       noValidate
     >
-      <fieldset disabled={pending} className="space-y-3">
+      <fieldset disabled={pending} className="min-w-0 space-y-3">
         <legend className="sr-only">Câmpurile taskului</legend>
+        {options.data && (
+          <div className="space-y-1" {...form.slot('groupId')}>
+            <TaskGroupCascade
+              groups={options.data.groups}
+              groupsById={groupsById}
+              value={groupId}
+              onChange={chooseGroup}
+              disabled={locked !== null}
+              describedBy={
+                [
+                  locked ? `${id}-group-lock` : undefined,
+                  form.error('groupId') ? form.errorId('groupId') : undefined,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
+            />
+            <FieldError {...form.errorProps('groupId')} />
+            {locked ? (
+              <p
+                id={`${id}-group-lock`}
+                className="text-sm text-muted-foreground"
+              >
+                {locked}
+              </p>
+            ) : (
+              groupId !== task.group_id && (
+                <p className="text-sm text-muted-foreground">
+                  Înainte de salvare vezi ce se schimbă pentru executor,
+                  candidați și campanie.
+                </p>
+              )
+            )}
+          </div>
+        )}
         <div className="space-y-1">
           <label className="block space-y-1">
             <span>Titlu</span>
@@ -384,6 +491,15 @@ function TaskEditForm({
             </div>
           </>
         )}
+        <fieldset className="min-w-0 space-y-3 border-t border-border pt-3">
+          <legend className="font-medium">Link atașat (opțional)</legend>
+          <AttachedLinkFields
+            value={link}
+            onChange={setLink}
+            form={form}
+            name="link"
+          />
+        </fieldset>
       </fieldset>
       {options.isPending && (
         <p role="status">Se verifică grupul și campaniile…</p>
