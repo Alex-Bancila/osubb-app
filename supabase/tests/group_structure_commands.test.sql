@@ -573,7 +573,7 @@ select pg_temp.g582_as(3);
 select throws_ok(
   format($$select public.update_event(
            (select id from public.events where title = 'Eveniment organizație #582'),
-           'Redenumit #582', 'sedinta', %s, now() + interval '3 days', null, null, null, null, 0)$$,
+           'Redenumit #582', 'sedinta', %s, now() + interval '3 days', null, null, null, null, 0, null)$$,
          pg_temp.g582_group('Părinte viu #582')),
   '42501', 'calendar_manage_forbidden',
   'update_event: an Organization Event belongs to its creator -- a Group Manager who did not create it is refused');
