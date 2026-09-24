@@ -93,12 +93,25 @@ export type CampaignReport = {
   }[];
 };
 
+/**
+ * The report's date range (#677): `p_from` inclusive, `p_to` exclusive, both
+ * instants, read against the day the points were awarded. An absent bound is
+ * no bound — the Work Filter's `rangeBounds` builds it from Bucharest days.
+ */
+export type CampaignReportRange = { p_from?: string; p_to?: string };
+
 export async function fetchCampaignReport(
   campaignId: number,
+  range: CampaignReportRange = {},
 ): Promise<CampaignReport> {
+  const args: { p_campaign_id: number } & CampaignReportRange = {
+    p_campaign_id: campaignId,
+  };
+  if (range.p_from !== undefined) args.p_from = range.p_from;
+  if (range.p_to !== undefined) args.p_to = range.p_to;
   const [totals, members] = await Promise.all([
-    supabase.rpc('campaign_totals', { p_campaign_id: campaignId }),
-    supabase.rpc('campaign_report', { p_campaign_id: campaignId }),
+    supabase.rpc('campaign_totals', args),
+    supabase.rpc('campaign_report', args),
   ]);
   if (totals.error) throw totals.error;
   if (members.error) throw members.error;
@@ -119,12 +132,20 @@ export async function fetchCampaignReport(
   };
 }
 
-/** Read only while a report is open: a panel of ten Campaigns is not ten reads. */
-export function useCampaignReport(campaignId: number | null) {
+/**
+ * Read only while a report is open: a panel of ten Campaigns is not ten reads.
+ * A `null` range (inverted on the page) reads nothing until it is corrected.
+ */
+export function useCampaignReport(
+  campaignId: number | null,
+  range: CampaignReportRange | null = {},
+) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
-    queryKey: keys.campaigns.report(memberId, campaignId ?? 0),
+    queryKey: keys.campaigns.report(memberId, campaignId ?? 0, range ?? {}),
     queryFn:
-      campaignId === null ? skipToken : () => fetchCampaignReport(campaignId),
+      campaignId === null || range === null
+        ? skipToken
+        : () => fetchCampaignReport(campaignId, range),
   });
 }

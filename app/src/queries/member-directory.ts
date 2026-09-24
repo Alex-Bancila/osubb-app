@@ -41,7 +41,7 @@ export type DirectoryMember = {
 };
 
 /** One explicit membership row, enough to pick the Voluntari chip (R17). */
-type MembershipCandidate = {
+export type MembershipCandidate = {
   id: number;
   name: string;
   color: string | null;
@@ -55,7 +55,7 @@ type MembershipCandidate = {
  * one (no parent) with the earliest roster `created_at`; "+n" counts every
  * other explicit membership, top-level or not.
  */
-function primaryGroupOf(rows: MembershipCandidate[]): {
+export function primaryGroupOf(rows: MembershipCandidate[]): {
   primaryGroup: PrimaryGroup | null;
   otherMemberships: number;
 } {

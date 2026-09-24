@@ -167,14 +167,29 @@ function labelled<G extends WorkFilterGroup>(group: G): G {
 const collator = new Intl.Collator('ro-RO', { sensitivity: 'base' });
 
 /**
- * **Grup principal** options: every active top-level Group, the Organization
+ * Where the **Grup principal** options start: `top-level` offers the
+ * organization's top-level Groups; `topmost` offers every given Group with no
+ * given Group above it — the page passes only the Groups the caller manages
+ * (Campanii, R13), so a Team's Manager starts at the Team.
+ */
+export type WorkFilterRoots = 'top-level' | 'topmost';
+
+/**
+ * **Grup principal** options: every active top-level Group (or, `topmost`,
+ * every active given Group with no given Group above it), the Organization
  * Group first and labelled OSUBB, the rest by name.
  */
 export function rootGroups<G extends WorkFilterGroup>(
   groups: readonly G[],
+  roots: WorkFilterRoots = 'top-level',
 ): G[] {
+  const given = new Set(groups.map((group) => group.id));
+  const isRoot = (group: G) =>
+    roots === 'topmost'
+      ? !group.path.some((id) => id !== group.id && given.has(id))
+      : group.path.length === 1;
   return groups
-    .filter((group) => group.status === 'active' && group.path.length === 1)
+    .filter((group) => group.status === 'active' && isRoot(group))
     .map(labelled)
     .sort(
       (a, b) =>
@@ -235,6 +250,26 @@ export function campaignsFor<C extends WorkFilterCampaign>(
       chosenPath.includes(campaign.group_id) ||
       (byId.get(campaign.group_id)?.path.includes(groupId) ?? false),
   );
+}
+
+/**
+ * The Work Filter value that places a chosen Group in the cascade: the root
+ * it sits under (itself when it is one) and, below a root, the Subgrup. A
+ * Group that is not among `groups` places nothing.
+ */
+export function placeGroup(
+  groups: readonly WorkFilterGroup[],
+  groupId: number | undefined,
+  roots: WorkFilterRoots = 'top-level',
+): Pick<WorkFilterValue, 'rootGroupId' | 'groupId'> {
+  const chosen = groups.find((group) => group.id === groupId);
+  if (!chosen) return {};
+  const rootIds = new Set(rootGroups(groups, roots).map((group) => group.id));
+  const rootId = chosen.path.find((id) => rootIds.has(id));
+  if (rootId === undefined) return {};
+  return rootId === chosen.id
+    ? { rootGroupId: rootId }
+    : { rootGroupId: rootId, groupId: chosen.id };
 }
 
 /** The Group a page filters by: the Subgrup when set, else the root. */
