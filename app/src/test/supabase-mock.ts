@@ -15,6 +15,7 @@ export function createSupabaseMock() {
     range: vi.fn(),
     update: vi.fn(),
     insert: vi.fn(),
+    upsert: vi.fn(),
     delete: vi.fn(),
     maybeSingle: vi.fn(),
     channel: vi.fn(),

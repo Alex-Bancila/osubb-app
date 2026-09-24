@@ -151,6 +151,12 @@ insert into push_deliveries (notification_id, token_id)
   select notification.id, push_token.id
     from notifications as notification, push_tokens as push_token
    where notification.title = 'rls-noti' and push_token.token = 'rls-token';
+-- #635: push preferences are self-only. The row owned by the claimless uid
+-- is what exercises the `member_id = auth.uid()` limb for the real claimless
+-- user below.
+insert into notification_push_preferences (member_id, kind, push_enabled) values
+  ('ffffffff-0000-0000-0000-000000000006', 'announce', false),
+  ('eeeeeeee-0000-0000-0000-000000000156', 'event', false);
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:

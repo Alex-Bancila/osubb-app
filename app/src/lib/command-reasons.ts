@@ -310,6 +310,16 @@ const REASON_COPY = new Map<string, string>([
     'push_subscribe_failed',
     'Nu am putut schimba notificările pe acest dispozitiv. Verifică internetul și încearcă din nou.',
   ],
+  /* ---- Push preferences (#635) ---- */
+  /* browser */
+  [
+    'push_preference_failed',
+    'Nu am putut salva preferința. Verifică internetul și încearcă din nou.',
+  ],
+  [
+    'push_preferences_unavailable',
+    'Nu am putut încărca preferințele. Verifică internetul și reîncarcă pagina.',
+  ],
 ]);
 
 /** Every reason with copy, for tests that prove a list of reasons is covered. */
