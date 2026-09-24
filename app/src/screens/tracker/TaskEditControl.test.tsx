@@ -386,6 +386,7 @@ it('refuses a Group a fresh read no longer offers, under the Group field', async
       /Nu mai poți pregăti taskuri pentru grupul ales/,
     ),
   );
+  expect(rootBox()).toHaveAttribute('aria-invalid', 'true');
   expect(state.preview).not.toHaveBeenCalled();
 });
 

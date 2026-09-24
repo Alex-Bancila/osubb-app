@@ -34,6 +34,7 @@ export function TaskGroupCascade({
   onChange,
   disabled = false,
   describedBy,
+  invalid = false,
 }: {
   groups: ManagedWorkGroup[];
   /** Names of every readable Group, so an option can show its parent. */
@@ -41,8 +42,10 @@ export function TaskGroupCascade({
   value: number | null;
   onChange: (group: ManagedWorkGroup) => void;
   disabled?: boolean;
-  /** A hint or error the triggers should announce. */
+  /** A hint or error both triggers should announce. */
   describedBy?: string;
+  /** True while the chosen Group has an error: both steps say so. */
+  invalid?: boolean;
 }) {
   const id = useId();
   const roots = useMemo(() => rootGroups(groups), [groups]);
@@ -75,6 +78,7 @@ export function TaskGroupCascade({
           <ComboboxTrigger
             aria-labelledby={`${id}-root`}
             aria-describedby={describedBy}
+            aria-invalid={invalid || undefined}
           >
             <ComboboxValue placeholder="Alege un grup">
               {(group: ManagedWorkGroup | null) =>
@@ -117,7 +121,10 @@ export function TaskGroupCascade({
           >
             <ComboboxTrigger
               aria-labelledby={`${id}-sub`}
-              aria-describedby={`${id}-sub-hint`}
+              aria-describedby={[`${id}-sub-hint`, describedBy]
+                .filter(Boolean)
+                .join(' ')}
+              aria-invalid={invalid || undefined}
             >
               <ComboboxValue placeholder={ONLY_ROOT}>
                 {(group: ManagedWorkGroup | null) =>

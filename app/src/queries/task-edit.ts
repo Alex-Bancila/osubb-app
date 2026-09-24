@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { memberDisplayName } from '../components/member/member-identity';
 import { CommandError } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
@@ -28,6 +29,7 @@ export type TaskUpdateConsequence = {
   kind: string;
   /** Null for a consequence that affects the Task rather than a member. */
   memberId: string | null;
+  /** The Nickname, or the full name when there is none (ruling R5). */
   memberName: string;
 };
 
@@ -90,12 +92,17 @@ export async function previewTaskUpdate(
     ? (
         await supabase
           .from('profiles_directory')
-          .select('id, full_name')
+          .select('id, full_name, nickname')
           .in('id', ids)
       ).data
     : [];
   const names = new Map(
-    (people ?? []).map((person) => [person.id, person.full_name]),
+    (people ?? []).map((person) => [
+      person.id,
+      person.full_name === null
+        ? null
+        : memberDisplayName(person.nickname, person.full_name),
+    ]),
   );
   return rows.map((row) => ({
     kind: row.consequence,

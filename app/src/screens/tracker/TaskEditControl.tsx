@@ -362,6 +362,7 @@ function TaskEditForm({
                   .filter(Boolean)
                   .join(' ') || undefined
               }
+              invalid={form.error('groupId') !== undefined}
             />
             <FieldError {...form.errorProps('groupId')} />
             {locked ? (

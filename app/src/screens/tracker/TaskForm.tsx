@@ -220,6 +220,7 @@ export function TaskForm({
           describedBy={
             form.error('groupId') ? form.errorId('groupId') : undefined
           }
+          invalid={form.error('groupId') !== undefined}
         />
         <FieldError {...form.errorProps('groupId')} />
         {subtask && (

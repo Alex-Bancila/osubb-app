@@ -92,23 +92,26 @@ it('previews with the same values and names each affected member', async () => {
   });
   const inIds = vi.fn().mockResolvedValue({
     data: [
-      { id: 'a', full_name: 'Ana Șerban' },
-      { id: 'b', full_name: 'Bianca Pop' },
+      { id: 'a', full_name: 'Ana Șerban', nickname: null },
+      { id: 'b', full_name: 'Bianca Pop', nickname: 'Bibi' },
     ],
     error: null,
   });
-  api.from.mockReturnValue({ select: () => ({ in: inIds }) });
+  const select = vi.fn(() => ({ in: inIds }));
+  api.from.mockReturnValue({ select });
   expect(await previewTaskUpdate(input)).toEqual([
     { kind: 'executor_removed', memberId: 'a', memberName: 'Ana Șerban' },
+    // The Nickname when the member chose one (ruling R5).
     {
       kind: 'executor_added_to_group',
       memberId: 'b',
-      memberName: 'Bianca Pop',
+      memberName: 'Bibi',
     },
     { kind: 'candidate_removed', memberId: 'z', memberName: 'Un membru' },
   ]);
   expect(api.rpc).toHaveBeenCalledWith('preview_task_update', args);
   expect(api.from).toHaveBeenCalledWith('profiles_directory');
+  expect(select).toHaveBeenCalledWith('id, full_name, nickname');
   expect(inIds).toHaveBeenCalledWith('id', ['a', 'b', 'z']);
 });
 

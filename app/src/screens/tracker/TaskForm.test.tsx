@@ -439,6 +439,10 @@ it('checks the whole draft on submit, focuses the first broken field and never s
     'Alege termenul taskului.',
   );
   expect(groupBox()).toHaveFocus();
+  expect(groupBox()).toHaveAttribute('aria-invalid', 'true');
+  expect(groupBox()).toHaveAccessibleDescription(
+    'Alege exact un grup de origine.',
+  );
   expect((await axe.run(container)).violations).toEqual([]);
 
   fireEvent.change(title, { target: { value: '  Titlu  ' } });
@@ -517,5 +521,26 @@ it('drops a Campaign that a refreshed read no longer offers, instead of refusing
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledWith(
     expect.objectContaining({ groupId: 3, campaignId: null }),
+  );
+});
+it('marks both cascade steps invalid when the server refuses the chosen Group', async () => {
+  const onDraft = vi.fn().mockRejectedValueOnce({
+    code: 'PT400',
+    message: 'task_group_unavailable',
+  });
+  render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = await content();
+  await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
+  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  const refusal =
+    'Nu mai poți pregăti taskuri pentru grupul ales. Alege un grup disponibil.';
+  await waitFor(() =>
+    expect(subgroupBox()).toHaveAttribute('aria-invalid', 'true'),
+  );
+  expect(groupBox()).toHaveAttribute('aria-invalid', 'true');
+  expect(groupBox()).toHaveAccessibleDescription(refusal);
+  expect(subgroupBox()).toHaveAccessibleDescription(
+    expect.stringContaining(refusal),
   );
 });
