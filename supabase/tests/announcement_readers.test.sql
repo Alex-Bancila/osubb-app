@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(41);
 truncate announcements, announcement_reads cascade;
 
 -- Personas (prefix 693):
@@ -105,6 +105,11 @@ select pg_temp.test_clear_jwt(); set local role authenticated;
 select throws_ok($$select * from announcement_readers((select edu_local from ann693))$$,
   'PT404','announcement_not_found','claimless caller gets announcement_not_found');
 select is(my_unread_announcements_count(),0,'claimless caller has 0 unread');
+reset role;
+-- A live BC session without organization claims: only auth_is_member() refuses.
+select pg_temp.test_login('69300000-0000-0000-0000-000000000009','{}'::jsonb);
+select throws_ok($$select * from announcement_readers((select edu_local from ann693))$$,
+  'PT404','announcement_not_found','an otherwise authorized BC without organization claims gets announcement_not_found');
 reset role;
 
 -- ==================== author ====================
