@@ -80,7 +80,7 @@ const consequenceLabels: Record<string, string> = {
   executor_added_to_group: 'executorul a devenit membru al grupului nou',
   executor_removed: 'executorul a fost eliminat',
   candidate_removed: 'o candidatură a fost închisă',
-  campaign_cleared: 'campania a fost ștearsă',
+  campaign_cleared: 'campania a fost eliminată din task',
 };
 // details.consequences (private.task_update_consequences, #626/#627) is one
 // row per Candidate closed or per Executor removed -- named here by
