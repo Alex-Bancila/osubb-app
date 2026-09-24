@@ -142,7 +142,7 @@ it('links to the tracker for leadership viewers and to Administrare for manageRo
   capabilities.seeLeadership = true;
   let dialog = await openCard();
   expect(
-    within(dialog).getByRole('link', { name: 'Vezi istoricul taskurilor' }),
+    within(dialog).getByRole('link', { name: 'Vezi trackerul' }),
   ).toHaveAttribute('href', '/tracker/membru/m-1');
   expect(within(dialog).queryByRole('link', { name: 'Editează' })).toBeNull();
 
@@ -157,7 +157,7 @@ it('links to the tracker for leadership viewers and to Administrare for manageRo
     within(dialog).getByRole('link', { name: 'Editează' }),
   ).toHaveAttribute('href', '/administrare/membri/m-1');
   expect(
-    within(dialog).queryByRole('link', { name: 'Vezi istoricul taskurilor' }),
+    within(dialog).queryByRole('link', { name: 'Vezi trackerul' }),
   ).toBeNull();
 });
 

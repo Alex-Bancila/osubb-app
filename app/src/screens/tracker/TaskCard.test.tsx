@@ -92,6 +92,28 @@ describe('Member Task cards', () => {
     ).toBeInTheDocument();
   });
 
+  it('the history variant is read-only: its record replaces the Executor line, stage and actions', () => {
+    const onProgress = vi.fn();
+    const task = toTaskPresentation(
+      taskRow({ status: 'in_progress', assignment_mode: 'public' }),
+      new Date('2026-09-15T12:00:00Z'),
+    );
+    render(
+      <TaskCard
+        task={task}
+        memberId="member"
+        onProgress={onProgress}
+        anchor={false}
+        history={<p>Atribuire activă</p>}
+      />,
+    );
+    expect(screen.getByText('Atribuire activă')).toBeInTheDocument();
+    expect(screen.queryByText('Executor:')).toBeNull();
+    expect(screen.queryByText('Stare înscriere')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByRole('article')).not.toHaveAttribute('id');
+  });
+
   it('shows the active Executor name on an ordinary Task', () => {
     card({
       visibleExecutor: { memberId: 'member', fullName: 'Ioana Executor' },
