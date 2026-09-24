@@ -146,6 +146,11 @@ insert into role_history (member_id, from_role, to_role, actor_kind, reason) val
 
 insert into push_tokens (member_id, token, platform)
   values ('ffffffff-0000-0000-0000-000000000006', 'rls-token', 'web');
+-- #703: the outbox row the enqueue trigger writes for a web device.
+insert into push_deliveries (notification_id, token_id)
+  select notification.id, push_token.id
+    from notifications as notification, push_tokens as push_token
+   where notification.title = 'rls-noti' and push_token.token = 'rls-token';
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:

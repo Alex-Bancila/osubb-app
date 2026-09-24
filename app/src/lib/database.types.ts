@@ -1649,6 +1649,57 @@ export type Database = {
           },
         ]
       }
+      push_deliveries: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: number
+          last_error: string | null
+          next_attempt_at: string
+          notification_id: number
+          sent_at: string | null
+          status: string
+          token_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          notification_id: number
+          sent_at?: string | null
+          status?: string
+          token_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          notification_id?: number
+          sent_at?: string | null
+          status?: string
+          token_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_deliveries_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_deliveries_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "push_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_tokens: {
         Row: {
           created_at: string
@@ -3283,6 +3334,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_push_deliveries: {
+        Args: { p_limit: number }
+        Returns: {
+          attempt: number
+          body: string
+          delivery_id: number
+          link: string
+          notification_id: number
+          title: string
+          token: string
+        }[]
+      }
       complete_task_review: {
         Args: {
           p_difficulty: number
@@ -4272,6 +4335,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      settle_push_delivery: {
+        Args: {
+          p_attempt: number
+          p_error?: string
+          p_id: number
+          p_outcome: string
+        }
+        Returns: string
       }
       start_task: {
         Args: { p_task_id: number }

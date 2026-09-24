@@ -114,3 +114,13 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/csv-import/index.ts"
+
+# #703 (ADR-0010) — Web Push outbox sender, called every minute by the
+# pg_cron job osubb-send-push through pg_net. verify_jwt makes the gateway
+# check the bearer's signature; the handler then requires role = service_role,
+# because an anon key passes the gateway too.
+[functions.send-push]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/send-push/index.ts"
