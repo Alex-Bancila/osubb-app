@@ -260,6 +260,8 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   parent_unavailable: 'parentTaskId',
   subtask_origin_mismatch: 'parentTaskId',
   invalid_audience: 'audience',
+  // #756: a Private Group's Tasks are local only.
+  private_group_local_only: 'audience',
   invalid_assignment_mode: 'assignmentMode',
   invalid_executor: 'executorId',
   executor_not_allowed_for_public: 'executorId',

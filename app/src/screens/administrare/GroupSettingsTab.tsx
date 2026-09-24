@@ -360,7 +360,7 @@ export function GroupSettingsTab({
             label="Primește cereri de înscriere"
             hint="Membrii pot cere să intre în grup."
             checked={accepts}
-            disabled={busy}
+            disabled={busy || group.is_private}
             onChange={setAccepts}
           />
 

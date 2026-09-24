@@ -342,6 +342,7 @@ it('maps every reason a Task command raises to a Task field', () => {
       'task_group_required',
       'invalid_task_kind',
       'invalid_audience',
+      'private_group_local_only',
       'invalid_assignment_mode',
       'invalid_executor',
       'executor_not_allowed_for_public',

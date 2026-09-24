@@ -1686,13 +1686,44 @@ begin
   -- of a row already held FOR UPDATE, so the update's own FOR NO KEY UPDATE is
   -- the only lock they take (conventions section 2); archive_group cascades
   -- over the same `path @>` set in the same order.
+  --
+  -- The cascade repeats until a pass changes nothing. create_group locks only
+  -- its parent, so a Child Group created under a descendant while a pass is
+  -- waiting on that descendant commits after the pass's snapshot was taken and
+  -- the pass cannot see it. The next statement takes a fresh snapshot (READ
+  -- COMMITTED) and does. A create that starts later waits on the descendant
+  -- this command now holds and reads it private. Locking the whole ancestor
+  -- path in create_group instead would invert update_group's and this
+  -- command's own child-then-parent order and deadlock them.
   if p_is_private and not v_group.is_private then
-    update public.groups as below
-       set is_private           = true,
-           accepts_applications = false
+    loop
+      update public.groups as below
+         set is_private           = true,
+             accepts_applications = false
+       where below.path @> array[p_group_id]
+         and below.id <> p_group_id
+         and (not below.is_private or below.accepts_applications);
+      exit when not found;
+    end loop;
+
+    -- An Application filed before the Group turned private is not
+    -- grandfathered: it is withdrawn with the actor as decider, exactly as
+    -- ruling R23's Minimum-Level removal withdraws one (#584, ruling R30).
+    perform 1 from public.group_applications as application
+      join public.groups as below on below.id = application.group_id
      where below.path @> array[p_group_id]
-       and below.id <> p_group_id
-       and (not below.is_private or below.accepts_applications);
+       and application.status = 'pending'
+     order by application.id
+       for update of application;
+
+    update public.group_applications as application
+       set status     = 'withdrawn',
+           decided_by = v_actor,
+           decided_at = clock_timestamp()
+      from public.groups as below
+     where below.id = application.group_id
+       and below.path @> array[p_group_id]
+       and application.status = 'pending';
   end if;
 
   if v_removed is not null then
@@ -1766,7 +1797,7 @@ comment on function private.create_group_impl(text, text, bigint, integer, uuid,
   'Body behind public.create_group (#582): input validation, the root/parent authority split, Minimum Level against the parent and the actor, the inherited Private Group setting (#756), the appointed Manager''s eligibility, the sibling-name check and the Group Manager''s roster row. Writes groups.category and is named in conventions.test.sql''s sweep exclusion for it (ruling R16). Never writes groups.parent_id after the insert. Since #583 the Manager''s roster row is written by private.appoint_group_member rather than by an upsert here, so the Appointment core is the only insert path into public.group_members in the whole schema, and the appointed Group Manager is notified of the appointment like any other.';
 
 comment on function public.update_group_structure(bigint, text, boolean, boolean, boolean, integer, text, text, boolean, boolean, boolean) is
-  'Replaces a Group''s STRUCTURAL settings (#582, ADR-0009 Decision 5): the presentation label, both Department Cup flags, Automatic Membership, colour and short name, the Organization marker, the Private Group setting (#756) and a TOP-LEVEL Group''s Minimum Level. BC and the Moderator only (live level >= 6); every refusal is the one non-disclosing 42501 group_manage_forbidden, an unknown id included. Full-state REPLACE (conventions OD5). Malformed input first: PT400 invalid_group_category / invalid_group_min_level / invalid_group_color / invalid_group_privacy (a null p_is_private is refused, never read as public) / private_not_allowed_for_organization (the Organization Group cannot be private). A CHILD Group''s Minimum Level belongs to its Managers, so changing it here is 42501 — the mirror image of update_group. Then PT409 group_archived; PT409 cup_not_top_level (only a root competes, groups_competes_top_level_ck), organization_group_exists (groups_one_organization_uidx allows one marked Group: clear the old one first), automatic_group_has_roster_members (turning Automatic Membership on while ordinary members are on the roster), automatic_group_accepts_no_applications (turning it on while the Group accepts Applications); PT400 group_min_level_below_parent / private_parent (a Child Group of a Private Group stays private) / group_min_level_above_children / group_min_level_above_actor; PT409 nothing_to_update. Turning a Group private (ruling R25) switches its Applications off and cascades both to its whole subtree in the same transaction; turning it public leaves the Child Groups as they are. The Minimum-Level raise behaves exactly as in update_group: PT409 group_has_members_below_level with the count in DETAIL unless p_confirm_removals is true, then the rows below the new level go and everyone affected is notified. This is one of the two commands allowed to write groups.category — it and private.create_group_impl are the only writers beside the three Wave 1 mirror functions, and conventions.test.sql''s sweep names them (ruling R16). It never writes groups.parent_id: a Group''s parent is fixed at creation (ruling R20).';
+  'Replaces a Group''s STRUCTURAL settings (#582, ADR-0009 Decision 5): the presentation label, both Department Cup flags, Automatic Membership, colour and short name, the Organization marker, the Private Group setting (#756) and a TOP-LEVEL Group''s Minimum Level. BC and the Moderator only (live level >= 6); every refusal is the one non-disclosing 42501 group_manage_forbidden, an unknown id included. Full-state REPLACE (conventions OD5). Malformed input first: PT400 invalid_group_category / invalid_group_min_level / invalid_group_color / invalid_group_privacy (a null p_is_private is refused, never read as public) / private_not_allowed_for_organization (the Organization Group cannot be private). A CHILD Group''s Minimum Level belongs to its Managers, so changing it here is 42501 — the mirror image of update_group. Then PT409 group_archived; PT409 cup_not_top_level (only a root competes, groups_competes_top_level_ck), organization_group_exists (groups_one_organization_uidx allows one marked Group: clear the old one first), automatic_group_has_roster_members (turning Automatic Membership on while ordinary members are on the roster), automatic_group_accepts_no_applications (turning it on while the Group accepts Applications); PT400 group_min_level_below_parent / private_parent (a Child Group of a Private Group stays private) / group_min_level_above_children / group_min_level_above_actor; PT409 nothing_to_update. Turning a Group private (ruling R25) switches its Applications off and cascades both to its whole subtree in the same transaction, withdrawing the subtree''s pending Applications with the actor as decider; turning it public leaves the Child Groups as they are. The Minimum-Level raise behaves exactly as in update_group: PT409 group_has_members_below_level with the count in DETAIL unless p_confirm_removals is true, then the rows below the new level go and everyone affected is notified. This is one of the two commands allowed to write groups.category — it and private.create_group_impl are the only writers beside the three Wave 1 mirror functions, and conventions.test.sql''s sweep names them (ruling R16). It never writes groups.parent_id: a Group''s parent is fixed at creation (ruling R20).';
 
 comment on function private.update_group_structure_impl(bigint, text, boolean, boolean, boolean, integer, text, text, boolean, boolean, boolean) is
-  'Body behind public.update_group_structure (#582): BC''s and the Moderator''s structural settings, the child Minimum-Level split, the tree and actor bounds, the full-state replace and ruling R23''s Minimum-Level removal behind p_confirm_removals. Since #584 (ruling R30) the removal also withdraws those Members'' pending Applications on this Group, with the actor as decider, exactly as private.update_group_impl does. Since #756 (ruling R25) it owns the Private Group setting: refused public under a private parent, cascaded down the subtree (with Applications switched off) when turned on. This is one of the two Group commands allowed to write the presentation label — it and private.create_group_impl are the only writers beside the three Wave 1 mirror functions, and conventions.test.sql''s sweep names them (ruling R16). It never writes groups.parent_id: a Group''s parent is fixed at creation (ruling R20).';
+  'Body behind public.update_group_structure (#582): BC''s and the Moderator''s structural settings, the child Minimum-Level split, the tree and actor bounds, the full-state replace and ruling R23''s Minimum-Level removal behind p_confirm_removals. Since #584 (ruling R30) the removal also withdraws those Members'' pending Applications on this Group, with the actor as decider, exactly as private.update_group_impl does. Since #756 (ruling R25) it owns the Private Group setting: refused public under a private parent, cascaded down the subtree (with Applications switched off and pending ones withdrawn) when turned on, repeated until a pass changes nothing so a Child Group created concurrently under a descendant is caught too. This is one of the two Group commands allowed to write the presentation label — it and private.create_group_impl are the only writers beside the three Wave 1 mirror functions, and conventions.test.sql''s sweep names them (ruling R16). It never writes groups.parent_id: a Group''s parent is fixed at creation (ruling R20).';

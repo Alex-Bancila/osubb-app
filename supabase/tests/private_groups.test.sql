@@ -29,6 +29,7 @@
 --   can_read_task without can_see_group       -> "tasks_read: the level-3 outsider ..." and "... BCE ..."
 --   can_read_event without can_see_group      -> "events_read: the level-3 outsider ..." and the fan-out one
 --   group_members_read without can_see_group  -> "group_members_read: a BCE ..."
+--   the cascade without its repeated pass    -> "race: the repeated cascade pass ..."
 -- my_groups() needs no call of its own: its rows are the caller's own
 -- Group Roles, each of which can_see_group admits by construction, and the
 -- wrapper joins public.groups under groups_read. Its assertions below pin
@@ -38,7 +39,8 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(65);
+create extension if not exists dblink with schema extensions;
+select plan(72);
 
 create function pg_temp.u756(n integer) returns uuid language sql immutable as $$
   select ('75600000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -232,6 +234,31 @@ select throws_ok(
          pg_temp.e756('Meeting in private #756')),
   'PT404', 'event_not_found',
   'cancel_event: a Private Group''s Event is missing, not forbidden, for an outsider');
+select throws_ok(
+  format($$select public.update_event(%s, 'Meeting in private #756', 'sedinta', %s,
+            '2027-02-01 12:00+00', null, null, null, null, 0, null)$$,
+         pg_temp.e756('Meeting in private #756'), pg_temp.g756('Private #756')),
+  'PT404', 'event_not_found',
+  'update_event: and missing for update_event too -- the two commands agree');
+
+-- Moving an Event into a Private Group: the old Group's Audience is told only
+-- if they can read the Event where it now lives.
+reset role;
+insert into public.events (title, type, group_id, starts_at, created_by, min_level)
+values ('Moving meeting #756', 'sedinta', pg_temp.g756('Other #756'), '2027-02-02 12:00+00', pg_temp.u756(1), 0);
+select pg_temp.test_login_leadership(pg_temp.u756(1));
+select lives_ok(
+  format($$select public.update_event(%s, 'Moving meeting #756', 'sedinta', %s,
+            '2027-02-02 12:00+00', null, null, null, null, 0, null)$$,
+         pg_temp.e756('Moving meeting #756'), pg_temp.g756('Private #756')),
+  'update_event: BC moves an Event from a public Group into the Private Group');
+reset role;
+select is(
+  (select array_agg(member_id order by member_id) from public.notifications
+    where title = 'Eveniment actualizat: Moving meeting #756' and body = 'Noul grup: Private #756'
+      and member_id in (pg_temp.u756(4), pg_temp.u756(6))),
+  array[pg_temp.u756(4)],
+  'update_event: the move reaches the Private Group''s member, not the old Group''s outsider');
 
 -- ==================== 5 · the local-only Audience ====================
 
@@ -322,6 +349,14 @@ select is(
       and member_id in (pg_temp.u756(4), pg_temp.u756(5))),
   array[pg_temp.u756(4)],
   'announcement fan-out: an org-wide Announcement of a Private Group reaches its member, not the outsider');
+select pg_temp.test_login_leadership(pg_temp.u756(1));
+select is(
+  (select array_agg(reader.member_id order by reader.member_id)
+     from public.announcement_readers(
+            (select id from public.announcements where title = 'Org news in private #756')) as reader
+    where reader.member_id in (pg_temp.u756(4), pg_temp.u756(5))),
+  array[pg_temp.u756(4)],
+  'announcement_readers: the readers list names the member, not the outsider');
 select pg_temp.test_login_leadership(pg_temp.u756(5));
 select is((select count(*) from public.announcements where title = 'Org news in private #756'), 0::bigint,
   'announcements_read: the outsider cannot read it');
@@ -360,6 +395,9 @@ insert into public.groups (name, category, parent_id, accepts_applications, appl
 select 'Cascade kid #756', 'team', id, true, 0 from public.groups where name = 'Cascade #756';
 insert into public.groups (name, category, parent_id)
 select 'Cascade grandkid #756', 'team', id from public.groups where name = 'Cascade kid #756';
+-- An Application filed while the Child Group still accepted them.
+select pg_temp.test_login_leadership(pg_temp.u756(5));
+select public.apply_to_group(pg_temp.g756('Cascade kid #756'), null);
 
 select pg_temp.test_login_leadership(pg_temp.u756(1));
 select throws_ok(
@@ -388,6 +426,13 @@ select is(
     where name like 'Cascade%#756'),
   array['true/false', 'true/false', 'true/false'],
   'the whole subtree turns private in the same command, with its Applications switched off');
+reset role;
+select is(
+  (select application.status || '/' || (application.decided_by = pg_temp.u756(1))::text
+     from public.group_applications as application
+    where application.group_id = pg_temp.g756('Cascade kid #756') and application.member_id = pg_temp.u756(5)),
+  'withdrawn/true',
+  'and a pending Application in the subtree is withdrawn with BC as decider -- it is not grandfathered');
 select pg_temp.test_login_leadership(pg_temp.u756(5));
 select is((select count(*) from public.groups where name like 'Cascade%#756'), 0::bigint,
   'and an outsider stops seeing all three Groups in the same transaction');
@@ -406,6 +451,70 @@ select is(
   (select array_agg(is_private order by name) from public.groups where name like 'Cascade%#756'),
   array[false, true, true],
   'turning a parent public leaves its Child Groups as they are');
+
+-- ==================== 11 · a Child Group created during the cascade ====================
+-- create_group locks only its parent. Session A creates a Child Group under a
+-- descendant and holds that descendant; session B turns the root private and
+-- its cascade waits on the same row. A commits a public Child Group that B's
+-- first cascade pass cannot see; the repeated pass must still reach it.
+-- Committed fixtures (a second session must see them), torn down at both ends.
+
+select extensions.dblink_connect('races_756_setup', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres', current_database()));
+select extensions.dblink_exec('races_756_setup', 'set lock_timeout = ''2s''');
+select extensions.dblink_exec('races_756_setup', $setup$
+  drop function if exists public.test_756_create();
+  drop function if exists public.test_756_privatize();
+  delete from public.groups where name like '%#756 race%';
+  delete from auth.users where id = '75610000-0000-0000-0000-000000000090';
+  insert into auth.users(id, email) values
+    ('75610000-0000-0000-0000-000000000090', 'bc.race.756@test.local');
+  insert into public.profiles(id, full_name, email, role, status) values
+    ('75610000-0000-0000-0000-000000000090', 'Race BC #756', 'bc.race.756@test.local', 'bc', 'activ');
+  insert into public.groups(name, category, created_by) values
+    ('Root #756 race', 'department', '75610000-0000-0000-0000-000000000090');
+  insert into public.groups(name, category, parent_id, created_by)
+  select 'Kid #756 race', 'team', id, '75610000-0000-0000-0000-000000000090'
+    from public.groups where name = 'Root #756 race';
+
+  create function public.test_756_create() returns text
+  language sql as $fn$
+    select (public.create_group('Grandkid #756 race', 'team',
+      (select id from public.groups where name = 'Kid #756 race'))).is_private::text;
+  $fn$;
+
+  create function public.test_756_privatize() returns text
+  language sql as $fn$
+    select (public.update_group_structure(
+      (select id from public.groups where name = 'Root #756 race'),
+      'department', false, true, false, 0, null, null, false, true)).is_private::text;
+  $fn$;
+
+  revoke execute on function public.test_756_create(), public.test_756_privatize()
+    from public, anon, authenticated, service_role;
+  grant execute on function public.test_756_create(), public.test_756_privatize() to authenticated;
+$setup$);
+
+select pg_temp.test_login('75610000-0000-0000-0000-000000000090',
+  '{"member_role":"bc","member_level":6}');
+reset role;
+create temp table race_756 as select * from pg_temp.test_race(
+  'select public.test_756_create()', 'select public.test_756_privatize()');
+
+select is((select result_a || '|' || result_b || '|' || b_waited from race_756),
+  'false|true|true',
+  'race: the Child Group is created public under a still-public parent, and the cascade waits on that parent');
+select is((select array_agg(is_private order by name) from public.groups where name like '%#756 race'),
+  array[true, true, true],
+  'race: the repeated cascade pass reaches the Child Group committed underneath it -- no public Group is left in the private subtree');
+
+select extensions.dblink_exec('races_756_setup', $teardown$
+  drop function if exists public.test_756_create();
+  drop function if exists public.test_756_privatize();
+  delete from public.groups where name like '%#756 race%';
+  delete from auth.users where id = '75610000-0000-0000-0000-000000000090';
+$teardown$);
+select extensions.dblink_disconnect('races_756_setup');
 
 select * from finish();
 rollback;

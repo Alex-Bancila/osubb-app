@@ -67,6 +67,24 @@ const REASON_COPY = new Map<string, string>([
     'Doar un grup fără grup părinte poate concura în Cupa Departamentelor.',
   ],
   ['organization_group_exists', 'Există deja un grup al organizației.'],
+  // #756 (ruling R25): Private Groups.
+  [
+    'group_private',
+    'Un grup privat nu primește cereri de înscriere. Membrii intră prin numire.',
+  ],
+  [
+    'private_parent',
+    'Un grup dintr-un grup privat rămâne privat cât timp grupul părinte e privat.',
+  ],
+  ['invalid_group_privacy', 'Alege dacă grupul este privat.'],
+  [
+    'private_not_allowed_for_organization',
+    'Grupul organizației nu poate fi privat.',
+  ],
+  [
+    'private_group_local_only',
+    'Taskurile unui grup privat sunt doar pentru membrii lui. Alege audiența locală.',
+  ],
   [
     'group_has_members_below_level',
     'Unii membri au nivelul sub noul nivel minim. Confirmă scoaterea lor.',
