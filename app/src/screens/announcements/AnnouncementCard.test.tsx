@@ -1,6 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+
 import AnnouncementCard from './AnnouncementCard';
 import type { AnnouncementPresentation } from './announcements-presentation';
 
@@ -16,6 +23,7 @@ function presentation(
     audience: 'org',
     audienceLabel: 'Toată organizația',
     author: 'BC',
+    authorMember: null,
     priority: 'critical',
     category: 'organizatoric',
     pinned: true,
@@ -244,6 +252,29 @@ describe('AnnouncementCard', () => {
     const formLink = screen.getByRole('link', { name: /Formular/ });
     await user.click(formLink);
 
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('names the author as a Member Card button that does not open the Announcement', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    render(
+      <AnnouncementCard
+        announcement={presentation({
+          authorMember: {
+            memberId: 'm1',
+            nickname: 'Ani',
+            fullName: 'Ana Pop',
+          },
+        })}
+        onOpen={onOpen}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Profilul membrului Ani' }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
     expect(onOpen).not.toHaveBeenCalled();
   });
 });

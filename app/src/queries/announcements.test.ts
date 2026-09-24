@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { supabase } from '../lib/supabase';
 import {
@@ -5,12 +6,17 @@ import {
   markAnnouncementRead,
   announcementsFeedQueryOptions,
   createAnnouncement,
+  fetchAnnouncementReaders,
+  fetchUnreadAnnouncementsCount,
+  markAnnouncementReadMutationOptions,
+  unreadAnnouncementsCountQueryOptions,
 } from './announcements';
 import { keys } from './keys';
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }));
 
@@ -168,6 +174,98 @@ describe('announcements query layer', () => {
 
       expect(options.queryKey).toEqual(keys.announcements.feed('user-123'));
       expect(typeof options.queryFn).toBe('function');
+    });
+  });
+  describe('unread announcements count', () => {
+    it('asks the server for the count the badge shows', async () => {
+      const rpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+      rpc.mockResolvedValue({ data: 4, error: null });
+
+      await expect(fetchUnreadAnnouncementsCount()).resolves.toBe(4);
+      expect(rpc).toHaveBeenCalledWith('my_unread_announcements_count');
+      expect(unreadAnnouncementsCountQueryOptions('m1').queryKey).toEqual(
+        keys.announcements.unread('m1'),
+      );
+    });
+
+    it('is invalidated by marking an Announcement read', async () => {
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(keys.announcements.unread('m1'), 4);
+      const options = markAnnouncementReadMutationOptions(queryClient, 'm1');
+
+      await options.onSuccess();
+
+      expect(
+        queryClient.getQueryState(keys.announcements.unread('m1'))
+          ?.isInvalidated,
+      ).toBe(true);
+    });
+  });
+
+  describe('fetchAnnouncementReaders', () => {
+    it('answers null on PT404, so the readers line stays hidden', async () => {
+      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: null,
+        error: { code: 'PT404', message: 'announcement_not_found' },
+      });
+
+      await expect(fetchAnnouncementReaders(7)).resolves.toBeNull();
+      expect(supabase.rpc).toHaveBeenCalledWith('announcement_readers', {
+        p_announcement_id: 7,
+      });
+    });
+
+    it('throws any other failure', async () => {
+      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: null,
+        error: { code: '08006', message: 'connection failure' },
+      });
+
+      await expect(fetchAnnouncementReaders(7)).rejects.toMatchObject({
+        code: '08006',
+      });
+    });
+
+    it('names every recipient from the directory, unread ones with a null time', async () => {
+      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [
+          { member_id: 'a', read_at: '2026-09-20T10:00:00Z' },
+          { member_id: 'b', read_at: null },
+        ],
+        error: null,
+      });
+      const inIds = vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'a',
+            full_name: 'Ana Pop',
+            nickname: 'Ani',
+            avatar_color: null,
+          },
+        ],
+        error: null,
+      });
+      const select = vi.fn().mockReturnValue({ in: inIds });
+      (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        select,
+      });
+
+      const readers = await fetchAnnouncementReaders(7);
+
+      expect(supabase.from).toHaveBeenCalledWith('profiles_directory');
+      expect(inIds).toHaveBeenCalledWith('id', ['a', 'b']);
+      expect(readers).toEqual([
+        {
+          member: {
+            memberId: 'a',
+            nickname: 'Ani',
+            fullName: 'Ana Pop',
+            avatarColor: null,
+          },
+          readAt: '2026-09-20T10:00:00Z',
+        },
+        { member: { memberId: 'b', fullName: 'Membru OSUBB' }, readAt: null },
+      ]);
     });
   });
 });

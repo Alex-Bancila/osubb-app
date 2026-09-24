@@ -8,10 +8,12 @@ import { useCapabilities } from '../../lib/capabilities';
 import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
+import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useNotificationRealtime } from '../../queries/notifications-realtime';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
+import { unreadAnnouncementsLabel } from '../../screens/announcements/announcements-presentation';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -25,17 +27,36 @@ import {
   SheetTrigger,
 } from '../ui/sheet';
 import {
+  ANNOUNCEMENTS_PATH,
   NAV_ITEMS,
   NOTIFICATIONS_PATH,
   TAB_ORDER,
   type NavItem,
 } from './navItems';
 
+/** The unread counts the shell badges, by the path whose entry carries them. */
+type NavBadges = Partial<Record<string, { count: number; label: string }>>;
+
+function navBadges(notifications: number, announcements: number): NavBadges {
+  const badges: NavBadges = {};
+  if (notifications > 0)
+    badges[NOTIFICATIONS_PATH] = {
+      count: notifications,
+      label: unreadBadgeLabel(notifications),
+    };
+  if (announcements > 0)
+    badges[ANNOUNCEMENTS_PATH] = {
+      count: announcements,
+      label: unreadAnnouncementsLabel(announcements),
+    };
+  return badges;
+}
+
 type SidebarContentProps = {
   items: NavItem[];
   label: string;
   firstLinkRef?: Ref<HTMLAnchorElement>;
-  unreadNotifications: number;
+  badges: NavBadges;
   memberName: string | undefined;
   memberEmail: string | undefined;
   avatarColor: string | null | undefined;
@@ -62,7 +83,7 @@ function SidebarContent({
   items,
   label,
   firstLinkRef,
-  unreadNotifications,
+  badges,
   memberName,
   memberEmail,
   avatarColor,
@@ -81,6 +102,7 @@ function SidebarContent({
       >
         {items.map((item, index) => {
           const Icon = item.icon;
+          const badge = badges[item.path];
           return (
             <NavLink
               key={item.path}
@@ -98,12 +120,10 @@ function SidebarContent({
             >
               <Icon className="size-5 shrink-0" aria-hidden="true" />
               {item.label}
-              {item.path === NOTIFICATIONS_PATH && unreadNotifications > 0 && (
+              {badge && (
                 <Badge variant="destructive" className="ml-auto">
-                  <span aria-hidden="true">{unreadNotifications}</span>
-                  <span className="sr-only">
-                    {unreadBadgeLabel(unreadNotifications)}
-                  </span>
+                  <span aria-hidden="true">{badge.count}</span>
+                  <span className="sr-only">{badge.label}</span>
                 </Badge>
               )}
             </NavLink>
@@ -168,6 +188,8 @@ export default function AppShell() {
   const roles = useRoles();
   const unreadNotifications = useUnreadNotificationCount();
   const unreadCount = unreadNotifications.data ?? 0;
+  const unreadAnnouncements = useUnreadAnnouncementsCount();
+  const badges = navBadges(unreadCount, unreadAnnouncements.data ?? 0);
   // The one cached my_capabilities() row the route guards and the Tracker
   // share: live rank and Group Roles, which the token cannot carry.
   const capabilities = useCapabilities();
@@ -211,7 +233,7 @@ export default function AppShell() {
     roleLabel,
     level: claims?.member_level,
     signOutAction,
-    unreadNotifications: unreadCount,
+    badges,
   };
 
   return (
@@ -318,6 +340,7 @@ export default function AppShell() {
       >
         {tabs.map((item) => {
           const Icon = item.icon;
+          const badge = badges[item.path];
           return (
             <NavLink
               key={item.path}
@@ -330,8 +353,19 @@ export default function AppShell() {
                 )
               }
             >
-              <Icon className="size-[22px]" aria-hidden="true" />
+              <span className="relative">
+                <Icon className="size-[22px]" aria-hidden="true" />
+                {badge && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1.5 -right-2.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]"
+                  >
+                    <span aria-hidden="true">{badge.count}</span>
+                  </Badge>
+                )}
+              </span>
               {item.label}
+              {badge && <span className="sr-only">, {badge.label}</span>}
             </NavLink>
           );
         })}
