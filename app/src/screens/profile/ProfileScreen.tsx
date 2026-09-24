@@ -166,7 +166,7 @@ export default function ProfileScreen() {
                 }}
                 aria-hidden="true"
               >
-                {initials(displayName)}
+                {initials(profile.full_name)}
               </div>
 
               <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 sm:items-start">

@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Loading } from '../../components/states';
 import { buttonVariants } from '../../components/ui/button';
@@ -11,10 +12,16 @@ import { ApplicationAction } from '../groups/ApplicationAction';
  * Member's pending Applications, each with #589's withdraw, and the way to
  * `/grupuri` to apply to another Group. Mounted only below level 5, so a
  * leader's Profil never asks for Applications at all.
+ *
+ * A withdrawn Application leaves the list as soon as the refetch lands, taking
+ * its button and dialog with it, so the confirmation lives here and focus moves
+ * to the link that stays.
  */
 export function JoiningSection() {
   const applications = useGroupApplications();
   const groups = useGroups();
+  const applyLink = useRef<HTMLAnchorElement>(null);
+  const [withdrawn, setWithdrawn] = useState<string | null>(null);
 
   return (
     <div
@@ -39,6 +46,7 @@ export function JoiningSection() {
           <ul className="flex flex-col divide-y divide-border">
             {applications.data.map((application) => {
               const group = groups.data?.get(application.group_id);
+              const groupName = group?.name ?? 'Grup';
               return (
                 <li
                   key={application.id}
@@ -53,7 +61,7 @@ export function JoiningSection() {
                       aria-hidden="true"
                     />
                     <span className="truncate text-sm font-semibold text-foreground">
-                      {group?.name ?? 'Grup'}
+                      {groupName}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -63,6 +71,10 @@ export function JoiningSection() {
                         kind: 'withdraw',
                         applicationId: application.id,
                       }}
+                      onSuccess={() => {
+                        setWithdrawn(groupName);
+                        applyLink.current?.focus();
+                      }}
                     />
                   </div>
                 </li>
@@ -70,9 +82,17 @@ export function JoiningSection() {
             })}
           </ul>
         )}
+        {/* Always mounted, so the confirmation is announced when it appears. */}
+        <p
+          role="status"
+          className={cn('text-sm text-muted-foreground', withdrawn && 'mt-2')}
+        >
+          {withdrawn && `Cererea pentru ${withdrawn} a fost retrasă.`}
+        </p>
       </div>
 
       <Link
+        ref={applyLink}
         to="/grupuri"
         className={cn(buttonVariants({ variant: 'outline' }), 'self-start')}
       >

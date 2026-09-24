@@ -561,8 +561,13 @@ describe('ProfileScreen', () => {
       expect((await axe.run(card)).violations).toEqual([]);
     });
 
-    it('withdraws a pending Application through the #589 command', async () => {
+    it('withdraws a pending Application through the #589 command and keeps the confirmation once the row is gone', async () => {
       const user = userEvent.setup();
+      // The refetch after the command no longer returns the Application.
+      applicationMocks.withdraw.mockImplementationOnce(async () => {
+        applicationMocks.applicationsQuery.data = [];
+        return null;
+      });
       render(<ProfileScreen />, { wrapper: wrapper() });
 
       await user.click(
@@ -574,6 +579,16 @@ describe('ProfileScreen', () => {
         kind: 'withdraw',
         applicationId: 501,
       });
+      expect(
+        await screen.findByText('Nicio cerere în așteptare.'),
+      ).toBeInTheDocument();
+      const joining = screen.getByTestId('joining-section');
+      expect(within(joining).getByRole('status')).toHaveTextContent(
+        'Cererea pentru Echipa Media a fost retrasă.',
+      );
+      expect(
+        screen.getByRole('link', { name: 'Aplică la un grup' }),
+      ).toHaveFocus();
     });
 
     it('says so when no Application is pending', () => {
