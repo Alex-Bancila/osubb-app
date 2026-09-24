@@ -25,16 +25,6 @@ vi.mock('../../queries/event-rsvp', () => ({
   useEventRsvp: hooks.useEventRsvp,
   useSetEventRsvp: hooks.useSetEventRsvp,
 }));
-vi.mock('@ionic/react', () => ({
-  IonButton: ({
-    children,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props}>{children}</button>
-  ),
-  IonSpinner: () => null,
-  IonToast: () => null,
-}));
 
 import { EventRsvpMutationError } from '../../queries/event-rsvp';
 import EventRsvpControls from './EventRsvpControls';
@@ -105,6 +95,20 @@ describe('EventRsvpControls', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Răspuns salvat: nu participi.',
     );
+  });
+
+  it('says it is saving while the answer is sent', () => {
+    hooks.useSetEventRsvp.mockReturnValue({
+      isPending: true,
+      mutateAsync: vi.fn(),
+    });
+
+    render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
+
+    expect(screen.getByText('Se salvează…')).toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Alege răspunsul' }),
+    ).toHaveAttribute('aria-busy', 'true');
   });
 
   it('keeps the confirmed answer selected and announces a safe failure', async () => {

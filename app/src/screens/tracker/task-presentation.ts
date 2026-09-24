@@ -126,6 +126,11 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   cancelled: 'Anulat',
 };
 
+/** A Task status in the words the Tracker uses (the Calendar's rows share it). */
+export function taskStatusLabel(status: TaskStatus): string {
+  return STATUS_LABELS[status];
+}
+
 export function isTerminalTask(status: TaskStatus): boolean {
   return ['completed', 'unfulfilled', 'cancelled'].includes(status);
 }

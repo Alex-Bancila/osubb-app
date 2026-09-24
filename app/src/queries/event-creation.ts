@@ -12,9 +12,11 @@ import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import type {
   EventDraft,
+  EventFormCampaign,
   EventFormGroup,
   EventFormOptions,
 } from '../screens/calendar/event-form-model';
+import { fetchCampaigns } from './campaigns';
 import { keys } from './keys';
 import { fetchMyGroups, type MyGroup } from './my-groups';
 
@@ -53,6 +55,7 @@ export function buildEventFormOptions(
   capabilities: Capabilities,
   mine: readonly MyGroup[],
   readable: readonly GroupRow[],
+  campaigns: readonly EventFormCampaign[] = [],
 ): EventFormOptions {
   const active = readable
     .filter((group) => group.status === 'active')
@@ -78,22 +81,31 @@ export function buildEventFormOptions(
   return {
     groups: groups.map(toFormGroup),
     groupNames: active.map((group) => ({ id: group.id, name: group.name })),
+    campaigns: [...campaigns],
   };
 }
 
 export async function fetchEventFormOptions(): Promise<EventFormOptions> {
-  const [capabilities, mine, groupsResult] = await Promise.all([
+  const [capabilities, mine, groupsResult, campaigns] = await Promise.all([
     fetchCapabilities(),
     fetchMyGroups(),
     supabase
       .from('groups')
       .select('id,name,path,min_level,status,is_organization'),
+    // Only an active Campaign may be attached (#691); the Group rule is
+    // eventCampaignsFor's, applied once a Group is chosen.
+    fetchCampaigns().then((rows) =>
+      rows
+        .filter((campaign) => campaign.is_active)
+        .map(({ id, name, group_id }) => ({ id, name, group_id })),
+    ),
   ]);
   if (groupsResult.error) throw groupsResult.error;
   return buildEventFormOptions(
     capabilities,
     mine,
     (groupsResult.data ?? []) as GroupRow[],
+    campaigns,
   );
 }
 
@@ -116,6 +128,7 @@ export async function createEvent(draft: EventDraft) {
     p_capacity: draft.capacity,
     p_description: draft.description,
     p_min_level: draft.minLevel,
+    p_campaign_id: draft.campaignId,
   };
   // PostgreSQL accepts NULL for optional values while generated optional RPC
   // properties omit nullability. Keep that generated-type mismatch local.

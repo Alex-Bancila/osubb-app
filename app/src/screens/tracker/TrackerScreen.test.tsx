@@ -292,6 +292,58 @@ describe('My tasks screen', () => {
     expect(hooks.useManagedTasks).toHaveBeenCalledWith(true);
   });
 
+  it.each([
+    ['De gestionat', 'useManagedTasks', 'useTaskManagement'],
+    ['Toate', 'useAllTasks', 'useTaskLeadership'],
+  ] as const)(
+    'shows %s as dense rows with Stare, search and the Work Filter — no table',
+    async (tab, list, capability) => {
+      const user = userEvent.setup();
+      query();
+      hooks[capability].mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
+      hooks[list].mockReturnValue({
+        data: [
+          taskRow({ id: 7, title: 'Viitor', deadline: '2099-01-01T00:00:00Z' }),
+          taskRow({
+            id: 8,
+            title: 'Întârziat',
+            deadline: '2020-01-01T00:00:00Z',
+          }),
+        ],
+        isPending: false,
+        isError: false,
+      });
+      render(<TrackerScreen />, { wrapper: Router });
+      await user.click(screen.getByRole('tab', { name: tab }));
+      const rows = within(
+        screen.getByRole('region', { name: 'Lista taskurilor' }),
+      ).getAllByRole('article');
+      expect(rows.map((row) => row.getAttribute('data-slot'))).toEqual([
+        'task-row',
+        'task-row',
+      ]);
+      // Overdue pinned first.
+      expect(rows[0]).toHaveAccessibleName('Întârziat');
+      expect(screen.queryByRole('table')).toBeNull();
+      expect(screen.getByLabelText('Stare')).toBeVisible();
+      expect(
+        screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole('region', { name: 'Filtre taskuri' }),
+      ).toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Viitor' }));
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #7');
+    },
+  );
+
   it('opens a newly created Task with a confirmation, once', async () => {
     const user = userEvent.setup();
     query();

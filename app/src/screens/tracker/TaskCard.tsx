@@ -66,6 +66,43 @@ type TaskCardProps = {
 const chipClass =
   'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-medium text-foreground';
 
+/**
+ * The chip naming the Task's Group, its dot in the `--task-stripe` colour the
+ * surrounding card or row sets. Colour is never the only carrier: the chip
+ * names the Group.
+ */
+export function TaskGroupChip({ task }: { task: TaskPresentation }) {
+  return (
+    <span className={chipClass}>
+      <span
+        aria-hidden="true"
+        className="size-2 shrink-0 rounded-full bg-(--task-stripe)"
+      />
+      <span className="min-w-0 wrap-anywhere">{task.origin.label}</span>
+    </span>
+  );
+}
+
+/** The status badge with the overdue, feedback and late badges beside it. */
+export function TaskStatusBadges({ task }: { task: TaskPresentation }) {
+  return (
+    <div className="flex min-w-0 flex-wrap gap-1.5">
+      <Badge
+        variant={task.status === 'unfulfilled' ? 'destructive' : 'outline'}
+      >
+        {task.statusLabel}
+      </Badge>
+      {task.overdue && <Badge variant="destructive">Termen depășit</Badge>}
+      {task.feedbackPending && (
+        <Badge variant="secondary">Modificări cerute</Badge>
+      )}
+      {task.completedLate && (
+        <Badge variant="secondary">Finalizat cu întârziere</Badge>
+      )}
+    </div>
+  );
+}
+
 export function TaskCard({
   task,
   allowInterest = false,
@@ -150,13 +187,7 @@ export function TaskCard({
         />
         <CardHeader className="min-w-0 gap-3">
           <div className="flex min-w-0 flex-wrap gap-1.5">
-            <span className={chipClass}>
-              <span
-                aria-hidden="true"
-                className="size-2 shrink-0 rounded-full bg-(--task-stripe)"
-              />
-              <span className="min-w-0 wrap-anywhere">{task.origin.label}</span>
-            </span>
+            <TaskGroupChip task={task} />
             {task.audience === 'org' && (
               <span className={chipClass}>OSUBB</span>
             )}
@@ -193,24 +224,7 @@ export function TaskCard({
               task.title
             )}
           </Title>
-          <div className="flex flex-wrap gap-1.5">
-            <Badge
-              variant={
-                task.status === 'unfulfilled' ? 'destructive' : 'outline'
-              }
-            >
-              {task.statusLabel}
-            </Badge>
-            {task.overdue && (
-              <Badge variant="destructive">Termen depășit</Badge>
-            )}
-            {task.feedbackPending && (
-              <Badge variant="secondary">Modificări cerute</Badge>
-            )}
-            {task.completedLate && (
-              <Badge variant="secondary">Finalizat cu întârziere</Badge>
-            )}
-          </div>
+          <TaskStatusBadges task={task} />
         </CardHeader>
         <CardContent className="min-w-0 space-y-3">
           <div className="grid gap-1.5 text-sm">

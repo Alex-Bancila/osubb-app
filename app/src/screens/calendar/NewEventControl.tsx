@@ -32,6 +32,7 @@ import {
 } from '../../queries/event-creation';
 import {
   EVENT_TYPE_CHOICES,
+  eventCampaignsFor,
   groupsAvailableAtLevel,
   minimumLevelChoices,
   type EventDraft,
@@ -53,6 +54,7 @@ const initialValues: EventFormValues = {
   capacity: '',
   description: '',
   minLevel: 0,
+  campaignId: null,
 };
 
 /** Calendar's kind gate. The command remains the authorization boundary. */
@@ -155,6 +157,7 @@ function EventForm({
   );
   const selectedGroup =
     options.groups.find((group) => group.id === values.groupId) ?? null;
+  const campaigns = eventCampaignsFor(selectedGroup, options.campaigns);
   const levelChoices = minimumLevelChoices(
     selectedGroup?.minLevel ?? 0,
     actorLevel,
@@ -170,6 +173,8 @@ function EventForm({
       : minimumLevelChoices(0, actorLevel);
     update({
       groupId: group?.id ?? null,
+      // A Campaign belongs to the Group's path: a new Group starts without one.
+      campaignId: group?.id === values.groupId ? values.campaignId : null,
       minLevel: choices.some((choice) => choice.value === values.minLevel)
         ? values.minLevel
         : (choices[0]?.value ?? 0),
@@ -294,6 +299,44 @@ function EventForm({
             </ComboboxContent>
           </Combobox>
           <FieldError {...form.errorProps('groupId')} />
+        </div>
+
+        <div className="grid gap-1.5">
+          <label className="grid gap-1.5" htmlFor={`${id}-campaign`}>
+            <span className="text-sm font-medium">Campanie (opțional)</span>
+            <select
+              id={`${id}-campaign`}
+              className={control}
+              value={values.campaignId ?? ''}
+              disabled={!selectedGroup || !campaigns.length}
+              onChange={(event) =>
+                update({
+                  campaignId: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+              {...form.field('campaignId', `${id}-campaign-hint`)}
+            >
+              <option value="">Fără campanie</option>
+              {campaigns.map((campaign) => (
+                <option key={campaign.id} value={campaign.id}>
+                  {campaign.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <FieldError {...form.errorProps('campaignId')} />
+          <p
+            id={`${id}-campaign-hint`}
+            className="text-sm text-muted-foreground"
+          >
+            {!selectedGroup
+              ? 'Alege întâi grupul: campaniile vin din grupul evenimentului și din cele de deasupra lui.'
+              : !campaigns.length
+                ? 'Grupul ales nu are campanii active.'
+                : 'O etichetă pentru filtre și rapoarte. Nu schimbă cine vede evenimentul.'}
+          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
