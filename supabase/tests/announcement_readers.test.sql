@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(41);
+select plan(43);
 truncate announcements, announcement_reads cascade;
 
 -- Personas (prefix 693):
@@ -74,7 +74,8 @@ grant select on ann693 to authenticated, anon;
 insert into announcement_reads(announcement_id,member_id,read_at) values
 ((select edu_local from ann693),'69300000-0000-0000-0000-000000000002','2026-09-01 10:00+00'),
 ((select edu_local from ann693),'69300000-0000-0000-0000-000000000007','2026-09-02 10:00+00'),
-((select edu_org from ann693),'69300000-0000-0000-0000-000000000005','2026-09-03 10:00+00');
+((select edu_org from ann693),'69300000-0000-0000-0000-000000000005','2026-09-03 10:00+00'),
+((select edu_org from ann693),'69300000-0000-0000-0000-000000000004','2026-09-03 10:00+00');
 
 -- Expected Audiences, computed as owner from the same helper #68's fan-out calls
 -- and, for org, straight from profiles so the helper is not graded by itself.
@@ -142,6 +143,17 @@ select is((select count(*) from announcement_readers((select edu_local from ann6
 select set_eq($$select member_id from announcement_readers((select edu_org from ann693))$$,
   $$select member_id from ann693_active$$,
   'author reads an org Audience equal to every activ profile');
+select is((select array_agg(r.member_id order by r.ord)
+             from announcement_readers((select edu_org from ann693)) with ordinality as r(member_id, read_at, ord)
+            where r.read_at is not null),
+  array['69300000-0000-0000-0000-000000000004','69300000-0000-0000-0000-000000000005']::uuid[],
+  'readers with the same read_at are ordered by member_id');
+select is((select array_agg(r.member_id order by r.ord)
+             from announcement_readers((select edu_org from ann693)) with ordinality as r(member_id, read_at, ord)
+            where r.read_at is null),
+  (select array_agg(member_id order by member_id) from ann693_active
+    where member_id not in ('69300000-0000-0000-0000-000000000004','69300000-0000-0000-0000-000000000005')),
+  'unread recipients follow the readers, ordered by member_id');
 reset role;
 
 -- ==================== ordinary audience member / outsider ====================
