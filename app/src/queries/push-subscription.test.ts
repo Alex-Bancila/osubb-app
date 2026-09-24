@@ -19,9 +19,17 @@ vi.mock('../lib/auth', () => ({
 import { urlBase64ToUint8Array } from '../lib/push-device';
 import { usePushSubscription } from './push-subscription';
 
-// A real P-256 public key shape: 65 bytes, base64url, no padding.
-const VAPID_KEY =
-  'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+// A synthetic key with a P-256 public key's shape — 65 bytes starting 0x04,
+// base64url without padding — built here rather than pasted, so it is plainly
+// not a real key. Bytes 248–255 make the encoding use both `-` and `_`.
+const VAPID_BYTES = Uint8Array.from([
+  0x04,
+  ...Array.from({ length: 64 }, (_, index) => (index * 37 + 248) % 256),
+]);
+const VAPID_KEY = btoa(String.fromCharCode(...VAPID_BYTES))
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/, '');
 const SUBSCRIPTION_JSON = {
   endpoint: 'https://push.example.test/send/abc',
   expirationTime: null,
@@ -289,9 +297,11 @@ describe('usePushSubscription', () => {
 
 describe('urlBase64ToUint8Array', () => {
   it('decodes an unpadded base64url VAPID key to its 65 bytes', () => {
+    expect(VAPID_KEY).toMatch(/-/);
+    expect(VAPID_KEY).toMatch(/_/);
     const bytes = urlBase64ToUint8Array(VAPID_KEY);
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes).toHaveLength(65);
-    expect(bytes[0]).toBe(0x04);
+    expect(Array.from(bytes)).toEqual(Array.from(VAPID_BYTES));
   });
 });
