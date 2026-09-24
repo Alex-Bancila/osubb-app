@@ -1,0 +1,55 @@
+# CodeRabbit configuration — https://docs.coderabbit.ai/reference/configuration
+# Reviews run automatically on every non-draft pull request against main.
+language: en-US
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+  path_filters:
+    - "!app/src/lib/database.types.ts"
+    - "!docs/pr-assets/**"
+    - "!mockup/**"
+    - "!app/public/**"
+    - "!**/*.png"
+    - "!**/*.webp"
+    - "!**/*.lock"
+    - "!app/package-lock.json"
+    - "!package-lock.json"
+  path_instructions:
+    - path: "supabase/migrations/**"
+      instructions: |
+        Apply docs/backend/conventions.md and the house rules in CLAUDE.md: a new migration must be dated
+        after the newest one on main; a `create or replace` body must be rebuilt from main's latest version;
+        every security definer function sets `search_path = ''` and uses fully qualified names; new tables
+        enable RLS in the creating migration; new views use `with (security_invoker = on)`; parent rows are
+        locked `for no key update`, never `for update`; reason codes follow `<field>_<rule>`; no function
+        body or policy may read `groups.category`. Flag any policy on `authenticated` that is satisfiable
+        without organization claims.
+    - path: "supabase/tests/**"
+      instructions: |
+        Every server rule needs a mutation guard: reverting the rule must turn a named assertion red. Check
+        the plan count matches the assertions. Suites must create the pgtap extension themselves.
+    - path: "app/src/**"
+      instructions: |
+        Nothing in app/ may write a Task table directly; every mutation goes through a command. Management
+        controls render from server capability rows, never from a level literal. Romanian interface copy,
+        CONTEXT.md vocabulary. Forms validate through the zod schemas in app/src/lib/schemas and show reasons
+        through the shared table in app/src/lib/command-reasons.ts. Names of Members render through
+        MemberName / MemberCard, never as plain strings.
+    - path: "docs/**"
+      instructions: |
+        Prettier-formatted Markdown. ADR amendments carry a dated header line. CONTEXT.md holds glossary
+        terms only, never implementation details.
+
+chat:
+  auto_reply: true
