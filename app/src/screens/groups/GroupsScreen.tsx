@@ -6,7 +6,8 @@ import { useAdminGroups, useMyGroupRoles } from '../../queries/groups-admin';
 import { useGroupApplications } from '../../queries/group-applications';
 import { categoryLabel } from '../administrare/group-tree';
 import { ApplicationAction } from './ApplicationAction';
-import { acceptsApplication } from './application-eligibility';
+import { ApplicationFormLink } from './ApplicationFormLink';
+import { acceptsApplication, applicationForm } from './application-eligibility';
 
 export default function GroupsScreen() {
   const groups = useAdminGroups();
@@ -18,6 +19,8 @@ export default function GroupsScreen() {
     return <p role="status">Se încarcă grupurile…</p>;
   if (groups.isError || mine.isError || applications.isError)
     return <p role="alert">Nu am putut încărca grupurile. Reîncarcă pagina.</p>;
+  // Ruling R25: a Private Group is never offered here, even to a Member who
+  // can read it (acceptsApplication skips is_private rows).
   const available = groups.data.filter((group) =>
     acceptsApplication(group, level),
   );
@@ -53,6 +56,7 @@ export default function GroupsScreen() {
           const membership = mine.data.find(
             (row) => row.id === group.id && (row.explicit || row.automatic),
           );
+          const form = applicationForm(group);
           const ancestor = groups.data.find(
             (row) => row.id === group.path[0] && row.id !== group.id,
           );
@@ -90,6 +94,8 @@ export default function GroupsScreen() {
                     command={{ kind: 'withdraw', applicationId: pending.id }}
                   />
                 </div>
+              ) : form ? (
+                <ApplicationFormLink label={form.label} url={form.url} />
               ) : (
                 <ApplicationAction
                   label="Aplică"

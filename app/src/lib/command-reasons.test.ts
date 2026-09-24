@@ -178,3 +178,17 @@ it('describes a failure for a form: the reason and the copy', () => {
     message: 'fallback',
   });
 });
+
+/* #698: the application form link's own words (the settings form renames
+   update_group's Attached Link reasons to these). */
+it.each([
+  ['application_form_incomplete', 'Completează și eticheta, și adresa.'],
+  ['application_form_label_too_long', 'Eticheta are cel mult 60 de caractere.'],
+  [
+    'application_form_url_invalid',
+    'Adresa trebuie să înceapă cu http:// sau https://.',
+  ],
+])('has Romanian copy for the application form reason %s', (reason, copy) => {
+  expect(reasonCopy(reason)).toBe(copy);
+  expect(commandReason({ code: 'PT400', message: reason })).toBe(reason);
+});

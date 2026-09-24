@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router';
+import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
@@ -14,7 +15,8 @@ import {
 } from '../../queries/group-applications';
 import { categoryLabel } from '../administrare/group-tree';
 import { ApplicationAction } from './ApplicationAction';
-import { acceptsApplication } from './application-eligibility';
+import { ApplicationFormLink } from './ApplicationFormLink';
+import { acceptsApplication, applicationForm } from './application-eligibility';
 
 export default function MemberGroupScreen() {
   const id = Number(useParams().groupId);
@@ -40,6 +42,7 @@ export default function MemberGroupScreen() {
     );
   const role = mine.data.find((row) => row.id === id);
   const pending = applications.data.find((row) => row.group_id === id);
+  const form = applicationForm(group);
   const authority = groupAuthority(
     group,
     mine.data,
@@ -57,7 +60,10 @@ export default function MemberGroupScreen() {
           style={{ backgroundColor: group.color ?? '#5C5C61' }}
         />
         <div>
-          <h1 className="text-2xl font-semibold">{group.name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold">{group.name}</h1>
+            <PrivateGroupBadge isPrivate={group.is_private} />
+          </div>
           <p className="text-muted-foreground">
             {categoryLabel(group.category)}
           </p>
@@ -88,12 +94,15 @@ export default function MemberGroupScreen() {
       ) : (
         !role?.explicit &&
         !role?.automatic &&
-        acceptsApplication(group, level) && (
+        acceptsApplication(group, level) &&
+        (form ? (
+          <ApplicationFormLink label={form.label} url={form.url} />
+        ) : (
           <ApplicationAction
             label="Aplică"
             command={{ kind: 'apply', groupId: id, note: '' }}
           />
-        )
+        ))
       )}
       {authority.manageWork && (
         <Link

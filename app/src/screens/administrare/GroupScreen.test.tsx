@@ -752,3 +752,34 @@ it('says plainly when the Group is not one the caller may read', () => {
   show(404);
   expect(screen.getByRole('alert')).toHaveTextContent('Nu ai acces');
 });
+
+it('notes on the Cereri tab that a Group with a form link takes sign-ups by form, and still lists Applications (#698)', async () => {
+  const user = userEvent.setup();
+  const note =
+    'Grupul primește înscrieri prin formular; adaugă membrii din Roster.';
+  const first = show();
+  await user.click(tab('Cereri'));
+  expect(screen.queryByText(note)).toBeNull();
+  first.unmount();
+
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? {
+            ...row,
+            accepts_applications: true,
+            application_level: 1,
+            application_form_label: 'Formular de înscriere',
+            application_form_url: 'https://forms.example.org/logistica',
+          }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  show();
+  await user.click(tab('Cereri'));
+  expect(screen.getByText(note)).toBeVisible();
+  // A link set later does not hide the Applications already filed.
+  expect(screen.getByText(/Cereri de înscriere/)).toBeVisible();
+});

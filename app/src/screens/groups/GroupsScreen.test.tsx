@@ -61,6 +61,9 @@ function group(
     manager_title: 'Coordonator',
     competes_in_cup: false,
     counts_toward_parent_cup: false,
+    is_private: false,
+    application_form_label: null,
+    application_form_url: null,
     memberCount: 1,
     ...extra,
   };
@@ -106,9 +109,9 @@ function list() {
     </MemoryRouter>,
   );
 }
-function detail() {
+function detail(id = 2) {
   return render(
-    <MemoryRouter initialEntries={['/grupuri/2']}>
+    <MemoryRouter initialEntries={[`/grupuri/${id}`]}>
       <Routes>
         <Route path="/grupuri/:groupId" element={<MemberGroupScreen />} />
       </Routes>
@@ -224,6 +227,106 @@ it('Manager sees the Administrare link and their own effective Role', () => {
   ).not.toBeInTheDocument();
 });
 it('has no automated accessibility violations', async () => {
+  const { container } = list();
+  expect((await axe.run(container)).violations).toEqual([]);
+});
+
+/* ---- #698 (ruling R18): a form link replaces the in-app Application ---- */
+const FORM_URL = 'https://forms.example.org/evenimente';
+function withFormLink() {
+  api.groups.mockReturnValue(
+    ready([
+      group(1, 'Educațional', { accepts_applications: false }),
+      group(2, 'Echipa Evenimente', {
+        parent_id: 1,
+        path: [1, 2],
+        application_form_label: 'Completează formularul',
+        application_form_url: FORM_URL,
+      }),
+    ]),
+  );
+}
+async function expectFormLinkInsteadOfApplying() {
+  const link = screen.getByRole('link', { name: /Completează formularul/ });
+  expect(link).toHaveAttribute('href', FORM_URL);
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(
+    screen.getByText(
+      'Înscrierea se face prin formular; responsabilii grupului te adaugă după ce răspunzi.',
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Aplică' }),
+  ).not.toBeInTheDocument();
+  // Opening the form files nothing: no dialog, no apply_to_group, no badge.
+  const stopNavigation = (event: Event) => event.preventDefault();
+  document.addEventListener('click', stopNavigation);
+  await userEvent.click(link);
+  document.removeEventListener('click', stopNavigation);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(api.mutate).not.toHaveBeenCalled();
+  expect(screen.queryByText('Cerere în așteptare')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Retrage aplicația' }),
+  ).not.toBeInTheDocument();
+}
+it('on /grupuri, a Group with a form link offers the form, not an Application', async () => {
+  withFormLink();
+  list();
+  await expectFormLinkInsteadOfApplying();
+});
+it('on the Group page, a Group with a form link offers the form, not an Application', async () => {
+  withFormLink();
+  detail();
+  await expectFormLinkInsteadOfApplying();
+});
+it('without a form link, the Group page keeps the in-app Application dialog', async () => {
+  const user = userEvent.setup();
+  detail();
+  await user.click(screen.getByRole('button', { name: 'Aplică' }));
+  await user.click(screen.getByRole('button', { name: 'Confirmă' }));
+  expect(api.mutate).toHaveBeenCalledWith({
+    kind: 'apply',
+    groupId: 2,
+    note: '',
+  });
+  expect(screen.queryByRole('link', { name: /filă nouă/ })).toBeNull();
+});
+it('with a form link, a Member below the Application Level is offered neither', () => {
+  api.level = 0;
+  withFormLink();
+  detail();
+  expect(
+    screen.queryByRole('link', { name: /Completează formularul/ }),
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Aplică' })).toBeNull();
+});
+it('never lists a Private Group to apply to, and badges it on its page with no Aplică (R25)', () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(2, 'Echipa Evenimente'),
+      // Readable by this Member (the database decided), still not offered.
+      group(6, 'Comitet Secret', {
+        is_private: true,
+        application_form_label: 'Formular',
+        application_form_url: FORM_URL,
+      }),
+    ]),
+  );
+  const view = list();
+  expect(screen.getByText('Echipa Evenimente')).toBeInTheDocument();
+  expect(screen.queryByText('Comitet Secret')).not.toBeInTheDocument();
+  view.unmount();
+  detail(6);
+  expect(
+    screen.getByRole('heading', { name: 'Comitet Secret' }),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Privat')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Aplică' })).toBeNull();
+  expect(screen.queryByRole('link', { name: /Formular/ })).toBeNull();
+});
+it('the form link passes the accessibility check', async () => {
+  withFormLink();
   const { container } = list();
   expect((await axe.run(container)).violations).toEqual([]);
 });
