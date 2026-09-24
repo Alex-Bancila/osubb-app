@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest';
-import { formatDate, formatDayMonthYear, formatLongDate } from './format';
+import {
+  formatDate,
+  formatDayMonthYear,
+  formatLongDate,
+  formatTaskCount,
+} from './format';
 
 // Pinned because #376 briefly swapped these to date-fns, whose Romanian
 // abbreviations differ ("12 noi", no full stops) — a visible change.
@@ -27,4 +32,18 @@ it('formats a milestone date with day, month and year', () => {
   expect(formatDayMonthYear('2024-03-12')).toBe('12 martie 2024');
   expect(formatDayMonthYear(null)).toBeNull();
   expect(formatDayMonthYear('2026-02-30')).toBeNull();
+});
+
+it('counts Tasks with the Romanian plural', () => {
+  expect([0, 1, 2, 19, 20, 101, 119, 120, 1000].map(formatTaskCount)).toEqual([
+    '0 taskuri',
+    '1 task',
+    '2 taskuri',
+    '19 taskuri',
+    '20 de taskuri',
+    '101 taskuri',
+    '119 taskuri',
+    '120 de taskuri',
+    '1.000 de taskuri',
+  ]);
 });

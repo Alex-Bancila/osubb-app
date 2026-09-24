@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -10,39 +10,27 @@ import {
   useManagedTasks,
   useAllTasks,
 } from '../../queries/task-tabs';
-import { useTaskProgress } from '../../queries/task-progress';
-import { useAuth } from '../../lib/auth';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskTable } from './ManagerTaskTable';
 import { NewTaskControl } from './NewTaskControl';
-import { TaskCard } from './TaskCard';
+import { TaskCardGrid } from './TaskCardGrid';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
 import {
   toTaskPresentation,
   type TaskPresentationRow,
 } from './task-presentation';
 
-function TaskQueryPanel({
+/** The loading and retry states every Tracker list shares. */
+function TaskQueryStates<Row>({
   query,
-  empty,
-  manager = false,
-  available = false,
-  now,
-  onOpenTask,
-  highlightedId = null,
+  children,
 }: {
-  query: UseQueryResult<TaskPresentationRow[], Error>;
-  empty: string;
-  manager?: boolean;
-  available?: boolean;
-  now: Date;
-  onOpenTask: (id: number) => void;
-  highlightedId?: number | null;
+  query: UseQueryResult<Row[], Error>;
+  children: (rows: Row[]) => ReactNode;
 }) {
-  const progress = useTaskProgress();
-  const { session } = useAuth();
   if (query.isPending) return <p role="status">Se încarcă taskurile…</p>;
   if (query.isError)
     return (
@@ -57,42 +45,48 @@ function TaskQueryPanel({
         </Button>
       </div>
     );
-  if (!query.data.length)
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>{empty}</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
-    );
-  if (manager)
-    return (
-      <ManagerTaskTable
-        tasks={query.data.map((row) => toTaskPresentation(row, now))}
-        onOpenTask={onOpenTask}
-      />
-    );
+  return children(query.data);
+}
+
+function TaskQueryPanel({
+  query,
+  empty,
+  manager = false,
+  now,
+  onOpenTask,
+  highlightedId = null,
+}: {
+  query: UseQueryResult<TaskPresentationRow[], Error>;
+  empty: string;
+  manager?: boolean;
+  now: Date;
+  onOpenTask: (id: number) => void;
+  highlightedId?: number | null;
+}) {
   return (
-    <ul
-      data-slot="task-card-grid"
-      className="grid min-w-0 grid-cols-1 items-stretch gap-4 p-0"
-    >
-      {query.data.map((row) => (
-        <li key={row.id} data-slot="task-card-row" className="h-full min-w-0">
-          <TaskCard
-            task={toTaskPresentation(row, now)}
-            allowInterest={available}
+    <TaskQueryStates query={query}>
+      {(rows) =>
+        !rows.length ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>{empty}</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        ) : manager ? (
+          <ManagerTaskTable
+            tasks={rows.map((row) => toTaskPresentation(row, now))}
             onOpenTask={onOpenTask}
-            memberId={session?.user.id}
-            pending={
-              progress.isPending && progress.variables?.taskId === row.id
-            }
-            onProgress={(input) => progress.mutateAsync(input)}
-            highlighted={row.id === highlightedId}
           />
-        </li>
-      ))}
-    </ul>
+        ) : (
+          <TaskCardGrid
+            rows={rows}
+            now={now}
+            onOpenTask={onOpenTask}
+            highlightedId={highlightedId}
+          />
+        )
+      }
+    </TaskQueryStates>
   );
 }
 /** `?task=<id>`: a positive whole Task id, or nothing. */
@@ -257,13 +251,15 @@ export default function TrackerScreen() {
             />
           </Tabs.Panel>
           <Tabs.Panel value="available">
-            <TaskQueryPanel
-              query={available}
-              empty="Nu sunt oportunități disponibile acum."
-              available
-              now={now}
-              onOpenTask={setDetailId}
-            />
+            <TaskQueryStates query={available}>
+              {(opportunities) => (
+                <AvailableOpportunities
+                  opportunities={opportunities}
+                  now={now}
+                  onOpenTask={setDetailId}
+                />
+              )}
+            </TaskQueryStates>
           </Tabs.Panel>
           {management.data && (
             <Tabs.Panel value="managed">

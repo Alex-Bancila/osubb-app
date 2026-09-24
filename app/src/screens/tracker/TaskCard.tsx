@@ -11,6 +11,7 @@ import {
   CardHeader,
 } from '../../components/ui/card';
 import { formatPoints } from '../../lib/format';
+import { cn } from '../../lib/utils';
 import type { TaskPresentation } from './task-presentation';
 import type { TaskProgressInput } from '../../queries/task-progress';
 import { TaskActionSuccess } from './TaskActionSuccess';
@@ -24,6 +25,19 @@ import { SubmissionNote } from './SubmissionNote';
 type TaskCardProps = {
   task: TaskPresentation;
   allowInterest?: boolean;
+  /**
+   * With `allowInterest`: whether the Task Audience admits this Member. A
+   * local-Audience Other OSUBB Opportunity is not joinable, so the card says
+   * so where the join button would be (ruling R10).
+   */
+  joinable?: boolean;
+  /**
+   * Disponibile's band: `other` greys the card — a neutral stripe, border and
+   * surface — while its chip still names the Group (ruling R10).
+   */
+  band?: 'own' | 'other';
+  /** The title's heading level: 3 when the card sits under a band heading. */
+  titleLevel?: 2 | 3;
   onOpenTask?: (id: number) => void;
   /** The viewer; the Executor's own card offers Start, Submit and Give up. */
   memberId?: string | undefined;
@@ -55,6 +69,9 @@ const chipClass =
 export function TaskCard({
   task,
   allowInterest = false,
+  joinable = true,
+  band,
+  titleLevel = 2,
   onOpenTask,
   memberId,
   pending = false,
@@ -85,7 +102,11 @@ export function TaskCard({
   const canGiveUp =
     isExecutor && (task.status === 'todo' || task.status === 'in_progress');
   // Colour is never the only carrier: the first chip names the Group.
-  const stripe = task.origin.color ?? 'var(--ink-400)';
+  const other = band === 'other';
+  const stripe = other
+    ? 'var(--ink-300)'
+    : (task.origin.color ?? 'var(--ink-400)');
+  const Title = titleLevel === 3 ? 'h3' : 'h2';
 
   async function start() {
     if (pending || saving || !onProgress) return;
@@ -109,10 +130,17 @@ export function TaskCard({
       id={anchor ? `task-${task.id}` : undefined}
       aria-labelledby={titleId}
       data-highlighted={highlighted || undefined}
+      data-band={band}
       className="h-full min-w-0 scroll-mt-24 rounded-xl data-highlighted:ring-3 data-highlighted:ring-primary data-highlighted:ring-offset-2 data-highlighted:ring-offset-background motion-safe:transition-shadow motion-safe:duration-300"
     >
       <Card
-        className="relative h-full pl-1.5"
+        className={cn(
+          'relative h-full pl-1.5',
+          // Greyed by surface and border only — never opacity, so every
+          // word keeps its full contrast.
+          other &&
+            'bg-muted shadow-none ring-0 border border-dashed border-border',
+        )}
         style={{ '--task-stripe': stripe } as CSSProperties}
       >
         <span
@@ -147,7 +175,7 @@ export function TaskCard({
               </span>
             )}
           </div>
-          <h2
+          <Title
             id={titleId}
             data-slot="task-title"
             tabIndex={-1}
@@ -164,7 +192,7 @@ export function TaskCard({
             ) : (
               task.title
             )}
-          </h2>
+          </Title>
           <div className="flex flex-wrap gap-1.5">
             <Badge
               variant={
@@ -244,7 +272,19 @@ export function TaskCard({
             (allowInterest &&
             !task.queueClosed &&
             ['todo', 'in_progress', 'in_review'].includes(task.status) ? (
-              <TaskInterestControls taskId={task.id} task={task} />
+              joinable ? (
+                <TaskInterestControls taskId={task.id} task={task} />
+              ) : (
+                <div className="space-y-3">
+                  <TaskStageSummary task={task} />
+                  <p
+                    data-slot="audience-notice"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Doar pentru membrii grupului
+                  </p>
+                </div>
+              )
             ) : (
               <TaskQueueStatus taskId={task.id} task={task} />
             ))}
