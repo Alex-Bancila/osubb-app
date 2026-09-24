@@ -79,9 +79,9 @@ values
 update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
  where title = 'Queue closed #330';
 
--- Public, LOCAL Opportunity in 'edu': an outsider cannot even read it (R6
--- local needs Origin membership), while a BCE of another Department reads it
--- through R1 and is still not eligible to join its queue.
+-- Public, LOCAL Opportunity in 'edu': an outsider reads it (#683, R6 ignores
+-- the Audience) and a BCE of another Department reads it through R1, yet
+-- neither is eligible to join its queue.
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
@@ -490,13 +490,14 @@ select throws_ok(format($$ select public.express_task_interest(%s) $$,
   'a local Opportunity admits only Members of its own Origin, global read access notwithstanding');
 reset role;
 
--- The outsider has no Department at all, so the same local Task is invisible:
--- visibility is the OUTER gate and answers first, with PT404.
+-- The outsider has no Department at all. Since #683 (ruling R10) they READ
+-- the local Opportunity -- an Other OSUBB Opportunity at the Group's Minimum
+-- Level -- but the Audience still decides who may join: 42501, not PT404.
 select pg_temp.test_login('33000000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.express_task_interest(%s) $$,
-  (select local_task_id from f330)), 'PT404', 'task_not_found',
-  'a local Opportunity the caller cannot read is not found -- never a hint that it exists');
+  (select local_task_id from f330)), '42501', 'task_audience_forbidden',
+  'a visible local Opportunity of a Group the caller is not in is seen but not joinable (#683)');
 select throws_ok(format($$ select public.withdraw_task_interest(%s) $$,
   (select withdraw_none_task_id from f330)), 'PT409', 'not_a_candidate',
   'withdrawing without a live pending Candidature is rejected');

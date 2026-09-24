@@ -34,7 +34,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(66);
+select plan(71);
 
 -- ==================== Shape ====================
 select policies_are('public', 'task_assignments', array['task_assignments_read'],
@@ -276,6 +276,31 @@ select task.id, persona.id, now() - interval '1 minute'
   from public.tasks as task, fx_persona_319 as persona
  where task.title = 'm319:Q' and persona.code = 'candidate2';
 
+-- #683: Task L — Department 'edu' origin, public, LOCAL audience, open queue,
+-- in progress: the executor persona holds its Assignment, candidate2 queues.
+-- Since ruling R10 the stranger (no Department at all) reads the Task itself
+-- as an Other OSUBB Opportunity -- and none of its history rows.
+insert into public.tasks (title, group_id, audience, assignment_mode, queue_opened_at, status, started_at)
+values ('m319:L', pg_temp.dept_group('edu'), 'local', 'public', now(), 'in_progress', now());
+insert into public.task_assignments (task_id, member_id, assigned_at, assigned_by)
+select task.id, persona.id, now(), (select id from fx_persona_319 where code = 'manager_bce_local')
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:L' and persona.code = 'executor';
+insert into public.task_candidates (task_id, member_id, joined_at)
+select task.id, persona.id, now()
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:L' and persona.code = 'candidate2';
+insert into public.task_activity (task_id, kind, actor_id, occurred_at)
+select task.id, 'interest_expressed', persona.id, now()
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:L' and persona.code = 'candidate2';
+insert into public.task_activity (task_id, kind, actor_id, assignment_id, from_status, to_status, occurred_at)
+select task.id, 'started', persona.id,
+       (select assignment.id from public.task_assignments as assignment
+         where assignment.task_id = task.id and assignment.member_id = persona.id),
+       'todo', 'in_progress', now()
+  from public.tasks as task, fx_persona_319 as persona
+ where task.title = 'm319:L' and persona.code = 'executor';
 -- Hidden — Department 'fin' origin, local audience, direct: unreadable to
 -- the 'edu' candidates and to the plain stranger.
 insert into public.tasks (title, group_id, audience, assignment_mode)
@@ -548,6 +573,20 @@ select is_empty('select * from pg_temp.visible_assignment_codes(''T'')',
   'stranger: not a Team member, no Assignment on Task T');
 select is_empty('select * from pg_temp.visible_activity_kinds(''T'')',
   'stranger: not a Team member, no activity on Task T either — decision (b) does not extend to non-members');
+-- #683: Task L is a local Opportunity of a Group the stranger is not in. They
+-- read the Task and its pending count -- never its position, Candidates,
+-- Assignment or activity.
+select ok(exists (select 1 from public.tasks where title = 'm319:L'),
+  '#683: stranger reads the local Other Opportunity L itself');
+select results_eq('select * from pg_temp.queue_summary_row(''L'')',
+  $q$ values (1, null::integer) $q$,
+  '#683: stranger sees L''s pending count through the view, but no position');
+select is_empty('select * from pg_temp.visible_candidate_codes(''L'')',
+  '#683: stranger reads no Candidature on L');
+select is_empty('select * from pg_temp.visible_assignment_codes(''L'')',
+  '#683: stranger reads no Assignment on L');
+select is_empty('select * from pg_temp.visible_activity_kinds(''L'')',
+  '#683: stranger reads no activity on L');
 
 -- ==================== Deactivated member with stale claims ====================
 reset role;
