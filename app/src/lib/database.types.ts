@@ -3103,7 +3103,7 @@ export type Database = {
         Returns: Database["public"]["Enums"]["member_role"]
       }
       campaign_report: {
-        Args: { p_campaign_id: number }
+        Args: { p_campaign_id: number; p_from?: string; p_to?: string }
         Returns: {
           full_name: string
           member_id: string
@@ -3113,7 +3113,7 @@ export type Database = {
         }[]
       }
       campaign_totals: {
-        Args: { p_campaign_id: number }
+        Args: { p_campaign_id: number; p_from?: string; p_to?: string }
         Returns: {
           points_total: number
           tasks_completed: number
@@ -3512,7 +3512,7 @@ export type Database = {
         }
       }
       department_cup: {
-        Args: { p_campaign_id?: number }
+        Args: { p_campaign_id?: number; p_from?: string; p_to?: string }
         Returns: {
           group_id: number
           members: number
@@ -3641,7 +3641,12 @@ export type Database = {
         }
       }
       leadership_leaderboard: {
-        Args: { p_campaign_id?: number; p_group_id?: number }
+        Args: {
+          p_campaign_id?: number
+          p_from?: string
+          p_group_id?: number
+          p_to?: string
+        }
         Returns: {
           full_name: string
           member_id: string
@@ -3651,7 +3656,7 @@ export type Database = {
         }[]
       }
       leadership_member_tasks: {
-        Args: { p_member_id: string }
+        Args: { p_from?: string; p_member_id: string; p_to?: string }
         Returns: {
           assigned_at: string
           assigned_by: string

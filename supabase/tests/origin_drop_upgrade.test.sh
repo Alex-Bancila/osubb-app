@@ -56,6 +56,13 @@ create function private.sync_task_group_origin() returns trigger language plpgsq
 create function private.sync_request_group_origin() returns trigger language plpgsql as 'begin return new; end';
 create function private.sync_campaign_group_origin() returns trigger language plpgsql as 'begin return new; end';
 create function private.sync_event_group_origin() returns trigger language plpgsql as 'begin return new; end';
+-- #677 widened the Cup and the Member drill-down by the Work Filter range, so
+-- the pre-#677 arities this migration drops get stand-ins too. The widened
+-- arities stay alongside under their own signatures until the rollback.
+create function private.department_cup_rows(bigint) returns void language sql as '';
+create function public.department_cup(bigint) returns void language sql as '';
+create function private.leadership_member_tasks_impl(uuid) returns void language sql as '';
+create function public.leadership_member_tasks(uuid) returns void language sql as '';
 
 -- The resolver, verbatim from 20260919135332_group_id_on_work_and_events.sql: the guards call it.
 create function private.group_id_for_legacy_origin(p_dept_id text, p_team_id text, p_project_id bigint)

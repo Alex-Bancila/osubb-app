@@ -15,59 +15,59 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(62);
+select plan(76);
 
 -- ==================== 1. Surface, shape and grants ====================
 
-select has_function('public', 'campaign_report', array['bigint'],
+select has_function('public', 'campaign_report', array['bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'the Campaign report read exists');
-select has_function('private', 'campaign_report_impl', array['bigint'],
+select has_function('private', 'campaign_report_impl', array['bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'its security-definer body exists in private');
-select has_function('public', 'campaign_totals', array['bigint'],
+select has_function('public', 'campaign_totals', array['bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'the Campaign totals read exists');
-select has_function('private', 'campaign_totals_impl', array['bigint'],
+select has_function('private', 'campaign_totals_impl', array['bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'its security-definer body exists in private');
 
 select is(
-  pg_get_function_result('public.campaign_report(bigint)'::regprocedure),
+  pg_get_function_result('public.campaign_report(bigint, timestamptz, timestamptz)'::regprocedure),
   'TABLE(member_id uuid, full_name text, nickname text, tasks_completed integer, points integer)',
   'the report returns member id, full name, Nickname (#675), tasks_completed and points -- one row per volunteer');
 select is(
-  pg_get_function_result('public.campaign_totals(bigint)'::regprocedure),
+  pg_get_function_result('public.campaign_totals(bigint, timestamptz, timestamptz)'::regprocedure),
   'TABLE(tasks_total integer, tasks_completed integer, points_total integer)',
   'the totals return the three whole-Campaign counters');
 
 select is(
-  (select prosecdef from pg_proc where oid = 'public.campaign_report(bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'public.campaign_report(bigint, timestamptz, timestamptz)'::regprocedure),
   false, 'the public report wrapper is security invoker');
 select is(
-  (select prosecdef from pg_proc where oid = 'private.campaign_report_impl(bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.campaign_report_impl(bigint, timestamptz, timestamptz)'::regprocedure),
   true, 'the private report body is security definer -- it reads the whole ledger past RLS and gates itself');
 select is(
-  (select prosecdef from pg_proc where oid = 'public.campaign_totals(bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'public.campaign_totals(bigint, timestamptz, timestamptz)'::regprocedure),
   false, 'the public totals wrapper is security invoker');
 select is(
-  (select prosecdef from pg_proc where oid = 'private.campaign_totals_impl(bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.campaign_totals_impl(bigint, timestamptz, timestamptz)'::regprocedure),
   true, 'the private totals body is security definer');
 
-select ok(has_function_privilege('authenticated', 'public.campaign_report(bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'public.campaign_report(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'authenticated may execute the report wrapper');
-select ok(not has_function_privilege('anon', 'public.campaign_report(bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.campaign_report(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'anon cannot execute the report wrapper');
-select ok(has_function_privilege('authenticated', 'private.campaign_report_impl(bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'private.campaign_report_impl(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'authenticated may execute the report body -- the security-invoker wrapper calls it as the caller');
-select ok(not has_function_privilege('anon', 'private.campaign_report_impl(bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'private.campaign_report_impl(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'anon cannot reach the report body directly');
-select ok(not has_function_privilege('service_role', 'private.campaign_report_impl(bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('service_role', 'private.campaign_report_impl(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'the server role cannot bypass the gate through the report body');
 
-select ok(has_function_privilege('authenticated', 'public.campaign_totals(bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'public.campaign_totals(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'authenticated may execute the totals wrapper');
-select ok(not has_function_privilege('anon', 'public.campaign_totals(bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.campaign_totals(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'anon cannot execute the totals wrapper');
-select ok(has_function_privilege('authenticated', 'private.campaign_totals_impl(bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'private.campaign_totals_impl(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'authenticated may execute the totals body');
-select ok(not has_function_privilege('service_role', 'private.campaign_totals_impl(bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('service_role', 'private.campaign_totals_impl(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'the server role cannot bypass the gate through the totals body');
 
 -- ==================== 2. Fixtures ====================
@@ -430,6 +430,104 @@ select is(
   (select points_total from public.campaign_totals(6250001)),
   'points_total equals an independent ledger sum over exactly this Campaign''s Tasks');
 
+-- ==================== 4b. The Work Filter date range (#677, R13) ====================
+-- A second Campaign on the same Group, dated in 2001 so no other award in
+-- the database can fall inside a range below. T1 = 2001-03-10 10:00Z,
+-- T2 = 2001-04-10 10:00Z, T3 = 2001-05-10 10:00Z.
+--   D1 -- 2 x 3 = 6 awarded to Xenia at T1, kept.
+--   D2 -- 1 x 3 = 3 awarded to Yannis at T1, reversed at T2 (the reversal's
+--         own ledger row dated T2), re-awarded to him at T3.
+-- points / tasks_completed follow the award instant; tasks_total never does.
+reset role;
+insert into auth.users (id, email) values
+  ('62500000-0000-0000-0000-000000000015', 'xenia625@example.test'),
+  ('62500000-0000-0000-0000-000000000016', 'yannis625@example.test');
+insert into public.profiles (id, full_name, email, role, status) values
+  ('62500000-0000-0000-0000-000000000015', 'Xenia Dated 625', 'xenia625@example.test', 'activ', 'activ'),
+  ('62500000-0000-0000-0000-000000000016', 'Yannis Dated 625', 'yannis625@example.test', 'activ', 'activ');
+insert into public.campaigns (id, group_id, name, created_by)
+overriding system value values
+  (6250002, pg_temp.dept_group('625-dept'), 'Campania Datata 625', '62500000-0000-0000-0000-000000000001');
+insert into public.tasks
+  (title, group_id, campaign_id, status, difficulty, rating,
+   created_by, created_at, completed_at)
+values
+  ('D1 Dated Kept 625', pg_temp.dept_group('625-dept'), 6250002, 'completed', 2, 5,
+   '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now()),
+  ('D2 Dated Reopened 625', pg_temp.dept_group('625-dept'), 6250002, 'completed', 1, 5,
+   '62500000-0000-0000-0000-000000000001', now() - interval '3 days', now());
+select pg_temp.test_credit_task(task.id, credit.member_id, '62500000-0000-0000-0000-000000000001',
+                                p_awarded_at => '2001-03-10 10:00:00+00')
+  from (values
+    ('D1 Dated Kept 625',     '62500000-0000-0000-0000-000000000015'::uuid),
+    ('D2 Dated Reopened 625', '62500000-0000-0000-0000-000000000016')
+  ) as credit (title, member_id)
+  join public.tasks as task on task.title = credit.title
+ order by task.id;
+select pg_temp.test_reverse_award(task.id, '62500000-0000-0000-0000-000000000016',
+                                  '2001-04-10 10:00:00+00')
+  from public.tasks as task where task.title = 'D2 Dated Reopened 625';
+select pg_temp.test_credit_task(task.id, '62500000-0000-0000-0000-000000000016',
+                                '62500000-0000-0000-0000-000000000001',
+                                p_awarded_at => '2001-05-10 10:00:00+00')
+  from public.tasks as task where task.title = 'D2 Dated Reopened 625';
+
+select is((select count(*)::int from pg_proc
+            where proname = 'campaign_report' and pronamespace = 'public'::regnamespace), 1,
+  'exactly one campaign_report overload exists -- PostgREST can resolve the call (no PGRST203)');
+select is((select count(*)::int from pg_proc
+            where proname = 'campaign_totals' and pronamespace = 'public'::regnamespace), 1,
+  'exactly one campaign_totals overload exists');
+
+create function pg_temp.totals625(p_from timestamptz, p_to timestamptz) returns text
+language sql as $$
+  select format('%s/%s/%s', tasks_total, tasks_completed, points_total)
+    from public.campaign_totals(6250002, p_from, p_to)
+$$;
+
+select pg_temp.test_login_leadership('62500000-0000-0000-0000-000000000001');
+
+select is(pg_temp.totals625(null, null), '2/2/9',
+  'with no range the dated Campaign''s totals are the whole story: two Tasks, both completed, 6 + (3 - 3 + 3)');
+select is(pg_temp.totals625('2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00'), '2/1/6',
+  'in [T1, T2): D1''s 6 and D2''s reversed award netting to zero; only D1''s completion was awarded there; tasks_total ignores the range');
+select is(pg_temp.totals625('2001-04-10 10:00:00+00', null), '2/1/3',
+  'in [T2, open): only the re-award at T3 -- the reversal is dated by its Evaluation, so no phantom -3 cancels it');
+select is(pg_temp.totals625(null, '2001-03-10 10:00:00+00'), '2/0/0',
+  'in [open, T1): nothing awarded, nothing completed -- the to bound is exclusive and filters both counters');
+select is(pg_temp.totals625('2001-03-10 10:00:00.000001+00', '2001-04-10 10:00:00+00'), '2/0/0',
+  'in [T1 + 1us, T2): nothing either -- the from bound filters both counters');
+
+select results_eq(
+  $$ select full_name, tasks_completed, points
+       from public.campaign_report(6250002, '2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00') $$,
+  $$ values ('Xenia Dated 625'::text, 1, 6), ('Yannis Dated 625', 0, 0) $$,
+  'the report over [T1, T2): Xenia''s award, and Yannis at zero -- his reversed award is neither points nor a completion there');
+select results_eq(
+  $$ select full_name, tasks_completed, points
+       from public.campaign_report(6250002, '2001-04-10 10:00:00+00', null) $$,
+  $$ values ('Yannis Dated 625'::text, 1, 3), ('Xenia Dated 625', 0, 0) $$,
+  'over [T2, open): Yannis''s re-award only, and both volunteers stay on the report -- the range narrows numbers, never the roster');
+select is((select points from public.campaign_report(6250002, '2001-03-10 10:00:00+00', '2001-03-10 10:00:01+00')
+            where member_id = '62500000-0000-0000-0000-000000000015'), 6,
+  'an award at T1 counts in [T1, T1 + 1s) -- the from bound is inclusive');
+select is((select sum(points)::int from public.campaign_report(6250002, null, '2001-03-10 10:00:00+00')), 0,
+  'nothing counts in [open, T1) -- the to bound is exclusive');
+select is((select points from public.campaign_report(6250002, '2001-03-10 10:00:00.000001+00', '2001-04-10 10:00:00+00')
+            where member_id = '62500000-0000-0000-0000-000000000015'), 0,
+  'and the award at T1 does not count in [T1 + 1us, T2)');
+
+-- Step 1, before authority: the outsider BCE is otherwise answered 42501.
+select pg_temp.test_login_leadership('62500000-0000-0000-0000-000000000003');
+select throws_ok(
+  $$select * from public.campaign_report(6250002, '2001-04-10 10:00:00+00', '2001-03-10 10:00:00+00')$$,
+  'PT400', 'invalid_date_range',
+  'an inverted range is PT400 invalid_date_range for the report, ahead of the authority refusal');
+select throws_ok(
+  $$select * from public.campaign_totals(6250002, '2001-04-10 10:00:00+00', '2001-03-10 10:00:00+00')$$,
+  'PT400', 'invalid_date_range',
+  'and for the totals');
+
 -- ==================== 5. Authority ====================
 
 -- A BC needs no Group membership at all (private.can_manage_group_work's
@@ -495,7 +593,7 @@ select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok('select * from public.campaign_report(6250001)', '42501', null,
   'anon holds no grant on the report wrapper');
-select throws_ok('select * from private.campaign_report_impl(6250001)', '42501', null,
+select throws_ok('select * from private.campaign_report_impl(6250001, null, null)', '42501', null,
   'anon cannot reach the report body directly either');
 select throws_ok('select * from public.campaign_totals(6250001)', '42501', null,
   'anon holds no grant on the totals wrapper');
