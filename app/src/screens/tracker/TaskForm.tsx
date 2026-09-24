@@ -24,7 +24,9 @@ import { TaskGroupCascade } from './TaskGroupCascade';
 import {
   campaignsFor,
   groupLookup,
+  isPrivateGroup,
   originFor,
+  PRIVATE_GROUP_AUDIENCE_HINT,
   rootGroups,
   taskDraftInput,
   umbrellasFor,
@@ -111,6 +113,7 @@ export function TaskForm({
   const parent =
     options.umbrellas.find((umbrella) => umbrella.id === values.parentTaskId) ??
     null;
+  const localOnly = isPrivateGroup(origin?.id, options);
   const umbrella = values.kind === 'umbrella';
   const subtask = values.kind === 'subtask';
   const lockedToParent = parentTaskId !== null;
@@ -358,7 +361,7 @@ export function TaskForm({
             <select
               id={`${id}-audience`}
               className={control}
-              value={values.audience}
+              value={localOnly ? 'local' : values.audience}
               onChange={(event) =>
                 update({
                   audience: event.target.value === 'org' ? 'org' : 'local',
@@ -367,11 +370,15 @@ export function TaskForm({
               {...form.field('audience')}
             >
               <option value="local">Membrii grupului de origine</option>
-              <option value="org">Toți membrii eligibili OSUBB</option>
+              <option value="org" disabled={localOnly}>
+                Toți membrii eligibili OSUBB
+              </option>
             </select>
             <FieldError {...form.errorProps('audience')} />
             <p className="text-sm text-muted-foreground">
-              Cine se poate înscrie când taskul este public.
+              {localOnly
+                ? PRIVATE_GROUP_AUDIENCE_HINT
+                : 'Cine se poate înscrie când taskul este public.'}
             </p>
           </div>
           {values.assignmentMode === 'direct' && origin && (

@@ -18,7 +18,11 @@ import type {
   RunGroupCommand,
 } from '../../queries/groups-admin';
 import { MemberPicker } from './MemberPicker';
-import { GROUP_CATEGORIES, minLevelChoices } from './group-tree';
+import {
+  GROUP_CATEGORIES,
+  minLevelChoices,
+  PRIVATE_GROUP_HINT,
+} from './group-tree';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
@@ -30,6 +34,12 @@ const control =
  * The parent is chosen here and never again: a Group's place in the tree is
  * fixed at creation (ADR-0009, ruling R20), which is why there is no "Mută
  * grupul" control anywhere in Administrare.
+ *
+ * **Grup privat** mirrors `create_group` (#756): BC and the Moderator choose
+ * it — for a top-level Group and for a Child Group of a public parent alike —
+ * and a Child Group of a Private Group is private whatever is chosen, so the
+ * box is shown ticked and locked. A Group Manager under a public parent is
+ * not offered it: the server would refuse the private Child.
  */
 export function GroupCreateDialog({
   trigger,
@@ -41,6 +51,7 @@ export function GroupCreateDialog({
   actorLevel,
   members,
   disabled,
+  choosePrivate,
   onCreate,
 }: {
   trigger: string;
@@ -53,6 +64,8 @@ export function GroupCreateDialog({
   actorLevel: number;
   members: AppointableMember[];
   disabled: boolean;
+  /** BC or the Moderator (`createTopLevelGroups`): may start a Private Group. */
+  choosePrivate: boolean;
   onCreate: RunGroupCommand;
 }) {
   const [open, setOpen] = useState(false);
@@ -65,6 +78,7 @@ export function GroupCreateDialog({
   const [color, setColor] = useState('');
   const [short, setShort] = useState('');
   const [manager, setManager] = useState<AppointableMember | null>(null);
+  const [isPrivate, setIsPrivate] = useState(false);
   const form = useFormValidation(
     groupCreateSchema,
     {
@@ -78,6 +92,8 @@ export function GroupCreateDialog({
   );
 
   const effectiveParent = parent ?? chosenParent;
+  const inheritsPrivate = effectiveParent?.is_private === true;
+  const privateChoice = inheritsPrivate || (choosePrivate && isPrivate);
   const choices = minLevelChoices(
     levels,
     effectiveParent?.min_level ?? 0,
@@ -92,6 +108,7 @@ export function GroupCreateDialog({
     setColor('');
     setShort('');
     setManager(null);
+    setIsPrivate(false);
     form.reset();
   }
 
@@ -109,6 +126,7 @@ export function GroupCreateDialog({
         managerId: manager?.memberId ?? null,
         color: values.color,
         short: values.short,
+        isPrivate: privateChoice,
       },
       (failure) => form.fail(failure, 'Nu am putut crea grupul. Reîncearcă.'),
     );
@@ -237,6 +255,26 @@ export function GroupCreateDialog({
               disabled={disabled}
             />
           </div>
+
+          {(choosePrivate || inheritsPrivate) && (
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 size-5 shrink-0"
+                checked={privateChoice}
+                disabled={disabled || inheritsPrivate}
+                onChange={(event) => setIsPrivate(event.target.checked)}
+              />
+              <span className="grid gap-0.5">
+                <span className="text-sm font-medium">Grup privat</span>
+                <span className="text-sm text-muted-foreground">
+                  {inheritsPrivate
+                    ? `${effectiveParent?.name ?? 'Grupul părinte'} este privat, deci și grupul nou va fi privat.`
+                    : PRIVATE_GROUP_HINT}
+                </span>
+              </span>
+            </label>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">

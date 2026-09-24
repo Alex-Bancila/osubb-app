@@ -20,6 +20,7 @@ import {
   type AdminGroup,
   type GroupCommand,
 } from '../../queries/groups-admin';
+import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { GroupCreateDialog } from './GroupCreateDialog';
 import { RolePanel } from './RolePanel';
 import { CsvImportPanel } from './CsvImportPanel';
@@ -83,6 +84,7 @@ function TreeName({
       >
         {row.group.name}
       </Link>
+      <PrivateGroupBadge isPrivate={row.group.is_private} />
     </span>
   );
 }
@@ -143,53 +145,60 @@ function treeColumns(
   ];
 }
 
-const MY_GROUP_COLUMNS: DataTableColumn<MyGroup>[] = [
-  {
-    id: 'name',
-    accessorFn: (row) => row.name,
-    header: 'Grup',
-    cell: ({ row }) => (
-      <span className="flex min-w-0 items-center gap-2">
-        <GroupDot color={row.original.color} />
-        <Link
-          to={`/administrare/grupuri/${row.original.id}`}
-          className="truncate font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          {row.original.name}
-        </Link>
-      </span>
-    ),
-    sortFn: (left, right) =>
-      left.original.name.localeCompare(right.original.name, 'ro'),
-  },
-  {
-    id: 'category',
-    accessorFn: (row) => categoryLabel(row.category),
-    header: 'Categorie',
-  },
-  {
-    id: 'group_role',
-    accessorFn: (row) => groupRoleLabel(row.group_role),
-    header: 'Rolul tău',
-    cell: ({ row }) => (
-      <span className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline">
-          {groupRoleLabel(row.original.group_role)}
-        </Badge>
-        {!row.original.explicit && !row.original.automatic && (
-          <span className="text-xs text-muted-foreground">
-            din grupul de deasupra
-          </span>
-        )}
-      </span>
-    ),
-  },
-  {
-    id: 'min_level',
-    accessorFn: (row) => row.min_level,
-    header: 'Nivel minim',
-  },
-];
+/* `my_groups()` carries no privacy column, so the Private Group mark comes
+   from the Group rows the caller can read (`groups_read`, the same filter). */
+function myGroupColumns(
+  privateIds: ReadonlySet<number>,
+): DataTableColumn<MyGroup>[] {
+  return [
+    {
+      id: 'name',
+      accessorFn: (row) => row.name,
+      header: 'Grup',
+      cell: ({ row }) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <GroupDot color={row.original.color} />
+          <Link
+            to={`/administrare/grupuri/${row.original.id}`}
+            className="truncate font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {row.original.name}
+          </Link>
+          <PrivateGroupBadge isPrivate={privateIds.has(row.original.id)} />
+        </span>
+      ),
+      sortFn: (left, right) =>
+        left.original.name.localeCompare(right.original.name, 'ro'),
+    },
+    {
+      id: 'category',
+      accessorFn: (row) => categoryLabel(row.category),
+      header: 'Categorie',
+    },
+    {
+      id: 'group_role',
+      accessorFn: (row) => groupRoleLabel(row.group_role),
+      header: 'Rolul tău',
+      cell: ({ row }) => (
+        <span className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">
+            {groupRoleLabel(row.original.group_role)}
+          </Badge>
+          {!row.original.explicit && !row.original.automatic && (
+            <span className="text-xs text-muted-foreground">
+              din grupul de deasupra
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      id: 'min_level',
+      accessorFn: (row) => row.min_level,
+      header: 'Nivel minim',
+    },
+  ];
+}
 
 function GroupTree({ groups }: { groups: AdminGroup[] }) {
   const rows = useMemo(() => buildTree(groups), [groups]);
@@ -238,10 +247,17 @@ function GroupTree({ groups }: { groups: AdminGroup[] }) {
   );
 }
 
-function MyGroupsTable({ groups }: { groups: MyGroup[] }) {
+function MyGroupsTable({
+  groups,
+  privateIds,
+}: {
+  groups: MyGroup[];
+  privateIds: ReadonlySet<number>;
+}) {
+  const columns = useMemo(() => myGroupColumns(privateIds), [privateIds]);
   return (
     <DataTable
-      columns={MY_GROUP_COLUMNS}
+      columns={columns}
       data={groups}
       initialSorting={[{ id: 'name', desc: false }]}
       emptyTitle="Nu coordonezi niciun grup."
@@ -278,6 +294,10 @@ export default function AdministrareScreen() {
   );
   const groupsById = useMemo(
     () => new Map(groups.map((group) => [group.id, { name: group.name }])),
+    [groups],
+  );
+  const privateIds = useMemo(
+    () => new Set(groups.filter((group) => group.is_private).map((g) => g.id)),
     [groups],
   );
   const levels = useMemo(
@@ -345,6 +365,7 @@ export default function AdministrareScreen() {
             actorLevel={actorLevel}
             members={membersQuery.data ?? []}
             disabled={command.isPending}
+            choosePrivate={createTopLevel}
             onCreate={run}
           />
         )}
@@ -380,7 +401,10 @@ export default function AdministrareScreen() {
       ) : (
         <>
           <h2 className="text-xl font-semibold">Grupurile mele</h2>
-          <MyGroupsTable groups={myGroupsQuery.data ?? []} />
+          <MyGroupsTable
+            groups={myGroupsQuery.data ?? []}
+            privateIds={privateIds}
+          />
         </>
       )}
       {capabilities.data?.provisionMembers === true && <CsvImportPanel />}

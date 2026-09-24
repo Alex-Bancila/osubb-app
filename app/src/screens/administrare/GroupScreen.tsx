@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { cn } from 'cn';
+import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
@@ -112,6 +113,14 @@ export default function GroupScreen() {
         .sort((left, right) => left.name.localeCompare(right.name, 'ro')),
     [groups, id],
   );
+  // Every Group below this one, at any depth: what turning it private hides.
+  const subtree = useMemo(
+    () =>
+      groups
+        .filter((row) => row.id !== id && row.path.includes(id))
+        .sort((left, right) => left.name.localeCompare(right.name, 'ro')),
+    [groups, id],
+  );
   const levels = useMemo(
     () => [
       ...new Set([...(rolesQuery.data?.values() ?? [])].map((r) => r.level)),
@@ -197,6 +206,7 @@ export default function GroupScreen() {
             {group.name}
           </h1>
           <Badge variant="outline">{categoryLabel(group.category)}</Badge>
+          <PrivateGroupBadge isPrivate={group.is_private} />
           {group.status !== 'active' && (
             <Badge variant="secondary">{groupStatusLabel(group.status)}</Badge>
           )}
@@ -253,6 +263,7 @@ export default function GroupScreen() {
           <GroupSettingsTab
             group={group}
             parent={parent}
+            subtree={subtree}
             roster={roster}
             authority={authority}
             levels={levels}

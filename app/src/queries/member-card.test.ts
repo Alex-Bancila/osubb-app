@@ -112,13 +112,20 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
     new Map([
       [4, { name: 'Imagine & PR', manager_title: null }],
       [7, { name: 'Mentorat', manager_title: 'Mentor-coordonator' }],
+      // A Private Group the viewer can read (#757): the card marks it.
+      [9, { name: 'Foto', manager_title: null, is_private: true }],
     ]),
   );
   expect(data).toMatchObject({
     nickname: null,
     fullName: 'Ana Pop',
     roleLabel: 'Voluntar Activ',
-    primaryGroup: { id: 1, name: 'Educațional', color: '#284C93' },
+    primaryGroup: {
+      id: 1,
+      name: 'Educațional',
+      color: '#284C93',
+      isPrivate: false,
+    },
     otherMemberships: 1,
     // An empty contact row is no contact.
     contact: null,
@@ -130,6 +137,7 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
       label: 'Educațional',
       color: '#284C93',
       roleLabel: 'Membru',
+      isPrivate: false,
     },
     {
       id: 7,
@@ -137,6 +145,7 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
       label: 'Mentorat · Educațional',
       color: null,
       roleLabel: 'Mentor-coordonator',
+      isPrivate: false,
     },
     {
       id: 9,
@@ -144,6 +153,7 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
       label: 'Foto · Imagine & PR',
       color: null,
       roleLabel: 'Fotograf-șef',
+      isPrivate: true,
     },
   ]);
   expect(toMemberCardData({ card: null, contact: null })).toBeNull();

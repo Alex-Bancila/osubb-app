@@ -45,6 +45,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     managerId: null,
     color: '  ',
     short: null,
+    isPrivate: true,
   });
   expect(api.rpc).toHaveBeenLastCalledWith('create_group', {
     p_name: 'Amfiteatru',
@@ -54,6 +55,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_manager_id: null,
     p_color: null,
     p_short: null,
+    p_is_private: true,
   });
 
   await runGroupCommand({

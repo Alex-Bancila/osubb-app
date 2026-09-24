@@ -41,9 +41,14 @@ export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
         .order('id')
         .range(from, to),
     ),
-    // Readable Group names, so a managed Child Group is shown with its parent.
+    // Readable Group names, so a managed Child Group is shown with its parent,
+    // and which of them are private (#757): their Tasks are local only.
     pages((from, to) =>
-      supabase.from('groups').select('id,name').order('id').range(from, to),
+      supabase
+        .from('groups')
+        .select('id,name,is_private')
+        .order('id')
+        .range(from, to),
     ),
   ]);
   const ids = new Set(groups.map((group) => group.id));

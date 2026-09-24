@@ -92,6 +92,29 @@ describe('Member Task cards', () => {
     ).toBeInTheDocument();
   });
 
+  it("locks a Private Group's chip, and no public one (#757)", async () => {
+    const publicCard = card();
+    expect(screen.queryByText('Privat')).toBeNull();
+    publicCard.unmount();
+
+    const { container } = card({
+      group: {
+        name: 'Audit',
+        short: null,
+        color: null,
+        category: 'team',
+        path: [1, 22],
+        is_organization: false,
+        is_private: true,
+      },
+    });
+    const chip = screen.getByText('Echipă · Audit')
+      .parentElement as HTMLElement;
+    expect(within(chip).getByText('Privat')).toBeInTheDocument();
+    expect(within(chip).getByTitle('Grup privat')).toBeInTheDocument();
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
   it('the history variant is read-only: its record replaces the Executor line, stage and actions', () => {
     const onProgress = vi.fn();
     const task = toTaskPresentation(

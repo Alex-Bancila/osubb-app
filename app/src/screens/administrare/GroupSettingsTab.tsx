@@ -15,6 +15,7 @@ import {
   groupSettingsSchema,
   groupStructureSchema,
 } from '../../lib/schemas/group';
+import { reasonCopy } from '../../lib/command-reasons';
 import { useFormValidation } from '../../lib/use-form-validation';
 import type {
   AdminGroup,
@@ -26,6 +27,7 @@ import {
   GROUP_CATEGORIES,
   membersBelowLevel,
   minLevelChoices,
+  PRIVATE_GROUP_HINT,
 } from './group-tree';
 
 const control =
@@ -90,6 +92,45 @@ function RemovalPreview({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * What turning a Group private does, named before anything is sent (ruling
+ * R25): the Group and every Group below it disappear for everyone outside
+ * them, and their Applications stop. The confirmation is the second press of
+ * the save button, like the Minimum-Level removals above.
+ */
+function PrivatePreview({
+  group,
+  subtree,
+}: {
+  group: AdminGroup;
+  subtree: AdminGroup[];
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+      <p className="text-sm font-medium">
+        {subtree.length === 0
+          ? `${group.name} va fi vizibil doar membrilor lui, coordonatorilor de pe traseu și BC.`
+          : subtree.length === 1
+            ? `${group.name} și subgrupul lui vor fi vizibile doar membrilor lor, coordonatorilor de pe traseu și BC:`
+            : `${group.name} și toate cele ${subtree.length} subgrupuri ale lui vor fi vizibile doar membrilor lor, coordonatorilor de pe traseu și BC:`}
+      </p>
+      {subtree.length > 0 && (
+        <ul
+          className="space-y-1 text-sm"
+          aria-label="Subgrupuri care devin private"
+        >
+          {subtree.map((below) => (
+            <li key={below.id}>{below.name}</li>
+          ))}
+        </ul>
+      )}
+      <p className="text-sm text-muted-foreground">
+        Cererile de înscriere se opresc, iar cele în așteptare se retrag.
+      </p>
     </div>
   );
 }
@@ -176,6 +217,7 @@ function ArchiveGroupDialog({
 export function GroupSettingsTab({
   group,
   parent,
+  subtree = [],
   roster,
   authority,
   levels,
@@ -187,6 +229,8 @@ export function GroupSettingsTab({
 }: {
   group: AdminGroup;
   parent: AdminGroup | undefined;
+  /** Every Group below this one: what turning it private also hides. */
+  subtree?: AdminGroup[];
   roster: RosterEntry[];
   authority: GroupAuthority;
   levels: number[];
@@ -219,6 +263,8 @@ export function GroupSettingsTab({
   const [color, setColor] = useState(group.color ?? '');
   const [short, setShort] = useState(group.short ?? '');
   const [isOrganization, setIsOrganization] = useState(group.is_organization);
+  const [isPrivate, setIsPrivate] = useState(group.is_private);
+  const [privateConfirmed, setPrivateConfirmed] = useState(false);
 
   // A refused save is the server saying the form was stale: re-ask before the
   // next attempt rather than resending the flag it already rejected. Adjusted
@@ -231,6 +277,12 @@ export function GroupSettingsTab({
   }
 
   const root = group.parent_id === null;
+  // Mirrors update_group_structure (#756): a Child Group of a Private Group
+  // stays private (private_parent), and the Organization Group is never
+  // private (private_not_allowed_for_organization).
+  const inheritsPrivate = parent?.is_private === true;
+  const privateValue = inheritsPrivate || (!isOrganization && isPrivate);
+  const turningPrivate = privateValue && !group.is_private;
   const chosenMinLevel = Number(minLevel);
   const choices = minLevelChoices(levels, parent?.min_level ?? 0, actorLevel);
   const leaving = membersBelowLevel(roster, chosenMinLevel);
@@ -291,7 +343,11 @@ export function GroupSettingsTab({
     event.preventDefault();
     const values = structureForm.validate();
     if (!values) return;
-    await onRun(
+    if (turningPrivate && !privateConfirmed) {
+      setPrivateConfirmed(true);
+      return;
+    }
+    const saved = await onRun(
       {
         kind: 'structure',
         groupId: group.id,
@@ -303,11 +359,12 @@ export function GroupSettingsTab({
         color: values.color,
         short: values.short,
         isOrganization,
-        isPrivate: group.is_private,
+        isPrivate: privateValue,
         confirmRemovals: false,
       },
       (failure) => structureForm.fail(failure, SAVE_FAILED),
     );
+    if (saved) setPrivateConfirmed(false);
   }
 
   if (!authority.manageGroup && !authority.editStructure)
@@ -358,7 +415,11 @@ export function GroupSettingsTab({
 
           <Check
             label="Primește cereri de înscriere"
-            hint="Membrii pot cere să intre în grup."
+            hint={
+              group.is_private
+                ? reasonCopy('group_private')
+                : 'Membrii pot cere să intre în grup.'
+            }
             checked={accepts}
             disabled={busy || group.is_private}
             onChange={setAccepts}
@@ -524,6 +585,28 @@ export function GroupSettingsTab({
             onChange={setAutomatic}
           />
 
+          <Check
+            label="Grup privat"
+            hint={
+              isOrganization
+                ? reasonCopy('private_not_allowed_for_organization')
+                : inheritsPrivate
+                  ? reasonCopy('private_parent')
+                  : group.is_private && !isPrivate && subtree.length > 0
+                    ? 'Subgrupurile rămân private. Fiecare se face public din setările lui.'
+                    : PRIVATE_GROUP_HINT
+            }
+            checked={privateValue}
+            disabled={busy || inheritsPrivate || isOrganization}
+            onChange={(checked) => {
+              setIsPrivate(checked);
+              setPrivateConfirmed(false);
+            }}
+          />
+          {turningPrivate && privateConfirmed && (
+            <PrivatePreview group={group} subtree={subtree} />
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <label className="grid gap-1.5">
@@ -557,7 +640,11 @@ export function GroupSettingsTab({
           <FieldError>{structureForm.formError}</FieldError>
 
           <Button type="submit" variant="outline" disabled={busy}>
-            Salvează structura
+            {turningPrivate && !privateConfirmed
+              ? 'Vezi ce devine privat'
+              : turningPrivate
+                ? 'Confirmă și salvează'
+                : 'Salvează structura'}
           </Button>
         </form>
       )}

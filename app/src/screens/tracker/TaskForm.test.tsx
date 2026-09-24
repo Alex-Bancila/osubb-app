@@ -157,6 +157,48 @@ it('picks the Origin as a root Group, then a Group below it, and emits a trimmed
     link: { label: null, url: null },
   });
 });
+it("disables the organization-wide Audience for a Private Group's Task, with the reason (#757)", async () => {
+  const onDraft = vi.fn();
+  const { container } = render(
+    <TaskForm
+      options={{
+        ...options,
+        groupNames: [
+          { id: 1, name: 'Educațional' },
+          { id: 4, name: 'Tineret', is_private: true },
+        ],
+      }}
+      onDraft={onDraft}
+    />,
+  );
+  const user = await content();
+  // A public Origin first, with the organization-wide Audience chosen.
+  await chooseOrigin(user, 'Conferință');
+  const audience = screen.getByLabelText('Audiență');
+  expect(
+    within(audience).getByRole('option', {
+      name: 'Toți membrii eligibili OSUBB',
+    }),
+  ).toBeEnabled();
+  await user.selectOptions(audience, 'org');
+
+  await chooseOrigin(user, 'Tineret');
+  const org = within(audience).getByRole('option', {
+    name: 'Toți membrii eligibili OSUBB',
+  });
+  expect(org).toBeDisabled();
+  expect(audience).toHaveValue('local');
+  expect(
+    screen.getByText(
+      'Grupul este privat: taskurile lui sunt doar pentru membrii grupului.',
+    ),
+  ).toBeVisible();
+  expect((await axe.run(container)).violations).toEqual([]);
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ groupId: 4, audience: 'local' }),
+  );
+});
 it('sends only the root when no Group below is chosen, and starts on the one root there is', async () => {
   const onDraft = vi.fn();
   const view = render(<TaskForm options={options} onDraft={onDraft} />);
