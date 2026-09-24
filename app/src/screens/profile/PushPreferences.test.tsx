@@ -37,6 +37,13 @@ function theSwitch(name: string) {
   return screen.getByRole('switch', { name });
 }
 
+/** The first read has landed: the switch is enabled and can be clicked. */
+async function ready(name: string) {
+  await waitFor(() =>
+    expect(theSwitch(name)).not.toHaveAttribute('aria-disabled', 'true'),
+  );
+}
+
 describe('PushPreferences', () => {
   beforeEach(() => {
     resetSupabaseMock();
@@ -90,7 +97,8 @@ describe('PushPreferences', () => {
     });
     const user = userEvent.setup();
     renderPreferences();
-    await waitFor(() => expect(theSwitch('Anunțuri')).toBeChecked());
+    await ready('Anunțuri');
+    expect(theSwitch('Anunțuri')).toBeChecked();
 
     await user.click(theSwitch('Anunțuri'));
 
@@ -124,7 +132,8 @@ describe('PushPreferences', () => {
     );
     const user = userEvent.setup();
     renderPreferences();
-    await waitFor(() => expect(theSwitch('Anunțuri')).toBeChecked());
+    await ready('Anunțuri');
+    expect(theSwitch('Anunțuri')).toBeChecked();
 
     await user.click(theSwitch('Anunțuri'));
 
@@ -143,6 +152,21 @@ describe('PushPreferences', () => {
     );
   });
 
+  it('keeps every switch held when the first read fails', async () => {
+    supabaseMock.eq.mockResolvedValue({
+      data: null,
+      error: { message: 'network down' },
+    });
+    renderPreferences();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Nu am putut încărca preferințele. Verifică internetul și reîncarcă pagina.',
+    );
+    for (const name of ['Anunțuri', 'Evenimente', 'Termene limită']) {
+      expect(theSwitch(name)).toHaveAttribute('aria-disabled', 'true');
+    }
+  });
+
   it('puts the switch back and says so in Romanian when the write fails', async () => {
     supabaseMock.upsert.mockResolvedValue({
       data: null,
@@ -150,13 +174,15 @@ describe('PushPreferences', () => {
     });
     const user = userEvent.setup();
     renderPreferences();
-    await waitFor(() => expect(theSwitch('Termene limită')).toBeChecked());
+    await ready('Termene limită');
+    expect(theSwitch('Termene limită')).toBeChecked();
 
     await user.click(theSwitch('Termene limită'));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Nu am putut salva preferința. Verifică internetul și încearcă din nou.',
     );
-    await waitFor(() => expect(theSwitch('Termene limită')).toBeChecked());
+    await ready('Termene limită');
+    expect(theSwitch('Termene limită')).toBeChecked();
   });
 });

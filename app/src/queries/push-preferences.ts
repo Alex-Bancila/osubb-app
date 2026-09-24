@@ -89,29 +89,32 @@ export function usePushPreferences() {
     // The switch moves at once; a refusal puts it back.
     onMutate: async ({ kind, enabled }) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<PushPreferences>(queryKey);
+      // What the switches showed, so a refusal restores exactly that.
+      const previous =
+        queryClient.getQueryData<PushPreferences>(queryKey) ?? ALL_ON;
       queryClient.setQueryData<PushPreferences>(queryKey, {
-        ...(previous ?? ALL_ON),
+        ...previous,
         [kind]: enabled,
       });
       return { previous };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous)
-        queryClient.setQueryData(queryKey, context.previous);
+      if (context) queryClient.setQueryData(queryKey, context.previous);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   return {
     preferences: query.data ?? ALL_ON,
-    /** The first read is still running. */
-    loading: query.isLoading,
+    /** No successful read yet (running or failed): the switches wait, so a
+        Member never changes a default that may not be their real setting. */
+    loading: query.data === undefined,
     /** A switch change is in flight; every switch waits for it. */
     pending: mutation.isPending,
-    error:
-      query.isError || mutation.isError
-        ? (reasonCopy('push_preference_failed') ?? null)
+    error: mutation.isError
+      ? (reasonCopy('push_preference_failed') ?? null)
+      : query.data === undefined && query.isError
+        ? (reasonCopy('push_preferences_unavailable') ?? null)
         : null,
     setPreference: (kind: MutablePushKind, enabled: boolean) =>
       mutation.mutate({ kind, enabled }),
