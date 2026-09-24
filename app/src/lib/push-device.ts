@@ -122,11 +122,22 @@ export async function subscribeDevice(
   try {
     subscription = await registration.pushManager.subscribe(options);
   } catch (error) {
-    // A subscription made with an earlier VAPID pair blocks a new one
-    // (docs/backend/push.md: rotating the pair means subscribing again).
-    // Drop it and try once more; anything else is a real failure.
+    // A subscription made with an earlier VAPID pair blocks a new one with
+    // InvalidStateError (docs/backend/push.md: rotating the pair means
+    // subscribing again). Only then: delete the stale row — send-push would
+    // otherwise fail every delivery to it with 401/403, never removing it —
+    // drop the stale subscription and try once more. Any other error is a
+    // real failure and leaves a working subscription alone.
+    if (!(error instanceof DOMException && error.name === 'InvalidStateError'))
+      throw error;
     const stale = await registration.pushManager.getSubscription();
     if (!stale) throw error;
+    const { error: staleRowError } = await supabase
+      .from('push_tokens')
+      .delete()
+      .eq('member_id', memberId)
+      .eq('token', tokenFor(stale));
+    if (staleRowError) throw staleRowError;
     await stale.unsubscribe();
     subscription = await registration.pushManager.subscribe(options);
   }

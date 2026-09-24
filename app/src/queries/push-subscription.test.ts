@@ -218,9 +218,10 @@ describe('usePushSubscription', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('replaces a subscription made with an earlier VAPID key', async () => {
+  it('replaces a subscription made with an earlier VAPID key, and its row', async () => {
+    const staleJson = { ...SUBSCRIPTION_JSON, endpoint: 'https://old.test/x' };
     const stale: FakeSubscription = {
-      toJSON: () => SUBSCRIPTION_JSON,
+      toJSON: () => staleJson,
       unsubscribe: vi.fn(async () => {
         browser.current = null;
         return true;
@@ -234,11 +235,39 @@ describe('usePushSubscription', () => {
     const { result } = renderHook(() => usePushSubscription(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // The stale row's delete → eq(member_id) → eq(token), the last awaited.
+    supabaseMock.eq
+      .mockReturnValueOnce(supabaseMock)
+      .mockResolvedValueOnce({ error: null });
     act(() => result.current.enable());
 
     await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalled());
+    expect(supabaseMock.delete).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.eq).toHaveBeenCalledWith(
+      'token',
+      JSON.stringify(staleJson),
+    );
     expect(stale.unsubscribe).toHaveBeenCalled();
     expect(browser.pushManager.subscribe).toHaveBeenCalledTimes(2);
+    expect(supabaseMock.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ token: TOKEN }),
+    );
+  });
+
+  it('keeps a working subscription when subscribing fails for another reason', async () => {
+    browser.current = browser.subscription;
+    browser.pushManager.subscribe.mockRejectedValueOnce(
+      new DOMException('push service unreachable', 'AbortError'),
+    );
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.enable());
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(browser.subscription.unsubscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.delete).not.toHaveBeenCalled();
+    expect(browser.pushManager.subscribe).toHaveBeenCalledTimes(1);
   });
 
   it('turns a failed insert into Romanian copy', async () => {
