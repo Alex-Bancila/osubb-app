@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { memberDisplayName } from '../components/member/member-identity';
 import { CommandError } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
@@ -7,6 +8,7 @@ import { keys } from './keys';
 /** The full new state of every editable Task field (never a patch). */
 export type TaskUpdateInput = {
   taskId: number;
+  /** The Task's Group; a different one moves it (#627). */
   groupId: number;
   title: string;
   description: string | null;
@@ -15,8 +17,8 @@ export type TaskUpdateInput = {
   /** Null for an Umbrella, which has neither. */
   assignmentMode: 'direct' | 'public' | null;
   audience: 'local' | 'org' | null;
-  /** The Attached Link, passed through unchanged until #688's form edits it;
-   *  both null means no link (#684). */
+  /** The Attached Link, full state like every other field: both null means
+   *  no link, so leaving them null clears it (#684). */
   linkLabel: string | null;
   linkUrl: string | null;
 };
@@ -27,6 +29,7 @@ export type TaskUpdateConsequence = {
   kind: string;
   /** Null for a consequence that affects the Task rather than a member. */
   memberId: string | null;
+  /** The Nickname, or the full name when there is none (ruling R5). */
   memberName: string;
 };
 
@@ -89,12 +92,16 @@ export async function previewTaskUpdate(
     ? (
         await supabase
           .from('profiles_directory')
-          .select('id, full_name')
+          .select('id, full_name, nickname')
           .in('id', ids)
       ).data
     : [];
   const names = new Map(
-    (people ?? []).map((person) => [person.id, person.full_name]),
+    (people ?? []).map((person) => [
+      person.id,
+      // full_name can be withheld (R5); a Nickname alone still names them.
+      memberDisplayName(person.nickname, person.full_name ?? '') || null,
+    ]),
   );
   return rows.map((row) => ({
     kind: row.consequence,

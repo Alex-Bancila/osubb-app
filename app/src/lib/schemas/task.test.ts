@@ -40,6 +40,7 @@ const draft: TaskDraftInput = {
   assignmentMode: 'public',
   executorId: null,
   campaignId: null,
+  link: { label: '', url: '' },
 };
 const schema = taskDraftSchema(options, { now });
 const check = (patch: Partial<TaskDraftInput>) => {
@@ -155,6 +156,43 @@ describe('taskDraftSchema', () => {
       ]);
   });
 
+  it('checks the Attached Link as a pair and sends blanks as none (#684)', () => {
+    expect(schema.parse(draft).link).toEqual({ label: null, url: null });
+    expect(
+      schema.parse({
+        ...draft,
+        link: { label: ' Brief ', url: ' https://example.org/b ' },
+      }).link,
+    ).toEqual({ label: 'Brief', url: 'https://example.org/b' });
+    expect(check({ link: { label: 'Brief', url: '' } })).toEqual([
+      'link.url: link_url_required',
+    ]);
+    expect(check({ link: { label: '', url: 'https://example.org' } })).toEqual([
+      'link.label: link_label_required',
+    ]);
+    expect(
+      check({ link: { label: 'l'.repeat(61), url: 'https://example.org' } }),
+    ).toEqual(['link.label: link_label_too_long']);
+    expect(
+      check({ link: { label: 'Brief', url: 'ftp://example.org' } }),
+    ).toEqual(['link.url: link_url_invalid']);
+    expect(
+      check({
+        link: { label: 'Brief', url: `https://${'a'.repeat(2041)}` },
+      }),
+    ).toEqual(['link.url: link_url_too_long']);
+    // An Umbrella may carry a link like any Task.
+    expect(
+      check({
+        kind: 'umbrella',
+        deadline: null,
+        audience: null,
+        assignmentMode: null,
+        link: { label: 'Plan', url: 'https://example.org' },
+      }),
+    ).toEqual([]);
+  });
+
   it('turns the form’s Subtask into a Task draft with a parent', () => {
     const parsed: TaskDraft = schema.parse({
       ...draft,
@@ -170,12 +208,14 @@ describe('taskDraftSchema', () => {
 describe('taskUpdateSchema', () => {
   const edit = taskUpdateSchema({ umbrella: false, campaignIds: [11] });
   const values = {
+    groupId: 3,
     title: 'Task',
     description: null,
     deadline: '2020-01-01T00:00:00Z',
     campaignId: null,
     assignmentMode: 'direct' as const,
     audience: 'local' as const,
+    link: { label: 'Brief', url: 'https://example.org/brief' },
   };
   const checkEdit = (patch: object, editSchema = edit) => {
     const result = editSchema.safeParse({ ...values, ...patch });
@@ -219,6 +259,42 @@ describe('taskUpdateSchema', () => {
   });
 });
 
+describe('taskUpdateSchema: Group and Attached Link (#627, #684)', () => {
+  const values = {
+    groupId: 3,
+    title: 'Task',
+    description: null,
+    deadline: '2020-01-01T00:00:00Z',
+    campaignId: null,
+    assignmentMode: 'direct' as const,
+    audience: 'local' as const,
+    link: { label: '', url: '' },
+  };
+  const checkMove = (patch: object, groupIds?: number[]) => {
+    const result = taskUpdateSchema({
+      umbrella: false,
+      campaignIds: [],
+      groupIds,
+    }).safeParse({ ...values, ...patch });
+    expectRoutable(result, fieldForReason);
+    return issues(result);
+  };
+  it('accepts a Group the fresh read offers and refuses one it does not', () => {
+    expect(checkMove({ groupId: 4 }, [3, 4])).toEqual([]);
+    expect(checkMove({ groupId: 5 }, [3, 4])).toEqual([
+      'groupId: task_group_unavailable',
+    ]);
+    expect(checkMove({ groupId: 0 })).toEqual(['groupId: task_group_required']);
+  });
+  it('clears the link with blanks and refuses half of one', () => {
+    const edit = taskUpdateSchema({ umbrella: false, campaignIds: [] });
+    expect(edit.parse(values).link).toEqual({ label: null, url: null });
+    expect(checkMove({ link: { label: 'Brief', url: ' ' } })).toEqual([
+      'link.url: link_url_required',
+    ]);
+  });
+});
+
 describe('taskDuplicateSchema', () => {
   const duplicate = taskDuplicateSchema({ now });
   it('reads the new deadline in Romania and refuses one in the past', () => {
@@ -251,6 +327,8 @@ it('maps every reason a Task command raises to a Task field', () => {
       'assignmentMode',
       'executorId',
       'campaignId',
+      'link.label',
+      'link.url',
     ],
     [
       // #673
@@ -274,6 +352,15 @@ it('maps every reason a Task command raises to a Task field', () => {
       'parent_terminal',
       'subtask_origin_mismatch',
       'subtask_cannot_be_umbrella',
+      // #627: update_task moving a Task
+      'invalid_group',
+      'subtask_origin_immutable',
+      'umbrella_has_subtasks',
+      // #684: private.require_attached_link
+      'link_incomplete',
+      'link_label_too_long',
+      'link_url_too_long',
+      'link_url_invalid',
     ],
   );
 });

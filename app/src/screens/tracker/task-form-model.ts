@@ -25,6 +25,8 @@ export type TaskDraft = {
   assignmentMode: 'direct' | 'public' | null;
   executorId: string | null;
   campaignId: number | null;
+  /** The Attached Link (#684): both set, or both null for none. */
+  link: { label: string | null; url: string | null };
 };
 export type TaskFormValues = {
   title: string;
@@ -37,7 +39,36 @@ export type TaskFormValues = {
   assignmentMode: 'direct' | 'public';
   executorId: string | null;
   campaignId: number | null;
+  link: { label: string; url: string };
 };
+
+/**
+ * The first level of the Origin cascade (ruling R3): the managed Groups with
+ * no managed ancestor in the same list. A Responsible of one Team sees that
+ * Team here; a Department Manager sees the Department, not its Teams.
+ */
+export function rootGroups(groups: ManagedWorkGroup[]) {
+  const managed = new Set(groups.map((group) => group.id));
+  return groupOptions(groups).filter(
+    (group) => !group.path.some((id) => id !== group.id && managed.has(id)),
+  );
+}
+
+/** The second level: every managed Group below `rootId`, at any depth. */
+export function groupsBelow(rootId: number, groups: ManagedWorkGroup[]) {
+  return groupOptions(groups).filter(
+    (group) => group.id !== rootId && group.path.includes(rootId),
+  );
+}
+
+/** The root a chosen Origin sits under — itself when it is one. */
+export function rootOf(groupId: number | null, groups: ManagedWorkGroup[]) {
+  const group = groups.find((candidate) => candidate.id === groupId);
+  if (!group) return undefined;
+  const roots = new Set(rootGroups(groups).map((root) => root.id));
+  const rootId = group.path.find((id) => roots.has(id));
+  return groups.find((candidate) => candidate.id === rootId);
+}
 
 /** Managed Groups in tree order: parents first, siblings alphabetically. */
 export function groupOptions(groups: ManagedWorkGroup[]) {
@@ -126,5 +157,6 @@ export function taskDraftInput(
         ? values.executorId
         : null,
     campaignId: umbrella ? null : campaignId,
+    link: values.link,
   };
 }

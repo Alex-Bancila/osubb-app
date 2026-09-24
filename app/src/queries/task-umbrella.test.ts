@@ -20,6 +20,7 @@ const draft: TaskDraft = {
   assignmentMode: 'public',
   executorId: null,
   campaignId: null,
+  link: { label: null, url: null },
 };
 
 describe('Umbrella commands', () => {
@@ -38,6 +39,8 @@ describe('Umbrella commands', () => {
       p_campaign_id: null,
       p_parent_task_id: 10,
       p_kind: 'task',
+      p_link_label: null,
+      p_link_url: null,
     });
   });
   it('creates a top-level direct Task with its Executor and Campaign', async () => {
@@ -49,6 +52,7 @@ describe('Umbrella commands', () => {
       audience: 'local',
       executorId: 'executor-1',
       campaignId: 5,
+      link: { label: 'Brief', url: 'https://example.org/brief' },
     });
     expect(rpc).toHaveBeenCalledWith('create_task', {
       p_title: 'Copil',
@@ -61,6 +65,8 @@ describe('Umbrella commands', () => {
       p_campaign_id: 5,
       p_parent_task_id: null,
       p_kind: 'task',
+      p_link_label: 'Brief',
+      p_link_url: 'https://example.org/brief',
     });
   });
   it('creates an Umbrella with no mode, audience, Executor or Campaign', async () => {
