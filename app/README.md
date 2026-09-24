@@ -91,7 +91,8 @@ app/
     │   └── work-filter/    # WorkFilter: Grup principal → Subgrup → Campanie → dates, with chips (+ test)
     ├── screens/
     │   ├── Placeholder.tsx # stands in for a screen; says which issue builds it
-    │   ├── dashboard/      # DashboardScreen (+test), DeptCupCard, LeaderboardCard, MyPointsCard
+    │   ├── dashboard/      # DashboardScreen (+test), DeptCupCard, LeaderboardCard, MyPointsCard,
+    │   │                   # NextTaskCard, NextEventCard, next-items (R4's picks + deep links)
     │   ├── tracker/        # TrackerScreen.tsx — my tasks; the full Tracker rebuild is tracked
     │   │                   # in CLAUDE.md's queue, not here
     │   ├── calendar/       # CalendarScreen (+test): Lună (CalendarMonth) / Agendă

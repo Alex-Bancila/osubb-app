@@ -1,16 +1,15 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-// TODO(#699, #700): goes with setupIonicReact() below.
+// TODO(#699): goes with setupIonicReact() below.
 import { setupIonicReact } from '@ionic/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 
-/* TODO(#699, #700): Ionic's four base stylesheets stay only because the
-   Profil (#699) and Acasă (#700) screens still render `IonPage`/`IonContent`,
-   which need them (the Calendar dropped Ionic in #692). The last of those two
-   rebuilds to
-   merge deletes these four imports, `setupIonicReact()` below, the `--ion-*`
-   mapping in theme/global.css, and the `@ionic/react` and `ionicons`
-   dependencies in package.json. */
+/* TODO(#699): Ionic's four base stylesheets stay only because the Profil
+   screen (#699) still renders `IonPage`/`IonContent`, which need them (the
+   Calendar dropped Ionic in #692, Acasă in #700). The Profil rebuild deletes
+   these four imports, `setupIonicReact()` below, the `--ion-*` mapping in
+   theme/global.css, and the `@ionic/react` and `ionicons` dependencies in
+   package.json. */
 import '@ionic/react/css/core.css';
 import '@ionic/react/css/normalize.css';
 import '@ionic/react/css/structure.css';
@@ -32,8 +31,8 @@ import { AuthProvider } from './lib/auth';
 import App from './App';
 import { PwaUpdatePrompt } from './pwa/PwaUpdatePrompt';
 
-/* TODO(#699, #700): remove with the four base stylesheets above, when the
-   last of the Profil and Acasă rebuilds merges. */
+/* TODO(#699): remove with the four base stylesheets above, when the Profil
+   rebuild merges. */
 setupIonicReact();
 
 const queryClient = createQueryClient();
