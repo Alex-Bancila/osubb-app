@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
+import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
@@ -261,34 +262,15 @@ export default function AnnouncementComposeSheet() {
             </label>
             <div className="space-y-3 rounded-lg border p-3 sm:p-4">
               <p className="text-sm font-medium">Formular asociat (opțional)</p>
-              <div className="space-y-1.5">
-                <label className={fieldClass}>
-                  Nume formular
-                  <input
-                    className={inputClass}
-                    name="form_label"
-                    value={linkLabel}
-                    onChange={(event) => setLinkLabel(event.target.value)}
-                    {...form.field('link.label')}
-                  />
-                </label>
-                <FieldError {...form.errorProps('link.label')} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={fieldClass}>
-                  Adresă formular
-                  <input
-                    className={inputClass}
-                    name="form_url"
-                    type="url"
-                    placeholder="https://"
-                    value={linkUrl}
-                    onChange={(event) => setLinkUrl(event.target.value)}
-                    {...form.field('link.url')}
-                  />
-                </label>
-                <FieldError {...form.errorProps('link.url')} />
-              </div>
+              <AttachedLinkFields
+                value={{ label: linkLabel, url: linkUrl }}
+                onChange={(next) => {
+                  setLinkLabel(next.label);
+                  setLinkUrl(next.url);
+                }}
+                form={form}
+                name="link"
+              />
             </div>
             <FieldError>{form.formError}</FieldError>
             <Button

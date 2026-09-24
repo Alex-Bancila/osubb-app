@@ -1,11 +1,11 @@
 import {
   AlertTriangle,
   ChevronRight,
-  ExternalLink,
   Pin,
   Star,
   UserRound,
 } from 'lucide-react';
+import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -111,15 +111,10 @@ export default function AnnouncementCard({
 
         {announcement.formLabel && announcement.formUrl && (
           <div className="pt-1">
-            <a
-              href={announcement.formUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:text-sm"
-            >
-              <span>Deschide formular: {announcement.formLabel}</span>
-              <ExternalLink className="size-3.5" aria-hidden="true" />
-            </a>
+            <AttachedLinkButton
+              label={announcement.formLabel}
+              url={announcement.formUrl}
+            />
           </div>
         )}
       </CardContent>
