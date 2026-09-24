@@ -3,14 +3,13 @@
 React + TypeScript, built by Vite. This is the app members will actually
 open; the backend it talks to lives one directory up, in `supabase/`.
 
-Ionic is temporary migration code. ADR-0002 fixes the target as Tailwind +
-shadcn/ui (Base UI, Nova style) + TanStack Table in a browser-first, installable
-PWA, migrated route by route; no new screen or shared primitive should depend
-on Ionic, and AG Grid is not used.
+ADR-0002 fixes the stack as Tailwind + shadcn/ui (Base UI, Nova style) +
+TanStack Table in a browser-first, installable PWA. The route-by-route migration
+off Ionic finished with the Profil rebuild (#699): no screen imports it and the
+dependency is gone. AG Grid is not used.
 
 The Tailwind v4 and shadcn Base UI/Nova foundation is installed. Add shared UI
-through `src/components/ui/` and use shadcn for all new work. Keep the Ionic
-bootstrap and CSS until the remaining routes have equivalent shadcn screens.
+through `src/components/ui/` and use shadcn for all new work.
 
 Use Node.js 24 or newer—the frontend and its test tooling are developed and
 verified on Node 24, matching GitHub Actions.
@@ -55,7 +54,7 @@ app/
 ├── index.html              # <html lang="ro">, Montserrat, no-flash theme script
 ├── public/icon.png         # OSUBB mark (favicon)
 └── src/
-    ├── main.tsx            # bootstrap: Ionic CSS, our theme, AuthProvider
+    ├── main.tsx            # bootstrap: our theme, AuthProvider
     ├── App.tsx             # routes + the session and capability guards
     ├── vite-env.d.ts
     ├── assets/brand/       # OSUBB mark + wordmark, light/dark (own README)
@@ -115,7 +114,7 @@ app/
     ├── theme/
     │   ├── tokens.css       # Brand Book palette; originated as a copy of mockup/css/tokens.css,
     │   │                    # forked since — check both before assuming they still match
-    │   ├── global.css       # maps those tokens onto Ionic's --ion-* variables
+    │   ├── global.css       # element defaults (inherited from Ionic's base CSS, #699)
     │   ├── auth-screens.css # the card the three pre-app screens share
     │   ├── shell.css        # the app frame, lifted from mockup/css/layout.css
     │   ├── screens.css      # cards, query states, the two lists
@@ -218,6 +217,4 @@ can actually use, instead of an app that is silently empty.
   Vite quietly move to the next free port would produce a sign-in that fails for
   a reason nothing on screen explains. Better to be told the port is busy.
 - **Routing uses `react-router` 7.18.2 directly.** The app uses declarative
-  `BrowserRouter` routing and keeps the remaining Ionic screens working without
-  the `@ionic/react-router` compatibility wrapper while they are migrated to
-  shadcn (ADR-0002). `npm audit` has no router advisories at this version.
+  `BrowserRouter` routing (ADR-0002). `npm audit` has no router advisories at this version.

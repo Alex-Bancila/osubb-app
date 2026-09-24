@@ -160,6 +160,19 @@ it.each([
   expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
 });
 
+/* Every reason #675's `private.guard_profile_nickname` raises (23514). */
+it.each([
+  'nickname_too_short',
+  'nickname_too_long',
+  'nickname_invalid',
+  'nickname_taken',
+])('has Romanian copy for the Nickname reason %s', (reason) => {
+  const copy = reasonCopy(reason);
+  expect(copy).toBeDefined();
+  expect(copy).toMatch(/^Pseudonimul /);
+  expect(commandReason({ code: '23514', message: reason })).toBe(reason);
+});
+
 it('describes a failure for a form: the reason and the copy', () => {
   expect(
     describeFailure({ code: 'PT400', message: 'title_too_long' }, 'fallback'),

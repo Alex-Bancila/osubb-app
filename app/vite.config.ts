@@ -42,9 +42,8 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    /* A budget, not a moving target. supabase-js, the router and the Ionic
-       wrappers that ADR-0002 retires route by route are ~1.6 MB raw (~355 kB
-       gzipped) before we write a real screen, so Vite's 500 kB default fires on
+    /* A budget, not a moving target. supabase-js, the router and the UI kit
+       were ~1.6 MB raw (~355 kB gzipped) before we wrote a real screen, so Vite's 500 kB default fires on
        every build and stops meaning anything. 2 MB (~450 kB gzipped) is roughly what we are willing to send a
        member on mobile data for a first visit.
 
