@@ -245,8 +245,14 @@ export function GroupSettingsTab({
       name,
       managerTitle,
       acceptsApplications: accepts,
-      applicationLevel:
-        accepts && applicationLevel !== '' ? Number(applicationLevel) : null,
+      // '' is "Ca nivelul minim al grupului": send the Minimum Level chosen
+      // in this same save (#731), not null -- update_group refuses a null
+      // level while Applications are on.
+      applicationLevel: accepts
+        ? applicationLevel === ''
+          ? chosenMinLevel
+          : Number(applicationLevel)
+        : null,
       sharedWorkVisibility: shared,
       minLevel: chosenMinLevel,
     },
