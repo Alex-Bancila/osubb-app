@@ -2983,6 +2983,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      announcement_readers: {
+        Args: { p_announcement_id: number }
+        Returns: {
+          member_id: string
+          read_at: string
+        }[]
+      }
       apply_to_group: {
         Args: { p_group_id: number; p_note?: string }
         Returns: {
@@ -3820,6 +3827,7 @@ export type Database = {
           task_id: number
         }[]
       }
+      my_unread_announcements_count: { Args: never; Returns: number }
       pending_request_decisions: {
         Args: never
         Returns: {
