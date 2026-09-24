@@ -1,4 +1,5 @@
 import {
+  skipToken,
   useMutation,
   useQuery,
   useQueryClient,
@@ -147,11 +148,40 @@ export function eventRsvpMutationOptions(queryClient: QueryClient) {
   return {
     mutationFn: setEventRsvp,
     onSuccess: async (rsvp: EventRsvp) => {
-      await queryClient.invalidateQueries({
-        queryKey: keys.events.rsvp(rsvp.eventId, rsvp.memberId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: keys.events.rsvp(rsvp.eventId, rsvp.memberId),
+        }),
+        // An Other OSUBB Event answered "Vin" moves into colour (#692).
+        queryClient.invalidateQueries({
+          queryKey: keys.events.going(rsvp.memberId),
+        }),
+      ]);
     },
   } as const;
+}
+
+/**
+ * The ids of the Events this member answered "Vin" (`going`) to, in one read
+ * for the whole Calendar rather than one per chip. Explicitly self-filtered:
+ * a manager may read other members' answers through RLS.
+ */
+export async function fetchGoingEventIds(memberId: string): Promise<number[]> {
+  const { data, error } = await supabase
+    .from('event_attendance')
+    .select('event_id')
+    .eq('member_id', memberId)
+    .eq('status', 'going');
+  if (error) throw error;
+  return (data ?? []).map((row) => row.event_id);
+}
+
+export function useGoingEventIds() {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.events.going(memberId ?? ''),
+    queryFn: memberId ? () => fetchGoingEventIds(memberId) : skipToken,
+  });
 }
 
 export function useSetEventRsvp() {
