@@ -1,7 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: api }));
-import { changeCampaign, fetchCampaigns } from './campaigns';
+import {
+  changeCampaign,
+  fetchCampaignReport,
+  fetchCampaigns,
+} from './campaigns';
 beforeEach(() => api.rpc.mockResolvedValue({ data: { id: 10 }, error: null }));
 it('uses only the three Campaign commands and trims names', async () => {
   await changeCampaign({ kind: 'create', groupId: 2, name: ' Campanie ' });
@@ -74,4 +78,33 @@ it('normalizes stable Campaign reasons independently of status code', async () =
   await expect(
     changeCampaign({ kind: 'active', id: 10, active: true }),
   ).rejects.toThrow('Nu am putut salva campania');
+});
+
+it('dates both report reads with the same range, and sends no bound unset', async () => {
+  api.rpc.mockResolvedValue({ data: [], error: null });
+  const range = {
+    p_from: '2026-08-31T21:00:00.000Z',
+    p_to: '2026-09-30T21:00:00.000Z',
+  };
+  await fetchCampaignReport(10, range);
+  expect(api.rpc).toHaveBeenCalledWith('campaign_totals', {
+    p_campaign_id: 10,
+    ...range,
+  });
+  expect(api.rpc).toHaveBeenCalledWith('campaign_report', {
+    p_campaign_id: 10,
+    ...range,
+  });
+  api.rpc.mockClear();
+  await fetchCampaignReport(10, { p_from: range.p_from });
+  expect(api.rpc).toHaveBeenCalledWith('campaign_totals', {
+    p_campaign_id: 10,
+    p_from: range.p_from,
+  });
+  api.rpc.mockClear();
+  await fetchCampaignReport(10);
+  expect(api.rpc).toHaveBeenCalledWith('campaign_report', {
+    p_campaign_id: 10,
+  });
+  expect(api.rpc).toHaveBeenCalledTimes(2);
 });

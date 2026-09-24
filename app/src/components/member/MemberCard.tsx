@@ -249,7 +249,7 @@ function CardSections({
               )}
             >
               <HistoryIcon aria-hidden="true" />
-              Vezi istoricul taskurilor
+              Vezi trackerul
             </Link>
           )}
           {manageRoles && (
