@@ -1,5 +1,8 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../ui/button';
+import { FieldError } from '../ui/field';
+import { evaluationSchema, fieldForReason } from '../../lib/schemas/evaluation';
+import { useFormValidation } from '../../lib/use-form-validation';
 import { useEvaluationScale } from '../../queries/reference';
 import { formatPoints } from '../../lib/format';
 import { RatingGuideDialog } from '../../screens/tracker/RatingGuideDialog';
@@ -31,7 +34,11 @@ export function EvaluationFields({
   const [difficulty, setDifficulty] = useState('');
   const [rating, setRating] = useState('');
   const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const form = useFormValidation(
+    evaluationSchema,
+    { difficulty, rating, note },
+    fieldForReason,
+  );
   const submitting = useRef(false);
   const chosen = scale.data?.ratings.find(
     (row) => row.rating === Number(rating),
@@ -41,25 +48,14 @@ export function EvaluationFields({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (submitting.current) return;
-    if (!difficulty || !rating || !note.trim() || !chosen) {
-      setError('Alege Dificultatea, Calificativul și scrie o notă.');
-      return;
-    }
+    const values = form.validate();
+    if (!values) return;
     submitting.current = true;
-    setError(null);
     try {
-      await onEvaluate({
-        difficulty: Number(difficulty),
-        rating: Number(rating),
-        note: note.trim(),
-      });
+      await onEvaluate(values);
       onSuccess();
     } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'Nu am putut salva evaluarea.',
-      );
+      form.fail(failure, 'Nu am putut salva evaluarea. Încearcă din nou.');
     } finally {
       submitting.current = false;
     }
@@ -122,6 +118,7 @@ export function EvaluationFields({
           value={difficulty}
           onChange={(event) => setDifficulty(event.target.value)}
           className="min-h-11 w-full rounded-md border border-input bg-background px-3"
+          {...form.field('difficulty')}
         >
           <option value="">Alege dificultatea</option>
           {scale.data?.difficulties.map((row) => (
@@ -130,6 +127,7 @@ export function EvaluationFields({
             </option>
           ))}
         </select>
+        <FieldError {...form.errorProps('difficulty')} />
         <label htmlFor={`${id}-rating`} className="block text-sm font-medium">
           Calificativ (obligatoriu)
         </label>
@@ -139,6 +137,7 @@ export function EvaluationFields({
           value={rating}
           onChange={(event) => setRating(event.target.value)}
           className="min-h-11 w-full rounded-md border border-input bg-background px-3"
+          {...form.field('rating')}
         >
           <option value="">Alege calificativul</option>
           {scale.data?.ratings.map((row) => (
@@ -147,6 +146,7 @@ export function EvaluationFields({
             </option>
           ))}
         </select>
+        <FieldError {...form.errorProps('rating')} />
         <p role="status" className="rounded-md bg-muted p-3 text-sm">
           {points === null
             ? 'Alege dificultatea și calificativul pentru previzualizare.'
@@ -162,13 +162,11 @@ export function EvaluationFields({
           onChange={(event) => setNote(event.target.value)}
           rows={3}
           className="min-h-24 w-full rounded-md border border-input bg-background p-3"
+          {...form.field('note')}
         />
+        <FieldError {...form.errorProps('note')} />
       </fieldset>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError>{form.formError}</FieldError>
       <div className="flex flex-wrap gap-2">
         <Button
           type="submit"

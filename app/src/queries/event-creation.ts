@@ -127,42 +127,6 @@ export async function createEvent(draft: EventDraft) {
   return data;
 }
 
-const commandMessages = new Map<string, string>([
-  ['invalid_event_title', 'Scrie titlul evenimentului.'],
-  ['invalid_event_type', 'Alege un tip de eveniment valid.'],
-  [
-    'invalid_event_interval',
-    'Verifică orele: încheierea trebuie să fie după început.',
-  ],
-  [
-    'invalid_event_capacity',
-    'Capacitatea trebuie să fie un număr întreg pozitiv.',
-  ],
-  ['invalid_event_min_level', 'Alege un nivel minim valid.'],
-  ['event_group_required', 'Alege grupul evenimentului.'],
-  [
-    'calendar_manage_forbidden',
-    'Nu mai ai permisiunea să creezi evenimente în acest grup. Reîncarcă pagina și încearcă din nou.',
-  ],
-  [
-    'event_min_level_below_group',
-    'Nivelul ales este sub nivelul minim al grupului.',
-  ],
-  [
-    'event_min_level_above_actor',
-    'Nu poți alege un nivel minim peste nivelul tău.',
-  ],
-]);
-
-export function eventCreationErrorMessage(error: unknown): string {
-  const fallback = 'Nu am putut crea evenimentul. Reîncearcă.';
-  const reason =
-    typeof error === 'object' && error !== null && 'message' in error
-      ? String(error.message)
-      : '';
-  return commandMessages.get(reason) ?? fallback;
-}
-
 export function createEventMutationOptions(client: QueryClient) {
   return {
     mutationFn: createEvent,

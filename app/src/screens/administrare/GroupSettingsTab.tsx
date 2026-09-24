@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -9,11 +10,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import {
+  fieldForReason,
+  groupSettingsSchema,
+  groupStructureSchema,
+} from '../../lib/schemas/group';
+import { useFormValidation } from '../../lib/use-form-validation';
 import type {
   AdminGroup,
   GroupAuthority,
-  GroupCommand,
   RosterEntry,
+  RunGroupCommand,
 } from '../../queries/groups-admin';
 import {
   GROUP_CATEGORIES,
@@ -23,6 +30,7 @@ import {
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+const SAVE_FAILED = 'Nu am putut salva schimbarea. Reîncearcă.';
 
 function Check({
   label,
@@ -187,7 +195,7 @@ export function GroupSettingsTab({
   error: string | null;
   /** The server's last refusal reason, so a stale form re-asks (R23). */
   lastReason: string | undefined;
-  onRun: (command: GroupCommand) => Promise<boolean>;
+  onRun: RunGroupCommand;
 }) {
   const [name, setName] = useState(group.name);
   const [managerTitle, setManagerTitle] = useState(group.manager_title ?? '');
@@ -229,42 +237,67 @@ export function GroupSettingsTab({
   const needsConfirmation =
     chosenMinLevel > group.min_level && leaving.length > 0;
 
-  async function saveSettings(event: FormEvent) {
-    event.preventDefault();
-    if (needsConfirmation && !confirmed) {
-      setConfirmed(true);
-      return;
-    }
-    const saved = await onRun({
-      kind: 'settings',
-      groupId: group.id,
+  // Ruling R8: each form checks its fields on blur and on save, and a refusal
+  // lands under the field it names.
+  const settingsForm = useFormValidation(
+    groupSettingsSchema,
+    {
       name,
-      managerTitle: managerTitle,
+      managerTitle,
       acceptsApplications: accepts,
       applicationLevel:
         accepts && applicationLevel !== '' ? Number(applicationLevel) : null,
       sharedWorkVisibility: shared,
       minLevel: chosenMinLevel,
-      confirmRemovals: needsConfirmation,
-    });
+    },
+    fieldForReason,
+  );
+  const structureForm = useFormValidation(
+    groupStructureSchema,
+    { color, short },
+    fieldForReason,
+  );
+
+  async function saveSettings(event: FormEvent) {
+    event.preventDefault();
+    const values = settingsForm.validate();
+    if (!values) return;
+    if (needsConfirmation && !confirmed) {
+      setConfirmed(true);
+      return;
+    }
+    const saved = await onRun(
+      {
+        kind: 'settings',
+        groupId: group.id,
+        ...values,
+        confirmRemovals: needsConfirmation,
+      },
+      (failure) => settingsForm.fail(failure, SAVE_FAILED),
+    );
     if (saved) setConfirmed(false);
   }
 
   async function saveStructure(event: FormEvent) {
     event.preventDefault();
-    await onRun({
-      kind: 'structure',
-      groupId: group.id,
-      category,
-      competesInCup: competes,
-      countsTowardParentCup: countsToward,
-      automaticMembership: automatic,
-      minLevel: root ? Number(structureMinLevel) : group.min_level,
-      color: color || null,
-      short: short || null,
-      isOrganization,
-      confirmRemovals: false,
-    });
+    const values = structureForm.validate();
+    if (!values) return;
+    await onRun(
+      {
+        kind: 'structure',
+        groupId: group.id,
+        category,
+        competesInCup: competes,
+        countsTowardParentCup: countsToward,
+        automaticMembership: automatic,
+        minLevel: root ? Number(structureMinLevel) : group.min_level,
+        color: values.color,
+        short: values.short,
+        isOrganization,
+        confirmRemovals: false,
+      },
+      (failure) => structureForm.fail(failure, SAVE_FAILED),
+    );
   }
 
   if (!authority.manageGroup && !authority.editStructure)
@@ -277,34 +310,41 @@ export function GroupSettingsTab({
   return (
     <div className="space-y-8">
       {authority.manageGroup && (
-        <form onSubmit={saveSettings} className="max-w-xl space-y-4">
+        <form onSubmit={saveSettings} noValidate className="max-w-xl space-y-4">
           <h3 className="text-lg font-semibold">Setările grupului</h3>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Numele grupului</span>
-            <input
-              className={control}
-              value={name}
-              required
-              maxLength={120}
-              disabled={busy}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">Numele grupului</span>
+              <input
+                className={control}
+                value={name}
+                required
+                disabled={busy}
+                onChange={(event) => setName(event.target.value)}
+                {...settingsForm.field('name')}
+              />
+            </label>
+            <FieldError {...settingsForm.errorProps('name')} />
+          </div>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">
-              Cum se numește coordonatorul
-            </span>
-            <input
-              className={control}
-              value={managerTitle}
-              maxLength={80}
-              placeholder="BCE, Coordonator Principal…"
-              disabled={busy}
-              onChange={(event) => setManagerTitle(event.target.value)}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">
+                Cum se numește coordonatorul
+              </span>
+              <input
+                className={control}
+                value={managerTitle}
+                maxLength={80}
+                placeholder="BCE, Coordonator Principal…"
+                disabled={busy}
+                onChange={(event) => setManagerTitle(event.target.value)}
+                {...settingsForm.field('managerTitle')}
+              />
+            </label>
+            <FieldError {...settingsForm.errorProps('managerTitle')} />
+          </div>
 
           <Check
             label="Primește cereri de înscriere"
@@ -315,27 +355,31 @@ export function GroupSettingsTab({
           />
 
           {accepts && (
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">
-                Nivelul de la care se poate cere înscrierea
-              </span>
-              <select
-                className={control}
-                value={applicationLevel}
-                disabled={busy}
-                onChange={(event) => setApplicationLevel(event.target.value)}
-              >
-                <option value="">Ca nivelul minim al grupului</option>
-                {levels
-                  .filter((level) => level >= chosenMinLevel)
-                  .sort((left, right) => left - right)
-                  .map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-              </select>
-            </label>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">
+                  Nivelul de la care se poate cere înscrierea
+                </span>
+                <select
+                  className={control}
+                  value={applicationLevel}
+                  disabled={busy}
+                  onChange={(event) => setApplicationLevel(event.target.value)}
+                  {...settingsForm.field('applicationLevel')}
+                >
+                  <option value="">Ca nivelul minim al grupului</option>
+                  {levels
+                    .filter((level) => level >= chosenMinLevel)
+                    .sort((left, right) => left - right)
+                    .map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <FieldError {...settingsForm.errorProps('applicationLevel')} />
+            </div>
           )}
 
           <Check
@@ -355,6 +399,7 @@ export function GroupSettingsTab({
                 setMinLevel(event.target.value);
                 setConfirmed(false);
               }}
+              {...settingsForm.field('minLevel')}
             >
               {[...new Set([group.min_level, ...choices])]
                 .sort((left, right) => left - right)
@@ -371,10 +416,12 @@ export function GroupSettingsTab({
               </span>
             )}
           </label>
+          <FieldError {...settingsForm.errorProps('minLevel')} />
 
           {needsConfirmation && (
             <RemovalPreview leaving={leaving} minLevel={chosenMinLevel} />
           )}
+          <FieldError>{settingsForm.formError}</FieldError>
 
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={busy}>
@@ -389,7 +436,11 @@ export function GroupSettingsTab({
       )}
 
       {authority.editStructure && (
-        <form onSubmit={saveStructure} className="max-w-xl space-y-4">
+        <form
+          onSubmit={saveStructure}
+          noValidate
+          className="max-w-xl space-y-4"
+        >
           <h3 className="text-lg font-semibold">Structura grupului</h3>
 
           <label className="grid gap-1.5">
@@ -464,27 +515,36 @@ export function GroupSettingsTab({
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Prescurtare</span>
-              <input
-                className={control}
-                value={short}
-                maxLength={16}
-                disabled={busy}
-                onChange={(event) => setShort(event.target.value)}
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Culoare</span>
-              <input
-                className={control}
-                value={color}
-                placeholder="#C8102E"
-                disabled={busy}
-                onChange={(event) => setColor(event.target.value)}
-              />
-            </label>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">Prescurtare</span>
+                <input
+                  className={control}
+                  value={short}
+                  maxLength={16}
+                  disabled={busy}
+                  onChange={(event) => setShort(event.target.value)}
+                  {...structureForm.field('short')}
+                />
+              </label>
+              <FieldError {...structureForm.errorProps('short')} />
+            </div>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">Culoare</span>
+                <input
+                  className={control}
+                  value={color}
+                  placeholder="#C8102E"
+                  disabled={busy}
+                  onChange={(event) => setColor(event.target.value)}
+                  {...structureForm.field('color')}
+                />
+              </label>
+              <FieldError {...structureForm.errorProps('color')} />
+            </div>
           </div>
+          <FieldError>{structureForm.formError}</FieldError>
 
           <Button type="submit" variant="outline" disabled={busy}>
             Salvează structura

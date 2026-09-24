@@ -81,7 +81,7 @@ async function content() {
     '  Pregătește afișele  ',
   );
   fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2026-10-01T12:30' },
+    target: { value: '2030-10-01T12:30' },
   });
   return user;
 }
@@ -131,7 +131,7 @@ it('picks the Origin from a searchable Group list showing each parent, and emits
   expect(onDraft).toHaveBeenCalledWith({
     title: 'Pregătește afișele',
     description: null,
-    deadline: '2026-10-01T09:30:00.000Z',
+    deadline: '2030-10-01T09:30:00.000Z',
     groupId: 3,
     kind: 'task',
     parentTaskId: null,
@@ -259,11 +259,13 @@ it('blocks invalid deadlines and a parent removed by a refreshed read', async ()
     <TaskForm options={options} onDraft={onDraft} parentTaskId={30} />,
   );
   const user = await content();
-  fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2027-03-28T03:30' },
-  });
+  const deadline = screen.getByLabelText(/Termen/);
+  fireEvent.change(deadline, { target: { value: '2027-03-28T03:30' } });
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
-  expect(screen.getByRole('alert')).toHaveTextContent('termen valid');
+  expect(deadline).toHaveAccessibleDescription(
+    'Alege un termen valid, în ora României.',
+  );
+  fireEvent.change(deadline, { target: { value: '2030-10-01T12:30' } });
   view.rerender(
     <TaskForm
       options={{ ...options, umbrellas: [] }}
@@ -272,10 +274,101 @@ it('blocks invalid deadlines and a parent removed by a refreshed read', async ()
     />,
   );
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
-  expect(screen.getByRole('alert')).toHaveTextContent(
-    'task-umbrelă disponibil',
-  );
+  expect(
+    screen.getByText(
+      'Taskul-umbrelă nu mai este disponibil. Alege alt părinte.',
+    ),
+  ).toHaveAttribute('role', 'alert');
   expect(onDraft).not.toHaveBeenCalled();
+});
+it('checks a field when it loses focus, without disabling anything first', async () => {
+  const onDraft = vi.fn();
+  render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = userEvent.setup();
+  const title = screen.getByLabelText('Titlu (obligatoriu)');
+  // Nothing is judged, and nothing disabled, before the member tries.
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Continuă' })).toBeEnabled();
+  await user.type(title, 'ab');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  await user.tab();
+  expect(title).toHaveAttribute('aria-invalid', 'true');
+  expect(title).toHaveAccessibleDescription(
+    'Titlul are cel puțin 3 caractere.',
+  );
+  // Editing hides the verdict on the old value; the next blur judges again.
+  await user.type(title, 'c');
+  expect(title).not.toHaveAttribute('aria-invalid');
+  await user.tab();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+it('checks the whole draft on submit, focuses the first broken field and never sends 121 characters', async () => {
+  const onDraft = vi.fn();
+  const { container } = render(
+    <TaskForm options={options} onDraft={onDraft} />,
+  );
+  const user = userEvent.setup();
+  const title = screen.getByLabelText('Titlu (obligatoriu)');
+  fireEvent.change(title, { target: { value: 't'.repeat(121) } });
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).not.toHaveBeenCalled();
+  // Every rule broken, each under its own field; the first one has focus.
+  expect(
+    screen.getByText('Alege exact un grup de origine.'),
+  ).toBeInTheDocument();
+  expect(title).toHaveAccessibleDescription(
+    'Titlul are cel mult 120 de caractere.',
+  );
+  expect(screen.getByLabelText(/Termen/)).toHaveAccessibleDescription(
+    'Alege termenul taskului.',
+  );
+  expect(groupBox()).toHaveFocus();
+  expect((await axe.run(container)).violations).toEqual([]);
+
+  fireEvent.change(title, { target: { value: '  Titlu  ' } });
+  fireEvent.change(screen.getByLabelText(/Termen/), {
+    target: { value: '2030-10-01T12:30' },
+  });
+  await pick(user, groupBox(), 'Tineret');
+  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  expect(onDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ title: 'Titlu', groupId: 4 }),
+  );
+});
+it('puts a server refusal under the field it names, and the rest above the button', async () => {
+  const onDraft = vi
+    .fn()
+    .mockRejectedValueOnce({
+      code: 'PT400',
+      message: 'title_too_long',
+      details: 'private SQL',
+    })
+    .mockRejectedValueOnce({ code: '42501', message: 'task_manage_forbidden' });
+  render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = await content();
+  await pick(user, groupBox(), 'Tineret');
+  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  const title = screen.getByLabelText('Titlu (obligatoriu)');
+  await waitFor(() =>
+    expect(title).toHaveAccessibleDescription(
+      'Titlul are cel mult 120 de caractere.',
+    ),
+  );
+  expect(title).toHaveFocus();
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Titlul are cel mult 120 de caractere.',
+  );
+  expect(screen.queryByText(/private|title_too_long/)).not.toBeInTheDocument();
+  // A reason that names no field lands in the form-level slot.
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Nu mai ai permisiunea să gestionezi taskurile acestui grup.',
+    ),
+  );
+  expect(title).not.toHaveAttribute('aria-invalid');
 });
 it('explains when the caller has no managed Groups', () => {
   render(

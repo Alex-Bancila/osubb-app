@@ -89,9 +89,12 @@ it('requires a rejection note, calls rejection only, and has no axe violations',
   const user = userEvent.setup();
   const { container } = render(<RequestDecisionQueue />);
   await user.click(screen.getByRole('button', { name: 'Respinge' }));
+  // Nothing is disabled before the first try; the rule shows under the field.
+  await user.click(screen.getByRole('button', { name: 'Respinge cererea' }));
   expect(
-    screen.getByRole('button', { name: 'Respinge cererea' }),
-  ).toBeDisabled();
+    screen.getByLabelText('Motivul respingerii (obligatoriu)'),
+  ).toHaveAccessibleDescription('Scrie o notă.');
+  expect(state.mutate).not.toHaveBeenCalled();
   await user.type(
     screen.getByLabelText('Motivul respingerii (obligatoriu)'),
     'Mai sunt necesare detalii',

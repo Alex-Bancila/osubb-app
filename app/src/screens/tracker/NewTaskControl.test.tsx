@@ -73,7 +73,7 @@ async function pickOrigin(user: ReturnType<typeof userEvent.setup>) {
 async function fillContent(
   user: ReturnType<typeof userEvent.setup>,
   title: string,
-  deadline: string | null = '2026-10-01T12:30',
+  deadline: string | null = '2030-10-01T12:30',
 ) {
   await user.type(screen.getByLabelText('Titlu (obligatoriu)'), title);
   if (deadline)

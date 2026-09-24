@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Sheet,
   SheetBackdrop,
@@ -10,6 +11,11 @@ import {
 } from '../../components/ui/sheet';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
+import {
+  announcementSchema,
+  fieldForReason,
+} from '../../lib/schemas/announcement';
+import { useFormValidation } from '../../lib/use-form-validation';
 import { useCreateAnnouncement } from '../../queries/announcements';
 import { useMyGroupRoles } from '../../queries/my-groups';
 import { useGroups } from '../../queries/reference';
@@ -28,8 +34,23 @@ export default function AnnouncementComposeSheet() {
   const [open, setOpen] = useState(false);
   const [originId, setOriginId] = useState('');
   const [audience, setAudience] = useState<'local' | 'org'>('local');
-  const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [linkLabel, setLinkLabel] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
   const [published, setPublished] = useState(false);
+  // Ruling R8: the same limits `announcements_guard_text` enforces, checked
+  // on blur and on publish; the guard's 23514 reason lands under its field.
+  const form = useFormValidation(
+    announcementSchema,
+    {
+      title,
+      body,
+      groupId: originId ? Number(originId) : null,
+      link: { label: linkLabel, url: linkUrl },
+    },
+    fieldForReason,
+  );
   const origins = announcementOrigins(
     [...(groups.data?.values() ?? [])],
     myGroups.data ?? [],
@@ -38,59 +59,49 @@ export default function AnnouncementComposeSheet() {
 
   if (capabilities.data?.managesAnyGroup !== true) return null;
 
+  function clear() {
+    setOriginId('');
+    setAudience('local');
+    setTitle('');
+    setBody('');
+    setLinkLabel('');
+    setLinkUrl('');
+    form.reset();
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    const form = new FormData(event.currentTarget);
-    const title = String(form.get('title') ?? '').trim();
-    const body = String(form.get('body') ?? '').trim();
-    if (!title || !body) {
-      setError('Completează titlul și mesajul anunțului.');
-      return;
-    }
-    const selected = origins.find((group) => group.id === Number(originId));
+    const values = form.validate();
+    if (!values) return;
+    const selected = origins.find((group) => group.id === values.groupId);
     if (!selected || !session?.user.id) {
-      setError('Alege un grup din lista disponibilă.');
+      form.fail(
+        { message: 'announcement_group_required' },
+        'Alege un grup din lista disponibilă.',
+      );
       return;
     }
-    const label = String(form.get('form_label') ?? '').trim();
-    const url = String(form.get('form_url') ?? '').trim();
-    if (Boolean(label) !== Boolean(url)) {
-      setError('Completează atât numele, cât și adresa formularului.');
-      return;
-    }
-    if (url) {
-      try {
-        const parsed = new URL(url);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-          throw new Error('Invalid scheme');
-      } catch {
-        setError(
-          'Adresa formularului trebuie să fie un link http sau https valid.',
-        );
-        return;
-      }
-    }
+    const extra = new FormData(event.currentTarget);
     try {
       await create.mutateAsync({
-        title,
-        body,
+        title: values.title,
+        body: values.body,
         group_id: selected.id,
         audience,
-        priority: String(form.get('priority') ?? 'normal') as
+        priority: String(extra.get('priority') ?? 'normal') as
           'normal' | 'important' | 'critical',
-        pinned: form.get('pinned') === 'on',
-        form_label: label || null,
-        form_url: url || null,
+        pinned: extra.get('pinned') === 'on',
+        form_label: values.link.label,
+        form_url: values.link.url,
         created_by: session.user.id,
       });
       setPublished(true);
       setOpen(false);
-      setOriginId('');
-      setAudience('local');
+      clear();
     } catch (cause) {
       const code = (cause as { code?: string })?.code;
-      setError(
+      form.fail(
+        cause,
         code === '42501'
           ? 'Nu ai permisiunea să publici din acest grup. Alege un alt grup sau cere ajutor unui coordonator.'
           : 'Anunțul nu a putut fi publicat. Încearcă din nou.',
@@ -104,7 +115,7 @@ export default function AnnouncementComposeSheet() {
       onOpenChange={(next) => {
         if (create.isPending) return;
         setOpen(next);
-        if (!next) setError(null);
+        if (!next) clear();
       }}
     >
       <div className="space-y-1">
@@ -146,46 +157,65 @@ export default function AnnouncementComposeSheet() {
               Închide
             </Button>
           </div>
-          <form onSubmit={(event) => void submit(event)} className="space-y-4">
-            <label className={fieldClass}>
-              Titlu
-              <input
-                className={inputClass}
-                name="title"
-                required
-                maxLength={200}
-              />
-            </label>
-            <label className={fieldClass}>
-              Mesaj
-              <textarea
-                className={`${inputClass} min-h-24 resize-y`}
-                name="body"
-                required
-              />
-            </label>
-            <label className={fieldClass}>
-              Grup de origine
-              <select
-                className={inputClass}
-                value={originId}
-                onChange={(event) => setOriginId(event.target.value)}
-                required
-                disabled={
-                  myGroups.isPending ||
-                  myGroups.isError ||
-                  groups.isPending ||
-                  groups.isError
-                }
-              >
-                <option value="">Alege grupul</option>
-                {origins.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <form
+            onSubmit={(event) => void submit(event)}
+            noValidate
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <label className={fieldClass}>
+                Titlu
+                <input
+                  className={inputClass}
+                  name="title"
+                  required
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  {...form.field('title')}
+                />
+              </label>
+              <FieldError {...form.errorProps('title')} />
+            </div>
+            <div className="space-y-1.5">
+              <label className={fieldClass}>
+                Mesaj
+                <textarea
+                  className={`${inputClass} min-h-24 resize-y`}
+                  name="body"
+                  required
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  {...form.field('body')}
+                />
+              </label>
+              <FieldError {...form.errorProps('body')} />
+            </div>
+            <div className="space-y-1.5">
+              <label className={fieldClass}>
+                Grup de origine
+                <select
+                  className={inputClass}
+                  value={originId}
+                  onChange={(event) => setOriginId(event.target.value)}
+                  required
+                  disabled={
+                    myGroups.isPending ||
+                    myGroups.isError ||
+                    groups.isPending ||
+                    groups.isError
+                  }
+                  {...form.field('groupId')}
+                >
+                  <option value="">Alege grupul</option>
+                  {origins.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <FieldError {...form.errorProps('groupId')} />
+            </div>
             {(myGroups.isError || groups.isError) && (
               <p role="alert" className="text-sm text-destructive">
                 Nu am putut încărca grupurile. Încearcă din nou.
@@ -231,29 +261,36 @@ export default function AnnouncementComposeSheet() {
             </label>
             <div className="space-y-3 rounded-lg border p-3 sm:p-4">
               <p className="text-sm font-medium">Formular asociat (opțional)</p>
-              <label className={fieldClass}>
-                Nume formular
-                <input
-                  className={inputClass}
-                  name="form_label"
-                  maxLength={200}
-                />
-              </label>
-              <label className={fieldClass}>
-                Adresă formular
-                <input
-                  className={inputClass}
-                  name="form_url"
-                  type="url"
-                  placeholder="https://"
-                />
-              </label>
+              <div className="space-y-1.5">
+                <label className={fieldClass}>
+                  Nume formular
+                  <input
+                    className={inputClass}
+                    name="form_label"
+                    value={linkLabel}
+                    onChange={(event) => setLinkLabel(event.target.value)}
+                    {...form.field('link.label')}
+                  />
+                </label>
+                <FieldError {...form.errorProps('link.label')} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={fieldClass}>
+                  Adresă formular
+                  <input
+                    className={inputClass}
+                    name="form_url"
+                    type="url"
+                    placeholder="https://"
+                    value={linkUrl}
+                    onChange={(event) => setLinkUrl(event.target.value)}
+                    {...form.field('link.url')}
+                  />
+                </label>
+                <FieldError {...form.errorProps('link.url')} />
+              </div>
             </div>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
+            <FieldError>{form.formError}</FieldError>
             <Button
               type="submit"
               disabled={create.isPending || origins.length === 0}

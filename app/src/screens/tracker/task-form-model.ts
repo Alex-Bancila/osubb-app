@@ -1,5 +1,5 @@
-import { validateTaskDraft } from './task-draft-validation';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
+import type { TaskDraftInput } from '../../lib/schemas/task';
 
 export type ManagedWorkGroup = {
   id: number;
@@ -91,21 +91,17 @@ export function campaignsFor(
     : [];
 }
 
-export function taskDraft(
+/**
+ * What the form's values say, in the shape `taskDraftSchema` checks: the
+ * Origin a Subtask inherits, the deadline read in Romania (`''` when that
+ * wall-clock time does not exist), and no assignment fields on an Umbrella.
+ * Nothing is judged here; the schema does that.
+ */
+export function taskDraftInput(
   values: TaskFormValues,
   options: TaskFormOptions,
-): TaskDraft | string {
-  if (
-    values.kind === 'subtask' &&
-    !options.umbrellas.some((parent) => parent.id === values.parentTaskId)
-  )
-    return 'Alege un task-umbrelă disponibil.';
+): TaskDraftInput {
   const origin = originFor(values, options);
-  const deadline = values.deadline
-    ? bucharestWallTimeToIso(values.deadline)
-    : null;
-  if (values.deadline && !deadline)
-    return 'Alege un termen valid, în ora României.';
   const umbrella = values.kind === 'umbrella';
   // Send what the form shows: a Campaign that is no longer offered for this
   // Origin (the options were refreshed) is displayed as none, so it is none.
@@ -114,12 +110,14 @@ export function taskDraft(
   )
     ? values.campaignId
     : null;
-  const draft: TaskDraft = {
-    title: values.title.trim(),
-    description: values.description.trim() || null,
-    deadline,
-    groupId: origin?.id ?? 0,
-    kind: umbrella ? 'umbrella' : 'task',
+  return {
+    title: values.title,
+    description: values.description,
+    deadline: values.deadline
+      ? (bucharestWallTimeToIso(values.deadline) ?? '')
+      : null,
+    groupId: origin?.id ?? values.groupId ?? 0,
+    kind: values.kind,
     parentTaskId: values.kind === 'subtask' ? values.parentTaskId : null,
     audience: umbrella ? null : values.audience,
     assignmentMode: umbrella ? null : values.assignmentMode,
@@ -129,5 +127,4 @@ export function taskDraft(
         : null,
     campaignId: umbrella ? null : campaignId,
   };
-  return validateTaskDraft(draft, options) ?? draft;
 }

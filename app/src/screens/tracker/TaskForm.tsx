@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Combobox,
   ComboboxContent,
@@ -17,13 +18,15 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from '../../components/ui/radio-group';
+import { fieldForReason, taskDraftSchema } from '../../lib/schemas/task';
+import { useFormValidation } from '../../lib/use-form-validation';
 import { DirectExecutorSelector } from './DirectExecutorSelector';
 import {
   campaignsFor,
   groupLookup,
   groupOptions,
   originFor,
-  taskDraft,
+  taskDraftInput,
   umbrellasFor,
   type ManagedWorkGroup,
   type TaskDraft,
@@ -55,7 +58,11 @@ const KINDS: {
   },
 ];
 
-/** Draft-only form; its caller owns the eventual atomic create command. */
+/**
+ * Draft-only form; its caller owns the eventual atomic create command. When
+ * that command refuses, `onDraft` rejects and the reason lands under the
+ * field it belongs to (ruling R8).
+ */
 export function TaskForm({
   options,
   onDraft,
@@ -65,7 +72,7 @@ export function TaskForm({
   submitLabel = 'Continuă',
 }: {
   options: TaskFormOptions;
-  onDraft: (draft: TaskDraft) => void;
+  onDraft: (draft: TaskDraft) => void | Promise<void>;
   parentTaskId?: number | null;
   /** False where a Subtask cannot be started (it is created from its Umbrella). */
   allowSubtask?: boolean;
@@ -86,7 +93,12 @@ export function TaskForm({
     executorId: null,
     campaignId: null,
   });
-  const [error, setError] = useState<string | null>(null);
+  const schema = useMemo(() => taskDraftSchema(options), [options]);
+  const form = useFormValidation(
+    schema,
+    taskDraftInput(values, options),
+    fieldForReason,
+  );
   const groupsById = useMemo(() => groupLookup(options), [options]);
   const groups = useMemo(() => groupOptions(options.groups), [options.groups]);
   const origin = originFor(values, options);
@@ -102,7 +114,6 @@ export function TaskForm({
     'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
   function update(patch: Partial<TaskFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
-    setError(null);
   }
   function chooseGroup(group: ManagedWorkGroup | null) {
     const groupId = group?.id ?? null;
@@ -122,15 +133,15 @@ export function TaskForm({
       executorId: next?.group_id === origin?.id ? values.executorId : null,
     });
   }
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const draft = taskDraft(values, options);
-    if (typeof draft === 'string') {
-      setError(draft);
-      return;
+    const draft = form.validate();
+    if (!draft) return;
+    try {
+      await onDraft(draft);
+    } catch (failure) {
+      form.fail(failure, 'Nu am putut pregăti taskul. Încearcă din nou.');
     }
-    setError(null);
-    onDraft(draft);
   }
   if (!options.groups.length)
     return <p>Nu ai grupuri în care poți pregăti taskuri.</p>;
@@ -146,7 +157,7 @@ export function TaskForm({
       className="space-y-5"
     >
       {heading && <h2 className="text-xl font-semibold">{heading}</h2>}
-      <div className="grid gap-2">
+      <div className="grid gap-2" {...form.slot('kind')}>
         <span id={`${id}-kind`} className="text-sm font-medium">
           Ce fel de task?
         </span>
@@ -191,8 +202,9 @@ export function TaskForm({
             </RadioCard>
           ))}
         </RadioGroup>
+        <FieldError {...form.errorProps('kind')} />
       </div>
-      <div className="grid gap-1.5">
+      <div className="grid gap-1.5" {...form.slot('groupId')}>
         <span id={`${id}-group`} className="text-sm font-medium">
           Grup de origine (obligatoriu)
         </span>
@@ -230,6 +242,7 @@ export function TaskForm({
             </ComboboxList>
           </ComboboxContent>
         </Combobox>
+        <FieldError {...form.errorProps('groupId')} />
         {subtask && (
           <p className="text-sm text-muted-foreground">
             Un subtask rămâne în grupul taskului-umbrelă.
@@ -237,7 +250,7 @@ export function TaskForm({
         )}
       </div>
       {subtask && (
-        <div className="grid gap-1.5">
+        <div className="grid gap-1.5" {...form.slot('parentTaskId')}>
           <span id={`${id}-parent`} className="text-sm font-medium">
             Task-umbrelă (obligatoriu)
           </span>
@@ -279,6 +292,7 @@ export function TaskForm({
               </ComboboxList>
             </ComboboxContent>
           </Combobox>
+          <FieldError {...form.errorProps('parentTaskId')} />
           {!parents.length && (
             <p className="text-sm text-muted-foreground">
               {origin
@@ -298,7 +312,9 @@ export function TaskForm({
           required
           value={values.title}
           onChange={(event) => update({ title: event.target.value })}
+          {...form.field('title')}
         />
+        <FieldError {...form.errorProps('title')} />
       </div>
       <div>
         <label htmlFor={`${id}-description`} className="text-sm font-medium">
@@ -310,7 +326,9 @@ export function TaskForm({
           rows={4}
           value={values.description}
           onChange={(event) => update({ description: event.target.value })}
+          {...form.field('description')}
         />
+        <FieldError {...form.errorProps('description')} />
       </div>
       <div>
         <label htmlFor={`${id}-deadline`} className="text-sm font-medium">
@@ -323,7 +341,9 @@ export function TaskForm({
           required={!umbrella}
           value={values.deadline}
           onChange={(event) => update({ deadline: event.target.value })}
+          {...form.field('deadline')}
         />
+        <FieldError {...form.errorProps('deadline')} />
       </div>
       {!umbrella && (
         <>
@@ -342,12 +362,14 @@ export function TaskForm({
                   executorId: null,
                 })
               }
+              {...form.field('assignmentMode')}
             >
               <option value="direct">Direct</option>
               <option value="public">
                 Public — înscriere prin lista de candidați
               </option>
             </select>
+            <FieldError {...form.errorProps('assignmentMode')} />
           </div>
           <div>
             <label htmlFor={`${id}-audience`} className="text-sm font-medium">
@@ -362,21 +384,24 @@ export function TaskForm({
                   audience: event.target.value === 'org' ? 'org' : 'local',
                 })
               }
+              {...form.field('audience')}
             >
               <option value="local">Membrii grupului de origine</option>
               <option value="org">Toți membrii eligibili OSUBB</option>
             </select>
+            <FieldError {...form.errorProps('audience')} />
             <p className="text-sm text-muted-foreground">
               Cine se poate înscrie când taskul este public.
             </p>
           </div>
           {values.assignmentMode === 'direct' && origin && (
-            <div className="grid gap-1.5">
+            <div className="grid gap-1.5" {...form.slot('executorId')}>
               <DirectExecutorSelector
                 originGroupId={origin.id}
                 value={values.executorId}
                 onChange={(executorId) => update({ executorId })}
               />
+              <FieldError {...form.errorProps('executorId')} />
               <p className="text-sm text-muted-foreground">
                 Executorul poate fi ales acum sau mai târziu.
               </p>
@@ -395,7 +420,6 @@ export function TaskForm({
                   : ''
               }
               disabled={!origin || !campaigns.length}
-              aria-describedby={`${id}-campaign-hint`}
               onChange={(event) =>
                 update({
                   campaignId: event.target.value
@@ -403,6 +427,7 @@ export function TaskForm({
                     : null,
                 })
               }
+              {...form.field('campaignId', `${id}-campaign-hint`)}
             >
               <option value="">Fără campanie</option>
               {campaigns.map((campaign) => (
@@ -411,6 +436,7 @@ export function TaskForm({
                 </option>
               ))}
             </select>
+            <FieldError {...form.errorProps('campaignId')} />
             <p
               id={`${id}-campaign-hint`}
               className="text-sm text-muted-foreground"
@@ -422,11 +448,7 @@ export function TaskForm({
           </div>
         </>
       )}
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError>{form.formError}</FieldError>
       <Button className="min-h-11" type="submit">
         {submitLabel}
       </Button>

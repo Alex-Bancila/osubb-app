@@ -5,7 +5,9 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
-import { commandErrorMessage } from '../lib/command-reasons';
+import { CommandError } from '../lib/command-reasons';
+import { parseOrRefuse } from '../lib/form-errors';
+import { campaignSchema } from '../lib/schemas/campaign';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 export type Campaign = {
@@ -41,31 +43,26 @@ export type CampaignChange =
   | { kind: 'create'; groupId: number; name: string }
   | { kind: 'rename'; id: number; name: string }
   | { kind: 'active'; id: number; active: boolean };
-export class CampaignError extends Error {}
+/** A refused Campaign change, in the shared copy of `command-reasons.ts`. */
+export class CampaignError extends CommandError {}
+const FAILED = 'Nu am putut salva campania. Reîncearcă.';
 export async function changeCampaign(change: CampaignChange) {
   const result =
     change.kind === 'create'
       ? await supabase.rpc('create_campaign', {
           p_group_id: change.groupId,
-          p_name: change.name.trim(),
+          p_name: parseOrRefuse(campaignSchema, change, FAILED).name,
         })
       : change.kind === 'rename'
         ? await supabase.rpc('update_campaign', {
             p_campaign_id: change.id,
-            p_name: change.name.trim(),
+            p_name: parseOrRefuse(campaignSchema, change, FAILED).name,
           })
         : await supabase.rpc('set_campaign_active', {
             p_campaign_id: change.id,
             p_active: change.active,
           });
-  if (result.error)
-    throw new CampaignError(
-      // One reason-to-copy table for the whole app (`command-reasons.ts`).
-      commandErrorMessage(
-        result.error,
-        'Nu am putut salva campania. Reîncearcă.',
-      ),
-    );
+  if (result.error) throw new CampaignError(result.error, FAILED);
   return result.data;
 }
 export function useCampaignChange() {

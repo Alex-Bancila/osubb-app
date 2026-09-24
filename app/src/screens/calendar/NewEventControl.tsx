@@ -2,6 +2,7 @@ import { useId, useMemo, useState, type FormEvent } from 'react';
 import { PlusIcon } from 'lucide-react';
 
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Combobox,
   ComboboxContent,
@@ -23,14 +24,14 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { useAuth } from '../../lib/auth';
+import { eventSchema, fieldForReason } from '../../lib/schemas/event';
+import { useFormValidation } from '../../lib/use-form-validation';
 import {
-  eventCreationErrorMessage,
   useCreateEvent,
   useEventFormOptions,
 } from '../../queries/event-creation';
 import {
   EVENT_TYPE_CHOICES,
-  eventDraft,
   groupsAvailableAtLevel,
   minimumLevelChoices,
   type EventDraft,
@@ -143,7 +144,11 @@ function EventForm({
 }) {
   const id = useId();
   const [values, setValues] = useState<EventFormValues>(initialValues);
-  const [error, setError] = useState<string | null>(null);
+  const schema = useMemo(
+    () => eventSchema(options, actorLevel),
+    [options, actorLevel],
+  );
+  const form = useFormValidation(schema, values, fieldForReason);
   const groupsById = useMemo(
     () => new Map(options.groupNames.map((group) => [group.id, group])),
     [options.groupNames],
@@ -157,7 +162,6 @@ function EventForm({
 
   function update(patch: Partial<EventFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
-    setError(null);
   }
 
   function chooseGroup(group: EventFormGroup | null) {
@@ -174,16 +178,12 @@ function EventForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const draft = eventDraft(values, options, actorLevel);
-    if (typeof draft === 'string') {
-      setError(draft);
-      return;
-    }
-    setError(null);
+    const draft = form.validate();
+    if (!draft) return;
     try {
       await onCreate(draft);
     } catch (cause) {
-      setError(eventCreationErrorMessage(cause));
+      form.fail(cause, 'Nu am putut crea evenimentul. Reîncearcă.');
     }
   }
 
@@ -193,56 +193,70 @@ function EventForm({
   return (
     <form aria-label="Eveniment nou" onSubmit={submit} noValidate>
       <fieldset disabled={pending} className="grid gap-5 disabled:opacity-70">
-        <label className="grid gap-1.5" htmlFor={`${id}-title`}>
-          <span className="text-sm font-medium">Titlu</span>
-          <input
-            id={`${id}-title`}
-            className={control}
-            value={values.title}
-            autoComplete="off"
-            onChange={(event) => update({ title: event.target.value })}
-          />
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-1.5" htmlFor={`${id}-type`}>
-            <span className="text-sm font-medium">Tip</span>
-            <select
-              id={`${id}-type`}
+        <div className="grid gap-1.5">
+          <label className="grid gap-1.5" htmlFor={`${id}-title`}>
+            <span className="text-sm font-medium">Titlu</span>
+            <input
+              id={`${id}-title`}
               className={control}
-              value={values.type}
-              onChange={(event) =>
-                update({ type: event.target.value as EventFormValues['type'] })
-              }
-            >
-              {EVENT_TYPE_CHOICES.map((choice) => (
-                <option key={choice.value} value={choice.value}>
-                  {choice.label}
-                </option>
-              ))}
-            </select>
+              value={values.title}
+              autoComplete="off"
+              onChange={(event) => update({ title: event.target.value })}
+              {...form.field('title')}
+            />
           </label>
-
-          <label className="grid gap-1.5" htmlFor={`${id}-min-level`}>
-            <span className="text-sm font-medium">Cine îl vede</span>
-            <select
-              id={`${id}-min-level`}
-              className={control}
-              value={values.minLevel}
-              onChange={(event) =>
-                update({ minLevel: Number(event.target.value) })
-              }
-            >
-              {levelChoices.map((choice) => (
-                <option key={choice.value} value={choice.value}>
-                  {choice.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <FieldError {...form.errorProps('title')} />
         </div>
 
-        <div className="grid gap-1.5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5" htmlFor={`${id}-type`}>
+              <span className="text-sm font-medium">Tip</span>
+              <select
+                id={`${id}-type`}
+                className={control}
+                value={values.type}
+                onChange={(event) =>
+                  update({
+                    type: event.target.value as EventFormValues['type'],
+                  })
+                }
+                {...form.field('type')}
+              >
+                {EVENT_TYPE_CHOICES.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FieldError {...form.errorProps('type')} />
+          </div>
+
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5" htmlFor={`${id}-min-level`}>
+              <span className="text-sm font-medium">Cine îl vede</span>
+              <select
+                id={`${id}-min-level`}
+                className={control}
+                value={values.minLevel}
+                onChange={(event) =>
+                  update({ minLevel: Number(event.target.value) })
+                }
+                {...form.field('minLevel')}
+              >
+                {levelChoices.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FieldError {...form.errorProps('minLevel')} />
+          </div>
+        </div>
+
+        <div className="grid gap-1.5" {...form.slot('groupId')}>
           <span id={`${id}-group`} className="text-sm font-medium">
             Grup
           </span>
@@ -279,31 +293,40 @@ function EventForm({
               </ComboboxList>
             </ComboboxContent>
           </Combobox>
+          <FieldError {...form.errorProps('groupId')} />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-1.5" htmlFor={`${id}-starts-at`}>
-            <span className="text-sm font-medium">Începe — ora României</span>
-            <input
-              id={`${id}-starts-at`}
-              type="datetime-local"
-              className={control}
-              value={values.startsAt}
-              onChange={(event) => update({ startsAt: event.target.value })}
-            />
-          </label>
-          <label className="grid gap-1.5" htmlFor={`${id}-ends-at`}>
-            <span className="text-sm font-medium">
-              Se încheie (opțional) — ora României
-            </span>
-            <input
-              id={`${id}-ends-at`}
-              type="datetime-local"
-              className={control}
-              value={values.endsAt}
-              onChange={(event) => update({ endsAt: event.target.value })}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5" htmlFor={`${id}-starts-at`}>
+              <span className="text-sm font-medium">Începe — ora României</span>
+              <input
+                id={`${id}-starts-at`}
+                type="datetime-local"
+                className={control}
+                value={values.startsAt}
+                onChange={(event) => update({ startsAt: event.target.value })}
+                {...form.field('startsAt')}
+              />
+            </label>
+            <FieldError {...form.errorProps('startsAt')} />
+          </div>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5" htmlFor={`${id}-ends-at`}>
+              <span className="text-sm font-medium">
+                Se încheie (opțional) — ora României
+              </span>
+              <input
+                id={`${id}-ends-at`}
+                type="datetime-local"
+                className={control}
+                value={values.endsAt}
+                onChange={(event) => update({ endsAt: event.target.value })}
+                {...form.field('endsAt')}
+              />
+            </label>
+            <FieldError {...form.errorProps('endsAt')} />
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -316,37 +339,41 @@ function EventForm({
               onChange={(event) => update({ location: event.target.value })}
             />
           </label>
-          <label className="grid gap-1.5" htmlFor={`${id}-capacity`}>
-            <span className="text-sm font-medium">Capacitate (opțional)</span>
-            <input
-              id={`${id}-capacity`}
-              type="number"
-              min="1"
-              step="1"
-              inputMode="numeric"
-              className={control}
-              value={values.capacity}
-              onChange={(event) => update({ capacity: event.target.value })}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5" htmlFor={`${id}-capacity`}>
+              <span className="text-sm font-medium">Capacitate (opțional)</span>
+              <input
+                id={`${id}-capacity`}
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                className={control}
+                value={values.capacity}
+                onChange={(event) => update({ capacity: event.target.value })}
+                {...form.field('capacity')}
+              />
+            </label>
+            <FieldError {...form.errorProps('capacity')} />
+          </div>
         </div>
 
-        <label className="grid gap-1.5" htmlFor={`${id}-description`}>
-          <span className="text-sm font-medium">Descriere (opțional)</span>
-          <textarea
-            id={`${id}-description`}
-            className={`${control} min-h-24 resize-y`}
-            rows={4}
-            value={values.description}
-            onChange={(event) => update({ description: event.target.value })}
-          />
-        </label>
+        <div className="grid gap-1.5">
+          <label className="grid gap-1.5" htmlFor={`${id}-description`}>
+            <span className="text-sm font-medium">Descriere (opțional)</span>
+            <textarea
+              id={`${id}-description`}
+              className={`${control} min-h-24 resize-y`}
+              rows={4}
+              value={values.description}
+              onChange={(event) => update({ description: event.target.value })}
+              {...form.field('description')}
+            />
+          </label>
+          <FieldError {...form.errorProps('description')} />
+        </div>
 
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        <FieldError>{form.formError}</FieldError>
 
         <DialogFooter>
           <Button

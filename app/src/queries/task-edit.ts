@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CommandError } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
 import { keys } from './keys';
@@ -25,33 +26,11 @@ export type TaskUpdateConsequence = {
   memberName: string;
 };
 
-const commandErrors = new Map<string, string>([
-  ['title_required', 'Scrie titlul taskului.'],
-  ['deadline_required', 'Alege termenul taskului.'],
-  ['invalid_audience', 'Alege audiența taskului.'],
-  ['invalid_assignment_mode', 'Alege atribuirea directă sau publică.'],
-  ['umbrella_has_no_campaign', 'Taskul-umbrelă nu poate avea o campanie.'],
-  ['task_is_umbrella', 'Taskul-umbrelă nu are audiență sau mod de atribuire.'],
-  [
-    'task_in_review',
-    'Taskul este în verificare și nu mai poate fi editat. Verifică starea actuală.',
-  ],
-  ['task_terminal', 'Taskul a fost finalizat. Verifică starea actuală.'],
-  ['nothing_to_update', 'Nu există modificări de salvat.'],
-  ['invalid_campaign', 'Campania nu mai este disponibilă pentru grupul ales.'],
-  ['task_not_found', 'Taskul nu mai este disponibil.'],
-  [
-    'task_parent_changed',
-    'Taskul-umbrelă s-a schimbat între timp. Verifică starea actuală.',
-  ],
-  ['task_command_forbidden', 'Nu mai ai permisiunea de a edita acest task.'],
-  ['task_manage_forbidden', 'Nu mai ai permisiunea de a edita acest task.'],
-]);
-
-export class TaskEditError extends Error {}
+/** A refused edit, in the shared copy of `command-reasons.ts`. */
+export class TaskEditError extends CommandError {}
 
 /** The edit would now affect people the manager has not confirmed. */
-export class TaskEditNeedsConfirmation extends TaskEditError {}
+export class TaskEditNeedsConfirmation extends Error {}
 
 function commandArgs(input: TaskUpdateInput) {
   // SQL takes full replacement values and NULL clears a field. Generated RPC
@@ -74,8 +53,8 @@ function editError(error: { message: string }) {
       'Modificarea afectează acum alți membri. Verifică și confirmă din nou.',
     );
   return new TaskEditError(
-    commandErrors.get(error.message) ??
-      'Nu am putut salva modificările. Reîncearcă.',
+    error,
+    'Nu am putut salva modificările. Reîncearcă.',
   );
 }
 

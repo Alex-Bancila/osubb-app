@@ -19,7 +19,6 @@ import {
   buildEventFormOptions,
   createEvent,
   createEventMutationOptions,
-  eventCreationErrorMessage,
   fetchEventFormOptions,
 } from './event-creation';
 import type { MyGroup } from './my-groups';
@@ -188,16 +187,5 @@ describe('create Event command', () => {
     expect(client.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['events'],
     });
-  });
-
-  it.each([
-    ['calendar_manage_forbidden', 'Nu mai ai permisiunea'],
-    ['event_min_level_below_group', 'nivelul minim al grupului'],
-    ['event_min_level_above_actor', 'peste nivelul tău'],
-    ['private SQL detail', 'Nu am putut crea evenimentul'],
-  ])('maps %s without exposing server details', (message, expected) => {
-    expect(eventCreationErrorMessage({ code: 'PT400', message })).toContain(
-      expected,
-    );
   });
 });

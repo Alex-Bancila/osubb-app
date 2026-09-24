@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { authCallbackUrl } from '../../lib/auth-destination';
+import { normalizeEmail } from '../../lib/normalize';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '../../components/ui/field';
@@ -24,7 +25,7 @@ export default function LoginScreen() {
   const [codeStatus, setCodeStatus] = useState<CodeStatus>('idle');
   const [codeError, setCodeError] = useState('');
   const sentHeadingRef = useRef<HTMLHeadingElement>(null);
-  const address = email.trim().toLowerCase();
+  const address = normalizeEmail(email);
 
   useEffect(() => {
     if (status === 'sent') sentHeadingRef.current?.focus();

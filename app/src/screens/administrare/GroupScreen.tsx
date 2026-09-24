@@ -129,7 +129,10 @@ export default function GroupScreen() {
     [group, id, myGroupsQuery.data, createTopLevel],
   );
 
-  async function run(next: GroupCommand): Promise<boolean> {
+  async function run(
+    next: GroupCommand,
+    onFailure?: (failure: unknown) => void,
+  ): Promise<boolean> {
     if (submitting.current) return false;
     submitting.current = true;
     setError(null);
@@ -142,9 +145,11 @@ export default function GroupScreen() {
     } catch (failure) {
       const known = failure instanceof CommandError;
       setLastReason(known ? failure.reason : undefined);
-      setError(
-        known ? failure.message : 'Nu am putut salva schimbarea. Reîncearcă.',
-      );
+      if (onFailure) onFailure(failure);
+      else
+        setError(
+          known ? failure.message : 'Nu am putut salva schimbarea. Reîncearcă.',
+        );
       return false;
     } finally {
       submitting.current = false;
