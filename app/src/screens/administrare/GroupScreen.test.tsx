@@ -313,6 +313,55 @@ it('re-asks when the server says the form was stale', async () => {
   ).toBeVisible();
 });
 
+it('sends the Minimum Level for "Ca nivelul minim al grupului", following a Minimum Level change made in the same save (#731)', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(
+    screen.getByRole('checkbox', { name: /Primește cereri de înscriere/ }),
+  );
+  expect(
+    screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
+  ).toHaveValue('');
+  // Lowering the Minimum Level never removes anyone, so this saves directly.
+  await user.selectOptions(screen.getByLabelText('Nivel minim'), '0');
+  await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
+  expect(api.mutate).toHaveBeenCalledWith({
+    kind: 'settings',
+    groupId: 2,
+    name: 'Logistică',
+    managerTitle: null,
+    acceptsApplications: true,
+    applicationLevel: 0,
+    sharedWorkVisibility: false,
+    minLevel: 0,
+    confirmRemovals: false,
+  });
+});
+
+it('keeps an explicit Application Level as chosen', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(
+    screen.getByRole('checkbox', { name: /Primește cereri de înscriere/ }),
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
+    '5',
+  );
+  await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
+  expect(api.mutate).toHaveBeenCalledWith({
+    kind: 'settings',
+    groupId: 2,
+    name: 'Logistică',
+    managerTitle: null,
+    acceptsApplications: true,
+    applicationLevel: 5,
+    sharedWorkVisibility: false,
+    minLevel: 1,
+    confirmRemovals: false,
+  });
+});
+
 it('archives through the command and explains unfinished work in the Group', async () => {
   const user = userEvent.setup();
   api.mutate.mockRejectedValue(

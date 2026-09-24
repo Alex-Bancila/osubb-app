@@ -329,8 +329,10 @@ export async function runGroupCommand(command: GroupCommand) {
  * `as never` on the argument objects, deliberately: the generated Args types
  * mark every parameter non-null, because Supabase's generator has no way to
  * say "this one accepts null". These commands do — a null `p_manager_title`
- * clears the display name, a null `p_application_level` falls back to the
- * Minimum Level, a null `p_parent_id` means a top-level Group — and sending
+ * clears the display name, a null `p_application_level` is only valid while
+ * Applications are off (#731: the "same as Minimum Level" option sends the
+ * Minimum Level itself, never null), a null `p_parent_id` means a top-level
+ * Group — and sending
  * `undefined` instead would drop the key from the JSON body, which for a
  * full-state command is a different request. The cast is the lie the generated
  * type forces; the values below are the truth.
