@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { useAuth } from '../../lib/auth';
+import { useCapability } from '../../lib/capabilities';
 import { useAnnouncementReaders } from '../../queries/announcements';
 import { useMyGroupRoles } from '../../queries/my-groups';
 import {
@@ -33,11 +34,12 @@ export default function AnnouncementReaders({
 }: {
   announcement: AnnouncementPresentation;
 }) {
-  const { session, claims } = useAuth();
+  const { session } = useAuth();
+  const bcOrModerator = useCapability('manageRoles').data === true;
   const myGroups = useMyGroupRoles();
   const allowed = mayAskForReaders(announcement, {
     memberId: session?.user.id,
-    level: claims?.member_level,
+    bcOrModerator,
     groups: myGroups.data,
   });
   const readers = useAnnouncementReaders(announcement.id, allowed);

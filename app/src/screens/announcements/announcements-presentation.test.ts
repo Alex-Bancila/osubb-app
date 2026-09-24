@@ -379,10 +379,18 @@ describe('announcements-presentation', () => {
 
     it('lets the author and BC/Moderator ask, for any Audience', () => {
       expect(
-        mayAskForReaders(org, { memberId: author, level: 1, groups: [] }),
+        mayAskForReaders(org, {
+          memberId: author,
+          bcOrModerator: false,
+          groups: [],
+        }),
       ).toBe(true);
       expect(
-        mayAskForReaders(org, { memberId: other, level: 6, groups: [] }),
+        mayAskForReaders(org, {
+          memberId: other,
+          bcOrModerator: true,
+          groups: [],
+        }),
       ).toBe(true);
     });
 
@@ -390,21 +398,21 @@ describe('announcements-presentation', () => {
       expect(
         mayAskForReaders(local, {
           memberId: other,
-          level: 3,
+          bcOrModerator: false,
           groups: managerOf2,
         }),
       ).toBe(true);
       expect(
         mayAskForReaders(local, {
           memberId: other,
-          level: 3,
+          bcOrModerator: false,
           groups: [{ id: 2, group_role: 'responsible' }],
         }),
       ).toBe(true);
       expect(
         mayAskForReaders(org, {
           memberId: other,
-          level: 3,
+          bcOrModerator: false,
           groups: managerOf2,
         }),
       ).toBe(false);
@@ -414,12 +422,16 @@ describe('announcements-presentation', () => {
       expect(
         mayAskForReaders(local, {
           memberId: other,
-          level: 5,
+          bcOrModerator: false,
           groups: [{ id: 2, group_role: 'member' }],
         }),
       ).toBe(false);
       expect(
-        mayAskForReaders(local, { memberId: undefined, level: 9, groups: [] }),
+        mayAskForReaders(local, {
+          memberId: undefined,
+          bcOrModerator: true,
+          groups: [],
+        }),
       ).toBe(false);
     });
   });

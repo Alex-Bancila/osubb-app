@@ -26,6 +26,9 @@ vi.mock('../../queries/announcements', () => ({
 vi.mock('../../queries/member-identities', () => ({
   useMemberIdentities: () => ({ data: undefined }),
 }));
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 vi.mock('../../queries/my-groups', () => ({
   useMyGroupRoles: () => ({ data: [] }),
 }));

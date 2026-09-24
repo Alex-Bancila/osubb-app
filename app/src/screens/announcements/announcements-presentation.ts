@@ -138,7 +138,8 @@ export function unreadAnnouncementsLabel(count: number): string {
 
 /**
  * Whether to ask `announcement_readers` at all (R15): the author, BC/Moderator
- * (level ≥ 6), or — for a local Audience only — a Manager or Responsible on the
+ * by live rank (`my_capabilities().manage_roles`, level ≥ 6, not the token's
+ * claim), or — for a local Audience only — a Manager or Responsible on the
  * Origin's path. `my_groups()` already carries the Roles inherited from an
  * ancestor. The server decides regardless; this only spares the others a
  * request that can only answer PT404.
@@ -150,13 +151,14 @@ export function mayAskForReaders(
   >,
   viewer: {
     memberId: string | undefined;
-    level: number | undefined;
+    /** BC/Moderator by live rank (`useCapability('manageRoles')`). */
+    bcOrModerator: boolean;
     groups: readonly { id: number; group_role: string }[] | undefined;
   },
 ): boolean {
   if (!viewer.memberId) return false;
   if (announcement.authorMember?.memberId === viewer.memberId) return true;
-  if ((viewer.level ?? 0) >= 6) return true;
+  if (viewer.bcOrModerator) return true;
   if (announcement.audience !== 'local') return false;
   return (viewer.groups ?? []).some(
     (group) =>

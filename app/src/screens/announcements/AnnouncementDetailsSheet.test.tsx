@@ -7,7 +7,7 @@ import { resetSupabaseMock, supabaseMock } from '../../test/supabase-mock';
 
 const viewer = vi.hoisted(() => ({
   id: 'd0000000-0000-0000-0000-000000000001',
-  level: 1,
+  bcOrModerator: false,
   groups: [] as { id: number; group_role: string }[],
 }));
 
@@ -20,8 +20,10 @@ vi.mock('../../lib/supabase', async () => {
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({
     session: { user: { id: viewer.id } },
-    claims: { member_level: viewer.level },
   }),
+}));
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: viewer.bcOrModerator }),
 }));
 vi.mock('../../queries/my-groups', () => ({
   useMyGroupRoles: () => ({ data: viewer.groups }),
@@ -44,7 +46,7 @@ function renderSheet(ui: ReactElement) {
 
 beforeEach(() => {
   resetSupabaseMock();
-  viewer.level = 1;
+  viewer.bcOrModerator = false;
   viewer.groups = [];
 });
 import type { AnnouncementPresentation } from './announcements-presentation';
@@ -237,7 +239,7 @@ describe('AnnouncementDetailsSheet', () => {
     });
 
     it('asks for a BC/Moderator and hides the line silently on PT404', async () => {
-      viewer.level = 6;
+      viewer.bcOrModerator = true;
       supabaseMock.rpc.mockResolvedValue({
         data: null,
         error: { code: 'PT404', message: 'announcement_not_found' },
