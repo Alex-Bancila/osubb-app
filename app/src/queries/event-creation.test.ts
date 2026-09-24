@@ -5,6 +5,7 @@ const api = vi.hoisted(() => ({
   rpc: vi.fn(),
   fetchCapabilities: vi.fn(),
   fetchMyGroups: vi.fn(),
+  fetchCampaigns: vi.fn(),
 }));
 
 vi.mock('../lib/supabase', () => ({
@@ -14,6 +15,7 @@ vi.mock('../lib/capabilities', () => ({
   fetchCapabilities: api.fetchCapabilities,
 }));
 vi.mock('./my-groups', () => ({ fetchMyGroups: api.fetchMyGroups }));
+vi.mock('./campaigns', () => ({ fetchCampaigns: api.fetchCampaigns }));
 
 import {
   buildEventFormOptions,
@@ -116,9 +118,13 @@ describe('Event form options', () => {
     expect(result.groups).toEqual([]);
   });
 
-  it('loads capabilities, effective roles, and readable Groups once', async () => {
+  it('loads capabilities, effective roles, readable Groups and active Campaigns once', async () => {
     api.fetchCapabilities.mockResolvedValue(managerCapabilities);
     api.fetchMyGroups.mockResolvedValue([]);
+    api.fetchCampaigns.mockResolvedValue([
+      { id: 3, name: 'Bun venit', group_id: 7, is_active: true },
+      { id: 4, name: 'Arhivată', group_id: 7, is_active: false },
+    ]);
     const select = vi.fn().mockResolvedValue({
       data: readableGroups,
       error: null,
@@ -139,6 +145,8 @@ describe('Event form options', () => {
         id: group.id,
         name: group.name,
       })),
+      // #691: only an active Campaign may be attached to an Event.
+      campaigns: [{ id: 3, name: 'Bun venit', group_id: 7 }],
     });
     expect(api.from).toHaveBeenCalledWith('groups');
     expect(select).toHaveBeenCalledWith(
@@ -162,6 +170,7 @@ describe('create Event command', () => {
     capacity: null,
     description: null,
     minLevel: 0,
+    campaignId: 3,
   };
 
   it('calls only create_event with named arguments', async () => {
@@ -177,6 +186,7 @@ describe('create Event command', () => {
       p_capacity: null,
       p_description: null,
       p_min_level: 0,
+      p_campaign_id: 3,
     });
   });
 

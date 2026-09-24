@@ -94,8 +94,10 @@ app/
     │   ├── dashboard/      # DashboardScreen (+test), DeptCupCard, LeaderboardCard, MyPointsCard
     │   ├── tracker/        # TrackerScreen.tsx — my tasks; the full Tracker rebuild is tracked
     │   │                   # in CLAUDE.md's queue, not here
-    │   ├── calendar/       # CalendarScreen (+test), EventCard, EventRsvpControls (+test),
-    │   │                   # calendar-presentation (+test)
+    │   ├── calendar/       # CalendarScreen (+test): Lună (CalendarMonth) / Agendă
+    │   │                   # (CalendarAgenda), view per device (calendar-view), Work
+    │   │                   # Filter, ?event=<id>; EventCard, EventRsvpControls (+test),
+    │   │                   # NewEventControl (+test), calendar-presentation (+test)
     │   ├── notifications/  # NotificationsScreen (+test), notifications-presentation (+test)
     │   ├── login/          # LoginScreen.tsx, AuthCallback.tsx — magic-link request + landing
     │   ├── profile/        # ProfileScreen.tsx (+test), EditProfileSheet.tsx (+test) (#108)

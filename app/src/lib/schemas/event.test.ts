@@ -30,6 +30,10 @@ const options: EventFormOptions = {
     },
   ],
   groupNames: [],
+  campaigns: [
+    { id: 3, name: 'Bun venit', group_id: 7 },
+    { id: 4, name: 'Toamna AG', group_id: 12 },
+  ],
 };
 const valid: EventFormValues = {
   title: '  Ședință de planificare  ',
@@ -41,6 +45,7 @@ const valid: EventFormValues = {
   capacity: '30',
   description: '  Stabilim pașii următori.  ',
   minLevel: 0,
+  campaignId: null,
 };
 const schema = (actorLevel = 5) => eventSchema(options, actorLevel, { now });
 const check = (patch: Partial<EventFormValues>, actorLevel = 5) => {
@@ -61,7 +66,17 @@ describe('eventSchema', () => {
       capacity: 30,
       description: 'Stabilim pașii următori.',
       minLevel: 0,
+      campaignId: null,
     });
+  });
+
+  // #691: a Campaign owned on the Event Group's path — the server's rule, and
+  // its reason, before the round trip.
+  it('accepts only a Campaign on the chosen Group path', () => {
+    expect(check({ campaignId: 3 })).toEqual([]);
+    expect(schema(6).parse({ ...valid, campaignId: 3 }).campaignId).toBe(3);
+    expect(check({ campaignId: 4 })).toEqual(['campaignId: invalid_campaign']);
+    expect(check({ campaignId: 99 })).toEqual(['campaignId: invalid_campaign']);
   });
 
   it('turns blank optional values into null', () => {
@@ -163,6 +178,7 @@ it('maps every reason an Event command raises to an Event field', () => {
       'capacity',
       'description',
       'minLevel',
+      'campaignId',
     ],
     [
       'title_too_short',
@@ -177,6 +193,7 @@ it('maps every reason an Event command raises to an Event field', () => {
       'event_group_required',
       'event_min_level_below_group',
       'event_min_level_above_actor',
+      'invalid_campaign',
     ],
   );
 });
