@@ -10,6 +10,7 @@ export const TASK_PRESENTATION_FIELDS = `
   id, group_id, title, description, status, deadline, completed_at, review_round,
   assignment_mode, audience, kind,
   parent_task_id, campaign_id, duplicated_from_task_id, queue_closed_at,
+  link_label, link_url,
   group:groups!tasks_group_id_fkey(name, short, color, category, path),
   campaign:campaigns!tasks_campaign_id_fkey(name),
   assignments:task_assignments!task_assignments_task_id_fkey(id, member_id, ended_at),

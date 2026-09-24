@@ -13,7 +13,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(125);
+select plan(138);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u(n integer) returns uuid language sql immutable as $$
@@ -132,19 +132,22 @@ select pg_temp.mk('r8:alone', 'in_progress', 'public', 'org', pg_temp.u(3));
 create function pg_temp.args(p_name text,
   p_title text default null, p_clear_description boolean default false,
   p_deadline timestamptz default null, p_campaign bigint default null,
-  p_mode text default null, p_audience text default null, p_group bigint default null)
+  p_mode text default null, p_audience text default null, p_group bigint default null,
+  p_link_label text default null, p_link_url text default null, p_clear_link boolean default false)
 returns text language sql stable as $$
-  select format('%s, %s, %L, %L, %L::timestamptz, %s, %L, %L',
+  select format('%s, %s, %L, %L, %L::timestamptz, %s, %L, %L, %L, %L',
     task.id, coalesce(p_group, task.group_id),
     coalesce(p_title, task.title),
     case when p_clear_description then null else task.description end,
     coalesce(p_deadline, task.deadline),
     coalesce(p_campaign::text, task.campaign_id::text, 'null'),
     coalesce(p_mode, task.assignment_mode),
-    coalesce(p_audience, task.audience))
+    coalesce(p_audience, task.audience),
+    case when p_clear_link then null else coalesce(p_link_label, task.link_label) end,
+    case when p_clear_link then null else coalesce(p_link_url, task.link_url) end)
     from public.tasks as task where task.id = pg_temp.t(p_name)
 $$;
-grant execute on function pg_temp.args(text, text, boolean, timestamptz, bigint, text, text, bigint) to authenticated;
+grant execute on function pg_temp.args(text, text, boolean, timestamptz, bigint, text, text, bigint, text, text, boolean) to authenticated;
 
 create function pg_temp.preview(p_args text) returns text[] language plpgsql as $$
 declare
@@ -178,37 +181,37 @@ grant select, insert on previews to authenticated;
 
 -- ==================== 1. API shape and privileges ====================
 select has_function('public', 'update_task',
-  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'boolean'],
-  'public.update_task exists with the full-state signature plus p_accept_consequences');
+  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'text', 'text', 'boolean'],
+  'public.update_task exists with the full-state signature (the #684 Attached Link included) plus p_accept_consequences');
 select is(pg_get_function_arguments(
-    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure),
-  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean DEFAULT false',
-  'update_task takes no actor parameter and p_accept_consequences defaults to false');
+    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)'::regprocedure),
+  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean DEFAULT false',
+  'update_task takes no actor parameter, the link pair has no default (full state, OD5), and p_accept_consequences defaults to false');
 select is(pg_get_function_result(
-    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)'::regprocedure),
   'TABLE(consequence text, member_id uuid)',
   'preview_task_update takes the same value arguments and returns (consequence, member_id) rows');
 select is((select provolatile::text from pg_proc
-            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)'::regprocedure),
   's', 'preview_task_update is stable');
 select ok(not (select prosecdef from pg_proc
-                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure)
+                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)'::regprocedure)
           and not (select prosecdef from pg_proc
-                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)'::regprocedure),
   'both public functions are security invoker wrappers');
 select ok(has_function_privilege('authenticated',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)', 'execute')
           and has_function_privilege('authenticated',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)', 'execute')
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)', 'execute')
           and not has_function_privilege('anon',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)', 'execute')
           and not has_function_privilege('anon',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)', 'execute'),
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)', 'execute'),
   'authenticated may call both, anon neither');
 select ok(not has_function_privilege('authenticated',
             'private.task_update_consequences(bigint,bigint,bigint,text,text)', 'execute')
           and not has_function_privilege('authenticated',
-            'private.plan_task_update(public.tasks,bigint,text,text,timestamptz,bigint,text,text)', 'execute'),
+            'private.plan_task_update(public.tasks,bigint,text,text,timestamptz,bigint,text,text,text,text)', 'execute'),
   'the two shared helpers are callable only from inside the definer bodies');
 
 -- ==================== 2. Every field, in todo / in_progress / Feedback pending ====================
@@ -299,28 +302,28 @@ select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input',
   'PT400', 'title_too_long', '#673: a title over 120 characters is refused');
 select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('x:input', p_title => '  ab  ')),
   'PT400', 'title_too_short', '#673: the preview measures the trimmed title, so "  ab  " is too short');
-select throws_ok(format('select public.update_task(%s, %s, %L, %L, now() + interval ''7 days'', null, %L, %L)',
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, now() + interval ''7 days'', null, %L, %L, null, null)',
     pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 2001), 'direct', 'org'),
   'PT400', 'description_too_long', '#673: a description over 2000 characters is refused');
 select lives_ok(format('select public.update_task(%s)', pg_temp.args('todo:deadline', p_deadline => now() - interval '1 day')),
   '#673: update_task accepts a deadline in the past on an existing Task -- R8 judges the deadline only at creation');
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.update_task(0, 0, repeat('t', 121), null, null, null, null, null) $$,
+select throws_ok($$ select public.update_task(0, 0, repeat('t', 121), null, null, null, null, null, null, null) $$,
   'PT400', 'title_too_long', '#673: step 1 answers a claimless caller before the gate');
-select throws_ok($$ select * from public.preview_task_update(0, 0, 'Titlu bun #673', repeat('d', 2001), null, null, null, null) $$,
+select throws_ok($$ select * from public.preview_task_update(0, 0, 'Titlu bun #673', repeat('d', 2001), null, null, null, null, null, null) $$,
   'PT400', 'description_too_long', '#673: the preview answers a claimless caller before the gate too');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u(1));
 
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => '   ')),
   'PT400', 'title_required', 'a blank title is refused');
-select throws_ok(format('select public.update_task(%s, %s, %L, %L, null, null, %L, %L)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, null, null, %L, %L, null, null)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
     'T626 x:input', 'd', 'direct', 'org'),
   'PT400', 'deadline_required', 'an ordinary Task needs a deadline');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_audience => 'world')),
   'PT400', 'invalid_audience', 'an Audience outside local/org is refused');
-select throws_ok(format('select public.update_task(%s, %s, %L, %L, %L::timestamptz, null, null, %L)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, %L::timestamptz, null, null, %L, null, null)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
     'T626 x:input', 'd', '2027-03-01 09:00:00+00', 'org'),
   'PT400', 'invalid_assignment_mode', 'a null Assignment Mode on an ordinary Task is refused (full state, never a patch)');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_campaign => (select pr_campaign from f626))),
@@ -517,6 +520,71 @@ select is((select format('%s|%s|%s|%s|%s', task.title, task.assignment_mode,
              from public.tasks as task where task.id = pg_temp.t('pv')),
   'T626 pv|public|1|0|0', 'the preview changed nothing, logged nothing and notified nobody');
 
+
+-- ==================== 8b. #684 The Attached Link is part of the full state ====================
+-- The link pair carries no defaults (OD5): the current values leave it alone,
+-- nulls clear it, a new pair replaces it -- each column that changes is named
+-- in the task_updated diff. The preview takes the same arity and refuses the
+-- same inputs at step 1.
+reset role;
+select pg_temp.mk('link:edit', 'todo', 'direct', 'org', null);
+update public.tasks set link_label = 'Brief', link_url = 'https://example.org/brief'
+ where id = pg_temp.t('link:edit');
+create function pg_temp.last_changed(p_name text) returns jsonb language sql stable as $$
+  select activity.details -> 'changed' from public.task_activity as activity
+   where activity.task_id = pg_temp.t(p_name) and activity.kind = 'task_updated'
+   order by activity.id desc limit 1
+$$;
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select lives_ok(format('select public.update_task(%s)', pg_temp.args('link:edit', p_title => 'T626 link:edit v2')),
+  '#684: an edit that passes the current link values applies');
+reset role;
+select is((select format('%s|%s|%s', task.link_label, task.link_url, pg_temp.last_changed('link:edit'))
+             from public.tasks as task where task.id = pg_temp.t('link:edit')),
+  'Brief|https://example.org/brief|["title"]',
+  '#684: the current link values leave the link alone and out of changed');
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select lives_ok(format('select public.update_task(%s)',
+  pg_temp.args('link:edit', p_link_label => '  Document nou  ', p_link_url => '  https://example.org/nou  ')),
+  '#684: a new link pair replaces the old one');
+reset role;
+select is((select format('%s|%s|%s', task.link_label, task.link_url, pg_temp.last_changed('link:edit'))
+             from public.tasks as task where task.id = pg_temp.t('link:edit')),
+  'Document nou|https://example.org/nou|["link_label", "link_url"]',
+  '#684: the replacement is stored trimmed and changed names both columns');
+select is((select activity.details -> 'before' ->> 'link_url' || '|' || (activity.details -> 'after' ->> 'link_url')
+             from public.task_activity as activity
+            where activity.task_id = pg_temp.t('link:edit') and activity.kind = 'task_updated'
+            order by activity.id desc limit 1),
+  'https://example.org/brief|https://example.org/nou',
+  '#684: before/after record the old and the new address');
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select lives_ok(format('select public.update_task(%s)', pg_temp.args('link:edit', p_clear_link => true)),
+  '#684: nulls clear the link');
+reset role;
+select is((select format('%s|%s|%s', task.link_label is null, task.link_url is null, pg_temp.last_changed('link:edit'))
+             from public.tasks as task where task.id = pg_temp.t('link:edit')),
+  't|t|["link_label", "link_url"]',
+  '#684: the cleared link is null in both columns and named in changed');
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('link:edit', p_link_label => 'Doar eticheta')),
+  'PT400', 'link_incomplete', '#684: update_task refuses a label without an address');
+select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('link:edit', p_link_url => 'https://example.org/x')),
+  'PT400', 'link_incomplete', '#684: preview_task_update refuses an address without a label');
+select throws_ok(format('select * from public.preview_task_update(%s)',
+    pg_temp.args('link:edit', p_link_label => repeat('e', 61), p_link_url => 'https://example.org/x')),
+  'PT400', 'link_label_too_long', '#684: the preview refuses a label over 60 characters');
+select throws_ok(format('select public.update_task(%s)',
+    pg_temp.args('link:edit', p_link_label => 'FTP', p_link_url => 'ftp://example.org/x')),
+  'PT400', 'link_url_invalid', '#684: update_task refuses a non-http(s) address');
+select throws_ok(format('select public.update_task(%s)',
+    pg_temp.args('link:edit', p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 2030))),
+  'PT400', 'link_url_too_long', '#684: update_task refuses an address over 2048 characters');
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.update_task(0, 0, 'Titlu bun #684', null, null, null, null, null, 'Doar eticheta', null) $$,
+  'PT400', 'link_incomplete', '#684: the link rule is step 1 -- a claimless caller hears it before the gate');
+reset role;
 
 -- ==================== 9. #627 Group moves and combined edits ====================
 insert into auth.users (id, email) values

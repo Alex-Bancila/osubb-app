@@ -19,6 +19,8 @@ export function taskRow(
     campaign_id: null,
     duplicated_from_task_id: null,
     queue_closed_at: null,
+    link_label: null,
+    link_url: null,
     group: {
       name: 'Educațional',
       short: 'EDU',

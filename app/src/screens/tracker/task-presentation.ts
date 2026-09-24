@@ -26,6 +26,8 @@ export type TaskPresentationRow = Pick<
   | 'campaign_id'
   | 'duplicated_from_task_id'
   | 'queue_closed_at'
+  | 'link_label'
+  | 'link_url'
 > & {
   /** The Task's Origin Group; null when RLS withholds it. */
   group?: Pick<

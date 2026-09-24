@@ -40,7 +40,7 @@ select is(
     where n.nspname = 'public' and p.proname in ('create_task', 'create_completed_work_request', 'create_campaign')),
   array['create_campaign(bigint,text)',
         'create_completed_work_request(text,bigint)',
-        'create_task(text,text,timestamp with time zone,text,text,uuid,bigint,bigint,text,bigint)'],
+        'create_task(text,text,timestamp with time zone,text,text,uuid,bigint,bigint,text,bigint,text,text)'],
   'exactly one arity each: create_task, create_completed_work_request and create_campaign take a Group id only (no PostgREST overload ambiguity)');
 
 -- ==================== Both validators still fire on a Group-only write ====================

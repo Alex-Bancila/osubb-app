@@ -208,6 +208,10 @@ function TaskEditForm({
       taskId: task.id,
       groupId: task.group_id,
       ...parsed,
+      // #684: the form has no link fields yet (#688), so the current link
+      // travels unchanged -- update_task is a full-state replace.
+      linkLabel: task.link_label,
+      linkUrl: task.link_url,
     };
     submitting.current = true;
     setChecking(true);

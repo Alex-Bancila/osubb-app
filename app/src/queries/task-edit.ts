@@ -15,6 +15,10 @@ export type TaskUpdateInput = {
   /** Null for an Umbrella, which has neither. */
   assignmentMode: 'direct' | 'public' | null;
   audience: 'local' | 'org' | null;
+  /** The Attached Link, passed through unchanged until #688's form edits it;
+   *  both null means no link (#684). */
+  linkLabel: string | null;
+  linkUrl: string | null;
 };
 
 export type TaskUpdateConsequence = {
@@ -44,6 +48,8 @@ function commandArgs(input: TaskUpdateInput) {
     p_campaign_id: input.campaignId,
     p_assignment_mode: input.assignmentMode,
     p_audience: input.audience,
+    p_link_label: input.linkLabel,
+    p_link_url: input.linkUrl,
   } as unknown as Database['public']['Functions']['preview_task_update']['Args'];
 }
 

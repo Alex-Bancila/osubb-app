@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(78);
+select plan(79);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -210,6 +210,10 @@ values
   ('Scriere directa #341', 'Tinta', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    now() - interval '5 days', '34100000-0000-0000-0000-000000000002');
 
+-- #684: the happy source carries an Attached Link the clone must copy.
+update public.tasks set link_label = 'Brief #684', link_url = 'https://example.org/brief-684'
+ where title = 'Sursa fericita #341';
+
 -- ==================== Ids, resolved as the owner ====================
 create temp table f341 as
 select
@@ -316,6 +320,11 @@ select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s',
          '34100000-0000-0000-0000-000000000002',
          (select happy_source_id from f341)),
   'the clone shares title/description/Origin/audience/assignment_mode/the active Campaign, is kind=task, status=todo, carries the CALLER''s own deadline, created_by=the actor, no parent, an opened queue (public) and duplicated_from_task_id = the source');
+select is((select format('%s|%s', clone.link_label, clone.link_url)
+             from public.tasks as clone
+            where clone.duplicated_from_task_id = (select happy_source_id from f341)),
+  'Brief #684|https://example.org/brief-684',
+  '#684: the clone copies the source''s Attached Link');
 select is((select format('%s|%s', (clone.difficulty is null)::text, (clone.rating is null)::text)
              from public.tasks as clone
             where clone.duplicated_from_task_id = (select happy_source_id from f341)),
