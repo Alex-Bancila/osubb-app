@@ -63,6 +63,12 @@ create function private.department_cup_rows(bigint) returns void language sql as
 create function public.department_cup(bigint) returns void language sql as '';
 create function private.leadership_member_tasks_impl(uuid) returns void language sql as '';
 create function public.leadership_member_tasks(uuid) returns void language sql as '';
+-- #691 widened create_event_impl / update_event_impl by p_campaign_id; section 10
+-- of the migration re-comments the pre-#691 arities, so they get stand-ins too.
+create function private.create_event_impl(text, text, bigint, timestamptz, timestamptz, text, integer, text, integer)
+returns public.events language sql as 'select null::public.events';
+create function private.update_event_impl(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer)
+returns public.events language sql as 'select null::public.events';
 
 -- The resolver, verbatim from 20260919135332_group_id_on_work_and_events.sql: the guards call it.
 create function private.group_id_for_legacy_origin(p_dept_id text, p_team_id text, p_project_id bigint)

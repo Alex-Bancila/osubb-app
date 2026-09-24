@@ -554,6 +554,7 @@ export type Database = {
       }
       events: {
         Row: {
+          campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
           capacity: number | null
@@ -572,6 +573,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          campaign_id?: number | null
           cancel_reason?: string | null
           cancelled_at?: string | null
           capacity?: number | null
@@ -590,6 +592,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          campaign_id?: number | null
           cancel_reason?: string | null
           cancelled_at?: string | null
           capacity?: number | null
@@ -608,6 +611,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "events_created_by_fkey"
             columns: ["created_by"]
@@ -3126,6 +3136,7 @@ export type Database = {
       cancel_event: {
         Args: { p_event_id: number; p_reason: string }
         Returns: {
+          campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
           capacity: number | null
@@ -3360,6 +3371,7 @@ export type Database = {
       }
       create_event: {
         Args: {
+          p_campaign_id?: number
           p_capacity?: number
           p_description?: string
           p_ends_at?: string
@@ -3371,6 +3383,7 @@ export type Database = {
           p_type: string
         }
         Returns: {
+          campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
           capacity: number | null
@@ -4264,6 +4277,7 @@ export type Database = {
       }
       update_event: {
         Args: {
+          p_campaign_id: number
           p_capacity: number
           p_description: string
           p_ends_at: string
@@ -4276,6 +4290,7 @@ export type Database = {
           p_type: string
         }
         Returns: {
+          campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
           capacity: number | null

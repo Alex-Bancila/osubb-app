@@ -52,6 +52,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     cancelled_at: null,
     cancel_reason: null,
     group_id: 7,
+    campaign_id: null,
     group: eduGroup,
     ...overrides,
   };
