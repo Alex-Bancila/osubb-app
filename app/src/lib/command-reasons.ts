@@ -101,6 +101,12 @@ const REASON_COPY = new Map<string, string>([
   ['campaign_not_found', 'Campania nu mai este disponibilă.'],
   ['invalid_campaign_active', 'Verifică starea campaniei.'],
 
+  /* ---- Work Filter date range (#677, #678) ---- */
+  [
+    'invalid_date_range',
+    'Data de sfârșit nu poate fi înaintea celei de început.',
+  ],
+
   /* ---- Input limits (#673, ruling R8) ---- */
   ['title_required', 'Scrie titlul.'],
   ['title_too_short', 'Titlul are cel puțin 3 caractere.'],

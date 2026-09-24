@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import type { WorkFilterParams } from '../lib/work-filter';
 import { keys } from './keys';
 
 type Functions = Database['public']['Functions'];
@@ -10,7 +11,9 @@ export type LeaderboardRow =
 export type CupRow = Functions['department_cup']['Returns'][number];
 export type MemberTask =
   Functions['leadership_member_tasks']['Returns'][number];
-export type LeadershipFilters = { groupId?: number; campaignId?: number };
+/** The Work Filter's arguments (#677, #678); the Cup takes all but the Group. */
+export type LeadershipFilters = WorkFilterParams;
+export type CupFilters = Omit<WorkFilterParams, 'p_group_id'>;
 
 async function pages<T>(
   read: (
@@ -30,19 +33,16 @@ async function pages<T>(
 export function fetchLeadershipLeaderboard(filters: LeadershipFilters) {
   return pages<LeaderboardRow>((from, to) =>
     supabase
-      .rpc('leadership_leaderboard', {
-        p_group_id: filters.groupId,
-        p_campaign_id: filters.campaignId,
-      })
+      .rpc('leadership_leaderboard', filters)
       .order('points', { ascending: false })
       .order('member_id')
       .range(from, to),
   );
 }
-export function fetchLeadershipCup(campaignId?: number) {
+export function fetchLeadershipCup(filters: CupFilters) {
   return pages<CupRow>((from, to) =>
     supabase
-      .rpc('department_cup', { p_campaign_id: campaignId })
+      .rpc('department_cup', filters)
       .order('points', { ascending: false })
       .order('name')
       .order('group_id')
@@ -63,7 +63,7 @@ export async function fetchLeadershipFilters() {
     pages((from, to) =>
       supabase
         .from('groups')
-        .select('id,name,path,status')
+        .select('id,name,path,status,is_organization')
         .order('id')
         .range(from, to),
     ),
@@ -77,18 +77,24 @@ export async function fetchLeadershipFilters() {
   ]);
   return { groups, campaigns };
 }
-export function useLeadershipLeaderboard(filters: LeadershipFilters) {
+/** `null` filters (an inverted date range) send nothing. */
+export function useLeadershipLeaderboard(filters: LeadershipFilters | null) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
     queryKey: keys.points.leadership(memberId, filters),
-    queryFn: memberId ? () => fetchLeadershipLeaderboard(filters) : skipToken,
+    queryFn:
+      memberId && filters
+        ? () => fetchLeadershipLeaderboard(filters)
+        : skipToken,
   });
 }
-export function useLeadershipCup(campaignId?: number) {
+/** `null` filters (an inverted date range) send nothing. */
+export function useLeadershipCup(filters: CupFilters | null) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
-    queryKey: keys.points.leadershipCup(memberId, campaignId),
-    queryFn: memberId ? () => fetchLeadershipCup(campaignId) : skipToken,
+    queryKey: keys.points.leadershipCup(memberId, filters),
+    queryFn:
+      memberId && filters ? () => fetchLeadershipCup(filters) : skipToken,
   });
 }
 export function useLeadershipFilters() {

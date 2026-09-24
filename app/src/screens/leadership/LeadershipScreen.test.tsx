@@ -26,9 +26,9 @@ vi.mock('../../lib/capabilities', () => ({
 }));
 import { useMemberCard } from '../../test/member-card-mock';
 const uid = '35400000-0000-0000-0000-000000000001';
-function renderPage() {
+function renderPage(query = '') {
   return render(
-    <MemoryRouter initialEntries={['/clasament']}>
+    <MemoryRouter initialEntries={[`/clasament${query}`]}>
       <main>
         <Routes>
           <Route path="/clasament" element={<LeadershipScreen />} />
@@ -47,7 +47,7 @@ beforeEach(() => {
       {
         member_id: uid,
         full_name: 'Ioana Popescu',
-        points: filters.groupId ? 12 : -1234,
+        points: filters?.p_group_id ? 12 : -1234,
       },
     ],
   }));
@@ -64,27 +64,70 @@ beforeEach(() => {
     },
   });
 });
-it('changes authoritative filters, displays returned totals and removes chips', async () => {
+it('sends no Work Filter argument with no level set, then the chosen ones', async () => {
   const user = userEvent.setup();
   renderPage();
+  expect(state.board).toHaveBeenLastCalledWith({});
+  expect(state.cup).toHaveBeenLastCalledWith({});
   expect(screen.getByText('−1.234')).toBeInTheDocument();
-  await user.click(screen.getByRole('combobox', { name: 'Grup' }));
+  await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
   await user.click(await screen.findByRole('option', { name: 'Educație' }));
-  expect(state.board).toHaveBeenLastCalledWith({
-    groupId: 7,
-    campaignId: undefined,
-  });
+  expect(state.board).toHaveBeenLastCalledWith({ p_group_id: 7 });
+  // The Group narrows only the members' board, never the Cup.
+  expect(state.cup).toHaveBeenLastCalledWith({});
   expect(screen.getByText('12')).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText('Campanie'), '3');
-  expect(state.board).toHaveBeenLastCalledWith({ groupId: 7, campaignId: 3 });
-  expect(state.cup).toHaveBeenLastCalledWith(3);
+  await user.click(screen.getByRole('combobox', { name: 'Campanie' }));
+  await user.click(await screen.findByRole('option', { name: /^Bun venit/ }));
+  expect(state.board).toHaveBeenLastCalledWith({
+    p_group_id: 7,
+    p_campaign_id: 3,
+  });
+  expect(state.cup).toHaveBeenLastCalledWith({ p_campaign_id: 3 });
   await user.click(
-    screen.getByRole('button', { name: 'Elimină filtrul Grup: Educație' }),
+    screen.getByRole('button', {
+      name: 'Elimină filtrul Grup principal: Educație',
+    }),
+  );
+  // Removing the root removes the Campaign that depended on it.
+  expect(state.board).toHaveBeenLastCalledWith({});
+});
+it('restores all four levels from the URL and sends the midnight bounds', () => {
+  renderPage(
+    '?grup=7&subgrup=9&campanie=3&de_la=2026-09-01&pana_la=2026-09-30',
   );
   expect(state.board).toHaveBeenLastCalledWith({
-    groupId: undefined,
-    campaignId: 3,
+    p_group_id: 9,
+    p_campaign_id: 3,
+    p_from: '2026-08-31T21:00:00.000Z',
+    p_to: '2026-09-30T21:00:00.000Z',
   });
+  expect(state.cup).toHaveBeenLastCalledWith({
+    p_campaign_id: 3,
+    p_from: '2026-08-31T21:00:00.000Z',
+    p_to: '2026-09-30T21:00:00.000Z',
+  });
+  expect(
+    screen.getByRole('combobox', { name: 'Grup principal' }),
+  ).toHaveTextContent('Educație');
+  expect(screen.getByRole('combobox', { name: 'Subgrup' })).toHaveTextContent(
+    'Mentorat',
+  );
+  expect(screen.getByRole('combobox', { name: 'Campanie' })).toHaveTextContent(
+    'Bun venit',
+  );
+});
+it('sends nothing while Până la is before De la', () => {
+  renderPage('?de_la=2026-09-30&pana_la=2026-09-01');
+  expect(state.board).toHaveBeenLastCalledWith(null);
+  expect(state.cup).toHaveBeenLastCalledWith(null);
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Data de sfârșit nu poate fi înaintea celei de început.',
+  );
+  expect(
+    screen.getAllByText(
+      'Corectează perioada din filtre ca să vezi rezultatele.',
+    ),
+  ).toHaveLength(2);
 });
 it('names each Member by Nickname as a card button whose card links to their history, with no axe violations', async () => {
   const user = userEvent.setup();
