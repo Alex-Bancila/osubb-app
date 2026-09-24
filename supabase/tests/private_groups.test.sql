@@ -30,6 +30,10 @@
 --   can_read_event without can_see_group      -> "events_read: the level-3 outsider ..." and the fan-out one
 --   group_members_read without can_see_group  -> "group_members_read: a BCE ..."
 --   the cascade without its repeated pass    -> "race: the repeated cascade pass ..."
+--   leadership_member_tasks without can_see_group (#759)
+--                                             -> "leadership_member_tasks: a BCE ..."
+--   campaigns_read without can_see_group (#759)
+--                                             -> "campaigns_read: the level-3 outsider ..." and "... BCE ..."
 -- my_groups() needs no call of its own: its rows are the caller's own
 -- Group Roles, each of which can_see_group admits by construction, and the
 -- wrapper joins public.groups under groups_read. Its assertions below pin
@@ -40,7 +44,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(72);
+select plan(80);
 
 create function pg_temp.u756(n integer) returns uuid language sql immutable as $$
   select ('75600000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -452,7 +456,62 @@ select is(
   array[false, true, true],
   'turning a parent public leaves its Child Groups as they are');
 
--- ==================== 11 · a Child Group created during the cascade ====================
+-- ==================== 11 · the leadership drill-down and Campaigns (#759) ====================
+-- Two read paths #756 left open: the BCE+ drill-down is a definer function
+-- behind a level threshold, and campaigns_read admitted every Member. Both
+-- now ask can_see_group of the owning Group.
+
+reset role;
+insert into public.tasks (title, deadline, group_id, audience, assignment_mode, status, created_by) values
+  ('Drill private #759', '2027-03-01 09:00+00', pg_temp.g756('Private #756'), 'local', 'direct', 'todo', pg_temp.u756(11)),
+  ('Drill public #759', '2027-03-01 09:00+00', pg_temp.g756('Open #756'), 'local', 'direct', 'todo', pg_temp.u756(1));
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, pg_temp.u756(4), pg_temp.u756(1), now()
+  from public.tasks where title like 'Drill % #759';
+insert into public.campaigns (group_id, name, created_by) values
+  (pg_temp.g756('Private #756'), 'Campaign private #759', pg_temp.u756(1)),
+  (pg_temp.g756('Child #756'), 'Campaign child #759', pg_temp.u756(1)),
+  (pg_temp.g756('Open #756'), 'Campaign open #759', pg_temp.u756(1));
+
+create function pg_temp.drill_759(p_member uuid) returns text language sql as $$
+  select coalesce(string_agg(title, ',' order by title), '')
+    from public.leadership_member_tasks(p_member) where title like 'Drill % #759'
+$$;
+create function pg_temp.visible_campaigns_759() returns text language sql as $$
+  select coalesce(string_agg(name, ',' order by name), '')
+    from public.campaigns where name like 'Campaign % #759'
+$$;
+grant execute on function pg_temp.drill_759(uuid) to authenticated;
+grant execute on function pg_temp.visible_campaigns_759() to authenticated;
+
+select pg_temp.test_login_leadership(pg_temp.u756(3));
+select is(pg_temp.drill_759(pg_temp.u756(4)), 'Drill public #759',
+  'leadership_member_tasks: a BCE drilling into a Member does not see their Assignment in a Private Group');
+select pg_temp.test_login_leadership(pg_temp.u756(1));
+select is(pg_temp.drill_759(pg_temp.u756(4)), 'Drill private #759,Drill public #759',
+  'leadership_member_tasks: BC sees every Assignment, the Private Group''s included');
+
+select pg_temp.test_login_leadership(pg_temp.u756(5));
+select is(pg_temp.visible_campaigns_759(), 'Campaign open #759',
+  'campaigns_read: the level-3 outsider reads none of a Private Group''s Campaigns');
+select pg_temp.test_login_leadership(pg_temp.u756(3));
+select is(pg_temp.visible_campaigns_759(), 'Campaign open #759',
+  'campaigns_read: nor does a BCE without a Group Role in it');
+select pg_temp.test_login_leadership(pg_temp.u756(4));
+select is(pg_temp.visible_campaigns_759(), 'Campaign open #759,Campaign private #759',
+  'campaigns_read: a member reads the Private Group''s Campaign, but not a private Child''s they are not in');
+select pg_temp.test_login_leadership(pg_temp.u756(7));
+select is(pg_temp.visible_campaigns_759(), 'Campaign child #759,Campaign open #759,Campaign private #759',
+  'campaigns_read: the Manager on the path reads every Campaign of the subtree');
+select pg_temp.test_login_leadership(pg_temp.u756(1));
+select is(pg_temp.visible_campaigns_759(), 'Campaign child #759,Campaign open #759,Campaign private #759',
+  'campaigns_read: BC reads every Campaign');
+select pg_temp.test_login_leadership(pg_temp.u756(12));
+select is(pg_temp.visible_campaigns_759(), 'Campaign open #759',
+  'campaigns_read: the membership gate still admits a level-1 Member to a public Group''s Campaign');
+reset role;
+
+-- ==================== 12 · a Child Group created during the cascade ====================
 -- create_group locks only its parent. Session A creates a Child Group under a
 -- descendant and holds that descendant; session B turns the root private and
 -- its cascade waits on the same row. A commits a public Child Group that B's
