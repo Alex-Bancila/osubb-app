@@ -71,7 +71,9 @@ app/
     │   ├── normalize.ts            # trim, lowercase email, phone → E.164 (+ test)
     │   ├── schemas/                # one zod schema per entity + fieldForReason (#674)
     │   ├── form-errors.ts          # zod issues + server reason → { field: message }
-    │   └── use-form-validation.ts  # blur/submit validation, server reason under its field
+    │   ├── use-form-validation.ts  # blur/submit validation, server reason under its field
+    │   ├── work-filter.ts          # the Work Filter: URL keys, cascade, Campaign rule, RPC bounds (+ test)
+    │   └── use-work-filter.ts      # useWorkFilter(): the filter in the query string, and its RPC params
     ├── queries/
     │   ├── client.ts       # QueryClient defaults; a refusal is not retried
     │   ├── keys.ts         # the key conventions — read this before adding a hook
@@ -85,7 +87,8 @@ app/
     ├── components/
     │   ├── ui/             # locally owned shadcn Base UI/Nova primitives
     │   ├── shell/          # AppShell.tsx, navItems.ts — one list drives sidebar/topbar/tab bar
-    │   └── states/         # Loading, Empty, ErrorState — every query renders all three (+ test)
+    │   ├── states/         # Loading, Empty, ErrorState — every query renders all three (+ test)
+    │   └── work-filter/    # WorkFilter: Grup principal → Subgrup → Campanie → dates, with chips (+ test)
     ├── screens/
     │   ├── Placeholder.tsx # stands in for a screen; says which issue builds it
     │   ├── dashboard/      # DashboardScreen (+test), DeptCupCard, LeaderboardCard, MyPointsCard

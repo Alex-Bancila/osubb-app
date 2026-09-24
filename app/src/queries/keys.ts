@@ -24,10 +24,22 @@ export const keys = {
     all: ['points'] as const,
     leadership: (
       memberId: string | undefined,
-      filters: { groupId?: number; campaignId?: number },
+      // The Work Filter's RPC arguments (#678); null while its range is invalid.
+      filters: {
+        p_group_id?: number;
+        p_campaign_id?: number;
+        p_from?: string;
+        p_to?: string;
+      } | null,
     ) => ['points', 'leadership', memberId, filters] as const,
-    leadershipCup: (memberId: string | undefined, campaignId?: number) =>
-      ['points', 'leadership-cup', memberId, campaignId] as const,
+    leadershipCup: (
+      memberId: string | undefined,
+      filters: {
+        p_campaign_id?: number;
+        p_from?: string;
+        p_to?: string;
+      } | null,
+    ) => ['points', 'leadership-cup', memberId, filters] as const,
     board: (memberId: string | undefined) =>
       ['points', 'board', { memberId }] as const,
     me: (memberId: string | undefined) =>

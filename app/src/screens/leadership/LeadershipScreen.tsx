@@ -1,15 +1,15 @@
 import { formatPoints } from '../../lib/format';
-import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Trophy, XIcon } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
-import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
-import { GroupOption, groupOptionLabel } from '../../components/ui/combobox';
+import { WorkFilter } from '../../components/work-filter/WorkFilter';
+import { useWorkFilter } from '../../lib/use-work-filter';
+import { withoutGroup } from '../../lib/work-filter';
 import {
   useLeadershipLeaderboard,
   useLeadershipCup,
@@ -42,67 +42,15 @@ const columns: DataTableColumn<LeaderboardRow>[] = [
     ),
   },
 ];
-type FilterGroup = {
-  id: number;
-  name: string;
-  path: number[];
-  status: string;
-};
+// An inverted range sends nothing (#678): the reads wait for a valid one.
+const RANGE_FIRST = 'Corectează perioada din filtre ca să vezi rezultatele.';
 
-// A searchable Group picker: `Name · Parent` tells two same-named teams apart,
-// and choosing a parent Group counts every Group below it.
-function GroupFilter({
-  groups,
-  value,
-  onChange,
-}: {
-  groups: FilterGroup[];
-  value: FilterGroup | null;
-  onChange: (group: FilterGroup | null) => void;
-}) {
-  const groupsById = new Map(groups.map((group) => [group.id, group]));
-  const label = (group: FilterGroup) =>
-    groupOptionLabel(group, groupsById) +
-    (group.status === 'archived' ? ' (arhivat)' : '');
-  return (
-    <div className="grid gap-1 text-sm font-medium">
-      <span id="leadership-group-label">Grup</span>
-      <GroupFilterCombobox
-        ariaLabelledBy="leadership-group-label"
-        groups={groups}
-        groupsById={groupsById}
-        value={value}
-        onValueChange={onChange}
-        placeholder="Toate grupurile"
-        itemToStringLabel={label}
-        renderItem={(group) => (
-          <>
-            <GroupOption group={group} groupsById={groupsById} />
-            {group.status === 'archived' && (
-              <span className="text-xs text-muted-foreground">arhivat</span>
-            )}
-          </>
-        )}
-      />
-    </div>
-  );
-}
-
-const selectStyle =
-  'min-h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring';
 function LeadershipContent() {
   const navigate = useNavigate();
-  const [groupId, setGroupId] = useState<number>();
-  const [campaignId, setCampaignId] = useState<number>();
+  const { params } = useWorkFilter();
   const options = useLeadershipFilters();
-  const board = useLeadershipLeaderboard({ groupId, campaignId });
-  const cup = useLeadershipCup(campaignId);
-  const selectedGroup = options.data?.groups.find(
-    (group) => group.id === groupId,
-  );
-  const selectedCampaign = options.data?.campaigns.find(
-    (campaign) => campaign.id === campaignId,
-  );
+  const board = useLeadershipLeaderboard(params);
+  const cup = useLeadershipCup(params && withoutGroup(params));
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-8">
       <header className="space-y-2">
@@ -129,64 +77,11 @@ function LeadershipContent() {
             </Button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <GroupFilter
-              groups={options.data.groups}
-              value={selectedGroup ?? null}
-              onChange={(group) => setGroupId(group?.id)}
-            />
-            <label className="grid gap-1 text-sm font-medium">
-              Campanie
-              <select
-                className={selectStyle}
-                value={campaignId ?? ''}
-                onChange={(event) =>
-                  setCampaignId(
-                    event.target.value ? Number(event.target.value) : undefined,
-                  )
-                }
-              >
-                <option value="">Toate campaniile</option>
-                {options.data.campaigns.map((campaign) => (
-                  <option key={campaign.id} value={campaign.id}>
-                    {campaign.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
-        <p className="text-sm text-muted-foreground">
-          Grupul include toate subgrupurile sale și filtrează doar clasamentul
-          membrilor. Campania filtrează și Cupa.
-        </p>
-        {(groupId || campaignId) && (
-          <div
-            role="group"
-            className="flex flex-wrap gap-2"
-            aria-label="Filtre active"
-          >
-            {groupId && (
-              <Button
-                variant="secondary"
-                aria-label={`Elimină filtrul Grup: ${selectedGroup?.name ?? groupId}`}
-                onClick={() => setGroupId(undefined)}
-              >
-                Grup: {selectedGroup?.name ?? `#${groupId}`}
-                <XIcon aria-hidden="true" />
-              </Button>
-            )}
-            {campaignId && (
-              <Button
-                variant="secondary"
-                aria-label={`Elimină filtrul Campanie: ${selectedCampaign?.name ?? campaignId}`}
-                onClick={() => setCampaignId(undefined)}
-              >
-                Campanie: {selectedCampaign?.name ?? `#${campaignId}`}
-                <XIcon aria-hidden="true" />
-              </Button>
-            )}
-          </div>
+          <WorkFilter
+            groups={options.data.groups}
+            campaigns={options.data.campaigns}
+            hint="Grupul include toate subgrupurile sale și filtrează doar clasamentul membrilor. Campania și perioada, după data acordării punctelor, filtrează și Cupa."
+          />
         )}
       </section>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -197,7 +92,9 @@ function LeadershipContent() {
           <h2 id="members-title" className="mb-4 text-xl font-semibold">
             Clasamentul membrilor
           </h2>
-          {board.isPending ? (
+          {!params ? (
+            <p>{RANGE_FIRST}</p>
+          ) : board.isPending ? (
             <p role="status">Se încarcă clasamentul…</p>
           ) : board.isError ? (
             <div role="alert">
@@ -231,7 +128,9 @@ function LeadershipContent() {
           <p className="mb-5 text-sm text-muted-foreground">
             Grupurile înscrise în competiție și punctele care le revin.
           </p>
-          {cup.isPending ? (
+          {!params ? (
+            <p>{RANGE_FIRST}</p>
+          ) : cup.isPending ? (
             <p role="status">Se încarcă Cupa…</p>
           ) : cup.isError ? (
             <div role="alert">
