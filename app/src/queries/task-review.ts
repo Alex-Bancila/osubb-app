@@ -4,6 +4,9 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { CommandError } from '../lib/command-reasons';
+import { parseOrRefuse } from '../lib/form-errors';
+import { evaluationSchema } from '../lib/schemas/evaluation';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { keys } from './keys';
@@ -35,8 +38,17 @@ const evaluationCopy: ReviewErrorCopy = {
   forbidden: 'Nu mai ai permisiunea de a evalua acest task.',
   failed: 'Nu am putut salva evaluarea. Încearcă din nou.',
 };
-export function reviewError(code?: string, copy = evaluationCopy) {
-  return new Error(
+/**
+ * A refused review command. A reason we know keeps its shared copy (and the
+ * form can show it under its field); anything else is told by its code.
+ */
+export function reviewError(
+  error: { code?: string; message?: string },
+  copy = evaluationCopy,
+) {
+  const { code } = error;
+  return new CommandError(
+    error,
     code === 'PT409'
       ? 'Taskul s-a schimbat. Verifică starea actuală înainte de a încerca din nou.'
       : code === '42501'
@@ -49,28 +61,19 @@ export function reviewError(code?: string, copy = evaluationCopy) {
 export async function evaluateTask(
   input: EvaluationInput & { outcome?: 'completed' | 'unfulfilled' },
 ) {
-  if (
-    !input.note.trim() ||
-    !Number.isInteger(input.difficulty) ||
-    input.difficulty < 1 ||
-    input.difficulty > 5 ||
-    !Number.isInteger(input.rating) ||
-    input.rating < 1 ||
-    input.rating > 5
-  )
-    throw new Error('Alege Dificultatea, Calificativul și scrie o notă.');
+  const values = parseOrRefuse(evaluationSchema, input, evaluationCopy.failed);
   const { data, error } = await supabase.rpc(
     input.outcome === 'unfulfilled'
       ? 'mark_task_unfulfilled'
       : 'complete_task_review',
     {
       p_task_id: input.taskId,
-      p_difficulty: input.difficulty,
-      p_rating: input.rating,
-      p_note: input.note.trim(),
+      p_difficulty: values.difficulty,
+      p_rating: values.rating,
+      p_note: values.note,
     },
   );
-  if (error) throw reviewError(error.code);
+  if (error) throw reviewError(error);
   return data;
 }
 export function useEvaluateTask() {

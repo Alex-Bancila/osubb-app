@@ -66,7 +66,12 @@ app/
     │   ├── capabilities.ts         # useCapabilities(): the server capability row (my_capabilities())
     │   ├── calendar-time.ts        # Bucharest wall-clock time conversions (+ calendar-time.test.ts)
     │   ├── database.types.ts       # generated — `npm run gen:types`, never hand-edited
-    │   └── format.ts               # dates, points, initials — Romanian locale
+    │   ├── format.ts               # dates, points, initials — Romanian locale
+    │   ├── command-reasons.ts      # the one reason → Romanian table (+ test)
+    │   ├── normalize.ts            # trim, lowercase email, phone → E.164 (+ test)
+    │   ├── schemas/                # one zod schema per entity + fieldForReason (#674)
+    │   ├── form-errors.ts          # zod issues + server reason → { field: message }
+    │   └── use-form-validation.ts  # blur/submit validation, server reason under its field
     ├── queries/
     │   ├── client.ts       # QueryClient defaults; a refusal is not retried
     │   ├── keys.ts         # the key conventions — read this before adding a hook
@@ -107,6 +112,23 @@ app/
 
 Each screen gets its own folder under `screens/` when there is something real
 to put in it.
+
+## Forms and validation
+
+Every form follows ruling R8 (#674). Its rules live in one zod schema per
+entity under `src/lib/schemas/`, which mirrors the server's limits (#673) and
+normalises before it measures: every text is trimmed, an email lowercased, a
+phone turned into E.164 exactly as `private.normalize_phone` does. A schema's
+issue messages are reason codes, never copy; `src/lib/command-reasons.ts` is
+the only place a reason becomes Romanian, for the browser's rules and the
+server's refusals alike.
+
+`useFormValidation(schema, values, fieldForReason)` checks a field on blur and
+the whole draft on submit, disables nothing before the first try, focuses the
+first broken field, and `fail(error, fallback)` puts a server reason under the
+field `fieldForReason` names (anything else in the form-level slot). Errors
+render through `FieldError` from `components/ui/field.tsx` — do not add a
+second error component or a per-feature reason table.
 
 ## Adding a query
 

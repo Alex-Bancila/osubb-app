@@ -272,12 +272,12 @@ describe('Task details sheet', () => {
     await user.click(await screen.findByRole('button', { name: 'Duplică' }));
     await user.type(
       screen.getByLabelText('Termen nou (ora Bucureștiului)'),
-      '2026-10-20T12:30',
+      '2030-10-20T12:30',
     );
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));
     expect(duplicate).toHaveBeenCalledWith({
       taskId: 1,
-      deadline: '2026-10-20T09:30:00.000Z',
+      deadline: '2030-10-20T09:30:00.000Z',
     });
     expect(await screen.findByText('Copia nouă')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Duplicat din #1' }));

@@ -65,7 +65,7 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await chooseGroup(user);
   await user.type(screen.getByLabelText('Titlu'), 'Ședință de toamnă');
   fireEvent.change(screen.getByLabelText(/Începe/), {
-    target: { value: '2026-10-01T18:00' },
+    target: { value: '2030-10-01T18:00' },
   });
 }
 
@@ -121,7 +121,7 @@ describe('NewEventControl', () => {
       expect.objectContaining({
         title: 'Ședință de toamnă',
         groupId: 7,
-        startsAt: '2026-10-01T15:00:00.000Z',
+        startsAt: '2030-10-01T15:00:00.000Z',
       }),
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -155,9 +155,12 @@ describe('NewEventControl', () => {
     await user.click(
       screen.getByRole('button', { name: 'Creează evenimentul' }),
     );
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Alege grupul evenimentului.',
-    );
+    expect(
+      await screen.findByText('Alege grupul evenimentului.'),
+    ).toHaveAttribute('role', 'alert');
+    expect(
+      screen.getByLabelText('Începe — ora României'),
+    ).toHaveAccessibleDescription('Alege ora de început.');
     expect(state.mutateAsync).not.toHaveBeenCalled();
   });
 

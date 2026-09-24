@@ -47,27 +47,6 @@ export async function completeUmbrella(taskId: number) {
   return data;
 }
 
-const completionReasons: Record<string, string> = {
-  task_command_forbidden: 'Nu ai permisiunea să finalizezi acest task-umbrelă.',
-  task_manage_forbidden: 'Nu ai permisiunea să finalizezi acest task-umbrelă.',
-  task_not_found: 'Taskul-umbrelă nu mai este disponibil.',
-  task_not_umbrella: 'Taskul ales nu este un task-umbrelă.',
-  task_terminal: 'Taskul-umbrelă este deja finalizat sau anulat.',
-  umbrella_has_no_subtasks:
-    'Adaugă cel puțin un subtask înainte de finalizare.',
-  subtasks_not_terminal:
-    'Starea subtaskurilor s-a schimbat. Verifică lista actualizată.',
-};
-export function umbrellaCompletionErrorMessage(error: unknown): string {
-  const fallback = 'Nu am putut finaliza taskul-umbrelă. Reîncearcă.';
-  const reason =
-    typeof error === 'object' && error !== null && 'message' in error
-      ? error.message
-      : undefined;
-  return typeof reason === 'string' && Object.hasOwn(completionReasons, reason)
-    ? (completionReasons[reason] ?? fallback)
-    : fallback;
-}
 export function createTaskMutationOptions(client: QueryClient) {
   return {
     mutationFn: createTask,

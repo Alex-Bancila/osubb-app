@@ -197,19 +197,20 @@ describe('Announcement composer', () => {
       '2',
     );
     await user.click(publish);
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      'Completează titlul',
-    );
+    expect(title).toHaveAccessibleDescription('Scrie titlul.');
+    expect(title).toHaveFocus();
     expect(mutateAsync).not.toHaveBeenCalled();
     await user.clear(title);
     await user.type(title, 'Anunț');
     await user.type(formName, 'Formular');
     await user.click(publish);
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('atât numele');
+    expect(formUrl).toHaveAccessibleDescription(
+      'Scrie adresa linkului sau lasă linkul gol.',
+    );
     await user.type(formUrl, 'ftp://example.com');
     await user.click(publish);
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      'http sau https',
+    expect(formUrl).toHaveAccessibleDescription(
+      'Adresa trebuie să înceapă cu http:// sau https://.',
     );
     expect(mutateAsync).not.toHaveBeenCalled();
   });

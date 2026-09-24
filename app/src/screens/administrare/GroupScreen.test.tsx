@@ -278,7 +278,7 @@ it('names who leaves before it raises the Minimum Level, and only then confirms'
     kind: 'settings',
     groupId: 2,
     name: 'Logistică',
-    managerTitle: '',
+    managerTitle: null,
     acceptsApplications: false,
     applicationLevel: null,
     sharedWorkVisibility: false,

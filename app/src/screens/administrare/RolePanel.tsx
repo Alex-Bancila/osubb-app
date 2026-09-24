@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
+import { commandErrorMessage } from '../../lib/command-reasons';
 import {
   useAdminGroups,
   useAppointableMembers,
@@ -21,17 +22,12 @@ const control =
 /** `member_status` enum values, in the reference list's canonical order. */
 const statusOptions = Object.keys(statusLabels);
 
+/** A refused change, in the shared copy of `command-reasons.ts`. */
 function changeError(error: unknown) {
-  const message =
-    error && typeof error === 'object' && 'message' in error
-      ? String(error.message)
-      : '';
-  if (message === 'member_manage_forbidden')
-    return 'Nu mai ai permisiunea de a modifica acest membru. Reîncarcă pagina.';
-  if (message === 'member_not_found')
-    return 'Membrul nu mai este disponibil. Reîncarcă pagina.';
-  if (message === 'nothing_to_update') return 'Nu există modificări de salvat.';
-  return 'Nu am putut salva modificarea. Încearcă din nou.';
+  return commandErrorMessage(
+    error,
+    'Nu am putut salva modificarea. Încearcă din nou.',
+  );
 }
 
 /** The Role and Status management surface; the server capability gates mount. */

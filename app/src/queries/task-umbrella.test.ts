@@ -7,7 +7,6 @@ import {
   completeUmbrella,
   createTask,
   createTaskMutationOptions,
-  umbrellaCompletionErrorMessage,
 } from './task-umbrella';
 import type { TaskDraft } from '../screens/tracker/task-form-model';
 const draft: TaskDraft = {
@@ -107,25 +106,6 @@ describe('Umbrella commands', () => {
   });
 });
 
-it.each([
-  ['task_command_forbidden', 'Nu ai permisiunea'],
-  ['task_manage_forbidden', 'Nu ai permisiunea'],
-  ['task_not_found', 'nu mai este disponibil'],
-  ['task_not_umbrella', 'nu este un task-umbrelă'],
-  ['task_terminal', 'deja finalizat'],
-  ['umbrella_has_no_subtasks', 'cel puțin un subtask'],
-  ['subtasks_not_terminal', 'Starea subtaskurilor s-a schimbat'],
-])('maps stable completion reason %s without SQLSTATE', (message, expected) => {
-  expect(umbrellaCompletionErrorMessage({ message })).toContain(expected);
-  expect(
-    umbrellaCompletionErrorMessage({ message, code: 'unknown' }),
-  ).toContain(expected);
-});
-it('does not classify or expose unknown completion payloads', () => {
-  expect(
-    umbrellaCompletionErrorMessage({ code: '42501', message: 'secret SQL' }),
-  ).toBe('Nu am putut finaliza taskul-umbrelă. Reîncearcă.');
-});
 it('refreshes Task reads even when Subtask creation is denied', async () => {
   const client = new QueryClient();
   const invalidate = vi.spyOn(client, 'invalidateQueries');

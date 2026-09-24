@@ -1,5 +1,8 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
+import { fieldForReason, reasonSchema } from '../../lib/schemas/reason';
+import { useFormValidation } from '../../lib/use-form-validation';
 import { useGiveUpTask } from '../../queries/task-give-up';
 
 export function TaskGiveUpControl({ taskId }: { taskId: number }) {
@@ -7,32 +10,24 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
   const reasonId = useId();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const form = useFormValidation(reasonSchema, { reason }, fieldForReason);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalizedReason = reason.trim();
-    if (!normalizedReason) {
-      setError('Scrie motivul pentru care renunți la task.');
-      return;
-    }
+    const values = form.validate();
+    if (!values) return;
 
-    setError(null);
     setMessage(null);
     try {
-      await mutation.mutateAsync({ taskId, reason: normalizedReason });
+      await mutation.mutateAsync({ taskId, reason: values.reason });
       setReason('');
       setOpen(false);
       setMessage(
         'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.',
       );
     } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'Nu am putut salva renunțarea. Încearcă din nou.',
-      );
+      form.fail(failure, 'Nu am putut salva renunțarea. Încearcă din nou.');
     }
   }
 
@@ -44,7 +39,7 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
           variant="outline"
           className="min-h-11 min-w-11 w-full whitespace-normal sm:w-auto"
           onClick={() => {
-            setError(null);
+            form.reset();
             setMessage(null);
             setOpen(true);
           }}
@@ -72,18 +67,15 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
           onChange={(event) => setReason(event.target.value)}
           rows={3}
           autoFocus
-          aria-describedby={`${reasonId}-help`}
           className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+          {...form.field('reason', `${reasonId}-help`)}
         />
+        <FieldError {...form.errorProps('reason')} />
         <p id={`${reasonId}-help`} className="text-sm text-muted-foreground">
           Motivul rămâne în istoricul taskului și este trimis managerului.
         </p>
       </div>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError>{form.formError}</FieldError>
       <div className="flex flex-wrap gap-2">
         <Button
           type="submit"
@@ -99,7 +91,7 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
           className="min-h-11 min-w-11"
           disabled={mutation.isPending}
           onClick={() => {
-            setError(null);
+            form.reset();
             setOpen(false);
           }}
         >

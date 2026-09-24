@@ -14,7 +14,7 @@ import type {
   AdminGroup,
   AppointableMember,
   GroupAuthority,
-  GroupCommand,
+  RunGroupCommand,
 } from '../../queries/groups-admin';
 import { GroupCreateDialog } from './GroupCreateDialog';
 import { categoryLabel, groupStatusLabel } from './group-tree';
@@ -125,7 +125,7 @@ export function GroupChildrenTab({
   authorityFor: (child: AdminGroup) => GroupAuthority;
   busy: boolean;
   error: string | null;
-  onRun: (command: GroupCommand) => Promise<boolean>;
+  onRun: RunGroupCommand;
 }) {
   return (
     <div className="space-y-4">
@@ -148,7 +148,6 @@ export function GroupChildrenTab({
             actorLevel={actorLevel}
             members={members}
             disabled={busy}
-            error={error}
             onCreate={onRun}
           />
         )}

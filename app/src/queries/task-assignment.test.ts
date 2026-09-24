@@ -35,5 +35,5 @@ it('uses the stable reason even if its SQL code changes', async () => {
   });
   await expect(
     assignTaskExecutor({ taskId: 7, memberId: 'member' }),
-  ).rejects.toThrow('Membrul nu mai este eligibil');
+  ).rejects.toThrow('Executorul nu mai este eligibil');
 });

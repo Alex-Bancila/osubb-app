@@ -77,7 +77,8 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'create',
     groupId: 2,
-    name: '  Iarnă  ',
+    // Trimmed before it is measured or sent (ruling R6).
+    name: 'Iarnă',
   });
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await user.click(screen.getByRole('button', { name: 'Redenumește' }));

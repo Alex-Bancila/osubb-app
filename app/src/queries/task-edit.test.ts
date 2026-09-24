@@ -120,7 +120,7 @@ it('maps refusals to safe copy and flags a needed confirmation', async () => {
     error: { code: '42501', message: 'task_manage_forbidden' },
   });
   await expect(previewTaskUpdate(input)).rejects.toThrow(
-    'Nu mai ai permisiunea de a edita',
+    'Nu mai ai permisiunea să gestionezi',
   );
   api.rpc.mockResolvedValue({
     error: { code: 'PT409', message: 'task_update_needs_confirmation' },

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CommandError } from '../../lib/command-reasons';
 
 const mutation = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -62,7 +63,9 @@ describe('Task give-up control', () => {
 
   it('preserves the reason and shows a safe command failure', async () => {
     const user = userEvent.setup();
-    mutation.mutateAsync.mockRejectedValue(new Error('Taskul s-a schimbat.'));
+    mutation.mutateAsync.mockRejectedValue(
+      new CommandError(null, 'Taskul s-a schimbat.'),
+    );
     render(<TaskGiveUpControl taskId={17} />);
 
     await user.click(screen.getByRole('button', { name: 'Renunță la task' }));

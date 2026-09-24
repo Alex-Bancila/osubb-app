@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -8,9 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { commandErrorMessage } from '../../lib/command-reasons';
 import { formatPoints } from '../../lib/format';
+import { campaignSchema, fieldForReason } from '../../lib/schemas/campaign';
+import { useFormValidation } from '../../lib/use-form-validation';
 import {
-  CampaignError,
   useCampaignChange,
   useCampaignReport,
   useCampaigns,
@@ -20,8 +23,14 @@ import {
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+const SAVE_FAILED = 'Nu am putut salva campania. Reîncearcă.';
 
-/** A small pop-up that asks for one Campaign name: used to create and to rename. */
+/**
+ * A small pop-up that asks for one Campaign name: used to create and to
+ * rename. The name is checked on blur and on save (3–120 characters, ruling
+ * R8); a refused save keeps the pop-up and the typed name, with the reason
+ * under the field.
+ */
 function CampaignNameDialog({
   title,
   label,
@@ -29,7 +38,6 @@ function CampaignNameDialog({
   initialName,
   trigger,
   disabled,
-  error,
   onSave,
 }: {
   title: string;
@@ -38,21 +46,26 @@ function CampaignNameDialog({
   initialName: string;
   trigger: string;
   disabled: boolean;
-  /** The last save's refusal, shown inside the pop-up while it is open. */
-  error: string | null;
-  onSave: (name: string) => Promise<boolean>;
+  /** Runs the command; rejects with the refusal. */
+  onSave: (name: string) => Promise<void>;
 }) {
+  const inputId = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initialName);
-  // Show only a refusal of a save made from this pop-up since it opened.
-  const [attempted, setAttempted] = useState(false);
-  const unchanged = name.trim() === initialName.trim();
+  const form = useFormValidation(campaignSchema, { name }, fieldForReason);
+  // Renaming to the same name is not a change; nothing to send.
+  const unchanged = initialName !== '' && name.trim() === initialName.trim();
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || unchanged) return;
-    setAttempted(true);
-    // A rejected save keeps the pop-up and the typed name for a retry.
-    if (await onSave(name)) setOpen(false);
+    if (unchanged) return;
+    const values = form.validate();
+    if (!values) return;
+    try {
+      await onSave(values.name);
+      setOpen(false);
+    } catch (failure) {
+      form.fail(failure, SAVE_FAILED);
+    }
   }
   return (
     <Dialog
@@ -62,7 +75,7 @@ function CampaignNameDialog({
         setOpen(next);
         if (next) {
           setName(initialName);
-          setAttempted(false);
+          form.reset();
         }
       }}
     >
@@ -72,33 +85,33 @@ function CampaignNameDialog({
         disabled={disabled}
         onClick={() => {
           setName(initialName);
-          setAttempted(false);
+          form.reset();
           setOpen(true);
         }}
       >
         {trigger}
       </Button>
       <DialogContent>
-        <form onSubmit={submit} className="grid gap-4">
+        <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">{label}</span>
+          <div className="grid gap-1.5">
+            <label htmlFor={inputId} className="text-sm font-medium">
+              {label}
+            </label>
             <input
+              id={inputId}
               className={control}
               value={name}
               required
-              maxLength={200}
               disabled={disabled}
               onChange={(event) => setName(event.target.value)}
+              {...form.field('name')}
             />
-          </label>
-          {attempted && error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+            <FieldError {...form.errorProps('name')} />
+          </div>
+          <FieldError>{form.formError}</FieldError>
           <DialogFooter>
             <Button
               type="button"
@@ -108,10 +121,7 @@ function CampaignNameDialog({
             >
               Renunță
             </Button>
-            <Button
-              type="submit"
-              disabled={disabled || !name.trim() || unchanged}
-            >
+            <Button type="submit" disabled={disabled || unchanged}>
               {submitLabel}
             </Button>
           </DialogFooter>
@@ -177,14 +187,16 @@ function CampaignReportView({ campaignId }: { campaignId: number }) {
 
 function CampaignRow({
   campaign,
-  onChange,
+  onRun,
+  onToggle,
   disabled,
-  error,
 }: {
   campaign: Campaign;
-  onChange: (change: CampaignChange) => Promise<boolean>;
+  /** Runs a change and rejects with its refusal (the rename pop-up shows it). */
+  onRun: (change: CampaignChange) => Promise<void>;
+  /** Runs a change and shows a refusal above the list. */
+  onToggle: (change: CampaignChange) => Promise<void>;
   disabled: boolean;
-  error: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const reportId = useId();
@@ -205,17 +217,14 @@ function CampaignRow({
             trigger="Redenumește"
             initialName={campaign.name}
             disabled={disabled}
-            error={error}
-            onSave={(name) =>
-              onChange({ kind: 'rename', id: campaign.id, name })
-            }
+            onSave={(name) => onRun({ kind: 'rename', id: campaign.id, name })}
           />
           <Button
             type="button"
             variant="outline"
             disabled={disabled}
             onClick={() =>
-              void onChange({
+              void onToggle({
                 kind: 'active',
                 id: campaign.id,
                 active: !campaign.is_active,
@@ -262,8 +271,9 @@ export function CampaignsPanel({
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
 
-  async function save(change: CampaignChange) {
-    if (submitting.current) return false;
+  /** One change at a time; a refusal is thrown to whoever asked. */
+  async function run(change: CampaignChange) {
+    if (submitting.current) return;
     submitting.current = true;
     setError(null);
     setMessage(null);
@@ -278,16 +288,16 @@ export function CampaignsPanel({
               ? 'Campania a fost activată.'
               : 'Campania a fost dezactivată. Taskurile existente păstrează campania.',
       );
-      return true;
-    } catch (failure) {
-      setError(
-        failure instanceof CampaignError
-          ? failure.message
-          : 'Nu am putut salva campania. Reîncearcă.',
-      );
-      return false;
     } finally {
       submitting.current = false;
+    }
+  }
+
+  async function toggle(change: CampaignChange) {
+    try {
+      await run(change);
+    } catch (failure) {
+      setError(commandErrorMessage(failure, SAVE_FAILED));
     }
   }
 
@@ -309,8 +319,7 @@ export function CampaignsPanel({
           trigger="Campanie nouă"
           initialName=""
           disabled={mutation.isPending}
-          error={error}
-          onSave={(name) => save({ kind: 'create', groupId: group.id, name })}
+          onSave={(name) => run({ kind: 'create', groupId: group.id, name })}
         />
       </div>
       {campaigns.isPending ? (
@@ -328,9 +337,9 @@ export function CampaignsPanel({
             <CampaignRow
               key={`${campaign.id}:${campaign.name}`}
               campaign={campaign}
-              onChange={save}
+              onRun={run}
+              onToggle={toggle}
               disabled={mutation.isPending}
-              error={error}
             />
           ))}
           {!own?.length && <li>Grupul nu are încă nicio campanie.</li>}

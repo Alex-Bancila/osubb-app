@@ -302,6 +302,16 @@ export type GroupCommand =
       positionTitle: string | null;
     };
 
+/**
+ * How a screen runs a Group command: `true` when it saved. With `onFailure`
+ * the refusal goes back to the form that asked, which shows it under the
+ * field it belongs to (ruling R8), instead of above the page.
+ */
+export type RunGroupCommand = (
+  command: GroupCommand,
+  onFailure?: (failure: unknown) => void,
+) => Promise<boolean>;
+
 const FALLBACK = 'Nu am putut salva schimbarea. Reîncearcă.';
 
 function trimmed(value: string | null): string | null {

@@ -62,7 +62,7 @@ it('rechecks current origins before releasing a draft and preserves entered cont
     'Draft păstrat',
   );
   fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2026-10-01T12:30' },
+    target: { value: '2030-10-01T12:30' },
   });
   await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
   await pickOrigin(user);
@@ -97,7 +97,7 @@ it('maps authoritative submission errors and prevents duplicate commands while r
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Titlu (obligatoriu)'), 'Task');
   fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2026-10-01T12:30' },
+    target: { value: '2030-10-01T12:30' },
   });
   await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
   await pickOrigin(user);

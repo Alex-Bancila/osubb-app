@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
+import { CommandError } from '../../lib/command-reasons';
 const state = vi.hoisted(() => ({
   capability: true,
   mutation: { isPending: false, mutateAsync: vi.fn() },
@@ -82,7 +83,7 @@ it('requires all fields, previews live guide values and submits one Executor eva
 }, 15_000);
 it('retains entered values on conflict and is accessible', async () => {
   state.mutation.mutateAsync.mockRejectedValue(
-    new Error('Taskul s-a schimbat.'),
+    new CommandError(null, 'Taskul s-a schimbat.'),
   );
   const user = userEvent.setup();
   const { container } = render(<TaskEvaluationControl {...props} />);

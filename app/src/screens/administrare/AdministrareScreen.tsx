@@ -287,7 +287,10 @@ export default function AdministrareScreen() {
     [rolesQuery.data],
   );
 
-  async function run(next: GroupCommand): Promise<boolean> {
+  async function run(
+    next: GroupCommand,
+    onFailure?: (failure: unknown) => void,
+  ): Promise<boolean> {
     if (submitting.current) return false;
     submitting.current = true;
     setError(null);
@@ -297,11 +300,13 @@ export default function AdministrareScreen() {
       setMessage('Grupul a fost creat.');
       return true;
     } catch (failure) {
-      setError(
-        failure instanceof CommandError
-          ? failure.message
-          : 'Nu am putut crea grupul. Reîncearcă.',
-      );
+      if (onFailure) onFailure(failure);
+      else
+        setError(
+          failure instanceof CommandError
+            ? failure.message
+            : 'Nu am putut crea grupul. Reîncearcă.',
+        );
       return false;
     } finally {
       submitting.current = false;
@@ -340,7 +345,6 @@ export default function AdministrareScreen() {
             actorLevel={actorLevel}
             members={membersQuery.data ?? []}
             disabled={command.isPending}
-            error={error}
             onCreate={run}
           />
         )}
