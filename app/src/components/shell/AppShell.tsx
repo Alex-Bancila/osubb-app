@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
-import { LogOut, Menu, X } from 'lucide-react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { Bell, LogOut, Menu, X } from 'lucide-react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
@@ -167,6 +167,7 @@ export default function AppShell() {
   const profile = useMyProfile();
   const roles = useRoles();
   const unreadNotifications = useUnreadNotificationCount();
+  const unreadCount = unreadNotifications.data ?? 0;
   // The one cached my_capabilities() row the route guards and the Tracker
   // share: live rank and Group Roles, which the token cannot carry.
   const capabilities = useCapabilities();
@@ -186,6 +187,8 @@ export default function AppShell() {
       ? location.pathname === '/'
       : location.pathname.startsWith(item.path),
   );
+  const isNotificationsActive =
+    location.pathname.startsWith(NOTIFICATIONS_PATH);
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -208,7 +211,7 @@ export default function AppShell() {
     roleLabel,
     level: claims?.member_level,
     signOutAction,
-    unreadNotifications: unreadNotifications.data ?? 0,
+    unreadNotifications: unreadCount,
   };
 
   return (
@@ -266,6 +269,31 @@ export default function AppShell() {
           <span className="truncate text-lg font-extrabold">
             {current?.label ?? 'OSUBB'}
           </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'relative ml-auto shrink-0 lg:hidden',
+              isNotificationsActive && 'bg-accent text-accent-foreground',
+            )}
+            aria-current={isNotificationsActive ? 'page' : undefined}
+            aria-label={
+              unreadCount > 0
+                ? `Notificări, ${unreadBadgeLabel(unreadCount)}`
+                : 'Notificări'
+            }
+            render={<Link to={NOTIFICATIONS_PATH} />}
+          >
+            <Bell aria-hidden="true" />
+            {unreadCount > 0 && (
+              <Badge
+                variant="destructive"
+                className="absolute top-1.5 right-1.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]"
+              >
+                <span aria-hidden="true">{unreadCount}</span>
+              </Badge>
+            )}
+          </Button>
         </header>
       </Sheet>
 
