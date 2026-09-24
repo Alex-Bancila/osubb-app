@@ -6,6 +6,8 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import { useEvaluationScale } from '../../queries/reference';
 import { formatPoints } from '../../lib/format';
 import { RatingGuideDialog } from '../../screens/tracker/RatingGuideDialog';
+import { ratingHint } from '../../screens/tracker/rating-guide-content';
+import { ScoreScale } from './ScoreScale';
 
 export function EvaluationFields({
   executorName,
@@ -106,46 +108,34 @@ export function EvaluationFields({
         <legend className="sr-only">
           Dificultate, calificativ și notă obligatorii
         </legend>
-        <label
-          htmlFor={`${id}-difficulty`}
-          className="block text-sm font-medium"
-        >
-          Dificultate (obligatoriu)
-        </label>
-        <select
-          id={`${id}-difficulty`}
-          required
-          value={difficulty}
-          onChange={(event) => setDifficulty(event.target.value)}
-          className="min-h-11 w-full rounded-md border border-input bg-background px-3"
-          {...form.field('difficulty')}
-        >
-          <option value="">Alege dificultatea</option>
-          {scale.data?.difficulties.map((row) => (
-            <option key={row.stars} value={row.stars}>
-              {row.stars} — {row.note}
-            </option>
-          ))}
-        </select>
+        <ScoreScale
+          variant="steps"
+          label="Dificultate (obligatoriu)"
+          prompt="Alege dificultatea: 1 e cel mai ușor, 5 cel mai greu."
+          value={difficulty === '' ? null : Number(difficulty)}
+          onChange={(value) => setDifficulty(String(value))}
+          hint={(value) =>
+            scale.data?.difficulties.find((row) => row.stars === value)?.note ??
+            null
+          }
+          disabled={isPending || !scale.data}
+          invalid={form.error('difficulty') !== undefined}
+          errorId={form.errorId('difficulty')}
+          groupRef={form.slot('difficulty').ref}
+        />
         <FieldError {...form.errorProps('difficulty')} />
-        <label htmlFor={`${id}-rating`} className="block text-sm font-medium">
-          Calificativ (obligatoriu)
-        </label>
-        <select
-          id={`${id}-rating`}
-          required
-          value={rating}
-          onChange={(event) => setRating(event.target.value)}
-          className="min-h-11 w-full rounded-md border border-input bg-background px-3"
-          {...form.field('rating')}
-        >
-          <option value="">Alege calificativul</option>
-          {scale.data?.ratings.map((row) => (
-            <option key={row.rating} value={row.rating}>
-              {row.rating} — {row.label}
-            </option>
-          ))}
-        </select>
+        <ScoreScale
+          variant="stars"
+          label="Calificativ (obligatoriu)"
+          prompt="Alege între 1 și 5 stele."
+          value={rating === '' ? null : Number(rating)}
+          onChange={(value) => setRating(String(value))}
+          hint={ratingHint}
+          disabled={isPending || !scale.data}
+          invalid={form.error('rating') !== undefined}
+          errorId={form.errorId('rating')}
+          groupRef={form.slot('rating').ref}
+        />
         <FieldError {...form.errorProps('rating')} />
         <p role="status" className="rounded-md bg-muted p-3 text-sm">
           {points === null

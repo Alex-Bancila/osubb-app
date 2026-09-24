@@ -87,6 +87,20 @@ it.each(CONSTRAINTS_KIT_REASONS)('has Romanian copy for %s', (reason) => {
   ).toBe(copy);
 });
 
+/* Every reason #684's `submit_task_for_review` raises for a Submission Note
+   (20260924010111_attached_link_submission_note.sql). */
+it.each([
+  'note_too_long',
+  'link_incomplete',
+  'link_label_too_long',
+  'link_url_invalid',
+  'link_url_too_long',
+])('has Romanian copy for the Submission Note reason %s', (reason) => {
+  const copy = reasonCopy(reason);
+  expect(copy).toBeDefined();
+  expect(copy).not.toMatch(/_/);
+});
+
 it('says the limits in words a member can act on', () => {
   expect(reasonCopy('title_too_short')).toBe(
     'Titlul are cel puțin 3 caractere.',

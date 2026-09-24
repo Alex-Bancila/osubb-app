@@ -128,4 +128,47 @@ describe('Authorized Task timeline', () => {
       screen.getByText(/Istoricul vechi poate fi incomplet/),
     ).toBeVisible();
   });
+
+  it('names Attached Link edits and shows a submission link', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              changed: ['link_label', 'link_url'],
+              before: { link_label: null, link_url: null },
+              after: {
+                link_label: 'Brief',
+                link_url: 'https://drive.example/b',
+              },
+            },
+          }),
+          activity({
+            id: 2,
+            kind: 'submitted',
+            note: 'Gata',
+            occurred_at: '2026-09-16T00:00:00Z',
+            details: {
+              link_label: 'Surse',
+              link_url: 'https://drive.example/s',
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText('Task actualizat: etichetă link, adresă link'),
+    ).toBeVisible();
+    expect(screen.getByText('Etichetă link: Brief')).toBeVisible();
+    expect(
+      screen.getByText('Adresă link: https://drive.example/b'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('link', {
+        name: 'Surse (se deschide într-o filă nouă)',
+      }),
+    ).toHaveAttribute('rel', 'noopener noreferrer');
+  });
 });

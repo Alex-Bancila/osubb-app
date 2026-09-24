@@ -129,19 +129,27 @@ function mockTaskReads(
   const openQuery = {
     select: vi.fn(),
     eq: vi.fn(),
+    order: vi.fn(),
+    limit: vi.fn(),
     is: vi.fn(),
     in: vi.fn(),
   };
   openQuery.select.mockReturnValue(openQuery);
+  openQuery.order.mockReturnValue(openQuery);
+  openQuery.limit.mockReturnValue(openQuery);
   openQuery.eq.mockReturnValue(openQuery);
   openQuery.is.mockReturnValue(openQuery);
   openQuery.in.mockResolvedValue({ data: openTasks, error: null });
   const participatedQuery = {
     select: vi.fn(),
     eq: vi.fn(),
+    order: vi.fn(),
+    limit: vi.fn(),
     in: vi.fn().mockResolvedValue({ data: participated, error: null }),
   };
   participatedQuery.select.mockReturnValue(participatedQuery);
+  participatedQuery.order.mockReturnValue(participatedQuery);
+  participatedQuery.limit.mockReturnValue(participatedQuery);
   participatedQuery.eq.mockReturnValue(participatedQuery);
   let taskQueryCount = 0;
   api.from.mockImplementation((table: string) => {
@@ -198,6 +206,13 @@ it('keeps an own candidature after its queue closes without broadening other row
     },
     { id: 2, visibleExecutor: null },
   ]);
+  // Each card's latest Submission Note comes in the same request (#685).
+  for (const query of [openQuery, participatedQuery]) {
+    expect(query.eq).toHaveBeenCalledWith('submission.kind', 'submitted');
+    expect(query.limit).toHaveBeenCalledWith(1, {
+      referencedTable: 'submission',
+    });
+  }
   expect(openQuery.is).toHaveBeenCalledWith('queue_closed_at', null);
   expect(openQuery.in).toHaveBeenCalledWith('status', [
     'todo',

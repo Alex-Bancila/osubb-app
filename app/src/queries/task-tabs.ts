@@ -3,7 +3,7 @@ import { useAuth } from '../lib/auth';
 import { useCapability } from '../lib/capabilities';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-import { TASK_PRESENTATION_FIELDS } from './tasks';
+import { latestSubmissionOnly, TASK_PRESENTATION_FIELDS } from './tasks';
 import { attachVisibleTaskExecutors } from './task-executors';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
@@ -20,13 +20,12 @@ export async function fetchManagedTasks(): Promise<TaskPresentationRow[]> {
   if (!data.length) return [];
   const rows: TaskPresentationRow[] = [];
   for (let offset = 0; offset < data.length; offset += 100) {
-    const result = await supabase
-      .from('tasks')
-      .select(TASK_PRESENTATION_FIELDS)
-      .in(
-        'id',
-        data.slice(offset, offset + 100).map((item) => item.task_id),
-      );
+    const result = await latestSubmissionOnly(
+      supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+    ).in(
+      'id',
+      data.slice(offset, offset + 100).map((item) => item.task_id),
+    );
     if (result.error) throw result.error;
     rows.push(...result.data);
   }
@@ -68,9 +67,9 @@ export function useAllTasks(enabled: boolean) {
         ? async (): Promise<TaskPresentationRow[]> => {
             const rows: TaskPresentationRow[] = [];
             for (let offset = 0; ; offset += 500) {
-              const { data, error } = await supabase
-                .from('tasks')
-                .select(TASK_PRESENTATION_FIELDS)
+              const { data, error } = await latestSubmissionOnly(
+                supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+              )
                 .order('id')
                 .range(offset, offset + 499);
               if (error) throw error;

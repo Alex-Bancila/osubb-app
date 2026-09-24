@@ -303,4 +303,57 @@ describe('Task details sheet', () => {
       screen.queryByRole('button', { name: 'Duplică' }),
     ).not.toBeInTheDocument();
   });
+
+  it('shows the latest Submission Note with its link whenever one exists', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'in_progress',
+          review_round: 1,
+          submission: [
+            {
+              id: 12,
+              kind: 'submitted',
+              note: 'Am pus prezentarea în folder.',
+              details: {
+                link_label: 'Prezentare',
+                link_url: 'https://drive.example/prezentare',
+              },
+              occurred_at: '2026-09-15T09:30:00Z',
+            },
+          ],
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    // Once, on the sheet itself: the card copy inside it does not repeat it.
+    const notes = screen.getAllByRole('region', { name: 'Notă la trimitere' });
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent('Am pus prezentarea în folder.');
+    expect(notes[0]).toHaveTextContent('15 septembrie 2026, 12:30');
+    expect(
+      within(notes[0] as HTMLElement).getByRole('link', {
+        name: 'Prezentare (se deschide într-o filă nouă)',
+      }),
+    ).toHaveAttribute('target', '_blank');
+    // The sheet's card is not the deep-link anchor.
+    expect(document.getElementById('task-1')).toBeNull();
+  });
+  it('shows no Submission Note for a Task never submitted', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ submission: [] }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(
+      screen.queryByRole('region', { name: 'Notă la trimitere' }),
+    ).not.toBeInTheDocument();
+  });
 });

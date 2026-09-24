@@ -39,4 +39,7 @@ export const fieldForReason: Readonly<Record<string, 'label' | 'url'>> = {
   link_url_required: 'url',
   link_url_invalid: 'url',
   link_url_too_long: 'url',
+  // The server's pair rule (#684) cannot say which half is missing; the
+  // address is the half a member most often leaves out.
+  link_incomplete: 'url',
 };
