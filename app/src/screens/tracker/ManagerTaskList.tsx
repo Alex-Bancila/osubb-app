@@ -117,7 +117,9 @@ export function ManagerTaskList({
             role="status"
             className="text-sm text-muted-foreground tabular-nums"
           >
-            {formatTaskCount(tasks.length)}
+            {tasks.length
+              ? formatTaskCount(tasks.length)
+              : `${formatTaskCount(0)} — niciun task nu corespunde filtrelor.`}
           </p>
           {tasks.length ? (
             <ul data-slot="task-row-list" className="grid min-w-0 gap-2 p-0">
