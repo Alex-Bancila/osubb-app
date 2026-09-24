@@ -72,6 +72,17 @@ npx supabase functions deploy send-push --project-ref <ref>
 
 Redeploy after any change under `supabase/functions/send-push/` or `supabase/functions/deno.json`.
 
+### 5. Give the frontend the public key
+
+Set `VITE_VAPID_PUBLIC_KEY` = the **public** key from step 1 in the environment that builds the frontend (the Cloudflare Pages project's environment variables for that environment, #110; `app/.env.local` locally, see `app/.env.example`). It is read at build time, so rebuild after setting or changing it. Without it the app still works and the Profil switch says push is not available yet.
+
+## The browser side (#704)
+
+- **Service worker.** `app/src/pwa/sw.ts`, built by vite-plugin-pwa in `injectManifest` mode, keeps the precache, the navigation fallback, the `/auth/callback` denylist and the network-only Supabase rule, and adds a `push` handler (shows `title`/`body` with the OSUBB icon, tagged `osubb-<id>`, and drops a malformed payload) and a `notificationclick` handler (focuses an open app window and navigates it to `link`, `/notificari` when there is none, or opens a new window). The tap writes nothing: marking the Notification read stays the in-app list's job.
+- **The switch.** Profil → **Notificări pe acest dispozitiv** asks for permission, subscribes with `VITE_VAPID_PUBLIC_KEY` and inserts one `push_tokens` row (`platform = 'web'`, `token` = the `PushSubscription` JSON) through the self-only policies; turning it off unsubscribes and deletes that row. The switch is on only when the browser holds a subscription **and** its row exists.
+- **Sign-out** deletes this device's row first (best-effort, bounded to five seconds), so a shared device stops receiving the previous Member's pushes.
+- **Platforms.** iOS offers Web Push only to the app added to the home screen; elsewhere the switch works from the browser tab or the installed app. A blocked permission can only be lifted in the browser's settings.
+
 ## Local development
 
 `supabase/functions/.env` is git-ignored (`.env` in `.gitignore`). Put a locally generated pair in it:
