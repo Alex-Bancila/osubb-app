@@ -211,6 +211,9 @@ export default function ProfileScreen() {
             </div>
           </section>
 
+          {/* Role Timeline */}
+          <RoleTimeline profile={profile} />
+
           {/* Contact Fields Card */}
           <section className="card p-6">
             <div className="card-head">
