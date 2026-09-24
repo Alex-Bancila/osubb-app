@@ -48,7 +48,7 @@ export function PushPreferences() {
               <Switch
                 aria-labelledby={labelId}
                 checked={push.preferences[kind]}
-                disabled={push.loading || push.pendingKind === kind}
+                disabled={push.loading || push.pending}
                 onCheckedChange={(next) => push.setPreference(kind, next)}
               />
             </li>

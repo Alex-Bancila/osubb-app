@@ -66,6 +66,10 @@ export function usePushPreferences() {
   });
 
   const mutation = useMutation({
+    // One write at a time: every switch is held while a write is in flight
+    // (`pending`), and the shared scope queues any call that still slips in,
+    // so writes land in click order and a rollback never undoes a later one.
+    scope: { id: `push-preferences-${memberId ?? 'signed-out'}` },
     mutationFn: async ({
       kind,
       enabled,
@@ -103,8 +107,8 @@ export function usePushPreferences() {
     preferences: query.data ?? ALL_ON,
     /** The first read is still running. */
     loading: query.isLoading,
-    /** The kind whose switch change is in flight, if any. */
-    pendingKind: mutation.isPending ? mutation.variables?.kind : undefined,
+    /** A switch change is in flight; every switch waits for it. */
+    pending: mutation.isPending,
     error:
       query.isError || mutation.isError
         ? (reasonCopy('push_preference_failed') ?? null)

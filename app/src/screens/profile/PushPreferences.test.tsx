@@ -114,6 +114,35 @@ describe('PushPreferences', () => {
     );
   });
 
+  it('holds every switch while one write is in flight', async () => {
+    let finish: (value: { data: null; error: null }) => void = () => {};
+    supabaseMock.upsert.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderPreferences();
+    await waitFor(() => expect(theSwitch('Anunțuri')).toBeChecked());
+
+    await user.click(theSwitch('Anunțuri'));
+
+    for (const name of ['Anunțuri', 'Evenimente', 'Termene limită']) {
+      expect(theSwitch(name)).toHaveAttribute('aria-disabled', 'true');
+    }
+    await user.click(theSwitch('Evenimente'));
+    expect(supabaseMock.upsert).toHaveBeenCalledTimes(1);
+
+    finish({ data: null, error: null });
+    await waitFor(() =>
+      expect(theSwitch('Evenimente')).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
+    );
+  });
+
   it('puts the switch back and says so in Romanian when the write fails', async () => {
     supabaseMock.upsert.mockResolvedValue({
       data: null,
