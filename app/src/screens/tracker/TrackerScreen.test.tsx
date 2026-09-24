@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { Link, MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
+import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { taskRow } from '../../test/task-fixtures';
@@ -15,7 +16,40 @@ const hooks = vi.hoisted(() => ({
   useManagedTasks: vi.fn(),
   useAllTasks: vi.fn(),
   useMyPoints: vi.fn(),
+  useTaskQueue: vi.fn(),
+  join: vi.fn(),
   level: 1,
+}));
+vi.mock('../../queries/task-queue', () => ({
+  useTaskQueue: hooks.useTaskQueue,
+}));
+vi.mock('../../queries/task-interest', () => ({
+  useExpressTaskInterest: () => ({ mutateAsync: hooks.join }),
+  TaskInterestError: Error,
+}));
+vi.mock('../../queries/task-withdrawal', () => ({
+  useWithdrawTaskInterest: () => ({ mutateAsync: vi.fn() }),
+}));
+vi.mock('../../queries/work-filter-options', () => ({
+  useWorkFilterOptions: () => ({
+    isPending: false,
+    isError: false,
+    data: {
+      groups: [
+        {
+          id: 5,
+          name: 'Organizația',
+          path: [5],
+          status: 'active',
+          is_organization: true,
+        },
+        { id: 10, name: 'Educațional', path: [10], status: 'active' },
+        { id: 20, name: 'Resurse Umane', path: [20], status: 'active' },
+        { id: 21, name: 'Recrutare', path: [20, 21], status: 'active' },
+      ],
+      campaigns: [{ id: 7, name: 'Recrutări de toamnă', group_id: 20 }],
+    },
+  }),
 }));
 vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
 vi.mock('../../queries/profile', () => ({
@@ -238,8 +272,11 @@ describe('My tasks screen', () => {
     screen.getByRole('tab', { name: 'Taskurile mele' }).focus();
     await user.keyboard('{ArrowRight}{Enter}');
     expect(
-      screen.getByText('Nu sunt oportunități disponibile acum.'),
+      screen.getByText('Nu sunt oportunități în grupurile tale.'),
     ).toBeVisible();
+    expect(
+      screen.queryByRole('region', { name: 'Alte oportunități OSUBB' }),
+    ).not.toBeInTheDocument();
   });
 
   it('lets a local manager open the authorized management query without global access', async () => {
@@ -372,6 +409,305 @@ describe('My tasks screen', () => {
       screen.getByRole('button', { name: 'Reîncarcă punctajul' }),
     );
     expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  describe('Disponibile (ruling R10)', () => {
+    const group = (
+      name: string,
+      path: number[],
+      extra: Partial<NonNullable<ReturnType<typeof taskRow>['group']>> = {},
+    ) => ({
+      name,
+      short: null,
+      color: '#1f6feb',
+      category: 'department',
+      path,
+      is_organization: false,
+      ...extra,
+    });
+    const opportunity = (
+      overrides: Partial<ReturnType<typeof taskRow>>,
+      relevant: boolean,
+      joinable: boolean,
+    ) => ({
+      ...taskRow({ assignment_mode: 'public', assignments: [], ...overrides }),
+      relevant,
+      joinable,
+    });
+    // A Member of Educațional (10): its local Task and the Organization's
+    // are theirs; Resurse Umane (20) and its Recrutare (21) are other.
+    const rows = [
+      opportunity(
+        {
+          id: 11,
+          title: 'Afișe pentru atelier',
+          group_id: 10,
+          group: group('Educațional', [10], { color: '#0a7d4f' }),
+          deadline: '2026-10-05T09:00:00Z',
+        },
+        true,
+        true,
+      ),
+      opportunity(
+        {
+          id: 12,
+          title: 'Voluntari la Balul Bobocilor',
+          group_id: 5,
+          audience: 'org',
+          group: group('Organizația', [5], {
+            category: 'organization',
+            is_organization: true,
+          }),
+          deadline: '2026-10-01T09:00:00Z',
+        },
+        true,
+        true,
+      ),
+      opportunity(
+        {
+          id: 13,
+          title: 'Interviuri de recrutare',
+          group_id: 21,
+          group: group('Recrutare', [20, 21], { category: 'team' }),
+          campaign_id: 7,
+          deadline: '2026-10-02T09:00:00Z',
+        },
+        false,
+        false,
+      ),
+      opportunity(
+        {
+          id: 14,
+          title: 'Sondaj pentru membri',
+          group_id: 20,
+          audience: 'org',
+          group: group('Resurse Umane', [20]),
+          deadline: '2026-10-03T09:00:00Z',
+        },
+        false,
+        true,
+      ),
+    ];
+    const ordered = [rows[1], rows[0], rows[2], rows[3]];
+    beforeEach(() => {
+      query();
+      hooks.join.mockReset();
+      hooks.useTaskQueue.mockReturnValue({
+        data: { status: null, position: null },
+        isPending: false,
+        isError: false,
+      });
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: ordered,
+        isPending: false,
+        isError: false,
+      });
+    });
+    async function openAvailable(url = '/tracker') {
+      const user = userEvent.setup();
+      const view = renderAt(url);
+      await user.click(screen.getByRole('tab', { name: 'Disponibile' }));
+      return { user, ...view };
+    }
+    const titles = (region: HTMLElement) =>
+      within(region)
+        .getAllByRole('article')
+        .map(
+          (card) =>
+            document.getElementById(card.getAttribute('aria-labelledby') ?? '')
+              ?.textContent,
+        );
+
+    it('shows own Groups above, in the Group colour with the Organization in OSUBB red, and Other OSUBB Opportunities greyed below', async () => {
+      await openAvailable();
+      const own = screen.getByRole('region', { name: 'Din grupurile mele' });
+      const other = screen.getByRole('region', {
+        name: 'Alte oportunități OSUBB',
+      });
+      expect(titles(own)).toEqual([
+        'Voluntari la Balul Bobocilor',
+        'Afișe pentru atelier',
+      ]);
+      expect(titles(other)).toEqual([
+        'Interviuri de recrutare',
+        'Sondaj pentru membri',
+      ]);
+      expect(
+        own.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      const stripe = (title: string) =>
+        (
+          screen
+            .getByRole('article', { name: title })
+            .querySelector('[data-slot="card"]') as HTMLElement
+        ).style.getPropertyValue('--task-stripe');
+      expect(stripe('Voluntari la Balul Bobocilor')).toBe('var(--scope-org)');
+      expect(stripe('Afișe pentru atelier')).toBe('#0a7d4f');
+      for (const card of within(other).getAllByRole('article')) {
+        expect(card).toHaveAttribute('data-band', 'other');
+        expect(card.querySelector('[data-slot="card"]')).toHaveClass(
+          'bg-muted',
+          'border-dashed',
+        );
+        expect(card.querySelector('[data-slot="card"]')).not.toHaveClass(
+          'opacity-50',
+        );
+      }
+      // Greyed, yet still naming its Group.
+      expect(
+        within(
+          screen.getByRole('article', { name: 'Interviuri de recrutare' }),
+        ).getByText('Echipă · Recrutare'),
+      ).toBeVisible();
+      // Band headings sit above the card titles.
+      expect(
+        within(own).getByRole('heading', {
+          level: 3,
+          name: 'Afișe pentru atelier',
+        }),
+      ).toBeVisible();
+    });
+
+    it('offers no join button on a local-Audience Other row, and keeps it on an org-Audience one', async () => {
+      await openAvailable();
+      const local = screen.getByRole('article', {
+        name: 'Interviuri de recrutare',
+      });
+      expect(
+        within(local).getByText('Doar pentru membrii grupului'),
+      ).toBeVisible();
+      expect(within(local).queryByRole('button', { name: /particip/ })).toBe(
+        null,
+      );
+      const org = screen.getByRole('article', {
+        name: 'Sondaj pentru membri',
+      });
+      expect(
+        within(org).getByRole('button', { name: 'Vreau să particip' }),
+      ).toBeEnabled();
+      expect(
+        within(org).queryByText('Doar pentru membrii grupului'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('confirms a join with the queue place, never an Executor selection', async () => {
+      hooks.join.mockResolvedValue({ position: 4 });
+      const { user } = await openAvailable();
+      const org = screen.getByRole('article', {
+        name: 'Sondaj pentru membri',
+      });
+      await user.click(
+        within(org).getByRole('button', { name: 'Vreau să particip' }),
+      );
+      expect(hooks.join).toHaveBeenCalledWith(14);
+      expect(
+        within(org).getByText(
+          'Te-ai înscris pe locul 4 în lista de așteptare.',
+        ),
+      ).toBeVisible();
+      expect(screen.queryByText('Ai fost selectat ca Executor.')).toBeNull();
+    });
+
+    it('keeps a pending Candidature on an Other org row in the lower band, with its place', async () => {
+      hooks.useTaskQueue.mockImplementation((taskId: number) => ({
+        data:
+          taskId === 14
+            ? { status: 'pending', position: 3 }
+            : { status: null, position: null },
+        isPending: false,
+        isError: false,
+      }));
+      await openAvailable();
+      const other = screen.getByRole('region', {
+        name: 'Alte oportunități OSUBB',
+      });
+      const org = within(other).getByRole('article', {
+        name: 'Sondaj pentru membri',
+      });
+      expect(within(org).getByText('Te-ai înscris pe locul 3.')).toBeVisible();
+      expect(
+        within(org).getByRole('button', { name: 'Retrage înscrierea' }),
+      ).toBeVisible();
+    });
+
+    it('omits the lower band when it is empty and says so when the upper band is', async () => {
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: [rows[2], rows[3]],
+        isPending: false,
+        isError: false,
+      });
+      const { rerender } = await openAvailable();
+      expect(
+        within(
+          screen.getByRole('region', { name: 'Din grupurile mele' }),
+        ).getByText('Nu sunt oportunități în grupurile tale.'),
+      ).toBeVisible();
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: [rows[1]],
+        isPending: false,
+        isError: false,
+      });
+      rerender(tree('/tracker'));
+      expect(
+        screen.queryByRole('region', { name: 'Alte oportunități OSUBB' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it.each([
+      // A Group means it and everything below it: Resurse Umane covers Recrutare.
+      ['?grup=20', [], ['Interviuri de recrutare', 'Sondaj pentru membri']],
+      ['?grup=20&subgrup=21', [], ['Interviuri de recrutare']],
+      ['?grup=20&campanie=7', [], ['Interviuri de recrutare']],
+      // Deadline range, Bucharest days, both ends inclusive.
+      [
+        '?de_la=2026-10-01&pana_la=2026-10-02',
+        ['Voluntari la Balul Bobocilor'],
+        ['Interviuri de recrutare'],
+      ],
+      ['?grup=5', ['Voluntari la Balul Bobocilor'], []],
+    ])(
+      'narrows both bands from the URL (%s)',
+      async (search, ownTitles, otherTitles) => {
+        await openAvailable(`/tracker${search}`);
+        const own = screen.getByRole('region', { name: 'Din grupurile mele' });
+        if (ownTitles.length) expect(titles(own)).toEqual(ownTitles);
+        else
+          expect(own).toHaveTextContent(
+            'Nicio oportunitate din grupurile tale nu corespunde filtrelor.',
+          );
+        const other = screen.queryByRole('region', {
+          name: 'Alte oportunități OSUBB',
+        });
+        if (other) expect(titles(other)).toEqual(otherTitles);
+        expect(other === null).toBe(otherTitles.length === 0);
+      },
+    );
+
+    it('asks for a valid range instead of listing when the dates are inverted', async () => {
+      await openAvailable('/tracker?de_la=2026-10-05&pana_la=2026-10-01');
+      expect(
+        screen.getByText(
+          'Corectează perioada din filtre ca să vezi taskurile.',
+        ),
+      ).toBeVisible();
+      expect(screen.queryByRole('article')).toBeNull();
+    });
+
+    it('has no axe violations across both bands', async () => {
+      const { container } = await openAvailable();
+      const panel = container.querySelector(
+        '[role="tabpanel"]:not([hidden])',
+      ) as HTMLElement;
+      expect(
+        (
+          await axe.run(panel, {
+            // jsdom computes no colours; the band's contrast is checked
+            // against the tokens in other-band-contrast.test.ts.
+            rules: { 'color-contrast': { enabled: false } },
+          })
+        ).violations,
+      ).toEqual([]);
+    });
   });
 
   describe('the ?task=<id> deep link', () => {

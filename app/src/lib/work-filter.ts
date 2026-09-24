@@ -348,3 +348,44 @@ export function withoutGroup(
   if (params.p_to !== undefined) rest.p_to = params.p_to;
   return rest;
 }
+
+/** The part of a Task row the filter reads when a page narrows its own list. */
+export type WorkFilterTask = {
+  group_id: number;
+  /** The Task's Group, embedded; `path` runs from the root to the Group. */
+  group?: { path: readonly number[] } | null;
+  campaign_id: number | null;
+  deadline: string | null;
+};
+
+/**
+ * Whether a Task the page already holds passes the filter — the rules #677's
+ * readers apply on the server, applied to a list the page read whole
+ * (Disponibile, De gestionat, Toate): the Group means that Group and every
+ * Group below it (its id is on the Task's Group `path`), the Campaign is
+ * exact, and the half-open range reads the deadline, so an undated Task is
+ * outside any range. A Task whose Group embed RLS withheld matches the Group
+ * level only by its own id.
+ */
+export function matchesWorkFilter(
+  task: WorkFilterTask,
+  params: WorkFilterParams,
+): boolean {
+  if (params.p_group_id !== undefined) {
+    const path = task.group?.path ?? [task.group_id];
+    if (!path.includes(params.p_group_id)) return false;
+  }
+  if (
+    params.p_campaign_id !== undefined &&
+    task.campaign_id !== params.p_campaign_id
+  )
+    return false;
+  if (params.p_from === undefined && params.p_to === undefined) return true;
+  const deadline = task.deadline ? Date.parse(task.deadline) : Number.NaN;
+  if (!Number.isFinite(deadline)) return false;
+  if (params.p_from !== undefined && deadline < Date.parse(params.p_from))
+    return false;
+  if (params.p_to !== undefined && deadline >= Date.parse(params.p_to))
+    return false;
+  return true;
+}

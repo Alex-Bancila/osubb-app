@@ -37,7 +37,7 @@ describe('Withdraw and rejoin', () => {
       data: { status: 'pending', position: 2 },
     });
     hooks.useExpressTaskInterest.mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ kind: 'queued', position: 7 }),
+      mutateAsync: vi.fn().mockResolvedValue({ position: 7 }),
     });
     hooks.useWithdrawTaskInterest.mockReturnValue({
       mutateAsync: vi.fn().mockResolvedValue(undefined),
@@ -60,6 +60,21 @@ describe('Withdraw and rejoin', () => {
     expect(
       screen.getByText('Te-ai înscris pe locul 7 în lista de așteptare.'),
     ).toBeVisible();
+  });
+  it('always confirms a first join with the queue place, never an Executor selection (R9)', async () => {
+    const user = userEvent.setup();
+    hooks.useTaskQueue.mockReturnValue({
+      data: { status: null, position: null },
+    });
+    render(<TaskInterestControls taskId={1} />);
+    await user.click(screen.getByRole('button', { name: 'Vreau să particip' }));
+    expect(hooks.useExpressTaskInterest().mutateAsync).toHaveBeenCalledWith(1);
+    expect(
+      screen.getByText('Te-ai înscris pe locul 7 în lista de așteptare.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Ai fost selectat ca Executor.'),
+    ).not.toBeInTheDocument();
   });
   it('preserves the queue state on failure and prevents duplicate pending clicks', async () => {
     const user = userEvent.setup();

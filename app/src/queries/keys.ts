@@ -134,6 +134,9 @@ export const keys = {
       ['groups', 'appointable', { memberId }] as const,
     mine: (memberId: string | undefined) =>
       ['groups', 'mine', { memberId }] as const,
+    /* The Work Filter's Group and Campaign choices on the Tracker. */
+    filterOptions: (memberId: string | undefined) =>
+      ['groups', 'filter-options', { memberId }] as const,
   },
   requests: {
     decisions: (memberId: string | undefined) =>
