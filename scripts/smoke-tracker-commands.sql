@@ -50,6 +50,9 @@
 -- refusals in those steps pin the reason string, not just 42501 -- see
 -- pg_temp.smoke_refused.
 --
+-- Step 24 adds #756: a Private Group, its local-only Task, an outsider who
+-- cannot find either or apply, and the Appointment that shows them both.
+--
 -- One deviation from the plan's sentence, and it is forced by the model:
 -- "Reviewer reopens -> total back -> Reviewer completes again" cannot be two
 -- consecutive commands. reopen_task leaves the Task `in_progress`, and
@@ -1055,13 +1058,64 @@ select pg_temp.smoke_refused(
   'step 23: a Recrut''s interest is refused as task_not_found, not as a denial');
 reset role;
 
+-- ==================== step 24: a Private Group hides its work until Appointment ====================
+-- #756 (ruling R25), through the public commands only: BC creates a Private
+-- Group under Educațional with the Coordonator as its Manager; its Task is
+-- local only; an outsider cannot find the Group, its Opportunity or a way to
+-- apply; the Manager appoints them and both appear.
+
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select (public.create_group('SMOKE Private Group', 'team', :edu_group, null, :'coordinator',
+                            null, null, true)).id as private_group \gset
+reset role;
+select pg_temp.smoke_assert(
+  (select is_private from public.groups where id = :private_group),
+  'step 24: BC creates a Private Group through create_group');
+
+select pg_temp.test_login_leadership(:'coordinator');
+select pg_temp.smoke_refused(
+  format($f$select public.create_task('SMOKE Private org Task', null, now() + interval '5 days',
+            'org', 'public', p_group_id => %s)$f$, :private_group),
+  'PT400', 'private_group_local_only',
+  'step 24: a Private Group''s Task cannot carry the organization-wide Audience');
+select (public.create_task('SMOKE Private Opportunity', 'Doar pentru membri', now() + interval '5 days',
+          'local', 'public', p_group_id => :private_group)).id as private_task \gset
+reset role;
+
+select pg_temp.test_login_leadership(:'eligible');
+select pg_temp.smoke_eq((select count(*)::int from public.groups where id = :private_group), 0,
+  'step 24: an outsider cannot find the Private Group');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :private_task), 0,
+  'step 24: nor its Opportunity');
+select pg_temp.smoke_refused(
+  format('select public.apply_to_group(%s, null)', :private_group),
+  'PT404', 'group_not_found',
+  'step 24: nor apply to it -- to an outsider it does not exist');
+reset role;
+
+select pg_temp.test_login_leadership(:'coordinator');
+select public.add_group_member(:private_group, :'eligible');
+reset role;
+
+select pg_temp.test_login_leadership(:'eligible');
+select pg_temp.smoke_eq((select count(*)::int from public.groups where id = :private_group), 1,
+  'step 24: after the Appointment the Member sees the Private Group');
+select pg_temp.smoke_eq((select count(*)::int from public.my_groups() where id = :private_group), 1,
+  'step 24: and my_groups() lists it');
+select public.express_task_interest(:private_task);
+reset role;
+select pg_temp.smoke_assert(
+  exists (select 1 from public.task_candidates
+           where task_id = :private_task and member_id = :'eligible' and status = 'pending'),
+  'step 24: the appointed Member queues for the Private Group''s Opportunity');
+
 -- ==================== done ====================
 
 do $$
 begin
   raise notice '';
   raise notice '================ SMOKE TEST PASSED ================';
-  raise notice 'All 23 work scenarios ran through public wrappers;';
+  raise notice 'All 24 work scenarios ran through public wrappers;';
   raise notice 'authenticated could not write Task or Group tables directly.';
   raise notice 'Only the step 23 OD9 fixture used an owner-written Group setting.';
   raise notice 'Rolling back -- the database is unchanged.';

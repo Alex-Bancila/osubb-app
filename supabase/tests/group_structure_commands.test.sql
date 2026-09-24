@@ -323,7 +323,7 @@ select throws_ok(
 reset role;
 select pg_temp.g582_as(3);
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'team', false, true, false, 0, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'team', false, true, false, 0, null, null, false, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   '42501', 'group_manage_forbidden',
   'update_group_structure: a Group Manager holds no structural setting (Decision 5)');
@@ -331,43 +331,43 @@ select throws_ok(
 reset role;
 select pg_temp.test_login(pg_temp.g582_uid(5), '{"provider":"email"}'::jsonb);
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'kind', false, true, false, 0, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'kind', false, true, false, 0, null, null, false, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT400', 'invalid_group_category',
   'update_group_structure: an unknown presentation label is malformed for everyone');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'department', false, true, false, 0, 'albastru', null, false)$$,
+  format($$select public.update_group_structure(%s, 'department', false, true, false, 0, 'albastru', null, false, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT400', 'invalid_group_color', 'update_group_structure: a colour is #rrggbb or nothing');
 
 reset role;
 select pg_temp.g582_bc();
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'team', false, true, false, 0, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'team', false, true, false, 0, null, null, false, false)$$,
          pg_temp.g582_group('Copil redenumit #582')),
   '42501', 'group_manage_forbidden',
   'update_group_structure: a CHILD Group''s Minimum Level belongs to its Managers -- the mirror image of update_group');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'team', true, true, false, 1, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'team', true, true, false, 1, null, null, false, false)$$,
          pg_temp.g582_group('Copil redenumit #582')),
   'PT409', 'cup_not_top_level', 'update_group_structure: only a top-level Group competes in the Department Cup');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'department', false, true, false, 0, null, null, true)$$,
+  format($$select public.update_group_structure(%s, 'department', false, true, false, 0, null, null, true, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT409', 'organization_group_exists',
   'update_group_structure: the Organization marker is unique -- the old Group is cleared first');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'department', false, true, true, 0, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'department', false, true, true, 0, null, null, false, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT409', 'automatic_group_has_roster_members',
   'update_group_structure: Automatic Membership cannot be switched on over a hand-written roster');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'department', false, true, true, 0, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'department', false, true, true, 0, null, null, false, false)$$,
          pg_temp.g582_group('Cu aplicații #582')),
   'PT409', 'automatic_group_accepts_no_applications',
   'update_group_structure: nor over a Group that accepts Applications -- the mirror of update_group''s check');
 select lives_ok(
-  format($$select public.update_group_structure(%s, 'department', true, true, false, 0, '#112233', 'RAD', false)$$,
+  format($$select public.update_group_structure(%s, 'department', true, true, false, 0, '#112233', 'RAD', false, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'update_group_structure: BC owns the label, both Cup flags, colour, short name and a root''s Minimum Level');
 select is(
@@ -376,19 +376,19 @@ select is(
   array['department', 'true', '#112233', 'RAD'],
   'and the structural state is replaced in full');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'department', true, true, false, 0, '#112233', 'RAD', false)$$,
+  format($$select public.update_group_structure(%s, 'department', true, true, false, 0, '#112233', 'RAD', false, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT409', 'nothing_to_update', 'update_group_structure: the same state sent twice is a state conflict');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'department', false, true, false, 0, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'department', false, true, false, 0, null, null, false, false)$$,
          pg_temp.g582_group('Arhivată #582')),
   'PT409', 'group_archived', 'update_group_structure: an archived Group is not edited');
 select throws_ok(
-  $$select public.update_group_structure(999999999, 'department', false, true, false, 0, null, null, false)$$,
+  $$select public.update_group_structure(999999999, 'department', false, true, false, 0, null, null, false, false)$$,
   '42501', 'group_manage_forbidden',
   'update_group_structure: an unknown id is refused, never reported as missing');
 select throws_ok(
-  format($$select public.update_group_structure(%s, 'department', false, true, false, 9, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'department', false, true, false, 9, null, null, false, false)$$,
          pg_temp.g582_group('Altă rădăcină #582')),
   'PT400', 'group_min_level_above_actor',
   'update_group_structure: BC may not put a Group above BC''s own Level');
@@ -396,7 +396,7 @@ select throws_ok(
 reset role;
 select pg_temp.g582_moderator();
 select lives_ok(
-  format($$select public.update_group_structure(%s, 'department', false, true, false, 9, null, null, false)$$,
+  format($$select public.update_group_structure(%s, 'department', false, true, false, 9, null, null, false, false)$$,
          pg_temp.g582_group('Altă rădăcină #582')),
   'update_group_structure: the Moderator is exempt from that rule, as ADR-0009 already rules for Events');
 
@@ -541,7 +541,8 @@ begin
   select * into v_group from public.groups where is_organization;
   perform public.update_group_structure(
     v_group.id, v_group.category, v_group.competes_in_cup, v_group.counts_toward_parent_cup,
-    v_group.automatic_membership, v_group.min_level, v_group.color, v_group.short, false);
+    v_group.automatic_membership, v_group.min_level, v_group.color, v_group.short, false,
+    v_group.is_private);
 end;
 $$;
 
@@ -549,7 +550,7 @@ select pg_temp.g582_bc();
 select lives_ok($$select pg_temp.g582_clear_org()$$,
   'fixture: BC clears the Organization marker from the mirrored OSUBB Group');
 select lives_ok(
-  format($$select public.update_group_structure(%s, 'organization', false, true, false, 0, null, null, true)$$,
+  format($$select public.update_group_structure(%s, 'organization', false, true, false, 0, null, null, true, false)$$,
          pg_temp.g582_group('Părinte viu #582')),
   'fixture: and sets it on a native Group, which carries no legacy id at all');
 

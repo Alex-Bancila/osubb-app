@@ -303,6 +303,7 @@ export function GroupSettingsTab({
         color: values.color,
         short: values.short,
         isOrganization,
+        isPrivate: group.is_private,
         confirmRemovals: false,
       },
       (failure) => structureForm.fail(failure, SAVE_FAILED),

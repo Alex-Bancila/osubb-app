@@ -74,6 +74,7 @@ function group(
     competes_in_cup: false,
     counts_toward_parent_cup: true,
     shared_work_visibility: false,
+    is_private: false,
     application_form_label: null,
     application_form_url: null,
     memberCount: 3,
