@@ -76,8 +76,10 @@
   gap: var(--s-2);
   margin: 0;
 }
-.card-title ion-icon {
-  font-size: 18px;
+.card-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
   color: var(--text-faint);
 }
 

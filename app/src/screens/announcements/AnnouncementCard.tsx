@@ -6,6 +6,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
+import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -121,13 +122,21 @@ export default function AnnouncementCard({
 
       <CardFooter className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-2">
-          {announcement.author && (
-            <span className="inline-flex items-center gap-1 font-medium text-foreground">
-              <UserRound className="size-3.5" aria-hidden="true" />
-              {announcement.author}
-            </span>
+          {announcement.authorMember ? (
+            <MemberName
+              {...announcement.authorMember}
+              size="sm"
+              className="text-xs text-foreground"
+            />
+          ) : (
+            announcement.author && (
+              <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                <UserRound className="size-3.5" aria-hidden="true" />
+                {announcement.author}
+              </span>
+            )
           )}
-          <span>·</span>
+          <span aria-hidden="true">·</span>
           <time dateTime={announcement.publishedAt}>
             {announcement.publishedLabel}
           </time>

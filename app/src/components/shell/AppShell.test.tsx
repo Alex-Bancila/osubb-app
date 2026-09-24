@@ -8,6 +8,7 @@ const queries = vi.hoisted(() => ({
   useMyProfile: vi.fn(),
   useRoles: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
+  useUnreadAnnouncementsCount: vi.fn(),
   useCapabilities: vi.fn(),
 }));
 
@@ -16,6 +17,9 @@ vi.mock('../../queries/profile', () => ({
   useMyProfile: queries.useMyProfile,
 }));
 vi.mock('../../queries/reference', () => ({ useRoles: queries.useRoles }));
+vi.mock('../../queries/announcements', () => ({
+  useUnreadAnnouncementsCount: queries.useUnreadAnnouncementsCount,
+}));
 vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
 }));
@@ -82,6 +86,7 @@ describe('AppShell', () => {
       data: new Map([['voluntar', { name: 'Voluntar' }]]),
     });
     queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
     queries.useCapabilities.mockReturnValue({ data: capabilities() });
   });
 
@@ -154,6 +159,52 @@ describe('AppShell', () => {
     expect(
       within(entry).getByText('3 notificări necitite'),
     ).toBeInTheDocument();
+  });
+
+  it('badges Anunțuri with the unread-announcements count on the sidebar and the mobile tab', () => {
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 2 });
+
+    renderShell();
+
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    const entry = within(primary).getByRole('link', { name: /Anunțuri/ });
+    expect(entry).toHaveTextContent('2');
+    expect(within(entry).getByText('2 anunțuri necitite')).toBeInTheDocument();
+
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    const tab = within(quick).getByRole('link', {
+      name: 'Anunțuri, 2 anunțuri necitite',
+    });
+    expect(tab).toHaveAttribute('href', '/anunturi');
+    expect(tab).toHaveTextContent('2');
+  });
+
+  it('says a single unread Announcement in the singular', () => {
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 1 });
+
+    renderShell();
+
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(
+      within(quick).getByRole('link', { name: 'Anunțuri, 1 anunț necitit' }),
+    ).toBeInTheDocument();
+  });
+
+  it('drops the Anunțuri badge from both surfaces once the count reaches 0', () => {
+    renderShell();
+
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', { name: 'Anunțuri' }),
+    ).toHaveTextContent(/^Anunțuri$/);
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(
+      within(quick).getByRole('link', { name: 'Anunțuri' }),
+    ).toHaveTextContent(/^Anunțuri$/);
   });
 
   it('leaves the notification entry unbadged once everything is read', () => {

@@ -21,6 +21,16 @@ vi.mock('../../lib/auth', () => ({
 vi.mock('../../queries/announcements', () => ({
   useAnnouncementsFeed: hooks.useAnnouncementsFeed,
   useMarkAnnouncementRead: hooks.useMarkAnnouncementRead,
+  useAnnouncementReaders: () => ({ data: undefined }),
+}));
+vi.mock('../../queries/member-identities', () => ({
+  useMemberIdentities: () => ({ data: undefined }),
+}));
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
+vi.mock('../../queries/my-groups', () => ({
+  useMyGroupRoles: () => ({ data: [] }),
 }));
 
 vi.mock('../../queries/reference', () => ({
