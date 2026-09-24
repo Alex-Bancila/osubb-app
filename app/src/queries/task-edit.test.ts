@@ -86,6 +86,7 @@ it('previews with the same values and names each affected member', async () => {
     data: [
       { consequence: 'executor_removed', member_id: 'a' },
       { consequence: 'executor_added_to_group', member_id: 'b' },
+      { consequence: 'candidate_removed', member_id: 'y' },
       { consequence: 'candidate_removed', member_id: 'z' },
     ],
     error: null,
@@ -94,6 +95,7 @@ it('previews with the same values and names each affected member', async () => {
     data: [
       { id: 'a', full_name: 'Ana Șerban', nickname: null },
       { id: 'b', full_name: 'Bianca Pop', nickname: 'Bibi' },
+      { id: 'y', full_name: null, nickname: 'Yoyo' },
     ],
     error: null,
   });
@@ -107,12 +109,14 @@ it('previews with the same values and names each affected member', async () => {
       memberId: 'b',
       memberName: 'Bibi',
     },
+    // A withheld full name still shows the Nickname.
+    { kind: 'candidate_removed', memberId: 'y', memberName: 'Yoyo' },
     { kind: 'candidate_removed', memberId: 'z', memberName: 'Un membru' },
   ]);
   expect(api.rpc).toHaveBeenCalledWith('preview_task_update', args);
   expect(api.from).toHaveBeenCalledWith('profiles_directory');
   expect(select).toHaveBeenCalledWith('id, full_name, nickname');
-  expect(inIds).toHaveBeenCalledWith('id', ['a', 'b', 'z']);
+  expect(inIds).toHaveBeenCalledWith('id', ['a', 'b', 'y', 'z']);
 });
 
 it('shows a campaign-only consequence without querying member names', async () => {

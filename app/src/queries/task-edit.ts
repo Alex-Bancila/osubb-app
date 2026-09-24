@@ -99,9 +99,8 @@ export async function previewTaskUpdate(
   const names = new Map(
     (people ?? []).map((person) => [
       person.id,
-      person.full_name === null
-        ? null
-        : memberDisplayName(person.nickname, person.full_name),
+      // full_name can be withheld (R5); a Nickname alone still names them.
+      memberDisplayName(person.nickname, person.full_name ?? '') || null,
     ]),
   );
   return rows.map((row) => ({
