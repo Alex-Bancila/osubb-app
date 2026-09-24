@@ -339,6 +339,12 @@ Deno.test("malformed VAPID settings are a configuration problem, not a subscript
     Deno.env.set("VAPID_PRIVATE_KEY", "too-short");
     assertEquals(realDeps().configProblems().length, 1);
 
+    // Two valid pairs, crossed: each key is well formed, the pair is not.
+    Deno.env.set("VAPID_PRIVATE_KEY", webpush.generateVAPIDKeys().privateKey);
+    assertEquals(realDeps().configProblems(), [
+      "VAPID_PUBLIC_KEY does not match VAPID_PRIVATE_KEY",
+    ]);
+
     Deno.env.set("VAPID_PRIVATE_KEY", pair.privateKey);
     Deno.env.set("VAPID_SUBJECT", "it@osubb.ro");
     assertEquals(realDeps().configProblems().length, 1);

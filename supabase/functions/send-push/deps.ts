@@ -3,6 +3,8 @@
 // so no test ever opens a socket.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { Buffer } from "node:buffer";
+import { createECDH } from "node:crypto";
 // @ts-types="npm:@types/web-push@3.6.4"
 import webpush from "web-push";
 
@@ -68,6 +70,15 @@ const REQUIRED_ENV = [
   "VAPID_SUBJECT",
 ];
 
+/** The base64url uncompressed P-256 public key of a base64url private key. */
+function publicKeyOf(privateKey: string): string {
+  const ecdh = createECDH("prime256v1");
+  // Buffers, not (string, encoding): the edge runtime's node:crypto only
+  // takes the former.
+  ecdh.setPrivateKey(Buffer.from(privateKey, "base64url"));
+  return Buffer.from(ecdh.getPublicKey()).toString("base64url");
+}
+
 export function realDeps(): SendPushDeps {
   // Read env per request rather than at module load, so importing this file
   // in a test never throws on a missing variable.
@@ -97,6 +108,17 @@ export function realDeps(): SendPushDeps {
         return [
           "VAPID_SUBJECT, VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY is malformed",
         ];
+      }
+      // Each key can be well formed and still come from different pairs; the
+      // push service would then refuse every signature with a 401/403.
+      let derived: string | null = null;
+      try {
+        derived = publicKeyOf(env("VAPID_PRIVATE_KEY"));
+      } catch (cause) {
+        console.error("VAPID public key derivation failed", cause);
+      }
+      if (derived !== env("VAPID_PUBLIC_KEY")) {
+        return ["VAPID_PUBLIC_KEY does not match VAPID_PRIVATE_KEY"];
       }
       return [];
     },

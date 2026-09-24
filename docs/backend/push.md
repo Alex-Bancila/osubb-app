@@ -47,7 +47,7 @@ npx supabase secrets set --project-ref <ref> \
   VAPID_SUBJECT=mailto:it@osubb.ro
 ```
 
-Run it from a real terminal (house rule 8: a non-interactive prompt can store an empty value). `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by the platform. The **public** key also goes to the frontend as `VITE_VAPID_PUBLIC_KEY` (#704). A missing secret, or a malformed VAPID subject or key, makes the function answer `500` naming the setting (never its value) **before** claiming anything, so no attempt is burned.
+Run it from a real terminal (house rule 8: a non-interactive prompt can store an empty value). `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by the platform. The **public** key also goes to the frontend as `VITE_VAPID_PUBLIC_KEY` (#704). A missing secret, a malformed VAPID subject or key, or a public key that does not belong to the private key makes the function answer `500` naming the setting (never its value) **before** claiming anything, so no attempt is burned.
 
 ### 3. Create the two Vault rows
 
@@ -115,6 +115,6 @@ Reading the answers:
 - **No `push_deliveries` rows** for a new Notification: the Member has no `web` device, or the Notification was never written (check `notifications` — Suppression decides there).
 - **`pending` with `attempts > 0`**: the push service is failing temporarily; `last_error` says how. It retries on its own.
 - **`sending` for more than five minutes**: the function died mid-run; the next run reclaims it.
-- **`failed` with `HTTP 401`/`403`**: the VAPID pair does not match the key the browser subscribed with (a malformed pair never gets this far: the function answers `500` and claims nothing — see `net._http_response`). **`invalid_subscription`**: the stored token is not a usable `PushSubscription`.
+- **`failed` with `HTTP 401`/`403`**: the browser subscribed with a different public key than the one configured (a malformed or mismatched pair never gets this far: the function answers `500` naming the problem and claims nothing — see `net._http_response`). **`invalid_subscription`**: the stored token is not a usable `PushSubscription`.
 - **`sent`** but nothing on screen: the push service accepted it; look at the device (notification permission, focus mode, and on iOS the app must be installed to the home screen).
 - **`cron.job_run_details` shows `failed`** with a `null value in column "url"`: the Vault rows are missing. `net._http_response` with `401`: the Vault key is not the `service_role` JWT.
