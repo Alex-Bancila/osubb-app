@@ -40,6 +40,9 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useAppointableMembers: api.members,
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
 }));
+vi.mock('./GroupApplicationsTab', () => ({
+  GroupApplicationsTab: () => <p>Cereri de înscriere</p>,
+}));
 vi.mock('../campaigns/CampaignsPanel', () => ({
   CampaignsPanel: ({ group: owner }: { group: { name: string } }) => (
     <p>Campaniile grupului {owner.name}</p>
@@ -210,9 +213,9 @@ it('heads the Group with its place in the tree and offers the five built tabs', 
     'Campanii',
   ])
     expect(tab(name)).toBeVisible();
-  // Applications are #589's; the tab is a placeholder until then.
+  // The Applications tab delegates to its separately tested command surface.
   await userEvent.click(tab('Cereri'));
-  expect(screen.getByText(/Cererile de înscriere apar aici/)).toBeVisible();
+  expect(screen.getByText(/Cereri de înscriere/)).toBeVisible();
   expect(
     (
       await axe.run(container, {

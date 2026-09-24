@@ -24,6 +24,10 @@ import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import ProfileScreen from './screens/profile/ProfileScreen';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
+const GroupsScreen = lazy(() => import('./screens/groups/GroupsScreen'));
+const MemberGroupScreen = lazy(
+  () => import('./screens/groups/MemberGroupScreen'),
+);
 const TrackerScreen = lazy(() => import('./screens/tracker/TrackerScreen'));
 const CalendarScreen = lazy(() => import('./screens/calendar/CalendarScreen'));
 const AdministrareScreen = lazy(
@@ -233,6 +237,22 @@ export default function App() {
             element={
               <DeferredRoute>
                 <CalendarScreen />
+              </DeferredRoute>
+            }
+          />
+          <Route
+            path="/grupuri"
+            element={
+              <DeferredRoute>
+                <GroupsScreen />
+              </DeferredRoute>
+            }
+          />
+          <Route
+            path="/grupuri/:groupId"
+            element={
+              <DeferredRoute>
+                <MemberGroupScreen />
               </DeferredRoute>
             }
           />
