@@ -99,7 +99,10 @@ Staging stays on the free organization it is in today.
    a bug that hammers the database must cost at most the plan, never an open-ended bill.
 4. **Project Settings → API keys**: note in Bitwarden which tabs exist (legacy `anon`/`service_role`, and
    `sb_publishable_…` / `sb_secret_…`). Copy the **publishable** key (not secret; it becomes a GitHub
-   variable) and the **secret** key (Bitwarden only; it goes into Vault in §7). Copy the **Project URL**
+   variable) and the **secret** key (Bitwarden only; it goes into Vault in §7). If the _Secret keys_ list
+   is empty, create one first. _Why:_ `invite-member`, `csv-import` and `send-push` take it from the
+   platform (`SUPABASE_SECRET_KEYS`, nothing to set by hand) and never read the legacy `service_role`
+   key; without one the provisioning functions refuse to start (#796). Copy the **Project URL**
    and the **project ref**.
 5. **Project Settings → Database → Connection string → Session pooler**: copy the URI, substitute the
    password → Bitwarden ("Supabase prod – pooler URL"). Used for the pre-Release dump (§11).
@@ -154,6 +157,13 @@ Project `osubb-app` (staging, ref `bbhetqtmavveaoqlxjhp`):
    The public key also goes to GitHub as the `staging` variable `VITE_VAPID_PUBLIC_KEY` (§6). CI deploys
    `send-push` after #110 merges; until then nothing calls the function.
 
+10. **Project Settings → API Keys → Secret keys**: at least one secret key (`sb_secret_…`) exists; if the
+    list is empty, create one. _Why:_ `invite-member` and `csv-import` build their admin client from it
+    and `send-push` checks the cron call against it, all through the platform-provided
+    `SUPABASE_SECRET_KEYS` (#769, #796). Nothing to set with `supabase secrets set` (the CLI refuses names
+    starting with `SUPABASE_`), and no function reads the legacy `service_role` key any more. Without a
+    secret key the two provisioning functions refuse to start, and their logs name `SUPABASE_SECRET_KEYS`.
+
 ## §6 GitHub Environments and secrets — Saturday 26 Sep (pairs with the #110 PR)
 
 **Why.** Secrets at repository level are readable by any workflow run from a branch in this repository.
@@ -194,7 +204,8 @@ Same as §5 on the production project, with these values:
 4. Verify with the two curl checks only (do **not** invite anyone: production must have zero profiles
    until the bootstrap of §12).
 5. From a terminal: `ALLOWED_ORIGINS=https://app.osubb.ro`, a **new** VAPID pair ("VAPID production";
-   never the staging pair), `VAPID_SUBJECT` (the platform gives `send-push` the secret key itself); SQL
+   never the staging pair), `VAPID_SUBJECT` (the platform gives `send-push`, `invite-member` and
+   `csv-import` the secret key itself, from the one §4.4 made sure exists); SQL
    Editor: the two Vault rows with production's URL and secret key. The public key → `production`
    variable `VITE_VAPID_PUBLIC_KEY`.
 6. **Data-processing agreements** (record each in Bitwarden with the date):
@@ -218,7 +229,8 @@ what a missing value means. Commit it to `main` (docs-only commits are allowed).
 
 1. Review and merge the #110 PR. Watch **Actions**: `push-staging` → `deploy-functions-staging` →
    `deploy-web-staging`. Open `https://osubb-staging.pages.dev`.
-2. Run §5.8 (`ALLOWED_ORIGINS`). From the app's Administrare, invite your own address. Confirm in Resend
+2. Run §5.8 (`ALLOWED_ORIGINS`) and check §5.10 (a secret key exists). From the app's Administrare, invite
+   your own address. Confirm in Resend
    → Emails, then sign in on your phone from the email. Install the app (Android: "Install app"; iPhone:
    Share → **Add to Home Screen**).
 3. After N2 and §5.9: turn on **Notificări pe acest dispozitiv** in Profil, then run the test snippet from

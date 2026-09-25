@@ -7,6 +7,7 @@ import { Buffer } from "node:buffer";
 import { createECDH } from "node:crypto";
 // @ts-types="npm:@types/web-push@3.6.4"
 import webpush from "web-push";
+import { parseSecretKeys } from "../_shared/secret-keys.ts";
 
 /** One claimed outbox row, as public.claim_push_deliveries returns it. */
 export interface ClaimedDelivery {
@@ -73,30 +74,6 @@ const REQUIRED_ENV = [
   "VAPID_PRIVATE_KEY",
   "VAPID_SUBJECT",
 ];
-
-/**
- * The secret keys in `SUPABASE_SECRET_KEYS`, the platform's JSON map of key
- * name to `sb_secret_` key (`{"default": "sb_secret_..."}`), `default`
- * first. The platform injects it into every function, locally too, and a
- * function secret cannot be named `SUPABASE_*`, so there is nothing to set by
- * hand (#769). Anything unreadable is no key at all.
- */
-export function parseSecretKeys(raw: string | undefined): string[] {
-  if (!raw) return [];
-  let map: unknown;
-  try {
-    map = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (typeof map !== "object" || map === null || Array.isArray(map)) return [];
-  return Object.entries(map as Record<string, unknown>)
-    .filter((entry): entry is [string, string] =>
-      typeof entry[1] === "string" && entry[1] !== ""
-    )
-    .sort(([a], [b]) => Number(b === "default") - Number(a === "default"))
-    .map(([, key]) => key);
-}
 
 /** The base64url uncompressed P-256 public key of a base64url private key. */
 function publicKeyOf(privateKey: string): string {
