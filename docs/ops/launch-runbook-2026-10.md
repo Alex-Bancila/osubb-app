@@ -99,7 +99,10 @@ Staging stays on the free organization it is in today.
    a bug that hammers the database must cost at most the plan, never an open-ended bill.
 4. **Project Settings → API keys**: note in Bitwarden which tabs exist (legacy `anon`/`service_role`, and
    `sb_publishable_…` / `sb_secret_…`). Copy the **publishable** key (not secret; it becomes a GitHub
-   variable) and the **secret** key (Bitwarden only; it goes into Vault in §7). Copy the **Project URL**
+   variable) and the **secret** key (Bitwarden only; it goes into Vault in §7). If the _Secret keys_ list
+   is empty, create one first. _Why:_ `invite-member`, `csv-import` and `send-push` take it from the
+   platform (`SUPABASE_SECRET_KEYS`, nothing to set by hand) and never read the legacy `service_role`
+   key; without one the provisioning functions refuse to start (#796). Copy the **Project URL**
    and the **project ref**.
 5. **Project Settings → Database → Connection string → Session pooler**: copy the URI, substitute the
    password → Bitwarden ("Supabase prod – pooler URL"). Used for the pre-Release dump (§11).
@@ -154,6 +157,13 @@ Project `osubb-app` (staging, ref `bbhetqtmavveaoqlxjhp`):
    The public key also goes to GitHub as the `staging` variable `VITE_VAPID_PUBLIC_KEY` (§6). CI deploys
    `send-push` after #110 merges; until then nothing calls the function.
 
+10. **Project Settings → API Keys → Secret keys**: at least one secret key (`sb_secret_…`) exists; if the
+    list is empty, create one. _Why:_ `invite-member` and `csv-import` build their admin client from it
+    and `send-push` checks the cron call against it, all through the platform-provided
+    `SUPABASE_SECRET_KEYS` (#769, #796). Nothing to set with `supabase secrets set` (the CLI refuses names
+    starting with `SUPABASE_`), and no function reads the legacy `service_role` key any more. Without a
+    secret key the two provisioning functions refuse to start, and their logs name `SUPABASE_SECRET_KEYS`.
+
 ## §6 GitHub Environments and secrets — Saturday 26 Sep (pairs with the #110 PR)
 
 **Why.** Secrets at repository level are readable by any workflow run from a branch in this repository.
@@ -162,6 +172,9 @@ reviewer approves. Variables hold the public build values so a reviewer can read
 
 1. Repository → **Settings → Environments → New environment**:
    - `preview`: no protection rules. Secret `CLOUDFLARE_API_TOKEN` (the staging/preview token of §1).
+     Variables: `SUPABASE_PROJECT_REF`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (staging's
+     **publishable** key, `sb_publishable_…`), `VITE_VAPID_PUBLIC_KEY` — all staging's values. _Why:_ a
+     preview job can only read its own Environment's variables, not `staging`'s.
    - `staging`: _Deployment branches and tags_ → **Selected branches** → add `main`. Secrets:
      `SUPABASE_ACCESS_TOKEN` (create a new one at `supabase.com/dashboard/account/tokens`, name
      `github-ci`, Bitwarden), `SUPABASE_DB_PASSWORD` (staging), `STAGING_DB_URL` (same value as today's
@@ -191,7 +204,8 @@ Same as §5 on the production project, with these values:
 4. Verify with the two curl checks only (do **not** invite anyone: production must have zero profiles
    until the bootstrap of §12).
 5. From a terminal: `ALLOWED_ORIGINS=https://app.osubb.ro`, a **new** VAPID pair ("VAPID production";
-   never the staging pair), `VAPID_SUBJECT` (the platform gives `send-push` the secret key itself); SQL
+   never the staging pair), `VAPID_SUBJECT` (the platform gives `send-push`, `invite-member` and
+   `csv-import` the secret key itself, from the one §4.4 made sure exists); SQL
    Editor: the two Vault rows with production's URL and secret key. The public key → `production`
    variable `VITE_VAPID_PUBLIC_KEY`.
 6. **Data-processing agreements** (record each in Bitwarden with the date):
@@ -215,7 +229,8 @@ what a missing value means. Commit it to `main` (docs-only commits are allowed).
 
 1. Review and merge the #110 PR. Watch **Actions**: `push-staging` → `deploy-functions-staging` →
    `deploy-web-staging`. Open `https://osubb-staging.pages.dev`.
-2. Run §5.8 (`ALLOWED_ORIGINS`). From the app's Administrare, invite your own address. Confirm in Resend
+2. Run §5.8 (`ALLOWED_ORIGINS`) and check §5.10 (a secret key exists). From the app's Administrare, invite
+   your own address. Confirm in Resend
    → Emails, then sign in on your phone from the email. Install the app (Android: "Install app"; iPhone:
    Share → **Add to Home Screen**).
 3. After N2 and §5.9: turn on **Notificări pe acest dispozitiv** in Profil, then run the test snippet from
@@ -248,13 +263,15 @@ anything on Thursday except fixes found by the acceptance run.
    ```
 
 3. **First Release** (rehearsal on the empty database): Actions → **Release to production** → _Run
-   workflow_. Read the `report` job. Take the dump even though it is empty, so the habit exists:
+   workflow_. Read the `report` job. Take the dump even though it is empty, so the habit exists.
+   _Why:_ `supabase db dump` writes the schema only unless told otherwise, so take both:
 
    ```bash
-   npx supabase db dump --db-url "<prod pooler URL>" -f prod-2026-10-01.sql
+   npx supabase db dump --db-url "<prod pooler URL>" -f prod-2026-10-01-schema.sql
+   npx supabase db dump --db-url "<prod pooler URL>" --data-only -f prod-2026-10-01-data.sql
    ```
 
-   (keep it on an encrypted disk, delete after 30 days). Approve in the **Review deployments** banner.
+   (keep them on an encrypted disk, delete after 30 days). Approve in the **Review deployments** banner.
    Watch `release` finish: migrations, functions, web to `osubb-app.pages.dev`, smoke checks.
 
 4. **Custom domain**: Cloudflare → Workers & Pages → `osubb-app` → **Custom domains → Set up a custom
