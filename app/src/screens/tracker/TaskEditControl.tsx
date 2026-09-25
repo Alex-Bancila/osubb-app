@@ -38,6 +38,8 @@ import { useTaskFormOptions } from '../../queries/task-form-options';
 import type { TaskPresentationRow } from './task-presentation';
 import { TaskGroupCascade } from './TaskGroupCascade';
 import {
+  AUDIENCE_HINT,
+  AUDIENCE_LABELS,
   campaignsFor,
   groupLookup,
   isPrivateGroup,
@@ -217,9 +219,11 @@ function TaskEditForm({
     assignmentMode: umbrella
       ? null
       : (assignmentMode as TaskUpdateValues['assignmentMode']),
+    // A direct Task is local only (R26), like a Private Group's; `audience`
+    // keeps the choice for when the mode goes back to Public.
     audience: umbrella
       ? null
-      : localOnly
+      : assignmentMode === 'direct' || localOnly
         ? 'local'
         : (audience as TaskUpdateValues['audience']),
     link,
@@ -452,28 +456,33 @@ function TaskEditForm({
               </label>
               <FieldError {...form.errorProps('assignmentMode')} />
             </div>
-            <div className="space-y-1">
-              <label className="block space-y-1">
-                <span>Audiență</span>
-                <select
-                  className={control}
-                  value={localOnly ? 'local' : audience}
-                  onChange={(event) => setAudience(event.target.value)}
-                  {...form.field('audience')}
+            {/* Hidden while Direct (R26): switching to Public is how a
+                direct Task is opened, starting from its stored Audience. */}
+            {assignmentMode === 'public' && (
+              <div className="space-y-1">
+                <label className="block space-y-1">
+                  <span>Audiență</span>
+                  <select
+                    className={control}
+                    value={localOnly ? 'local' : audience}
+                    onChange={(event) => setAudience(event.target.value)}
+                    {...form.field('audience', `${id}-audience-hint`)}
+                  >
+                    <option value="local">{AUDIENCE_LABELS.local}</option>
+                    <option value="org" disabled={localOnly}>
+                      {AUDIENCE_LABELS.org}
+                    </option>
+                  </select>
+                </label>
+                <FieldError {...form.errorProps('audience')} />
+                <p
+                  id={`${id}-audience-hint`}
+                  className="text-sm text-muted-foreground"
                 >
-                  <option value="local">Membrii grupului de origine</option>
-                  <option value="org" disabled={localOnly}>
-                    Toți membrii eligibili OSUBB
-                  </option>
-                </select>
-              </label>
-              <FieldError {...form.errorProps('audience')} />
-              {localOnly && (
-                <p className="text-sm text-muted-foreground">
-                  {PRIVATE_GROUP_AUDIENCE_HINT}
+                  {localOnly ? PRIVATE_GROUP_AUDIENCE_HINT : AUDIENCE_HINT}
                 </p>
-              )}
-            </div>
+              </div>
+            )}
             <div className="space-y-1">
               <label htmlFor={`${id}-campaign`}>Campanie (opțional)</label>
               <select

@@ -95,7 +95,9 @@ describe('Task details sheet', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Detalii task' }),
     ).toBeVisible();
-    expect(screen.getByText('În cadrul originii')).toBeVisible();
+    // A direct Task is local only (R26): no Audiență row.
+    expect(screen.queryByText('Audiență')).toBeNull();
+    expect(screen.queryByText('În cadrul originii')).toBeNull();
     expect(screen.getByText('Indisponibil')).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Duplicat din #7' }),
@@ -109,6 +111,19 @@ describe('Task details sheet', () => {
     ).toEqual([]);
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledOnce();
+  });
+  it('shows the Audiență row on a public Task (R26)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ assignment_mode: 'public', audience: 'org' }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    const row = screen.getByText('Audiență').closest('div') as HTMLElement;
+    expect(within(row).getByText('În tot OSUBB')).toBeVisible();
   });
   it('names the Executor as a button that opens their Member Card', async () => {
     const user = userEvent.setup();

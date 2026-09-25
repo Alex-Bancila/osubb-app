@@ -30,14 +30,13 @@ export function hasOwnOrigin(
 }
 
 /**
- * An Opportunity as Disponibile shows it (ruling R10):
- * - `relevant` — the Task's Group is one of the Member's own, so it belongs in
- *   the upper band. The Organization Group is an Automatic Membership of every
- *   Member, so its Opportunities are always relevant.
+ * An Opportunity as Disponibile shows it (ruling R26):
+ * - `relevant` — the Task's Group is one of the Member's own. The Organization
+ *   Group is an Automatic Membership of every Member, so its Opportunities are
+ *   always relevant.
  * - `joinable` — the Task Audience admits the Member: their own Group's Task,
- *   or an org-Audience Task of any Group. A local-Audience Other OSUBB
- *   Opportunity is shown but cannot be joined; the server's
- *   `task_audience_forbidden` remains the rule, this only hides the button.
+ *   or an org-Audience Task of any Group. The server's
+ *   `task_audience_forbidden` remains the rule; this only decides the button.
  */
 export type Opportunity = TaskPresentationRow & {
   relevant: boolean;
@@ -62,15 +61,28 @@ export function compareByDeadline(
   );
 }
 
+/** The Member's own Candidatures, by Task id. */
+export type OpportunityCandidatures = {
+  /** Tasks the Member is a pending Candidate on. */
+  pending?: ReadonlySet<number>;
+  /** Tasks the Member has any Candidature on, whatever its status. */
+  participated?: ReadonlySet<number>;
+};
+
 /**
- * Every row the server returned is an Opportunity (#683 decides visibility);
- * this only classifies them and orders the own band before the other band,
- * each in deadline order. A Candidature never moves a row between bands.
+ * Disponibile is one band (ruling R26): what the Member can join, plus what
+ * they have taken part in, in deadline order. The server returns the Member's
+ * own Groups' Opportunities and every Group's org-Audience ones (#794); a row
+ * that leadership can read but not join (R1/R3) belongs to the management
+ * tabs, so it is dropped here unless the Member holds a Candidature on it.
  */
 export function orderOpportunities(
   rows: TaskPresentationRow[],
   memberships: TaskMemberships,
-  pendingTaskIds: ReadonlySet<number> = new Set(),
+  {
+    pending = new Set(),
+    participated = new Set(),
+  }: OpportunityCandidatures = {},
 ): Opportunity[] {
   return rows
     .map((task) => {
@@ -80,14 +92,11 @@ export function orderOpportunities(
         relevant,
         // A pending Candidate keeps their controls after leaving the Group:
         // `withdraw_task_interest` checks no Audience, so they can still leave.
-        joinable:
-          relevant || task.audience === 'org' || pendingTaskIds.has(task.id),
+        joinable: relevant || task.audience === 'org' || pending.has(task.id),
       };
     })
-    .sort(
-      (a, b) =>
-        Number(b.relevant) - Number(a.relevant) || compareByDeadline(a, b),
-    );
+    .filter((task) => task.joinable || participated.has(task.id))
+    .sort(compareByDeadline);
 }
 
 export async function fetchTaskOpportunities(
@@ -138,7 +147,10 @@ export async function fetchTaskOpportunities(
   for (const task of [...openResult.data, ...participatedTasks])
     tasks.set(task.id, task);
   return attachVisibleTaskExecutors(
-    orderOpportunities([...tasks.values()], scopes, pendingTaskIds),
+    orderOpportunities([...tasks.values()], scopes, {
+      pending: pendingTaskIds,
+      participated: participatedTaskIds,
+    }),
   );
 }
 

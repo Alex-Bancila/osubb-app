@@ -104,7 +104,7 @@ $session = Invoke-RestMethod `
   } | ConvertTo-Json)
 ```
 
-Send the template (or your completed copy) as JSON. Use the anonymous key only in the `apikey` header and the BC access token for authorization. **Never use or paste the service-role key here.**
+Send the template (or your completed copy) as JSON. Use the anonymous key only in the `apikey` header and the BC access token for authorization. **Never use or paste a secret key (`sb_secret_…`) or the legacy service-role key here** — the function holds its own (see "Which key the functions use" below).
 
 ```powershell
 $csv = Get-Content -Raw .\docs\backend\recruits-import-template.csv
@@ -195,6 +195,12 @@ enable_signup = true         # the email PROVIDER exists at all. KEEP TRUE.
 Setting the second one to `false` renders `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`, which disables email entirely — magic links, invitations and every login fail with _"Email logins are disabled"_. The invite-only guarantee comes from the **first** key, not the second. This was the actual state of the repo until 2026-08-23, and it would have surfaced only at the first real invite.
 
 Hosted projects don't read `config.toml`: the same two settings live in the dashboard under Authentication → Sign In / Providers (issue #54).
+
+## Which key the functions use
+
+`invite-member` and `csv-import` run two clients. The **caller** client carries your access token and only asks Auth who you are. The **admin** client — the one that reads your level, checks the Groups and the address, sends the invitation, calls `provision_profile()` and rolls back a failed invitation — is built from the project's **secret key** (`sb_secret_…`), which the gateway maps to `service_role`. The functions read it from `SUPABASE_SECRET_KEYS`, the JSON map of the project's secret keys that the platform injects into every function (the `default` key first), exactly as `send-push` does (#769, #796). They never read the legacy JWT `service_role` key, which Supabase retires by the end of 2026 (ruling L8).
+
+There is nothing to set by hand: the CLI refuses any function secret whose name starts with `SUPABASE_`, and `npx supabase functions serve` injects the local secret key too. A hosted project must **have** a secret key — Project Settings → API Keys → _Secret keys_; create one if the list is empty. Without one both functions refuse to start: the boot error in the function's logs says `invite-member cannot start: SUPABASE_SECRET_KEYS holds no secret key` (or `csv-import …`) and names the dashboard page. The key is read once, when a function boots, so to rotate it: create a new secret key, delete the old one, then redeploy the functions so no warm worker keeps the deleted key.
 
 ## CORS: who is allowed to call this function from a browser
 

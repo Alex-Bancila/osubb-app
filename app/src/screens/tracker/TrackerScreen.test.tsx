@@ -6,6 +6,7 @@ import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { taskRow } from '../../test/task-fixtures';
+import { orderOpportunities } from '../../queries/task-opportunities';
 
 const hooks = vi.hoisted(() => ({
   useMyTasks: vi.fn(),
@@ -62,7 +63,10 @@ vi.mock('../../queries/reference', () => ({
     ]),
   }),
 }));
-vi.mock('../../queries/task-opportunities', () => ({
+vi.mock('../../queries/task-opportunities', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../../queries/task-opportunities')
+  >()),
   useTaskOpportunities: hooks.useTaskOpportunities,
 }));
 vi.mock('../../queries/task-tabs', () => ({
@@ -272,11 +276,8 @@ describe('My tasks screen', () => {
     screen.getByRole('tab', { name: 'Taskurile mele' }).focus();
     await user.keyboard('{ArrowRight}{Enter}');
     expect(
-      screen.getByText('Nu sunt oportunități în grupurile tale.'),
+      screen.getByText('Nu sunt oportunități deschise pentru tine.'),
     ).toBeVisible();
-    expect(
-      screen.queryByRole('region', { name: 'Alte oportunități OSUBB' }),
-    ).not.toBeInTheDocument();
   });
 
   it('lets a local manager open the authorized management query without global access', async () => {
@@ -463,7 +464,7 @@ describe('My tasks screen', () => {
     expect(refetch).toHaveBeenCalledOnce();
   });
 
-  describe('Disponibile (ruling R10)', () => {
+  describe('Disponibile (ruling R26)', () => {
     const group = (
       name: string,
       path: number[],
@@ -477,31 +478,21 @@ describe('My tasks screen', () => {
       is_organization: false,
       ...extra,
     });
-    const opportunity = (
-      overrides: Partial<ReturnType<typeof taskRow>>,
-      relevant: boolean,
-      joinable: boolean,
-    ) => ({
-      ...taskRow({ assignment_mode: 'public', assignments: [], ...overrides }),
-      relevant,
-      joinable,
-    });
-    // A Member of Educațional (10): its local Task and the Organization's
-    // are theirs; Resurse Umane (20) and its Recrutare (21) are other.
-    const rows = [
-      opportunity(
-        {
+    const publicTask = (overrides: Partial<ReturnType<typeof taskRow>>) =>
+      taskRow({ assignment_mode: 'public', assignments: [], ...overrides });
+    // A Member of Educațional (10), and of the Organization (5) by Automatic
+    // Membership; Resurse Umane (20) and its Recrutare (21) are not theirs.
+    // The rows go through the real classifier, as the query does.
+    const rows = orderOpportunities(
+      [
+        publicTask({
           id: 11,
           title: 'Afișe pentru atelier',
           group_id: 10,
           group: group('Educațional', [10], { color: '#0a7d4f' }),
           deadline: '2026-10-05T09:00:00Z',
-        },
-        true,
-        true,
-      ),
-      opportunity(
-        {
+        }),
+        publicTask({
           id: 12,
           title: 'Voluntari la Balul Bobocilor',
           group_id: 5,
@@ -511,36 +502,39 @@ describe('My tasks screen', () => {
             is_organization: true,
           }),
           deadline: '2026-10-01T09:00:00Z',
-        },
-        true,
-        true,
-      ),
-      opportunity(
-        {
+        }),
+        // Another Group's local Task, readable only through leadership
+        // (R1/R3): it belongs to the management tabs, never to Disponibile.
+        publicTask({
           id: 13,
           title: 'Interviuri de recrutare',
           group_id: 21,
           group: group('Recrutare', [20, 21], { category: 'team' }),
           campaign_id: 7,
           deadline: '2026-10-02T09:00:00Z',
-        },
-        false,
-        false,
-      ),
-      opportunity(
-        {
+        }),
+        // Another Group's org Opportunity: joinable by every Member.
+        publicTask({
           id: 14,
           title: 'Sondaj pentru membri',
           group_id: 20,
           audience: 'org',
-          group: group('Resurse Umane', [20]),
+          group: group('Resurse Umane', [20], { color: '#b8412c' }),
           deadline: '2026-10-03T09:00:00Z',
-        },
-        false,
-        true,
-      ),
-    ];
-    const ordered = [rows[1], rows[0], rows[2], rows[3]];
+        }),
+        // Another Group's local Task the Member once took part in.
+        publicTask({
+          id: 15,
+          title: 'Arhivă de interviuri',
+          group_id: 21,
+          group: group('Recrutare', [20, 21], { category: 'team' }),
+          campaign_id: 7,
+          deadline: '2026-10-04T09:00:00Z',
+        }),
+      ],
+      new Set([5, 10]),
+      { participated: new Set([15]) },
+    );
     beforeEach(() => {
       query();
       hooks.join.mockReset();
@@ -550,7 +544,7 @@ describe('My tasks screen', () => {
         isError: false,
       });
       hooks.useTaskOpportunities.mockReturnValue({
-        data: ordered,
+        data: rows,
         isPending: false,
         isError: false,
       });
@@ -561,32 +555,30 @@ describe('My tasks screen', () => {
       await user.click(screen.getByRole('tab', { name: 'Disponibile' }));
       return { user, ...view };
     }
+    const band = () =>
+      screen.getByRole('region', { name: 'Oportunități deschise' });
     const titles = (region: HTMLElement) =>
       within(region)
-        .getAllByRole('article')
+        .queryAllByRole('article')
         .map(
           (card) =>
             document.getElementById(card.getAttribute('aria-labelledby') ?? '')
               ?.textContent,
         );
 
-    it('shows own Groups above, in the Group colour with the Organization in OSUBB red, and Other OSUBB Opportunities greyed below', async () => {
-      await openAvailable();
-      const own = screen.getByRole('region', { name: 'Din grupurile mele' });
-      const other = screen.getByRole('region', {
-        name: 'Alte oportunități OSUBB',
-      });
-      expect(titles(own)).toEqual([
+    it('shows one band in deadline order, each card in its Group colour, the Organization in OSUBB red', async () => {
+      const { container } = await openAvailable();
+      expect(titles(band())).toEqual([
         'Voluntari la Balul Bobocilor',
+        'Sondaj pentru membri',
+        'Arhivă de interviuri',
         'Afișe pentru atelier',
       ]);
-      expect(titles(other)).toEqual([
-        'Interviuri de recrutare',
-        'Sondaj pentru membri',
-      ]);
       expect(
-        own.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
+        screen.queryByRole('region', { name: 'Alte oportunități OSUBB' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/Din grupurile în care nu ești/)).toBeNull();
+      expect(container.querySelector('[data-band]')).toBeNull();
       const stripe = (title: string) =>
         (
           screen
@@ -595,35 +587,50 @@ describe('My tasks screen', () => {
         ).style.getPropertyValue('--task-stripe');
       expect(stripe('Voluntari la Balul Bobocilor')).toBe('var(--scope-org)');
       expect(stripe('Afișe pentru atelier')).toBe('#0a7d4f');
-      for (const card of within(other).getAllByRole('article')) {
-        expect(card).toHaveAttribute('data-band', 'other');
-        expect(card.querySelector('[data-slot="card"]')).toHaveClass(
+      // Another Group's org Opportunity keeps its own colour, never grey.
+      expect(stripe('Sondaj pentru membri')).toBe('#b8412c');
+      for (const card of within(band()).getAllByRole('article'))
+        expect(card.querySelector('[data-slot="card"]')).not.toHaveClass(
           'bg-muted',
           'border-dashed',
         );
-        expect(card.querySelector('[data-slot="card"]')).not.toHaveClass(
-          'opacity-50',
-        );
-      }
-      // Greyed, yet still naming its Group.
+      // The heading sits above the card titles.
       expect(
-        within(
-          screen.getByRole('article', { name: 'Interviuri de recrutare' }),
-        ).getByText('Echipă · Recrutare'),
-      ).toBeVisible();
-      // Band headings sit above the card titles.
-      expect(
-        within(own).getByRole('heading', {
+        within(band()).getByRole('heading', {
           level: 3,
           name: 'Afișe pentru atelier',
         }),
       ).toBeVisible();
     });
 
-    it('offers no join button on a local-Audience Other row, and keeps it on an org-Audience one', async () => {
+    it('lists another Group’s org Opportunity with its Group chip and a join button', async () => {
+      await openAvailable();
+      const org = screen.getByRole('article', {
+        name: 'Sondaj pentru membri',
+      });
+      expect(
+        within(org).getByText('Departament · Resurse Umane'),
+      ).toBeVisible();
+      expect(within(org).getByText('OSUBB')).toBeVisible();
+      expect(
+        within(org).getByRole('button', { name: 'Vreau să particip' }),
+      ).toBeEnabled();
+      expect(
+        within(org).queryByText('Doar pentru membrii grupului'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('does not list a row leadership can read but not join (R1/R3)', async () => {
+      await openAvailable();
+      expect(
+        screen.queryByRole('article', { name: 'Interviuri de recrutare' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('keeps a local row the Member took part in, without a join button', async () => {
       await openAvailable();
       const local = screen.getByRole('article', {
-        name: 'Interviuri de recrutare',
+        name: 'Arhivă de interviuri',
       });
       expect(
         within(local).getByText('Doar pentru membrii grupului'),
@@ -631,15 +638,6 @@ describe('My tasks screen', () => {
       expect(within(local).queryByRole('button', { name: /particip/ })).toBe(
         null,
       );
-      const org = screen.getByRole('article', {
-        name: 'Sondaj pentru membri',
-      });
-      expect(
-        within(org).getByRole('button', { name: 'Vreau să particip' }),
-      ).toBeEnabled();
-      expect(
-        within(org).queryByText('Doar pentru membrii grupului'),
-      ).not.toBeInTheDocument();
     });
 
     it('confirms a join with the queue place, never an Executor selection', async () => {
@@ -660,7 +658,7 @@ describe('My tasks screen', () => {
       expect(screen.queryByText('Ai fost selectat ca Executor.')).toBeNull();
     });
 
-    it('keeps a pending Candidature on an Other org row in the lower band, with its place', async () => {
+    it('keeps a pending Candidature on another Group’s org row, with its place', async () => {
       hooks.useTaskQueue.mockImplementation((taskId: number) => ({
         data:
           taskId === 14
@@ -670,10 +668,7 @@ describe('My tasks screen', () => {
         isError: false,
       }));
       await openAvailable();
-      const other = screen.getByRole('region', {
-        name: 'Alte oportunități OSUBB',
-      });
-      const org = within(other).getByRole('article', {
+      const org = within(band()).getByRole('article', {
         name: 'Sondaj pentru membri',
       });
       expect(within(org).getByText('Te-ai înscris pe locul 3.')).toBeVisible();
@@ -682,58 +677,39 @@ describe('My tasks screen', () => {
       ).toBeVisible();
     });
 
-    it('omits the lower band when it is empty and says so when the upper band is', async () => {
+    it('says so when nothing is open for the Member', async () => {
       hooks.useTaskOpportunities.mockReturnValue({
-        data: [rows[2], rows[3]],
+        data: [],
         isPending: false,
         isError: false,
       });
-      const { rerender } = await openAvailable();
+      await openAvailable();
       expect(
-        within(
-          screen.getByRole('region', { name: 'Din grupurile mele' }),
-        ).getByText('Nu sunt oportunități în grupurile tale.'),
+        within(band()).getByText('Nu sunt oportunități deschise pentru tine.'),
       ).toBeVisible();
-      hooks.useTaskOpportunities.mockReturnValue({
-        data: [rows[1]],
-        isPending: false,
-        isError: false,
-      });
-      rerender(tree('/tracker'));
-      expect(
-        screen.queryByRole('region', { name: 'Alte oportunități OSUBB' }),
-      ).not.toBeInTheDocument();
     });
 
     it.each([
-      // A Group means it and everything below it: Resurse Umane covers Recrutare.
-      ['?grup=20', [], ['Interviuri de recrutare', 'Sondaj pentru membri']],
-      ['?grup=20&subgrup=21', [], ['Interviuri de recrutare']],
-      ['?grup=20&campanie=7', [], ['Interviuri de recrutare']],
+      // A Group means it and everything below it: Resurse Umane covers
+      // Recrutare, and brings in its org Opportunity.
+      ['?grup=20', ['Sondaj pentru membri', 'Arhivă de interviuri']],
+      ['?grup=20&subgrup=21', ['Arhivă de interviuri']],
+      ['?grup=20&campanie=7', ['Arhivă de interviuri']],
       // Deadline range, Bucharest days, both ends inclusive.
       [
-        '?de_la=2026-10-01&pana_la=2026-10-02',
-        ['Voluntari la Balul Bobocilor'],
-        ['Interviuri de recrutare'],
+        '?de_la=2026-10-01&pana_la=2026-10-03',
+        ['Voluntari la Balul Bobocilor', 'Sondaj pentru membri'],
       ],
-      ['?grup=5', ['Voluntari la Balul Bobocilor'], []],
-    ])(
-      'narrows both bands from the URL (%s)',
-      async (search, ownTitles, otherTitles) => {
-        await openAvailable(`/tracker${search}`);
-        const own = screen.getByRole('region', { name: 'Din grupurile mele' });
-        if (ownTitles.length) expect(titles(own)).toEqual(ownTitles);
-        else
-          expect(own).toHaveTextContent(
-            'Nicio oportunitate din grupurile tale nu corespunde filtrelor.',
-          );
-        const other = screen.queryByRole('region', {
-          name: 'Alte oportunități OSUBB',
-        });
-        if (other) expect(titles(other)).toEqual(otherTitles);
-        expect(other === null).toBe(otherTitles.length === 0);
-      },
-    );
+      ['?grup=5', ['Voluntari la Balul Bobocilor']],
+      ['?de_la=2026-11-01&pana_la=2026-11-02', []],
+    ])('narrows the band from the URL (%s)', async (search, expected) => {
+      await openAvailable(`/tracker${search}`);
+      expect(titles(band())).toEqual(expected);
+      if (!expected.length)
+        expect(band()).toHaveTextContent(
+          'Nicio oportunitate nu corespunde filtrelor.',
+        );
+    });
 
     it('asks for a valid range instead of listing when the dates are inverted', async () => {
       await openAvailable('/tracker?de_la=2026-10-05&pana_la=2026-10-01');
@@ -745,7 +721,7 @@ describe('My tasks screen', () => {
       expect(screen.queryByRole('article')).toBeNull();
     });
 
-    it('has no axe violations across both bands', async () => {
+    it('has no axe violations', async () => {
       const { container } = await openAvailable();
       const panel = container.querySelector(
         '[role="tabpanel"]:not([hidden])',
@@ -753,8 +729,7 @@ describe('My tasks screen', () => {
       expect(
         (
           await axe.run(panel, {
-            // jsdom computes no colours; the band's contrast is checked
-            // against the tokens in other-band-contrast.test.ts.
+            // jsdom computes no colours.
             rules: { 'color-contrast': { enabled: false } },
           })
         ).violations,

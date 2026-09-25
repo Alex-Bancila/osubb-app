@@ -21,6 +21,21 @@ Studio (DB browser): http://127.0.0.1:54323 · Mailpit (local email inbox): http
 
 Windows note: if start/reset fails with "port is not available", run `net stop winnat && net start winnat` in an **admin** PowerShell.
 
+## Staging and PR previews
+
+| What        | URL                                        | Updated                                                       |
+| ----------- | ------------------------------------------ | ------------------------------------------------------------- |
+| Staging     | https://osubb-staging.pages.dev            | every merge to `main`: migrations → Edge Functions → web app  |
+| PR previews | `https://pr-<n>.osubb-staging.pages.dev`   | every push to a pull request from a branch of this repository |
+| Production  | https://app.osubb.ro (not live before #36) | only by the manual, reviewer-approved Release workflow (#78)  |
+
+A preview is the pull request's web app talking to **staging** — its database, Edge Functions and demo data — and a bot comment on the PR carries its URL. Two things behave differently there:
+
+- **Sign in with the six-digit code** from the email. The link in the email lands on staging's Site URL, not on the preview.
+- **Inviting members does not work** on a preview: staging's `ALLOWED_ORIGINS` is an exact match and lists only `https://osubb-staging.pages.dev`.
+
+Every deploy runs from GitHub Actions (`.github/workflows/ci.yml`); both Cloudflare Pages projects are Direct Upload and never connected to Git (ADR-0005; ruling L3 of the 2026-09-25 launch grill). Until the Cloudflare token and the GitHub Environments exist (#109), the deploy jobs finish green with a notice and deploy nothing.
+
 ## Contributing (team + agents)
 
 Work is cut into **≤1-hour issues** (label `max-1h`), each with goal, reasoning, steps, and acceptance criteria: `gh issue list --label max-1h --state open`. The loop: branch → build → `db reset` + `test db` green → PR with `Closes #n` → CI green → review → merge (staging's **schema** updates automatically; its demo data is a separate manual workflow — `docs/backend/seeding-staging.md`).
@@ -40,4 +55,4 @@ Work is cut into **≤1-hour issues** (label `max-1h`), each with goal, reasonin
 | How do we work as a team?  | `docs/team/team-plan.md`                                   |
 | Requirements source (RO)   | `docs/org/`                                                |
 
-Private repo · secrets live in Bitwarden + GitHub Actions secrets, never in git.
+Public repo · secrets live in Bitwarden + GitHub Environment secrets, never in git.
