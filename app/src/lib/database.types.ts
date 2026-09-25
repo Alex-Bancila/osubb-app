@@ -3589,6 +3589,10 @@ export type Database = {
           token: string
         }[]
       }
+      close_evaluation_period: {
+        Args: { p_period_id: number }
+        Returns: undefined
+      }
       complete_task_review: {
         Args: {
           p_difficulty: number
@@ -4221,6 +4225,7 @@ export type Database = {
         }[]
       }
       my_unread_announcements_count: { Args: never; Returns: number }
+      open_evaluation_period: { Args: { p_name: string }; Returns: number }
       pending_request_decisions: {
         Args: never
         Returns: {

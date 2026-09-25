@@ -19,7 +19,8 @@
 --
 -- Fixtures. One closed Period [2005-01-01, 2005-07-01) and one open Period
 -- from 2006-01-01, written as the owner inside this rolled-back transaction
--- (conventions section 10: no command opens or closes a Period before #701).
+-- (conventions section 10's fixture exception: #701's commands open at now(), and
+-- these Periods are dated in the past).
 -- The demo seed's two Role holders are deactivated first, so the cohorts are
 -- exactly this suite's Members. In-Period Task Points (Difficulty x
 -- rating_mult(Rating)):

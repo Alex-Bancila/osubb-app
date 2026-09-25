@@ -19,7 +19,8 @@
 -- "Comisia AG 512" is a Child Group of AG 512; a decoy Group literally named
 -- "Adunarea Generală" sits beside AG 512. The Periods and the setting are
 -- written as the owner inside this rolled-back transaction -- the fixture
--- exception of conventions section 10 (no command opens a Period before #701).
+-- exception of conventions section 10 (#701's commands are exercised in
+-- evaluation_period_commands.test.sql).
 -- The open Period opens at now(), so only this suite's awards fall inside it.
 --
 -- Mutation guards, each named against the assertion that turns red (every
