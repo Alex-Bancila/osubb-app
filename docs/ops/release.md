@@ -8,7 +8,7 @@ _Promotion_ is a Member moving up a Role, never a deploy.
 This page covers starting, reviewing, approving and verifying a Release, its rollback, who holds which
 login, and the recurring per-environment setup and lookups around it. The very first Release is different
 — production doesn't exist yet, so most of this page doesn't apply — and is walked step by step in §11 of
-[`launch-runbook-2026-10.md`](launch-runbook-2026-10.md), kept as the historical record of that one run.
+[`launch-runbook-2026-10.md`](launch-runbook-2026-10.md), the runbook for that one run.
 
 ## The one command
 
@@ -187,8 +187,10 @@ Member's own inbox is at fault:
    separates "we never sent it" from "we sent it and it bounced" from "it's sitting in spam", three
    different fixes.
 2. Read the entry's status. **Delivered** means it left Resend and the receiving server accepted it — check
-   spam next, and that the address really is the Member's. **Bounced** or **Complained** means the address
-   itself is the problem (mistyped, or the mailbox refused it). **No entry at all** means the send never
+   spam next, and that the address really is the Member's. **Bounced** means Resend recorded a delivery
+   rejection; inspect its details and distinguish temporary or undetermined bounces from permanent address
+   or suppression failures. **Complained** means the recipient marked a delivered email as spam, so handle
+   it separately from address validity. **No entry at all** means the send never
    happened — check `docs/backend/auth-config.md` § "Verifying the whole thing works" for the provider being
    off or the rate limit being hit.
 3. **If the fix is a mistyped address:** there is no re-send path today. `invite-member` refuses on purpose
