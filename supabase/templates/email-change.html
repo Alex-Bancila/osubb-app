@@ -1,0 +1,67 @@
+<!--
+  Email-change confirmation. With double_confirm_changes on, GoTrue sends this
+  body twice — once to the current address and once to the new one — each with
+  its own one-time password; the change completes when both are used. The link
+  and the six-digit token below are the SAME one-time password with the same
+  expiry (GoTrue renders Go template actions everywhere in this file, comments
+  included, so do not write one here). The button opens the app's /auth/confirm
+  page, never Supabase's verify endpoint: the token is spent only when the
+  Member taps "Conectează-mă" there, so a mail scanner that fetches the link
+  (Microsoft 365 does) spends nothing (ruling L7, #768). Wired locally by
+  supabase/config.toml; staging and production need the same body pasted in
+  the dashboard (#54, #77).
+-->
+<div
+  style="
+    font-family: Montserrat, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #16181d;
+  "
+>
+  <h1 style="font-size: 20px; margin: 0 0 16px">
+    Confirmă schimbarea adresei de email
+  </h1>
+
+  <p style="margin: 0 0 16px">
+    Contul tău din aplicația OSUBB trece de la <strong>{{ .Email }}</strong> la
+    <strong>{{ .NewEmail }}</strong>. Mesajul acesta a ajuns la
+    <strong>{{ .SendingTo }}</strong>; schimbarea se face după ce o confirmi de
+    pe ambele adrese. Apasă butonul, apoi confirmă pe pagina care se deschide:
+  </p>
+
+  <p style="margin: 0 0 24px">
+    <a
+      href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&email={{ .Email }}&redirect_to={{ .RedirectTo }}"
+      style="
+        display: inline-block;
+        padding: 12px 20px;
+        border-radius: 8px;
+        background: #0b3d91;
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 700;
+      "
+      >Confirmă adresa</a
+    >
+  </p>
+
+  <p style="margin: 0 0 8px">Dacă aplicația îți cere un cod, acesta este:</p>
+
+  <p
+    style="
+      margin: 0 0 24px;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 6px;
+    "
+  >
+    {{ .Token }}
+  </p>
+
+  <p style="margin: 0 0 16px; color: #5a6072; font-size: 14px">
+    Linkul și codul sunt una și aceeași parolă de unică folosință: expiră
+    repede și pot fi folosite o singură dată. Dacă nu ai cerut tu schimbarea,
+    nu apăsa nimic și anunță BC.
+  </p>
+</div>
