@@ -17,8 +17,13 @@ const inputClassName =
 /* There is no password field on this screen, and that is the product working as
    designed: accounts exist only by BC invitation and sign-in is passwordless
    (ADR-0003). Nobody generates, distributes, forgets or leaks a password. */
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+export default function LoginScreen({
+  initialEmail = '',
+}: {
+  /** Handed over by `/auth/confirm` when an emailed link failed (#768). */
+  initialEmail?: string;
+}) {
+  const [email, setEmail] = useState(initialEmail);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [code, setCode] = useState('');

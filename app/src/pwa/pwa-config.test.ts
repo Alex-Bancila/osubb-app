@@ -12,9 +12,10 @@ describe('PWA build options', () => {
     expect(options).not.toHaveProperty('workbox');
   });
 
-  it('precaches only the static shell', () => {
+  it('precaches only the static shell and its theme script', () => {
     expect(createPwaOptions().injectManifest.globPatterns).toEqual([
       'index.html',
+      'theme-init.js',
       'assets/*.{js,css,woff2,png,svg,ico}',
     ]);
   });
@@ -61,14 +62,20 @@ describe('service worker cache boundary', () => {
     expect(supabaseOriginPattern('not a url')).toBeNull();
   });
 
-  it('keeps auth callbacks out of the navigation fallback', () => {
-    const [callbackDenylist] = NAVIGATION_DENYLIST;
-    if (!callbackDenylist) throw new Error('Missing callback denylist');
-    expect(callbackDenylist.test('/auth/callback')).toBe(true);
-    expect(callbackDenylist.test('/auth/callback/')).toBe(true);
-    expect(callbackDenylist.test('/auth/callback?code=magic-link-code')).toBe(
-      true,
-    );
-    expect(callbackDenylist.test('/calendar')).toBe(false);
+  it('keeps emailed-link landings out of the navigation fallback', () => {
+    const denied = (path: string) =>
+      NAVIGATION_DENYLIST.some((pattern) => pattern.test(path));
+
+    expect(denied('/auth/callback')).toBe(true);
+    expect(denied('/auth/callback/')).toBe(true);
+    expect(denied('/auth/callback?code=magic-link-code')).toBe(true);
+    // The click-to-confirm page (#768) is never served from cache either.
+    expect(denied('/auth/confirm')).toBe(true);
+    expect(denied('/auth/confirm/')).toBe(true);
+    expect(denied('/auth/confirm?token_hash=abc&type=invite')).toBe(true);
+
+    expect(denied('/calendar')).toBe(false);
+    expect(denied('/auth/confirmed')).toBe(false);
+    expect(denied('/auth')).toBe(false);
   });
 });
