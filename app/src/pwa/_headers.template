@@ -1,9 +1,11 @@
 # Cloudflare Pages response headers (ruling L12, #770).
 #
 # Rendered into dist/_headers by headersPlugin (headers-plugin.ts) at build,
-# with __SUPABASE_HOST__ replaced by the host of VITE_SUPABASE_URL. Pages sets
-# no security headers of its own, and without a Cloudflare zone this file is
-# the only place HSTS can come from.
+# with __SUPABASE_ORIGIN__ replaced by the origin of VITE_SUPABASE_URL and
+# __SUPABASE_REALTIME_ORIGIN__ by the same origin over ws(s), the way
+# supabase-js derives its Realtime URL. Pages sets no security headers of its
+# own, and without a Cloudflare zone this file is the only place HSTS can come
+# from.
 #
 # Every rule whose path matches applies, and a header named by two matching
 # rules gets both values joined with a comma. So Cache-Control is set only in
@@ -16,7 +18,7 @@
 # Report-Only, which is why X-Frame-Options stays alongside it.
 
 /*
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://__SUPABASE_HOST__ wss://__SUPABASE_HOST__; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' __SUPABASE_ORIGIN__ __SUPABASE_REALTIME_ORIGIN__; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff

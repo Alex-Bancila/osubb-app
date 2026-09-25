@@ -45,8 +45,9 @@ describe('Cloudflare _headers (ruling L12, #770)', () => {
   const rules = parseHeaders(rendered);
 
   it('substitutes the Supabase host everywhere', () => {
-    expect(template).toContain('__SUPABASE_HOST__');
-    expect(rendered).not.toContain('__SUPABASE_HOST__');
+    expect(template).toContain('__SUPABASE_ORIGIN__');
+    expect(template).toContain('__SUPABASE_REALTIME_ORIGIN__');
+    expect(rendered).not.toMatch(/__SUPABASE_\w+__/);
     const all = rules.get('/*');
     const csp = directives(
       all?.get('Content-Security-Policy-Report-Only') ?? '',
@@ -112,8 +113,11 @@ describe('Cloudflare _headers (ruling L12, #770)', () => {
     expect(() =>
       renderHeaders(template, 'ftp://abcdefghijklmnop.supabase.co'),
     ).toThrow(/VITE_SUPABASE_URL/);
+  });
+
+  it('follows a local http URL with ws, as supabase-js does', () => {
     expect(renderHeaders(template, 'http://127.0.0.1:54321')).toContain(
-      'wss://127.0.0.1:54321',
+      "connect-src 'self' http://127.0.0.1:54321 ws://127.0.0.1:54321;",
     );
   });
 });
