@@ -37,13 +37,18 @@
 -- adjacent, not overlapping. No Notification on open: R20 is silent.
 --
 -- The close, one transaction, never half-done:
---   1. the Period row, the command's target, locked `for update`;
+--   1. the Period row, the command's target, locked `for no key update`: the
+--      close writes closed_at, closed_by and closing_threshold, none of them a
+--      key, and the Period is a row other rows may reference -- so, like #49's
+--      stamp, it takes the mode that does not block the FOR KEY SHARE a
+--      referencing insert takes (conventions section 2). It still conflicts
+--      with itself, so two closes serialise on the row as well as on (47, 1);
 --   2. closed_at = now(), closed_by = the actor -- first, because #47's
 --      evaluation_periods_threshold_ck keeps closing_threshold null until
 --      closed_at is set, and #52 dates "promoted at or after the close" by
 --      that same now(), which its role_history rows share;
 --   3. #49's private.stamp_closing_threshold(p_period_id) -- the command never
---      computes the boundary itself. It relocks the row `for no key update`
+--      computes the boundary itself. It relocks the row in the same mode
 --      in the same transaction (free), and leaves closing_threshold null when
 --      the Period ranked nobody (the threshold in force carries over);
 --   4. #52's private.apply_close_promotions(p_period_id) -- the close-time
@@ -166,7 +171,7 @@ begin
   select * into v_period
     from public.evaluation_periods as period
    where period.id = p_period_id
-   for update;
+   for no key update;
   if not found then
     raise sqlstate 'PT404' using message = 'period_not_found';
   end if;
@@ -191,7 +196,7 @@ end;
 $$;
 
 comment on function private.close_evaluation_period_impl(bigint) is
-  '#701: body of public.close_evaluation_period. private.require_active_member() and live level >= 6 (BC, Moderator), every refusal 42501 period_manage_forbidden; pg_advisory_xact_lock(47, 1), shared with open_evaluation_period; the Period locked for update -- PT404 period_not_found, PT409 period_already_closed. Then, in one transaction: closed_at = now() and closed_by = the actor; #49''s private.stamp_closing_threshold (the Promotion Threshold -- left null when the Period ranked nobody); #52''s private.apply_close_promotions (the close-time promotions and the Retention Signal Notifications, taking pg_advisory_xact_lock(52, 1) after (47, 1)). Any error rolls the whole close back.';
+  '#701: body of public.close_evaluation_period. private.require_active_member() and live level >= 6 (BC, Moderator), every refusal 42501 period_manage_forbidden; pg_advisory_xact_lock(47, 1), shared with open_evaluation_period; the Period locked for no key update -- PT404 period_not_found, PT409 period_already_closed. Then, in one transaction: closed_at = now() and closed_by = the actor; #49''s private.stamp_closing_threshold (the Promotion Threshold -- left null when the Period ranked nobody); #52''s private.apply_close_promotions (the close-time promotions and the Retention Signal Notifications, taking pg_advisory_xact_lock(52, 1) after (47, 1)). Any error rolls the whole close back.';
 
 create function public.close_evaluation_period(p_period_id bigint)
 returns void

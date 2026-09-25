@@ -2,10 +2,11 @@
 -- commands, public.open_evaluation_period(p_name) and
 -- public.close_evaluation_period(p_period_id), over their private _impls.
 --
--- In order: two concurrent opens (pg_temp.test_race, first -- before this
--- transaction takes the (47, 1) advisory lock or writes a Period, both of
--- which would block the race sessions); the functions and their execute
--- privileges; the name, answered before the gate; the gate, against both
+-- In order: two concurrent opens (pg_temp.test_race) and a held-lock probe of
+-- the close, first: before this transaction takes the (47, 1) advisory lock
+-- or writes a Period, both of which would block the remote sessions; the
+-- functions and their execute privileges; the name, answered before the
+-- gate; the gate, against both
 -- commands; a close that ranks somebody (#49's stamp and #52's close-time
 -- promotion ran); the close's refusals; an open, a second open, and a close
 -- that ranks nobody; apply_close_promotions called exactly once; the
@@ -27,7 +28,9 @@
 --     close-time promotion ...";
 --   * the stamp_closing_threshold call removed -> "the close stamped
 --     closing_threshold through #49 ...";
---   * the advisory lock removed, or the open check removed -> "two
+--   * the close's advisory lock removed -> "a close waits on the (47, 1)
+--     advisory lock ...";
+--   * the open's advisory lock removed, or the open check removed -> "two
 --     concurrent opens: the second waits and answers period_already_open";
 --   * the level-6 gate dropped -> "a BCE cannot open a Period" and "a BCE
 --     cannot close a Period";
@@ -42,7 +45,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(40);
+select plan(41);
 
 -- ==================== 1. Two concurrent opens ====================
 -- A opens and holds (47, 1) until it commits; B waits on the lock, then sees
@@ -81,6 +84,33 @@ select is((select period_count from extensions.dblink('period_setup', $$
   select count(*) from public.evaluation_periods where opened_by = '70100000-0000-0000-0000-0000000000f1'
 $$) as result (period_count bigint)), 1::bigint,
   'two concurrent opens commit exactly one Period');
+
+-- The close takes the same lock before it reads a Period. A held-lock probe,
+-- as #52's suite probes (52, 1), rather than a race of two committed closes:
+-- a committed close would run #52's real close-time run over the committed
+-- database, and its promotions and Retention Signal Notifications would
+-- outlive this suite's rollback. Both remote transactions roll back; the id
+-- is unknown, so even a mutant that skips the lock changes nothing.
+select extensions.dblink_connect('period_lock', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
+  current_database()));
+select extensions.dblink_connect('period_retry', format(
+  'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
+  current_database()));
+select extensions.dblink_exec('period_lock',
+  'begin; do $lock$ begin perform pg_catalog.pg_advisory_xact_lock(47, 1); end $lock$;');
+select extensions.dblink_exec('period_retry', format(
+  'begin; set local lock_timeout = ''250ms''; select set_config(''request.jwt.claims'', %L, true); set local role authenticated;',
+  current_setting('request.jwt.claims')));
+select throws_ok(
+  $$ select * from extensions.dblink('period_retry', 'select public.close_evaluation_period(0)::text')
+       as result (closed text) $$,
+  '55P03', 'canceling statement due to lock timeout',
+  'a close waits on the (47, 1) advisory lock an open or another close holds, before it reads the Period');
+select extensions.dblink_exec('period_retry', 'rollback;');
+select extensions.dblink_exec('period_lock', 'rollback;');
+select extensions.dblink_disconnect('period_retry');
+select extensions.dblink_disconnect('period_lock');
 
 select extensions.dblink_exec('period_setup', $$
   delete from public.evaluation_periods where opened_by = '70100000-0000-0000-0000-0000000000f1';
