@@ -85,10 +85,16 @@ describe('taskDraftSchema', () => {
     expect(check({ deadline: null })).toEqual(['deadline: deadline_required']);
   });
 
-  it('accepts both audiences and assignment modes', () => {
+  it('accepts both audiences on a public Task and a local direct one', () => {
     for (const audience of ['local', 'org'] as const)
-      for (const assignmentMode of ['direct', 'public'] as const)
-        expect(check({ audience, assignmentMode })).toEqual([]);
+      expect(check({ audience, assignmentMode: 'public' })).toEqual([]);
+    expect(check({ audience: 'local', assignmentMode: 'direct' })).toEqual([]);
+  });
+
+  it('refuses an org Audience on a direct Task, on the mode (R26)', () => {
+    expect(check({ audience: 'org', assignmentMode: 'direct' })).toEqual([
+      'assignmentMode: direct_task_local_only',
+    ]);
   });
 
   it('accepts a Campaign from any ancestor or self, not a sibling or a removed one', () => {
@@ -227,6 +233,15 @@ describe('taskUpdateSchema', () => {
     expect(checkEdit({})).toEqual([]);
   });
 
+  it('refuses an org Audience on a direct Task, on the mode (R26)', () => {
+    expect(checkEdit({ audience: 'org' })).toEqual([
+      'assignmentMode: direct_task_local_only',
+    ]);
+    expect(checkEdit({ audience: 'org', assignmentMode: 'public' })).toEqual(
+      [],
+    );
+  });
+
   it('keeps the title and description limits', () => {
     expect(checkEdit({ title: 't'.repeat(121) })).toEqual([
       'title: title_too_long',
@@ -344,6 +359,7 @@ it('maps every reason a Task command raises to a Task field', () => {
       'invalid_audience',
       'private_group_local_only',
       'invalid_assignment_mode',
+      'direct_task_local_only',
       'invalid_executor',
       'executor_not_allowed_for_public',
       'invalid_campaign',
