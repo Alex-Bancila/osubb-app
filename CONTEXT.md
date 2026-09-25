@@ -54,7 +54,7 @@ The presentation label chosen when a Group is created: Department, Project, or T
 _Avoid_: Kind, type, group type
 
 **Minimum Level**:
-The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Opportunities and Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it but never lower it, and a creator cannot set it above their own Level.
+The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it but never lower it, and a creator cannot set it above their own Level.
 _Avoid_: Min level, access level, role gate
 
 **Group Role**:
@@ -143,7 +143,7 @@ The Group that owns a Task. Every Task has exactly one Origin.
 _Avoid_: Scope when ownership is meant
 
 **Task Audience**:
-Whether the Candidate Queue of a public Task admits only the Origin Group's members or every Member its Minimum Level admits. Seeing an Opportunity does not depend on it; joining does.
+Whether a public Task is visible and joinable only by the Origin Group's members or by every active Member; a directly assigned Task carries the local Audience.
 _Avoid_: Visibility, scope
 
 **Assignment Mode**:
@@ -179,10 +179,6 @@ _Avoid_: Open status
 
 **Candidate**:
 A Member who has expressed interest in a public Task and is waiting, selected, withdrawn, or closed in its queue.
-
-**Other OSUBB Opportunity**:
-A visible Opportunity of a Group the Member is not in, presented greyed below the Opportunities of their own Groups. A Member sees every open Opportunity of a Group whose Minimum Level they satisfy, and may join it only when its Task Audience admits them. Opportunities and Events of the Organization Group are never "other": they belong to everyone and carry the OSUBB colour.
-_Avoid_: Foreign task, external opportunity
 
 **Candidate Queue**:
 The arrival-ordered list of every Member who expressed interest in a public Task. Nobody becomes Executor by arriving first: the Task Manager selects the Executor from the queue, and selects again when an Executor gives up.
