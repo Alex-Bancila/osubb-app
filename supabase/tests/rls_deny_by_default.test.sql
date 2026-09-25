@@ -157,6 +157,9 @@ insert into push_deliveries (notification_id, token_id)
 insert into notification_push_preferences (member_id, kind, push_enabled) values
   ('ffffffff-0000-0000-0000-000000000006', 'announce', false),
   ('eeeeeeee-0000-0000-0000-000000000156', 'event', false);
+-- #47: no command opens a Period yet (#701), and no migration seeds one.
+insert into evaluation_periods (name, opened_by)
+  values ('rls-period', 'ffffffff-0000-0000-0000-000000000006');
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:
