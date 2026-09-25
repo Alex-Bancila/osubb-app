@@ -372,3 +372,19 @@ it('says so, once, when the tree cannot be read', () => {
     'Nu am putut încărca grupurile.',
   );
 });
+
+it('offers the Perioade de evaluare entry only with manageRoles (#702)', () => {
+  // A Group Manager or a BCE administers Groups but does not manage Roles.
+  capabilities({ createTopLevelGroups: true, manageRoles: false });
+  const view = show();
+  expect(
+    screen.queryByRole('link', { name: 'Perioade de evaluare' }),
+  ).toBeNull();
+  view.unmount();
+
+  capabilities({ createTopLevelGroups: true, manageRoles: true });
+  show();
+  expect(
+    screen.getByRole('link', { name: 'Perioade de evaluare' }),
+  ).toHaveAttribute('href', '/administrare/perioade');
+});

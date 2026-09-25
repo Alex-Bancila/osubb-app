@@ -199,6 +199,25 @@ export const keys = {
     unread: (memberId?: string) =>
       ['notifications', 'unread', { memberId }] as const,
   },
+  /* Evaluation Periods and what their close fixes (#702): the Periods, the
+     Promotion Threshold in force and the last close's Retention Signals. One
+     `['evaluation']` prefix, so opening or closing a Period refreshes all three
+     from a single invalidation. */
+  evaluation: {
+    all: ['evaluation'] as const,
+    periods: (memberId: string | undefined) =>
+      ['evaluation', 'periods', { memberId }] as const,
+    threshold: (memberId: string | undefined) =>
+      ['evaluation', 'threshold', { memberId }] as const,
+    signals: (periodId: number | null, memberId: string | undefined) =>
+      ['evaluation', 'signals', { periodId, memberId }] as const,
+  },
+  /* The organization settings (#681): every row, read by every Member. */
+  orgSettings: {
+    all: ['org-settings'] as const,
+    list: (memberId: string | undefined) =>
+      ['org-settings', { memberId }] as const,
+  },
   /* Whether this browser receives Web Push for the member (#704): its
      subscription and its `push_tokens` row. "Mine", so keyed by member. */
   push: {

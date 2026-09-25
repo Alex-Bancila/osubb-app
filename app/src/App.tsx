@@ -35,6 +35,9 @@ const AdministrareScreen = lazy(
   () => import('./screens/administrare/AdministrareScreen'),
 );
 const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
+const PeriodsScreen = lazy(
+  () => import('./screens/administrare/PeriodsScreen'),
+);
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -268,6 +271,16 @@ export default function App() {
               <RequireCapability capability="administer">
                 <DeferredRoute>
                   <AdministrareScreen />
+                </DeferredRoute>
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/administrare/perioade"
+            element={
+              <RequireCapability capability="manageRoles">
+                <DeferredRoute>
+                  <PeriodsScreen />
                 </DeferredRoute>
               </RequireCapability>
             }
