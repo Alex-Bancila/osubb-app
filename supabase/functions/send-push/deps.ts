@@ -45,6 +45,11 @@ export const SEND_TIMEOUT_MS = 20_000;
 
 export interface SendPushDeps {
   /**
+   * The project's secret keys (`sb_secret_...`), any of which the caller
+   * must send on the `apikey` header. Empty when the platform provides none.
+   */
+  secretKeys(): string[];
+  /**
    * What is wrong with the function's configuration: the names of missing
    * settings, or of VAPID settings that are malformed -- never their values.
    */
@@ -64,11 +69,34 @@ export interface SendPushDeps {
 
 const REQUIRED_ENV = [
   "SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
   "VAPID_PUBLIC_KEY",
   "VAPID_PRIVATE_KEY",
   "VAPID_SUBJECT",
 ];
+
+/**
+ * The secret keys in `SUPABASE_SECRET_KEYS`, the platform's JSON map of key
+ * name to `sb_secret_` key (`{"default": "sb_secret_..."}`), `default`
+ * first. The platform injects it into every function, locally too, and a
+ * function secret cannot be named `SUPABASE_*`, so there is nothing to set by
+ * hand (#769). Anything unreadable is no key at all.
+ */
+export function parseSecretKeys(raw: string | undefined): string[] {
+  if (!raw) return [];
+  let map: unknown;
+  try {
+    map = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (typeof map !== "object" || map === null || Array.isArray(map)) return [];
+  return Object.entries(map as Record<string, unknown>)
+    .filter((entry): entry is [string, string] =>
+      typeof entry[1] === "string" && entry[1] !== ""
+    )
+    .sort(([a], [b]) => Number(b === "default") - Number(a === "default"))
+    .map(([, key]) => key);
+}
 
 /** The base64url uncompressed P-256 public key of a base64url private key. */
 function publicKeyOf(privateKey: string): string {
@@ -83,15 +111,22 @@ export function realDeps(): SendPushDeps {
   // Read env per request rather than at module load, so importing this file
   // in a test never throws on a missing variable.
   const env = (name: string) => Deno.env.get(name) ?? "";
+  const secretKeys = () =>
+    parseSecretKeys(Deno.env.get("SUPABASE_SECRET_KEYS"));
   let admin: SupabaseClient | null = null;
+  // The outbox commands are granted to service_role, which the gateway maps
+  // a secret key to -- the same key the caller had to present, not the
+  // legacy service_role JWT that Supabase retires by the end of 2026.
   const client = () =>
     admin ??= createClient(
       env("SUPABASE_URL"),
-      env("SUPABASE_SERVICE_ROLE_KEY"),
+      secretKeys()[0] ?? "",
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
   return {
+    secretKeys,
+
     configProblems() {
       const missing = REQUIRED_ENV.filter((name) => env(name) === "");
       if (missing.length > 0) return missing;

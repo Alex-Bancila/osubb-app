@@ -16,6 +16,7 @@ import {
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { NetworkOnly } from 'workbox-strategies';
 import { focusOrOpen, parsePushPayload, targetUrl } from './push-payload';
+import { renewSubscription } from './push-renewal';
 import { NAVIGATION_DENYLIST, supabaseOriginPattern } from './sw-routes';
 
 declare let self: ServiceWorkerGlobalScope;
@@ -60,6 +61,24 @@ self.addEventListener('push', (event) => {
       data: { link: payload.link, id: payload.id },
       tag: `osubb-${payload.id}`,
     }),
+  );
+});
+
+/* #769: the push service expired or replaced the subscription. Subscribe
+   again and hand the new one to any open window, which stores its row; with
+   none open, the app's self-repair stores it at the next start. A failure
+   here is left to that same self-repair. */
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    renewSubscription(
+      self.registration.pushManager,
+      self.clients,
+      event,
+      import.meta.env.VITE_VAPID_PUBLIC_KEY,
+    ).then(
+      () => undefined,
+      () => undefined,
+    ),
   );
 });
 

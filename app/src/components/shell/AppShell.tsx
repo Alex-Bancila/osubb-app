@@ -12,6 +12,7 @@ import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useNotificationRealtime } from '../../queries/notifications-realtime';
 import { useMyProfile } from '../../queries/profile';
+import { usePushSelfRepair } from '../../queries/push-subscription';
 import { useRoles } from '../../queries/reference';
 import { unreadAnnouncementsLabel } from '../../screens/announcements/announcements-presentation';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
@@ -180,6 +181,9 @@ function SidebarContent({
 export default function AppShell() {
   const { claims, session, signOut } = useAuth();
   useNotificationRealtime(session?.user.id);
+  // #769: keep this device's push subscription working across VAPID key
+  // rotations and push-service renewals, silently, from every app start.
+  usePushSelfRepair();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const firstMobileLinkRef = useRef<HTMLAnchorElement>(null);

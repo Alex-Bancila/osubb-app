@@ -2,11 +2,19 @@
 // The port is faked end to end: no database, no push service, no network.
 
 import { assertEquals } from "@std/assert";
-import { BATCH_SIZE, bearerRole, classify, handleSendPush } from "./handler.ts";
+import * as handler from "./handler.ts";
+import {
+  BATCH_SIZE,
+  classify,
+  constantTimeEqual,
+  handleSendPush,
+  isSecretKey,
+} from "./handler.ts";
 import {
   type ClaimedDelivery,
   InvalidSubscriptionError,
   type Outcome,
+  parseSecretKeys,
   type PushResponse,
   type PushSubscriptionJson,
   realDeps,
@@ -28,7 +36,8 @@ function jwt(claims: Record<string, unknown>): string {
   return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(claims)}.signature`;
 }
 
-const SERVICE = `Bearer ${jwt({ role: "service_role", iss: "supabase" })}`;
+// A made-up key in the sb_secret_ shape; never a real one.
+const SECRET = "sb_secret_test0000000000000000000000000000";
 
 function row(id: number, token = SUBSCRIPTION): ClaimedDelivery {
   return {
@@ -58,6 +67,7 @@ function fakeDeps(options: {
   batches?: ClaimedDelivery[][];
   answer?: (endpoint: string) => PushResponse | Error;
   missing?: string[];
+  keys?: string[];
   retryBecomesFailed?: boolean;
 } = {}) {
   const batches = [...(options.batches ?? [[row(1)]])];
@@ -66,6 +76,7 @@ function fakeDeps(options: {
   let claims = 0;
 
   const deps: SendPushDeps = {
+    secretKeys: () => options.keys ?? [SECRET],
     configProblems: () => options.missing ?? [],
     claim: (limit) => {
       claims++;
@@ -91,37 +102,108 @@ function fakeDeps(options: {
   return { deps, settled, sent, claimCount: () => claims };
 }
 
-function post(authorization: string | null = SERVICE): Request {
+function post(
+  apikey: string | null = SECRET,
+  extra: Record<string, string> = {},
+): Request {
   return new Request("http://localhost/send-push", {
     method: "POST",
-    headers: authorization ? { Authorization: authorization } : {},
+    headers: { ...(apikey === null ? {} : { apikey }), ...extra },
     body: "{}",
   });
 }
 
-Deno.test("an anon bearer is refused with 401 and nothing is claimed", async () => {
+Deno.test("a missing or wrong apikey is refused with 401 and nothing is claimed", async () => {
   const { deps, claimCount } = fakeDeps();
-  const anon = `Bearer ${jwt({ role: "anon" })}`;
-  assertEquals((await handleSendPush(post(anon), deps)).status, 401);
-  assertEquals((await handleSendPush(post(null), deps)).status, 401);
-  assertEquals(
-    (await handleSendPush(post("Bearer not-a-jwt"), deps)).status,
-    401,
-  );
+  for (
+    const apikey of [
+      null,
+      "",
+      "sb_secret_wrong",
+      SECRET.slice(0, -1),
+      `${SECRET}x`,
+      `Bearer ${SECRET}`,
+      "sb_publishable_test0000000000000000000000000",
+    ]
+  ) {
+    const response = await handleSendPush(post(apikey), deps);
+    assertEquals(response.status, 401, `apikey ${apikey}`);
+  }
   assertEquals(claimCount(), 0);
 });
 
-Deno.test("an authenticated Member's bearer is refused with 401", async () => {
+Deno.test("the exact secret key on apikey is accepted", async () => {
   const { deps, claimCount } = fakeDeps();
-  const member = `Bearer ${jwt({ role: "authenticated", sub: "member-1" })}`;
-  assertEquals((await handleSendPush(post(member), deps)).status, 401);
+  const response = await handleSendPush(post(SECRET), deps);
+  assertEquals(response.status, 200);
+  assertEquals(claimCount(), 1);
+});
+
+Deno.test("any of the project's secret keys is accepted, and only those", async () => {
+  const { deps } = fakeDeps({ keys: ["sb_secret_first", "sb_secret_second"] });
+  assertEquals(
+    (await handleSendPush(post("sb_secret_second"), deps)).status,
+    200,
+  );
+  assertEquals((await handleSendPush(post(SECRET), deps)).status, 401);
+});
+
+Deno.test("no role parsing remains: a service_role JWT bearer without the key is refused", async () => {
+  const { deps, claimCount } = fakeDeps();
+  const service = `Bearer ${jwt({ role: "service_role", iss: "supabase" })}`;
+  // The legacy shape of the cron call: a service_role JWT as bearer, on
+  // Authorization and on apikey. Neither is a secret key any more.
+  assertEquals(
+    (await handleSendPush(post(null, { Authorization: service }), deps)).status,
+    401,
+  );
+  assertEquals(
+    (await handleSendPush(
+      post(service.slice(7), { Authorization: service }),
+      deps,
+    ))
+      .status,
+    401,
+  );
   assertEquals(claimCount(), 0);
+  assertEquals("bearerRole" in handler, false);
+});
+
+Deno.test("with no secret key provided the function answers 500 naming the setting", async () => {
+  const { deps, claimCount } = fakeDeps({ keys: [] });
+  const response = await handleSendPush(post(SECRET), deps);
+  assertEquals(response.status, 500);
+  assertEquals((await response.json()).problems, ["SUPABASE_SECRET_KEYS"]);
+  assertEquals(claimCount(), 0);
+});
+
+Deno.test("constantTimeEqual and isSecretKey compare whole strings", () => {
+  assertEquals(constantTimeEqual("abc", "abc"), true);
+  assertEquals(constantTimeEqual("abc", "abd"), false);
+  assertEquals(constantTimeEqual("abc", "ab"), false);
+  assertEquals(constantTimeEqual("", ""), true);
+  assertEquals(constantTimeEqual("ă", "a"), false);
+  assertEquals(isSecretKey(null, [SECRET]), false);
+  assertEquals(isSecretKey("", [""]), false);
+  assertEquals(isSecretKey(SECRET, [SECRET]), true);
+});
+
+Deno.test("parseSecretKeys reads the platform's JSON map, default first", () => {
+  assertEquals(parseSecretKeys(undefined), []);
+  assertEquals(parseSecretKeys(""), []);
+  assertEquals(parseSecretKeys("sb_secret_plain"), []);
+  assertEquals(parseSecretKeys('["sb_secret_a"]'), []);
+  assertEquals(parseSecretKeys('{"default":""}'), []);
+  assertEquals(
+    parseSecretKeys('{"ci":"sb_secret_ci","default":"sb_secret_d","n":1}'),
+    ["sb_secret_d", "sb_secret_ci"],
+  );
 });
 
 Deno.test("only POST is accepted", async () => {
   const { deps } = fakeDeps();
   const get = new Request("http://localhost/send-push", {
-    headers: { Authorization: SERVICE },
+    headers: { apikey: SECRET },
   });
   assertEquals((await handleSendPush(get, deps)).status, 405);
 });
@@ -302,14 +384,6 @@ Deno.test("an empty outbox claims once and answers zeros", async () => {
   });
 });
 
-Deno.test("bearerRole reads the role claim and rejects anything else", () => {
-  assertEquals(bearerRole(SERVICE), "service_role");
-  assertEquals(bearerRole(null), null);
-  assertEquals(bearerRole("Basic abc"), null);
-  assertEquals(bearerRole("Bearer a.!!!.c"), null);
-  assertEquals(bearerRole(`Bearer ${jwt({ sub: "x" })}`), null);
-});
-
 Deno.test("the settle quotes back the attempt the claim leased", async () => {
   const { deps, settled } = fakeDeps({
     batches: [[{ ...row(7), attempt: 3 }]],
@@ -321,7 +395,7 @@ Deno.test("the settle quotes back the attempt the claim leased", async () => {
 Deno.test("malformed VAPID settings are a configuration problem, not a subscription one", () => {
   const names = [
     "SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SECRET_KEYS",
     "VAPID_PUBLIC_KEY",
     "VAPID_PRIVATE_KEY",
     "VAPID_SUBJECT",
@@ -330,7 +404,8 @@ Deno.test("malformed VAPID settings are a configuration problem, not a subscript
   try {
     const pair = webpush.generateVAPIDKeys();
     Deno.env.set("SUPABASE_URL", "http://localhost:54321");
-    Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "service-key");
+    Deno.env.set("SUPABASE_SECRET_KEYS", `{"default":"${SECRET}"}`);
+    assertEquals(realDeps().secretKeys(), [SECRET]);
     Deno.env.set("VAPID_PUBLIC_KEY", pair.publicKey);
     Deno.env.set("VAPID_PRIVATE_KEY", pair.privateKey);
     Deno.env.set("VAPID_SUBJECT", "mailto:it@osubb.ro");
