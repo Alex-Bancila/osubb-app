@@ -46,6 +46,11 @@ export const keys = {
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
       ['points', 'standing', { memberId }] as const,
+    /* #634: the open Evaluation Period, the Promotion Rules' tenure, the
+       Promotion Threshold in force and my own row of the Period's ranking.
+       Under `points` so an Evaluation's invalidation moves the bar too. */
+    promotionProgress: (memberId: string | undefined) =>
+      ['points', 'promotion-progress', { memberId }] as const,
     leaderboard: (limit = 10) => ['points', 'leaderboard', { limit }] as const,
     deptCup: () => ['points', 'deptCup'] as const,
   },
