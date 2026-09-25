@@ -63,6 +63,15 @@ export function pushOnHere(memberId: string): boolean {
   }
 }
 
+/**
+ * Forget that push is on here for a Member whose session ended without the
+ * sign-out button (expiry, another tab, a forced sign-out). Clears the flag
+ * only: the browser subscription may already belong to the next Member.
+ */
+export function forgetPushOn(memberId: string) {
+  rememberPushOn(memberId, false);
+}
+
 function rememberPushOn(memberId: string, on: boolean) {
   try {
     if (on) localStorage.setItem(pushOnKey(memberId), '1');
@@ -161,8 +170,8 @@ export type RepairOutcome = 'healthy' | 'skipped' | 'repaired';
  *   replaced the subscription while no window was open), or
  * - the browser holds no subscription at all,
  *
- * it deletes the stale row, unsubscribes, subscribes again with `publicKey`
- * and stores the new row, silently. Nothing happens without a granted
+ * it unsubscribes, subscribes again with `publicKey`, stores the new row and
+ * then deletes the stale one, silently. Nothing happens without a granted
  * permission: subscribing must never prompt from here.
  */
 export async function repairDevice(
@@ -187,15 +196,17 @@ export async function repairDevice(
   const keyMatches = key === null || key === normalizeUrlBase64(publicKey);
   if (subscription && rowExists && keyMatches) return 'healthy';
 
-  if (subscription && token) {
-    if (rowExists) await deleteRow(memberId, token);
-    await subscription.unsubscribe().catch(() => false);
-  }
+  // The old row goes only once the new one is stored: if resubscribing
+  // fails, the Member keeps what they had and the next start tries again.
+  if (subscription) await subscription.unsubscribe().catch(() => false);
   const fresh = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
-  await storeRow(memberId, tokenFor(fresh));
+  const freshToken = tokenFor(fresh);
+  await storeRow(memberId, freshToken);
+  if (rowExists && token && token !== freshToken)
+    await deleteRow(memberId, token);
   return 'repaired';
 }
 

@@ -157,8 +157,12 @@ describe('usePushSelfRepair (#769)', () => {
 
     renderHook(() => usePushSelfRepair(), { wrapper });
 
-    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(1));
-    expect(supabaseMock.delete).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(supabaseMock.delete).toHaveBeenCalledTimes(1));
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+    // The stale row goes only after the new one is stored.
+    expect(supabaseMock.insert.mock.invocationCallOrder[0]).toBeLessThan(
+      supabaseMock.delete.mock.invocationCallOrder[0] ?? 0,
+    );
     expect(supabaseMock.eq).toHaveBeenCalledWith('token', tokenOf(stale));
     expect(stale.unsubscribe).toHaveBeenCalled();
     expect(browser.subscribe).toHaveBeenCalledWith({
@@ -171,6 +175,23 @@ describe('usePushSelfRepair (#769)', () => {
       platform: 'web',
     });
     expect(pushOnHere(MEMBER)).toBe(true);
+  });
+
+  it('keeps the old row when resubscribing fails, for the next start to retry', async () => {
+    const stale = fakeSubscription('https://push.example.test/old', OLD_KEY);
+    stale.unsubscribe.mockRejectedValueOnce(new Error('unsubscribe failed'));
+    browser.current = stale;
+    browser.subscribe.mockRejectedValueOnce(
+      new DOMException('different key', 'InvalidStateError'),
+    );
+    rowPresent(true);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+
+    await waitFor(() => expect(browser.subscribe).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(supabaseMock.delete).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
   });
 
   it('resubscribes when the row is missing and push is on here', async () => {
@@ -250,7 +271,7 @@ describe('usePushSelfRepair (#769)', () => {
     );
     first.unmount();
     renderHook(() => usePushSelfRepair(), { wrapper });
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(supabaseMock.maybeSingle).toHaveBeenCalledTimes(1);
   });
