@@ -133,9 +133,12 @@ Edge Functions have no rollback control of their own; they return to a previous 
 
 ## Per-environment one-time configuration
 
-None of this runs as part of a Release — a hosted project never reads `config.toml` (house rule 1 extends to
-infrastructure, not just schema). Each item is set once per environment by a human, and touched again only
-when it changes. To keep one copy instead of two drifting apart, the settings themselves live where each was
+These manual dashboard, secret and Pages setup steps do not run as part of a Release — a hosted project
+never reads `config.toml` for them (house rule 1 extends to infrastructure, not just schema). The one
+exception is a function's own `[functions.*]` settings (`verify_jwt` and the like): `supabase functions
+deploy` applies those from `config.toml` on every Release, so a change to them is a Release input like any
+other and belongs in the `report` job's review, not this list. Each item below is set once per environment
+by a human, and touched again only when it changes. To keep one copy instead of two drifting apart, the settings themselves live where each was
 originally written; this page only points at them.
 
 | What                                                                                                                                                  | Where it's documented                                                                    | Set for staging in | Set for production in |
@@ -143,7 +146,7 @@ originally written; this page only points at them.
 | Auth dashboard settings (provider on, self-signup off, the JWT claims hook, URL Configuration, SMTP, the three email templates, the email rate limit) | `docs/backend/auth-config.md` § "Hosted projects"                                        | launch-runbook §5  | launch-runbook §7     |
 | The `/auth/confirm` redirect the click-to-confirm templates depend on                                                                                 | `docs/backend/auth-config.md` § "Why the link opens a page with a button"                | §5.3               | §7.1                  |
 | `ALLOWED_ORIGINS` for `invite-member` and every other CORS-gated function                                                                             | `docs/backend/inviting.md` § "CORS: who is allowed to call this function from a browser" | §5.8               | §7.5                  |
-| VAPID pair and the two Vault rows (`project_url`, `secret_key`)                                                                                       | `docs/backend/push.md` § "Setting it up, per environment"                                | §5.9               | §7.5                  |
+| Optional (only if push is enabled): VAPID pair and the two Vault rows (`project_url`, `secret_key`)                                                   | `docs/backend/push.md` § "Setting it up, per environment"                                | §5.9               | §7.5                  |
 | Pages project and custom domain                                                                                                                       | `launch-runbook-2026-10.md`                                                              | §1                 | §11.2, §11.4          |
 
 _Why linked and not copied:_ a value repeated in two places is a value that goes stale in one of them the
