@@ -97,6 +97,18 @@ export function groupLookup(options: TaskFormOptions) {
   return names;
 }
 
+/**
+ * The Task Audience's options (ruling R26): `org` opens a public Task to every
+ * Member, with no Minimum Level gate, so the word "eligibili" is gone.
+ */
+export const AUDIENCE_LABELS = {
+  local: 'Membrii grupului',
+  org: 'Toți membrii OSUBB',
+} as const;
+
+/** The Audiență field's helper text; shown only while the mode is Public. */
+export const AUDIENCE_HINT = 'Cine vede taskul și se poate înscrie.';
+
 /** Why the organization-wide Audience is not offered for a Private Group. */
 export const PRIVATE_GROUP_AUDIENCE_HINT =
   'Grupul este privat: taskurile lui sunt doar pentru membrii grupului.';
@@ -175,10 +187,13 @@ export function taskDraftInput(
     kind: values.kind,
     parentTaskId: values.kind === 'subtask' ? values.parentTaskId : null,
     // A Private Group's Task is local whatever was picked before the Group
-    // was (#757); the form shows the same.
+    // was (#757), and so is a direct Task, whose Audience means nothing
+    // (R26); the form shows the same. `values.audience` keeps the choice, so
+    // switching back to Public restores it.
     audience: umbrella
       ? null
-      : isPrivateGroup(origin?.id, options)
+      : values.assignmentMode === 'direct' ||
+          isPrivateGroup(origin?.id, options)
         ? 'local'
         : values.audience,
     assignmentMode: umbrella ? null : values.assignmentMode,

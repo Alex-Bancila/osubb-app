@@ -123,6 +123,9 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
       if (draft.audience === null) issue('audience', 'invalid_audience');
       if (draft.assignmentMode === null)
         issue('assignmentMode', 'invalid_assignment_mode');
+      // R26: a direct Task is for its own Group only.
+      else if (draft.assignmentMode === 'direct' && draft.audience === 'org')
+        issue('assignmentMode', 'direct_task_local_only');
       if (draft.executorId !== null && !draft.executorId.trim())
         issue('executorId', 'invalid_executor');
       else if (draft.assignmentMode === 'public' && draft.executorId !== null)
@@ -198,6 +201,9 @@ export function taskUpdateSchema({
       if (values.deadline === null) issue('deadline', 'deadline_required');
       if (values.assignmentMode === null)
         issue('assignmentMode', 'invalid_assignment_mode');
+      // R26: a direct Task is for its own Group only.
+      else if (values.assignmentMode === 'direct' && values.audience === 'org')
+        issue('assignmentMode', 'direct_task_local_only');
       if (values.audience === null) issue('audience', 'invalid_audience');
       if (
         values.campaignId !== null &&
@@ -263,6 +269,9 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   // #756: a Private Group's Tasks are local only.
   private_group_local_only: 'audience',
   invalid_assignment_mode: 'assignmentMode',
+  // R26: the Audience field is hidden while Direct, so the error goes on the
+  // mode that would lift it.
+  direct_task_local_only: 'assignmentMode',
   invalid_executor: 'executorId',
   executor_not_allowed_for_public: 'executorId',
   invalid_campaign: 'campaignId',
