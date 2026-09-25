@@ -247,6 +247,10 @@ jobs:
     concurrency:
       group: staging-deploy
       cancel-in-progress: false
+    # The deploys after this one run only when it really pushed: a web app
+    # must never go live on top of migrations that were skipped.
+    outputs:
+      pushed: ${{ steps.push.outputs.pushed }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -256,6 +260,7 @@ jobs:
 
       # No-ops politely until the staging secrets exist (issue 7.1 / 0.3).
       - name: db push
+        id: push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -264,7 +269,8 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_REF }}
         run: |
           if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_PROJECT_REF" ]; then
-            echo "Staging secrets not configured yet — skipping (see issue 7.1)."
+            echo "::notice title=Migrations not pushed::The staging Supabase secrets are not configured — skipping."
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           supabase link --project-ref "$SUPABASE_PROJECT_REF"
@@ -273,6 +279,7 @@ jobs:
           # `db push` refuses any migration older than the newest one already
           # applied remotely, and staging silently stops tracking main.
           supabase db push --include-all
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
 
   # ── Deploys (#110, rulings L3, L11, L12) ─────────────────────────────────
   #
@@ -284,7 +291,9 @@ jobs:
   #
   # Every deploy job first asks whether its target is configured and, when it
   # is not, says so in a notice and finishes green without deploying — the
-  # same polite no-op push-staging has always made. So this file can merge
+  # same polite no-op push-staging has always made; each staging deploy also
+  # stands down when the one before it did not deploy, so a web app never
+  # goes live over skipped migrations or functions. So this file can merge
   # before the Cloudflare account, the Pages projects and the Environments
   # exist (#109), and the deploys light up by themselves once they do. The
   # check is a step of each deploy job rather than a job of its own: a job
@@ -302,6 +311,8 @@ jobs:
     concurrency:
       group: staging-functions
       cancel-in-progress: false
+    outputs:
+      deployed: ${{ steps.deploy.outputs.deployed }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -315,15 +326,21 @@ jobs:
       # --prune: a function that exists only on staging is removed by a
       # person, never by a merge.
       - name: supabase functions deploy
+        id: deploy
         env:
+          PUSHED: ${{ needs.push-staging.outputs.pushed }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_REF }}
         run: |
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_PROJECT_REF" ]; then
-            echo "::notice title=Edge Functions not deployed::The staging Supabase secrets are not configured — skipping."
+          # push-staging skips on the same secrets this step needs, so its
+          # result is the one check: no migrations, no functions.
+          if [ "$PUSHED" != true ]; then
+            echo "::notice title=Edge Functions not deployed::The migrations were not pushed, so the functions are not deployed either."
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
 
   deploy-web-staging:
     name: Deploy web app to staging
@@ -342,8 +359,12 @@ jobs:
         env:
           HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
           ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          BACKEND_DEPLOYED: ${{ needs.deploy-functions-staging.outputs.deployed }}
         run: |
-          if [ "$HAS_TOKEN" = true ] && [ -n "$ACCOUNT_ID" ]; then
+          if [ "$BACKEND_DEPLOYED" != true ]; then
+            echo "::notice title=Web app not deployed::The migrations and Edge Functions were not deployed, so the web app is not either."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_TOKEN" = true ] && [ -n "$ACCOUNT_ID" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=Web app not deployed::CLOUDFLARE_API_TOKEN (staging Environment) or the CLOUDFLARE_ACCOUNT_ID repository variable is not set yet — skipping (#109, #110)."
