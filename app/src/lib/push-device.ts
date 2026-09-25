@@ -197,7 +197,7 @@ export async function repairDevice(
   if (subscription && rowExists && keyMatches) return 'healthy';
 
   // The old row goes only once the new one is stored: if resubscribing
-  // fails, the Member keeps what they had and the next start tries again.
+  // fails, the row stays for the next start, which tries again.
   if (subscription) await subscription.unsubscribe().catch(() => false);
   const fresh = await registration.pushManager.subscribe({
     userVisibleOnly: true,
