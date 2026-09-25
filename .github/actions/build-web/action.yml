@@ -17,9 +17,8 @@ inputs:
     required: false
     default: ""
   project-ref:
-    description: When set, the Supabase URL must belong to this project (the production build passes it).
-    required: false
-    default: ""
+    description: SUPABASE_PROJECT_REF — the Supabase URL must be exactly https://<ref>.supabase.co.
+    required: true
 
 runs:
   using: composite
@@ -43,8 +42,9 @@ runs:
         fail() { echo "::error::$1"; exit 1; }
         [ -n "$URL" ] || fail "Variable VITE_SUPABASE_URL is not set on this Environment."
         [ -n "$KEY" ] || fail "Variable VITE_SUPABASE_ANON_KEY is not set on this Environment."
+        [ -n "$REF" ] || fail "Variable SUPABASE_PROJECT_REF is not set on this Environment."
         # A bare project origin: https, no credentials, no path, query or
-        # fragment; with a project ref, exactly https://<ref>.supabase.co.
+        # fragment, and exactly https://<ref>.supabase.co.
         problem="$(node -e '
           const { URL: raw, REF: ref } = process.env;
           let u;
@@ -52,7 +52,7 @@ runs:
           if (u.protocol !== "https:") console.log("must be an https:// URL");
           else if (u.username || u.password) console.log("must not carry credentials");
           else if (u.pathname !== "/" || u.search || u.hash) console.log("must be the bare project URL, with no path, query or fragment");
-          else if (ref && u.host !== `${ref}.supabase.co`) console.log(`must be https://${ref}.supabase.co`);
+          else if (u.host !== `${ref}.supabase.co`) console.log(`must be https://${ref}.supabase.co`);
         ')"
         [ -z "$problem" ] || fail "VITE_SUPABASE_URL $problem."
         case "$KEY" in

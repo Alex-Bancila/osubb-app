@@ -426,9 +426,9 @@ jobs:
       # Staging's values: a preview is this PR's web app talking to staging's
       # database and functions. They are public build values, set as
       # variables on the preview Environment as well as on staging, because a
-      # job reads only its own Environment's variables. SUPABASE_PROJECT_REF
-      # there as well lets the build check the URL's host; without it (and
-      # once the repository secret is gone) that one check is skipped.
+      # job reads only its own Environment's variables. That includes
+      # SUPABASE_PROJECT_REF, which the build requires to check the URL's host:
+      # a preview that says "staging" must not be built against anything else.
       - name: Build with the staging variables
         if: steps.gate.outputs.ok == 'true'
         uses: ./.github/actions/build-web
