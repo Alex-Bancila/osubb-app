@@ -111,4 +111,21 @@ describe('taskDraftInput', () => {
       ),
     ).toMatchObject({ groupId: 3, parentTaskId: 30 });
   });
+  it('sends a direct Task as local whatever Audience was picked (R26)', () => {
+    expect(
+      taskDraftInput({ ...values, audience: 'org' }, options).audience,
+    ).toBe('local');
+    // The choice is kept for Public: switching back sends it again.
+    expect(
+      taskDraftInput(
+        {
+          ...values,
+          audience: 'org',
+          assignmentMode: 'public',
+          executorId: null,
+        },
+        options,
+      ).audience,
+    ).toBe('org');
+  });
 });

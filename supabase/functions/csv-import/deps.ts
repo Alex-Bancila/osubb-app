@@ -1,9 +1,12 @@
 import { type InviteDeps, inviteMember } from "../_shared/member-invite.ts";
-import { realDeps } from "../invite-member/deps.ts";
+import { type AdminEnv, realDeps } from "../invite-member/deps.ts";
 import type { CsvImportDeps } from "./handler.ts";
 
-export function realCsvImportDeps(request: Request): CsvImportDeps {
-  const deps = realDeps(request);
+export function realCsvImportDeps(
+  request: Request,
+  env: AdminEnv,
+): CsvImportDeps {
+  const deps = realDeps(request, env);
 
   return {
     callerId: () => deps.callerId(),
