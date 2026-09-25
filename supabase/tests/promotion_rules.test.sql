@@ -255,8 +255,14 @@ select throws_ok(
      values ('activ', 'vot', 'time', 6, '2001-01-02 00:00:00+00', '2001-01-01 00:00:00+00') $$,
   '23514', 'new row for relation "promotion_rules" violates check constraint "promotion_rules_updated_at_ck"',
   'promotion_rules_updated_at_ck: updated_at never precedes created_at');
+-- Compared against the row's own value before the edit, so the assertion does
+-- not lean on when the seed was written.
+create temp table before49 as
+  select updated_at from public.promotion_rules where kind = 'time';
 update public.promotion_rules set enabled = true where kind = 'time';
-select ok((select updated_at >= now() from public.promotion_rules where kind = 'time'),
+select ok((select rule.updated_at > before.updated_at
+             from public.promotion_rules as rule, before49 as before
+            where rule.kind = 'time'),
   'promotion_rules_set_updated_at moves updated_at on an in-place edit');
 
 -- ==================== 4. Reading, and no client write ====================
