@@ -44,7 +44,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(80);
+select plan(82);
 
 create function pg_temp.u756(n integer) returns uuid language sql immutable as $$
   select ('75600000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -307,6 +307,15 @@ select is(
      (select id from public.tasks where title = 'Org opportunity in private #756'), '2027-05-01 09:00+00') as clone),
   'local',
   'duplicate_task: a copy of an older org-Audience Task made inside a Private Group is local');
+-- #794: convert_task_mode never judged R25 until now.
+select throws_ok(
+  format($$select public.convert_task_mode(%s, 'public', 'org')$$,
+         (select id from public.tasks where title = 'Local task #756')),
+  'PT400', 'private_group_local_only',
+  'convert_task_mode: a Private Group''s Task cannot be converted to the organization-wide Audience (#794)');
+select is(
+  (select audience from public.tasks where title = 'Local task #756'), 'local',
+  'convert_task_mode: the refused conversion left the Task local');
 
 -- ==================== 6 · Applications ====================
 
