@@ -1,4 +1,11 @@
 import { supabase } from './supabase';
+import {
+  normalizeUrlBase64,
+  subscriptionServerKey,
+  urlBase64ToUint8Array,
+} from './vapid-key';
+
+export { urlBase64ToUint8Array };
 
 /**
  * This browser as a Web Push device (#704, ADR-0010): the `PushManager`
@@ -36,15 +43,33 @@ export function vapidPublicKey(): string | null {
   return key ? key : null;
 }
 
-/** A base64url VAPID key as the bytes `PushManager.subscribe` expects. */
-export function urlBase64ToUint8Array(value: string) {
-  const padding = '='.repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const bytes = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let index = 0; index < raw.length; index += 1)
-    bytes[index] = raw.charCodeAt(index);
-  return bytes;
+/**
+ * Whether this Member turned push on on this device (#769): set when the
+ * switch subscribes or a row is found for this browser's subscription,
+ * cleared when the switch or sign-out unsubscribes. It is what lets the
+ * self-repair tell "my row went missing" from "another Member's subscription
+ * was left behind" -- the latter is never taken over silently. Per browser
+ * and per Member; storage that throws (a private window) reads as off.
+ */
+function pushOnKey(memberId: string) {
+  return `osubb.push-on.${memberId}`;
+}
+
+export function pushOnHere(memberId: string): boolean {
+  try {
+    return localStorage.getItem(pushOnKey(memberId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberPushOn(memberId: string, on: boolean) {
+  try {
+    if (on) localStorage.setItem(pushOnKey(memberId), '1');
+    else localStorage.removeItem(pushOnKey(memberId));
+  } catch {
+    // Without storage the self-repair only works while the row exists.
+  }
 }
 
 /** What `push_tokens.token` holds: the subscription JSON `send-push` reads. */
@@ -88,15 +113,110 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
 export async function isDeviceSubscribed(memberId: string): Promise<boolean> {
   const subscription = await currentSubscription();
   if (!subscription) return false;
+  return hasRow(memberId, tokenFor(subscription));
+}
 
+/** Whether the Member's `push_tokens` row for this token exists. */
+async function hasRow(memberId: string, token: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('push_tokens')
     .select('id')
     .eq('member_id', memberId)
-    .eq('token', tokenFor(subscription))
+    .eq('token', token)
     .maybeSingle();
   if (error) throw error;
   return data !== null;
+}
+
+/** Store the Member's row for a token; an existing one (`23505`) is fine. */
+async function storeRow(memberId: string, token: string): Promise<void> {
+  const { error } = await supabase.from('push_tokens').insert({
+    member_id: memberId,
+    token,
+    platform: WEB_PLATFORM,
+  });
+  if (error && error.code !== '23505') throw error;
+}
+
+/** Delete the Member's row for a token, if there is one. */
+async function deleteRow(memberId: string, token: string): Promise<void> {
+  const { error } = await supabase
+    .from('push_tokens')
+    .delete()
+    .eq('member_id', memberId)
+    .eq('token', token);
+  if (error) throw error;
+}
+
+export type RepairOutcome = 'healthy' | 'skipped' | 'repaired';
+
+/**
+ * App-start self-repair (#769, ADR-0010, ruling L8). Push is on here when
+ * the Member's row for this browser's subscription exists, or when they
+ * turned it on on this device ({@link pushOnHere}). If it is on and
+ *
+ * - the subscription was made with another key than `publicKey` (the VAPID
+ *   pair was rotated: every push to it would fail with 401/403), or
+ * - the row is missing (a `404`/`410` removed it, or `pushsubscriptionchange`
+ *   replaced the subscription while no window was open), or
+ * - the browser holds no subscription at all,
+ *
+ * it deletes the stale row, unsubscribes, subscribes again with `publicKey`
+ * and stores the new row, silently. Nothing happens without a granted
+ * permission: subscribing must never prompt from here.
+ */
+export async function repairDevice(
+  memberId: string,
+  publicKey: string,
+): Promise<RepairOutcome> {
+  if (!pushSupported() || Notification.permission !== 'granted')
+    return 'skipped';
+
+  const registration = await withTimeout(
+    navigator.serviceWorker.ready,
+    SERVICE_WORKER_TIMEOUT_MS,
+  );
+  const subscription = await registration.pushManager.getSubscription();
+  const token = subscription ? tokenFor(subscription) : null;
+  const rowExists = token ? await hasRow(memberId, token) : false;
+  if (rowExists) rememberPushOn(memberId, true);
+  if (!rowExists && !pushOnHere(memberId)) return 'skipped';
+
+  const key = subscription ? subscriptionServerKey(subscription) : null;
+  // A browser that does not report the key is trusted to hold the right one.
+  const keyMatches = key === null || key === normalizeUrlBase64(publicKey);
+  if (subscription && rowExists && keyMatches) return 'healthy';
+
+  if (subscription && token) {
+    if (rowExists) await deleteRow(memberId, token);
+    await subscription.unsubscribe().catch(() => false);
+  }
+  const fresh = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+  await storeRow(memberId, tokenFor(fresh));
+  return 'repaired';
+}
+
+/**
+ * The service worker resubscribed after `pushsubscriptionchange` (#769):
+ * store the new subscription's row and drop the old one's. Only for a Member
+ * whose old row existed or who has push on here, so a subscription another
+ * Member left behind is never adopted. Returns whether it stored anything.
+ */
+export async function storeRenewedSubscription(
+  memberId: string,
+  subscription: PushSubscriptionJSON,
+  oldSubscription: PushSubscriptionJSON | null,
+): Promise<boolean> {
+  const oldToken = oldSubscription ? JSON.stringify(oldSubscription) : null;
+  const hadRow = oldToken ? await hasRow(memberId, oldToken) : false;
+  if (!hadRow && !pushOnHere(memberId)) return false;
+  rememberPushOn(memberId, true);
+  await storeRow(memberId, JSON.stringify(subscription));
+  if (oldToken && hadRow) await deleteRow(memberId, oldToken);
+  return true;
 }
 
 /**
@@ -132,22 +252,13 @@ export async function subscribeDevice(
       throw error;
     const stale = await registration.pushManager.getSubscription();
     if (!stale) throw error;
-    const { error: staleRowError } = await supabase
-      .from('push_tokens')
-      .delete()
-      .eq('member_id', memberId)
-      .eq('token', tokenFor(stale));
-    if (staleRowError) throw staleRowError;
+    await deleteRow(memberId, tokenFor(stale));
     await stale.unsubscribe();
     subscription = await registration.pushManager.subscribe(options);
   }
 
-  const { error } = await supabase.from('push_tokens').insert({
-    member_id: memberId,
-    token: tokenFor(subscription),
-    platform: WEB_PLATFORM,
-  });
-  if (error && error.code !== '23505') throw error;
+  await storeRow(memberId, tokenFor(subscription));
+  rememberPushOn(memberId, true);
 }
 
 /**
@@ -156,6 +267,9 @@ export async function subscribeDevice(
  * which is what turning the switch off promises.
  */
 export async function unsubscribeDevice(memberId: string): Promise<void> {
+  // Off is off even if what follows fails: the self-repair must not turn it
+  // back on (#769).
+  rememberPushOn(memberId, false);
   const subscription = await currentSubscription();
   if (!subscription) return;
   const token = tokenFor(subscription);
@@ -166,10 +280,5 @@ export async function unsubscribeDevice(memberId: string): Promise<void> {
     // The row delete below is what stops delivery.
   }
 
-  const { error } = await supabase
-    .from('push_tokens')
-    .delete()
-    .eq('member_id', memberId)
-    .eq('token', token);
-  if (error) throw error;
+  await deleteRow(memberId, token);
 }

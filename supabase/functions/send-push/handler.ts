@@ -5,7 +5,8 @@
 //
 // POST (any body)
 //   200 { claimed, sent, retried, dead, failed }
-//   401  the bearer is not the service-role key
+//   401  the apikey header is not one of the project's secret keys
+//        (sb_secret_...; the cron job sends it from the Vault row secret_key)
 //   405  not POST
 //   500  a required secret is missing or malformed, or a claim failed
 //
@@ -46,23 +47,36 @@ function json(body: unknown, status: number): Response {
   });
 }
 
+const encoder = new TextEncoder();
+
 /**
- * The `role` claim of the bearer JWT, or null. verify_jwt = true in
- * config.toml means the gateway has already checked the signature, so the
- * payload is trusted here; the gateway lets an anon key through, which is
- * why the role still has to be read.
+ * Whether two strings are equal, in time that depends only on their lengths:
+ * every byte is compared, with no early exit at the first difference, so the
+ * answer time does not reveal how much of a guess was right.
  */
-export function bearerRole(header: string | null): string | null {
-  const match = /^Bearer ([^.\s]+)\.([^.\s]+)\.([^.\s]+)$/.exec(header ?? "");
-  if (!match) return null;
-  try {
-    const base64 = match[2].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-    const claims = JSON.parse(atob(padded));
-    return typeof claims?.role === "string" ? claims.role : null;
-  } catch {
-    return null;
+export function constantTimeEqual(a: string, b: string): boolean {
+  const left = encoder.encode(a);
+  const right = encoder.encode(b);
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
   }
+  return difference === 0;
+}
+
+/**
+ * Whether the `apikey` header is exactly one of the project's secret keys
+ * (#769, ruling L8). verify_jwt = false in config.toml, so the gateway checks
+ * nothing and this is the whole authentication. Every key is compared, even
+ * after a match.
+ */
+export function isSecretKey(header: string | null, keys: string[]): boolean {
+  if (!header) return false;
+  let matched = false;
+  for (const key of keys) {
+    if (key !== "" && constantTimeEqual(header, key)) matched = true;
+  }
+  return matched;
 }
 
 export function classify(status: number): Outcome {
@@ -154,8 +168,18 @@ export async function handleSendPush(
 ): Promise<Response> {
   if (req.method !== "POST") return json({ error: "Use POST." }, 405);
 
-  if (bearerRole(req.headers.get("Authorization")) !== "service_role") {
-    return json({ error: "service_role only" }, 401);
+  const keys = deps.secretKeys();
+  if (keys.length === 0) {
+    // Without a key to compare with, nobody could ever be let in; say so
+    // rather than answer 401 to the right caller.
+    console.error("send-push configuration", ["SUPABASE_SECRET_KEYS"]);
+    return json(
+      { error: "configuration", problems: ["SUPABASE_SECRET_KEYS"] },
+      500,
+    );
+  }
+  if (!isSecretKey(req.headers.get("apikey"), keys)) {
+    return json({ error: "secret key only" }, 401);
   }
 
   const problems = deps.configProblems();
