@@ -83,7 +83,9 @@ jobs:
             echo
             echo "$commits commit(s) $since."
             echo
-            echo "### Migrations production lacks ($(count "$migrations"))"
+            echo "### Migration files added $since ($(count "$migrations"))"
+            echo
+            echo "Read from git: what \`db push\` will apply unless a Release that failed before its tag already applied some. The \`release\` job prints production's own \`supabase migration list\` before it pushes."
             echo
             bullets "$migrations"
             if [ -n "$edited" ]; then
@@ -207,10 +209,10 @@ jobs:
           fi
           # `supabase link` wrote the session-pooler URL, without the password.
           pooler="$(cat supabase/.temp/pooler-url 2>/dev/null || true)"
-          answer="$( [ -n "$pooler" ] && psql "$pooler" -tAc 'select 1' 2>&1 || true)"
+          answer="$( [ -n "$pooler" ] && timeout 30 psql "$pooler" -tAc 'select 1' 2>&1 || true)"
           if [ "$answer" = 1 ]; then pass "select 1 through the pooler"; else fail "select 1 through the pooler (${answer:-no pooler URL from supabase link})"; fi
 
-          status="$(curl -s -o /dev/null -w '%{http_code}' "${SUPABASE_URL%/}/functions/v1/send-push" || true)"
+          status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${SUPABASE_URL%/}/functions/v1/send-push" || true)"
           if [ "$status" = 401 ]; then pass "GET send-push without a key → 401"; else fail "GET send-push without a key → $status, expected 401"; fi
 
           hosts="https://$PAGES_PROJECT.pages.dev"
@@ -220,21 +222,31 @@ jobs:
             echo "::notice::$PRODUCTION_DOMAIN does not resolve yet; checked $hosts only (runbook §11 adds the CNAME after the first Release)."
           fi
           for host in $hosts; do
-            headers="$(curl -sSI "$host/" 2>&1 | tr -d '\r' | tr '[:upper:]' '[:lower:]' || true)"
+            headers="$(curl -sSI --connect-timeout 10 --max-time 30 "$host/" 2>&1 | tr -d '\r' | tr '[:upper:]' '[:lower:]' || true)"
             if printf '%s\n' "$headers" | grep -Eq '^content-security-policy(-report-only)?:'; then pass "$host/ sends a CSP"; else fail "$host/ sends no Content-Security-Policy"; fi
             if printf '%s\n' "$headers" | grep -q '^strict-transport-security:'; then pass "$host/ sends HSTS"; else fail "$host/ sends no Strict-Transport-Security"; fi
-            type="$(curl -sS -o /dev/null -w '%{content_type}' "$host/manifest.webmanifest" || true)"
+            type="$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{content_type}' "$host/manifest.webmanifest" || true)"
             if [ "${type%%;*}" = application/manifest+json ]; then pass "$host/manifest.webmanifest is application/manifest+json"; else fail "$host/manifest.webmanifest is '$type', expected application/manifest+json"; fi
           done
           exit "$failed"
 
       # Written last, so a tag means every step above passed; the next
-      # Release's report counts from it.
+      # Release's report counts from it. Releasing the same commit twice in
+      # one day finds its tag already there, which is success; a tag of that
+      # name on another commit is not.
       - name: Tag the Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="release/$(date -u +%F)-${GITHUB_SHA:0:7}"
-          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          if existing="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null)"; then
+            if [ "$existing" != "$GITHUB_SHA" ]; then
+              echo "::error::Tag $tag already exists on $existing, not on $GITHUB_SHA."
+              exit 1
+            fi
+            echo "Tag $tag already marks this commit."
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          fi
           echo "Released and tagged [\`$tag\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$tag)." >> "$GITHUB_STEP_SUMMARY"

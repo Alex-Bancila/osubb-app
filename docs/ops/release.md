@@ -12,10 +12,11 @@ rest of the operations runbook are #772's; the first Release of all is §11 of
 ## The one command
 
 ```bash
-gh workflow run release-production.yml --ref main && gh run watch
+gh workflow run release-production.yml --ref main
 ```
 
-Or in the browser: **Actions → Release to production → Run workflow** (branch `main`). Started from any
+Then follow it with `gh run watch --exit-status` (pick the new run; the command exits non-zero if the
+Release fails), or in the browser. To start it from the browser instead: **Actions → Release to production → Run workflow** (branch `main`). Started from any
 other branch it refuses before anything else runs, and the `production` Environment admits only `main`
 as a second lock.
 
@@ -23,10 +24,13 @@ as a second lock.
 
 The workflow is `.github/workflows/release-production.yml`, two jobs:
 
-1. **`report`** — no Environment, no production secret. It writes to the run's summary the commit going
-   live, the migrations production lacks and the Edge Functions whose code changed, all counted from the
-   newest `release/*` tag (the first Release lists everything). It also warns when a migration file that
-   was already released has been edited: `db push` never re-applies one.
+1. **`report`** — no Environment, no production secret, so it reads **git**, not production: it writes
+   to the run's summary the commit going live, the migration files added and the Edge Functions whose
+   code changed, all counted from the newest `release/*` tag (the first Release lists everything). After
+   a Release that failed before its tag, some of those migrations may already be applied; production's
+   own record is the `supabase migration list` that the `release` job prints before it pushes. The report
+   also warns when a migration file that was already released has been edited: `db push` never
+   re-applies one.
 2. **`release`** — waits in the `production` Environment for a required reviewer (Alex or Dobre; one
    approval is enough). Until someone approves, it has no secret and runs nothing. After approval, in
    order:
