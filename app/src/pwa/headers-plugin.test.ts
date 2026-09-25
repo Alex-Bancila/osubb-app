@@ -109,6 +109,12 @@ describe('Cloudflare _headers (ruling L12, #770)', () => {
     expect(() => renderHeaders(template, 'not a url')).toThrow(
       /VITE_SUPABASE_URL/,
     );
+    expect(() =>
+      renderHeaders(template, 'ftp://abcdefghijklmnop.supabase.co'),
+    ).toThrow(/VITE_SUPABASE_URL/);
+    expect(renderHeaders(template, 'http://127.0.0.1:54321')).toContain(
+      'wss://127.0.0.1:54321',
+    );
   });
 });
 

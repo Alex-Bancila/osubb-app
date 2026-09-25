@@ -6,20 +6,21 @@ const PLACEHOLDER = /__SUPABASE_HOST__/g;
 
 /**
  * `_headers.template` with the Supabase host filled in (ruling L12, #770).
- * Throws when the URL is missing or unparseable: a deployed build without it
- * cannot reach its backend, and a CSP naming no Supabase host would block
- * every request once it is enforced.
+ * Throws when the URL is missing, unparseable or not http(s): a deployed
+ * build without it cannot reach its backend, and a CSP naming no Supabase
+ * host would block every request once it is enforced.
  */
 function renderHeaders(template: string, supabaseUrl: string | undefined) {
-  let host: string;
+  let host = '';
   try {
-    host = new URL(supabaseUrl ?? '').host;
+    const url = new URL(supabaseUrl ?? '');
+    if (url.protocol === 'https:' || url.protocol === 'http:') host = url.host;
   } catch {
     host = '';
   }
   if (!host)
     throw new Error(
-      `_headers: VITE_SUPABASE_URL must be an absolute URL, got ${JSON.stringify(supabaseUrl ?? null)}.`,
+      `_headers: VITE_SUPABASE_URL must be an absolute http(s) URL, got ${JSON.stringify(supabaseUrl ?? null)}.`,
     );
   return template.replace(PLACEHOLDER, host);
 }
