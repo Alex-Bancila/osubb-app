@@ -155,8 +155,14 @@ function ThresholdBar({
 }) {
   // Reaching the threshold promotes (R9), so "at" counts as past it.
   const reached = points >= threshold;
-  const shown = Math.min(Math.max(points, 0), threshold);
-  const percent = (shown / threshold) * 100;
+  // A stamped threshold can be 0 or negative (net points after reversals and
+  // low Ratings): no scale to fill, so the bar is simply full or empty.
+  const binary = threshold <= 0;
+  const max = binary ? 1 : threshold;
+  const shown = binary
+    ? Number(reached)
+    : Math.min(Math.max(points, 0), threshold);
+  const percent = (shown / max) * 100;
 
   return (
     <div className="flex flex-col gap-3">
@@ -170,7 +176,7 @@ function ThresholdBar({
         role="progressbar"
         aria-label="Progres spre Voluntar Activ"
         aria-valuemin={0}
-        aria-valuemax={threshold}
+        aria-valuemax={max}
         aria-valuenow={shown}
         aria-valuetext={`${formatPoints(points)} din ${pointCount(threshold)}`}
         className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
@@ -203,9 +209,17 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** "1 punct", "5 puncte" — the singular is the one form "puncte" gets wrong. */
+/**
+ * "1 punct", "5 puncte", "30 de puncte" — Romanian puts "de" before the noun
+ * when the last two digits are 00 or 20–99, as `formatTaskCount` does.
+ */
 function pointWord(points: number): string {
-  return points === 1 ? 'punct' : 'puncte';
+  const count = Math.abs(points);
+  if (count === 1) return 'punct';
+  const lastTwo = count % 100;
+  return count >= 20 && (lastTwo === 0 || lastTwo >= 20)
+    ? 'de puncte'
+    : 'puncte';
 }
 
 function pointCount(points: number): string {

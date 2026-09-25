@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberClaims } from '../../lib/auth';
 import type { PromotionProgress as Progress } from '../../queries/promotion-progress';
@@ -153,7 +153,7 @@ describe('PromotionProgress (#634)', () => {
       expect(bar).toHaveAttribute('aria-valuemin', '0');
       expect(bar).toHaveAttribute('aria-valuemax', '30');
       expect(bar).toHaveAttribute('aria-valuenow', '12');
-      expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 puncte');
+      expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 de puncte');
       expect(
         screen.getByText('Mai ai 18 puncte până la Voluntar Activ'),
       ).toBeInTheDocument();
@@ -195,6 +195,35 @@ describe('PromotionProgress (#634)', () => {
       ).toBeInTheDocument();
     });
 
+    it('a threshold of 0 or below makes the bar full or empty, never NaN', () => {
+      setup('voluntar', progress({ threshold: 0, periodPoints: 0 }));
+
+      const full = screen.getByRole('progressbar');
+      expect(full).toHaveAttribute('aria-valuemax', '1');
+      expect(full).toHaveAttribute('aria-valuenow', '1');
+      expect(
+        screen.getByText('Ai depășit pragul — rolul se acordă automat'),
+      ).toBeInTheDocument();
+      cleanup();
+
+      setup('voluntar', progress({ threshold: -2, periodPoints: -5 }));
+
+      const empty = screen.getByRole('progressbar');
+      expect(empty).toHaveAttribute('aria-valuemax', '1');
+      expect(empty).toHaveAttribute('aria-valuenow', '0');
+      expect(
+        screen.getByText('Mai ai 3 puncte până la Voluntar Activ'),
+      ).toBeInTheDocument();
+    });
+
+    it('twenty or more points take "de"', () => {
+      setup('voluntar', progress({ threshold: 40, periodPoints: 5 }));
+
+      expect(
+        screen.getByText('Mai ai 35 de puncte până la Voluntar Activ'),
+      ).toBeInTheDocument();
+    });
+
     it('no open Period: the tenure line only, the bar hidden', () => {
       setup('voluntar', progress({ openPeriod: null, periodPoints: null }));
 
@@ -227,7 +256,7 @@ describe('PromotionProgress (#634)', () => {
         screen.getByText('puncte în Semestrul I 2026–2027'),
       ).toBeInTheDocument();
       expect(
-        screen.getByText('Pragul semestrului: 30 puncte'),
+        screen.getByText('Pragul semestrului: 30 de puncte'),
       ).toBeInTheDocument();
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(screen.queryByText(/mai ai|depășit/i)).not.toBeInTheDocument();
