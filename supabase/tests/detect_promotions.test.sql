@@ -31,7 +31,8 @@
 --                the close's date -- and C4 voluntar, tied at the boundary
 --   rank 8 (12): C5 voluntar, C9 recrut joined 2004-06-01 -- just outside
 --   below: V1 vot 10, A2 activ 9, V2 vot 8, A3 activ 6, V3 vot 3, F1 bce 3,
---          F2 bce 2, V4 vot 1, F3 bce 1; A4 activ has nothing in P1.
+--          F2 bce 2, V4 vot 1, F3 bce 1; A4 activ has nothing in P1, nor
+--          does CA, a deactivated recrut joined 2004-06-01.
 -- Retention in P1: Voluntar Activ cohort C1 30, A2 9, A3 6, A4 0 -> share
 -- ceil(1.2) = 2: A3, A4 signalled. Drept de Vot cohort V1 10, V2 8, V3 3,
 -- V4 1 -> share ceil(1.0) = 1: V2, V3, V4 signalled.
@@ -49,8 +50,9 @@
 -- 2026-09-25 against the live database, each reverted after):
 --   * `<=` -> `<` in the continuous tenure -> "tenure boundary today";
 --   * drop `status = 'activ'` from the continuous run -> "the threshold door
---     is behind the tenure gate" (N8); from the close's stepped Roles -> "the
---     close: the full result set" (C7);
+--     is behind the tenure gate" (N8); from the close's tenure step -> "the
+--     close: the full result set" (CA, a deactivated tenured Recrut); from the
+--     close's stepped Roles -> "the close: the full result set" (C7);
 --   * `>=` -> `>` against the threshold -> "the threshold boundary";
 --   * initial_threshold read instead of promotion_threshold_in_force() ->
 --     "a stamped close moves the threshold in force";
@@ -99,7 +101,7 @@ insert into auth.users (id, email)
 select ('51000000-0000-0000-0000-0000000000' || suffix)::uuid, 'm' || suffix || '-51@test.local'
   from unnest(array['01', '11', '12', '13', '14', '15', '16', '17', '18', '19',
                     '21', '22', '23', '31', '32', '33', '34', '41', '42', '43',
-                    '51', '52', '53', '54', '55', '56', '57', '58', '59']) as suffix;
+                    '51', '52', '53', '54', '55', '56', '57', '58', '59', '1a']) as suffix;
 
 insert into public.profiles (id, full_name, email, role, status, joined_at) values
   ('51000000-0000-0000-0000-000000000001', 'BC 51', 'm01-51@test.local', 'bc',       'activ',   '2000-01-01'),
@@ -112,6 +114,8 @@ insert into public.profiles (id, full_name, email, role, status, joined_at) valu
   ('51000000-0000-0000-0000-000000000017', 'C7 51', 'm17-51@test.local', 'voluntar', 'inactiv', '2004-06-01'),
   ('51000000-0000-0000-0000-000000000018', 'C8 51', 'm18-51@test.local', 'recrut',   'activ',   '2005-01-02'),
   ('51000000-0000-0000-0000-000000000019', 'C9 51', 'm19-51@test.local', 'recrut',   'activ',   '2004-06-01'),
+  -- Deactivated, tenured at the close: guards the close's tenure-rule step.
+  ('51000000-0000-0000-0000-00000000001a', 'CA 51', 'm1a-51@test.local', 'recrut',   'inactiv', '2004-06-01'),
   ('51000000-0000-0000-0000-000000000021', 'A2 51', 'm21-51@test.local', 'activ',    'activ',   '2003-01-01'),
   ('51000000-0000-0000-0000-000000000022', 'A3 51', 'm22-51@test.local', 'activ',    'activ',   '2003-01-01'),
   ('51000000-0000-0000-0000-000000000023', 'A4 51', 'm23-51@test.local', 'activ',    'activ',   '2003-01-01'),
