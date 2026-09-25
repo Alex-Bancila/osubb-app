@@ -131,7 +131,7 @@ select pg_temp.test_login('52200000-0000-0000-0000-000000000092',
   '{"member_role":"bc","member_level":6}');
 reset role;
 create temp table target_race_348 as select * from pg_temp.test_race(
-  $q$select (public.create_task('Race task #348', null, now()+interval '1 day', 'org', 'direct', p_executor_id => '52200000-0000-0000-0000-000000000093', p_group_id => (select id from public.groups where name='Race #522'))).status::text$q$,
+  $q$select (public.create_task('Race task #348', null, now()+interval '1 day', 'local', 'direct', p_executor_id => '52200000-0000-0000-0000-000000000093', p_group_id => (select id from public.groups where name='Race #522'))).status::text$q$,
   'select public.test_348_deactivate_target()');
 select is((select result_a from target_race_348),'todo','creation assigns a live, eligible Executor');
 select ok((select b_waited from target_race_348),'target deactivation waits for the creating transaction');
