@@ -33,6 +33,8 @@
 --   * in-force without `closing_threshold is not null` -> "a Period that
 --     ranked nobody leaves the previous stamp in force" answers null;
 --   * drop the already-stamped refusal -> "a close is stamped once";
+--   * drop the missing-rule refusal -> "with no top_percent rule the stamp
+--     refuses" (OFFSET NULL would stamp the top Member);
 --   * drop the open-Period refusal -> "an open Period cannot be stamped"
 --     answers 23514 (evaluation_periods_threshold_ck) instead of PT409;
 --   * drop auth_is_member() / caller_level() from promotion_rules_read ->
@@ -46,7 +48,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(48);
+select plan(57);
 
 -- ==================== Fixtures ====================
 
@@ -218,6 +220,44 @@ select throws_ok(
      values ('activ', 'vot', 'top_percent', 6, 20, 10) $$,
   '23505', 'duplicate key value violates unique constraint "promotion_rules_top_percent_uidx"',
   'promotion_rules_top_percent_uidx: there is exactly one top_percent rule for the stamp to read');
+select throws_ok(
+  $$ insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months, percent, initial_threshold)
+     values ('activ', 'vot', 'top_percent', 6, 0, 30) $$,
+  '23514', 'new row for relation "promotion_rules" violates check constraint "promotion_rules_percent_range_ck"',
+  'promotion_rules_percent_range_ck: a percentage of 0 is rejected');
+select throws_ok(
+  $$ insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months, percent, initial_threshold)
+     values ('activ', 'vot', 'top_percent', 6, 20, 0) $$,
+  '23514', 'new row for relation "promotion_rules" violates check constraint "promotion_rules_initial_threshold_range_ck"',
+  'promotion_rules_initial_threshold_range_ck: an initial threshold of 0 is rejected');
+select throws_ok(
+  $$ insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months)
+     values ('activ', 'activ', 'time', 6) $$,
+  '23514', 'new row for relation "promotion_rules" violates check constraint "promotion_rules_roles_ck"',
+  'promotion_rules_roles_ck: a rule moves a Member to another Role');
+select throws_ok(
+  $$ insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months)
+     values ('activ', 'vot', 'time', -1) $$,
+  '23514', 'new row for relation "promotion_rules" violates check constraint "promotion_rules_tenure_range_ck"',
+  'promotion_rules_tenure_range_ck: a negative tenure is rejected');
+select throws_ok(
+  $$ insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months)
+     values ('activ', 'vot', 'time', 121) $$,
+  '23514', 'new row for relation "promotion_rules" violates check constraint "promotion_rules_tenure_range_ck"',
+  'promotion_rules_tenure_range_ck: a tenure above 120 months is rejected');
+select throws_ok(
+  $$ insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months)
+     values ('recrut', 'voluntar', 'time', 12) $$,
+  '23505', 'duplicate key value violates unique constraint "promotion_rules_from_role_to_role_key"',
+  'promotion_rules_from_role_to_role_key: one rule per from-Role / to-Role pair');
+select throws_ok(
+  $$ insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months, created_at, updated_at)
+     values ('activ', 'vot', 'time', 6, '2001-01-02 00:00:00+00', '2001-01-01 00:00:00+00') $$,
+  '23514', 'new row for relation "promotion_rules" violates check constraint "promotion_rules_updated_at_ck"',
+  'promotion_rules_updated_at_ck: updated_at never precedes created_at');
+update public.promotion_rules set enabled = true where kind = 'time';
+select ok((select updated_at >= now() from public.promotion_rules where kind = 'time'),
+  'promotion_rules_set_updated_at moves updated_at on an in-place edit');
 
 -- ==================== 4. Reading, and no client write ====================
 
@@ -305,6 +345,17 @@ select throws_ok($$ select private.stamp_closing_threshold(-49) $$,
   'PT404', 'evaluation_period_not_found', 'an unknown Period cannot be stamped');
 select throws_ok(format($$ select private.stamp_closing_threshold(%s) $$, (select po from fx49)),
   'PT409', 'evaluation_period_open', 'an open Period cannot be stamped -- the threshold is fixed at the close');
+
+-- Without the top_percent row the percentage is null, and OFFSET NULL is
+-- OFFSET 0: the stamp would silently record the top Member. It must refuse.
+-- (A savepoint would roll back pgTAP's own result rows, so the row is put
+-- back by hand.)
+delete from public.promotion_rules where kind = 'top_percent';
+select throws_ok(format($$ select private.stamp_closing_threshold(%s) $$, (select pa from fx49)),
+  'PT404', 'promotion_rule_not_found',
+  'with no top_percent rule the stamp refuses rather than recording the top Member''s points');
+insert into public.promotion_rules (from_role, to_role, kind, min_tenure_months, percent, initial_threshold)
+values ('voluntar', 'activ', 'top_percent', 6, 30, 30);
 
 -- P_A at the seeded 30 %.
 select results_eq(

@@ -144,10 +144,13 @@ declare
 begin
   -- The close command (#701) already holds this row; taking it again in the
   -- same transaction is free, and a stray second caller serializes here.
+  -- `for no key update`: the write touches closing_threshold alone, so it
+  -- need not block the FOR KEY SHARE a future row referencing the Period
+  -- takes (conventions section 2).
   select * into v_period
     from public.evaluation_periods as period
    where period.id = p_period_id
-   for update;
+   for no key update;
   if not found then
     raise sqlstate 'PT404' using message = 'evaluation_period_not_found';
   end if;
