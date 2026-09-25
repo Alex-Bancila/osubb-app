@@ -141,7 +141,7 @@ Project `osubb-app` (staging, ref `bbhetqtmavveaoqlxjhp`):
    `npx web-push generate-vapid-keys` → Bitwarden ("VAPID staging"); then
 
    ```bash
-   npx supabase secrets set --project-ref bbhetqtmavveaoqlxjhp VAPID_PUBLIC_KEY=<public> VAPID_PRIVATE_KEY=<private> VAPID_SUBJECT=mailto:<your @osubb.ro> SUPABASE_SECRET_KEY=<sb_secret_ of staging>
+   npx supabase secrets set --project-ref bbhetqtmavveaoqlxjhp VAPID_PUBLIC_KEY=<public> VAPID_PRIVATE_KEY=<private> VAPID_SUBJECT=mailto:<your @osubb.ro>
    ```
 
    and in the dashboard **SQL Editor**:
@@ -191,7 +191,7 @@ Same as §5 on the production project, with these values:
 4. Verify with the two curl checks only (do **not** invite anyone: production must have zero profiles
    until the bootstrap of §12).
 5. From a terminal: `ALLOWED_ORIGINS=https://app.osubb.ro`, a **new** VAPID pair ("VAPID production";
-   never the staging pair), `VAPID_SUBJECT`, `SUPABASE_SECRET_KEY` = production's `sb_secret_`; SQL
+   never the staging pair), `VAPID_SUBJECT` (the platform gives `send-push` the secret key itself); SQL
    Editor: the two Vault rows with production's URL and secret key. The public key → `production`
    variable `VITE_VAPID_PUBLIC_KEY`.
 6. **Data-processing agreements** (record each in Bitwarden with the date):
