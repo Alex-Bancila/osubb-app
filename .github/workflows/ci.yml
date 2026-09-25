@@ -371,8 +371,11 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # No token left in .git/config for the build's code to find.
       - if: steps.gate.outputs.ok == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Build with the staging variables
         if: steps.gate.outputs.ok == 'true'
@@ -420,8 +423,11 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # No token left in .git/config for the build's code to find.
       - if: steps.gate.outputs.ok == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       # Staging's values: a preview is this PR's web app talking to staging's
       # database and functions. They are public build values, set as
