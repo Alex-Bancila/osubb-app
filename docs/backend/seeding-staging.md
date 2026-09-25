@@ -18,7 +18,7 @@ The workflow needs a direct database connection, which `SUPABASE_ACCESS_TOKEN` d
 2. Choose **Session pooler** and copy the URI. It looks like
    `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:5432/postgres`
 3. Replace `[YOUR-PASSWORD]` with the database password (the same one in `SUPABASE_DB_PASSWORD`).
-4. GitHub → repo **Settings → Secrets and variables → Actions → New repository secret**, named `STAGING_DB_URL`.
+4. GitHub → repo **Settings → Environments → staging → Add environment secret**, named `STAGING_DB_URL` (#110 moved the staging secrets out of the repository level, where any branch's run could read them).
 
 Use the **session pooler** (port 5432), not the direct `db.<ref>.supabase.co` connection: GitHub runners are IPv4-only and the direct host is IPv6-only on current projects. The transaction pooler (6543) is for application traffic, not for scripts that run in one transaction.
 
@@ -30,10 +30,10 @@ Use the **session pooler** (port 5432), not the direct `db.<ref>.supabase.co` co
 
 The job refuses to do anything unless both are true:
 
-| Check                                                      | Fails when                                                                     |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| the ref you typed equals the `SUPABASE_PROJECT_REF` secret | you meant a different project, or mistyped                                     |
-| `STAGING_DB_URL` contains that same ref                    | the URL secret points somewhere else — production, another project, an old one |
+| Check                                           | Fails when                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| the ref you typed equals `SUPABASE_PROJECT_REF` | you meant a different project, or mistyped                                     |
+| `STAGING_DB_URL` contains that same ref         | the URL secret points somewhere else — production, another project, an old one |
 
 Then it preflights (are the migrations applied? can this role write `auth.users`?) before writing anything, applies the seed **in a single transaction**, and prints the leaderboard it produced.
 

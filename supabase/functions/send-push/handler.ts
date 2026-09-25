@@ -18,6 +18,7 @@
 //   any other status     -> failed at once (400/401/403 is a VAPID or payload
 //                           fault), with the response body as last_error
 
+import { isSecretKey } from "../_shared/secret-keys.ts";
 import { InvalidSubscriptionError } from "./deps.ts";
 import type {
   ClaimedDelivery,
@@ -45,38 +46,6 @@ function json(body: unknown, status: number): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-const encoder = new TextEncoder();
-
-/**
- * Whether two strings are equal, in time that depends only on their lengths:
- * every byte is compared, with no early exit at the first difference, so the
- * answer time does not reveal how much of a guess was right.
- */
-export function constantTimeEqual(a: string, b: string): boolean {
-  const left = encoder.encode(a);
-  const right = encoder.encode(b);
-  let difference = left.length ^ right.length;
-  for (let index = 0; index < Math.max(left.length, right.length); index++) {
-    difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
-  }
-  return difference === 0;
-}
-
-/**
- * Whether the `apikey` header is exactly one of the project's secret keys
- * (#769, ruling L8). verify_jwt = false in config.toml, so the gateway checks
- * nothing and this is the whole authentication. Every key is compared, even
- * after a match.
- */
-export function isSecretKey(header: string | null, keys: string[]): boolean {
-  if (!header) return false;
-  let matched = false;
-  for (const key of keys) {
-    if (key !== "" && constantTimeEqual(header, key)) matched = true;
-  }
-  return matched;
 }
 
 export function classify(status: number): Outcome {
@@ -178,6 +147,8 @@ export async function handleSendPush(
       500,
     );
   }
+  // verify_jwt = false in config.toml, so the gateway checks nothing and this
+  // constant-time comparison is the whole authentication (#769, ruling L8).
   if (!isSecretKey(req.headers.get("apikey"), keys)) {
     return json({ error: "secret key only" }, 401);
   }

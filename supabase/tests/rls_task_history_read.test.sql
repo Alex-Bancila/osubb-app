@@ -278,8 +278,8 @@ select task.id, persona.id, now() - interval '1 minute'
 
 -- #683: Task L — Department 'edu' origin, public, LOCAL audience, open queue,
 -- in progress: the executor persona holds its Assignment, candidate2 queues.
--- Since ruling R10 the stranger (no Department at all) reads the Task itself
--- as an Other OSUBB Opportunity -- and none of its history rows.
+-- #794 (ruling R26): the stranger (no Department at all) reads neither the
+-- Task itself nor any of its history rows.
 insert into public.tasks (title, group_id, audience, assignment_mode, queue_opened_at, status, started_at)
 values ('m319:L', pg_temp.dept_group('edu'), 'local', 'public', now(), 'in_progress', now());
 insert into public.task_assignments (task_id, member_id, assigned_at, assigned_by)
@@ -573,20 +573,19 @@ select is_empty('select * from pg_temp.visible_assignment_codes(''T'')',
   'stranger: not a Team member, no Assignment on Task T');
 select is_empty('select * from pg_temp.visible_activity_kinds(''T'')',
   'stranger: not a Team member, no activity on Task T either — decision (b) does not extend to non-members');
--- #683: Task L is a local Opportunity of a Group the stranger is not in. They
--- read the Task and its pending count -- never its position, Candidates,
--- Assignment or activity.
-select ok(exists (select 1 from public.tasks where title = 'm319:L'),
-  '#683: stranger reads the local Other Opportunity L itself');
-select results_eq('select * from pg_temp.queue_summary_row(''L'')',
-  $q$ values (1, null::integer) $q$,
-  '#683: stranger sees L''s pending count through the view, but no position');
+-- #794 (ruling R26): Task L is a local Opportunity of a Group the stranger is
+-- not in, so they read neither the Task nor its queue summary row -- and,
+-- as before, no Candidate, Assignment or activity on it.
+select ok(not exists (select 1 from public.tasks where title = 'm319:L'),
+  '#794: stranger does not read the local Opportunity L of a Group they are not in');
+select is_empty('select * from pg_temp.queue_summary_row(''L'')',
+  '#794: task_queue_summary has no row for L either');
 select is_empty('select * from pg_temp.visible_candidate_codes(''L'')',
-  '#683: stranger reads no Candidature on L');
+  '#794: stranger reads no Candidature on L');
 select is_empty('select * from pg_temp.visible_assignment_codes(''L'')',
-  '#683: stranger reads no Assignment on L');
+  '#794: stranger reads no Assignment on L');
 select is_empty('select * from pg_temp.visible_activity_kinds(''L'')',
-  '#683: stranger reads no activity on L');
+  '#794: stranger reads no activity on L');
 
 -- ==================== Deactivated member with stale claims ====================
 reset role;

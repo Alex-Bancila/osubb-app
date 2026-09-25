@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(79);
+select plan(81);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -820,5 +820,28 @@ begin
   end loop;
 end $$;
 
+
+-- ==================== #794: a direct copy carries the local Audience ====================
+-- A legacy direct + org source (the #794 migration corrects every such row;
+-- no command writes one any more) is copied as direct + local, the way a
+-- Private Group's copy is coerced (#756): the copy never re-creates the
+-- combination R26 forbids.
+insert into public.tasks
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
+values
+  ('Sursa directa org #794', 'Rand vechi direct + org', now() + interval '10 days', pg_temp.dept_group('edu'), 'org', 'direct', 'todo',
+   now() - interval '5 days', '34100000-0000-0000-0000-000000000002');
+select pg_temp.test_login('34100000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-06 09:00:00+00') $$,
+  (select id from public.tasks where title = 'Sursa directa org #794')),
+  '#794: the local BCE duplicates a legacy direct + org Task');
+reset role;
+select is((select format('%s|%s|%s', clone.audience, clone.assignment_mode, clone.queue_opened_at is null)
+             from public.tasks as clone
+            where clone.duplicated_from_task_id = (select id from public.tasks
+                                                    where title = 'Sursa directa org #794' and duplicated_from_task_id is null)),
+  'local|direct|t',
+  '#794: the copy of a direct Task is direct + local, never direct + org');
 select * from finish();
 rollback;
