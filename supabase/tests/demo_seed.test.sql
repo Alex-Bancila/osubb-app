@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(71);
+select plan(72);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -160,6 +160,10 @@ select ok(exists (select 1 from groups g where g.name='Adunarea Generală'
   and g.automatic_membership and g.min_level=3 and not g.competes_in_cup
   and not g.accepts_applications),
   'General Assembly follows Level 3 automatically, without Cup or Applications');
+select is((select value from org_settings where key='adunarea_generala_group_id'),
+  (select id::text from groups g where g.name='Adunarea Generală'
+    and g.created_by='d0000000-0000-0000-0000-000000000007'),
+  'the adunarea_generala_group_id setting names the demo Adunarea Generală (#512), so Interne''s Responsibles read the full Period ranking');
 select is((select string_agg(gm.member_id::text||'='||gm.group_role,',' order by gm.member_id)
   from group_members gm join groups g on g.id=gm.group_id
   where g.name='Adunarea Generală'
