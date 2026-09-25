@@ -75,3 +75,23 @@ Deno.test("with no secret key the function refuses to start, naming the setting"
     assertEquals(error.message.includes("SUPABASE_SECRET_KEYS"), true);
   }
 });
+
+Deno.test("with no project URL or anon key the function refuses to start, naming the variable", () => {
+  const secretKeys = `{"default":"${SECRET}"}`;
+  for (
+    const [missing, values] of [
+      ["SUPABASE_URL", { SUPABASE_ANON_KEY: ANON }],
+      ["SUPABASE_ANON_KEY", { SUPABASE_URL: URL }],
+    ] as const
+  ) {
+    const { get } = environment({
+      ...values,
+      SUPABASE_SECRET_KEYS: secretKeys,
+    });
+    const error = assertThrows(() => readAdminEnv("invite-member", get));
+    assertEquals(
+      (error as Error).message,
+      `invite-member cannot start: ${missing} is not set.`,
+    );
+  }
+});

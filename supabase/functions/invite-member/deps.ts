@@ -40,16 +40,24 @@ export interface AdminEnv {
  * Reads the function's environment at boot. The admin client is built from
  * the project's secret key in `SUPABASE_SECRET_KEYS` (#796, ruling L8), never
  * from the legacy service_role key variable, which Supabase retires by the
- * end of 2026. Throws MissingSecretKeyError when there is no secret key, so
+ * end of 2026. Throws MissingSecretKeyError when there is no secret key, and
+ * an error naming the variable when the URL or the anon key is missing, so
  * the function refuses to start rather than fail every invitation.
  */
 export function readAdminEnv(
   functionName: string,
   get: (name: string) => string | undefined = (name) => Deno.env.get(name),
 ): AdminEnv {
+  const required = (name: string): string => {
+    const value = get(name);
+    if (!value) {
+      throw new Error(`${functionName} cannot start: ${name} is not set.`);
+    }
+    return value;
+  };
   return {
-    url: get("SUPABASE_URL") ?? "",
-    anonKey: get("SUPABASE_ANON_KEY") ?? "",
+    url: required("SUPABASE_URL"),
+    anonKey: required("SUPABASE_ANON_KEY"),
     secretKey: requireSecretKey(get("SUPABASE_SECRET_KEYS"), functionName),
   };
 }
