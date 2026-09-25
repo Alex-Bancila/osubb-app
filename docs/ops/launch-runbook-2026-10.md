@@ -162,6 +162,9 @@ reviewer approves. Variables hold the public build values so a reviewer can read
 
 1. Repository → **Settings → Environments → New environment**:
    - `preview`: no protection rules. Secret `CLOUDFLARE_API_TOKEN` (the staging/preview token of §1).
+     Variables: `SUPABASE_PROJECT_REF`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (staging's
+     **publishable** key, `sb_publishable_…`), `VITE_VAPID_PUBLIC_KEY` — all staging's values. _Why:_ a
+     preview job can only read its own Environment's variables, not `staging`'s.
    - `staging`: _Deployment branches and tags_ → **Selected branches** → add `main`. Secrets:
      `SUPABASE_ACCESS_TOKEN` (create a new one at `supabase.com/dashboard/account/tokens`, name
      `github-ci`, Bitwarden), `SUPABASE_DB_PASSWORD` (staging), `STAGING_DB_URL` (same value as today's
@@ -248,13 +251,15 @@ anything on Thursday except fixes found by the acceptance run.
    ```
 
 3. **First Release** (rehearsal on the empty database): Actions → **Release to production** → _Run
-   workflow_. Read the `report` job. Take the dump even though it is empty, so the habit exists:
+   workflow_. Read the `report` job. Take the dump even though it is empty, so the habit exists.
+   _Why:_ `supabase db dump` writes the schema only unless told otherwise, so take both:
 
    ```bash
-   npx supabase db dump --db-url "<prod pooler URL>" -f prod-2026-10-01.sql
+   npx supabase db dump --db-url "<prod pooler URL>" -f prod-2026-10-01-schema.sql
+   npx supabase db dump --db-url "<prod pooler URL>" --data-only -f prod-2026-10-01-data.sql
    ```
 
-   (keep it on an encrypted disk, delete after 30 days). Approve in the **Review deployments** banner.
+   (keep them on an encrypted disk, delete after 30 days). Approve in the **Review deployments** banner.
    Watch `release` finish: migrations, functions, web to `osubb-app.pages.dev`, smoke checks.
 
 4. **Custom domain**: Cloudflare → Workers & Pages → `osubb-app` → **Custom domains → Set up a custom
