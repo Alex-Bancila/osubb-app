@@ -326,6 +326,18 @@ The signed membership facts attached to a session, including Role, Level, and th
 **Capability**:
 A named product action available at or above an organizational Level, without replacing Group Role authority.
 
+**Privacy Notice**:
+The versioned statement of what OSUBB does with a Member's personal data, who processes it and what rights the Member has; the current version is shown in the application and approved by BC.
+_Avoid_: GDPR page, terms, consent form, cookie policy
+
+**Privacy Acknowledgement**:
+A Member's one-time confirmation that they have read a given version of the Privacy Notice, recorded with the time; BC and Moderator can see who has acknowledged the current version. It is a record of information given, not a consent.
+_Avoid_: GDPR approval, acceptance, agreement
+
+**Release**:
+The deliberate, human-approved act of carrying `main` into the production environment. Distinct from Promotion, which is a Member moving up a Role.
+_Avoid_: Promote to production, deploy (in the sense of production), push to prod
+
 ## Term → identifier
 
 Where a term above is not spelled the same way in the schema. Use the Term in prose and Romanian copy; use the identifier in code, migrations, issues, and tests. Read from `supabase/migrations/0001_core_schema.sql` unless noted otherwise.
