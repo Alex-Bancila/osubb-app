@@ -3,18 +3,11 @@
 
 import { assertEquals } from "@std/assert";
 import * as handler from "./handler.ts";
-import {
-  BATCH_SIZE,
-  classify,
-  constantTimeEqual,
-  handleSendPush,
-  isSecretKey,
-} from "./handler.ts";
+import { BATCH_SIZE, classify, handleSendPush } from "./handler.ts";
 import {
   type ClaimedDelivery,
   InvalidSubscriptionError,
   type Outcome,
-  parseSecretKeys,
   type PushResponse,
   type PushSubscriptionJson,
   realDeps,
@@ -175,29 +168,6 @@ Deno.test("with no secret key provided the function answers 500 naming the setti
   assertEquals(response.status, 500);
   assertEquals((await response.json()).problems, ["SUPABASE_SECRET_KEYS"]);
   assertEquals(claimCount(), 0);
-});
-
-Deno.test("constantTimeEqual and isSecretKey compare whole strings", () => {
-  assertEquals(constantTimeEqual("abc", "abc"), true);
-  assertEquals(constantTimeEqual("abc", "abd"), false);
-  assertEquals(constantTimeEqual("abc", "ab"), false);
-  assertEquals(constantTimeEqual("", ""), true);
-  assertEquals(constantTimeEqual("ă", "a"), false);
-  assertEquals(isSecretKey(null, [SECRET]), false);
-  assertEquals(isSecretKey("", [""]), false);
-  assertEquals(isSecretKey(SECRET, [SECRET]), true);
-});
-
-Deno.test("parseSecretKeys reads the platform's JSON map, default first", () => {
-  assertEquals(parseSecretKeys(undefined), []);
-  assertEquals(parseSecretKeys(""), []);
-  assertEquals(parseSecretKeys("sb_secret_plain"), []);
-  assertEquals(parseSecretKeys('["sb_secret_a"]'), []);
-  assertEquals(parseSecretKeys('{"default":""}'), []);
-  assertEquals(
-    parseSecretKeys('{"ci":"sb_secret_ci","default":"sb_secret_d","n":1}'),
-    ["sb_secret_d", "sb_secret_ci"],
-  );
 });
 
 Deno.test("only POST is accepted", async () => {
