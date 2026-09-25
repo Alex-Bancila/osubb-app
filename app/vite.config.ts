@@ -3,11 +3,17 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
+import { headersPlugin } from './src/pwa/headers-plugin.ts';
 import { createPwaOptions } from './src/pwa/pwa-config.ts';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), VitePWA(createPwaOptions())],
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA(createPwaOptions()),
+    headersPlugin(),
+  ],
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },

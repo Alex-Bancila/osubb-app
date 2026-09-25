@@ -12,9 +12,10 @@ describe('PWA build options', () => {
     expect(options).not.toHaveProperty('workbox');
   });
 
-  it('precaches only the static shell', () => {
+  it('precaches only the static shell and its theme script', () => {
     expect(createPwaOptions().injectManifest.globPatterns).toEqual([
       'index.html',
+      'theme-init.js',
       'assets/*.{js,css,woff2,png,svg,ico}',
     ]);
   });
