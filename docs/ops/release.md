@@ -5,9 +5,10 @@ at `app.osubb.ro`. It is always started by a person and approved by a person; no
 touches production (ruling L10 of the 2026-09-25 launch grill, issue #78). The glossary word is _Release_;
 _Promotion_ is a Member moving up a Role, never a deploy.
 
-This page covers starting, reviewing, approving and verifying a Release. Rollback, account holders and the
-rest of the operations runbook are #772's; the first Release of all is §11 of
-[`launch-runbook-2026-10.md`](launch-runbook-2026-10.md).
+This page covers starting, reviewing, approving and verifying a Release, its rollback, who holds which
+login, and the recurring per-environment setup and lookups around it. The very first Release is different
+— production doesn't exist yet, so most of this page doesn't apply — and is walked step by step in §11 of
+[`launch-runbook-2026-10.md`](launch-runbook-2026-10.md), kept as the historical record of that one run.
 
 ## The one command
 
@@ -97,3 +98,112 @@ functions and the web app are simply deployed again.
 | Cloudflare                          | Pages project `osubb-app`, production branch `main`, custom domain `app.osubb.ro`              |
 
 How each one is created is in §4, §6, §7 and §11 of the launch runbook.
+
+## Rollback and the forward-fix rule
+
+**The database is never rolled back on production.** `db push --include-all` only ever moves forward, and
+Postgres has no reliable "undo" for a migration that already ran against live rows — some may already have
+been read, changed, or referenced by rows that same migration wrote. A bad migration is fixed the way every
+other bug is: write a new migration that corrects it, ship it through the ordinary PR process (house rules
+1, 5, 7), and start a new Release. _Why:_ an installed PWA still on the previous bundle can hit the schema
+mid-session, so a fix, like any other schema change, must expand before it contracts
+(`docs/backend/conventions.md`) — the same discipline that makes forward-fixing safe going in keeps it safe
+going "back".
+
+**The web app rolls back one of two ways**, depending on whether Edge Functions changed with it:
+
+1. **Fast, static-only — Cloudflare's own rollback.** Cloudflare dashboard → Workers & Pages → `osubb-app` →
+   **Deployments** lists every past deployment; **Rollback** next to a previous one makes it live again in
+   seconds, with no GitHub Actions run and no reviewer approval. _Why fast matters here:_ a broken bundle in
+   front of Members outweighs the review ritual for the minute it takes. It swaps static assets only — it
+   never touches the database or Edge Functions — so use it only when the previous bundle is still
+   compatible with whatever schema and functions are live right now.
+2. **Full — re-run the Release at the previous good commit.** When Edge Functions must roll back together
+   with the web app (their contract changed in the same Release), Cloudflare's button alone leaves the
+   functions on the new code. `release-production.yml` only ever runs from `refs/heads/main` — it refuses
+   any other ref before the reviewer is even asked (ruling L10) — so "the previous `release/*` tag's commit"
+   means bringing `main` there with a **new** commit (`git revert` the offending commit(s), or a fresh commit
+   whose tree matches that tag), never a force-push to `main` (house rule 7). Push it, then run the one
+   command as usual: the `release` job redeploys every Edge Function from that commit's
+   `supabase/functions/`, rebuilds and redeploys the web app from the same commit, and tags a new `release/*`
+   name. If the revert touches `supabase/migrations/`, the `report` job's "already released, edited" warning
+   is expected — the migration itself still only ever moves forward, per the rule above.
+
+Edge Functions have no rollback control of their own; they return to a previous version only through path 2.
+
+## Per-environment one-time configuration
+
+None of this runs as part of a Release — a hosted project never reads `config.toml` (house rule 1 extends to
+infrastructure, not just schema). Each item is set once per environment by a human, and touched again only
+when it changes. To keep one copy instead of two drifting apart, the settings themselves live where each was
+originally written; this page only points at them.
+
+| What                                                                                                                                                  | Where it's documented                                                                    | Set for staging in | Set for production in |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------ | --------------------- |
+| Auth dashboard settings (provider on, self-signup off, the JWT claims hook, URL Configuration, SMTP, the three email templates, the email rate limit) | `docs/backend/auth-config.md` § "Hosted projects"                                        | launch-runbook §5  | launch-runbook §7     |
+| The `/auth/confirm` redirect the click-to-confirm templates depend on                                                                                 | `docs/backend/auth-config.md` § "Why the link opens a page with a button"                | §5.3               | §7.1                  |
+| `ALLOWED_ORIGINS` for `invite-member` and every other CORS-gated function                                                                             | `docs/backend/inviting.md` § "CORS: who is allowed to call this function from a browser" | §5.8               | §7.5                  |
+| VAPID pair and the two Vault rows (`project_url`, `secret_key`)                                                                                       | `docs/backend/push.md` § "Setting it up, per environment"                                | §5.9               | §7.5                  |
+| Pages project and custom domain                                                                                                                       | `launch-runbook-2026-10.md`                                                              | §1                 | §11.2, §11.4          |
+
+_Why linked and not copied:_ a value repeated in two places is a value that goes stale in one of them the
+first time it changes; the runbook and the backend docs are what the person doing the work actually opens.
+
+Demo data is a separate concern again — staging-only, never production, applied by hand on request, never by
+a Release: `docs/backend/seeding-staging.md`.
+
+## Who holds which login
+
+Every credential below is a Bitwarden entry in the **OSUBB infra** collection (house rule 8, launch-runbook
+intro) — this table says who is meant to hold it and where it lives, never the value itself.
+
+| Account                                    | Holder(s)                                                              | Notes                                                                                                                                                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloudflare account "OSUBB"                 | Alex's `@osubb.ro` user (Super Administrator)                          | `it@osubb.ro` is added as a second Super Administrator once the Workspace admin creates it (launch-runbook §13) — an invite, never a shared password. Recovery codes and its TOTP secret go in Bitwarden. |
+| Resend team                                | Alex's `@osubb.ro` user                                                | `it@osubb.ro` invited as Admin in §13. Two sending-only API keys, one per environment, each scoped to `app.osubb.ro` alone — a leaked staging key is revoked without touching production.                 |
+| Supabase organization "OSUBB" (production) | Owned by `it@osubb.ro` once it exists; Alex as second owner until then | Staging stays in its own, older, free organization — kept separate on purpose (L14).                                                                                                                      |
+| GitHub repository                          | Alex: Admin. Dobre and Paul: Write                                     | Admin edits branch/Environment protection rules, so the reviewer gate below is only as strong as this list (launch-runbook §6.3).                                                                         |
+| GitHub Environment `production`            | Required reviewers: Alex and Dobre, any one approval                   | Set once in **Settings → Environments → production**; nobody outside this list can approve a Release.                                                                                                     |
+| cyber_folks DNS (cPanel)                   | Alex, plus whoever else is recorded in Bitwarden                       | The next coordinator needs this to touch a DNS record — write down who else holds the login the moment you learn it (launch-runbook §3.4).                                                                |
+
+## The canary device
+
+After every `send-push` deploy — by hand today, from CI once #110 merges, and as part of every production
+Release from then on — the IT Coordinator sends their own subscribed device one test push and confirms it
+arrives. The exact SQL is in `docs/backend/push.md`, § "Setting it up, per environment". _Why a device and
+not another automated smoke check:_ the [smoke checks](#smoke-checks) above prove the function is deployed
+and refuses an anonymous call, not that a real payload reaches a real browser and shows a notification — that
+needs VAPID signing, the push service, and a subscribed device end to end, and is worth keeping outside the
+automated gate so a stale or revoked canary subscription fails as a visible follow-up step, never as a Release
+blocked for a reason that has nothing to do with the code going out.
+
+## The Resend "never arrived" lookup
+
+A Member says an invitation or a sign-in email never showed up. Before assuming Resend is broken, or the
+Member's own inbox is at fault:
+
+1. **Resend dashboard → Emails**, search by the recipient's address. Every send from either environment's
+   key shows here — one Resend team, two keys (see "Who holds which login" above). _Why here first:_ it
+   separates "we never sent it" from "we sent it and it bounced" from "it's sitting in spam", three
+   different fixes.
+2. Read the entry's status. **Delivered** means it left Resend and the receiving server accepted it — check
+   spam next, and that the address really is the Member's. **Bounced** or **Complained** means the address
+   itself is the problem (mistyped, or the mailbox refused it). **No entry at all** means the send never
+   happened — check `docs/backend/auth-config.md` § "Verifying the whole thing works" for the provider being
+   off or the rate limit being hit.
+3. **If the fix is a mistyped address:** there is no re-send path today. `invite-member` refuses on purpose
+   when the profile already exists (`409`, `docs/backend/inviting.md` § "When something goes wrong") — that
+   is what protects an existing Member from being silently overwritten. Correcting the address and
+   re-sending, for a Member who has never signed in, is issue **#773**
+   ("Administrare: correct the email and re-send the invitation…", blocked by #103) — not built yet. Until it
+   ships there is no workaround: do not delete and re-invite the profile, which is exactly the
+   re-provisioning #773 exists to avoid.
+
+## November recruitment pacing
+
+The org-wide rollout (#37) stays in November, after the 2 October launch scope closes (ruling L15). _Why it
+needs pacing at all:_ the CSV import accepts at most 100 rows per file (`docs/backend/inviting.md`) and
+Resend's free plan sends at most 100 emails a day, so a recruitment batch that needs more than one file in
+one day needs either three days spread across the free plan, or one month of Resend Pro ($20) with
+**Rate Limits → Emails sent per hour** raised to 250 on the import days and put back afterward. Which of the
+two is used is decided when November's actual batch size is known, not now (ruling L6).
