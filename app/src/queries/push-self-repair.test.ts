@@ -194,6 +194,23 @@ describe('usePushSelfRepair (#769)', () => {
     expect(supabaseMock.insert).not.toHaveBeenCalled();
   });
 
+  it('keeps the old row when storing the new one fails', async () => {
+    browser.current = fakeSubscription(
+      'https://push.example.test/old',
+      OLD_KEY,
+    );
+    supabaseMock.insert.mockResolvedValueOnce({
+      error: { code: '42501', message: 'row-level security' },
+    });
+    rowPresent(true);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+
+    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(supabaseMock.delete).not.toHaveBeenCalled();
+  });
+
   it('resubscribes when the row is missing and push is on here', async () => {
     const current = fakeSubscription('https://push.example.test/cur', NEW_KEY);
     browser.current = current;
