@@ -26,7 +26,8 @@
 --   * drop the closed_at bound -> "an award at exactly closed_at belongs to
 --     the next Period, not this one";
 --   * read points_ledger.created_at instead of evaluated_at -> "a reversal
---     dated after P1 still nets its in-Period award to zero";
+--     dated after P1 still nets its in-Period award to zero" and "an award
+--     at exactly closed_at belongs to the next Period" (a -3 leaks in);
 --   * `>` for `>=` on opened_at -> "an award at exactly opened_at counts";
 --   * rank after the visibility filter -> "Elena reads her own row at rank 3";
 --   * drop the own-row branch -> "Ana reads exactly her own row";
@@ -128,7 +129,7 @@ select fixture.title, 'Fixture', now() - interval '2 days',
                ('Horia azi #47', 1, 4),          --  2, inside P2
                ('Florin inainte #47', 1, 5),     --  3, before P1
                ('Florin in #47', 2, 5),          --  6, inside P1
-               ('Florin reversat #47', 5, 5),    -- 15, inside P1, reversed after it
+               ('Florin reversat #47', 5, 5),    -- 15, inside P1, reversed in the next
                ('Florin la inchidere #47', 4, 5),-- 12, at exactly P1's close
                ('Gabi la deschidere #47', 1, 4)  --  2, at exactly P1's open
        ) as fixture (title, difficulty, rating);
@@ -147,10 +148,10 @@ select pg_temp.test_credit_task(task.id, credit.member_id, '47000000-0000-0000-0
   ) as credit (title, member_id, awarded_at)
   join public.tasks as task on task.title = credit.title
  order by task.id;
--- The reversal's own ledger row is dated after P1 closed; the award it undoes
--- is dated inside it.
+-- The reversal's own ledger row is dated after P1 closed, inside the next
+-- Period (Vara 2001 #47); the award it undoes is dated inside P1.
 select pg_temp.test_reverse_award(task.id, '47000000-0000-0000-0000-000000000010',
-                                  '2001-07-01 12:00:00+00')
+                                  '2001-06-15 12:00:00+00')
   from public.tasks as task where task.title = 'Florin reversat #47';
 
 -- A sanction inside P2 is on the ledger but is not a Task Point.
