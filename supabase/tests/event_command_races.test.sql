@@ -41,7 +41,7 @@ select extensions.dblink_exec('events_248_setup',$setup$
  declare e public.events%rowtype;
  begin
  select * into e from public.events where title='Race #248';
- return (public.update_event(e.id,e.title,e.type::text,e.group_id,e.starts_at,e.ends_at,e.location,30,e.description,e.min_level)).title;
+ return (public.update_event(e.id,e.title,e.type::text,e.group_id,e.starts_at,e.ends_at,e.location,30,e.description,e.min_level,e.campaign_id)).title;
  exception when sqlstate 'PT409' then return sqlstate || ':' || sqlerrm;
  end; $$;
  create or replace function public.test_248_cancel() returns text language sql security definer set search_path='' as $$

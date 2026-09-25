@@ -17,12 +17,14 @@ vi.mock('../lib/supabase', () => ({
 }));
 
 import { fetchMyTasks } from './tasks';
-import { taskRow } from '../test/task-fixtures';
+import { afterSubmissionFilter, taskRow } from '../test/task-fixtures';
 
 describe('normalized My tasks reads', () => {
+  let filter = afterSubmissionFilter({ eq: api.byMember });
   beforeEach(() => {
+    filter = afterSubmissionFilter({ eq: api.byMember });
     api.from.mockReturnValue({ select: api.select });
-    api.select.mockReturnValue({ eq: api.byMember });
+    api.select.mockReturnValue(filter);
     api.byMember.mockReturnValue({ order: api.orderAssignedAt });
     api.orderAssignedAt.mockReturnValue({ order: api.orderId });
     api.rpc.mockResolvedValue({ data: [], error: null });
@@ -63,6 +65,13 @@ describe('normalized My tasks reads', () => {
       'evaluations:task_evaluations',
     );
     expect(api.select.mock.lastCall?.[0]).not.toContain('task_assignees');
+    // The latest Submission Note rides in the same request (#685).
+    expect(api.select.mock.lastCall?.[0]).toContain('submission:task_activity');
+    expect(filter.calls).toEqual([
+      ['eq', 'task.submission.kind', 'submitted'],
+      ['order', 'id', { ascending: false, referencedTable: 'task.submission' }],
+      ['limit', 1, { referencedTable: 'task.submission' }],
+    ]);
     expect(api.rpc).toHaveBeenCalledWith('visible_task_executors', {
       p_task_ids: [1, 2],
     });
@@ -124,7 +133,7 @@ describe('normalized My tasks reads', () => {
       error: null,
     });
     api.select
-      .mockReturnValueOnce({ eq: api.byMember })
+      .mockReturnValueOnce(afterSubmissionFilter({ eq: api.byMember }))
       .mockReturnValueOnce({ in: parents });
     api.orderId.mockResolvedValue({
       data: [{ task: child }, { task: hiddenChild }],

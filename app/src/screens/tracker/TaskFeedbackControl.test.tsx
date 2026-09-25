@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { CommandError } from '../../lib/command-reasons';
 const state = vi.hoisted(() => ({
   capability: true,
   mutation: { isPending: false, mutateAsync: vi.fn() },
@@ -44,9 +45,7 @@ it('opens a titled pop-up, requires a trimmed note, sends feedback and announces
     within(dialog).getByRole('button', { name: 'Confirmă feedbackul' }),
   );
   expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
-  expect(within(dialog).getByRole('alert')).toHaveTextContent(
-    'Scrie o notă pentru Executor.',
-  );
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Scrie o notă.');
   await user.type(
     within(dialog).getByLabelText(noteLabel),
     '  Adaugă sursele  ',
@@ -81,7 +80,7 @@ it('closes with Escape without sending and returns focus to the trigger', async 
 it('keeps feedback inside the pop-up on conflict and suppresses duplicate submissions', async () => {
   const user = userEvent.setup();
   state.mutation.mutateAsync.mockRejectedValueOnce(
-    new Error('Taskul s-a schimbat.'),
+    new CommandError(null, 'Taskul s-a schimbat.'),
   );
   render(<TaskFeedbackControl {...props} />);
   const dialog = await openDialog(user);

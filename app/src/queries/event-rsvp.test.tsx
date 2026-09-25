@@ -19,6 +19,7 @@ import {
   eventRsvpMutationOptions,
   eventRsvpQueryOptions,
   fetchEventRsvp,
+  fetchGoingEventIds,
   setEventRsvp,
   useEventRsvp,
   useSetEventRsvp,
@@ -174,7 +175,7 @@ describe('RSVP mutation', () => {
     },
   );
 
-  it('invalidates only the returned member and event after success', async () => {
+  it('invalidates the returned member and event, and their Vin set, after success', async () => {
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, 'invalidateQueries')
@@ -188,9 +189,12 @@ describe('RSVP mutation', () => {
       checkedIn: false,
     });
 
-    expect(invalidate).toHaveBeenCalledOnce();
+    expect(invalidate).toHaveBeenCalledTimes(2);
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['events', 'rsvp', { eventId: 42, memberId }],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ['events', 'going', { memberId }],
     });
   });
 
@@ -215,5 +219,26 @@ describe('RSVP mutation', () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['events', 'rsvp', { eventId: 42, memberId }],
     });
+  });
+});
+
+describe('the Events I said Vin to', () => {
+  beforeEach(() => {
+    resetSupabaseMock();
+  });
+
+  // One read colours every Other OSUBB Event answered "Vin" (#692). Mutation
+  // this catches: dropping the self-filter, which would colour the Events
+  // other members answered for a manager who may read their rows.
+  it('reads only my going answers', async () => {
+    supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockResolvedValueOnce({
+      data: [{ event_id: 4 }, { event_id: 9 }],
+      error: null,
+    });
+
+    await expect(fetchGoingEventIds(memberId)).resolves.toEqual([4, 9]);
+    expect(supabaseMock.from).toHaveBeenCalledWith('event_attendance');
+    expect(supabaseMock.eq).toHaveBeenNthCalledWith(1, 'member_id', memberId);
+    expect(supabaseMock.eq).toHaveBeenNthCalledWith(2, 'status', 'going');
   });
 });

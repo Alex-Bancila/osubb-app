@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -9,13 +10,19 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
+import { fieldForReason, groupCreateSchema } from '../../lib/schemas/group';
+import { useFormValidation } from '../../lib/use-form-validation';
 import type {
   AdminGroup,
   AppointableMember,
-  GroupCommand,
+  RunGroupCommand,
 } from '../../queries/groups-admin';
 import { MemberPicker } from './MemberPicker';
-import { GROUP_CATEGORIES, minLevelChoices } from './group-tree';
+import {
+  GROUP_CATEGORIES,
+  minLevelChoices,
+  PRIVATE_GROUP_HINT,
+} from './group-tree';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
@@ -27,6 +34,12 @@ const control =
  * The parent is chosen here and never again: a Group's place in the tree is
  * fixed at creation (ADR-0009, ruling R20), which is why there is no "Mută
  * grupul" control anywhere in Administrare.
+ *
+ * **Grup privat** mirrors `create_group` (#756): BC and the Moderator choose
+ * it — for a top-level Group and for a Child Group of a public parent alike —
+ * and a Child Group of a Private Group is private whatever is chosen, so the
+ * box is shown ticked and locked. A Group Manager under a public parent is
+ * not offered it: the server would refuse the private Child.
  */
 export function GroupCreateDialog({
   trigger,
@@ -38,7 +51,7 @@ export function GroupCreateDialog({
   actorLevel,
   members,
   disabled,
-  error,
+  choosePrivate,
   onCreate,
 }: {
   trigger: string;
@@ -51,8 +64,9 @@ export function GroupCreateDialog({
   actorLevel: number;
   members: AppointableMember[];
   disabled: boolean;
-  error: string | null;
-  onCreate: (command: GroupCommand) => Promise<boolean>;
+  /** BC or the Moderator (`createTopLevelGroups`): may start a Private Group. */
+  choosePrivate: boolean;
+  onCreate: RunGroupCommand;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -64,9 +78,22 @@ export function GroupCreateDialog({
   const [color, setColor] = useState('');
   const [short, setShort] = useState('');
   const [manager, setManager] = useState<AppointableMember | null>(null);
-  const [attempted, setAttempted] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const form = useFormValidation(
+    groupCreateSchema,
+    {
+      name,
+      category,
+      minLevel: minLevel === '' ? null : Number(minLevel),
+      color,
+      short,
+    },
+    fieldForReason,
+  );
 
   const effectiveParent = parent ?? chosenParent;
+  const inheritsPrivate = effectiveParent?.is_private === true;
+  const privateChoice = inheritsPrivate || (choosePrivate && isPrivate);
   const choices = minLevelChoices(
     levels,
     effectiveParent?.min_level ?? 0,
@@ -81,23 +108,28 @@ export function GroupCreateDialog({
     setColor('');
     setShort('');
     setManager(null);
-    setAttempted(false);
+    setIsPrivate(false);
+    form.reset();
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim()) return;
-    setAttempted(true);
-    const created = await onCreate({
-      kind: 'create',
-      name,
-      category,
-      parentId: effectiveParent?.id ?? null,
-      minLevel: minLevel === '' ? null : Number(minLevel),
-      managerId: manager?.memberId ?? null,
-      color: color || null,
-      short: short || null,
-    });
+    const values = form.validate();
+    if (!values) return;
+    const created = await onCreate(
+      {
+        kind: 'create',
+        name: values.name,
+        category: values.category,
+        parentId: effectiveParent?.id ?? null,
+        minLevel: values.minLevel,
+        managerId: manager?.memberId ?? null,
+        color: values.color,
+        short: values.short,
+        isPrivate: privateChoice,
+      },
+      (failure) => form.fail(failure, 'Nu am putut crea grupul. Reîncearcă.'),
+    );
     if (created) {
       setOpen(false);
       reset();
@@ -124,7 +156,7 @@ export function GroupCreateDialog({
         {trigger}
       </Button>
       <DialogContent>
-        <form onSubmit={submit} className="grid gap-4">
+        <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>
@@ -134,33 +166,40 @@ export function GroupCreateDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Numele grupului</span>
-            <input
-              className={control}
-              value={name}
-              required
-              maxLength={120}
-              disabled={disabled}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">Numele grupului</span>
+              <input
+                className={control}
+                value={name}
+                required
+                disabled={disabled}
+                onChange={(event) => setName(event.target.value)}
+                {...form.field('name')}
+              />
+            </label>
+            <FieldError {...form.errorProps('name')} />
+          </div>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Categorie</span>
-            <select
-              className={control}
-              value={category}
-              disabled={disabled}
-              onChange={(event) => setCategory(event.target.value)}
-            >
-              {GROUP_CATEGORIES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">Categorie</span>
+              <select
+                className={control}
+                value={category}
+                disabled={disabled}
+                onChange={(event) => setCategory(event.target.value)}
+                {...form.field('category')}
+              >
+                {GROUP_CATEGORIES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FieldError {...form.errorProps('category')} />
+          </div>
 
           {!parent && (
             <div className="grid gap-1.5">
@@ -178,26 +217,30 @@ export function GroupCreateDialog({
             </div>
           )}
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Nivel minim</span>
-            <select
-              className={control}
-              value={minLevel}
-              disabled={disabled}
-              onChange={(event) => setMinLevel(event.target.value)}
-            >
-              <option value="">
-                {effectiveParent
-                  ? `Ca grupul părinte (${effectiveParent.min_level})`
-                  : 'Oricine (0)'}
-              </option>
-              {choices.map((level) => (
-                <option key={level} value={level}>
-                  {level}
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">Nivel minim</span>
+              <select
+                className={control}
+                value={minLevel}
+                disabled={disabled}
+                onChange={(event) => setMinLevel(event.target.value)}
+                {...form.field('minLevel')}
+              >
+                <option value="">
+                  {effectiveParent
+                    ? `Ca grupul părinte (${effectiveParent.min_level})`
+                    : 'Oricine (0)'}
                 </option>
-              ))}
-            </select>
-          </label>
+                {choices.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FieldError {...form.errorProps('minLevel')} />
+          </div>
 
           <div className="grid gap-1.5">
             <span id="create-group-manager" className="text-sm font-medium">
@@ -213,34 +256,58 @@ export function GroupCreateDialog({
             />
           </div>
 
+          {(choosePrivate || inheritsPrivate) && (
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 size-5 shrink-0"
+                checked={privateChoice}
+                disabled={disabled || inheritsPrivate}
+                onChange={(event) => setIsPrivate(event.target.checked)}
+              />
+              <span className="grid gap-0.5">
+                <span className="text-sm font-medium">Grup privat</span>
+                <span className="text-sm text-muted-foreground">
+                  {inheritsPrivate
+                    ? `${effectiveParent?.name ?? 'Grupul părinte'} este privat, deci și grupul nou va fi privat.`
+                    : PRIVATE_GROUP_HINT}
+                </span>
+              </span>
+            </label>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Prescurtare</span>
-              <input
-                className={control}
-                value={short}
-                maxLength={16}
-                disabled={disabled}
-                onChange={(event) => setShort(event.target.value)}
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Culoare</span>
-              <input
-                className={control}
-                value={color}
-                placeholder="#C8102E"
-                disabled={disabled}
-                onChange={(event) => setColor(event.target.value)}
-              />
-            </label>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">Prescurtare</span>
+                <input
+                  className={control}
+                  value={short}
+                  maxLength={16}
+                  disabled={disabled}
+                  onChange={(event) => setShort(event.target.value)}
+                  {...form.field('short')}
+                />
+              </label>
+              <FieldError {...form.errorProps('short')} />
+            </div>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">Culoare</span>
+                <input
+                  className={control}
+                  value={color}
+                  placeholder="#C8102E"
+                  disabled={disabled}
+                  onChange={(event) => setColor(event.target.value)}
+                  {...form.field('color')}
+                />
+              </label>
+              <FieldError {...form.errorProps('color')} />
+            </div>
           </div>
 
-          {attempted && error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+          <FieldError>{form.formError}</FieldError>
 
           <DialogFooter>
             <Button
@@ -251,7 +318,7 @@ export function GroupCreateDialog({
             >
               Renunță
             </Button>
-            <Button type="submit" disabled={disabled || !name.trim()}>
+            <Button type="submit" disabled={disabled}>
               Creează
             </Button>
           </DialogFooter>

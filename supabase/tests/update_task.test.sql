@@ -13,7 +13,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(125);
+select plan(141);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u(n integer) returns uuid language sql immutable as $$
@@ -91,19 +91,23 @@ create function pg_temp.cand(p_task text, p_member uuid, p_age interval) returns
   select id, p_member, 'pending', now() - p_age from t626 where name = p_task
 $$;
 
--- Section 2: one Task per (status, field), each direct/org with exec_in.
-select pg_temp.mk(s.status_name || ':' || f.field, s.status, 'direct', 'org', pg_temp.u(2), s.round)
+-- Section 2: one Task per (status, field), each direct/local with exec_in --
+-- except the Audience one, which is public/local so that widening it to org
+-- is a legal edit (#794, ruling R26: a direct Task carries the local Audience).
+select pg_temp.mk(s.status_name || ':' || f.field, s.status,
+                  case when f.field = 'audience' then 'public' else 'direct' end, 'local',
+                  pg_temp.u(2), s.round)
   from (values ('todo', 'todo', 0), ('progress', 'in_progress', 0), ('feedback', 'in_progress', 1))
          as s (status_name, status, round)
  cross join (values ('title'), ('description'), ('deadline'), ('campaign_id'), ('audience'), ('assignment_mode'))
          as f (field);
 
 -- Section 3/4 targets.
-select pg_temp.mk('x:review', 'in_review', 'direct', 'org', pg_temp.u(2));
-select pg_temp.mk('x:done', 'completed', 'direct', 'org', null);
-select pg_temp.mk('x:cancelled', 'cancelled', 'direct', 'org', null);
-select pg_temp.mk('x:same', 'todo', 'direct', 'org', null);
-select pg_temp.mk('x:input', 'todo', 'direct', 'org', null);
+select pg_temp.mk('x:review', 'in_review', 'direct', 'local', pg_temp.u(2));
+select pg_temp.mk('x:done', 'completed', 'direct', 'local', null);
+select pg_temp.mk('x:cancelled', 'cancelled', 'direct', 'local', null);
+select pg_temp.mk('x:same', 'todo', 'direct', 'local', null);
+select pg_temp.mk('x:input', 'todo', 'direct', 'local', null);
 select pg_temp.mk('x:umbrella', 'todo', null, null, null, 0, 'umbrella');
 select pg_temp.mk('x:auth', 'todo', 'direct', 'local', pg_temp.u(2));
 
@@ -125,6 +129,8 @@ select pg_temp.cand('r8:narrow', pg_temp.u(7), '1 hour');
 select pg_temp.mk('r8:keep', 'todo', 'public', 'org', pg_temp.u(2));
 select pg_temp.cand('r8:keep', pg_temp.u(5), '2 hours');
 select pg_temp.cand('r8:keep', pg_temp.u(4), '1 hour');
+-- r8:direct is a legacy direct + org row (#794's migration corrects every
+-- such row and no command writes one now); narrowing it is still legal.
 select pg_temp.mk('r8:direct', 'in_progress', 'direct', 'org', pg_temp.u(3));
 select pg_temp.mk('r8:alone', 'in_progress', 'public', 'org', pg_temp.u(3));
 
@@ -132,19 +138,22 @@ select pg_temp.mk('r8:alone', 'in_progress', 'public', 'org', pg_temp.u(3));
 create function pg_temp.args(p_name text,
   p_title text default null, p_clear_description boolean default false,
   p_deadline timestamptz default null, p_campaign bigint default null,
-  p_mode text default null, p_audience text default null, p_group bigint default null)
+  p_mode text default null, p_audience text default null, p_group bigint default null,
+  p_link_label text default null, p_link_url text default null, p_clear_link boolean default false)
 returns text language sql stable as $$
-  select format('%s, %s, %L, %L, %L::timestamptz, %s, %L, %L',
+  select format('%s, %s, %L, %L, %L::timestamptz, %s, %L, %L, %L, %L',
     task.id, coalesce(p_group, task.group_id),
     coalesce(p_title, task.title),
     case when p_clear_description then null else task.description end,
     coalesce(p_deadline, task.deadline),
     coalesce(p_campaign::text, task.campaign_id::text, 'null'),
     coalesce(p_mode, task.assignment_mode),
-    coalesce(p_audience, task.audience))
+    coalesce(p_audience, task.audience),
+    case when p_clear_link then null else coalesce(p_link_label, task.link_label) end,
+    case when p_clear_link then null else coalesce(p_link_url, task.link_url) end)
     from public.tasks as task where task.id = pg_temp.t(p_name)
 $$;
-grant execute on function pg_temp.args(text, text, boolean, timestamptz, bigint, text, text, bigint) to authenticated;
+grant execute on function pg_temp.args(text, text, boolean, timestamptz, bigint, text, text, bigint, text, text, boolean) to authenticated;
 
 create function pg_temp.preview(p_args text) returns text[] language plpgsql as $$
 declare
@@ -178,37 +187,37 @@ grant select, insert on previews to authenticated;
 
 -- ==================== 1. API shape and privileges ====================
 select has_function('public', 'update_task',
-  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'boolean'],
-  'public.update_task exists with the full-state signature plus p_accept_consequences');
+  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'text', 'text', 'boolean'],
+  'public.update_task exists with the full-state signature (the #684 Attached Link included) plus p_accept_consequences');
 select is(pg_get_function_arguments(
-    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure),
-  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_accept_consequences boolean DEFAULT false',
-  'update_task takes no actor parameter and p_accept_consequences defaults to false');
+    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)'::regprocedure),
+  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean DEFAULT false',
+  'update_task takes no actor parameter, the link pair has no default (full state, OD5), and p_accept_consequences defaults to false');
 select is(pg_get_function_result(
-    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)'::regprocedure),
   'TABLE(consequence text, member_id uuid)',
   'preview_task_update takes the same value arguments and returns (consequence, member_id) rows');
 select is((select provolatile::text from pg_proc
-            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)'::regprocedure),
   's', 'preview_task_update is stable');
 select ok(not (select prosecdef from pg_proc
-                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)'::regprocedure)
+                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)'::regprocedure)
           and not (select prosecdef from pg_proc
-                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)'::regprocedure),
+                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)'::regprocedure),
   'both public functions are security invoker wrappers');
 select ok(has_function_privilege('authenticated',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)', 'execute')
           and has_function_privilege('authenticated',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)', 'execute')
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)', 'execute')
           and not has_function_privilege('anon',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,boolean)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean)', 'execute')
           and not has_function_privilege('anon',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text)', 'execute'),
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text)', 'execute'),
   'authenticated may call both, anon neither');
 select ok(not has_function_privilege('authenticated',
             'private.task_update_consequences(bigint,bigint,bigint,text,text)', 'execute')
           and not has_function_privilege('authenticated',
-            'private.plan_task_update(public.tasks,bigint,text,text,timestamptz,bigint,text,text)', 'execute'),
+            'private.plan_task_update(public.tasks,bigint,text,text,timestamptz,bigint,text,text,text,text)', 'execute'),
   'the two shared helpers are callable only from inside the definer bodies');
 
 -- ==================== 2. Every field, in todo / in_progress / Feedback pending ====================
@@ -219,7 +228,7 @@ begin
     when 'description' then pg_temp.args(p_name, p_clear_description => true)
     when 'deadline' then pg_temp.args(p_name, p_deadline => '2027-03-02 09:00:00+00')
     when 'campaign_id' then pg_temp.args(p_name, p_campaign => (select edu_campaign from f626))
-    when 'audience' then pg_temp.args(p_name, p_audience => 'local')
+    when 'audience' then pg_temp.args(p_name, p_audience => 'org')
     when 'assignment_mode' then pg_temp.args(p_name, p_mode => 'public')
   end);
 end;
@@ -232,7 +241,7 @@ create function pg_temp.field_check(p_name text, p_field text) returns text lang
       when 'description' then task.description is null
       when 'deadline' then task.deadline = '2027-03-02 09:00:00+00'::timestamptz
       when 'campaign_id' then task.campaign_id = (select edu_campaign from f626)
-      when 'audience' then task.audience = 'local'
+      when 'audience' then task.audience = 'org'
       when 'assignment_mode' then task.assignment_mode = 'public' and task.queue_opened_at is not null
                                   and task.queue_closed_at is null
     end,
@@ -299,28 +308,33 @@ select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input',
   'PT400', 'title_too_long', '#673: a title over 120 characters is refused');
 select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('x:input', p_title => '  ab  ')),
   'PT400', 'title_too_short', '#673: the preview measures the trimmed title, so "  ab  " is too short');
-select throws_ok(format('select public.update_task(%s, %s, %L, %L, now() + interval ''7 days'', null, %L, %L)',
-    pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 2001), 'direct', 'org'),
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, now() + interval ''7 days'', null, %L, %L, null, null)',
+    pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 2001), 'direct', 'local'),
   'PT400', 'description_too_long', '#673: a description over 2000 characters is refused');
 select lives_ok(format('select public.update_task(%s)', pg_temp.args('todo:deadline', p_deadline => now() - interval '1 day')),
   '#673: update_task accepts a deadline in the past on an existing Task -- R8 judges the deadline only at creation');
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.update_task(0, 0, repeat('t', 121), null, null, null, null, null) $$,
+select throws_ok($$ select public.update_task(0, 0, repeat('t', 121), null, null, null, null, null, null, null) $$,
   'PT400', 'title_too_long', '#673: step 1 answers a claimless caller before the gate');
-select throws_ok($$ select * from public.preview_task_update(0, 0, 'Titlu bun #673', repeat('d', 2001), null, null, null, null) $$,
+select throws_ok($$ select * from public.preview_task_update(0, 0, 'Titlu bun #673', repeat('d', 2001), null, null, null, null, null, null) $$,
   'PT400', 'description_too_long', '#673: the preview answers a claimless caller before the gate too');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u(1));
 
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => '   ')),
   'PT400', 'title_required', 'a blank title is refused');
-select throws_ok(format('select public.update_task(%s, %s, %L, %L, null, null, %L, %L)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
-    'T626 x:input', 'd', 'direct', 'org'),
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, null, null, %L, %L, null, null)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
+    'T626 x:input', 'd', 'direct', 'local'),
   'PT400', 'deadline_required', 'an ordinary Task needs a deadline');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_audience => 'world')),
   'PT400', 'invalid_audience', 'an Audience outside local/org is refused');
-select throws_ok(format('select public.update_task(%s, %s, %L, %L, %L::timestamptz, null, null, %L)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
+-- #794 (ruling R26): a directly assigned Task carries the local Audience.
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_audience => 'org')),
+  'PT400', 'direct_task_local_only', '#794: update_task refuses the org Audience on a direct Task');
+select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('x:input', p_audience => 'org')),
+  'PT400', 'direct_task_local_only', '#794: preview_task_update refuses it the same way');
+select throws_ok(format('select public.update_task(%s, %s, %L, %L, %L::timestamptz, null, null, %L, null, null)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
     'T626 x:input', 'd', '2027-03-01 09:00:00+00', 'org'),
   'PT400', 'invalid_assignment_mode', 'a null Assignment Mode on an ordinary Task is refused (full state, never a patch)');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_campaign => (select pr_campaign from f626))),
@@ -353,14 +367,18 @@ select is((select task.title from public.tasks as task where task.id = pg_temp.t
   'no unauthorized call changed the Task');
 
 -- ==================== 5. Public -> Direct ====================
+-- #794 (ruling R26): a Task that goes Direct takes the local Audience in the
+-- same edit; keeping org is refused before any consequence is computed.
 select pg_temp.test_login_leadership(pg_temp.u(1));
-select is(pg_temp.preview(pg_temp.args('p2d', p_mode => 'direct')),
+select throws_ok(format('select public.update_task(%s, true)', pg_temp.args('p2d', p_mode => 'direct')),
+  'PT400', 'direct_task_local_only', '#794: Public -> Direct keeping the org Audience is refused, even with consequences accepted');
+select is(pg_temp.preview(pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   array['candidate_removed:' || pg_temp.u(5), 'candidate_removed:' || pg_temp.u(4), 'candidate_removed:' || pg_temp.u(6)],
   'the preview lists one candidate_removed per pending Candidate, in queue order');
-insert into previews values ('p2d', pg_temp.preview_json(pg_temp.args('p2d', p_mode => 'direct')));
-select throws_ok(format('select public.update_task(%s)', pg_temp.args('p2d', p_mode => 'direct')),
+insert into previews values ('p2d', pg_temp.preview_json(pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')));
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   'PT409', 'task_update_needs_confirmation', 'Public -> Direct without acceptance is refused');
-select throws_ok(format('select public.update_task(%s, false)', pg_temp.args('p2d', p_mode => 'direct')),
+select throws_ok(format('select public.update_task(%s, false)', pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   'PT409', 'task_update_needs_confirmation', 'an explicit p_accept_consequences = false is refused the same way');
 reset role;
 select is((select format('%s|%s|%s|%s', task.assignment_mode,
@@ -370,7 +388,7 @@ select is((select format('%s|%s|%s|%s', task.assignment_mode,
              from public.tasks as task where task.id = pg_temp.t('p2d')),
   'public|3|0|0', 'the refused edit wrote nothing: still public, three pending, no activity, no notification');
 select pg_temp.test_login_leadership(pg_temp.u(1));
-select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('p2d', p_mode => 'direct')),
+select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   'with the consequences accepted the Task goes Direct');
 reset role;
 select is((select format('%s|%s|%s', task.assignment_mode, task.queue_opened_at is null, task.queue_closed_at is null)
@@ -388,8 +406,8 @@ select is((select format('%s|%s', a.member_id, a.ended_at is null) from public.t
   format('%s|t', pg_temp.u(2)), 'the Executor keeps the Task');
 select is((select count(*) from public.notifications as n
             where n.task_id = pg_temp.t('p2d') and n.member_id = pg_temp.u(2)
-              and n.body = 'Modificat: assignment_mode.'), 1::bigint,
-  'the Executor is told the Assignment Mode changed');
+              and n.body = 'Modificat: audience, assignment_mode.'), 1::bigint,
+  'the Executor is told the Audience and the Assignment Mode changed');
 select is(pg_temp.activity_consequences('p2d'), (select consequences from previews where name = 'p2d'),
   'the command applied exactly the consequence set the preview showed');
 
@@ -406,12 +424,13 @@ select is((select format('%s|%s|%s', task.assignment_mode, task.queue_opened_at 
 select is(pg_temp.activity_consequences('d2p'), '[]'::jsonb, 'and records an empty consequence set');
 
 -- ==================== 7. R-E8: Audience narrowing ====================
--- (a) public, outsider Executor, mixed queue: Executor removed, outsiders removed, head member promoted.
+-- (a) public, outsider Executor, mixed queue: Executor removed, outsiders removed,
+-- and (#682) the member Candidates stay queued -- nobody is promoted.
 select pg_temp.test_login_leadership(pg_temp.u(1));
 select is(pg_temp.preview(pg_temp.args('r8:narrow', p_audience => 'local')),
   array['executor_removed:' || pg_temp.u(3), 'candidate_removed:' || pg_temp.u(5),
-        'candidate_removed:' || pg_temp.u(6), 'candidate_promoted:' || pg_temp.u(4)],
-  'local Audience on a public Task: the non-member Executor and non-member Candidates go, the head member Candidate is promoted');
+        'candidate_removed:' || pg_temp.u(6)],
+  'local Audience on a public Task: the non-member Executor and non-member Candidates go, and no Candidate is promoted');
 insert into previews values ('r8:narrow', pg_temp.preview_json(pg_temp.args('r8:narrow', p_audience => 'local')));
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('r8:narrow', p_audience => 'local')),
   'PT409', 'task_update_needs_confirmation', 'removing an Executor needs acceptance');
@@ -426,15 +445,14 @@ select is((select format('%s|%s|%s', task.status, task.started_at is null, task.
   'todo|t|local', 'the Task returned to todo with started_at cleared');
 select is((select string_agg(right(c.member_id::text, 1) || ':' || c.status, ',' order by c.joined_at)
              from public.task_candidates as c where c.task_id = pg_temp.t('r8:narrow')),
-  '5:closed,4:selected,6:closed,7:pending', 'non-members closed, the head member selected, the rest still queued');
-select is((select format('%s|%s', a.member_id, (select c.assignment_id from public.task_candidates as c
-                                                  where c.task_id = a.task_id and c.status = 'selected') = a.id)
-             from public.task_assignments as a where a.task_id = pg_temp.t('r8:narrow') and a.ended_at is null),
-  format('%s|t', pg_temp.u(4)), 'the promoted Candidate holds the one active Assignment');
+  '5:closed,4:pending,6:closed,7:pending', 'non-members closed, every member Candidate still queued in order');
+select is((select count(*) from public.task_assignments as a
+            where a.task_id = pg_temp.t('r8:narrow') and a.ended_at is null), 0::bigint,
+  'no Assignment is opened -- the queue waits for the manager''s selection');
 select is((select string_agg(right(n.member_id::text, 1) || ':' || split_part(n.title, ':', 1), ',' order by n.member_id)
              from public.notifications as n where n.task_id = pg_temp.t('r8:narrow')),
-  '3:Task actualizat,4:Task nou,5:Coadă închisă,6:Coadă închisă',
-  'the removed Executor, the removed Candidates and the promoted Candidate are notified; the still-queued member is not');
+  '3:Task actualizat,5:Coadă închisă,6:Coadă închisă',
+  'the removed Executor and the removed Candidates are notified; the still-queued members are not');
 select is((select n.body from public.notifications as n
             where n.task_id = pg_temp.t('r8:narrow') and n.member_id = pg_temp.u(3)),
   'Nu mai ești executorul acestui task: audiența lui s-a schimbat.', 'the removed Executor is told why');
@@ -444,10 +462,10 @@ select is((select format('%s|%s|%s', a.from_status, a.to_status,
                              where x.task_id = a.task_id and x.member_id = pg_temp.u(3)))
              from public.task_activity as a where a.task_id = pg_temp.t('r8:narrow') and a.kind = 'task_updated'),
   'in_progress|todo|t', 'the task_updated row records the return to todo and the ended Assignment');
-select is((select string_agg(a.kind || ':' || coalesce(a.details ->> 'via', a.details ->> 'promoted', ''), ',' order by a.id)
+select is((select string_agg(a.kind, ',' order by a.id)
              from public.task_activity as a where a.task_id = pg_temp.t('r8:narrow')),
-  'task_updated:,executor_assigned:queue_promotion,candidate_selected:true',
-  'the promotion is recorded as in give_up_task');
+  'task_updated',
+  'task_updated is the only activity row -- no executor_assigned, no candidate_selected');
 select is(pg_temp.activity_consequences('r8:narrow'), (select consequences from previews where name = 'r8:narrow'),
   'the command applied exactly the consequence set the preview showed');
 
@@ -518,6 +536,71 @@ select is((select format('%s|%s|%s|%s|%s', task.title, task.assignment_mode,
   'T626 pv|public|1|0|0', 'the preview changed nothing, logged nothing and notified nobody');
 
 
+-- ==================== 8b. #684 The Attached Link is part of the full state ====================
+-- The link pair carries no defaults (OD5): the current values leave it alone,
+-- nulls clear it, a new pair replaces it -- each column that changes is named
+-- in the task_updated diff. The preview takes the same arity and refuses the
+-- same inputs at step 1.
+reset role;
+select pg_temp.mk('link:edit', 'todo', 'direct', 'local', null);
+update public.tasks set link_label = 'Brief', link_url = 'https://example.org/brief'
+ where id = pg_temp.t('link:edit');
+create function pg_temp.last_changed(p_name text) returns jsonb language sql stable as $$
+  select activity.details -> 'changed' from public.task_activity as activity
+   where activity.task_id = pg_temp.t(p_name) and activity.kind = 'task_updated'
+   order by activity.id desc limit 1
+$$;
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select lives_ok(format('select public.update_task(%s)', pg_temp.args('link:edit', p_title => 'T626 link:edit v2')),
+  '#684: an edit that passes the current link values applies');
+reset role;
+select is((select format('%s|%s|%s', task.link_label, task.link_url, pg_temp.last_changed('link:edit'))
+             from public.tasks as task where task.id = pg_temp.t('link:edit')),
+  'Brief|https://example.org/brief|["title"]',
+  '#684: the current link values leave the link alone and out of changed');
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select lives_ok(format('select public.update_task(%s)',
+  pg_temp.args('link:edit', p_link_label => '  Document nou  ', p_link_url => '  https://example.org/nou  ')),
+  '#684: a new link pair replaces the old one');
+reset role;
+select is((select format('%s|%s|%s', task.link_label, task.link_url, pg_temp.last_changed('link:edit'))
+             from public.tasks as task where task.id = pg_temp.t('link:edit')),
+  'Document nou|https://example.org/nou|["link_label", "link_url"]',
+  '#684: the replacement is stored trimmed and changed names both columns');
+select is((select activity.details -> 'before' ->> 'link_url' || '|' || (activity.details -> 'after' ->> 'link_url')
+             from public.task_activity as activity
+            where activity.task_id = pg_temp.t('link:edit') and activity.kind = 'task_updated'
+            order by activity.id desc limit 1),
+  'https://example.org/brief|https://example.org/nou',
+  '#684: before/after record the old and the new address');
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select lives_ok(format('select public.update_task(%s)', pg_temp.args('link:edit', p_clear_link => true)),
+  '#684: nulls clear the link');
+reset role;
+select is((select format('%s|%s|%s', task.link_label is null, task.link_url is null, pg_temp.last_changed('link:edit'))
+             from public.tasks as task where task.id = pg_temp.t('link:edit')),
+  't|t|["link_label", "link_url"]',
+  '#684: the cleared link is null in both columns and named in changed');
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('link:edit', p_link_label => 'Doar eticheta')),
+  'PT400', 'link_incomplete', '#684: update_task refuses a label without an address');
+select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('link:edit', p_link_url => 'https://example.org/x')),
+  'PT400', 'link_incomplete', '#684: preview_task_update refuses an address without a label');
+select throws_ok(format('select * from public.preview_task_update(%s)',
+    pg_temp.args('link:edit', p_link_label => repeat('e', 61), p_link_url => 'https://example.org/x')),
+  'PT400', 'link_label_too_long', '#684: the preview refuses a label over 60 characters');
+select throws_ok(format('select public.update_task(%s)',
+    pg_temp.args('link:edit', p_link_label => 'FTP', p_link_url => 'ftp://example.org/x')),
+  'PT400', 'link_url_invalid', '#684: update_task refuses a non-http(s) address');
+select throws_ok(format('select public.update_task(%s)',
+    pg_temp.args('link:edit', p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 2030))),
+  'PT400', 'link_url_too_long', '#684: update_task refuses an address over 2048 characters');
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.update_task(0, 0, 'Titlu bun #684', null, null, null, null, null, 'Doar eticheta', null) $$,
+  'PT400', 'link_incomplete', '#684: the link rule is step 1 -- a claimless caller hears it before the gate');
+reset role;
+
 -- ==================== 9. #627 Group moves and combined edits ====================
 insert into auth.users (id, email) values
   (pg_temp.u(9), 'bc.627@test.local'), (pg_temp.u(10), 'eligible.627@test.local'),
@@ -528,11 +611,11 @@ insert into public.profiles (id, full_name, email, role, status) values
   (pg_temp.u(11), 'Eligible 627 B', 'eligible2.627@test.local', 'bce', 'activ');
 update public.groups set min_level = 2, application_level = greatest(application_level, 2)
  where id = pg_temp.dept_group('pr');
-select pg_temp.mk('627:add', 'in_progress', 'direct', 'org', pg_temp.u(10));
+select pg_temp.mk('627:add', 'in_progress', 'direct', 'local', pg_temp.u(10));
 select pg_temp.mk('627:remove', 'in_progress', 'public', 'org', pg_temp.u(2));
 select pg_temp.cand('627:remove', pg_temp.u(4), '2 hours');
 select pg_temp.cand('627:remove', pg_temp.u(10), '1 hour');
-select pg_temp.mk('627:campaign', 'todo', 'direct', 'org', null);
+select pg_temp.mk('627:campaign', 'todo', 'direct', 'local', null);
 update public.tasks set campaign_id = (select edu_campaign from f626) where id = pg_temp.t('627:campaign');
 select pg_temp.mk('627:combined', 'in_progress', 'public', 'org', pg_temp.u(11));
 select pg_temp.cand('627:combined', pg_temp.u(1), '1 hour');
@@ -612,7 +695,7 @@ with child as (
   insert into public.tasks (title, deadline, group_id, status, audience, assignment_mode,
     kind, parent_task_id, created_by)
   values ('T627 child', '2027-03-01 09:00:00+00', pg_temp.dept_group('edu'),
-    'todo', 'org', 'direct', 'task', pg_temp.t('627:umbrella'), pg_temp.u(9))
+    'todo', 'local', 'direct', 'task', pg_temp.t('627:umbrella'), pg_temp.u(9))
   returning id)
 insert into t626 select '627:child', id from child;
 select pg_temp.test_login_leadership(pg_temp.u(9));

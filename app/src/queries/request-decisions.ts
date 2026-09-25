@@ -5,6 +5,10 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
+import { CommandError } from '../lib/command-reasons';
+import { parseOrRefuse } from '../lib/form-errors';
+import { evaluationSchema } from '../lib/schemas/evaluation';
+import { noteSchema } from '../lib/schemas/note';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 export type PendingDecision = {
@@ -47,56 +51,28 @@ export type RequestDecision =
       note: string;
     }
   | { kind: 'reject'; requestId: number; note: string };
-const commandErrors = new Map<string, string>([
-  [
-    'request_not_pending',
-    'Cererea a fost deja decisă. Lista a fost actualizată.',
-  ],
-  [
-    'request_command_forbidden',
-    'Nu mai ai permisiunea de a decide această cerere.',
-  ],
-  [
-    'request_decide_forbidden',
-    'Nu mai ai permisiunea de a decide această cerere.',
-  ],
-  ['request_not_found', 'Cererea nu mai este disponibilă.'],
-  ['invalid_difficulty', 'Alege o Dificultate validă.'],
-  ['invalid_rating', 'Alege un Calificativ valid.'],
-  ['evaluation_note_required', 'Scrie o notă pentru această decizie.'],
-  ['note_required', 'Scrie o notă pentru această decizie.'],
-]);
-export class RequestDecisionError extends Error {}
+/** A refused decision, in the shared copy of `command-reasons.ts`. */
+export class RequestDecisionError extends CommandError {}
+const FAILED = 'Nu am putut salva decizia. Reîncearcă.';
+async function sendDecision(input: RequestDecision) {
+  if (input.kind === 'approve') {
+    const values = parseOrRefuse(evaluationSchema, input, FAILED);
+    return supabase.rpc('approve_completed_work_request', {
+      p_request_id: input.requestId,
+      p_difficulty: values.difficulty,
+      p_rating: values.rating,
+      p_note: values.note,
+    });
+  }
+  const { note } = parseOrRefuse(noteSchema, input, FAILED);
+  return supabase.rpc('reject_completed_work_request', {
+    p_request_id: input.requestId,
+    p_note: note,
+  });
+}
 export async function decideRequest(input: RequestDecision) {
-  if (!input.note.trim())
-    throw new RequestDecisionError('Scrie o notă pentru această decizie.');
-  if (
-    input.kind === 'approve' &&
-    (!Number.isInteger(input.difficulty) ||
-      input.difficulty < 1 ||
-      input.difficulty > 5 ||
-      !Number.isInteger(input.rating) ||
-      input.rating < 1 ||
-      input.rating > 5)
-  )
-    throw new RequestDecisionError('Alege Dificultatea și Calificativul.');
-  const { data, error } =
-    input.kind === 'approve'
-      ? await supabase.rpc('approve_completed_work_request', {
-          p_request_id: input.requestId,
-          p_difficulty: input.difficulty,
-          p_rating: input.rating,
-          p_note: input.note.trim(),
-        })
-      : await supabase.rpc('reject_completed_work_request', {
-          p_request_id: input.requestId,
-          p_note: input.note.trim(),
-        });
-  if (error)
-    throw new RequestDecisionError(
-      commandErrors.get(error.message) ??
-        'Nu am putut salva decizia. Reîncearcă.',
-    );
+  const { data, error } = await sendDecision(input);
+  if (error) throw new RequestDecisionError(error, FAILED);
   return data;
 }
 export function useRequestDecision() {

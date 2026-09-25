@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/task-history', () => ({ useTaskHistory: vi.fn() }));
 import { TaskTimeline } from './TaskHistory';
 import type { TaskActivity } from '../../queries/task-history';
@@ -107,10 +108,59 @@ describe('Authorized Task timeline', () => {
     expect(screen.getByText('Task actualizat: titlu, termen')).toBeVisible();
     expect(screen.getByText('executorul a fost eliminat')).toBeVisible();
     expect(screen.getByText('2 candidaturi au fost închise')).toBeVisible();
-    expect(screen.getByText('un candidat a fost promovat')).toBeVisible();
+    // #682 retired queue promotion: an old row's candidate_promoted
+    // consequence is no longer labelled.
+    expect(screen.queryByText('un candidat a fost promovat')).toBeNull();
     // The generic before/after diff still renders underneath the sentence.
     expect(screen.getByText('Titlu: Vechi')).toBeVisible();
     expect(screen.getByText('Titlu: Nou')).toBeVisible();
+  });
+  it('shows a Group move with the Group names, its consequences and the link (#627, #688)', () => {
+    render(
+      <TaskTimeline
+        groupNames={
+          new Map([
+            [2, { name: 'Echipa' }],
+            [4, { name: 'Tineret' }],
+          ])
+        }
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              changed: ['group_id', 'campaign_id', 'link_url'],
+              before: {
+                group_id: 2,
+                campaign_id: 9,
+                link_url: 'https://a.example',
+              },
+              after: {
+                group_id: 4,
+                campaign_id: null,
+                link_url: 'https://b.example',
+              },
+              consequences: [
+                { consequence: 'executor_added_to_group', member_id: 'ana' },
+                { consequence: 'campaign_cleared', member_id: null },
+              ],
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText('Task actualizat: grup, campanie, adresă link'),
+    ).toBeVisible();
+    expect(screen.getByText('Grup: Echipa')).toBeVisible();
+    expect(screen.getByText('Grup: Tineret')).toBeVisible();
+    expect(
+      screen.getByText('executorul a devenit membru al grupului nou'),
+    ).toBeVisible();
+    expect(
+      screen.getByText('campania a fost eliminată din task'),
+    ).toBeVisible();
+    expect(screen.getByText('Adresă link: https://b.example')).toBeVisible();
   });
   it('falls back to the bare task_updated label when there is nothing to list', () => {
     render(
@@ -125,5 +175,48 @@ describe('Authorized Task timeline', () => {
     expect(
       screen.getByText(/Istoricul vechi poate fi incomplet/),
     ).toBeVisible();
+  });
+
+  it('names Attached Link edits and shows a submission link', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              changed: ['link_label', 'link_url'],
+              before: { link_label: null, link_url: null },
+              after: {
+                link_label: 'Brief',
+                link_url: 'https://drive.example/b',
+              },
+            },
+          }),
+          activity({
+            id: 2,
+            kind: 'submitted',
+            note: 'Gata',
+            occurred_at: '2026-09-16T00:00:00Z',
+            details: {
+              link_label: 'Surse',
+              link_url: 'https://drive.example/s',
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText('Task actualizat: etichetă link, adresă link'),
+    ).toBeVisible();
+    expect(screen.getByText('Etichetă link: Brief')).toBeVisible();
+    expect(
+      screen.getByText('Adresă link: https://drive.example/b'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('link', {
+        name: 'Surse (se deschide într-o filă nouă)',
+      }),
+    ).toHaveAttribute('rel', 'noopener noreferrer');
   });
 });

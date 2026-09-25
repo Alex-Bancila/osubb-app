@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: mocks }));
 import { fetchManagedTasks, fetchTaskLeadership } from './task-tabs';
-import { taskRow } from '../test/task-fixtures';
+import { afterSubmissionFilter, taskRow } from '../test/task-fixtures';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -54,7 +54,9 @@ it('pages authorized IDs and reads only those Tasks through RLS in bounded batch
       error: null,
     }),
   );
-  mocks.from.mockReturnValue({ select: () => ({ in: filter }) });
+  mocks.from.mockReturnValue({
+    select: () => afterSubmissionFilter({ in: filter }),
+  });
   const tasks = await fetchManagedTasks();
   expect(tasks).toHaveLength(501);
   expect(tasks[0]).toMatchObject({

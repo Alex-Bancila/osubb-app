@@ -11,9 +11,10 @@ vi.mock('../lib/supabase', async () => {
 });
 
 import {
-  fetchUpcomingEvents,
+  eventsRangeQueryOptions,
+  fetchEvent,
+  fetchEventsInRange,
   toEventPresentation,
-  upcomingEventsQueryOptions,
 } from './events';
 
 type EventTableRow = Database['public']['Tables']['events']['Row'];
@@ -52,6 +53,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     cancelled_at: null,
     cancel_reason: null,
     group_id: 7,
+    campaign_id: null,
     group: eduGroup,
     ...overrides,
   };
@@ -65,6 +67,7 @@ describe('event presentation', () => {
       type: 'sedinta',
       groupId: 7,
       group: eduGroup,
+      campaignId: null,
       startsAt: '2026-08-29T21:30:00.000Z',
       endsAt: '2026-08-29T23:00:00.000Z',
       dayKey: '2026-08-30',
@@ -77,30 +80,38 @@ describe('event presentation', () => {
     });
   });
 
+  it('carries the Event Campaign label (#691)', () => {
+    expect(toEventPresentation(eventRow({ campaign_id: 3 }))?.campaignId).toBe(
+      3,
+    );
+  });
+
   it('keeps a Group this member may not read as null rather than inventing one', () => {
     expect(toEventPresentation(eventRow({ group: null }))?.group).toBeNull();
   });
 });
 
-describe('upcoming-events query', () => {
+describe('events range query', () => {
   beforeEach(() => {
     resetSupabaseMock();
   });
 
-  it('loads visible events from the current instant in chronological order', async () => {
-    supabaseMock.order.mockResolvedValue({ data: [eventRow()], error: null });
-    const now = new Date('2026-08-29T18:00:00.000Z');
+  const range = {
+    from: '2026-09-30T21:00:00.000Z',
+    to: '2026-10-31T22:00:00.000Z',
+  };
 
-    const result = await fetchUpcomingEvents(now);
+  it('reads a start window, half-open, in chronological order', async () => {
+    supabaseMock.order.mockResolvedValue({ data: [eventRow()], error: null });
+
+    const result = await fetchEventsInRange(range);
 
     expect(supabaseMock.from).toHaveBeenCalledWith('events');
     expect(supabaseMock.select).toHaveBeenCalledWith(
-      'id, title, type, group_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)',
+      'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)',
     );
-    expect(supabaseMock.gte).toHaveBeenCalledWith(
-      'starts_at',
-      now.toISOString(),
-    );
+    expect(supabaseMock.gte).toHaveBeenCalledWith('starts_at', range.from);
+    expect(supabaseMock.lt).toHaveBeenCalledWith('starts_at', range.to);
     expect(supabaseMock.order).toHaveBeenCalledWith('starts_at', {
       ascending: true,
     });
@@ -108,13 +119,38 @@ describe('upcoming-events query', () => {
     expect(result[0]?.dayKey).toBe('2026-08-30');
   });
 
+  // #691 / ADR-0008 amended 2026-09-23: past Events are readable, so the read
+  // has no `now` floor — the window is the caller's, and an open window sends
+  // no bound at all. Mutation this catches: putting `.gte('starts_at', now)`
+  // back into the read.
+  it('sends no now floor: an open window asks for every readable Event', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-24T10:00:00.000Z'));
+    supabaseMock.order.mockResolvedValue({ data: [], error: null });
+
+    await fetchEventsInRange({});
+
+    expect(supabaseMock.gte).not.toHaveBeenCalled();
+    expect(supabaseMock.lt).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('bounds only the ends it is given', async () => {
+    supabaseMock.order.mockResolvedValue({ data: [], error: null });
+
+    await fetchEventsInRange({ from: range.from });
+
+    expect(supabaseMock.gte).toHaveBeenCalledWith('starts_at', range.from);
+    expect(supabaseMock.lt).not.toHaveBeenCalled();
+  });
+
   // R13: `events_read` (Minimum Level) is the whole visibility rule, so the
-  // calendar no longer second-guesses it. Mutation this catches: putting the
+  // calendar does not second-guess it. Mutation this catches: putting the
   // `.neq('scope', 'project')` filter back.
   it('asks for every visible Event, Project Events included', async () => {
     supabaseMock.order.mockResolvedValue({ data: [eventRow()], error: null });
 
-    await fetchUpcomingEvents(new Date('2026-08-29T18:00:00.000Z'));
+    await fetchEventsInRange(range);
 
     expect(supabaseMock.neq).not.toHaveBeenCalled();
   });
@@ -123,29 +159,48 @@ describe('upcoming-events query', () => {
     const error = { code: '42501', message: 'permission denied' };
     supabaseMock.order.mockResolvedValue({ data: null, error });
 
-    await expect(
-      fetchUpcomingEvents(new Date('2026-08-29T18:00:00.000Z')),
-    ).rejects.toBe(error);
+    await expect(fetchEventsInRange(range)).rejects.toBe(error);
   });
 
   it('treats a successful null payload as an empty event list', async () => {
     supabaseMock.order.mockResolvedValue({ data: null, error: null });
 
-    await expect(
-      fetchUpcomingEvents(new Date('2026-08-29T18:00:00.000Z')),
-    ).resolves.toEqual([]);
+    await expect(fetchEventsInRange(range)).resolves.toEqual([]);
   });
 
-  it('isolates RLS-dependent event caches by member', () => {
-    const ioana = upcomingEventsQueryOptions('member-ioana');
-    const vlad = upcomingEventsQueryOptions('member-vlad');
+  it('isolates RLS-dependent event caches by member and window', () => {
+    const ioana = eventsRangeQueryOptions('member-ioana', range);
+    const vlad = eventsRangeQueryOptions('member-vlad', range);
 
     expect(ioana.queryKey).not.toEqual(vlad.queryKey);
     expect(ioana.queryKey).toEqual([
       'events',
-      'upcoming',
-      { memberId: 'member-ioana' },
+      'range',
+      { memberId: 'member-ioana', from: range.from, to: range.to },
     ]);
-    expect(ioana.staleTime).toBe(0);
+  });
+});
+
+describe('one Event by id', () => {
+  beforeEach(() => {
+    resetSupabaseMock();
+  });
+
+  it('reads the linked Event through RLS', async () => {
+    supabaseMock.maybeSingle.mockResolvedValue({
+      data: eventRow(),
+      error: null,
+    });
+
+    const event = await fetchEvent(42);
+
+    expect(supabaseMock.eq).toHaveBeenCalledWith('id', 42);
+    expect(event?.id).toBe(42);
+  });
+
+  it('answers null for an Event RLS hides', async () => {
+    supabaseMock.maybeSingle.mockResolvedValue({ data: null, error: null });
+
+    await expect(fetchEvent(42)).resolves.toBeNull();
   });
 });

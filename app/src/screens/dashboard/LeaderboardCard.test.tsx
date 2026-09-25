@@ -2,7 +2,6 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
 
-vi.mock('@ionic/react', () => ({ IonIcon: () => null }));
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: 'me' } } }),
 }));

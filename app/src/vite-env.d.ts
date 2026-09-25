@@ -6,6 +6,9 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
+  /* The environment's VAPID public key (ADR-0010, #704). Optional: without it
+     the Profil switch says push is not available yet, and the rest works. */
+  readonly VITE_VAPID_PUBLIC_KEY?: string;
 }
 
 interface ImportMeta {

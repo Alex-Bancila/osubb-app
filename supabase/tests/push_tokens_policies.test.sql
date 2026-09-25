@@ -5,7 +5,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 select plan(24);
-truncate public.push_tokens;
+truncate public.push_tokens cascade; -- #703: push_deliveries references it
 insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000001', 'push66-1@test.local');
 insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000001', 'Device Member 1', 'push66-1@test.local', 'recrut', 'activ');
 insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000002', 'push66-2@test.local');

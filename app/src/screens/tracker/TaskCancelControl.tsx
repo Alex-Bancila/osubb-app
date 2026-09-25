@@ -48,8 +48,8 @@ function CancelDialog({
       triggerLabel="Anulează taskul"
       title="Anulează taskul"
       description="Anularea păstrează istoricul publicat, evaluările și atribuirile. Taskul nu mai poate fi lucrat sau evaluat."
+      field="reason"
       fieldLabel="Motiv (obligatoriu)"
-      requiredMessage="Scrie motivul anulării."
       confirmLabel="Confirmă anularea"
       failureMessage="Nu am putut anula taskul."
       isPending={mutation.isPending}

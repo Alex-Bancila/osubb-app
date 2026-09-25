@@ -215,6 +215,54 @@ it('deactivates through the atomic Status command and explains the token window'
   });
 });
 
+it('offers all three reference statuses', async () => {
+  const user = userEvent.setup();
+  render(<RolePanel />);
+  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  const select = screen.getByLabelText('Status');
+  const options = within(select).getAllByRole('option');
+  expect(options.map((option) => option.getAttribute('value'))).toEqual([
+    'activ',
+    'inactiv',
+    'alumni',
+  ]);
+  expect(options.map((option) => option.textContent)).toEqual([
+    'Activ',
+    'Inactiv',
+    'Alumni',
+  ]);
+});
+
+it('opens on the matching option for a Member already marked alumni', async () => {
+  state.members.mockReturnValue({
+    data: people.map((person) =>
+      person.memberId === 'target' ? { ...person, status: 'alumni' } : person,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  const user = userEvent.setup();
+  render(<RolePanel />);
+  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  expect(screen.getByLabelText('Status')).toHaveValue('alumni');
+  expect(screen.getByText('Status actual: Alumni')).toBeVisible();
+});
+
+it('sends the atomic Status command with alumni and the reason', async () => {
+  const user = userEvent.setup();
+  render(<RolePanel />);
+  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(screen.getByLabelText('Status'), 'alumni');
+  await user.type(screen.getByLabelText('Motiv (opțional)'), 'Absolvent');
+  await user.click(screen.getByRole('button', { name: 'Salvează statusul' }));
+  expect(state.mutate).toHaveBeenCalledWith({
+    kind: 'status',
+    memberId: 'target',
+    status: 'alumni',
+    reason: 'Absolvent',
+  });
+});
+
 it('lets only the live Moderator edit a BC target', async () => {
   state.auth.mockReturnValue({ session: { user: { id: 'moderator' } } });
   state.members.mockReturnValue({

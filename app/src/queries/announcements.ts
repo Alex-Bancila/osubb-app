@@ -1,4 +1,5 @@
 import {
+  skipToken,
   useMutation,
   useQuery,
   useQueryClient,
@@ -8,7 +9,11 @@ import {
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-import type { RawAnnouncementRow } from '../screens/announcements/announcements-presentation';
+import { fetchMemberIdentities } from './member-identities';
+import type {
+  AnnouncementReader,
+  RawAnnouncementRow,
+} from '../screens/announcements/announcements-presentation';
 
 const ANNOUNCEMENT_FIELDS = `
   id,
@@ -70,6 +75,71 @@ export function useAnnouncementsFeed(memberId?: string) {
   return useQuery({
     ...announcementsFeedQueryOptions(effectiveMemberId),
     enabled: Boolean(effectiveMemberId),
+  });
+}
+
+/**
+ * The Anunțuri badge: unread Announcements the Member may read, counted by the
+ * server under the same read policy as the feed (#693).
+ */
+export async function fetchUnreadAnnouncementsCount(): Promise<number> {
+  const { data, error } = await supabase.rpc('my_unread_announcements_count');
+  if (error) throw error;
+  return data ?? 0;
+}
+
+export function unreadAnnouncementsCountQueryOptions(memberId?: string) {
+  return {
+    queryKey: keys.announcements.unread(memberId),
+    queryFn: memberId ? fetchUnreadAnnouncementsCount : skipToken,
+  } as const;
+}
+
+export function useUnreadAnnouncementsCount() {
+  const memberId = useAuth().session?.user.id;
+  return useQuery(unreadAnnouncementsCountQueryOptions(memberId));
+}
+
+/**
+ * Who of the Audience has read an Announcement (#693), names resolved from the
+ * directory. `null` when the server answers `PT404 announcement_not_found`:
+ * the viewer may not see the readers, which hides the line rather than failing.
+ */
+export async function fetchAnnouncementReaders(
+  announcementId: number,
+): Promise<AnnouncementReader[] | null> {
+  const { data, error } = await supabase.rpc('announcement_readers', {
+    p_announcement_id: announcementId,
+  });
+  if (error) {
+    if (error.code === 'PT404') return null;
+    throw error;
+  }
+  const rows = data ?? [];
+  const identities = await fetchMemberIdentities(
+    rows.map((row) => row.member_id),
+  );
+  return rows.map((row) => ({
+    member: identities.get(row.member_id) ?? {
+      memberId: row.member_id,
+      fullName: 'Membru OSUBB',
+    },
+    readAt: row.read_at ?? null,
+  }));
+}
+
+/** Asked only when `enabled` — the viewer might be allowed (`mayAskForReaders`). */
+export function useAnnouncementReaders(
+  announcementId: number | null,
+  enabled: boolean,
+) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.announcements.readers(announcementId ?? 0, memberId),
+    queryFn:
+      announcementId !== null && memberId && enabled
+        ? () => fetchAnnouncementReaders(announcementId)
+        : skipToken,
   });
 }
 

@@ -67,9 +67,10 @@ function columnsFor(
       header: 'Grupuri',
       cell: ({ row }) => (
         <MemberGroups
-          groups={row.original.groups}
+          primaryGroup={row.original.primaryGroup}
+          otherMemberships={row.original.otherMemberships}
           memberName={shownName(row.original)}
-          onShowAll={() => open(row.original)}
+          onOpen={() => open(row.original)}
         />
       ),
       sortFn: (left, right, columnId) =>
@@ -134,10 +135,10 @@ function DirectoryCard({
         </p>
       </div>
       <MemberGroups
-        groups={member.groups}
-        max={3}
+        primaryGroup={member.primaryGroup}
+        otherMemberships={member.otherMemberships}
         memberName={shownName(member)}
-        onShowAll={onOpen}
+        onOpen={onOpen}
       />
       {member.contact?.email && (
         <p className="truncate text-sm text-muted-foreground">

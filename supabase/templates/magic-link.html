@@ -5,8 +5,12 @@
   second way in, it is the same way in for a
   browser the link cannot reach (an installed PWA on iOS has its own storage,
   separate from Safari; a link opened on a second device lands in the wrong
-  place). Keep both. Wired locally by supabase/config.toml; staging and
-  production need the same body pasted in the dashboard (#54, #77).
+  place). Keep both. The button opens the app's /auth/confirm page, never
+  Supabase's verify endpoint: the token is spent only when the Member taps
+  "Conectează-mă" there, so a mail scanner that fetches the link (Microsoft 365
+  does) spends nothing (ruling L7, #768). Wired locally by
+  supabase/config.toml; staging and production need the same body pasted in
+  the dashboard (#54, #77).
 -->
 <div
   style="
@@ -19,13 +23,14 @@
   <h1 style="font-size: 20px; margin: 0 0 16px">Conectare la aplicația OSUBB</h1>
 
   <p style="margin: 0 0 16px">
-    Ai cerut un link de conectare pentru <strong>{{ .Email }}</strong>. Apasă
-    butonul de mai jos pe dispozitivul de pe care vrei să folosești aplicația:
+    Ai cerut un link de conectare pentru <strong>{{ .Email }}</strong>. Pe
+    dispozitivul de pe care vrei să folosești aplicația, apasă butonul, apoi
+    confirmă pe pagina care se deschide:
   </p>
 
   <p style="margin: 0 0 24px">
     <a
-      href="{{ .ConfirmationURL }}"
+      href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&email={{ .Email }}&redirect_to={{ .RedirectTo }}"
       style="
         display: inline-block;
         padding: 12px 20px;
