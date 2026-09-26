@@ -23,6 +23,7 @@ import {
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { GroupCreateDialog } from './GroupCreateDialog';
 import { RolePanel } from './RolePanel';
+import { PrivacyPanel } from './PrivacyPanel';
 import { CsvImportPanel } from './CsvImportPanel';
 import {
   buildTree,
@@ -379,6 +380,7 @@ export default function AdministrareScreen() {
       )}
 
       {capabilities.data?.manageRoles === true && <RolePanel />}
+      {capabilities.data?.manageRoles === true && <PrivacyPanel />}
 
       {pending ? (
         <p role="status">Se încarcă grupurile…</p>

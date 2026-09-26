@@ -19,6 +19,10 @@ import {
   type LedgerRow,
 } from '../../queries/admin-member';
 import { useAdminGroups, useMyGroupRoles } from '../../queries/groups-admin';
+import {
+  acknowledgementLabel,
+  useMemberAcknowledgement,
+} from '../../queries/privacy';
 import { statusLabel } from '../volunteers/directory-filters';
 import { ReinvitePanel } from './ReinvitePanel';
 import { RolePanel } from './RolePanel';
@@ -130,6 +134,11 @@ export default function MemberScreen() {
   const capabilities = useCapabilities();
   const groups = useAdminGroups();
   const mine = useMyGroupRoles();
+  // #771: BC and the Moderator see the Member's Privacy Acknowledgement.
+  const privacy = useMemberAcknowledgement(
+    memberId,
+    capabilities.data?.manageRoles === true,
+  );
   if (
     member.isPending ||
     capabilities.isPending ||
@@ -209,6 +218,18 @@ export default function MemberScreen() {
           <div>
             <dt>Telefon</dt>
             <dd>{data.contact.phone}</dd>
+          </div>
+        )}
+        {canEdit && (
+          <div>
+            <dt>Politica de confidențialitate</dt>
+            <dd>
+              {privacy.isPending
+                ? 'Se încarcă…'
+                : privacy.isError
+                  ? '—'
+                  : acknowledgementLabel(privacy.data)}
+            </dd>
           </div>
         )}
       </dl>

@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(40);
+select plan(41);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -157,6 +157,12 @@ insert into push_deliveries (notification_id, token_id)
 insert into notification_push_preferences (member_id, kind, push_enabled) values
   ('ffffffff-0000-0000-0000-000000000006', 'announce', false),
   ('eeeeeeee-0000-0000-0000-000000000156', 'event', false);
+-- #771: Privacy Acknowledgements are own-row plus level >= 6. The row owned
+-- by the claimless uid is what exercises the own-row limb of
+-- privacy_notice_acknowledgements_read for the real claimless user below.
+insert into privacy_notice_acknowledgements (member_id, notice_version) values
+  ('ffffffff-0000-0000-0000-000000000006', '1.0'),
+  ('eeeeeeee-0000-0000-0000-000000000156', '1.0');
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:
@@ -288,6 +294,8 @@ select is((select count(*) from tasks),          0::bigint, 'claimless: tasks hi
 select is((select count(*) from task_assignments), 0::bigint, 'claimless: Assignment history hidden');
 select is((select count(*) from completed_work_requests), 0::bigint, 'claimless: Completed-work Requests hidden');
 select is((select count(*) from points_ledger),  0::bigint, 'claimless: points_ledger hidden');
+select is((select count(*) from privacy_notice_acknowledgements), 0::bigint,
+  'claimless: Privacy Acknowledgements hidden');
 
 -- Views are security_invoker, so they inherit the tables' answers.
 select is((select count(*) from member_points),  0::bigint, 'claimless: member_points empty');

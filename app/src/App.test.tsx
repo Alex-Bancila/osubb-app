@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -102,6 +103,17 @@ vi.mock('./screens/profile/ProfileScreen', () => ({
   default: () => <h1>Profil screen</h1>,
 }));
 
+/* The Privacy Acknowledgement step (#771) has its own tests; here it only
+   has to sit between the member guard and the shell, so a flag holds it. */
+const privacy = vi.hoisted(() => ({ blocked: false }));
+vi.mock('./components/shell/PrivacyGate', () => ({
+  PrivacyGate: ({ children }: { children: ReactElement }) =>
+    privacy.blocked ? <h1>Privacy step</h1> : children,
+}));
+vi.mock('./screens/privacy/PrivacyNoticeScreen', () => ({
+  default: () => <h1>Privacy Notice</h1>,
+}));
+
 vi.mock('./screens/campaigns/CampaignsScreen', () => ({
   default: () => <h1>Campanii screen</h1>,
 }));
@@ -140,7 +152,39 @@ describe('route guards', () => {
     auth.useAuth.mockReset();
     grant(...EVERY_CAPABILITY);
     capabilities.pending = false;
+    privacy.blocked = false;
     window.history.pushState({}, '', '/');
+  });
+
+  it('shows the Privacy Notice to anyone, signed in or not', async () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState({}, '', '/confidentialitate');
+    const view = render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Privacy Notice' }),
+    ).toBeVisible();
+    expect(window.location.pathname).toBe('/confidentialitate');
+    view.unmount();
+
+    // A member who has not acknowledged yet still reads it from the link.
+    auth.useAuth.mockReturnValue(member);
+    privacy.blocked = true;
+    window.history.pushState({}, '', '/confidentialitate');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Privacy Notice' }),
+    ).toBeVisible();
+  });
+
+  it('puts the Privacy Acknowledgement step in front of every member screen', async () => {
+    auth.useAuth.mockReturnValue(member);
+    privacy.blocked = true;
+    window.history.pushState({}, '', '/profil');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Privacy step' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Profil screen' })).toBeNull();
   });
 
   it('opens Campaigns only for members who manage work in some Group', async () => {

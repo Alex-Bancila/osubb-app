@@ -27,6 +27,8 @@ import CompletedWorkRequestScreen from './screens/requests/CompletedWorkRequestS
 import AnnouncementsScreen from './screens/announcements/AnnouncementsScreen';
 import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import ProfileScreen from './screens/profile/ProfileScreen';
+import PrivacyNoticeScreen from './screens/privacy/PrivacyNoticeScreen';
+import { PrivacyGate } from './components/shell/PrivacyGate';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
 const GroupsScreen = lazy(() => import('./screens/groups/GroupsScreen'));
@@ -189,6 +191,10 @@ export default function App() {
               mail scanner fetching the link must not spend it (#768). */}
         <Route path="/auth/confirm" element={<AuthConfirm />} />
 
+        {/* Public: the login screen links here before there is a session,
+              and Profil after (#771). It reads nothing. */}
+        <Route path="/confidentialitate" element={<PrivacyNoticeScreen />} />
+
         <Route
           path="/no-profile"
           element={
@@ -202,7 +208,9 @@ export default function App() {
         <Route
           element={
             <RequireMember>
-              <AppShell />
+              <PrivacyGate>
+                <AppShell />
+              </PrivacyGate>
             </RequireMember>
           }
         >

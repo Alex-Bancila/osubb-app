@@ -384,6 +384,25 @@ const REASON_COPY = new Map<string, string>([
     'push_preferences_unavailable',
     'Nu am putut încărca preferințele. Verifică internetul și reîncarcă pagina.',
   ],
+
+  /* ---- The Privacy Notice (#771, ruling L16) ---- */
+  ['notice_version_required', 'Reîncarcă pagina și citește politica din nou.'],
+  [
+    'privacy_notice_version_stale',
+    'Politica de confidențialitate tocmai s-a actualizat. Citește versiunea nouă și confirm-o.',
+  ],
+  [
+    'privacy_notice_already_acknowledged',
+    'Ai confirmat deja această versiune a politicii.',
+  ],
+  [
+    'privacy_acknowledgement_forbidden',
+    'Contul tău nu este activ, așa că nu poți confirma politica.',
+  ],
+  [
+    'privacy_acknowledgements_forbidden',
+    'Doar BC și Moderatorul văd confirmările politicii de confidențialitate.',
+  ],
 ]);
 
 /** Every reason with copy, for tests that prove a list of reasons is covered. */
