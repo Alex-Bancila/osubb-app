@@ -5,7 +5,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(31);
 
 create function pg_temp.u67(n integer) returns uuid language sql immutable as $$
   select ('67000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -35,7 +35,8 @@ select pg_temp.g67(g), pg_temp.u67(n), r from (values
   ('Private', 1, 'manager'), ('Private', 2, 'responsible'),
   ('Private', 3, 'responsible'), ('Private', 4, 'member'), ('Private', 5, 'member'),
   ('Shared', 1, 'manager'), ('Shared', 4, 'member'), ('Shared', 5, 'member'),
-  ('Grandchild', 5, 'member'), ('Restricted', 7, 'manager')
+  -- An ordinary Member at the Minimum Level: a Group Role would bypass the gate.
+  ('Grandchild', 5, 'member'), ('Restricted', 7, 'member')
 ) as roster(g, n, r);
 
 create temp table tasks67(name text primary key, id bigint);
@@ -61,13 +62,15 @@ select pg_temp.task67('descendant', 'Grandchild', 5);
 create function pg_temp.t67(p_name text) returns bigint language sql stable as $$
   select id from pg_temp.tasks67 where name = p_name
 $$;
+-- A local Opportunity: since ruling R26 (#794) an `org` one is visible to every
+-- active Member whatever the Minimum Level, which the org-control below proves.
 insert into tasks(title, group_id, created_by, deadline, status, audience, assignment_mode, queue_opened_at)
-values ('Opportunity #67', pg_temp.g67('Restricted'), pg_temp.u67(7),
-  now() + interval '1 day', 'todo', 'org', 'public', now());
+values ('Opportunity #67', pg_temp.g67('Restricted'), pg_temp.u67(1),
+  now() + interval '1 day', 'todo', 'local', 'public', now());
 insert into tasks67 select 'opportunity', id from tasks where title = 'Opportunity #67';
 insert into events(title, type, group_id, min_level, starts_at, ends_at, created_by)
 values ('Event #67', 'sedinta', pg_temp.g67('Restricted'), 3,
-  now() + interval '1 day', now() + interval '2 days', pg_temp.u67(7));
+  now() + interval '1 day', now() + interval '2 days', pg_temp.u67(1));
 
 -- The same pair of ordinary Members, with the visibility setting alone differing.
 select pg_temp.test_login_leadership(pg_temp.u67(4));
@@ -119,7 +122,7 @@ select pg_temp.test_login_leadership(pg_temp.u67(4));
 select is((select count(*) from groups where id = pg_temp.g67('Restricted')),
   0::bigint, 'below-Minimum-Level Member cannot discover the Group');
 select is((select count(*) from tasks where id = pg_temp.t67('opportunity')),
-  0::bigint, 'organization Audience does not expose a below-Minimum-Level Opportunity');
+  0::bigint, 'below-Minimum-Level Member cannot discover the Group''s local Opportunity');
 select is((select count(*) from events where title = 'Event #67'),
   0::bigint, 'below-Minimum-Level Member cannot discover the Group Event');
 select throws_ok($$select public.express_task_interest(pg_temp.t67('opportunity'))$$,
@@ -128,11 +131,19 @@ reset role;
 -- Positive controls rule out absent fixtures or invalid Event instants.
 select pg_temp.test_login_leadership(pg_temp.u67(7));
 select is((select count(*) from groups where id = pg_temp.g67('Restricted')),
-  1::bigint, 'Member at Minimum Level sees the Group');
+  1::bigint, 'ordinary Member at Minimum Level sees the Group');
 select is((select count(*) from tasks where id = pg_temp.t67('opportunity')),
-  1::bigint, 'Member at Minimum Level sees the Opportunity');
+  1::bigint, 'ordinary Member at Minimum Level sees the Group''s local Opportunity');
 select is((select count(*) from events where title = 'Event #67'),
-  1::bigint, 'Member at Minimum Level sees the future Event');
+  1::bigint, 'ordinary Member at Minimum Level sees the future Event');
+reset role;
+-- R26 (#794): an organization-wide Opportunity leaves the Minimum Level gate.
+update tasks set audience = 'org' where id = pg_temp.t67('opportunity');
+select pg_temp.test_login_leadership(pg_temp.u67(4));
+select is((select count(*) from tasks where id = pg_temp.t67('opportunity')),
+  1::bigint, 'an organization-wide Opportunity reaches a Member below the Minimum Level (R26)');
+select is((select count(*) from events where title = 'Event #67'),
+  0::bigint, 'the organization-wide Opportunity does not expose the Group Event');
 reset role;
 
 -- Live inactivity defeats a stale Manager token; the global claimless sweep
