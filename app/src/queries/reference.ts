@@ -44,10 +44,12 @@ export type Group = Pick<
 > & {
   manager_title?: string | null;
   automatic_membership?: boolean;
+  /** A Private Group (#757, ruling R25): the reader sees it, so marks it. */
+  is_private?: boolean;
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, automatic_membership';
 
 /**
  * Every Group this member may read. RLS is the only filter — the browser asks

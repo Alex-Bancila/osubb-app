@@ -1,0 +1,81 @@
+name: Build the web app
+description: >-
+  Installs app/ from its lockfile and runs `npm run build` with one
+  Environment's public build values, refusing values that would ship a broken
+  or dangerous bundle. Used by the staging, preview and production deploys
+  (#110, #78). The caller checks out the repository first.
+
+inputs:
+  supabase-url:
+    description: VITE_SUPABASE_URL — the Environment's Supabase project URL.
+    required: true
+  supabase-key:
+    description: VITE_SUPABASE_ANON_KEY — the Environment's publishable key (sb_publishable_…).
+    required: true
+  vapid-public-key:
+    description: VITE_VAPID_PUBLIC_KEY — optional; without it, turning push on for a device reports that push is not configured.
+    required: false
+    default: ""
+  project-ref:
+    description: SUPABASE_PROJECT_REF — the Supabase URL must be exactly https://<ref>.supabase.co.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: app/.nvmrc
+        cache: npm
+        cache-dependency-path: app/package-lock.json
+
+    # Everything in these values ends up in a public JavaScript bundle. A
+    # missing one builds an app that throws at start-up; a secret key would be
+    # handed to every visitor. Both stop here, before anything is deployed.
+    - name: Check the build values
+      shell: bash
+      env:
+        URL: ${{ inputs.supabase-url }}
+        KEY: ${{ inputs.supabase-key }}
+        REF: ${{ inputs.project-ref }}
+      run: |
+        fail() { echo "::error::$1"; exit 1; }
+        [ -n "$URL" ] || fail "Variable VITE_SUPABASE_URL is not set on this Environment."
+        [ -n "$KEY" ] || fail "Variable VITE_SUPABASE_ANON_KEY is not set on this Environment."
+        [ -n "$REF" ] || fail "Variable SUPABASE_PROJECT_REF is not set on this Environment."
+        # A bare project origin: https, no credentials, no path, query or
+        # fragment, and exactly https://<ref>.supabase.co.
+        problem="$(node -e '
+          const { URL: raw, REF: ref } = process.env;
+          let u;
+          try { u = new URL(raw); } catch { console.log("is not a URL"); process.exit(); }
+          if (u.protocol !== "https:") console.log("must be an https:// URL");
+          else if (u.username || u.password) console.log("must not carry credentials");
+          else if (u.pathname !== "/" || u.search || u.hash) console.log("must be the bare project URL, with no path, query or fragment");
+          else if (u.host !== `${ref}.supabase.co`) console.log(`must be https://${ref}.supabase.co`);
+        ')"
+        [ -z "$problem" ] || fail "VITE_SUPABASE_URL $problem."
+        case "$KEY" in
+          sb_secret_*) fail "VITE_SUPABASE_ANON_KEY holds a secret key. It must be the publishable key." ;;
+          sb_publishable_*) ;;
+          *)
+            # A legacy JWT key: refuse the service_role one outright.
+            role="$(KEY="$KEY" node -e 'try { const p = process.env.KEY.split(".")[1]; console.log(JSON.parse(Buffer.from(p, "base64url").toString()).role ?? "") } catch { console.log("") }')"
+            [ "$role" != service_role ] || fail "VITE_SUPABASE_ANON_KEY holds the service_role key. It must be the publishable key."
+            echo "::warning::VITE_SUPABASE_ANON_KEY is not an sb_publishable_ key; ruling L11 asks for the publishable key."
+            ;;
+        esac
+
+    - name: Install
+      shell: bash
+      working-directory: app
+      run: npm ci
+
+    - name: Build
+      shell: bash
+      working-directory: app
+      env:
+        VITE_SUPABASE_URL: ${{ inputs.supabase-url }}
+        VITE_SUPABASE_ANON_KEY: ${{ inputs.supabase-key }}
+        VITE_VAPID_PUBLIC_KEY: ${{ inputs.vapid-public-key }}
+      run: npm run build

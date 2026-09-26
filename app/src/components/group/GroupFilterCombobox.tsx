@@ -35,6 +35,7 @@ export function GroupFilterCombobox<G extends GroupFilterOption>({
   placeholder,
   itemToStringLabel,
   renderItem,
+  disabled,
 }: {
   ariaLabelledBy: string;
   groups: G[];
@@ -49,6 +50,8 @@ export function GroupFilterCombobox<G extends GroupFilterOption>({
   /** Defaults to `<GroupOption />`; override to add extra per-row content
    *  (e.g. an "arhivat" badge) beside the name and parent. */
   renderItem?: (group: G) => ReactNode;
+  /** Nothing to choose yet, e.g. a Subgrup before its root is chosen. */
+  disabled?: boolean;
 }) {
   const stringLabel =
     itemToStringLabel ?? ((group: G) => groupOptionLabel(group, groupsById));
@@ -60,6 +63,7 @@ export function GroupFilterCombobox<G extends GroupFilterOption>({
       // argument; callers only ever want the selected Group (or null).
       onValueChange={(group: G | null) => onValueChange(group)}
       itemToStringLabel={stringLabel}
+      disabled={disabled}
     >
       <ComboboxTrigger aria-labelledby={ariaLabelledBy}>
         <ComboboxValue placeholder={placeholder} />

@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(70);
+select plan(71);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -206,11 +206,8 @@ select ok(
   ),
   'public + open queue: no Executor, no Candidate, queue_opened_at set');
 
--- The same state again, in a second Department: still empty. No command
--- leaves a pending Candidate with no Executor at all — express_task_interest
--- takes the first-come branch and becomes the Executor itself when there is
--- none — so this mirrors pr-open-queue rather than being "one step on" from
--- it (#296 fix round 1, review finding 1).
+-- The same state again, in a second Department: still empty, mirroring
+-- pr-open-queue (#296 fix round 1, review finding 1).
 select ok(
   exists (
     select 1 from tasks task
@@ -223,8 +220,9 @@ select ok(
   ),
   'public + open queue in a second Department: no Executor, no Candidate, queue_opened_at set');
 
--- Public with an Executor and two Members queued behind them, each with its
--- own `interest_expressed` row.
+-- Public with a manager-selected Executor and two Members queued behind them
+-- (#682: nobody becomes Executor by arriving first). Every Candidate, the
+-- selected one included, has its own `interest_expressed` row.
 select ok(
   exists (
     select 1 from tasks task
@@ -232,14 +230,23 @@ select ok(
        and task.status = 'in_progress'
        and task.assignment_mode = 'public' and task.audience = 'local'
        and exists (select 1 from task_assignments a
-                    where a.task_id = task.id and a.ended_at is null)
+                     join task_candidates c on c.assignment_id = a.id and c.status = 'selected'
+                    where a.task_id = task.id and a.ended_at is null
+                      and a.assigned_by = task.created_by and c.decided_by = task.created_by)
        and (select count(*) from task_candidates c
              where c.task_id = task.id and c.status = 'pending') = 2
        and (select count(*) from task_activity activity
              where activity.task_id = task.id
-               and activity.kind = 'interest_expressed') = 2
+               and activity.kind = 'interest_expressed') = 3
   ),
-  'public + Executor + two pending Candidates, each with an interest_expressed row');
+  'public + manager-selected Executor + two pending Candidates, each Candidate with an interest_expressed row');
+-- No demo row carries a retired arrival-based Assignment path.
+select is(
+  (select count(*) from task_activity activity
+    where activity.kind = 'executor_assigned'
+      and activity.details ->> 'via' not in ('create', 'assign', 'select', 'reopen', 'request_approval')),
+  0::bigint,
+  'every demo executor_assigned row names a live path -- no first-come or promotion history (#682)');
 
 -- In review, once returned: review_round 1, both the return and the
 -- resubmission on the timeline.

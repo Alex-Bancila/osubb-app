@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -92,12 +92,57 @@ describe('Member Task cards', () => {
     ).toBeInTheDocument();
   });
 
+  it("locks a Private Group's chip, and no public one (#757)", async () => {
+    const publicCard = card();
+    expect(screen.queryByText('Privat')).toBeNull();
+    publicCard.unmount();
+
+    const { container } = card({
+      group: {
+        name: 'Audit',
+        short: null,
+        color: null,
+        category: 'team',
+        path: [1, 22],
+        is_organization: false,
+        is_private: true,
+      },
+    });
+    const chip = screen.getByText('Echipă · Audit')
+      .parentElement as HTMLElement;
+    expect(within(chip).getByText('Privat')).toBeInTheDocument();
+    expect(within(chip).getByTitle('Grup privat')).toBeInTheDocument();
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
+  it('the history variant is read-only: its record replaces the Executor line, stage and actions', () => {
+    const onProgress = vi.fn();
+    const task = toTaskPresentation(
+      taskRow({ status: 'in_progress', assignment_mode: 'public' }),
+      new Date('2026-09-15T12:00:00Z'),
+    );
+    render(
+      <TaskCard
+        task={task}
+        memberId="member"
+        onProgress={onProgress}
+        anchor={false}
+        history={<p>Atribuire activă</p>}
+      />,
+    );
+    expect(screen.getByText('Atribuire activă')).toBeInTheDocument();
+    expect(screen.queryByText('Executor:')).toBeNull();
+    expect(screen.queryByText('Stare înscriere')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByRole('article')).not.toHaveAttribute('id');
+  });
+
   it('shows the active Executor name on an ordinary Task', () => {
     card({
       visibleExecutor: { memberId: 'member', fullName: 'Ioana Executor' },
     });
 
-    expect(screen.getByText('Responsabil:')).toBeInTheDocument();
+    expect(screen.getByText('Executor:')).toBeInTheDocument();
     expect(screen.getByText('Ioana Executor')).toBeInTheDocument();
   });
 
@@ -119,7 +164,7 @@ describe('Member Task cards', () => {
       visibleExecutor: { memberId: 'member', fullName: 'Nume imposibil' },
     });
 
-    expect(screen.queryByText('Responsabil:')).not.toBeInTheDocument();
+    expect(screen.queryByText('Executor:')).not.toBeInTheDocument();
     expect(screen.queryByText('Nume imposibil')).not.toBeInTheDocument();
   });
 
@@ -187,16 +232,159 @@ describe('Member Task cards', () => {
     await user.tab();
     expect(screen.getByRole('button', { name: 'Începe taskul' })).toHaveFocus();
     await user.keyboard('{Enter}');
-    expect(onProgress).toHaveBeenCalledWith(1, 'start');
+    expect(onProgress).toHaveBeenCalledWith({ taskId: 1, action: 'start' });
   });
 
-  it('offers submission for work in progress', async () => {
+  it('offers submission for work in progress through the Submission Note dialog', async () => {
     const user = userEvent.setup();
     const { onProgress } = card({ status: 'in_progress' });
     await user.click(
       screen.getByRole('button', { name: 'Trimite la verificare' }),
     );
-    expect(onProgress).toHaveBeenCalledWith(1, 'submit');
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Trimite la verificare',
+    });
+    expect(onProgress).not.toHaveBeenCalled();
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Trimite la verificare' }),
+    );
+    expect(onProgress).toHaveBeenCalledWith({
+      taskId: 1,
+      action: 'submit',
+      note: null,
+      linkLabel: null,
+      linkUrl: null,
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Taskul a fost trimis la verificare.',
+    );
+  });
+
+  it('paints the Origin Group stripe, OSUBB red for the Organization Group', () => {
+    const { container, unmount } = card();
+    const stripe = container.querySelector<HTMLElement>(
+      '[data-slot="task-stripe"]',
+    );
+    expect(stripe).toHaveAttribute('aria-hidden', 'true');
+    expect(
+      stripe
+        ?.closest<HTMLElement>('[data-slot="card"]')
+        ?.style.getPropertyValue('--task-stripe'),
+    ).toBe('var(--dept-edu)');
+    unmount();
+
+    const organization = card({
+      audience: 'org',
+      assignment_mode: 'public',
+      group: {
+        name: 'Organizație',
+        short: 'ORG',
+        color: '#123456',
+        category: 'org',
+        path: [5],
+        is_organization: true,
+      },
+    });
+    expect(
+      organization.container
+        .querySelector<HTMLElement>('[data-slot="card"]')
+        ?.style.getPropertyValue('--task-stripe'),
+    ).toBe('var(--scope-org)');
+    // Colour is never the only carrier: the chips name the Group and Audience.
+    expect(screen.getByText('Organizație')).toBeVisible();
+    expect(screen.getByText('OSUBB')).toBeVisible();
+  });
+
+  it('shows the OSUBB chip only on a public org-Audience Task (R26)', () => {
+    const shows = (overrides: Partial<TaskPresentationRow>) => {
+      const { unmount } = card(overrides);
+      const found = screen.queryByText('OSUBB') !== null;
+      unmount();
+      return found;
+    };
+    expect(shows({ assignment_mode: 'public', audience: 'org' })).toBe(true);
+    expect(shows({ assignment_mode: 'public', audience: 'local' })).toBe(false);
+    // A direct Task is local only: a stale org Audience says nothing.
+    expect(shows({ assignment_mode: 'direct', audience: 'org' })).toBe(false);
+  });
+
+  it('anchors the list card for the deep link, never the sheet copy', () => {
+    const { container, unmount } = card();
+    expect(container.querySelector('article')).toHaveAttribute('id', 'task-1');
+    unmount();
+    const task = toTaskPresentation(
+      taskRow(),
+      new Date('2026-09-15T12:00:00Z'),
+    );
+    const sheet = render(
+      <TaskCard
+        task={task}
+        memberId="member"
+        pending={false}
+        onProgress={vi.fn()}
+        anchor={false}
+      />,
+    );
+    expect(sheet.container.querySelector('article')).not.toHaveAttribute('id');
+  });
+
+  it('opens the Attached Link in a new tab with safe attributes', () => {
+    card({ link_label: 'Brief', link_url: 'https://drive.example/brief' });
+    const link = screen.getByRole('link', {
+      name: 'Brief (se deschide într-o filă nouă)',
+    });
+    expect(link).toHaveAttribute('href', 'https://drive.example/brief');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('shows the latest Submission Note while the Task is in review', () => {
+    const submission = [
+      {
+        id: 3,
+        kind: 'submitted',
+        note: 'Prima variantă',
+        details: {},
+        occurred_at: '2026-09-14T10:00:00Z',
+      },
+      {
+        id: 9,
+        kind: 'submitted',
+        note: 'Varianta finală, cu sursele.',
+        details: {
+          link_label: 'Surse',
+          link_url: 'https://drive.example/surse',
+        },
+        occurred_at: '2026-09-15T10:00:00Z',
+      },
+    ];
+    const { unmount } = card({ status: 'in_review', submission });
+    const note = screen.getByRole('region', { name: 'Notă la trimitere' });
+    expect(note).toHaveTextContent('Varianta finală, cu sursele.');
+    expect(note).not.toHaveTextContent('Prima variantă');
+    expect(
+      within(note).getByRole('link', {
+        name: 'Surse (se deschide într-o filă nouă)',
+      }),
+    ).toHaveAttribute('rel', 'noopener noreferrer');
+    unmount();
+
+    // Back in progress after a return: the card no longer shows it.
+    const returned = card({
+      status: 'in_progress',
+      review_round: 1,
+      submission,
+    });
+    expect(
+      screen.queryByRole('region', { name: 'Notă la trimitere' }),
+    ).not.toBeInTheDocument();
+    returned.unmount();
+
+    // Never submitted: nothing to show.
+    card({ status: 'in_review', submission: [] });
+    expect(
+      screen.queryByRole('region', { name: 'Notă la trimitere' }),
+    ).not.toBeInTheDocument();
   });
 
   it('offers give-up only to the active Executor before review', () => {
@@ -259,7 +447,37 @@ describe('Member Task cards', () => {
   });
 
   it('passes automated accessibility checks', async () => {
-    const { container } = card({ status: 'in_progress', review_round: 1 });
+    const { container } = card({
+      status: 'in_progress',
+      review_round: 1,
+      audience: 'org',
+      campaign_id: 3,
+      campaign: { name: 'Toamnă' },
+      link_label: 'Brief',
+      link_url: 'https://drive.example/brief',
+      visibleExecutor: { memberId: 'member', fullName: 'Ana Pop' },
+    });
+    const result = await axe.run(container, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(result.violations).toEqual([]);
+  });
+
+  it('passes automated accessibility checks with a Submission Note in review', async () => {
+    const { container } = card({
+      status: 'in_review',
+      link_label: 'Brief',
+      link_url: 'https://drive.example/brief',
+      submission: [
+        {
+          id: 2,
+          kind: 'submitted',
+          note: 'Gata de verificat.',
+          details: { link_label: 'Surse', link_url: 'https://drive.example/s' },
+          occurred_at: '2026-09-15T10:00:00Z',
+        },
+      ],
+    });
     const result = await axe.run(container, {
       rules: { 'color-contrast': { enabled: false } },
     });

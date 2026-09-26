@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { CommandError } from '../../lib/command-reasons';
 const state = vi.hoisted(() => ({
   mutation: { isPending: false, mutateAsync: vi.fn() },
 }));
@@ -48,9 +49,7 @@ it('requires a trimmed reason, cancels and announces success accessibly', async 
     within(dialog).getByRole('button', { name: 'Confirmă anularea' }),
   );
   expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
-  expect(within(dialog).getByRole('alert')).toHaveTextContent(
-    'Scrie motivul anulării.',
-  );
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Scrie motivul.');
   await user.type(
     within(dialog).getByLabelText(reasonLabel),
     '  Evenimentul s-a amânat  ',
@@ -85,7 +84,7 @@ it('closes with Escape without cancelling and returns focus to the trigger', asy
 it('keeps the reason inside the pop-up on conflict and suppresses duplicate submissions', async () => {
   const user = userEvent.setup();
   state.mutation.mutateAsync.mockRejectedValueOnce(
-    new Error('Taskul s-a schimbat.'),
+    new CommandError(null, 'Taskul s-a schimbat.'),
   );
   render(<TaskCancelControl {...props} />);
   const dialog = await openDialog(user);
@@ -102,6 +101,33 @@ it('keeps the reason inside the pop-up on conflict and suppresses duplicate subm
     within(dialog).getByRole('button', { name: 'Confirmă anularea' }),
   );
   expect(state.mutation.mutateAsync).toHaveBeenCalledTimes(2);
+});
+
+it('checks the 1000-character limit and shows the server reason under the field', async () => {
+  const user = userEvent.setup();
+  state.mutation.mutateAsync.mockRejectedValueOnce(
+    new CommandError({ code: 'PT400', message: 'reason_too_long' }, 'x'),
+  );
+  render(<TaskCancelControl {...props} />);
+  const dialog = await openDialog(user);
+  const reason = within(dialog).getByLabelText(reasonLabel);
+  await user.click(reason);
+  await user.paste('r'.repeat(1001));
+  await user.tab();
+  expect(reason).toHaveAccessibleDescription(
+    'Motivul are cel mult 1000 de caractere.',
+  );
+  await user.clear(reason);
+  await user.type(reason, 'Surse');
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Confirmă anularea' }),
+  );
+  await waitFor(() =>
+    expect(reason).toHaveAccessibleDescription(
+      'Motivul are cel mult 1000 de caractere.',
+    ),
+  );
+  expect(reason).toHaveFocus();
 });
 
 it('announces and focuses success after status refetch before mutation resolves', async () => {

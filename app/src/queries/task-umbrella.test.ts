@@ -7,7 +7,6 @@ import {
   completeUmbrella,
   createTask,
   createTaskMutationOptions,
-  umbrellaCompletionErrorMessage,
 } from './task-umbrella';
 import type { TaskDraft } from '../screens/tracker/task-form-model';
 const draft: TaskDraft = {
@@ -21,6 +20,7 @@ const draft: TaskDraft = {
   assignmentMode: 'public',
   executorId: null,
   campaignId: null,
+  link: { label: null, url: null },
 };
 
 describe('Umbrella commands', () => {
@@ -39,6 +39,8 @@ describe('Umbrella commands', () => {
       p_campaign_id: null,
       p_parent_task_id: 10,
       p_kind: 'task',
+      p_link_label: null,
+      p_link_url: null,
     });
   });
   it('creates a top-level direct Task with its Executor and Campaign', async () => {
@@ -50,6 +52,7 @@ describe('Umbrella commands', () => {
       audience: 'local',
       executorId: 'executor-1',
       campaignId: 5,
+      link: { label: 'Brief', url: 'https://example.org/brief' },
     });
     expect(rpc).toHaveBeenCalledWith('create_task', {
       p_title: 'Copil',
@@ -62,6 +65,8 @@ describe('Umbrella commands', () => {
       p_campaign_id: 5,
       p_parent_task_id: null,
       p_kind: 'task',
+      p_link_label: 'Brief',
+      p_link_url: 'https://example.org/brief',
     });
   });
   it('creates an Umbrella with no mode, audience, Executor or Campaign', async () => {
@@ -107,25 +112,6 @@ describe('Umbrella commands', () => {
   });
 });
 
-it.each([
-  ['task_command_forbidden', 'Nu ai permisiunea'],
-  ['task_manage_forbidden', 'Nu ai permisiunea'],
-  ['task_not_found', 'nu mai este disponibil'],
-  ['task_not_umbrella', 'nu este un task-umbrelă'],
-  ['task_terminal', 'deja finalizat'],
-  ['umbrella_has_no_subtasks', 'cel puțin un subtask'],
-  ['subtasks_not_terminal', 'Starea subtaskurilor s-a schimbat'],
-])('maps stable completion reason %s without SQLSTATE', (message, expected) => {
-  expect(umbrellaCompletionErrorMessage({ message })).toContain(expected);
-  expect(
-    umbrellaCompletionErrorMessage({ message, code: 'unknown' }),
-  ).toContain(expected);
-});
-it('does not classify or expose unknown completion payloads', () => {
-  expect(
-    umbrellaCompletionErrorMessage({ code: '42501', message: 'secret SQL' }),
-  ).toBe('Nu am putut finaliza taskul-umbrelă. Reîncearcă.');
-});
 it('refreshes Task reads even when Subtask creation is denied', async () => {
   const client = new QueryClient();
   const invalidate = vi.spyOn(client, 'invalidateQueries');

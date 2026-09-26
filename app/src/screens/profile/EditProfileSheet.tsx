@@ -16,6 +16,8 @@ import {
   SheetTitle,
 } from '../../components/ui/sheet';
 import { useCapability } from '../../lib/capabilities';
+import { fieldForReason, profileSchema } from '../../lib/schemas/profile';
+import { useFormValidation } from '../../lib/use-form-validation';
 import { cn } from '../../lib/utils';
 import { type MyProfile, useUpdateMyProfile } from '../../queries/profile';
 
@@ -47,50 +49,44 @@ function EditProfileForm({
   const [avatarColor, setAvatarColor] = useState(
     profile.avatar_color ?? '#ED2025',
   );
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
   const updateMutation = useUpdateMyProfile();
   // #675 (R5): the full name is a privileged column -- only BC/Moderator
   // (the same rank as `manageRoles`) may change it. Below that the field is
   // read-only and never sent, so a save cannot trip the server's 42501.
   const canEditFullName = useCapability('manageRoles').data === true;
+  // Ruling R8: the phone is normalised to E.164 before it is judged or sent;
+  // the server's `phone_invalid` lands under the same field.
+  const form = useFormValidation(
+    profileSchema,
+    { ...(canEditFullName ? { fullName } : {}), phone, avatarColor },
+    fieldForReason,
+  );
+  const nameError = form.error('fullName');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const trimmedName = fullName.trim();
-    if (canEditFullName && !trimmedName) {
-      setNameError('Numele complet este obligatoriu.');
-      return;
-    }
-    setNameError(null);
-    setSubmitError(null);
+    const values = form.validate();
+    if (!values) return;
 
     try {
       await updateMutation.mutateAsync({
-        ...(canEditFullName ? { fullName: trimmedName } : {}),
-        phone: phone.trim() || null,
-        avatarColor,
+        ...(values.fullName === undefined ? {} : { fullName: values.fullName }),
+        phone: values.phone,
+        avatarColor: values.avatarColor,
       });
       onClose();
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : 'Nu am putut salva modificările.',
-      );
+      form.fail(err, 'Nu am putut salva modificările.');
     }
   };
 
   return (
     <>
-      {submitError && (
-        <div
-          role="alert"
-          className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          <AlertCircle className="size-4 shrink-0" />
-          <span>{submitError}</span>
-        </div>
+      {form.formError && (
+        <FieldError className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+          <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+          <span>{form.formError}</span>
+        </FieldError>
       )}
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
@@ -101,10 +97,8 @@ function EditProfileForm({
               id="edit-profile-name"
               type="text"
               value={fullName}
-              onChange={(e) => {
-                setFullName(e.target.value);
-                if (nameError) setNameError(null);
-              }}
+              onChange={(e) => setFullName(e.target.value)}
+              {...form.field('fullName')}
               className={cn(
                 'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
                 nameError &&
@@ -125,7 +119,7 @@ function EditProfileForm({
               </FieldDescription>
             </>
           )}
-          {nameError && <FieldError errors={[{ message: nameError }]} />}
+          <FieldError {...form.errorProps('fullName')} />
         </Field>
 
         <Field>
@@ -152,14 +146,16 @@ function EditProfileForm({
             onChange={(e) => setPhone(e.target.value)}
             placeholder="ex: 0712345678"
             className="flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            {...form.field('phone', 'edit-profile-phone-hint')}
           />
-          <FieldDescription>
+          <FieldError {...form.errorProps('phone')} />
+          <FieldDescription id="edit-profile-phone-hint">
             Numărul de telefon este vizibil doar pentru tine și membrii cu nivel
             ≥5.
           </FieldDescription>
         </Field>
 
-        <Field>
+        <Field {...form.slot('avatarColor')}>
           <FieldLabel>Culoare avatar</FieldLabel>
           <div
             className="flex flex-wrap gap-2 pt-1"
@@ -191,6 +187,7 @@ function EditProfileForm({
               );
             })}
           </div>
+          <FieldError {...form.errorProps('avatarColor')} />
         </Field>
 
         <div className="mt-4 flex items-center justify-end gap-3 border-t border-border pt-4">

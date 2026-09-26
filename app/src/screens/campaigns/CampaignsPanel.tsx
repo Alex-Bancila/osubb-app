@@ -1,6 +1,9 @@
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router';
+import { cn } from 'cn';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -8,20 +11,35 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { describeFailure } from '../../lib/command-reasons';
 import { formatPoints } from '../../lib/format';
+import { campaignSchema, fieldForReason } from '../../lib/schemas/campaign';
+import { useFormValidation } from '../../lib/use-form-validation';
 import {
-  CampaignError,
   useCampaignChange,
   useCampaignReport,
   useCampaigns,
   type Campaign,
   type CampaignChange,
+  type CampaignReportRange,
 } from '../../queries/campaigns';
+import {
+  CAMPAIGN_STATE_KEY,
+  subtreeCampaigns,
+  type CampaignOwnerGroup,
+  type CampaignState,
+} from './campaign-list';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+const SAVE_FAILED = 'Nu am putut salva campania. Reîncearcă.';
 
-/** A small pop-up that asks for one Campaign name: used to create and to rename. */
+/**
+ * A small pop-up that asks for one Campaign name: used to create and to
+ * rename. The name is checked on blur and on save (3–120 characters, ruling
+ * R8); a refused save keeps the pop-up and the typed name, with the reason
+ * under the field.
+ */
 function CampaignNameDialog({
   title,
   label,
@@ -29,7 +47,6 @@ function CampaignNameDialog({
   initialName,
   trigger,
   disabled,
-  error,
   onSave,
 }: {
   title: string;
@@ -38,21 +55,26 @@ function CampaignNameDialog({
   initialName: string;
   trigger: string;
   disabled: boolean;
-  /** The last save's refusal, shown inside the pop-up while it is open. */
-  error: string | null;
-  onSave: (name: string) => Promise<boolean>;
+  /** Runs the command; rejects with the refusal. */
+  onSave: (name: string) => Promise<void>;
 }) {
+  const inputId = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initialName);
-  // Show only a refusal of a save made from this pop-up since it opened.
-  const [attempted, setAttempted] = useState(false);
-  const unchanged = name.trim() === initialName.trim();
+  const form = useFormValidation(campaignSchema, { name }, fieldForReason);
+  // Renaming to the same name is not a change; nothing to send.
+  const unchanged = initialName !== '' && name.trim() === initialName.trim();
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || unchanged) return;
-    setAttempted(true);
-    // A rejected save keeps the pop-up and the typed name for a retry.
-    if (await onSave(name)) setOpen(false);
+    if (unchanged) return;
+    const values = form.validate();
+    if (!values) return;
+    try {
+      await onSave(values.name);
+      setOpen(false);
+    } catch (failure) {
+      form.fail(failure, SAVE_FAILED);
+    }
   }
   return (
     <Dialog
@@ -62,7 +84,7 @@ function CampaignNameDialog({
         setOpen(next);
         if (next) {
           setName(initialName);
-          setAttempted(false);
+          form.reset();
         }
       }}
     >
@@ -72,33 +94,33 @@ function CampaignNameDialog({
         disabled={disabled}
         onClick={() => {
           setName(initialName);
-          setAttempted(false);
+          form.reset();
           setOpen(true);
         }}
       >
         {trigger}
       </Button>
       <DialogContent>
-        <form onSubmit={submit} className="grid gap-4">
+        <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">{label}</span>
+          <div className="grid gap-1.5">
+            <label htmlFor={inputId} className="text-sm font-medium">
+              {label}
+            </label>
             <input
+              id={inputId}
               className={control}
               value={name}
               required
-              maxLength={200}
               disabled={disabled}
               onChange={(event) => setName(event.target.value)}
+              {...form.field('name')}
             />
-          </label>
-          {attempted && error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
+            <FieldError {...form.errorProps('name')} />
+          </div>
+          <FieldError>{form.formError}</FieldError>
           <DialogFooter>
             <Button
               type="button"
@@ -108,10 +130,7 @@ function CampaignNameDialog({
             >
               Renunță
             </Button>
-            <Button
-              type="submit"
-              disabled={disabled || !name.trim() || unchanged}
-            >
+            <Button type="submit" disabled={disabled || unchanged}>
               {submitLabel}
             </Button>
           </DialogFooter>
@@ -126,8 +145,20 @@ function CampaignNameDialog({
  * report is open, so a panel of ten Campaigns is not ten reads — and it is a
  * report, never a roster: nobody belongs to a Campaign.
  */
-function CampaignReportView({ campaignId }: { campaignId: number }) {
-  const report = useCampaignReport(campaignId);
+function CampaignReportView({
+  campaignId,
+  range,
+}: {
+  campaignId: number;
+  range: CampaignReportRange | null;
+}) {
+  const report = useCampaignReport(campaignId, range);
+  if (range === null)
+    return (
+      <p className="text-sm text-muted-foreground">
+        Corectează perioada din filtre ca să vezi raportul.
+      </p>
+    );
   if (report.isPending)
     return (
       <p className="text-sm text-muted-foreground">Se încarcă raportul…</p>
@@ -139,8 +170,14 @@ function CampaignReportView({ campaignId }: { campaignId: number }) {
       </p>
     );
   const { totals, members } = report.data;
+  const dated = range.p_from !== undefined || range.p_to !== undefined;
   return (
     <div className="space-y-2">
+      {dated && (
+        <p className="text-sm text-muted-foreground">
+          Doar punctele acordate în perioada aleasă.
+        </p>
+      )}
       <p className="text-sm">
         <span className="font-semibold">{formatPoints(totals.points)}</span>{' '}
         puncte · {totals.tasksCompleted} din {totals.tasksTotal} taskuri
@@ -148,7 +185,9 @@ function CampaignReportView({ campaignId }: { campaignId: number }) {
       </p>
       {members.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nimeni nu a primit încă puncte în această campanie.
+          {dated
+            ? 'Nimeni nu a primit puncte în această campanie în perioada aleasă.'
+            : 'Nimeni nu a primit încă puncte în această campanie.'}
         </p>
       ) : (
         <ul className="space-y-1 text-sm" aria-label="Voluntari cu puncte">
@@ -177,14 +216,21 @@ function CampaignReportView({ campaignId }: { campaignId: number }) {
 
 function CampaignRow({
   campaign,
-  onChange,
+  owner,
+  range,
+  onRun,
+  onToggle,
   disabled,
-  error,
 }: {
   campaign: Campaign;
-  onChange: (change: CampaignChange) => Promise<boolean>;
+  /** The owning Group's name. */
+  owner: string;
+  range: CampaignReportRange | null;
+  /** Runs a change and rejects with its refusal (the rename pop-up shows it). */
+  onRun: (change: CampaignChange) => Promise<void>;
+  /** Runs a change and shows a refusal above the list. */
+  onToggle: (change: CampaignChange) => Promise<void>;
   disabled: boolean;
-  error: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const reportId = useId();
@@ -193,9 +239,7 @@ function CampaignRow({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="grid min-w-0 gap-0.5">
           <span className="font-medium break-words">{campaign.name}</span>
-          <span className="text-sm text-muted-foreground">
-            {campaign.is_active ? 'Activă' : 'Inactivă'}
-          </span>
+          <span className="text-sm text-muted-foreground">Grup: {owner}</span>
         </span>
         <span className="flex flex-wrap gap-2">
           <CampaignNameDialog
@@ -205,17 +249,14 @@ function CampaignRow({
             trigger="Redenumește"
             initialName={campaign.name}
             disabled={disabled}
-            error={error}
-            onSave={(name) =>
-              onChange({ kind: 'rename', id: campaign.id, name })
-            }
+            onSave={(name) => onRun({ kind: 'rename', id: campaign.id, name })}
           />
           <Button
             type="button"
             variant="outline"
             disabled={disabled}
             onClick={() =>
-              void onChange({
+              void onToggle({
                 kind: 'active',
                 id: campaign.id,
                 active: !campaign.is_active,
@@ -237,7 +278,7 @@ function CampaignRow({
       </div>
       {open && (
         <div id={reportId}>
-          <CampaignReportView campaignId={campaign.id} />
+          <CampaignReportView campaignId={campaign.id} range={range} />
         </div>
       )}
     </li>
@@ -245,25 +286,40 @@ function CampaignRow({
 }
 
 /**
- * One Group's Campaigns: create, rename, activate, and the report behind each
- * one. Shared by the Campanii screen (which picks the Group first) and the
- * Campanii tab of a Group in Administrare, so there is exactly one of these.
+ * The Campaigns of one Group and every Group below it, each naming its owner:
+ * create (in the Group itself), rename, activate, and the report behind each
+ * one. Shared by the Campanii screen (which picks the Group through the Work
+ * Filter and passes its date range) and the Campanii tab of a Group in
+ * Administrare, so there is exactly one of these. The Active / Inactive toggle
+ * lives in the URL (`?stare=inactive`); the server decides who may change a
+ * row (`campaign_manage_forbidden`), and its refusal is shown.
  */
 export function CampaignsPanel({
   group,
   label,
+  groups,
+  range = {},
 }: {
   group: { id: number; name: string };
   label: string;
+  /** Groups with their paths: the owners of the listed Campaigns and their names. */
+  groups: readonly CampaignOwnerGroup[];
+  /** The report's range; `null` while the page's range is inverted. */
+  range?: CampaignReportRange | null;
 }) {
-  const campaigns = useCampaigns(group.id);
+  const campaigns = useCampaigns();
   const mutation = useCampaignChange();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const state: CampaignState =
+    searchParams.get(CAMPAIGN_STATE_KEY) === 'inactive' ? 'inactive' : 'active';
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
+  const toggleId = useId();
 
-  async function save(change: CampaignChange) {
-    if (submitting.current) return false;
+  /** One change at a time; a refusal is thrown to whoever asked. */
+  async function run(change: CampaignChange) {
+    if (submitting.current) return;
     submitting.current = true;
     setError(null);
     setMessage(null);
@@ -278,20 +334,46 @@ export function CampaignsPanel({
               ? 'Campania a fost activată.'
               : 'Campania a fost dezactivată. Taskurile existente păstrează campania.',
       );
-      return true;
-    } catch (failure) {
-      setError(
-        failure instanceof CampaignError
-          ? failure.message
-          : 'Nu am putut salva campania. Reîncearcă.',
-      );
-      return false;
     } finally {
       submitting.current = false;
     }
   }
 
-  const own = campaigns.data?.filter((row) => row.group_id === group.id);
+  async function toggle(change: CampaignChange) {
+    try {
+      await run(change);
+    } catch (failure) {
+      // A `CampaignError` is already translated; `describeFailure` keeps its
+      // copy (the server's `campaign_manage_forbidden` among them).
+      setError(describeFailure(failure, SAVE_FAILED).message);
+    }
+  }
+
+  function show(next: CampaignState) {
+    setMessage(null);
+    setError(null);
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        if (next === 'inactive') params.set(CAMPAIGN_STATE_KEY, 'inactive');
+        else params.delete(CAMPAIGN_STATE_KEY);
+        return params;
+      },
+      { replace: true },
+    );
+  }
+
+  const names = useMemo(
+    () => new Map(groups.map((row) => [row.id, row.name])),
+    [groups],
+  );
+  const listed = useMemo(
+    () =>
+      subtreeCampaigns(campaigns.data ?? [], groups, group.id).filter(
+        (campaign) => campaign.is_active === (state === 'active'),
+      ),
+    [campaigns.data, groups, group.id, state],
+  );
   return (
     <>
       {message && <p role="status">{message}</p>}
@@ -309,9 +391,44 @@ export function CampaignsPanel({
           trigger="Campanie nouă"
           initialName=""
           disabled={mutation.isPending}
-          error={error}
-          onSave={(name) => save({ kind: 'create', groupId: group.id, name })}
+          onSave={(name) => run({ kind: 'create', groupId: group.id, name })}
         />
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Campaniile grupului și ale subgrupurilor lui. O campanie nouă aparține
+        grupului {group.name}.
+      </p>
+      <div
+        role="group"
+        aria-labelledby={toggleId}
+        className="flex w-fit items-center gap-3"
+      >
+        <span id={toggleId} className="text-sm font-medium">
+          Stare
+        </span>
+        <span className="flex rounded-lg border border-border p-0.5">
+          {(
+            [
+              ['active', 'Active'],
+              ['inactive', 'Inactive'],
+            ] as const
+          ).map(([value, text]) => (
+            <Button
+              key={value}
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={state === value}
+              className={cn(
+                'min-h-11 sm:min-h-9',
+                state === value && 'bg-muted text-foreground',
+              )}
+              onClick={() => show(value)}
+            >
+              {text}
+            </Button>
+          ))}
+        </span>
       </div>
       {campaigns.isPending ? (
         <p role="status">Se încarcă campaniile…</p>
@@ -322,19 +439,34 @@ export function CampaignsPanel({
             Reîncearcă
           </Button>
         </div>
-      ) : (
-        <ul className="space-y-3" aria-label="Campaniile grupului">
-          {own?.map((campaign) => (
+      ) : listed.length ? (
+        <ul
+          className="space-y-3"
+          aria-label={
+            state === 'active' ? 'Campanii active' : 'Campanii inactive'
+          }
+        >
+          {listed.map((campaign) => (
             <CampaignRow
               key={`${campaign.id}:${campaign.name}`}
               campaign={campaign}
-              onChange={save}
+              owner={
+                names.get(campaign.group_id) ??
+                (campaign.group_id === group.id ? group.name : 'Grup')
+              }
+              range={range}
+              onRun={run}
+              onToggle={toggle}
               disabled={mutation.isPending}
-              error={error}
             />
           ))}
-          {!own?.length && <li>Grupul nu are încă nicio campanie.</li>}
         </ul>
+      ) : (
+        <p className="text-muted-foreground">
+          {state === 'active'
+            ? 'Nicio campanie activă în acest grup sau în subgrupurile lui.'
+            : 'Nicio campanie inactivă în acest grup sau în subgrupurile lui.'}
+        </p>
       )}
     </>
   );

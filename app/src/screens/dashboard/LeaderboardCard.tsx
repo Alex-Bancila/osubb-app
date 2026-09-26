@@ -1,5 +1,4 @@
-import { trophyOutline } from 'ionicons/icons';
-import { IonIcon } from '@ionic/react';
+import { Trophy } from 'lucide-react';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { useLeaderboard, useMyStanding } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
@@ -83,7 +82,7 @@ export default function LeaderboardCard() {
     <section className="card">
       <header className="card-head">
         <h2 className="card-title">
-          <IonIcon icon={trophyOutline} aria-hidden="true" />
+          <Trophy className="card-title-icon" aria-hidden="true" />
           Clasament
         </h2>
       </header>

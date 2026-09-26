@@ -1,6 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+
 import AnnouncementCard from './AnnouncementCard';
 import type { AnnouncementPresentation } from './announcements-presentation';
 
@@ -16,6 +23,7 @@ function presentation(
     audience: 'org',
     audienceLabel: 'Toată organizația',
     author: 'BC',
+    authorMember: null,
     priority: 'critical',
     category: 'organizatoric',
     pinned: true,
@@ -155,7 +163,7 @@ describe('AnnouncementCard', () => {
     expect(screen.queryByText('Necitit')).not.toBeInTheDocument();
   });
 
-  it('renders external form button with safe attributes when form_url is present', () => {
+  it('renders the Attached Link button with safe attributes when form_url is present', () => {
     render(
       <AnnouncementCard
         announcement={presentation({
@@ -166,13 +174,26 @@ describe('AnnouncementCard', () => {
       />,
     );
 
+    // AttachedLinkButton's own accessible name (#679): the label plus the
+    // new-tab hint, not the card's old "Deschide formular:" prefix.
     const formLink = screen.getByRole('link', {
-      name: /Completează formularul/,
+      name: 'Completează formularul (se deschide într-o filă nouă)',
     });
     expect(formLink).toBeInTheDocument();
     expect(formLink).toHaveAttribute('href', 'https://forms.gle/exemplu');
     expect(formLink).toHaveAttribute('target', '_blank');
     expect(formLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('renders no Attached Link button when form_url is absent', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({ formLabel: null, formUrl: null })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('calls onOpen when read button is clicked', async () => {
@@ -231,6 +252,29 @@ describe('AnnouncementCard', () => {
     const formLink = screen.getByRole('link', { name: /Formular/ });
     await user.click(formLink);
 
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('names the author as a Member Card button that does not open the Announcement', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    render(
+      <AnnouncementCard
+        announcement={presentation({
+          authorMember: {
+            memberId: 'm1',
+            nickname: 'Ani',
+            fullName: 'Ana Pop',
+          },
+        })}
+        onOpen={onOpen}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Profilul membrului Ani' }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
     expect(onOpen).not.toHaveBeenCalled();
   });
 });

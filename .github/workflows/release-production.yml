@@ -1,0 +1,252 @@
+name: Release to production
+
+# A Release puts `main` live in production: migrations, Edge Functions, web
+# app (#78, ruling L10). It is started by hand, never by a push, and nothing
+# that can read a production secret runs before a reviewer approves. The
+# word is Release: the glossary keeps "Promotion" for a Member moving up a
+# Role.
+#
+#   report   no Environment, no secret: what this Release would change
+#   release  Environment `production` (main only; reviewers Alex and Dobre,
+#            any one approval): db push → functions → web → smoke → tag
+#
+# Before approving, the reviewer takes a local `supabase db dump` of
+# production to their own encrypted disk (docs/ops/release.md). A dump is
+# never a workflow artifact: this repository is public.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One Release at a time, and never one cancelled halfway by the next.
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+env:
+  SUPABASE_CLI_VERSION: 2.117.0
+  WRANGLER_VERSION: 4.139.0
+  PAGES_PROJECT: osubb-app
+  PRODUCTION_DOMAIN: app.osubb.ro
+
+jobs:
+  report:
+    name: Report what this Release changes
+    runs-on: ubuntu-latest
+    steps:
+      # The production Environment admits `main` only as well; this refuses
+      # sooner, before anyone is asked to approve, and says why.
+      - name: Refuse anything but main
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::A Release runs from main only; this run was started from $REF. Nothing was touched."
+          exit 1
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # the release/* tags and the history since the last one
+          persist-credentials: false
+
+      # This job can read no production secret, so it reads the difference
+      # from git: what changed under supabase/ since the newest release/* tag
+      # this commit descends from. The release job prints production's own
+      # `supabase migration list` before it pushes, as the record of what was
+      # really pending.
+      - name: Report
+        run: |
+          short="$(git rev-parse --short=7 HEAD)"
+          if last="$(git describe --tags --abbrev=0 --match 'release/*' HEAD 2>/dev/null)"; then
+            since="since \`$last\`"
+            commits="$(git rev-list --count "$last..HEAD")"
+            migrations="$(git diff --name-only --diff-filter=A "$last..HEAD" -- 'supabase/migrations/*.sql')"
+            edited="$(git diff --name-only --diff-filter=MDR "$last..HEAD" -- supabase/migrations)"
+            functions="$(git diff --name-only "$last..HEAD" -- supabase/functions | sed -n 's#^supabase/functions/\([^/]*\)/.*#\1#p' | sort -u)"
+            config="$(git diff --name-only "$last..HEAD" -- supabase/config.toml)"
+          else
+            since="since the beginning: no Release yet, production is empty"
+            commits="$(git rev-list --count HEAD)"
+            migrations="$(git ls-files 'supabase/migrations/*.sql')"
+            edited=""
+            functions="$(git ls-files supabase/functions | sed -n 's#^supabase/functions/\([^_/][^/]*\)/.*#\1#p' | sort -u)"
+            config=""
+          fi
+
+          bullets() { if [ -n "$1" ]; then printf '%s\n' "$1" | sed 's/^/- `/; s/$/`/'; else echo "_none_"; fi; }
+          count() { if [ -n "$1" ]; then printf '%s\n' "$1" | wc -l | tr -d ' '; else echo 0; fi; }
+          {
+            echo "## Release of \`$short\`"
+            echo
+            echo "Commit going live: [\`$short\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) $(git log -1 --format=%s)"
+            echo
+            echo "$commits commit(s) $since."
+            echo
+            echo "### Migration files added $since ($(count "$migrations"))"
+            echo
+            echo "Read from git: what \`db push\` will apply unless a Release that failed before its tag already applied some. The \`release\` job prints production's own \`supabase migration list\` before it pushes."
+            echo
+            bullets "$migrations"
+            if [ -n "$edited" ]; then
+              echo
+              echo "> [!WARNING]"
+              echo "> Migration files already released were edited $since. \`db push\` never re-applies a migration, so production keeps the old version of:"
+              printf '%s\n' "$edited" | sed 's/^/> - `/; s/$/`/'
+            fi
+            echo
+            echo "### Edge Functions changed $since"
+            echo
+            echo "Every function is deployed either way; these are the ones whose code changed."
+            echo
+            bullets "$functions"
+            if [ -n "$config" ]; then
+              echo
+              echo "\`supabase/config.toml\` changed too; function settings such as \`verify_jwt\` may differ."
+            fi
+            echo
+            echo "### Before you approve"
+            echo
+            echo "Take a local dump of production to your own encrypted disk (\`docs/ops/release.md\`), then approve in the **Review deployments** banner."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Release to production
+    needs: report
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ env.PRODUCTION_DOMAIN }}
+    permissions:
+      contents: write # the release/* tag, written last
+    steps:
+      # A Release is deliberate, so a missing value fails it rather than
+      # skipping: the reviewer approved a deploy, not a no-op.
+      - name: Check the production Environment
+        env:
+          HAS_SUPABASE_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+          HAS_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD != '' }}
+          HAS_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=""
+          [ "$HAS_SUPABASE_TOKEN" = true ] || missing="$missing secret SUPABASE_ACCESS_TOKEN,"
+          [ "$HAS_DB_PASSWORD" = true ] || missing="$missing secret SUPABASE_DB_PASSWORD,"
+          [ "$HAS_CLOUDFLARE_TOKEN" = true ] || missing="$missing secret CLOUDFLARE_API_TOKEN,"
+          [ -n "$PROJECT_REF" ] || missing="$missing variable SUPABASE_PROJECT_REF,"
+          [ -n "$ACCOUNT_ID" ] || missing="$missing variable CLOUDFLARE_ACCOUNT_ID,"
+          if [ -n "$missing" ]; then
+            echo "::error::The production Environment lacks:${missing%,}. Nothing was touched."
+            exit 1
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      # --include-all for the reason push-staging gives in ci.yml: migrations
+      # from parallel branches reach main out of timestamp order, and without
+      # it `db push` refuses any file older than the newest one applied.
+      - name: db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase link --project-ref "$PROJECT_REF"
+          echo "Production before this Release:"
+          supabase migration list
+          supabase db push --include-all
+
+      # Every function under supabase/functions/, each with its config.toml
+      # settings; no --prune, as on staging.
+      - name: supabase functions deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: supabase functions deploy --project-ref "$PROJECT_REF" --use-api
+
+      - name: Build with the production variables
+        uses: ./.github/actions/build-web
+        with:
+          supabase-url: ${{ vars.VITE_SUPABASE_URL }}
+          supabase-key: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          vapid-public-key: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+          project-ref: ${{ vars.SUPABASE_PROJECT_REF }}
+
+      - name: wrangler pages deploy
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          workingDirectory: app
+          command: pages deploy dist --project-name=${{ env.PAGES_PROJECT }} --branch=main --commit-hash=${{ github.sha }} --commit-dirty=true
+
+      # What a member reaches, checked from outside: the database through the
+      # pooler; a function that is up and refuses an anonymous call; the
+      # headers of #770 and the manifest's content type on the Pages address
+      # and, once its CNAME resolves, on app.osubb.ro (the first Release runs
+      # before the custom domain exists, runbook §11). Every check runs and
+      # reports; any failure fails the step, so no tag is written.
+      - name: Smoke checks
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+        run: |
+          failed=0
+          pass() { echo "ok    $1"; }
+          fail() { echo "::error::Smoke check failed: $1"; failed=1; }
+
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          fi
+          # `supabase link` wrote the session-pooler URL, without the password.
+          pooler="$(cat supabase/.temp/pooler-url 2>/dev/null || true)"
+          answer="$( [ -n "$pooler" ] && timeout 30 psql "$pooler" -tAc 'select 1' 2>&1 || true)"
+          if [ "$answer" = 1 ]; then pass "select 1 through the pooler"; else fail "select 1 through the pooler (${answer:-no pooler URL from supabase link})"; fi
+
+          status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${SUPABASE_URL%/}/functions/v1/send-push" || true)"
+          if [ "$status" = 401 ]; then pass "GET send-push without a key → 401"; else fail "GET send-push without a key → $status, expected 401"; fi
+
+          hosts="https://$PAGES_PROJECT.pages.dev"
+          if getent hosts "$PRODUCTION_DOMAIN" >/dev/null; then
+            hosts="$hosts https://$PRODUCTION_DOMAIN"
+          else
+            echo "::notice::$PRODUCTION_DOMAIN does not resolve yet; checked $hosts only (runbook §11 adds the CNAME after the first Release)."
+          fi
+          for host in $hosts; do
+            headers="$(curl -sSI --connect-timeout 10 --max-time 30 "$host/" 2>&1 | tr -d '\r' | tr '[:upper:]' '[:lower:]' || true)"
+            if printf '%s\n' "$headers" | grep -Eq '^content-security-policy(-report-only)?:'; then pass "$host/ sends a CSP"; else fail "$host/ sends no Content-Security-Policy"; fi
+            if printf '%s\n' "$headers" | grep -q '^strict-transport-security:'; then pass "$host/ sends HSTS"; else fail "$host/ sends no Strict-Transport-Security"; fi
+            type="$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{content_type}' "$host/manifest.webmanifest" || true)"
+            if [ "${type%%;*}" = application/manifest+json ]; then pass "$host/manifest.webmanifest is application/manifest+json"; else fail "$host/manifest.webmanifest is '$type', expected application/manifest+json"; fi
+          done
+          exit "$failed"
+
+      # Written last, so a tag means every step above passed; the next
+      # Release's report counts from it. Releasing the same commit twice in
+      # one day finds its tag already there, which is success; a tag of that
+      # name on another commit is not.
+      - name: Tag the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="release/$(date -u +%F)-${GITHUB_SHA:0:7}"
+          if existing="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null)"; then
+            if [ "$existing" != "$GITHUB_SHA" ]; then
+              echo "::error::Tag $tag already exists on $existing, not on $GITHUB_SHA."
+              exit 1
+            fi
+            echo "Tag $tag already marks this commit."
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          echo "Released and tagged [\`$tag\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$tag)." >> "$GITHUB_STEP_SUMMARY"

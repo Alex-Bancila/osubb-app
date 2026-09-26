@@ -53,6 +53,15 @@ vi.mock('./supabase', () => ({
   },
 }));
 
+// The Web Push device (#704): sign-out removes this device's row first.
+const pushDevice = vi.hoisted(() => ({
+  unsubscribeDevice: vi.fn(async (_memberId: string) => undefined),
+}));
+vi.mock('./push-device', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./push-device')>()),
+  unsubscribeDevice: pushDevice.unsubscribeDevice,
+}));
+
 import { AuthProvider, useAuth } from './auth';
 
 // Builds a stored session. Passing `issuedAtMs` also stamps `expires_at` /
@@ -153,6 +162,26 @@ describe('AuthProvider cache hygiene', () => {
 
     await waitFor(() =>
       expect(client.getQueryCache().getAll()).toHaveLength(0),
+    );
+  });
+
+  it('forgets that push is on here for a member whose session ends (#769)', async () => {
+    localStorage.setItem('osubb.push-on.a', '1');
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <div />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    notifyListener()('SIGNED_IN', sessionFor('a'));
+    expect(localStorage.getItem('osubb.push-on.a')).toBe('1');
+    notifyListener()('SIGNED_OUT', null);
+
+    await waitFor(() =>
+      expect(localStorage.getItem('osubb.push-on.a')).toBeNull(),
     );
   });
 
@@ -284,6 +313,49 @@ describe('AuthProvider cache hygiene', () => {
     expect(client.getQueryData(['profile', 'me', { memberId: 'a' }])).toEqual({
       full_name: 'A',
     });
+  });
+});
+
+describe('sign-out and this device’s Web Push (#704)', () => {
+  function renderSignedIn() {
+    auth.getSession.mockResolvedValueOnce({
+      data: { session: sessionFor('member-a') },
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <SessionProbe />
+          <SignOutButton />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('removes this device’s push row before signing out', async () => {
+    renderSignedIn();
+    await waitFor(() =>
+      expect(screen.getByTestId('session-user')).toHaveTextContent('member-a'),
+    );
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
+    expect(pushDevice.unsubscribeDevice).toHaveBeenCalledWith('member-a');
+    const [removeOrder] = pushDevice.unsubscribeDevice.mock.invocationCallOrder;
+    const [signOutOrder] = auth.signOut.mock.invocationCallOrder;
+    expect(removeOrder).toBeLessThan(signOutOrder ?? 0);
+  });
+
+  it('still signs out when removing the push row fails', async () => {
+    pushDevice.unsubscribeDevice.mockRejectedValueOnce(new Error('offline'));
+    renderSignedIn();
+    await waitFor(() =>
+      expect(screen.getByTestId('session-user')).toHaveTextContent('member-a'),
+    );
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
   });
 });
 

@@ -266,7 +266,10 @@ create or replace function pg_temp.test_credit_task(
   p_task_id   bigint,
   p_member_id uuid,
   p_evaluator uuid,
-  p_note      text default 'fixture evaluation'
+  p_note      text default 'fixture evaluation',
+  -- #677: the award instant -- the Evaluation's evaluated_at and its ledger
+  -- row's created_at. Null keeps the transaction's now().
+  p_awarded_at timestamptz default null
 ) returns int
 language plpgsql
 as $function$
@@ -305,29 +308,73 @@ begin
 
   insert into public.task_evaluations
     (task_id, assignment_id, evaluated_by, outcome,
-     difficulty, rating, points, note)
+     difficulty, rating, points, note, evaluated_at)
   values (p_task_id, v_assignment_id, p_evaluator, v_outcome,
-          v_task.difficulty, v_task.rating, v_points, p_note)
+          v_task.difficulty, v_task.rating, v_points, p_note,
+          coalesce(p_awarded_at, now()))
   returning id into v_evaluation_id;
 
   insert into public.points_ledger
-    (member_id, delta, reason, task_id, evaluation_id)
-  values (p_member_id, v_points, 'task', p_task_id, v_evaluation_id);
+    (member_id, delta, reason, task_id, evaluation_id, created_at)
+  values (p_member_id, v_points, 'task', p_task_id, v_evaluation_id,
+          coalesce(p_awarded_at, now()));
 
   return v_points;
 end;
 $function$;
 
+-- test_reverse_award (#677): reverse one member's live Evaluation on a Task
+-- at p_reversed_at exactly the way reopen_task does -- the reversal trio on
+-- the Evaluation (the only update task_evaluations_guard_change permits) plus
+-- the offsetting `task_reversal` ledger row, whose own created_at is
+-- p_reversed_at. Paired with test_credit_task's p_awarded_at, this dates the
+-- two ledger rows apart while they share one Evaluation -- which is what lets
+-- a Work Filter test tell "the award instant" from "a ledger row's
+-- created_at".
+create or replace function pg_temp.test_reverse_award(
+  p_task_id     bigint,
+  p_member_id   uuid,
+  p_reversed_at timestamptz
+) returns void
+language plpgsql
+as $function$
+declare
+  v_evaluation public.task_evaluations;
+begin
+  select evaluation.* into strict v_evaluation
+    from public.task_evaluations as evaluation
+    join public.task_assignments as assignment on assignment.id = evaluation.assignment_id
+   where evaluation.task_id = p_task_id
+     and assignment.member_id = p_member_id
+     and evaluation.reversed_at is null;
+
+  update public.task_evaluations
+     set reversed_at = p_reversed_at,
+         reversed_by = v_evaluation.evaluated_by,
+         reversal_reason = 'fixture dated reversal'
+   where id = v_evaluation.id;
+  insert into public.points_ledger
+    (member_id, delta, reason, task_id, evaluation_id, created_at)
+  values (p_member_id, -v_evaluation.points, 'task_reversal', p_task_id,
+          v_evaluation.id, p_reversed_at);
+end;
+$function$;
+
 -- Native fixture materializer: aliases exist only in pg_temp descriptor rows.
+-- A descriptor without a group_id falls back to its name, scoped to the parent
+-- the materializer gives it (Group names are unique among siblings only):
+-- Departments and Projects are roots, a Team sits under its Department's
+-- Group (or at the root), and the seeded demo Teams under their seeded parents.
 create or replace function pg_temp.dept_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
- select coalesce((select g.id from public.groups g where g.id=d.group_id),(select g.id from public.groups g where g.name=d.name limit 1)) from pg_temp.fixture_departments d where d.id=p_key
+ select coalesce((select g.id from public.groups g where g.id=d.group_id),(select g.id from public.groups g where g.name=d.name and g.parent_id is null)) from pg_temp.fixture_departments d where d.id=p_key
 $$;
 create or replace function pg_temp.team_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
- select coalesce((select coalesce((select g.id from public.groups g where g.id=t.group_id),(select g.id from public.groups g where g.name=t.name limit 1)) from pg_temp.fixture_teams t where t.id=p_key),
- (select g.id from public.groups g where g.name=case p_key when 't-app' then 'Echipa Aplicație' when 't-recruti' then 'Echipa Recruți' when 't-logistica' then 'Echipa Logistică' end limit 1))
+ select coalesce((select coalesce((select g.id from public.groups g where g.id=t.group_id),(select g.id from public.groups g where g.name=t.name and g.parent_id is not distinct from pg_temp.dept_group(t.dept_id))) from pg_temp.fixture_teams t where t.id=p_key),
+ (select g.id from public.groups g where g.name=case p_key when 't-app' then 'Echipa Aplicație' when 't-recruti' then 'Echipa Recruți' when 't-logistica' then 'Echipa Logistică' end
+    and g.parent_id is not distinct from (select r.id from public.groups r where r.parent_id is null and r.name=case p_key when 't-app' then 'Diverse' when 't-recruti' then 'Educațional' end)))
 $$;
 create or replace function pg_temp.project_group(p_key bigint) returns bigint language sql stable security definer set search_path='' as $$
- select coalesce((select g.id from public.groups g where g.id=p.group_id),(select g.id from public.groups g where g.name=p.name limit 1)) from pg_temp.fixture_projects p where p.id=p_key
+ select coalesce((select g.id from public.groups g where g.id=p.group_id),(select g.id from public.groups g where g.name=p.name and g.parent_id is null)) from pg_temp.fixture_projects p where p.id=p_key
 $$;
 create or replace function pg_temp.materialize_legacy_groups() returns void language plpgsql security definer set search_path='' as $$
 declare fixture record; v_id bigint;
@@ -375,7 +422,7 @@ $$;
 
 \if :{?osubb_test_suite}
 \else
-select plan(24);
+select plan(26);
 
 insert into auth.users (id, email)
 values ('e3670000-0000-0000-0000-000000000001', 'helpers.bce@test.local');
@@ -507,6 +554,38 @@ select is(
     where task.title = 'helpers-credit-fixture'),
   'command:6:e3670000-0000-0000-0000-000000000001',
   'the ledger row names a command Evaluation on that member''s own Assignment');
+
+-- test_credit_task's p_awarded_at and test_reverse_award: the award instant
+-- is set at insert, and the reversal row is dated apart from it.
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('helpers-dated-fixture', 2, 5, 'completed', now(), pg_temp.dept_group('edu'));
+select pg_temp.test_credit_task(
+  (select id from public.tasks where title = 'helpers-dated-fixture'),
+  'e3670000-0000-0000-0000-000000000001',
+  'e3670000-0000-0000-0000-000000000001',
+  p_awarded_at => '2001-03-10 10:00:00+00');
+select pg_temp.test_reverse_award(
+  (select id from public.tasks where title = 'helpers-dated-fixture'),
+  'e3670000-0000-0000-0000-000000000001', '2001-04-10 10:00:00+00');
+
+select is(
+  (select array_agg(format('%s:%s:%s', ledger.reason, ledger.delta,
+                           ledger.created_at = '2001-03-10 10:00:00+00')
+                    order by ledger.created_at)
+     from public.points_ledger ledger
+     join public.tasks task on task.id = ledger.task_id
+    where task.title = 'helpers-dated-fixture'),
+  array['task:6:t', 'task_reversal:-6:f'],
+  'p_awarded_at dates the credit row; test_reverse_award dates the reversal row apart from it');
+
+select is(
+  (select format('%s:%s', evaluation.evaluated_at = '2001-03-10 10:00:00+00',
+                 evaluation.reversed_at = '2001-04-10 10:00:00+00')
+     from public.task_evaluations evaluation
+     join public.tasks task on task.id = evaluation.task_id
+    where task.title = 'helpers-dated-fixture'),
+  't:t',
+  'and the one Evaluation both rows share carries both instants');
 
 select * from finish();
 rollback;

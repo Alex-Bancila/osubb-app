@@ -7,9 +7,14 @@
 // is painful against a query-builder chain and trivial against six methods.
 // The CSV import (#72) will reuse the same port.
 
-import { createClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  type SupabaseClient,
+  type SupabaseClientOptions,
+} from "@supabase/supabase-js";
 import type { InviteDeps } from "../_shared/member-invite.ts";
 import { allActiveGroups, type GroupReference } from "../_shared/groups.ts";
+import { requireSecretKey } from "../_shared/secret-keys.ts";
 
 export type {
   DbError,
@@ -22,22 +27,63 @@ export interface InviteAdminDeps extends InviteDeps {
   activeGroups(): Promise<GroupReference[]>;
 }
 
-export function realDeps(req: Request): InviteAdminDeps {
-  // Read env here rather than at module load, so importing this file in a
-  // test (or from another function) never throws on a missing variable.
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+/** What the two clients are built from, read once when the function boots. */
+export interface AdminEnv {
+  url: string;
+  /** Validates the caller's token; never used for anything privileged. */
+  anonKey: string;
+  /** The project's secret key (`sb_secret_...`) the admin client uses. */
+  secretKey: string;
+}
+
+/**
+ * Reads the function's environment at boot. The admin client is built from
+ * the project's secret key in `SUPABASE_SECRET_KEYS` (#796, ruling L8), never
+ * from the legacy service_role key variable, which Supabase retires by the
+ * end of 2026. Throws MissingSecretKeyError when there is no secret key, and
+ * an error naming the variable when the URL or the anon key is missing, so
+ * the function refuses to start rather than fail every invitation.
+ */
+export function readAdminEnv(
+  functionName: string,
+  get: (name: string) => string | undefined = (name) => Deno.env.get(name),
+): AdminEnv {
+  const required = (name: string): string => {
+    const value = get(name);
+    if (!value) {
+      throw new Error(`${functionName} cannot start: ${name} is not set.`);
+    }
+    return value;
+  };
+  return {
+    url: required("SUPABASE_URL"),
+    anonKey: required("SUPABASE_ANON_KEY"),
+    secretKey: requireSecretKey(get("SUPABASE_SECRET_KEYS"), functionName),
+  };
+}
+
+export type ClientFactory = (
+  url: string,
+  key: string,
+  options?: SupabaseClientOptions<"public">,
+) => SupabaseClient;
+
+export function realDeps(
+  req: Request,
+  env: AdminEnv,
+  create: ClientFactory = createClient,
+): InviteAdminDeps {
   const authHeader = req.headers.get("Authorization") ?? "";
 
   // Anon client + the caller's header: validates the token against Auth.
-  const caller = createClient(url, anonKey, {
+  const caller = create(env.url, env.anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
-  // Service client bypasses RLS, so it is never handed a client-supplied
-  // filter — every query below is keyed off the validated user id or a value
-  // the handler has already checked.
-  const admin = createClient(url, serviceKey, {
+  // The secret key maps to service_role at the gateway, so this client
+  // bypasses RLS and is never handed a client-supplied filter — every query
+  // below is keyed off the validated user id or a value the handler has
+  // already checked.
+  const admin = create(env.url, env.secretKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 

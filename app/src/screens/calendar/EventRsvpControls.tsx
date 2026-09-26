@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { IonButton, IonSpinner, IonToast } from '@ionic/react';
+import { LoaderCircle } from 'lucide-react';
 
+import { Button } from '../../components/ui/button';
 import {
   EventRsvpMutationError,
   useEventRsvp,
@@ -34,6 +35,7 @@ export default function EventRsvpControls({
   const mutation = useSetEventRsvp();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const controlsDisabled = rsvp.isPending || rsvp.isError || mutation.isPending;
+  const answer = rsvp.data?.status;
 
   async function save(status: EventRsvpStatus) {
     if (controlsDisabled) return;
@@ -57,18 +59,22 @@ export default function EventRsvpControls({
     <section className="event-rsvp" aria-label={`Răspuns pentru ${eventTitle}`}>
       <div className="event-rsvp-head">
         <p className="event-rsvp-prompt">Participi?</p>
-        <span className="event-rsvp-state" aria-live="polite">
+        <span className="event-rsvp-state">
           {mutation.isPending ? (
             <>
-              <IonSpinner name="crescent" aria-hidden="true" /> Se salvează…
+              <LoaderCircle
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              Se salvează…
             </>
           ) : rsvp.isPending ? (
             'Se încarcă răspunsul…'
           ) : rsvp.isError ? (
             'Răspuns indisponibil'
-          ) : rsvp.data?.status === 'going' ? (
+          ) : answer === 'going' ? (
             'Ai răspuns: particip'
-          ) : rsvp.data?.status === 'declined' ? (
+          ) : answer === 'declined' ? (
             'Ai răspuns: nu particip'
           ) : (
             'Nu ai răspuns încă'
@@ -82,54 +88,46 @@ export default function EventRsvpControls({
         aria-label="Alege răspunsul"
         aria-busy={mutation.isPending ? 'true' : 'false'}
       >
-        <IonButton
-          className={
-            rsvp.data?.status === 'going'
-              ? 'event-rsvp-button is-going'
-              : 'event-rsvp-button'
-          }
+        <Button
           type="button"
-          fill={rsvp.data?.status === 'going' ? 'solid' : 'outline'}
+          variant={answer === 'going' ? 'default' : 'outline'}
+          className="event-rsvp-button"
           disabled={controlsDisabled}
-          aria-pressed={rsvp.data?.status === 'going' ? 'true' : 'false'}
+          aria-pressed={answer === 'going' ? 'true' : 'false'}
           onClick={() => void save('going')}
         >
           Particip
-        </IonButton>
-        <IonButton
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
           className={
-            rsvp.data?.status === 'declined'
+            answer === 'declined'
               ? 'event-rsvp-button is-declined'
               : 'event-rsvp-button'
           }
-          type="button"
-          fill={rsvp.data?.status === 'declined' ? 'solid' : 'outline'}
           disabled={controlsDisabled}
-          aria-pressed={rsvp.data?.status === 'declined' ? 'true' : 'false'}
+          aria-pressed={answer === 'declined' ? 'true' : 'false'}
           onClick={() => void save('declined')}
         >
           Nu particip
-        </IonButton>
+        </Button>
       </div>
 
+      {/* One inline message, seen and announced alike: it replaced the Ionic
+          toast, which needed a hidden twin for assistive technology. */}
       {feedback && (
         <p
-          className="event-rsvp-live"
+          className={
+            feedback.kind === 'error'
+              ? 'event-rsvp-live is-error'
+              : 'event-rsvp-live'
+          }
           role={feedback.kind === 'error' ? 'alert' : 'status'}
         >
           {feedback.message}
         </p>
       )}
-
-      <IonToast
-        isOpen={feedback !== null}
-        message={feedback?.message}
-        color={feedback?.kind === 'error' ? 'danger' : 'success'}
-        duration={2800}
-        position="bottom"
-        htmlAttributes={{ 'aria-hidden': 'true' }}
-        onDidDismiss={() => setFeedback(null)}
-      />
     </section>
   );
 }

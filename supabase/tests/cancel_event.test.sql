@@ -67,7 +67,7 @@ select ok((select bool_and(title='Eveniment anulat: Event a #248') from public.n
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000003');
 select throws_ok($q$select public.cancel_event((select id from ex where title='Event a #248'),'Anulat')$q$,'PT409','event_cancelled','double cancellation rejected');
-select throws_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='a'),'2026-10-01 12:00+00',null,null,null,null,0)$q$,'PT409','event_cancelled','cancelled Event cannot be edited');
+select throws_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='a'),'2026-10-01 12:00+00',null,null,null,null,0,null)$q$,'PT409','event_cancelled','cancelled Event cannot be edited');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000004');
 select is((select count(*) from public.events where id=(select id from ex where title='Event a #248')),1::bigint,'cancelled Event remains readable');

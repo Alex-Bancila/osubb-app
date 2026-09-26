@@ -20,6 +20,7 @@ import { useTaskProgress } from '../../queries/task-progress';
 import { TaskDuplicateControl } from './TaskDuplicateControl';
 import { TaskActionSuccess } from './TaskActionSuccess';
 import { TaskCard } from './TaskCard';
+import { SubmissionNote } from './SubmissionNote';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { UmbrellaTaskSection } from './UmbrellaTaskSection';
 import { TaskQueueControl } from './TaskQueueControl';
@@ -61,11 +62,14 @@ function TaskDetails({
           task={task}
           memberId={memberId}
           pending={progress.isPending}
-          onProgress={(selectedId, action) =>
-            progress.mutateAsync({ taskId: selectedId, action })
-          }
+          onProgress={(input) => progress.mutateAsync(input)}
+          anchor={false}
+          showSubmissionNote={false}
         />
       </div>
+      {task.submission && (
+        <SubmissionNote submission={task.submission} showTime />
+      )}
       {canManage && task.kind === 'task' && (
         <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
       )}
@@ -111,10 +115,13 @@ function TaskDetails({
             <dd>{task.difficulty ?? 'Neevaluat'}</dd>
           </div>
         )}
-        <div>
-          <dt className="font-semibold">Audiență</dt>
-          <dd>{task.audienceLabel}</dd>
-        </div>
+        {/* A direct Task is local only (R26): its Audience says nothing. */}
+        {task.assignmentMode === 'public' && (
+          <div>
+            <dt className="font-semibold">Audiență</dt>
+            <dd>{task.audienceLabel}</dd>
+          </div>
+        )}
         <div>
           <dt className="font-semibold">Atribuire</dt>
           <dd>

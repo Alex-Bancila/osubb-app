@@ -78,7 +78,7 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
     { id: 20, title: 'Umbrelă administrată', group_id: 501 },
   ]);
   expect(data.groupNames).toEqual([{ id: 1, name: 'Educațional' }]);
-  expect(calls).toContainEqual(['groups', 'select', 'id,name']);
+  expect(calls).toContainEqual(['groups', 'select', 'id,name,is_private']);
   expect(api.rpc).toHaveBeenCalledWith('managed_work_groups');
 });
 it('returns no form options for a successful lack of managed origins', async () => {

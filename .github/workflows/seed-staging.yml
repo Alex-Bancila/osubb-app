@@ -43,12 +43,13 @@ jobs:
       - name: Confirm the target is staging
         env:
           TYPED_REF: ${{ inputs.project_ref }}
-          STAGING_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          # A variable of the staging Environment after #110; the secret until then.
+          STAGING_REF: ${{ vars.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_REF }}
           DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: |
           fail() { echo "::error::$1"; exit 1; }
 
-          [ -n "$STAGING_REF" ] || fail "Secret SUPABASE_PROJECT_REF is not set."
+          [ -n "$STAGING_REF" ] || fail "SUPABASE_PROJECT_REF is not set (staging Environment variable, or the old repository secret)."
           [ -n "$DB_URL" ] || fail "Secret STAGING_DB_URL is not set — see docs/backend/seeding-staging.md."
 
           [ "$TYPED_REF" = "$STAGING_REF" ] || \

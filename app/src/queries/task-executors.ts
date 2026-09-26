@@ -5,9 +5,9 @@ import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
  * Adds the deliberately narrow Executor identity returned by #499's RPC.
  * One request enriches an entire result set; Task cards never fetch profiles.
  */
-export async function attachVisibleTaskExecutors(
-  rows: TaskPresentationRow[],
-): Promise<TaskPresentationRow[]> {
+export async function attachVisibleTaskExecutors<
+  Row extends TaskPresentationRow,
+>(rows: Row[]): Promise<Row[]> {
   if (!rows.length) return rows;
 
   const taskIds = [...new Set(rows.map((row) => row.id))];
