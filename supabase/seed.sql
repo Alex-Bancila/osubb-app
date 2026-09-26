@@ -57,24 +57,20 @@
 -- requests → tasks → campaigns → events → announcements → projects → teams →
 -- auth.users.
 
--- A real tester may create a Project and temporarily choose a demo account as
--- its lead. That Project is not demo-owned, so deleting it would be data loss;
--- preserving it while deleting its lead would violate the foreign key. Abort
--- the transaction with a precise message and let a human reassign the lead.
+-- Do not silently remove demo-held positions in a real Member's Group.
 do $$
 begin
   if exists (
-    select 1
-      from projects project
-      join profiles leader on leader.id = project.leader_id
-      join profiles creator on creator.id = project.created_by
-     where leader.email like '%@demo.osubb'
-       and creator.email not like '%@demo.osubb'
+    select 1 from groups g
+    join profiles creator on creator.id=g.created_by
+    join group_members gm on gm.group_id=g.id
+    join profiles member on member.id=gm.member_id
+    where creator.email not like '%@demo.osubb'
+      and member.email like '%@demo.osubb'
   ) then
-    raise exception using
-      errcode = 'P0001',
-      message = 'seed_refuses_cross_owned_demo_project',
-      detail = 'Reassign every non-demo-owned Project away from demo leads before re-seeding.';
+    raise exception using errcode='P0001',
+      message='seed_refuses_cross_owned_demo_group',
+      detail='Remove demo memberships from non-demo-owned Groups before re-seeding.';
   end if;
 end;
 $$;
@@ -178,14 +174,6 @@ delete from events e
 delete from announcements a
  using profiles p where a.created_by = p.id and p.email like '%@demo.osubb';
 
--- Clear legacy demo fixtures left by a pre-#587 staging seed. This seed never
--- creates them again; the deletion allows a live staging database to upgrade.
-delete from projects project
- where exists (select 1 from profiles creator
-                where creator.id = project.created_by
-                  and creator.email like '%@demo.osubb');
-delete from teams t where t.id in ('t-app', 't-recruti', 't-logistica');
-
 -- #586: Group commands now master these demo Groups. Remove only Groups
 -- created by the demo cohort after their work and Events have gone.
 delete from groups g
@@ -258,7 +246,7 @@ select pg_temp.seed_bc_claims();
 -- The five established Department Groups are reference data. BCE manages
 -- Diverse; everyone else is an ordinary Department member.
 select public.set_group_role(
-  (select id from groups where legacy_dept_id='diverse'),
+  (select id from groups where name='Diverse'),
   'd0000000-0000-0000-0000-000000000006','manager');
 do $$
 declare v_row record;
@@ -276,7 +264,7 @@ begin
         ('secretariat', 'd0000000-0000-0000-0000-000000000004'::uuid),
         ('diverse', 'd0000000-0000-0000-0000-000000000008'::uuid)
       ) as fixture(dept_id, member_id)
-      join groups grp on grp.legacy_dept_id = fixture.dept_id
+      join groups grp on grp.name = case fixture.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
   loop
     perform public.add_group_member(v_row.group_id, v_row.member_id);
   end loop;
@@ -287,9 +275,9 @@ $$;
 -- the demo creator for every later lookup so another BC's same-name Group is
 -- never changed by a staging rerun.
 select public.create_group('Echipa Aplicație','team',
-  (select id from groups where legacy_dept_id='diverse'));
+  (select id from groups where name='Diverse'));
 select public.create_group('Echipa Recruți','team',
-  (select id from groups where legacy_dept_id='edu'));
+  (select id from groups where name='Educațional'));
 select public.create_group('Echipa Logistică','team');
 select public.create_group('Festivalul Studențesc 2026','project',
   p_manager_id => 'd0000000-0000-0000-0000-000000000005');
@@ -323,10 +311,10 @@ begin
     end if;
   end loop;
   perform public.add_group_member(
-    (select id from groups where legacy_team_id='it'),
+    (select id from groups where name='Echipa IT'),
     'd0000000-0000-0000-0000-000000000006');
   perform public.add_group_member(
-    (select id from groups where legacy_team_id='it'),
+    (select id from groups where name='Echipa IT'),
     'd0000000-0000-0000-0000-000000000008');
 end;
 $$;
@@ -397,9 +385,9 @@ stable
 as $$
   select grp.id
     from public.groups as grp
-   where (p_dept is not null and grp.legacy_dept_id = p_dept)
+   where (p_dept is not null and grp.name = case p_dept when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end)
       or (p_team is not null and
-        (grp.legacy_team_id = p_team or
+        (grp.name = case p_team when 'it' then 'Echipa IT' when 'interne' then 'Echipa Interne' end or
          (grp.created_by = 'd0000000-0000-0000-0000-000000000007'
           and grp.name = case p_team
             when 't-app' then 'Echipa Aplicație'
@@ -1536,27 +1524,27 @@ select e.id, a.member_id, a.status
 -- The documented seed entrypoints run as postgres in one transaction, so an
 -- error rolls the trigger state back with the inserts.
 alter table announcements disable trigger announcements_fan_out;
-insert into announcements (title, body, dept_id, author, priority, category, pinned, form_label, form_url, published_at, created_by, group_id, audience) values
+insert into announcements (title, body, author, priority, category, pinned, form_label, form_url, published_at, created_by, group_id, audience) values
   ('Ședință extraordinară BC — vineri',
    'Vineri, ora 18:00, Aula Magna. Prezența tuturor coordonatorilor este obligatorie.',
-   null, 'BC', 'critical', 'organizatoric', true, null, null,
+   'BC', 'critical', 'organizatoric', true, null, null,
    now() - interval '1 day',  'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org'),
   ('Feedback eveniment de deschidere',
    'Spune-ne cum ți s-a părut. Durează două minute și chiar ne ajută.',
-   null, 'Imagine & PR', 'important', 'feedback', false,
+   'Imagine & PR', 'important', 'feedback', false,
    'Completează formularul', 'https://forms.gle/exemplu-osubb',
    now() - interval '3 days', 'd0000000-0000-0000-0000-000000000006', (select id from groups where is_organization), 'org'),
   ('Materiale de la cursul de Excel',
    'Slide-urile și exercițiile sunt în drive-ul departamentului.',
-   'edu', 'Educational', 'normal', 'resurse', false, null, null,
-   now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where legacy_dept_id='edu'), 'local'),
+   'Educational', 'normal', 'resurse', false, null, null,
+   now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where name='Educațional'), 'local'),
   ('Recrutarea de toamnă începe luni',
    'Standul din campus are nevoie de voluntari pentru două ture pe zi.',
-   null, 'Resurse Umane', 'important', 'recrutare', true, null, null,
+   'Resurse Umane', 'important', 'recrutare', true, null, null,
    now() - interval '2 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where is_organization), 'org'),
   ('Noul ghid de punctaj',
    'Dificultatea și nota se înmulțesc — detaliile sunt în aplicație, la Ghid.',
-   null, 'BC', 'normal', 'organizatoric', false, null, null,
+   'BC', 'normal', 'organizatoric', false, null, null,
    now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org');
 alter table announcements enable trigger announcements_fan_out;
 

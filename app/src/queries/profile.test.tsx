@@ -44,6 +44,7 @@ describe('profile queries and mutations', () => {
                   data: {
                     id: memberId,
                     full_name: 'Alex Băncilă',
+                    nickname: 'Alex',
                     role: 'bc',
                     status: 'activ',
                     avatar_color: '#ED2025',
@@ -79,6 +80,7 @@ describe('profile queries and mutations', () => {
       expect(profile).toEqual({
         id: memberId,
         full_name: 'Alex Băncilă',
+        nickname: 'Alex',
         role: 'bc',
         status: 'activ',
         avatar_color: '#ED2025',
@@ -99,6 +101,7 @@ describe('profile queries and mutations', () => {
                   data: {
                     id: memberId,
                     full_name: 'Recrut Nou',
+                    nickname: null,
                     role: 'recrut',
                     status: 'activ',
                     avatar_color: null,
@@ -131,6 +134,7 @@ describe('profile queries and mutations', () => {
       expect(profile).toEqual({
         id: memberId,
         full_name: 'Recrut Nou',
+        nickname: null,
         role: 'recrut',
         status: 'activ',
         avatar_color: null,
@@ -225,20 +229,47 @@ describe('profile queries and mutations', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          fullName: 'Ana Ionescu',
+          nickname: '  Ani  ',
           phone: '0799887766',
           avatarColor: '#007F33',
         });
       });
 
+      // #675 (R5): the full name is never part of a self-update.
       expect(updateMock).toHaveBeenCalledWith({
-        full_name: 'Ana Ionescu',
+        nickname: 'Ani',
         phone: '0799887766',
         avatar_color: '#007F33',
       });
+      expect(updateMock.mock.calls[0]?.[0]).not.toHaveProperty('full_name');
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: keys.profile.all,
       });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: keys.members.all,
+      });
+    });
+
+    it('clears the Nickname with null when it is emptied', async () => {
+      auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
+      const updateMock = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      });
+      supabaseMock.from.mockImplementation((table: string) =>
+        table === 'profiles' ? { update: updateMock } : supabaseMock,
+      );
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const { result } = renderHook(() => useUpdateMyProfile(), {
+        wrapper: wrapper(queryClient),
+      });
+
+      await act(async () => {
+        await result.current.mutateAsync({ nickname: '   ' });
+      });
+
+      expect(updateMock).toHaveBeenCalledWith({ nickname: null });
     });
   });
 });

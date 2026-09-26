@@ -82,7 +82,7 @@ select is((select array_agg(proname order by proname) from pg_proc
 -- ==================== 4. The two row guards ====================
 -- announcements_guard_text, exercised as the owner so only the guard and the
 -- constraints speak (RLS is announcements.test.sql's and rls_announcements').
-create temp table g673 as select id from public.groups where legacy_dept_id = 'edu';
+create temp table g673 as select id from public.groups where name = 'Educațional';
 create function pg_temp.announce(p_title text, p_body text, p_label text default null, p_url text default null)
 returns void language sql as $$
   insert into public.announcements (title, body, group_id, audience, form_label, form_url)

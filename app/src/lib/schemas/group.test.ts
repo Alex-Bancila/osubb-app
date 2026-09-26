@@ -4,7 +4,9 @@ import {
   expectRoutable,
   issues,
 } from '../../test/schema-issues';
+import { CommandError } from '../command-reasons';
 import {
+  applicationFormFailure,
   fieldForReason,
   groupCreateSchema,
   groupSettingsSchema,
@@ -25,6 +27,7 @@ const settings = {
   applicationLevel: null as number | null,
   sharedWorkVisibility: false,
   minLevel: 1,
+  applicationForm: { label: '', url: '' },
 };
 function check<T extends object>(
   schema: { safeParse: (value: unknown) => Parameters<typeof issues>[0] },
@@ -108,6 +111,8 @@ it('maps every reason a Group command raises to a Group field', () => {
       'managerTitle',
       'minLevel',
       'applicationLevel',
+      'applicationForm.label',
+      'applicationForm.url',
     ],
     [
       'invalid_group_name',
@@ -123,6 +128,104 @@ it('maps every reason a Group command raises to a Group field', () => {
       'group_min_level_below_parent',
       'group_min_level_above_actor',
       'group_min_level_above_children',
+      // update_group's application form link (#697): #684's link reasons.
+      'link_incomplete',
+      'link_label_too_long',
+      'link_url_invalid',
+      'link_url_too_long',
     ],
   );
+});
+
+describe('Application form link (#698)', () => {
+  const url = 'https://forms.example.org/logistica';
+  const form = (label: string, address: string) =>
+    issues(
+      groupSettingsSchema.safeParse({
+        ...settings,
+        applicationForm: { label, url: address },
+      }),
+    );
+
+  it('takes both or neither, trimmed, blank as no value', () => {
+    expect(form('', '')).toEqual([]);
+    expect(form('  ', ' ')).toEqual([]);
+    expect(form('Înscrie-te', url)).toEqual([]);
+    expect(
+      groupSettingsSchema.parse({
+        ...settings,
+        applicationForm: { label: ' Înscrie-te ', url: ` ${url} ` },
+      }).applicationForm,
+    ).toEqual({ label: 'Înscrie-te', url });
+    expect(groupSettingsSchema.parse(settings).applicationForm).toEqual({
+      label: null,
+      url: null,
+    });
+    // The half left empty is the one named.
+    expect(form('Înscrie-te', '')).toEqual([
+      'applicationForm.url: application_form_incomplete',
+    ]);
+    expect(form('', url)).toEqual([
+      'applicationForm.label: application_form_incomplete',
+    ]);
+  });
+
+  it('measures the label at 60 characters, as char_length counts them', () => {
+    expect(
+      check(groupSettingsSchema, settings, {
+        applicationForm: { label: 'ș'.repeat(60), url },
+      }),
+    ).toEqual([]);
+    expect(
+      check(groupSettingsSchema, settings, {
+        applicationForm: { label: 'ș'.repeat(61), url },
+      }),
+    ).toEqual(['applicationForm.label: application_form_label_too_long']);
+  });
+
+  it('asks for an http(s) address of at most 2048 characters', () => {
+    for (const ok of [
+      'http://a.ro',
+      'https://a.ro',
+      `https://${'a'.repeat(2040)}`,
+    ])
+      expect(form('Formular', ok), ok).toEqual([]);
+    expect(
+      check(groupSettingsSchema, settings, {
+        applicationForm: { label: 'Formular', url: 'forms.example.org' },
+      }),
+    ).toEqual(['applicationForm.url: application_form_url_invalid']);
+    // The server's prefix check is case-sensitive; so is this one.
+    expect(form('Formular', 'HTTPS://a.ro')).toEqual([
+      'applicationForm.url: application_form_url_invalid',
+    ]);
+    expect(
+      check(groupSettingsSchema, settings, {
+        applicationForm: {
+          label: 'Formular',
+          url: `https://${'a'.repeat(2041)}`,
+        },
+      }),
+    ).toEqual(['applicationForm.url: link_url_too_long']);
+  });
+
+  it("renames update_group's Attached Link reasons into this form's words", () => {
+    for (const [server, renamed] of [
+      ['link_incomplete', 'application_form_incomplete'],
+      ['link_label_too_long', 'application_form_label_too_long'],
+      ['link_url_invalid', 'application_form_url_invalid'],
+    ] as const) {
+      const failure = applicationFormFailure(
+        new CommandError({ code: 'PT400', message: server }, 'x'),
+      );
+      expect(failure, server).toBeInstanceOf(CommandError);
+      expect((failure as CommandError).reason).toBe(renamed);
+      // A raw PostgREST error is renamed the same way.
+      expect(
+        (applicationFormFailure({ message: server }) as CommandError).reason,
+      ).toBe(renamed);
+    }
+    const other = new CommandError({ message: 'group_name_taken' }, 'x');
+    expect(applicationFormFailure(other)).toBe(other);
+  });
 });
