@@ -31,9 +31,10 @@ Minimum Level is selected from these organization concepts:
 | ------------------- | ------------------: |
 | Everyone            |                   0 |
 | AG / Voting Member+ |                   3 |
-| Responsible+        |                   4 |
 | BCE+                |                   5 |
 | BC+                 |                   6 |
+
+"Responsible+" (level 4) is retired as a Minimum Level choice — see the 2026-09-20 amendment above; `events_min_level_ck` admits only `{0, 3, 5, 6}`.
 
 An Event creator cannot choose a Minimum Level above their own organizational level. Moderator retains global override.
 
