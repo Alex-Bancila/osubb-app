@@ -60,6 +60,7 @@ const baseProfile: MyProfile = {
   joined_year: 2025,
   joined_at: '2025-10-01',
   email: 'maria@osubb.ro',
+  nickname: null,
   phone: '0722334455',
 };
 
