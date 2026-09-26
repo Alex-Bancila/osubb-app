@@ -37,7 +37,7 @@ insert into auth.users (id, email) values
   ('a3680000-0000-0000-0000-000000000001', 'lead.368@test.local'),
   ('a3680000-0000-0000-0000-000000000002', 'creator.368@test.local');
 insert into public.profiles (id, full_name, email, role) values
-  ('a3680000-0000-0000-0000-000000000001', 'Lead 368', 'lead.368@test.local', 'responsabil'),
+  ('a3680000-0000-0000-0000-000000000001', 'Lead 368', 'lead.368@test.local', 'vot'),
   ('a3680000-0000-0000-0000-000000000002', 'Creator 368', 'creator.368@test.local', 'bc');
 
 select pg_temp.materialize_legacy_groups();

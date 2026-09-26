@@ -74,7 +74,7 @@ insert into auth.users (id, email) values
   ('29100000-0000-0000-0000-000000000015', 'withdrawn-nodecider-291@test.local'),
   ('29100000-0000-0000-0000-000000000016', 'closed-by-manager-291@test.local');
 insert into public.profiles (id, full_name, email, role) values
-  ('29100000-0000-0000-0000-000000000001', 'Decider 291', 'decider-291@test.local', 'responsabil'),
+  ('29100000-0000-0000-0000-000000000001', 'Decider 291', 'decider-291@test.local', 'vot'),
   ('29100000-0000-0000-0000-000000000002', 'Pending Member 291', 'pending-member-291@test.local', 'voluntar'),
   ('29100000-0000-0000-0000-000000000003', 'Pending Bad 291', 'pending-bad-291@test.local', 'voluntar'),
   ('29100000-0000-0000-0000-000000000004', 'Withdrawn Ok 291', 'withdrawn-ok-291@test.local', 'voluntar'),

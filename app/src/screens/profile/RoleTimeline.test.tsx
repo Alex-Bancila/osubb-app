@@ -175,8 +175,27 @@ describe('RoleTimeline', () => {
   });
 
   it('shows a Role key the reference does not know as-is', () => {
-    render(<RoleTimeline profile={{ ...profile, role: 'responsabil' }} />);
+    // role_history keeps the retired rank as text (#593); the reference no
+    // longer lists it, so its segment shows the stored key unchanged.
+    historyMock.data = [
+      {
+        from_role: 'recrut',
+        to_role: 'responsabil',
+        created_at: '2026-02-01T10:00:00Z',
+        actor_kind: 'human',
+        changed_by: null,
+      },
+      {
+        from_role: 'responsabil',
+        to_role: 'voluntar',
+        created_at: '2026-06-01T10:00:00Z',
+        actor_kind: 'human',
+        changed_by: null,
+      },
+    ];
 
-    expect(items()[0]).toHaveTextContent('responsabil');
+    render(<RoleTimeline profile={profile} />);
+
+    expect(items()[1]).toHaveTextContent('responsabil');
   });
 });

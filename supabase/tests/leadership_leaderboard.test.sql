@@ -91,11 +91,10 @@ insert into public.profiles (id, full_name, email, role, status) values
   -- its Task's Origin or not at all.
   ('25800000-0000-0000-0000-000000000002', 'Mihai Executor 258', 'executor258@example.test', 'activ', 'activ'),
   ('25800000-0000-0000-0000-000000000003', 'Inactive BCE 258', 'inactivebce258@example.test', 'bce', 'inactiv'),
-  -- Level 4 -- the rank directly below the gate, and the plausible drift:
-  -- `app/src/lib/capabilities.ts` already draws a `manageTasks: 4` line, so a
-  -- gate loosened to `>= 4` would hand every Project Responsible the whole
-  -- organisation's points. Ruling 5: pin the threshold, not "some lower role".
-  ('25800000-0000-0000-0000-000000000004', 'Responsabil 258', 'responsabil258@example.test', 'responsabil', 'activ'),
+  -- Level 3 -- the highest live rank below the gate since #593 retired level 4.
+  -- A gate loosened below 5 would hand this persona the whole organisation's
+  -- points. Ruling 5: pin the threshold, not "some lower role".
+  ('25800000-0000-0000-0000-000000000004', 'Responsabil 258', 'responsabil258@example.test', 'vot', 'activ'),
   -- Level 6 -- proves the allow side is not carried by BCE alone.
   ('25800000-0000-0000-0000-000000000005', 'BC 258', 'bc258@example.test', 'bc', 'activ'),
   ('25800000-0000-0000-0000-000000000006', 'Ana Egalitate 258', 'egalitate258@example.test', 'activ', 'activ'),
@@ -522,9 +521,9 @@ select is((select count(*) from public.leadership_leaderboard()
 -- Ruling 5: the threshold is pinned by the rank immediately below it.
 select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000004');
 select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
-  'a responsabil (level 4, one rank below the gate) sees no protected rows');
+  'a vot (level 3, the highest live rank below the gate) sees no protected rows');
 select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 0::bigint,
-  'a responsabil gets no rows from a filtered read either -- the gate is >= 5, not >= 4');
+  'a vot gets no rows from a filtered read either -- the gate is >= 5');
 
 -- …and the allow side by every role the function's comment promises it to, not
 -- by BCE alone: BC (6) and Moderator (9).

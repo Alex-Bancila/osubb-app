@@ -58,7 +58,7 @@ insert into auth.users (id, email) values
   ('31600000-0000-0000-0000-000000000002', 'executor-a-316@test.local'),
   ('31600000-0000-0000-0000-000000000003', 'executor-b-316@test.local');
 insert into public.profiles (id, full_name, email, role) values
-  ('31600000-0000-0000-0000-000000000001', 'Evaluator 316', 'evaluator-316@test.local', 'responsabil'),
+  ('31600000-0000-0000-0000-000000000001', 'Evaluator 316', 'evaluator-316@test.local', 'vot'),
   ('31600000-0000-0000-0000-000000000002', 'Executor A 316', 'executor-a-316@test.local', 'voluntar'),
   ('31600000-0000-0000-0000-000000000003', 'Executor B 316', 'executor-b-316@test.local', 'voluntar');
 

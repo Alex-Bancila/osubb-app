@@ -79,9 +79,9 @@ jobs:
               raise exception
                 'Migrations are not applied on this project: public.roles does not exist. Merge to main and let the deploy finish first.';
             end if;
-            if (select count(*) from public.roles) <> 8 then
+            if (select count(*) from public.roles) <> 7 then
               raise exception
-                'Migrations are only partly applied (public.roles has % rows, expected 8).',
+                'Migrations are only partly applied (public.roles has % rows, expected 7).',
                 (select count(*) from public.roles);
             end if;
             if not has_table_privilege('auth.users', 'insert') then

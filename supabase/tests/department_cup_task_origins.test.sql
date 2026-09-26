@@ -70,11 +70,10 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('25900000-0000-0000-0000-000000000001', 'BCE 259', 'bce259@example.test', 'bce', 'activ'),
   ('25900000-0000-0000-0000-000000000002', 'Member 259', 'member259@example.test', 'activ', 'activ'),
   ('25900000-0000-0000-0000-000000000003', 'Inactive BCE 259', 'inactive259@example.test', 'bce', 'inactiv'),
-  -- Level 4 -- the rank directly below the gate. This is the persona that
-  -- pins the threshold: `app/src/lib/capabilities.ts` carries `manageTasks: 4`
-  -- for `responsabil`, so a gate accidentally loosened to `>= 4` must be
-  -- caught here rather than shipping unnoticed (review finding 1).
-  ('25900000-0000-0000-0000-000000000004', 'Responsabil 259', 'responsabil259@example.test', 'responsabil', 'activ'),
+  -- Level 3 -- the highest live rank below the gate since #593 retired level 4.
+  -- This is the persona that pins the threshold: a gate accidentally loosened
+  -- below 5 must be caught here rather than shipping unnoticed (review finding 1).
+  ('25900000-0000-0000-0000-000000000004', 'Responsabil 259', 'responsabil259@example.test', 'vot', 'activ'),
   -- Level 6 -- proves the allow side is not carried by BCE alone.
   ('25900000-0000-0000-0000-000000000005', 'BC 259', 'bc259@example.test', 'bc', 'activ');
 
@@ -354,15 +353,15 @@ select is((select count(*) from public.dept_cup), 0::bigint,
 select is((select count(*) from public.department_cup(2590001)), 0::bigint,
   'an ordinary Member gets no rows from the filtered read either -- and no error');
 
--- Pins the threshold itself, not merely "some level is denied". A responsabil
--- is level 4, the rank directly below the gate, and is the plausible-drift
--- case named in review finding 1: loosening `>= 5` to `>= 4` would leave every
--- other persona in this suite green.
+-- Pins the threshold itself, not merely "some level is denied". A vot is
+-- level 3, the highest live rank below the gate since #593 retired level 4,
+-- and is the plausible-drift case named in review finding 1: loosening `>= 5`
+-- to `>= 3` would leave every other persona in this suite green.
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000004');
 select is((select count(*) from public.dept_cup), 0::bigint,
-  'a responsabil (level 4, one rank below the gate) sees no protected rows');
+  'a vot (level 3, the highest live rank below the gate) sees no protected rows');
 select is((select count(*) from public.department_cup(2590001)), 0::bigint,
-  'a responsabil gets no rows from the filtered read either -- the gate is >= 5, not >= 4');
+  'a vot gets no rows from the filtered read either -- the gate is >= 5');
 
 -- Pins the allow side above BCE alone: a gate accidentally narrowed to `= 5`
 -- must fail here.

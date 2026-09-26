@@ -26,7 +26,7 @@ values ('36900000-0000-0000-0000-000000000001',
         'event-integrity-lead-369@test.local');
 insert into public.profiles (id, full_name, email, role, status)
 values ('36900000-0000-0000-0000-000000000001', 'Event Integrity Lead',
-        'event-integrity-lead-369@test.local', 'responsabil', 'activ');
+        'event-integrity-lead-369@test.local', 'vot', 'activ');
 insert into pg_temp.fixture_projects (name, status, leader_id, created_by)
 values ('Event Integrity Project 369', 'active',
         '36900000-0000-0000-0000-000000000001',

@@ -157,7 +157,7 @@ insert into auth.users (
 );
 insert into profiles (id, full_name, email, role, joined_year, avatar_color)
 values ('e2750000-0000-0000-0000-000000000001', 'Seed Preservation',
-        'seed-preservation@test.local', 'responsabil', 2026, '#000000');
+        'seed-preservation@test.local', 'vot', 2026, '#000000');
 insert into groups (name, category, created_by)
 values ('Cross-owned seed guard', 'project', 'e2750000-0000-0000-0000-000000000001');
 insert into group_members(group_id,member_id,group_role)
