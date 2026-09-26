@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import {
   Calendar,
-  Lock,
-  Mail,
   Moon,
   Pencil,
   Phone,
@@ -21,6 +19,7 @@ import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useMyGroups, useRoles } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
+import ChangeEmailSection from './ChangeEmailSection';
 import { JoiningSection } from './JoiningSection';
 import { PushDeviceCard } from './PushDeviceCard';
 
@@ -211,38 +210,13 @@ export default function ProfileScreen() {
             </div>
           </section>
 
-          {/* Contact Fields Card */}
+          {/* Email Change — #632 */}
+          <ChangeEmailSection profile={profile} />
+
+          {/* Phone Card */}
           <section className="card p-6">
-            <div className="card-head">
-              <h3 className="card-title flex items-center gap-2">
-                <Mail className="size-5 text-primary" aria-hidden="true" />
-                <span>Date de contact</span>
-              </h3>
-            </div>
-
-            <dl className="flex flex-col gap-4 text-sm">
+            <dl className="text-sm">
               <div>
-                <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <span>Adresă de email</span>
-                  <Lock
-                    className="size-3 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </dt>
-                <dd className="mt-1 font-medium text-foreground break-all">
-                  {profile.email ?? (
-                    <span className="text-muted-foreground italic">
-                      Indisponibil
-                    </span>
-                  )}
-                </dd>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Autentificarea se face prin link sau cod trimis la această
-                  adresă.
-                </p>
-              </div>
-
-              <div className="border-t border-border pt-3">
                 <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <Phone className="size-3.5" aria-hidden="true" />
                   <span>Număr de telefon</span>
@@ -257,8 +231,8 @@ export default function ProfileScreen() {
                   )}
                 </dd>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Numărul de telefon este vizibil doar pentru tine și membrii cu
-                  nivel ≥5.
+                  Numărul de telefon este vizibil doar pentru tine și
+                  membrii cu nivel ≥5.
                 </p>
               </div>
             </dl>

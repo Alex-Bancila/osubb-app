@@ -137,8 +137,8 @@ function EditProfileForm({
             className={LOCKED_INPUT_CLASS}
           />
           <FieldDescription>
-            Adresa de email este identificatorul contului tău. Pentru
-            modificări, contactează Biroul de Conducere.
+            Adresa de email se schimbă din secțiunea „Adresa de e-mail" de pe
+            pagina de profil.
           </FieldDescription>
         </Field>
 
