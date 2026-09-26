@@ -45,8 +45,9 @@
 -- Manager (Coordonator) runs a Project Task end to end and creates one by
 -- Group id alone; a Group Responsible is refused on the Manager's Task and
 -- allowed on an ordinary member's; Independent-Team peers manage each other's
--- Tasks while only BC evaluates them; and a Group's Minimum Level hides an
--- organization-wide Opportunity from a member of that very Group. The
+-- Tasks while only BC evaluates them; and, since #794 (ruling R26), an
+-- organization-wide Opportunity reaches Members below its Group's Minimum
+-- Level while a local one stays with the Group's members. The
 -- refusals in those steps pin the reason string, not just 42501 -- see
 -- pg_temp.smoke_refused.
 --
@@ -986,7 +987,12 @@ select pg_temp.smoke_assert(
      from public.tasks where id = :pair_task),
   'step 22: the peer manages a non-BC teammate on a Group-side Independent-Team Task');
 
--- ==================== step 23: Group Minimum Level hides and closes an org Opportunity ====================
+-- ==================== step 23: Task visibility follows the Audience, not the Minimum Level ====================
+-- #794 (ruling R26, ADR-0007 amended 2026-09-25): an open public Opportunity
+-- whose Audience is `org` is visible to, and joinable by, every active Member
+-- whatever its Group's Minimum Level; a `local` one stays with the Group's
+-- members. BC raises the Group's Minimum Level first, so both halves are
+-- proved on a Group the outsiders are below.
 select id as gated_group from public.groups
 where name = 'Festivalul Studențesc 2026'
   and created_by = 'd0000000-0000-0000-0000-000000000007' \gset
@@ -994,51 +1000,55 @@ select id as coordinator from public.profiles where email = 'responsabil@demo.os
 select id as below_minimum from public.profiles where email = 'voluntar@demo.osubb' \gset
 select id as eligible from public.profiles where email = 'vot@demo.osubb' \gset
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
-select public.update_group(id,name,manager_title,accepts_applications,3,shared_work_visibility,3,true)
+select public.update_group(id,name,manager_title,accepts_applications,3,shared_work_visibility,3,
+  application_form_label,application_form_url,p_confirm_removals => true)
 from public.groups where id=:gated_group;
 reset role;
 select pg_temp.test_login_leadership(:'coordinator');
-select public.create_task('SMOKE Gated org Opportunity', 'Minimum Level proof', now() + interval '5 days',
+select public.create_task('SMOKE Gated org Opportunity', 'Audience proof', now() + interval '5 days',
   'org', 'public', p_group_id => :gated_group);
+select public.create_task('SMOKE Gated local Opportunity', 'Audience proof', now() + interval '5 days',
+  'local', 'public', p_group_id => :gated_group);
 reset role;
 select id as gated_task from public.tasks where title = 'SMOKE Gated org Opportunity' \gset
+select id as local_task from public.tasks where title = 'SMOKE Gated local Opportunity' \gset
 create function pg_temp.smoke_hidden_interest(p_task bigint) returns void language plpgsql as $$
 begin
   begin
     perform public.express_task_interest(p_task);
   exception when sqlstate 'PT404' then
     if sqlerrm <> 'task_not_found' then raise; end if;
-    raise notice 'ok: step 23: below-Minimum-Level interest refused as task_not_found';
+    raise notice 'ok: step 23: interest in another Group''s local Opportunity refused as task_not_found';
     return;
   end;
-  raise exception 'SMOKE FAILED: step 23 below-Minimum-Level interest succeeded';
+  raise exception 'SMOKE FAILED: step 23 interest in another Group''s local Opportunity succeeded';
 end;
 $$;
 select pg_temp.test_login_leadership(:'below_minimum');
-select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 0,
-  'step 23: below-Minimum-Level member cannot discover the org Opportunity');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 1,
+  'step 23: a Member below the Group''s Minimum Level still discovers its org Opportunity (R26)');
+select public.express_task_interest(:gated_task);
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :local_task), 0,
+  'step 23: a non-member cannot discover the Group''s local Opportunity');
 -- A hidden Task must answer the same as an unknown Task, rather than leak its audience.
-select pg_temp.smoke_hidden_interest(:gated_task);
+select pg_temp.smoke_hidden_interest(:local_task);
 reset role;
 select pg_temp.smoke_assert(
-  not exists (select 1 from public.task_assignments where task_id = :gated_task)
-  and not exists (select 1 from public.task_candidates where task_id = :gated_task),
+  not exists (select 1 from public.task_assignments where task_id = :local_task)
+  and not exists (select 1 from public.task_candidates where task_id = :local_task),
   'step 23: refused interest writes neither Assignment nor Candidature');
 select pg_temp.test_login_leadership(:'eligible');
 select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 1,
-  'step 23: eligible outsider can discover the org Opportunity');
+  'step 23: an eligible outsider discovers the org Opportunity');
 select public.express_task_interest(:gated_task);
 reset role;
 select pg_temp.smoke_assert(
-  (select count(*) = 1 from public.task_candidates
-   where task_id = :gated_task and member_id = :'eligible' and status = 'pending')
+  (select count(*) = 2 from public.task_candidates
+   where task_id = :gated_task and member_id in (:'below_minimum', :'eligible') and status = 'pending')
   and not exists (select 1 from public.task_assignments where task_id = :gated_task),
-  'step 23: eligible outsider joins the Candidate Queue through the public command (#682: no Executor by arrival)');
+  'step 23: both outsiders join the Candidate Queue through the public command (#682: no Executor by arrival)');
 
--- ---- step 23, continued: it really is the Minimum Level doing the hiding ----
--- Two facts turn "one member saw nothing" into a proof about the setting:
--- the settings command removed the ineligible membership, and the eligible
--- outsider still sees the Opportunity through its organization-wide Audience.
+-- ---- step 23, continued: the Minimum Level still governs the roster ----
 select pg_temp.smoke_assert(
   not exists (select 1 from public.group_members
            where group_id = :gated_group and member_id = :'below_minimum'),
@@ -1046,16 +1056,15 @@ select pg_temp.smoke_assert(
 select pg_temp.smoke_assert(
   not exists (select 1 from public.group_members
                where group_id = :gated_group and member_id = :'eligible'),
-  'step 23: the member who can see it belongs to the Group only through the org Audience');
--- A Recrut remains below this Group's Minimum Level.
+  'step 23: the eligible Member sees the Opportunity only through its org Audience');
 select id as recruit from public.profiles where email = 'recrut@demo.osubb' \gset
 select pg_temp.test_login_leadership(:'recruit');
-select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 0,
-  'step 23: a Recrut cannot discover the gated org Opportunity either');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 1,
+  'step 23: a Recrut discovers the org Opportunity too');
 select pg_temp.smoke_refused(
-  format('select public.express_task_interest(%s)', :gated_task),
+  format('select public.express_task_interest(%s)', :local_task),
   'PT404', 'task_not_found',
-  'step 23: a Recrut''s interest is refused as task_not_found, not as a denial');
+  'step 23: a Recrut''s interest in the local Opportunity is refused as task_not_found, not as a denial');
 reset role;
 
 -- ==================== step 24: a Private Group hides its work until Appointment ====================
@@ -1116,7 +1125,7 @@ select public.set_group_role(:native_root,'d0000000-0000-0000-0000-000000000005'
 reset role;
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
 select (public.create_group('SMOKE native child','team',:native_root,1)).id as native_child \gset
-select public.update_group(:native_child,'SMOKE native child','Coordonator',true,1,true,1);
+select public.update_group(:native_child,'SMOKE native child','Coordonator',true,1,true,1,null,null);
 reset role;
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
 select (public.apply_to_group(:native_child,'SMOKE application')).id as native_application \gset
