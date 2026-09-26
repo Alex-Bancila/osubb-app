@@ -70,7 +70,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(49);
+select plan(50);
 
 -- ==================== 1. Grants and the cron entry ====================
 
@@ -279,6 +279,16 @@ select results_eq(
       from public.role_history where member_id = pg_temp.m('12')$$,
   $$values ('voluntar', 'activ', 'automatic', null::uuid)$$,
   'a Voluntar inside the top x% at the close is promoted once, with a system-actor history row');
+-- #593 turned role_history's rank columns into historical text while the
+-- signals still carry the live enum: the close-time run must compare the two
+-- as text, or every close fails before its first promotion.
+select ok(
+  (select data_type from information_schema.columns
+    where table_schema = 'public' and table_name = 'role_history' and column_name = 'to_role') = 'text'
+  and (select promotions from close52) > 0
+  and exists (select 1 from public.role_history
+               where member_id = pg_temp.m('12') and to_role = 'activ' and actor_kind = 'automatic'),
+  'a close-time promotion still applies once role_history holds rank names as text (#593)');
 
 select results_eq(
   $$select notification.kind::text, notification.link, notification.dedupe_key
@@ -429,8 +439,8 @@ select is(
   0::bigint, 'no Member ever holds a lower Role after either function ran');
 select is(
   (select count(*) from public.role_history as history
-     join public.roles as from_role on from_role.id = history.from_role
-     join public.roles as to_role on to_role.id = history.to_role
+     join public.roles as from_role on from_role.id::text = history.from_role
+     join public.roles as to_role on to_role.id::text = history.to_role
     where history.actor_kind = 'automatic' and to_role.level <= from_role.level),
   0::bigint, 'every automatic role_history row raises the Role');
 

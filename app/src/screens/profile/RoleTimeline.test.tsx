@@ -175,8 +175,8 @@ describe('RoleTimeline', () => {
   });
 
   it('shows a Role key the reference does not know as-is', () => {
-    render(<RoleTimeline profile={{ ...profile, role: 'responsabil' }} />);
+    render(<RoleTimeline profile={{ ...profile, role: 'bce' }} />);
 
-    expect(items()[0]).toHaveTextContent('responsabil');
+    expect(items()[0]).toHaveTextContent('bce');
   });
 });
