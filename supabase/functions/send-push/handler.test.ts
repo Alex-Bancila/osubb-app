@@ -62,6 +62,7 @@ function fakeDeps(options: {
   missing?: string[];
   keys?: string[];
   retryBecomesFailed?: boolean;
+  origin?: string | null;
 } = {}) {
   const batches = [...(options.batches ?? [[row(1)]])];
   const settled: Settlement[] = [];
@@ -71,6 +72,8 @@ function fakeDeps(options: {
   const deps: SendPushDeps = {
     secretKeys: () => options.keys ?? [SECRET],
     configProblems: () => options.missing ?? [],
+    appOrigin: () =>
+      options.origin === undefined ? "https://app.osubb.ro" : options.origin,
     claim: (limit) => {
       claims++;
       assertEquals(limit, BATCH_SIZE);
@@ -317,13 +320,32 @@ Deno.test("a subscription the library cannot encrypt for fails instead of retryi
   assertEquals(settled[0].error, "invalid_subscription: bad p256dh");
 });
 
-Deno.test("the payload is the Notification's id, title, body and link and nothing else", async () => {
+Deno.test("the payload is the Notification's id, title, body and link, twice: for the service worker and declaratively (#778)", async () => {
   const { deps, sent } = fakeDeps();
   await handleSendPush(post(), deps);
   assertEquals(sent[0].subscription, {
     endpoint: "https://push.example/device-1",
     keys: { p256dh: "BPublicKey", auth: "authSecret" },
   });
+  assertEquals(JSON.parse(sent[0].payload), {
+    id: 1001,
+    title: "Titlu 1",
+    body: "Corp",
+    link: "/tracker/1",
+    web_push: 8030,
+    notification: {
+      title: "Titlu 1",
+      body: "Corp",
+      navigate: "https://app.osubb.ro/tracker/1",
+      tag: "osubb-1001",
+      lang: "ro",
+    },
+  });
+});
+
+Deno.test("without an https app origin only the service worker's shape is sent", async () => {
+  const { deps, sent } = fakeDeps({ origin: null });
+  await handleSendPush(post(), deps);
   assertEquals(JSON.parse(sent[0].payload), {
     id: 1001,
     title: "Titlu 1",

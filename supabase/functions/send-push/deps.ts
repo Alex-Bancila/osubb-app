@@ -8,6 +8,7 @@ import { createECDH } from "node:crypto";
 // @ts-types="npm:@types/web-push@3.6.4"
 import webpush from "web-push";
 import { parseSecretKeys } from "../_shared/secret-keys.ts";
+import { appOrigin } from "./payload.ts";
 
 /** One claimed outbox row, as public.claim_push_deliveries returns it. */
 export interface ClaimedDelivery {
@@ -55,6 +56,12 @@ export interface SendPushDeps {
    * settings, or of VAPID settings that are malformed -- never their values.
    */
   configProblems(): string[];
+  /**
+   * The app's https origin, which Declarative Web Push needs for its
+   * absolute `navigate` URL (#778), or null to send only the service
+   * worker's shape.
+   */
+  appOrigin(): string | null;
   claim(limit: number): Promise<ClaimedDelivery[]>;
   settle(
     id: number,
@@ -103,6 +110,8 @@ export function realDeps(): SendPushDeps {
 
   return {
     secretKeys,
+
+    appOrigin,
 
     configProblems() {
       const missing = REQUIRED_ENV.filter((name) => env(name) === "");

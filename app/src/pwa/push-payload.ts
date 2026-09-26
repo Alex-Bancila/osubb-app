@@ -2,8 +2,10 @@
  * The pure half of the service worker's push handling (#704, ADR-0010), kept
  * out of `sw.ts` so Vitest covers it without a worker runtime.
  *
- * `send-push` (#703) sends exactly `{ id, title, body, link }` — the
- * Notification's own row and nothing else.
+ * `send-push` (#703) sends `{ id, title, body, link }` — the Notification's
+ * own row and nothing else — plus, since #778, the same text as a Declarative
+ * Web Push (`web_push`, `notification`) for Safari, which shows that one
+ * without waking this worker. Every other top-level key is ignored here.
  */
 export type PushPayload = {
   id: number;

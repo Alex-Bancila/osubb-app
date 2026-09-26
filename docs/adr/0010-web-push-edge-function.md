@@ -6,6 +6,7 @@
 - **Supersedes:** the open provider comparison in ADR-0005 §Push notifications
 - **Superseded by:** —
 - **Amended:** 2026-09-25 — re-examined against OneSignal, FCM, Novu, Knock, Courier, MagicBell, Pusher Beams and a Cloudflare Worker sender and kept (ruling L8 of `docs/superpowers/plans/2026-09-25-launch-infrastructure-grill.md`); the cron-to-function authentication changes and six hardening items are added; see the notes below
+- **Amended:** 2026-09-27 — Declarative Web Push alongside the service-worker payload (#778); see the note under Privacy
 - **Related:** ADR-0001, ADR-0002, ADR-0005, #703 (outbox and `send-push`), #704 (service worker and device subscription), #635 (per-Member push preferences), `CONTEXT.md`
 
 ## Context
@@ -33,6 +34,8 @@ ADR-0005 deferred browser push until after the Task Tracker and Calendar and ask
 **Suppression and preferences.** `notif_suppression` is honoured by construction — a `notifications` row exists only if the Fan-out decided it was deliverable — and is never re-applied at push time, which would silence BC's direct Task Notifications. The only push-time filter is #635's per-Member preferences, checked inside the enqueue trigger: a muted kind keeps its in-app row and writes no outbox row.
 
 **Privacy.** The payload carries the Notification's `id`, `title`, `body` and `link` and nothing else. A subscription is stored as the `PushSubscription` JSON in `push_tokens.token`, readable only by its Member, and deleted when the Member turns the device off or signs out on it.
+
+> **Amended 2026-09-27 (#778).** The payload also carries the same title, body and link as a Declarative Web Push (`web_push: 8030`, `notification` with an absolute `navigate` on the app origin, the first `ALLOWED_ORIGINS` entry), which Safari shows without waking the service worker; other browsers ignore those keys. No new data. The body is cut to keep the payload within one 4096-byte push message. See `docs/backend/push.md` § Declarative Web Push.
 
 **Service worker.** The existing worker migrates to `injectManifest` with a `src/pwa/sw.ts` that keeps today's precache, navigation fallback, `/auth/callback` denylist and network-only Supabase rule, and adds a `push` handler that shows the notification with the OSUBB icon and a `notificationclick` handler that focuses or opens the app at its `link` (`/notificari` when null).
 
