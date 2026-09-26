@@ -1543,6 +1543,60 @@ export type Database = {
         }
         Relationships: []
       }
+      promotion_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          from_role: Database["public"]["Enums"]["member_role"]
+          id: number
+          initial_threshold: number | null
+          kind: string
+          min_tenure_months: number
+          percent: number | null
+          to_role: Database["public"]["Enums"]["member_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          from_role: Database["public"]["Enums"]["member_role"]
+          id?: never
+          initial_threshold?: number | null
+          kind: string
+          min_tenure_months: number
+          percent?: number | null
+          to_role: Database["public"]["Enums"]["member_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          from_role?: Database["public"]["Enums"]["member_role"]
+          id?: never
+          initial_threshold?: number | null
+          kind?: string
+          min_tenure_months?: number
+          percent?: number | null
+          to_role?: Database["public"]["Enums"]["member_role"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_rules_from_role_fkey"
+            columns: ["from_role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_rules_to_role_fkey"
+            columns: ["to_role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_deliveries: {
         Row: {
           attempts: number
@@ -3812,6 +3866,7 @@ export type Database = {
           member_id: string
         }[]
       }
+      promotion_threshold_in_force: { Args: never; Returns: number }
       provision_profile: {
         Args: {
           p_appointed_by?: string
