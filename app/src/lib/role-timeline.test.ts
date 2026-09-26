@@ -2,229 +2,205 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRoleSegments,
   formatRoleDuration,
-  formatSegmentLabel,
+  formatSegmentPeriod,
   type RoleHistoryInput,
-  type RoleSegment,
 } from './role-timeline';
 
-// ---------------------------------------------------------------------------
-// buildRoleSegments
-// ---------------------------------------------------------------------------
+function change(
+  from_role: string,
+  to_role: string,
+  created_at: string,
+  changed_by: string | null = 'bc-1',
+): RoleHistoryInput {
+  return {
+    from_role,
+    to_role,
+    created_at,
+    actor_kind: changed_by ? 'human' : 'automatic',
+    changed_by,
+  };
+}
 
 describe('buildRoleSegments', () => {
   it('no rows → one open segment from joined_at in the current Role', () => {
     const segments = buildRoleSegments('2025-10-01', 'voluntar', []);
 
-    expect(segments).toHaveLength(1);
-    expect(segments[0]?.role).toBe('voluntar');
-    expect(segments[0]?.startDate).toEqual(new Date(2025, 9, 1));
-    expect(segments[0]?.endDate).toBeNull();
+    expect(segments).toEqual([
+      {
+        role: 'voluntar',
+        startDate: new Date(2025, 9, 1),
+        endDate: null,
+        openedBy: null,
+      },
+    ]);
   });
 
-  it('one row → two segments with correct boundaries', () => {
-    const rows: RoleHistoryInput[] = [
+  it('one row → two segments split at the change', () => {
+    const segments = buildRoleSegments('2025-10-01', 'voluntar', [
+      change('recrut', 'voluntar', '2026-02-01T10:00:00Z'),
+    ]);
+
+    expect(segments).toEqual([
       {
-        from_role: 'recrut',
-        to_role: 'voluntar',
-        created_at: '2026-02-01T10:00:00Z',
+        role: 'recrut',
+        startDate: new Date(2025, 9, 1),
+        endDate: new Date('2026-02-01T10:00:00Z'),
+        openedBy: null,
       },
-    ];
-
-    const segments = buildRoleSegments('2025-10-01', 'voluntar', rows);
-
-    expect(segments).toHaveLength(2);
-
-    // First segment: Recrut from joined_at to the row date
-    expect(segments[0]?.role).toBe('recrut');
-    expect(segments[0]?.startDate).toEqual(new Date(2025, 9, 1));
-    expect(segments[0]?.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-
-    // Second segment: Voluntar from the row date, open
-    expect(segments[1]?.role).toBe('voluntar');
-    expect(segments[1]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[1]?.endDate).toBeNull();
+      {
+        role: 'voluntar',
+        startDate: new Date('2026-02-01T10:00:00Z'),
+        endDate: null,
+        openedBy: { kind: 'human', memberId: 'bc-1' },
+      },
+    ]);
   });
 
-  it('two rows → three segments with correct boundaries and durations', () => {
-    const rows: RoleHistoryInput[] = [
-      {
-        from_role: 'recrut',
-        to_role: 'voluntar',
-        created_at: '2026-02-01T10:00:00Z',
-      },
-      {
-        from_role: 'voluntar',
-        to_role: 'activ',
-        created_at: '2026-06-01T10:00:00Z',
-      },
-    ];
+  it('two rows → three segments with correct boundaries and actors', () => {
+    const segments = buildRoleSegments('2025-10-01', 'activ', [
+      change('recrut', 'voluntar', '2026-02-01T10:00:00Z'),
+      change('voluntar', 'activ', '2026-06-01T10:00:00Z', null),
+    ]);
 
-    const segments = buildRoleSegments('2025-10-01', 'activ', rows);
-
-    expect(segments).toHaveLength(3);
-
-    expect(segments[0]?.role).toBe('recrut');
+    expect(segments.map((s) => s.role)).toEqual([
+      'recrut',
+      'voluntar',
+      'activ',
+    ]);
     expect(segments[0]?.startDate).toEqual(new Date(2025, 9, 1));
     expect(segments[0]?.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-
-    expect(segments[1]?.role).toBe('voluntar');
     expect(segments[1]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
     expect(segments[1]?.endDate).toEqual(new Date('2026-06-01T10:00:00Z'));
-
-    expect(segments[2]?.role).toBe('activ');
     expect(segments[2]?.startDate).toEqual(new Date('2026-06-01T10:00:00Z'));
     expect(segments[2]?.endDate).toBeNull();
+    expect(segments[2]?.openedBy).toEqual({
+      kind: 'automatic',
+      memberId: null,
+    });
+    expect(
+      segments.map((s) => formatRoleDuration(s.startDate, s.endDate)),
+    ).toEqual(['4 luni', '4 luni', null]);
+  });
+
+  it('orders rows by created_at whatever order they arrive in', () => {
+    const segments = buildRoleSegments('2025-10-01', 'activ', [
+      change('voluntar', 'activ', '2026-06-01T10:00:00Z'),
+      change('recrut', 'voluntar', '2026-02-01T10:00:00Z'),
+    ]);
+
+    expect(segments.map((s) => s.role)).toEqual([
+      'recrut',
+      'voluntar',
+      'activ',
+    ]);
+  });
+
+  it('ignores Status rows (same Role on both sides)', () => {
+    const segments = buildRoleSegments('2025-10-01', 'voluntar', [
+      change('voluntar', 'voluntar', '2026-03-01T10:00:00Z'),
+    ]);
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0]?.role).toBe('voluntar');
+  });
+
+  it('the open segment holds the current Role', () => {
+    const segments = buildRoleSegments('2025-10-01', 'activ', [
+      change('recrut', 'responsabil', '2026-02-01T10:00:00Z'),
+    ]);
+
+    expect(segments[1]?.role).toBe('activ');
   });
 
   it('null joined_at and no rows → current Role only, no dates', () => {
-    const segments = buildRoleSegments(null, 'voluntar', []);
-
-    expect(segments).toHaveLength(1);
-    expect(segments[0]?.role).toBe('voluntar');
-    expect(segments[0]?.startDate).toBeNull();
-    expect(segments[0]?.endDate).toBeNull();
+    expect(buildRoleSegments(null, 'voluntar', [])).toEqual([
+      { role: 'voluntar', startDate: null, endDate: null, openedBy: null },
+    ]);
   });
 
-  it('null joined_at with rows → first segment starts at first row date', () => {
-    const rows: RoleHistoryInput[] = [
-      {
-        from_role: 'recrut',
-        to_role: 'voluntar',
-        created_at: '2026-02-01T10:00:00Z',
-      },
-    ];
+  it('null joined_at with rows → still the current Role only, no dates', () => {
+    const segments = buildRoleSegments(null, 'activ', [
+      change('recrut', 'voluntar', '2026-02-01T10:00:00Z'),
+      change('voluntar', 'activ', '2026-06-01T10:00:00Z'),
+    ]);
 
-    const segments = buildRoleSegments(null, 'voluntar', rows);
-
-    expect(segments).toHaveLength(2);
-    // Without joined_at, the first segment starts at the first row date
-    expect(segments[0]?.role).toBe('recrut');
-    expect(segments[0]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[0]?.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-
-    expect(segments[1]?.role).toBe('voluntar');
-    expect(segments[1]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[1]?.endDate).toBeNull();
+    expect(segments).toEqual([
+      { role: 'activ', startDate: null, endDate: null, openedBy: null },
+    ]);
   });
 
-  it('row dated before joined_at → first segment clamped to joined_at', () => {
-    const rows: RoleHistoryInput[] = [
-      {
-        from_role: 'recrut',
-        to_role: 'voluntar',
-        created_at: '2025-12-01T10:00:00Z',
-      },
-    ];
+  it('a row dated before joined_at is clamped to it', () => {
+    const joined = new Date(2026, 0, 1);
+    const segments = buildRoleSegments('2026-01-01', 'activ', [
+      change('recrut', 'voluntar', '2025-12-01T10:00:00Z'),
+      change('voluntar', 'activ', '2026-03-01T10:00:00Z'),
+    ]);
 
-    const segments = buildRoleSegments('2026-01-01', 'voluntar', rows);
-
-    expect(segments).toHaveLength(2);
-    // First segment starts at joined_at (clamped), not the row date
-    expect(segments[0]?.startDate).toEqual(new Date(2026, 0, 1));
-    expect(segments[0]?.endDate).toEqual(new Date('2025-12-01T10:00:00Z'));
+    expect(segments[0]?.startDate).toEqual(joined);
+    expect(segments[0]?.endDate).toEqual(joined);
+    expect(segments[1]?.startDate).toEqual(joined);
+    expect(segments[1]?.endDate).toEqual(new Date('2026-03-01T10:00:00Z'));
+    for (const s of segments) {
+      if (s.startDate && s.endDate) {
+        expect(s.endDate.getTime()).toBeGreaterThanOrEqual(
+          s.startDate.getTime(),
+        );
+      }
+    }
   });
 });
 
-// ---------------------------------------------------------------------------
-// formatRoleDuration
-// ---------------------------------------------------------------------------
-
 describe('formatRoleDuration', () => {
-  it('returns null when start is null', () => {
+  it('returns null when either date is missing', () => {
     expect(formatRoleDuration(null, new Date())).toBeNull();
-  });
-
-  it('returns null when end is null', () => {
     expect(formatRoleDuration(new Date(), null)).toBeNull();
   });
 
-  it('formats "sub o lună" for less than a month', () => {
-    const start = new Date(2026, 0, 1);
-    const end = new Date(2026, 0, 15);
-    expect(formatRoleDuration(start, end)).toBe('sub o lună');
-  });
-
-  it('formats "1 lună" for exactly one month', () => {
-    const start = new Date(2026, 0, 1);
-    const end = new Date(2026, 1, 1);
-    expect(formatRoleDuration(start, end)).toBe('1 lună');
-  });
-
-  it('formats "4 luni" for four months', () => {
-    const start = new Date(2025, 9, 1);
-    const end = new Date(2026, 1, 1);
-    expect(formatRoleDuration(start, end)).toBe('4 luni');
-  });
-
-  it('formats "1 an" for exactly one year', () => {
-    const start = new Date(2025, 0, 1);
-    const end = new Date(2026, 0, 1);
-    expect(formatRoleDuration(start, end)).toBe('1 an');
-  });
-
-  it('formats "1 an și 2 luni" for fourteen months', () => {
-    const start = new Date(2025, 0, 1);
-    const end = new Date(2026, 2, 1);
-    expect(formatRoleDuration(start, end)).toBe('1 an și 2 luni');
-  });
-
-  it('formats "2 ani și 1 lună" for twenty-five months', () => {
-    const start = new Date(2024, 0, 1);
-    const end = new Date(2026, 1, 1);
-    expect(formatRoleDuration(start, end)).toBe('2 ani și 1 lună');
-  });
-
-  it('formats "2 ani" for exactly two years', () => {
-    const start = new Date(2024, 0, 1);
-    const end = new Date(2026, 0, 1);
-    expect(formatRoleDuration(start, end)).toBe('2 ani');
+  it.each([
+    [new Date(2026, 0, 1), new Date(2026, 0, 15), 'sub o lună'],
+    [new Date(2026, 0, 1), new Date(2026, 1, 1), '1 lună'],
+    [new Date(2025, 9, 1), new Date(2026, 1, 1), '4 luni'],
+    [new Date(2025, 0, 1), new Date(2026, 0, 1), '1 an'],
+    [new Date(2025, 0, 1), new Date(2026, 2, 1), '1 an și 2 luni'],
+    [new Date(2024, 0, 1), new Date(2026, 1, 1), '2 ani și 1 lună'],
+    [new Date(2024, 0, 1), new Date(2026, 0, 1), '2 ani'],
+    [new Date(2026, 0, 31), new Date(2026, 1, 28), 'sub o lună'],
+  ])('%s → %s is "%s"', (start, end, expected) => {
+    expect(formatRoleDuration(start, end)).toBe(expected);
   });
 });
 
-// ---------------------------------------------------------------------------
-// formatSegmentLabel
-// ---------------------------------------------------------------------------
-
-describe('formatSegmentLabel', () => {
-  it('closed segment with duration → "Recrut timp de 4 luni"', () => {
-    const segment: RoleSegment = {
-      role: 'recrut',
-      startDate: new Date(2025, 9, 1),
-      endDate: new Date(2026, 1, 1),
-    };
-    expect(formatSegmentLabel('Recrut', segment)).toBe(
-      'Recrut timp de 4 luni',
-    );
+describe('formatSegmentPeriod', () => {
+  it('a closed segment shows its start and end dates', () => {
+    expect(
+      formatSegmentPeriod({
+        role: 'recrut',
+        startDate: new Date(2025, 9, 1),
+        endDate: new Date(2026, 1, 12),
+        openedBy: null,
+      }),
+    ).toBe('1 oct. 2025 – 12 feb. 2026');
   });
 
-  it('current segment with date → "Voluntar din <date>"', () => {
-    const segment: RoleSegment = {
-      role: 'voluntar',
-      startDate: new Date(2026, 1, 12),
-      endDate: null,
-    };
-    const label = formatSegmentLabel('Voluntar', segment);
-    // The exact format depends on Intl, but should contain "din" and a date
-    expect(label).toMatch(/^Voluntar din /);
-    expect(label).toMatch(/12/);
-    expect(label).toMatch(/2026/);
+  it('the current segment is "din <dată>"', () => {
+    expect(
+      formatSegmentPeriod({
+        role: 'voluntar',
+        startDate: new Date(2026, 1, 12),
+        endDate: null,
+        openedBy: null,
+      }),
+    ).toBe('din 12 feb. 2026');
   });
 
-  it('current segment without date → role name only', () => {
-    const segment: RoleSegment = {
-      role: 'voluntar',
-      startDate: null,
-      endDate: null,
-    };
-    expect(formatSegmentLabel('Voluntar', segment)).toBe('Voluntar');
-  });
-
-  it('closed segment with no calculable duration → role name only', () => {
-    const segment: RoleSegment = {
-      role: 'recrut',
-      startDate: null,
-      endDate: new Date(2026, 1, 1),
-    };
-    expect(formatSegmentLabel('Recrut', segment)).toBe('Recrut');
+  it('an undated segment has no period', () => {
+    expect(
+      formatSegmentPeriod({
+        role: 'voluntar',
+        startDate: null,
+        endDate: null,
+        openedBy: null,
+      }),
+    ).toBeNull();
   });
 });

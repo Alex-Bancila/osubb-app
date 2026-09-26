@@ -21,9 +21,9 @@ import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useMyGroups, useRoles } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
-import RoleTimeline from './RoleTimeline';
 import { JoiningSection } from './JoiningSection';
 import { PushDeviceCard } from './PushDeviceCard';
+import { RoleTimeline } from './RoleTimeline';
 
 /** R18: the joining parts of the Groups card stop at this Level. */
 const JOINING_LEVEL_LIMIT = 5;
@@ -212,7 +212,6 @@ export default function ProfileScreen() {
             </div>
           </section>
 
-          {/* Role Timeline */}
           <RoleTimeline profile={profile} />
 
           {/* Contact Fields Card */}

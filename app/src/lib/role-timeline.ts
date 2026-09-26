@@ -1,93 +1,104 @@
 /**
  * Pure functions that turn `role_history` rows, `joined_at`, and the current
- * Role into a displayable timeline. No React, no Supabase — testable alone.
+ * Role into a displayable timeline (#633, ruling R8). No React, no Supabase.
  *
- * The issue spec (#633) defines the segment model:
- *  - First segment starts at `joined_at` with the earliest row's `from_role`
- *    (or the current Role when there are no rows).
- *  - Each row opens a new segment whose Role is the row's `to_role`.
- *  - The last segment is open-ended (endDate = null).
- *  - A null `joined_at` degrades: current Role only, no dates, no durations.
+ * The segment model:
+ *  - The first segment starts at `joined_at` in the earliest change's
+ *    `from_role` (or the current Role when there is no change).
+ *  - Each change opens a new segment; the last one is open and holds the
+ *    current Role (`profiles.role` is the truth for "now").
+ *  - A change dated before `joined_at` is clamped to it, so no segment ends
+ *    before it starts.
+ *  - A null `joined_at` degrades to the current Role only: no dates, no
+ *    durations — the caller shows "Membru din <joined_year>" instead.
+ *
+ * Role values are plain strings: `role_history.from_role`/`to_role` are the
+ * `member_role` enum today and become text when #593 retires level four, and
+ * both shapes render the same way.
  */
 
-import type { Database } from './database.types';
+import { parseLocalDate } from './format';
 
-type MemberRole = Database['public']['Enums']['member_role'];
-
-export type RoleSegment = {
-  /** The member_role enum value for this segment. */
-  role: MemberRole;
-  /** Calendar start. Null only when joined_at is null and this is the sole segment. */
-  startDate: Date | null;
-  /** Calendar end. Null for the current (last) segment. */
-  endDate: Date | null;
+/** One `role_history` row as the timeline reads it. */
+export type RoleHistoryInput = {
+  from_role: string;
+  to_role: string;
+  created_at: string; // ISO-8601 timestamptz
+  /** `human` (a BC or Moderator decided, named by `changed_by`) or `automatic`. */
+  actor_kind: string;
+  changed_by: string | null;
 };
 
-export type RoleHistoryInput = {
-  from_role: MemberRole;
-  to_role: MemberRole;
-  created_at: string; // ISO-8601 timestamptz
+/** Who made the change that opened a segment. */
+export type RoleChangeActor = {
+  kind: string;
+  memberId: string | null;
+};
+
+export type RoleSegment = {
+  /** The Role key (`recrut`, `voluntar`, …) held during this segment. */
+  role: string;
+  /** Null only when `joined_at` is null (the sole, undated segment). */
+  startDate: Date | null;
+  /** Null for the current (last) segment. */
+  endDate: Date | null;
+  /** The change that opened this segment; null for the first one. */
+  openedBy: RoleChangeActor | null;
 };
 
 /**
- * Build an ordered array of role segments from the raw data.
+ * Build the segments, oldest first.
  *
- * @param joinedAt  The `profiles.joined_at` date string (YYYY-MM-DD) or null.
- * @param currentRole  The member's current `profiles.role`.
- * @param rows  Role-change rows ordered by `created_at` ascending.
+ * @param joinedAt  `profiles.joined_at` (YYYY-MM-DD) or null.
+ * @param currentRole  The Member's current `profiles.role`.
+ * @param rows  The Member's `role_history` rows, in any order. Status rows
+ *   (same Role on both sides, #580) are ignored.
  */
 export function buildRoleSegments(
   joinedAt: string | null,
-  currentRole: MemberRole,
-  rows: RoleHistoryInput[],
+  currentRole: string,
+  rows: readonly RoleHistoryInput[],
 ): RoleSegment[] {
-  const joinDate = joinedAt ? parseDate(joinedAt) : null;
+  const joinDate = parseLocalDate(joinedAt);
+  const changes = rows
+    .filter((row) => row.from_role !== row.to_role)
+    .map((row) => ({ row, at: new Date(row.created_at) }))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
 
-  // No history rows → single open segment
-  if (rows.length === 0) {
-    return [{ role: currentRole, startDate: joinDate, endDate: null }];
+  const first = changes[0];
+  if (!joinDate || !first) {
+    return [
+      { role: currentRole, startDate: joinDate, endDate: null, openedBy: null },
+    ];
   }
 
-  const segments: RoleSegment[] = [];
+  const clamp = (date: Date) => (date < joinDate ? joinDate : date);
 
-  // First segment: role is the earliest row's from_role, starts at joined_at
-  const firstRow = rows[0]; if (!firstRow) return [];
-  const firstRowDate = new Date(firstRow.created_at);
-  const firstStart =
-    joinDate && joinDate < firstRowDate ? joinDate : joinDate ?? firstRowDate;
+  const segments: RoleSegment[] = [
+    {
+      role: first.row.from_role,
+      startDate: joinDate,
+      endDate: clamp(first.at),
+      openedBy: null,
+    },
+  ];
 
-  segments.push({
-    role: firstRow.from_role,
-    startDate: firstStart,
-    endDate: firstRowDate,
-  });
-
-  // Middle segments: each row starts a new segment
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]; if (!row) continue;
-    const rowDate = new Date(row.created_at);
-    const nextRow = rows[i + 1];
-    const nextDate = nextRow ? new Date(nextRow.created_at) : null;
-
+  changes.forEach(({ row, at }, i) => {
+    const next = changes[i + 1];
     segments.push({
-      role: row.to_role,
-      startDate: rowDate,
-      endDate: nextDate, // null for the last segment
+      role: next ? row.to_role : currentRole,
+      startDate: clamp(at),
+      endDate: next ? clamp(next.at) : null,
+      openedBy: { kind: row.actor_kind, memberId: row.changed_by },
     });
-  }
+  });
 
   return segments;
 }
 
-// ---------------------------------------------------------------------------
-// Duration formatting — Romanian
-// ---------------------------------------------------------------------------
-
 /**
- * Compute the duration between two dates in whole months and years,
- * then format in Romanian.
- *
- * Returns null when either date is missing (null joined_at case).
+ * Whole months and years between two dates, in Romanian: "4 luni",
+ * "1 an și 2 luni", "sub o lună". Null when either date is missing.
  */
 export function formatRoleDuration(
   start: Date | null,
@@ -102,45 +113,21 @@ export function formatRoleDuration(
   const months = totalMonths % 12;
 
   const parts: string[] = [];
-  if (years > 0) parts.push(formatYears(years));
-  if (months > 0) parts.push(formatMonths(months));
+  if (years > 0) parts.push(years === 1 ? '1 an' : `${years} ani`);
+  if (months > 0) parts.push(months === 1 ? '1 lună' : `${months} luni`);
 
   return parts.join(' și ');
 }
 
 /**
- * Format a segment for display.
- *
- * - Closed segment: "Recrut timp de 4 luni"
- * - Current segment with date: "Voluntar din 12 feb. 2026"
- * - Current segment without date: just the role name
+ * The dates line of a segment: "1 oct. 2025 – 1 feb. 2026" for a closed one,
+ * "din 1 feb. 2026" for the current one, null when the segment is undated.
  */
-export function formatSegmentLabel(
-  roleName: string,
-  segment: RoleSegment,
-  fallbackYear: number | null = null,
-): string {
-  if (segment.endDate !== null) {
-    // Closed segment
-    const dur = formatRoleDuration(segment.startDate, segment.endDate);
-    return dur ? `${roleName} timp de ${dur}` : roleName;
-  }
-
-  // Current (open) segment
-  if (segment.startDate) {
-    return `${roleName} din ${formatShortDate(segment.startDate)}`;
-  }
-
-  if (fallbackYear) {
-    return `${roleName} din ${fallbackYear}`;
-  }
-
-  return roleName;
+export function formatSegmentPeriod(segment: RoleSegment): string | null {
+  if (!segment.startDate) return null;
+  if (!segment.endDate) return `din ${formatShortDate(segment.startDate)}`;
+  return `${formatShortDate(segment.startDate)} – ${formatShortDate(segment.endDate)}`;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 /** Floor month difference between two dates. */
 function monthDiff(a: Date, b: Date): number {
@@ -152,31 +139,11 @@ function monthDiff(a: Date, b: Date): number {
   return Math.max(0, total);
 }
 
-function formatYears(n: number): string {
-  if (n === 1) return '1 an';
-  return `${n} ani`;
-}
-
-function formatMonths(n: number): string {
-  if (n === 1) return '1 lună';
-  return `${n} luni`;
-}
-
-/** "12 feb. 2026" style short date in Romanian. */
-function formatShortDate(d: Date): string {
+/** "12 feb. 2026" — short Romanian date. */
+function formatShortDate(date: Date): string {
   return new Intl.DateTimeFormat('ro-RO', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  }).format(d);
-}
-
-/** Parse a YYYY-MM-DD date string into a local Date. */
-function parseDate(value: string): Date | null {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return null;
-  const [, y, m, d] = match;
-  const date = new Date(Number(y), Number(m) - 1, Number(d));
-  date.setFullYear(Number(y));
-  return date;
+  }).format(date);
 }

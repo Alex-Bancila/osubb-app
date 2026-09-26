@@ -1,49 +1,46 @@
 import { GraduationCap } from 'lucide-react';
-import type { MyProfile } from '../../queries/profile';
-import { useMyRoleHistory } from '../../queries/role-history';
-import { useRoles } from '../../queries/reference';
+import type { MemberIdentity } from '../../components/member/member-identity';
+import { MemberName } from '../../components/member/MemberName';
 import {
   buildRoleSegments,
   formatRoleDuration,
-  formatSegmentLabel,
+  formatSegmentPeriod,
+  type RoleChangeActor,
 } from '../../lib/role-timeline';
+import { useMemberIdentities } from '../../queries/member-identities';
+import type { MyProfile } from '../../queries/profile';
+import { useRoles } from '../../queries/reference';
+import { useMyRoleHistory } from '../../queries/role-history';
 
 /**
- * Role timeline card for the profile page.
+ * The Member's own Role timeline on Profil (#633, ruling R8): each Role held,
+ * oldest first, from when to when and for how long, and the current Role
+ * "din <dată>". A change a BC or Moderator made names them with `MemberName`
+ * (#676); one the promotion job made says so.
  *
- * Shows the Member's own Role history as a vertical timeline, oldest first:
- * each Role held, from when to when, how long, and the current Role since its
- * start date — the LinkedIn-style ladder from Ruling R8.
- *
- * Non-critical: if the query is pending or errored, the section is simply
- * absent — no skeleton, no error banner. The profile page is usable without it.
+ * Self-contained and non-critical: while the history loads or if it fails,
+ * the section is absent and the rest of the profile is unaffected.
  */
-export default function RoleTimeline({ profile }: { profile: MyProfile }) {
+export function RoleTimeline({ profile }: { profile: MyProfile }) {
   const historyQuery = useMyRoleHistory();
   const rolesQuery = useRoles();
-
-  // Non-critical section: hide while loading or on error
-  if (historyQuery.isPending || historyQuery.isError) return null;
-  if (!rolesQuery.data) return null;
-
-  const segments = buildRoleSegments(
-    profile.joined_at,
-    profile.role,
-    historyQuery.data ?? [],
+  const rows = historyQuery.data ?? [];
+  const actorIds = rows.flatMap((row) =>
+    row.actor_kind === 'human' && row.changed_by ? [row.changed_by] : [],
   );
+  const actorsQuery = useMemberIdentities(actorIds);
 
-  const rolesMap = rolesQuery.data;
-  const resolveRoleName = (roleId: string) =>
-    rolesMap.get(roleId)?.name ?? roleId;
+  if (historyQuery.isPending || historyQuery.isError) return null;
+
+  const segments = buildRoleSegments(profile.joined_at, profile.role, rows);
+  const roleName = (role: string) => rolesQuery.data?.get(role)?.name ?? role;
+  const undated = segments.length === 1 && !segments[0]?.startDate;
 
   return (
     <section className="card p-6" data-testid="role-timeline-card">
       <div className="card-head">
         <h3 className="card-title flex items-center gap-2">
-          <GraduationCap
-            className="size-5 text-primary"
-            aria-hidden="true"
-          />
+          <GraduationCap className="size-5 text-primary" aria-hidden="true" />
           <span>Parcursul organizațional</span>
         </h3>
       </div>
@@ -53,50 +50,74 @@ export default function RoleTimeline({ profile }: { profile: MyProfile }) {
         aria-label="Parcursul organizațional"
       >
         {segments.map((segment, i) => {
-          const roleName = resolveRoleName(segment.role);
-          const label = formatSegmentLabel(
-            roleName,
-            segment,
-            profile.joined_year,
+          const isCurrent = segment.endDate === null;
+          const period = formatSegmentPeriod(segment);
+          const duration = formatRoleDuration(
+            segment.startDate,
+            segment.endDate,
           );
-          const isCurrent = i === segments.length - 1;
-          const duration =
-            !isCurrent && segment.startDate && segment.endDate
-              ? formatRoleDuration(segment.startDate, segment.endDate)
-              : null;
-
           return (
-            <li
-              key={`${segment.role}-${i}`}
-              className="relative text-sm"
-            >
-              {/* Timeline dot */}
+            <li key={i} className="relative text-sm">
               <span
                 className={`absolute -left-[calc(1rem+0.3125rem)] top-1 size-2.5 rounded-full ${
-                  isCurrent
-                    ? 'bg-primary ring-2 ring-primary/20'
-                    : 'bg-border'
+                  isCurrent ? 'bg-primary ring-2 ring-primary/20' : 'bg-border'
                 }`}
                 aria-hidden="true"
               />
-
               <p
                 className={`font-semibold ${
                   isCurrent ? 'text-foreground' : 'text-muted-foreground'
                 }`}
               >
-                {label}
+                {roleName(segment.role)}
               </p>
-
-              {duration && !isCurrent && (
+              {period && (
                 <p className="text-xs text-muted-foreground">
-                  {duration}
+                  {period}
+                  {duration && ` · ${duration}`}
                 </p>
+              )}
+              {undated && profile.joined_year && (
+                <p className="text-xs text-muted-foreground">
+                  Membru din {profile.joined_year}
+                </p>
+              )}
+              {segment.openedBy && (
+                <ChangeActor
+                  actor={segment.openedBy}
+                  identity={
+                    segment.openedBy.memberId
+                      ? actorsQuery.data?.get(segment.openedBy.memberId)
+                      : undefined
+                  }
+                />
               )}
             </li>
           );
         })}
       </ol>
     </section>
+  );
+}
+
+/** Who opened a segment: the promotion job, or the BC/Moderator by name. */
+function ChangeActor({
+  actor,
+  identity,
+}: {
+  actor: RoleChangeActor;
+  identity: MemberIdentity | undefined;
+}) {
+  if (actor.kind !== 'human') {
+    return <p className="text-xs text-muted-foreground">Schimbare automată</p>;
+  }
+  // A decider the directory no longer answers for (deactivated) stays unnamed.
+  if (!identity) {
+    return <p className="text-xs text-muted-foreground">Decis de conducere</p>;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+      <span>Decis de</span> <MemberName size="sm" {...identity} />
+    </div>
   );
 }
