@@ -316,6 +316,65 @@ describe('AuthProvider cache hygiene', () => {
   });
 });
 
+describe('a change of sign-in address re-reads the profile (#632)', () => {
+  const profileKey = ['profile', 'me', { memberId: 'a' }];
+  const withEmail = (email: string) => ({
+    ...sessionFor('a'),
+    user: { id: 'a', email },
+  });
+
+  async function renderWithProfile() {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <div />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+    notifyListener()('SIGNED_IN', withEmail('maria@osubb.ro'));
+    client.setQueryData(profileKey, { email: 'maria@osubb.ro' });
+    return client;
+  }
+
+  it('invalidates the profile on USER_UPDATED, keeping the rest of the cache', async () => {
+    const client = await renderWithProfile();
+    client.setQueryData(['tasks', 'mine', { memberId: 'a' }], [{ id: 1 }]);
+
+    notifyListener()('USER_UPDATED', withEmail('maria@osubb.ro'));
+
+    await waitFor(() =>
+      expect(client.getQueryState(profileKey)?.isInvalidated).toBe(true),
+    );
+    expect(
+      client.getQueryState(['tasks', 'mine', { memberId: 'a' }])?.isInvalidated,
+    ).toBe(false);
+  });
+
+  it('invalidates the profile when the same member’s session carries a new address', async () => {
+    const client = await renderWithProfile();
+
+    notifyListener()('SIGNED_IN', withEmail('ana@gmail.com'));
+
+    await waitFor(() =>
+      expect(client.getQueryState(profileKey)?.isInvalidated).toBe(true),
+    );
+    expect(client.getQueryData(profileKey)).toEqual({
+      email: 'maria@osubb.ro',
+    });
+  });
+
+  it('leaves the profile alone on a refresh that changes nothing', async () => {
+    const client = await renderWithProfile();
+
+    notifyListener()('TOKEN_REFRESHED', withEmail('maria@osubb.ro'));
+
+    await act(async () => undefined);
+    expect(client.getQueryState(profileKey)?.isInvalidated).toBe(false);
+  });
+});
+
 describe('sign-out and this device’s Web Push (#704)', () => {
   function renderSignedIn() {
     auth.getSession.mockResolvedValueOnce({
