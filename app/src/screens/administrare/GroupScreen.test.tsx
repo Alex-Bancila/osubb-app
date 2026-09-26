@@ -428,6 +428,11 @@ it('lists the roster with each Member Status and appoints through add_group_memb
   const table = screen.getByRole('table');
   expect(within(table).getByText('Inactiv')).toBeVisible();
   expect(within(table).getByText('Activ')).toBeVisible();
+  // Each name opens that Member's Administrare page (#103).
+  expect(within(table).getByRole('link', { name: 'Ana Pop' })).toHaveAttribute(
+    'href',
+    '/administrare/membri/a',
+  );
   // A Manager's roster row is not removed here: the position ends first.
   expect(within(table).getByText('Retrage întâi funcția')).toBeVisible();
 

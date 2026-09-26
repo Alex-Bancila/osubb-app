@@ -7,54 +7,66 @@ vi.mock('../lib/supabase', async () => ({
     )
   ).supabaseClientMock,
 }));
-import {
-  cardMemberships,
-  fetchAdminMember,
-  updateMemberIdentity,
-} from './admin-member';
+import { fetchAdminMember, updateMemberIdentity } from './admin-member';
+
 beforeEach(resetSupabaseMock);
-it('reads the safe Member Card and uses RLS for contact and paginated ledger rows', async () => {
+
+function chain(result: unknown) {
+  const query: Record<string, ReturnType<typeof vi.fn>> = {};
+  for (const name of ['select', 'eq', 'order'])
+    query[name] = vi.fn(() => query);
+  query.maybeSingle = vi.fn().mockResolvedValue(result);
+  query.range = vi.fn().mockResolvedValue(result);
+  return query;
+}
+
+it('reads the Member Card, the status and only the ledger rows RLS returns', async () => {
   const card = { member_id: 'member', memberships: [] };
+  const ledger = [
+    { id: 1, delta: 5, reason: 'task', created_at: 'x', task_id: 30 },
+  ];
   supabaseMock.rpc.mockReturnValue({
     maybeSingle: vi.fn().mockResolvedValue({ data: card, error: null }),
   });
-  supabaseMock.from.mockImplementation((table: string) => {
-    if (table === 'points_ledger') {
-      const q = {
-        select: vi.fn(),
-        eq: vi.fn(),
-        order: vi.fn(),
-        range: vi.fn().mockResolvedValue({ data: [], error: null }),
-      };
-      q.select.mockReturnValue(q);
-      q.eq.mockReturnValue(q);
-      q.order.mockReturnValue(q);
-      return q;
-    }
-    return {
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({
-            data: table === 'profiles_directory' ? { status: 'activ' } : null,
-            error: null,
-          }),
-        }),
-      }),
-    };
-  });
+  const tables = {
+    profiles_contact: chain({ data: null, error: null }),
+    profiles_directory: chain({ data: { status: 'activ' }, error: null }),
+    points_ledger: chain({ data: ledger, error: null }),
+  };
+  supabaseMock.from.mockImplementation(
+    (table: string) => tables[table as keyof typeof tables],
+  );
+
   expect(await fetchAdminMember('member')).toEqual({
     card,
-    memberships: [],
-    status: 'activ',
     contact: null,
-    points: [],
+    status: 'activ',
+    points: ledger,
   });
   expect(supabaseMock.rpc).toHaveBeenCalledWith('member_card', {
     p_member_id: 'member',
   });
-  expect(supabaseMock.from).toHaveBeenCalledWith('points_ledger');
+  expect(tables.points_ledger.eq).toHaveBeenCalledWith('member_id', 'member');
+  expect(tables.profiles_directory.eq).toHaveBeenCalledWith('id', 'member');
 });
-it('updates only nickname/full name and checks that RLS returned the target row', async () => {
+
+it('surfaces a refused status read instead of an empty page', async () => {
+  supabaseMock.rpc.mockReturnValue({
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+  });
+  const refused = { message: 'permission denied' };
+  const tables = {
+    profiles_contact: chain({ data: null, error: null }),
+    profiles_directory: chain({ data: null, error: refused }),
+    points_ledger: chain({ data: [], error: null }),
+  };
+  supabaseMock.from.mockImplementation(
+    (table: string) => tables[table as keyof typeof tables],
+  );
+  await expect(fetchAdminMember('member')).rejects.toBe(refused);
+});
+
+it('writes only the two names and requires the updated row back', async () => {
   const single = vi
     .fn()
     .mockResolvedValue({ data: { id: 'member' }, error: null });
@@ -64,13 +76,23 @@ it('updates only nickname/full name and checks that RLS returned the target row'
   supabaseMock.from.mockReturnValue({ update });
   await updateMemberIdentity({
     memberId: 'member',
-    nickname: '  ',
-    fullName: ' Ana Pop ',
+    nickname: null,
+    fullName: 'Ana Pop',
   });
+  expect(supabaseMock.from).toHaveBeenCalledWith('profiles');
   expect(update).toHaveBeenCalledWith({ nickname: null, full_name: 'Ana Pop' });
   expect(eq).toHaveBeenCalledWith('id', 'member');
+  expect(select).toHaveBeenCalledWith('id');
   expect(single).toHaveBeenCalled();
 });
-it('rejects malformed membership JSON', () => {
-  expect(cardMemberships([null, { group_id: '1' }, 'bad'])).toEqual([]);
+
+it('fails when RLS returns no row, so a refusal never reads as saved', async () => {
+  const refused = { code: 'PGRST116', message: 'no rows' };
+  const single = vi.fn().mockResolvedValue({ data: null, error: refused });
+  supabaseMock.from.mockReturnValue({
+    update: () => ({ eq: () => ({ select: () => ({ single }) }) }),
+  });
+  await expect(
+    updateMemberIdentity({ memberId: 'm', nickname: null, fullName: 'A B' }),
+  ).rejects.toBe(refused);
 });

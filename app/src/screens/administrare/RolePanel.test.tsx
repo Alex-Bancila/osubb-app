@@ -1,4 +1,3 @@
-import { MemoryRouter } from 'react-router';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
@@ -21,7 +20,16 @@ vi.mock('../../queries/member-role-management', () => ({
   useMemberGroupIds: state.groupIds,
   useMemberChange: () => ({ mutateAsync: state.mutate, isPending: false }),
 }));
+import { MemoryRouter } from 'react-router';
 import { RolePanel } from './RolePanel';
+
+function renderPanel(url = '/administrare') {
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <RolePanel />
+    </MemoryRouter>,
+  );
+}
 
 const roles = new Map([
   ['recrut', { name: 'Recrut', level: 0 }],
@@ -114,11 +122,7 @@ beforeEach(() => {
 
 it('offers seven reference ranks, excludes responsabil, and blocks self and BC targets for a BC', async () => {
   const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   const select = screen.getByLabelText('Rol organizațional');
   const options = within(select).getAllByRole('option');
@@ -144,11 +148,7 @@ it('offers seven reference ranks, excludes responsabil, and blocks self and BC t
 
 it('shows explicit archived and automatic Groups before a demotion and sends the audited Role command', async () => {
   const user = userEvent.setup();
-  const { container } = render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  const { container } = renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'vot');
   expect(screen.getByText(/Confirmi Drept de Vot/)).toBeVisible();
@@ -191,11 +191,7 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
     isError: false,
   });
   const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'bce');
   expect(screen.queryByText(/Retragi Drept de Vot/)).toBeNull();
@@ -215,11 +211,7 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
 
 it('deactivates through the atomic Status command and explains the token window', async () => {
   const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   expect(screen.getByText(/cel mult o oră/)).toBeVisible();
@@ -234,7 +226,7 @@ it('deactivates through the atomic Status command and explains the token window'
 
 it('offers all three reference statuses', async () => {
   const user = userEvent.setup();
-  render(<RolePanel />);
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   const select = screen.getByLabelText('Status');
   const options = within(select).getAllByRole('option');
@@ -259,7 +251,7 @@ it('opens on the matching option for a Member already marked alumni', async () =
     isError: false,
   });
   const user = userEvent.setup();
-  render(<RolePanel />);
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   expect(screen.getByLabelText('Status')).toHaveValue('alumni');
   expect(screen.getByText('Status actual: Alumni')).toBeVisible();
@@ -267,7 +259,7 @@ it('opens on the matching option for a Member already marked alumni', async () =
 
 it('sends the atomic Status command with alumni and the reason', async () => {
   const user = userEvent.setup();
-  render(<RolePanel />);
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Status'), 'alumni');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Absolvent');
@@ -298,11 +290,7 @@ it('lets only the live Moderator edit a BC target', async () => {
     isError: false,
   });
   const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'protected');
   expect(screen.getByLabelText('Rol organizațional')).toBeEnabled();
   expect(
@@ -318,11 +306,7 @@ it('fails closed when live actor row is absent despite stale moderator claims', 
     claims: { member_role: 'moderator' },
   });
   const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'protected');
   expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
   expect(screen.getByLabelText('Status')).toBeDisabled();
@@ -337,11 +321,7 @@ it('disables edits when the live actor is inactive', async () => {
     isError: false,
   });
   const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
 });
@@ -349,11 +329,7 @@ it('disables edits when the live actor is inactive', async () => {
 it('keeps the target and reason on a refused command', async () => {
   state.mutate.mockRejectedValueOnce({ message: 'member_manage_forbidden' });
   const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <RolePanel />
-    </MemoryRouter>,
-  );
+  renderPanel();
   await user.selectOptions(screen.getByLabelText('Membru'), 'target');
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Verificare');
@@ -363,4 +339,26 @@ it('keeps the target and reason on a refused command', async () => {
   );
   expect(screen.getByLabelText('Membru')).toHaveValue('target');
   expect(screen.getByLabelText('Motiv (opțional)')).toHaveValue('Verificare');
+});
+
+it('links the chosen Member to their Administrare page (#103)', async () => {
+  const user = userEvent.setup();
+  renderPanel();
+  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  expect(
+    screen.getByRole('link', { name: 'Vezi detaliile membrului' }),
+  ).toHaveAttribute('href', '/administrare/membri/target');
+});
+
+it('edits only the given Member on their own page, without the picker (#103)', () => {
+  render(
+    <MemoryRouter>
+      <RolePanel selectedMemberId="target" />
+    </MemoryRouter>,
+  );
+  expect(screen.queryByLabelText('Membru')).toBeNull();
+  expect(
+    screen.queryByRole('link', { name: 'Vezi detaliile membrului' }),
+  ).toBeNull();
+  expect(screen.getByText('Rol actual: BCE')).toBeVisible();
 });

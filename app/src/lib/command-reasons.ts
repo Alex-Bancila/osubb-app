@@ -303,6 +303,17 @@ const REASON_COPY = new Map<string, string>([
     'Nu mai ai permisiunea de a modifica acest membru. Reîncarcă pagina.',
   ],
   ['member_not_found', 'Membrul nu mai este disponibil. Reîncarcă pagina.'],
+  // #675 (ruling R5): the Nickname guard on `profiles`.
+  ['nickname_too_short', 'Pseudonimul are cel puțin 2 caractere.'],
+  ['nickname_too_long', 'Pseudonimul are cel mult 24 de caractere.'],
+  [
+    'nickname_invalid',
+    'Pseudonimul poate avea doar litere, cifre, spații, punct, cratimă sau underscore.',
+  ],
+  [
+    'nickname_taken',
+    'Pseudonimul este deja folosit de alt membru. Alege altul.',
+  ],
   /* browser */
   ['full_name_required', 'Scrie numele complet.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],

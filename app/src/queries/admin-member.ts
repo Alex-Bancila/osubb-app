@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   skipToken,
   useMutation,
@@ -8,55 +9,46 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { readAllRows } from './groups-admin';
-import type { Database } from '../lib/database.types';
+import {
+  fetchMemberCardRows,
+  toMemberCardData,
+  type MemberCardData,
+  type MemberCardRows,
+} from './member-card';
+import { useGroups, useRoles } from './reference';
 
-type Card = Database['public']['Functions']['member_card']['Returns'][number];
-export type CardMembership = {
-  group_id: number;
-  name: string;
-  parent_id: number | null;
-  color: string | null;
-  group_role: string;
-  position_title: string | null;
-  joined_at: string;
+/**
+ * A Member's page in Administrare (#103). Nothing here decides who may see
+ * what: the Member Card projection (#675, Private Groups filtered by #756),
+ * `profiles_contact` and `points_ledger` each answer only what RLS lets the
+ * viewer read, and the page renders exactly those rows.
+ */
+export type LedgerRow = {
+  id: number;
+  delta: number;
+  reason: string;
+  created_at: string;
+  task_id: number | null;
 };
-export function cardMemberships(value: Card['memberships']): CardMembership[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((row) => {
-    if (
-      !row ||
-      typeof row !== 'object' ||
-      Array.isArray(row) ||
-      typeof row.group_id !== 'number' ||
-      typeof row.name !== 'string' ||
-      typeof row.group_role !== 'string'
-    )
-      return [];
-    return [
-      {
-        group_id: row.group_id,
-        name: row.name,
-        parent_id: typeof row.parent_id === 'number' ? row.parent_id : null,
-        color: typeof row.color === 'string' ? row.color : null,
-        group_role: row.group_role,
-        position_title:
-          typeof row.position_title === 'string' ? row.position_title : null,
-        joined_at: typeof row.joined_at === 'string' ? row.joined_at : '',
-      },
-    ];
-  });
-}
-export async function fetchAdminMember(memberId: string) {
-  const [card, profile, contact, points] = await Promise.all([
-    supabase.rpc('member_card', { p_member_id: memberId }).maybeSingle(),
+
+export type AdminMemberRows = MemberCardRows & {
+  status: string | null;
+  points: LedgerRow[];
+};
+
+export type AdminMember = MemberCardData & {
+  status: string | null;
+  points: LedgerRow[];
+};
+
+export async function fetchAdminMember(
+  memberId: string,
+): Promise<AdminMemberRows> {
+  const [rows, profile, points] = await Promise.all([
+    fetchMemberCardRows(memberId),
     supabase
       .from('profiles_directory')
       .select('status')
-      .eq('id', memberId)
-      .maybeSingle(),
-    supabase
-      .from('profiles_contact')
-      .select('email, phone')
       .eq('id', memberId)
       .maybeSingle(),
     readAllRows((from, to) =>
@@ -69,41 +61,50 @@ export async function fetchAdminMember(memberId: string) {
         .range(from, to),
     ),
   ]);
-  for (const result of [card, profile, contact])
-    if (result.error) throw result.error;
-  return card.data
-    ? {
-        card: card.data,
-        memberships: cardMemberships(card.data.memberships),
-        status: profile.data?.status,
-        contact: contact.data,
-        points,
-      }
-    : null;
+  if (profile.error) throw profile.error;
+  return { ...rows, status: profile.data?.status ?? null, points };
 }
+
 export function useAdminMember(memberId: string | undefined) {
-  const actor = useAuth().session?.user.id;
-  return useQuery({
-    queryKey: [...keys.members.all, 'admin-detail', { actor, memberId }],
-    queryFn: actor && memberId ? () => fetchAdminMember(memberId) : skipToken,
+  const viewerId = useAuth().session?.user.id;
+  const roles = useRoles();
+  const groups = useGroups();
+  const rows = useQuery({
+    queryKey: keys.members.admin(memberId ?? '', viewerId),
+    queryFn:
+      viewerId && memberId ? () => fetchAdminMember(memberId) : skipToken,
   });
+  const data = useMemo((): AdminMember | null | undefined => {
+    if (!rows.data) return undefined;
+    const card = toMemberCardData(rows.data, roles.data, groups.data);
+    return card
+      ? { ...card, status: rows.data.status, points: rows.data.points }
+      : null;
+  }, [rows.data, roles.data, groups.data]);
+  return { data, isPending: rows.isPending, isError: rows.isError };
 }
+
+/**
+ * #675's write path for names: `profiles_update_self` lets BC and the
+ * Moderator update any row, `guard_profile_privileged_columns` refuses a
+ * changed full name below level 6, and `guard_profile_nickname` names the
+ * reason a Nickname is refused. `.single()` requires the row back, so an RLS
+ * refusal (zero rows) fails instead of looking like a save.
+ */
 export async function updateMemberIdentity(input: {
   memberId: string;
-  nickname: string;
+  nickname: string | null;
   fullName: string;
 }) {
   const { error } = await supabase
     .from('profiles')
-    .update({
-      nickname: input.nickname.trim() || null,
-      full_name: input.fullName.trim(),
-    })
+    .update({ nickname: input.nickname, full_name: input.fullName })
     .eq('id', input.memberId)
     .select('id')
     .single();
   if (error) throw error;
 }
+
 export function useUpdateMemberIdentity() {
   const client = useQueryClient();
   return useMutation({
