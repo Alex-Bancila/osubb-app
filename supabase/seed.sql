@@ -328,6 +328,13 @@ select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
   'd0000000-0000-0000-0000-000000000006','responsible','Responsabil Adunarea Generală');
 select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
   'd0000000-0000-0000-0000-000000000008','responsible','Responsabil Adunarea Generală');
+-- #512: name this Group as the Adunarea Generală, so its Responsibles read the
+-- full Evaluation Period ranking. Written as the owner rather than through
+-- set_org_setting so updated_by stays null: a demo actor there would pin the
+-- demo cohort's profile against the cleanup above on the next run.
+update public.org_settings
+   set value = pg_temp.seed_group_id('Adunarea Generală')::text
+ where key = 'adunarea_generala_group_id';
 select public.archive_group(pg_temp.seed_group_id('Gala Voluntarilor 2025'));
 select set_config('request.jwt.claims','',true);
 

@@ -32,7 +32,9 @@
 --   * rank after the visibility filter -> "Elena reads her own row at rank 3";
 --   * drop the own-row branch -> "Ana reads exactly her own row";
 --   * widen the own-row branch to every row -> the same assertion;
---   * `>= 6` for `>= 5` -> "BCE reads every row";
+--   * restore #47's interim level >= 5 full read -> "a BCE with no Group
+--     Role reads only their own row" (#512 replaced it; the full-read matrix
+--     is evaluation_rankings_read.test.sql's);
 --   * drop auth_is_member() -> "Ana without claims reads nothing";
 --   * drop the live caller_level() checks -> "a deactivated Member's valid
 --     token reads nothing" / "a deactivated BC's token reads nothing";
@@ -447,14 +449,9 @@ reset role;
 -- ==================== 7. Reading the ranking: personas ====================
 
 select pg_temp.test_login_leadership('47000000-0000-0000-0000-000000000002');
-select results_eq(
-  format($$ select member_id, task_points, rank from public.evaluation_period_ranking(%s) $$, (select p2 from fx47)),
-  $$ values ('47000000-0000-0000-0000-000000000005'::uuid, 9, 1),
-            ('47000000-0000-0000-0000-000000000008'::uuid, 9, 1),
-            ('47000000-0000-0000-0000-000000000009'::uuid, 4, 3),
-            ('47000000-0000-0000-0000-000000000012'::uuid, 2, 4),
-            ('47000000-0000-0000-0000-000000000006'::uuid, 0, 5) $$,
-  'BCE reads every row of the ranking (level >= 5 until #512)');
+select is(
+  (select count(*) from public.evaluation_period_ranking((select p2 from fx47))), 0::bigint,
+  'a BCE with no Group Role reads only their own row -- none in this Period: #512 narrowed the full read to its predicate (evaluation_rankings_read.test.sql owns the matrix)');
 reset role;
 
 select pg_temp.test_login_leadership('47000000-0000-0000-0000-000000000005');
