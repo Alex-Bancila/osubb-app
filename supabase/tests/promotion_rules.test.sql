@@ -10,9 +10,9 @@
 -- 2003-2004: P_A at the seeded 30 % over seven distinct totals, P_B at 50 %
 -- over five totals with a tie at the boundary, and P_C, which ranked nobody.
 --
--- No command closes a Period yet (#701), so the Periods are written closed as
--- the owner inside this rolled-back transaction (conventions section 10, OD9)
--- and the stamp is called as the owner, as #701's security-definer body will.
+-- The Periods are written closed as the owner inside this rolled-back
+-- transaction (conventions section 10, OD9) -- #701's close cannot date one in
+-- the past -- and the stamp is called as the owner, as #701's close does.
 -- The Periods are dated in 2003-2004 so no seeded demo Evaluation falls
 -- inside them. P_B is inserted before P_A, so "most recently closed" and
 -- "highest id" disagree.

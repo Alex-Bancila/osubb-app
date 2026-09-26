@@ -11,9 +11,9 @@
 -- personas over the table and the ranking, and the close stamping actor and
 -- instant with closing_threshold left null.
 --
--- No command opens or closes a Period yet (#701), so the Periods themselves
--- are written as the owner inside this rolled-back transaction -- the
--- fixture exception of conventions section 10 (OD9).
+-- The Periods themselves are written as the owner inside this rolled-back
+-- transaction -- the fixture exception of conventions section 10 (OD9) -- so
+-- one can be dated in 2001; #701's commands have their own suite.
 --
 -- The open Period opens at now(): the seeded demo Evaluations are all dated
 -- days before the reset, so nothing but this suite's awards can fall inside
@@ -511,8 +511,10 @@ select throws_ok(
 reset role;
 
 -- ==================== 8. Closing stamps the instant and the actor ====================
--- #701's close_evaluation_period will do this; until then the owner writes
--- it. clock_timestamp() is later than now(), so the Period's in-Period
+-- The owner writes the close here, to prove #47's close shape with
+-- closing_threshold still null -- #701's close_evaluation_period would stamp
+-- it at once (evaluation_period_commands.test.sql covers the command).
+-- clock_timestamp() is later than now(), so the Period's in-Period
 -- awards (all at now()) stay inside the closed span.
 
 create temp table close47 as select clock_timestamp() as closed_at;

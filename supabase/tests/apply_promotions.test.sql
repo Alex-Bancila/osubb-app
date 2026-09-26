@@ -15,7 +15,8 @@
 -- guards; nobody demoted.
 --
 -- Fixtures, written as the owner inside this rolled-back transaction
--- (conventions section 10: no command opens or closes a Period before #701).
+-- (conventions section 10's fixture exception: #701's commands open at now(), and
+-- these Periods are dated in the past).
 -- Every live active ladder holder the demo seed brings is deactivated first.
 -- Both rules pinned to 6 months of tenure, x = 30 (seed), y = 25 (seed), the
 -- top_percent rule's initial_threshold 10 (P1 carries no stamp, so it is the
