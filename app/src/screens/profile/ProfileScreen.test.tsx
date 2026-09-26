@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import * as axe from 'axe-core';
 import { useEffect, useState, type ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberClaims } from '../../lib/auth';
 import type { Database } from '../../lib/database.types';
-import type { MemberGroup } from '../../queries/reference';
+import type { GroupApplication } from '../../queries/group-applications';
+import type { Group, MemberGroup } from '../../queries/reference';
 import ProfileScreen from './ProfileScreen';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -17,14 +20,6 @@ vi.mock('../../components/profile/PromotionProgress', () => ({
 const authMock = vi.hoisted(() => ({
   claims: null as MemberClaims | null,
   session: { user: { id: 'p1' } },
-}));
-
-// The edit sheet asks whether the viewer may change a full name (#675, R5):
-// only BC/Moderator (`manageRoles`). Tests that rename set it.
-const capabilityMock = vi.hoisted(() => ({ manageRoles: false }));
-
-vi.mock('../../lib/capabilities', () => ({
-  useCapability: (name: 'manageRoles') => ({ data: capabilityMock[name] }),
 }));
 
 vi.mock('../../lib/auth', () => ({
@@ -40,6 +35,7 @@ const profileMocks = vi.hoisted(() => {
   const mockProfile = {
     id: 'p1',
     full_name: 'Maria Enache',
+    nickname: null as string | null,
     role: 'voluntar' as Database['public']['Enums']['member_role'],
     status: 'activ' as const,
     avatar_color: '#ED2025' as string | null,
@@ -105,14 +101,14 @@ vi.mock('../../queries/profile', () => ({
     ...updateProfileMock,
     mutateAsync: vi.fn(
       async (input: {
-        fullName?: string;
+        nickname?: string | null;
         phone?: string | null;
         avatarColor?: string | null;
       }) => {
         await updateProfileMock.mutateAsync(input);
         const nextProfile = {
           ...activeProfileData,
-          ...(input.fullName ? { full_name: input.fullName } : {}),
+          ...(input.nickname !== undefined ? { nickname: input.nickname } : {}),
           ...(input.phone !== undefined ? { phone: input.phone } : {}),
           ...(input.avatarColor !== undefined
             ? { avatar_color: input.avatarColor }
@@ -197,6 +193,12 @@ const referenceMocks = vi.hoisted(() => {
       error: null as Error | null,
       refetch: vi.fn(),
     },
+    // Every readable Group, which names a pending Application's Group.
+    allGroupsQueryMock: {
+      data: new Map<number, Pick<Group, 'id' | 'name' | 'color'>>([
+        [40, { id: 40, name: 'Echipa Media', color: '#7500A0' }],
+      ]),
+    },
   };
 });
 
@@ -210,13 +212,50 @@ vi.mock('../../queries/reference', async (importOriginal) => {
     ...actual,
     useRoles: () => referenceMocks.rolesQueryMock,
     useMyGroups: () => referenceMocks.groupsQueryMock,
+    useGroups: () => referenceMocks.allGroupsQueryMock,
   };
 });
+
+// #589's read and withdraw, as the joining card (R18) uses them.
+const applicationMocks = vi.hoisted(() => ({
+  useGroupApplications: vi.fn(),
+  applicationsQuery: {
+    data: [] as GroupApplication[],
+    isPending: false,
+    isError: false,
+  },
+  withdraw: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../../queries/group-applications', () => ({
+  useGroupApplications: applicationMocks.useGroupApplications,
+  useApplicationCommand: () => ({
+    mutateAsync: applicationMocks.withdraw,
+    isPending: false,
+  }),
+}));
+
+const pendingApplication: GroupApplication = {
+  id: 501,
+  group_id: 40,
+  member_id: 'p1',
+  status: 'pending',
+  note: null,
+  created_at: '2026-09-20T10:00:00Z',
+  decided_at: null,
+  decided_by: null,
+  decision_note: null,
+  member: { memberId: 'p1', fullName: 'Maria Enache' },
+};
 
 function wrapper(queryClient = new QueryClient()) {
   return function QueryWrapper({ children }: { children: ReactNode }) {
     return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </MemoryRouter>
     );
   };
 }
@@ -225,14 +264,11 @@ describe('ProfileScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    capabilityMock.manageRoles = false;
     document.documentElement.removeAttribute('data-theme');
 
     authMock.claims = {
       member_role: 'voluntar',
       member_level: 1,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10, 20, 30],
     };
 
@@ -257,6 +293,13 @@ describe('ProfileScreen', () => {
     groupsQueryMock.isPending = false;
     groupsQueryMock.isError = false;
     groupsQueryMock.error = null;
+
+    applicationMocks.applicationsQuery.data = [pendingApplication];
+    applicationMocks.applicationsQuery.isPending = false;
+    applicationMocks.applicationsQuery.isError = false;
+    applicationMocks.useGroupApplications.mockImplementation(
+      () => applicationMocks.applicationsQuery,
+    );
     groupsQueryMock.refetch.mockClear();
   });
 
@@ -341,8 +384,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'vot',
       member_level: 3,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -362,8 +403,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'bce',
       member_level: 5,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -388,8 +427,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'bce',
       member_level: 5,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -420,66 +457,194 @@ describe('ProfileScreen', () => {
     expect(localStorage.getItem('osubb-theme')).toBe('light');
   });
 
-  it('opens EditProfileSheet when clicking "Editează profil" and saves updated fields', async () => {
-    capabilityMock.manageRoles = true;
+  it('opens EditProfileSheet when clicking "Editează profil" and saves the Nickname, never the full name', async () => {
     const user = userEvent.setup();
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    const editButton = screen.getByRole('button', { name: /editează profil/i });
-    await user.click(editButton);
+    await user.click(screen.getByRole('button', { name: /editează profil/i }));
 
     expect(
       screen.getByRole('heading', { name: /editează profilul/i }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText('Nume complet')).toHaveAttribute('readonly');
 
-    const nameInput = screen.getByLabelText(/nume complet/i);
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Maria Ionescu');
-
-    const saveButton = screen.getByRole('button', { name: /salvează/i });
-    await user.click(saveButton);
+    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.click(screen.getByRole('button', { name: /salvează/i }));
 
     expect(updateProfileMock.mutateAsync).toHaveBeenCalledWith({
-      fullName: 'Maria Ionescu',
+      nickname: 'Mara',
       phone: '+40722334455',
       avatarColor: '#ED2025',
     });
   });
 
-  it('after saving a profile edit, the header re-renders with the updated name', async () => {
-    capabilityMock.manageRoles = true;
+  it('after saving a Nickname, the heading shows it with the full name underneath', async () => {
     const user = userEvent.setup();
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    // Initial name in header
+    // Without a Nickname the full name is the heading, and is not repeated.
     expect(
-      screen.getByRole('heading', { name: /maria enache/i }),
+      screen.getByRole('heading', { level: 2, name: 'Maria Enache' }),
     ).toBeInTheDocument();
+    expect(screen.queryByTestId('profile-full-name')).not.toBeInTheDocument();
 
-    // Open edit sheet
-    const editButton = screen.getByRole('button', { name: /editează profil/i });
-    await user.click(editButton);
+    await user.click(screen.getByRole('button', { name: /editează profil/i }));
+    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.click(screen.getByRole('button', { name: /salvează/i }));
 
     expect(
-      screen.getByRole('heading', { name: /editează profilul/i }),
+      await screen.findByRole('heading', { level: 2, name: 'Mara' }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('profile-full-name')).toHaveTextContent(
+      'Maria Enache',
+    );
+  });
 
-    // Type updated name
-    const nameInput = screen.getByLabelText(/nume complet/i);
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Maria Ionescu');
+  it('shows the Nickname as the heading with the full name underneath', () => {
+    setTestProfile({ ...mockProfile, nickname: 'Mara' });
+    render(<ProfileScreen />, { wrapper: wrapper() });
 
-    // Save changes
-    const saveButton = screen.getByRole('button', { name: /salvează/i });
-    await user.click(saveButton);
-
-    // Header re-renders with updated name, old name is gone
+    const heading = screen.getByRole('heading', { level: 2, name: 'Mara' });
+    const fullName = screen.getByTestId('profile-full-name');
+    expect(fullName).toHaveTextContent('Maria Enache');
+    // The full name follows the Nickname in the identity block.
     expect(
-      await screen.findByRole('heading', { name: /maria ionescu/i }),
-    ).toBeInTheDocument();
+      heading.compareDocumentPosition(fullName) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
-      screen.queryByRole('heading', { name: /maria enache/i }),
+      screen.queryByRole('heading', { name: 'Maria Enache' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('does not repeat the full name when the Nickname is the same', () => {
+    setTestProfile({ ...mockProfile, nickname: 'Maria Enache' });
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Maria Enache' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('profile-full-name')).not.toBeInTheDocument();
+  });
+
+  describe('Grupurile mele (R18)', () => {
+    it('at level 1 shows the memberships, a pending Application with withdraw, and the button to /grupuri', async () => {
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const card = screen.getByTestId('groups-card');
+      expect(
+        within(card).getByRole('heading', { name: 'Grupurile mele' }),
+      ).toBeInTheDocument();
+      // One card: the memberships stay in it, listed once.
+      expect(within(card).getByText('Educațional')).toBeInTheDocument();
+      expect(within(card).getByText('Echipa IT')).toBeInTheDocument();
+      expect(within(card).getByText('Gala OSUBB')).toBeInTheDocument();
+      expect(screen.getAllByText('Educațional')).toHaveLength(1);
+
+      const joining = within(card).getByTestId('joining-section');
+      expect(
+        within(joining).getByRole('heading', { name: 'Cereri în așteptare' }),
+      ).toBeInTheDocument();
+      const pending = within(joining).getByRole('listitem');
+      expect(pending).toHaveTextContent('Echipa Media');
+      expect(
+        within(pending).getByRole('button', { name: 'Retrage aplicația' }),
+      ).toBeInTheDocument();
+
+      const apply = within(card).getByRole('link', {
+        name: 'Aplică la un grup',
+      });
+      expect(apply).toHaveAttribute('href', '/grupuri');
+      expect(applicationMocks.useGroupApplications).toHaveBeenCalled();
+
+      expect((await axe.run(card)).violations).toEqual([]);
+    });
+
+    it('withdraws a pending Application through the #589 command and keeps the confirmation once the row is gone', async () => {
+      const user = userEvent.setup();
+      // The refetch after the command no longer returns the Application.
+      applicationMocks.withdraw.mockImplementationOnce(async () => {
+        applicationMocks.applicationsQuery.data = [];
+        return null;
+      });
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Retrage aplicația' }),
+      );
+      await user.click(screen.getByRole('button', { name: 'Confirmă' }));
+
+      expect(applicationMocks.withdraw).toHaveBeenCalledWith({
+        kind: 'withdraw',
+        applicationId: 501,
+      });
+      expect(
+        await screen.findByText('Nicio cerere în așteptare.'),
+      ).toBeInTheDocument();
+      const joining = screen.getByTestId('joining-section');
+      expect(within(joining).getByRole('status')).toHaveTextContent(
+        'Cererea pentru Echipa Media a fost retrasă.',
+      );
+      expect(
+        screen.getByRole('link', { name: 'Aplică la un grup' }),
+      ).toHaveFocus();
+    });
+
+    it('says so when no Application is pending', () => {
+      applicationMocks.applicationsQuery.data = [];
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      expect(
+        screen.getByText('Nicio cerere în așteptare.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Retrage aplicația' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('link', { name: 'Aplică la un grup' }),
+      ).toBeInTheDocument();
+    });
+
+    it('at level 5 stays Grupuri with none of the joining parts', () => {
+      authMock.claims = {
+        member_role: 'bce',
+        member_level: 5,
+        group_ids: [10],
+      };
+      setTestProfile({ ...mockProfile, role: 'bce' });
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const card = screen.getByTestId('groups-card');
+      expect(
+        within(card).getByRole('heading', { name: 'Grupuri' }),
+      ).toBeInTheDocument();
+      expect(within(card).getByText('Educațional')).toBeInTheDocument();
+      expect(screen.queryByText('Grupurile mele')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('joining-section')).not.toBeInTheDocument();
+      expect(screen.queryByText('Cereri în așteptare')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('link', { name: 'Aplică la un grup' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Retrage aplicația' }),
+      ).not.toBeInTheDocument();
+      // A leader's Profil never asks for Applications at all.
+      expect(applicationMocks.useGroupApplications).not.toHaveBeenCalled();
+    });
+  });
+
+  it('imports no Ionic anywhere in the Profil screens (#699)', () => {
+    const sources = import.meta.glob<string>('./*.tsx', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    });
+    const files = Object.keys(sources).filter(
+      (path) => !path.endsWith('.test.tsx'),
+    );
+    expect(files).toContain('./ProfileScreen.tsx');
+    for (const path of files)
+      expect(sources[path], path).not.toMatch(/@ionic\//);
   });
 
   it('renders loading state when profile is pending', () => {

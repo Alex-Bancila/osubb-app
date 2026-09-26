@@ -159,11 +159,11 @@ insert into public.profiles (id, full_name, email, role, status)
 select persona.id, 'M319 ' || persona.code, 'm319.' || persona.code || '@test.local',
        persona.role, persona.status
   from fx_persona_319 as persona;
-insert into public.member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
 select persona.id, persona.dept_id from fx_persona_319 as persona where persona.dept_id is not null;
 
-insert into public.teams (id, name, dept_id) values ('m319-dt', 'M319 Department Team', 'edu');
-insert into public.team_members (team_id, member_id)
+insert into pg_temp.fixture_teams (id, name, dept_id) values ('m319-dt', 'M319 Department Team', 'edu');
+insert into pg_temp.fixture_team_members (team_id, member_id)
 select 'm319-dt', persona.id from fx_persona_319 as persona where persona.code = 'team_member';
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -656,7 +656,7 @@ select is((select count(*) from public.task_activity where task_id=(select id fr
   'a Department member reads none of a Child Team Task''s activity while the Department Group''s Shared Work Visibility is off');
 reset role;
 -- ADR-0009 settings fixture, rolled back with the suite; no production Group write.
-update public.groups set shared_work_visibility=true where legacy_dept_id='d521';
+update public.groups set shared_work_visibility=true where id = pg_temp.dept_group('d521');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
 select is((select count(*) from public.task_activity where task_id=(select id from g521_tasks where name='team')),1::bigint,

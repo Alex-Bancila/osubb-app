@@ -36,20 +36,20 @@ insert into profiles (id, full_name, email, role, status) values
   -- A former BC, deactivated. Kept at the 'bc' role row so the fixture proves
   -- the denial comes from `status`, not from downgrading the role too.
   ('06000000-0000-0000-0000-000000000006', 'Dorin Dezactivat',  'dorin.dezactivat@test.local', 'bc',      'inactiv');
-insert into member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('01000000-0000-0000-0000-000000000001', 'edu'),
   ('02000000-0000-0000-0000-000000000002', 'pr'),
   ('03000000-0000-0000-0000-000000000003', 'edu');
 
-insert into teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-pr', 'Echipa PR', 'pr');
-insert into team_members (team_id, member_id)
+insert into pg_temp.fixture_team_members (team_id, member_id)
   values ('t-pr', '02000000-0000-0000-0000-000000000002');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
 update public.group_members set group_role = 'responsible'
 where member_id = '03000000-0000-0000-0000-000000000003'
-  and group_id = (select id from public.groups where legacy_dept_id = 'edu');
+  and group_id = (select id from public.groups where name = 'Educațional');
 
 
 -- One event per (scope, Minimum Level) combination that matters: 0 spread
@@ -134,7 +134,7 @@ select lives_ok(
   $$ select public.create_event(
        p_title := 'Workshop CV',
        p_type := 'activitate',
-       p_group_id := (select id from public.groups where legacy_dept_id = 'edu'),
+       p_group_id := (select id from public.groups where name = 'Educațional'),
        p_starts_at := now()) $$,
   'a Group Responsible creates Events through the validated command');
 select throws_ok(

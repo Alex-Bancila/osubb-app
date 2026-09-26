@@ -187,14 +187,14 @@ select pg_temp.smoke_assert(
 select pg_temp.smoke_assert(
   (select count(*) = 2 from public.group_members gm
     join public.groups g on g.id = gm.group_id
-    where g.legacy_dept_id = 'edu'
+    where g.name = 'Educațional'
       and gm.member_id in ('d0000000-0000-0000-0000-000000000002',
                            'd0000000-0000-0000-0000-000000000005')),
   'step 0: both interested members belong to edu (the local-Audience eligibility rule)');
 
 select pg_temp.smoke_points('d0000000-0000-0000-0000-000000000002') as base_02 \gset
 -- The Group is the only Origin a command takes. Educațional is reference data.
-select id as edu_group from public.groups where legacy_dept_id = 'edu' \gset
+select id as edu_group from public.groups where name = 'Educațional' \gset
 
 -- ==================== step 1: manager creates a public Task ====================
 
@@ -696,7 +696,7 @@ select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
 select pg_temp.smoke_denied(
   $$ insert into public.tasks (title, group_id, audience, assignment_mode, status)
      select 'SMOKE direct insert', id, 'local', 'direct', 'todo'::public.task_status
-       from public.groups where legacy_dept_id = 'edu' $$,
+       from public.groups where name = 'Educațional' $$,
   'step 19: direct INSERT into public.tasks');
 
 select pg_temp.smoke_denied(
@@ -741,22 +741,22 @@ select pg_temp.smoke_denied(
 select pg_temp.smoke_denied(
   $$ insert into public.campaigns (group_id, name, created_by)
      select id, 'SMOKE campanie', 'd0000000-0000-0000-0000-000000000002'::uuid
-       from public.groups where legacy_dept_id = 'edu' $$,
+       from public.groups where name = 'Educațional' $$,
   'step 19: direct INSERT into public.campaigns');
 
 select pg_temp.smoke_denied(
   $$ insert into public.groups (name, category) values ('SMOKE forged Group', 'team') $$,
   'step 19: direct INSERT into public.groups');
 select pg_temp.smoke_denied(
-  $$ update public.groups set name = 'SMOKE forged rename' where legacy_dept_id = 'edu' $$,
+  $$ update public.groups set name = 'SMOKE forged rename' where name = 'Educațional' $$,
   'step 19: direct UPDATE of public.groups');
 select pg_temp.smoke_denied(
-  $$ delete from public.groups where legacy_dept_id = 'edu' $$,
+  $$ delete from public.groups where name = 'Educațional' $$,
   'step 19: direct DELETE from public.groups');
 select pg_temp.smoke_denied(
   $$ insert into public.group_members (group_id, member_id, group_role)
      select id, 'd0000000-0000-0000-0000-000000000002', 'manager'
-     from public.groups where legacy_dept_id = 'edu' $$,
+     from public.groups where name = 'Educațional' $$,
   'step 19: direct INSERT into public.group_members');
 select pg_temp.smoke_denied(
   $$ update public.group_members set group_role = 'manager'

@@ -67,6 +67,12 @@ export const keys = {
     all: ['members'] as const,
     card: (memberId: string, viewerId: string | undefined) =>
       ['members', 'card', { memberId, viewerId }] as const,
+    /** A Member's Administrare page (#103): card, status and ledger rows. */
+    admin: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'admin', { memberId, viewerId }] as const,
+    /** Whether a Member ever signed in (#773), read by `reinvite-member`. */
+    invitation: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'invitation', { memberId, viewerId }] as const,
     /** Avatar colour and Voluntari chip for a set of Members (sorted ids). */
     identities: (viewerId: string | undefined, memberIds: readonly string[]) =>
       ['members', 'identities', { viewerId, memberIds }] as const,

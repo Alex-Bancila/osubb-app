@@ -73,8 +73,6 @@ function claims(level: number) {
     claims: {
       member_role: 'x',
       member_level: level,
-      dept_ids: [],
-      team_ids: [],
       group_ids: [],
     },
     session: { user: { id: ME } },
