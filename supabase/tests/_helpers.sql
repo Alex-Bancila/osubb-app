@@ -44,16 +44,6 @@ begin
   select jsonb_build_object(
            'member_role', profile.role,
            'member_level', role.level,
-           'dept_ids', coalesce((
-             select jsonb_agg(g.legacy_dept_id order by g.legacy_dept_id)
-               from public.group_members membership join public.groups g on g.id=membership.group_id
-              where membership.member_id=profile.id and g.legacy_dept_id is not null
-           ), '[]'::jsonb),
-           'team_ids', coalesce((
-             select jsonb_agg(g.legacy_team_id order by g.legacy_team_id)
-               from public.group_members membership join public.groups g on g.id=membership.group_id
-              where membership.member_id=profile.id and g.legacy_team_id is not null
-           ), '[]'::jsonb),
            'group_ids', coalesce((
              select jsonb_agg(membership.group_id order by membership.group_id)
                from public.group_members as membership
@@ -370,94 +360,65 @@ begin
 end;
 $function$;
 
--- #586: transitional, rolled-back test fixture materializer. Historical
--- Task/Calendar suites call this explicitly after creating legacy fixtures.
--- No trigger or production-schema sync function is created.
-create or replace function pg_temp.materialize_legacy_groups() returns void
-language plpgsql security definer set search_path = '' as $function$
+-- Native fixture materializer: aliases exist only in pg_temp descriptor rows.
+-- A descriptor without a group_id falls back to its name, scoped to the parent
+-- the materializer gives it (Group names are unique among siblings only):
+-- Departments and Projects are roots, a Team sits under its Department's
+-- Group (or at the root), and the seeded demo Teams under their seeded parents.
+create or replace function pg_temp.dept_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
+ select coalesce((select g.id from public.groups g where g.id=d.group_id),(select g.id from public.groups g where g.name=d.name and g.parent_id is null)) from pg_temp.fixture_departments d where d.id=p_key
+$$;
+create or replace function pg_temp.team_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
+ select coalesce((select coalesce((select g.id from public.groups g where g.id=t.group_id),(select g.id from public.groups g where g.name=t.name and g.parent_id is not distinct from pg_temp.dept_group(t.dept_id))) from pg_temp.fixture_teams t where t.id=p_key),
+ (select g.id from public.groups g where g.name=case p_key when 't-app' then 'Echipa Aplicație' when 't-recruti' then 'Echipa Recruți' when 't-logistica' then 'Echipa Logistică' end
+    and g.parent_id is not distinct from (select r.id from public.groups r where r.parent_id is null and r.name=case p_key when 't-app' then 'Diverse' when 't-recruti' then 'Educațional' end)))
+$$;
+create or replace function pg_temp.project_group(p_key bigint) returns bigint language sql stable security definer set search_path='' as $$
+ select coalesce((select g.id from public.groups g where g.id=p.group_id),(select g.id from public.groups g where g.name=p.name and g.parent_id is null)) from pg_temp.fixture_projects p where p.id=p_key
+$$;
+create or replace function pg_temp.materialize_legacy_groups() returns void language plpgsql security definer set search_path='' as $$
+declare fixture record; v_id bigint;
 begin
-  insert into public.groups(name,category,competes_in_cup,application_level,
-                            manager_title,short,color,legacy_dept_id)
-  select d.name,'department',d.kind='department',0,'BCE',d.short,d.color,d.id
-    from pg_temp.fixture_departments d
-   where not exists(select 1 from public.groups g where g.legacy_dept_id=d.id)
-  on conflict (legacy_dept_id) do nothing;
-
-  insert into public.groups(name,category,parent_id,application_level,
-                            shared_work_visibility,manager_title,legacy_team_id)
-  select t.name,'team',parent.id,0,true,
-         case when t.dept_id is null then null else 'Coordonator' end,t.id
-    from pg_temp.fixture_teams t
-    left join public.groups parent on parent.legacy_dept_id=t.dept_id
-   where t.id not in ('t-app','t-recruti','t-logistica')
-     and not exists(select 1 from public.groups g where g.legacy_team_id=t.id)
-  on conflict (legacy_team_id) do nothing;
-
-  insert into public.groups(name,category,application_level,manager_title,
-                            status,legacy_project_id,created_by)
-  select p.name,'project',0,'Coordonator Principal',p.status,p.id,p.created_by
-    from pg_temp.fixture_projects p
-   where not exists(select 1 from public.profiles creator
-     where creator.id=p.created_by and creator.email like '%@demo.osubb')
-     and not exists(select 1 from public.groups g where g.legacy_project_id=p.id)
-  on conflict (legacy_project_id) do nothing;
-
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,md.member_id,
-         case when p.role='bce' then 'manager' else 'member' end
-    from pg_temp.fixture_member_departments md
-    join public.groups g on g.legacy_dept_id=md.dept_id
-    join public.profiles p on p.id=md.member_id
-   where md.dept_id <> 'org'
-  on conflict (group_id,member_id) do nothing;
-
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,tm.member_id,
-         case when t.dept_id is null then 'responsible' else 'member' end
-    from pg_temp.fixture_team_members tm
-    join pg_temp.fixture_teams t on t.id=tm.team_id
-    join public.groups g on g.legacy_team_id=tm.team_id
-  on conflict (group_id,member_id) do nothing;
-
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,p.leader_id,'manager'
-    from pg_temp.fixture_projects p
-    join public.groups g on g.legacy_project_id=p.id
-  on conflict (group_id,member_id) do nothing;
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,pm.member_id,pm.project_role
-    from pg_temp.fixture_project_members pm
-    join public.groups g on g.legacy_project_id=pm.project_id
-  on conflict (group_id,member_id) do nothing;
+ for fixture in select * from pg_temp.fixture_departments loop
+  v_id := pg_temp.dept_group(fixture.id);
+  if v_id is null then
+   insert into public.groups(name,category,competes_in_cup,application_level,manager_title,short,color)
+   values(fixture.name,'department',fixture.kind='department',0,'BCE',fixture.short,fixture.color) returning id into v_id;
+  end if;
+  update pg_temp.fixture_departments set group_id=v_id where id=fixture.id;
+ end loop;
+ for fixture in select * from pg_temp.fixture_teams loop
+  v_id := pg_temp.team_group(fixture.id);
+  if v_id is null then
+   insert into public.groups(name,category,parent_id,application_level,shared_work_visibility,manager_title)
+   values(fixture.name,'team',pg_temp.dept_group(fixture.dept_id),0,true,case when fixture.dept_id is null then null else 'Coordonator' end) returning id into v_id;
+  end if;
+  update pg_temp.fixture_teams set group_id=v_id where id=fixture.id;
+ end loop;
+ for fixture in select * from pg_temp.fixture_projects loop
+  v_id := pg_temp.project_group(fixture.id);
+  if v_id is null then
+   insert into public.groups(name,category,application_level,manager_title,status,created_by)
+   values(fixture.name,'project',0,'Coordonator Principal',fixture.status,fixture.created_by) returning id into v_id;
+  end if;
+  update pg_temp.fixture_projects set group_id=v_id where id=fixture.id;
+ end loop;
+ insert into public.group_members(group_id,member_id,group_role)
+ select d.group_id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+ from pg_temp.fixture_member_departments md join pg_temp.fixture_departments d on d.id=md.dept_id
+ join public.profiles p on p.id=md.member_id join public.groups g on g.id=d.group_id where not g.automatic_membership
+ on conflict(group_id,member_id) do nothing;
+ insert into public.group_members(group_id,member_id,group_role)
+ select t.group_id,tm.member_id,case when t.dept_id is null then 'responsible' else 'member' end
+ from pg_temp.fixture_team_members tm join pg_temp.fixture_teams t on t.id=tm.team_id
+ join public.profiles p on p.id=tm.member_id join public.groups g on g.id=t.group_id where not g.automatic_membership
+ on conflict(group_id,member_id) do nothing;
+ insert into public.group_members(group_id,member_id,group_role)
+ select p.group_id,p.leader_id,'manager' from pg_temp.fixture_projects p where p.leader_id is not null on conflict(group_id,member_id) do nothing;
+ insert into public.group_members(group_id,member_id,group_role)
+ select p.group_id,pm.member_id,pm.project_role from pg_temp.fixture_project_members pm join pg_temp.fixture_projects p on p.id=pm.project_id on conflict(group_id,member_id) do nothing;
 end;
-$function$;
-
--- Fixture id lookups are read-only and owner-backed so denied personas can
--- name a Group without gaining any read privilege.
-create or replace function pg_temp.dept_group(p_dept_id text) returns bigint
-language sql stable security definer set search_path = '' as $function$
-  select id from public.groups where legacy_dept_id=p_dept_id
-$function$;
-create or replace function pg_temp.team_group(p_team_id text) returns bigint
-language sql stable security definer set search_path = '' as $function$
-  select g.id from public.groups g where g.legacy_team_id=p_team_id
-    union all select g.id from public.groups g
-      where g.created_by='d0000000-0000-0000-0000-000000000007'
-        and g.name=case p_team_id when 't-app' then 'Echipa Aplicație'
-          when 't-recruti' then 'Echipa Recruți'
-          when 't-logistica' then 'Echipa Logistică' end
-    limit 1
-$function$;
-create or replace function pg_temp.project_group(p_project_id bigint) returns bigint
-language sql stable security definer set search_path = '' as $function$
-  select g.id from public.groups g where g.legacy_project_id=p_project_id
-    union all select g.id from public.groups g
-      join pg_temp.fixture_projects p on p.name=g.name
-      where p.id=p_project_id
-        and g.created_by='d0000000-0000-0000-0000-000000000007'
-        and p.created_by=g.created_by
-    limit 1
-$function$;
+$$;
 
 \if :{?osubb_test_suite}
 \else
@@ -505,8 +466,7 @@ select lives_ok($$
 $$, 'test_login_leadership derives claims from fixtures');
 select is(auth.jwt() -> 'app_metadata', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5,
-  'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb,
-  'group_ids', (select jsonb_agg(grp.id) from public.groups grp where grp.legacy_dept_id = 'edu')),
+  'group_ids', (select jsonb_agg(grp.id) from public.groups grp where grp.name = 'Educațional')),
   'leadership login derives role, level, Departments, Teams and Groups');
 
 select throws_ok($call$

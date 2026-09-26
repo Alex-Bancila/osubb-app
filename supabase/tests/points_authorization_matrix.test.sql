@@ -141,7 +141,7 @@ select is((select count(*) from public.points_ledger where reason = 'sanction'),
 select is((select count(*) from public.tasks where title like 'Matrix % Task'), 4::bigint,
   'all four origin fixtures exist');
 select results_eq(
-  $$ select count(grp.legacy_dept_id)::int, count(grp.legacy_team_id)::int, count(grp.legacy_project_id)::int
+  $$ select count((select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=grp.id))::int, count((select fixture.id from pg_temp.fixture_teams fixture where fixture.group_id=grp.id))::int, count((select fixture.id from pg_temp.fixture_projects fixture where fixture.group_id=grp.id))::int
        from public.tasks as task join public.groups as grp on grp.id = task.group_id
       where task.title like 'Matrix % Task' $$,
   $$ values (1, 2, 1) $$,

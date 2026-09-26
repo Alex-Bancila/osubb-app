@@ -61,7 +61,7 @@ refresh_token_reuse_interval = 10
 enable_signup = false
 enable_manual_linking = false
 
-# Epic 2.2: inject member_role / member_level / dept_ids / team_ids into the JWT.
+# Epic 2.2: inject member_role / member_level / group_ids into the JWT (#591 dropped dept_ids / team_ids).
 # Hosted projects need this enabled once in Dashboard → Authentication → Hooks.
 [auth.hook.custom_access_token]
 enabled = true

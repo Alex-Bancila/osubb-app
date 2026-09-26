@@ -128,7 +128,7 @@ insert into public.campaigns (id, group_id, name, created_by)
 overriding system value
 select 6250001, grp.id, 'Campania 625', '62500000-0000-0000-0000-000000000001'
   from public.groups as grp
- where grp.legacy_dept_id = '625-dept';
+ where grp.id = pg_temp.dept_group('625-dept');
 
 select is((select count(*) from public.campaigns where id = 6250001), 1::bigint,
   'the fixture Campaign exists and really carries 625-dept''s Group -- every assertion below is against it, never vacuous');

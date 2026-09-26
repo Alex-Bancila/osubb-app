@@ -725,11 +725,11 @@ select extensions.dblink_exec('gut_setup', $$
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #332 committed', 'Sonda', '2027-08-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Lock probe #332 committed', 'Sonda', '2027-08-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33200000-0000-0000-0000-000000000021'),
-    ('Race empty queue #332 committed', 'Cursa coada goala', '2027-08-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race empty queue #332 committed', 'Cursa coada goala', '2027-08-02 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33200000-0000-0000-0000-000000000021'),
-    ('Race promotion #332 committed', 'Cursa promovare', '2027-08-03 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race promotion #332 committed', 'Cursa promovare', '2027-08-03 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33200000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)

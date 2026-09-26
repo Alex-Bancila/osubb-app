@@ -307,7 +307,7 @@ select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-01 09:00:00+
 reset role;
 
 select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s',
-                         clone.title, clone.description, (select legacy_dept_id from public.groups where id = clone.group_id), clone.audience,
+                         clone.title, clone.description, (select id from pg_temp.fixture_departments where group_id = clone.group_id), clone.audience,
                          clone.assignment_mode, clone.campaign_id::text, clone.kind, clone.status::text,
                          clone.deadline::text, clone.created_by::text,
                          (clone.parent_task_id is null)::text,
@@ -408,7 +408,7 @@ select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-02 09:00:00+
 reset role;
 
 select is((select format('%s|%s|%s',
-                         (clone.parent_task_id is null)::text, (select legacy_dept_id from public.groups where id = clone.group_id),
+                         (clone.parent_task_id is null)::text, (select id from pg_temp.fixture_departments where group_id = clone.group_id),
                          clone.duplicated_from_task_id::text)
              from public.tasks as clone
             where clone.duplicated_from_task_id = (select sub_source_id from f341)),
@@ -658,15 +658,15 @@ select extensions.dblink_exec('dt_setup', $$
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from (values ('34100000-0000-0000-0000-000000000051'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34100000-0000-0000-0000-000000000051'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34100000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.campaigns (group_id, name, is_active, created_by) values
-    ((select id from public.groups where legacy_dept_id = 'edu'), 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
+    ((select id from public.groups where name = 'Educațional'), 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, campaign_id, created_at, created_by)
-  select 'Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
+  select 'Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'todo',
          campaign.id, now() - interval '3 days', '34100000-0000-0000-0000-000000000051'
     from public.campaigns as campaign
    where campaign.name = 'Campanie blocaj #341 committed';
@@ -721,7 +721,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '34100000-0000-0000-0000-000000000051'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'and the Group roster row its authority rests on FOR SHARE too, since a BCE (unlike BC/Moderator) reaches that branch');
 
 select extensions.dblink_exec('dt_lock', 'rollback');

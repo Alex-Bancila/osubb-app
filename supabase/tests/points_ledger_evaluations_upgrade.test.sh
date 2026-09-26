@@ -216,11 +216,11 @@ SQL
 #                         backfill must invent no Evaluation for it
 read -r -d '' fixture_tasks <<'SQL' || true
 insert into public.tasks (title, difficulty, group_id, created_by) values
-  ('Legacy solo 317', 3, (select id from public.groups where legacy_dept_id = 'edu'), '31700000-0000-0000-0000-000000000003'),
-  ('Legacy pair 317', 5, (select id from public.groups where legacy_dept_id = 'edu'), '31700000-0000-0000-0000-000000000003'),
-  ('Legacy penalty 317', 2, (select id from public.groups where legacy_dept_id = 'edu'), '31700000-0000-0000-0000-000000000003'),
-  ('Legacy unfulfilled 317', 4, (select id from public.groups where legacy_dept_id = 'edu'), '31700000-0000-0000-0000-000000000003'),
-  ('Legacy ungraded 317', 1, (select id from public.groups where legacy_dept_id = 'edu'), '31700000-0000-0000-0000-000000000003');
+  ('Legacy solo 317', 3, (select id from public.groups where name = 'Educațional'), '31700000-0000-0000-0000-000000000003'),
+  ('Legacy pair 317', 5, (select id from public.groups where name = 'Educațional'), '31700000-0000-0000-0000-000000000003'),
+  ('Legacy penalty 317', 2, (select id from public.groups where name = 'Educațional'), '31700000-0000-0000-0000-000000000003'),
+  ('Legacy unfulfilled 317', 4, (select id from public.groups where name = 'Educațional'), '31700000-0000-0000-0000-000000000003'),
+  ('Legacy ungraded 317', 1, (select id from public.groups where name = 'Educațional'), '31700000-0000-0000-0000-000000000003');
 SQL
 
 run_replay() {

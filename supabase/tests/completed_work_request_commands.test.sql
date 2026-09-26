@@ -417,7 +417,7 @@ select isnt((select task_id from t344), null,
 
 select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s',
               task.kind, task.audience, task.assignment_mode, task.status,
-              (select legacy_dept_id from public.groups where id = task.group_id), task.created_by, task.difficulty, task.rating,
+              (select id from pg_temp.fixture_departments where group_id = task.group_id), task.created_by, task.difficulty, task.rating,
               (task.completed_at is not null)::text)
              from public.tasks as task where task.id = (select task_id from t344)),
   'task|local|direct|completed|edu|34400000-0000-0000-0000-000000000002|3|4|true',
@@ -916,14 +916,14 @@ select extensions.dblink_exec('cwr_setup', $$
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
     from (values ('34400000-0000-0000-0000-000000000051'::uuid, 'edu'),
     ('34400000-0000-0000-0000-000000000052'::uuid, 'edu'),
-    ('34400000-0000-0000-0000-000000000053'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    ('34400000-0000-0000-0000-000000000053'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34400000-%'
   on conflict (group_id,member_id) do nothing;
 
   insert into public.completed_work_requests (requester_id, group_id, description) values
-    ('34400000-0000-0000-0000-000000000052', (select id from public.groups where legacy_dept_id = 'edu'), 'Cerere pentru cursa de aprobare #344 committed'),
-    ('34400000-0000-0000-0000-000000000053', (select id from public.groups where legacy_dept_id = 'edu'), 'Cerere pentru sonda de blocaj #344 committed');
+    ('34400000-0000-0000-0000-000000000052', (select id from public.groups where name = 'Educațional'), 'Cerere pentru cursa de aprobare #344 committed'),
+    ('34400000-0000-0000-0000-000000000053', (select id from public.groups where name = 'Educațional'), 'Cerere pentru sonda de blocaj #344 committed');
 $$);
 
 create temp table r344 as
@@ -972,7 +972,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.group_members') as row_lock
     join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '34400000-0000-0000-0000-000000000051'
-     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+     and membership.group_id = (select id from public.groups where name = 'Educațional')
 ), false), 'and the Group membership the BCE''s decider authority rests on FOR SHARE too');
 
 select extensions.dblink_exec('cwr_lock', 'rollback');

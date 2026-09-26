@@ -758,7 +758,7 @@ select extensions.dblink_exec('ctr_setup', $$
     from (values ('33700000-0000-0000-0000-000000000051'::uuid, 'edu'),
     ('33700000-0000-0000-0000-000000000052'::uuid, 'edu'),
     ('33700000-0000-0000-0000-000000000053'::uuid, 'edu'),
-    ('33700000-0000-0000-0000-000000000054'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
+    ('33700000-0000-0000-0000-000000000054'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33700000-%'
   on conflict (group_id,member_id) do nothing;
@@ -767,10 +767,10 @@ select extensions.dblink_exec('ctr_setup', $$
     (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, created_by)
   values
-    ('Sonda blocaj nerealizat #337 committed', 'Sonda', now() - interval '2 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_progress',
+    ('Sonda blocaj nerealizat #337 committed', 'Sonda', now() - interval '2 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_progress',
      now() - interval '5 days', now() - interval '4 days',
      '33700000-0000-0000-0000-000000000052'),
-    ('Cursa dubla nerealizat #337 committed', 'Doi apeluri, un task nerealizat', now() - interval '2 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_progress',
+    ('Cursa dubla nerealizat #337 committed', 'Doi apeluri, un task nerealizat', now() - interval '2 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_progress',
      now() - interval '5 days', now() - interval '4 days',
      '33700000-0000-0000-0000-000000000052');
 
@@ -832,7 +832,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33700000-0000-0000-0000-000000000051'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'and the Group roster row their evaluator authority rests on FOR SHARE too');
 select ok(coalesce((
   select bool_or(row_lock.modes && array['For Update', 'Update', 'No Key Update'])

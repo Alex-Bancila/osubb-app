@@ -54,7 +54,7 @@ select is((select prosecdef from pg_proc where oid = 'private.department_cup_row
 
 -- ==================== 2. Group settings define the competing set ====================
 select set_eq(
-  $$select legacy_dept_id from public.groups where competes_in_cup$$,
+  $$select d.id from public.groups g join pg_temp.fixture_departments d on d.group_id=g.id where g.competes_in_cup$$,
   $$select unnest(array['edu','pr','youth','fin','hr']::text[])$$,
   'seeded Group settings identify the five current competitors');
 
@@ -204,23 +204,23 @@ select set_eq(
 
 -- #523: settings and deep paths, all changed only in this rolled-back fixture.
 reset role;
-update public.groups set counts_toward_parent_cup=false where legacy_team_id='259-dept-team';
+update public.groups set counts_toward_parent_cup=false where id = pg_temp.team_group('259-dept-team');
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),0,
   'a child link that does not count blocks its Task points');
-update public.groups set counts_toward_parent_cup=true where legacy_team_id='259-dept-team';
-update public.groups set competes_in_cup=false where legacy_dept_id='youth';
+update public.groups set counts_toward_parent_cup=true where id = pg_temp.team_group('259-dept-team');
+update public.groups set competes_in_cup=false where name = 'Tineret';
 select is((select count(*) from public.dept_cup where group_id = pg_temp.dept_group('youth')),0::bigint,
   'disabling competition removes a Group row');
-update public.groups set competes_in_cup=true where legacy_dept_id='youth';
+update public.groups set competes_in_cup=true where name = 'Tineret';
 
 -- Two native ancestors above a mapped leaf exercise arbitrary depth without
 -- bypassing #519's Task/Request legacy-Origin compatibility boundary.
 insert into public.groups(name,category,parent_id,path)
-select 'Cup native child 523','team',id,'{}' from public.groups where legacy_dept_id='edu';
+select 'Cup native child 523','team',id,'{}' from public.groups where name = 'Educațional';
 insert into public.groups(name,category,parent_id,path)
 select 'Cup native grandchild 523','project',id,'{}' from public.groups where name='Cup native child 523';
 update public.groups set parent_id=(select id from public.groups where name='Cup native grandchild 523')
-where legacy_team_id='259-dept-team';
+where id = pg_temp.team_group('259-dept-team');
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),15,
   'two native levels and the mapped leaf all count toward the competing root');
 update public.groups set counts_toward_parent_cup=false where name='Cup native grandchild 523';
@@ -230,27 +230,27 @@ update public.groups set counts_toward_parent_cup=true where name='Cup native gr
 update public.groups set counts_toward_parent_cup=false where name='Cup native child 523';
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),0,
   'the upper native link can independently block the Cup contribution');
-select is((select points from public.leadership_leaderboard((select id from public.groups where legacy_dept_id='edu'),2590002)
+select is((select points from public.leadership_leaderboard((select id from public.groups where name = 'Educațional'),2590002)
   where member_id='25900000-0000-0000-0000-000000000002'),15,
   'Cup participation settings never remove work from a Group subtree Leaderboard');
 update public.groups set counts_toward_parent_cup=true where name='Cup native child 523';
-update public.groups set counts_toward_parent_cup=false where legacy_dept_id='edu';
+update public.groups set counts_toward_parent_cup=false where name = 'Educațional';
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),15,
   'the root flag is not a link below itself and does not discard descendant points');
 select is((select points from public.department_cup(2590001) where group_id = pg_temp.dept_group('edu')),12,
   'a competing Group keeps its own direct work regardless of its parent flag');
-update public.groups set counts_toward_parent_cup=true where legacy_dept_id='edu';
+update public.groups set counts_toward_parent_cup=true where name = 'Educațional';
 
-update public.groups set competes_in_cup=true where legacy_project_id=2590003;
-select is((select points from public.dept_cup where group_id=(select id from public.groups where legacy_project_id=2590003)),15,
+update public.groups set competes_in_cup=true where id = pg_temp.project_group(2590003);
+select is((select points from public.dept_cup where group_id=(select id from public.groups where id = pg_temp.project_group(2590003))),15,
   'a Project presentation label never prevents a Group from competing');
-update public.groups set competes_in_cup=false where legacy_project_id=2590003;
-select ok(exists(select 1 from public.dept_cup cup join public.groups grp on grp.id=cup.group_id where grp.legacy_dept_id='edu'),
+update public.groups set competes_in_cup=false where id = pg_temp.project_group(2590003);
+select ok(exists(select 1 from public.dept_cup cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
   'unfiltered Cup includes the actual Group identifier');
-select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.legacy_dept_id='edu'),
+select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
   'Campaign-filtered Cup includes the actual Group identifier');
 select is((select members from public.dept_cup where group_id = pg_temp.dept_group('edu')),
-  (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where legacy_dept_id='edu')),
+  (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where name = 'Educațional')),
   'Cup roster counts active explicit members of the competitor itself');
 
 -- #523: the attribution rule is the *nearest* competing ancestor-or-self, not

@@ -51,7 +51,6 @@ const mockGroup: Group = {
   min_level: 1,
   status: 'active',
   is_organization: false,
-  legacy_dept_id: 'it',
 };
 
 const mockGroups = new Map<number, Group>([[10, mockGroup]]);

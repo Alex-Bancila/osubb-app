@@ -851,7 +851,7 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 select ok(private.can_read_task((select id from g521_tasks where name='private')) and private.can_read_task((select id from g521_tasks where name='archived')),'low-rank Group Manager reads active work and archived history');
 reset role;
 -- OD9 rolled-back settings fixture; no production Group write.
-update public.groups set min_level=3,application_level=3 where legacy_team_id='dt521';
+update public.groups set min_level=3,application_level=3 where id = pg_temp.team_group('dt521');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 -- #794 (ruling R26): the org Opportunity reads at any level; the Group's own

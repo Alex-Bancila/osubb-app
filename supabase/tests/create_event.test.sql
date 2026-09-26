@@ -39,8 +39,8 @@ update public.groups set status='archived' where name='Archived #370';
 
 insert into public.groups(name,category,min_level,automatic_membership) values ('AG #370','team',3,true);
 create temp table fx as
-select id, case when legacy_dept_id='edu' then 'edu' when legacy_dept_id='org' then 'org'
-when legacy_team_id='t-370-dt' then 'dt' when legacy_team_id='t-370-ind' then 'ind'
+select id, case when name = 'Educațional' then 'edu' when name = 'OSUBB' then 'org'
+when id = pg_temp.team_group('t-370-dt') then 'dt' when id = pg_temp.team_group('t-370-ind') then 'ind'
 when name='Project #370' then 'project' when name='Archived #370' then 'archived'
 when name='AG #370' then 'ag' end as name from public.groups;
 grant select on fx to authenticated,anon;
@@ -170,7 +170,7 @@ reset role;
 select pg_temp.login(1);
 select throws_ok($$select public.create_event('xyz','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed for an authorized caller too, never calendar_manage_forbidden');
 reset role;
-update public.groups set min_level=3,application_level=3 where legacy_team_id='t-370-dt';
+update public.groups set min_level=3,application_level=3 where id = pg_temp.team_group('t-370-dt');
 select pg_temp.login(2);
 select throws_ok($$select public.create_event('below','sedinta',(select id from fx where name='dt'),now())$$,'PT400','event_min_level_below_group','Event cannot lower Group minimum');
 select lives_ok($$select public.create_event('matching','sedinta',(select id from fx where name='dt'),now(),p_min_level:=3)$$,'Event matches Group minimum');

@@ -853,9 +853,6 @@ export type Database = {
           id: number
           is_organization: boolean
           is_private: boolean
-          legacy_dept_id: string | null
-          legacy_project_id: number | null
-          legacy_team_id: string | null
           manager_title: string | null
           min_level: number
           name: string
@@ -881,9 +878,6 @@ export type Database = {
           id?: never
           is_organization?: boolean
           is_private?: boolean
-          legacy_dept_id?: string | null
-          legacy_project_id?: number | null
-          legacy_team_id?: string | null
           manager_title?: string | null
           min_level?: number
           name: string
@@ -909,9 +903,6 @@ export type Database = {
           id?: never
           is_organization?: boolean
           is_private?: boolean
-          legacy_dept_id?: string | null
-          legacy_project_id?: number | null
-          legacy_team_id?: string | null
           manager_title?: string | null
           min_level?: number
           name?: string
@@ -2868,9 +2859,6 @@ export type Database = {
           id: number
           is_organization: boolean
           is_private: boolean
-          legacy_dept_id: string | null
-          legacy_project_id: number | null
-          legacy_team_id: string | null
           manager_title: string | null
           min_level: number
           name: string
@@ -2928,9 +2916,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      auth_in_dept: { Args: { d: string }; Returns: boolean }
       auth_in_group: { Args: { g: number }; Returns: boolean }
-      auth_in_team: { Args: { t: string }; Returns: boolean }
       auth_is_member: { Args: never; Returns: boolean }
       auth_level: { Args: never; Returns: number }
       auth_role: {
@@ -3271,9 +3257,6 @@ export type Database = {
           id: number
           is_organization: boolean
           is_private: boolean
-          legacy_dept_id: string | null
-          legacy_project_id: number | null
-          legacy_team_id: string | null
           manager_title: string | null
           min_level: number
           name: string
@@ -4210,9 +4193,6 @@ export type Database = {
           id: number
           is_organization: boolean
           is_private: boolean
-          legacy_dept_id: string | null
-          legacy_project_id: number | null
-          legacy_team_id: string | null
           manager_title: string | null
           min_level: number
           name: string
@@ -4259,9 +4239,6 @@ export type Database = {
           id: number
           is_organization: boolean
           is_private: boolean
-          legacy_dept_id: string | null
-          legacy_project_id: number | null
-          legacy_team_id: string | null
           manager_title: string | null
           min_level: number
           name: string

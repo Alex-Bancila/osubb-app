@@ -31,6 +31,11 @@ psql_run() {
 # the legacy columns carry their real constraints, foreign keys and indexes.
 teardown() {
   cat <<'SQL'
+-- #591 retired backfill keys. These stand-ins live only in this rollback replay.
+alter table public.groups add column legacy_dept_id text, add column legacy_team_id text, add column legacy_project_id bigint;
+update public.groups set legacy_dept_id=case name when 'Educațional' then 'edu' when 'Imagine & PR' then 'pr' when 'Resurse Umane' then 'hr' when 'Financiar' then 'fin' when 'Tineret' then 'youth' when 'Diverse' then 'diverse' when 'Secretariat' then 'secretariat' when 'OSUBB' then 'org' end;
+update public.groups set legacy_team_id=case name when 'Echipa IT' then 'it' when 'Echipa Interne' then 'interne' end;
+
 -- The new arities are created with plain `create function` by the migration.
 -- #684 later widened create_task by the Attached Link pair; the live arity is
 -- the one to clear before the replay recreates #579's Group-only one.

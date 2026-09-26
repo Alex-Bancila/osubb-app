@@ -260,7 +260,7 @@ Then, with a BC access token, run the `curl` above and:
 
 1. Open http://127.0.0.1:54324 — the invitation is there.
 2. Open the link in it. You land on the redirect URL with an `access_token` in the fragment.
-3. Paste that token into jwt.io. It must contain `app_metadata.member_role`, `member_level`, `dept_ids`, `team_ids`, `group_ids`. **If those are missing, the JWT claims hook is off** and every screen will look empty.
+3. Paste that token into jwt.io. It must contain `app_metadata.member_role`, `member_level`, `group_ids` (the `dept_ids`/`team_ids` claims were removed in #591). **If those are missing, the JWT claims hook is off** and every screen will look empty.
 4. Query the API with it and confirm the permission model answers correctly:
 
 ```bash

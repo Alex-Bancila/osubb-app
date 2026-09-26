@@ -21,7 +21,7 @@ insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
 select id,'24800000-0000-0000-0000-000000000004','member' from pg_temp.fixture_projects where name='Events A #248';
 select pg_temp.materialize_legacy_groups();
 create temp table gx as select id, case when name='Events A #248' then 'a' when name='Events B #248' then 'b' else 'org' end name
-from public.groups where name in ('Events A #248','Events B #248') or legacy_dept_id='org';
+from public.groups where name in ('Events A #248','Events B #248') or name = 'OSUBB';
 grant select on gx to authenticated,anon;
 insert into public.events(title,type,group_id,starts_at,created_by,min_level)
 select 'Event '||name||' #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000002',0 from gx;
@@ -103,7 +103,7 @@ insert into pg_temp.fixture_member_departments(member_id,dept_id) values
 select pg_temp.materialize_legacy_groups();
 insert into public.events(title,type,group_id,starts_at,created_by,min_level)
 select 'Team ancestor #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000001',0
-  from public.groups where legacy_team_id='it';
+  from public.groups where name = 'Echipa IT';
 create temp table ex2 as select id,title from public.events where title='Team ancestor #248';
 grant select on ex2 to authenticated,anon;
 reset role;

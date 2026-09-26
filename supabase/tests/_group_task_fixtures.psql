@@ -17,18 +17,10 @@ from generate_series(1,12) n;
 
 -- ==================== #578: groups/group_members, asserted directly ====================
 -- The corresponding legacy rows are retained below solely as historical read fixtures.
-insert into public.groups(name,category,competes_in_cup,application_level,manager_title,short,color,legacy_dept_id)
-values ('Department #521','department',true,1,'BCE','D521','#123456','d521');
-insert into public.groups(name,category,parent_id,application_level,shared_work_visibility,manager_title,legacy_team_id)
-values ('Child #521','team',(select id from public.groups where name='Department #521'),0,true,'Coordonator','dt521');
-insert into public.groups(name,category,application_level,shared_work_visibility,legacy_team_id)
-values ('Independent #521','team',0,true,'ind521');
--- Sentinel project ids (never produced by the identity sequence in practice): assigned up
--- front so the Group can name them via legacy_project_id before the `projects` rows exist.
-insert into public.groups(name,category,application_level,manager_title,legacy_project_id,created_by)
-values
-  ('Project #521','project',0,'Coordonator Principal',521000000001,pg_temp.g521_uid(1)),
-  ('Archived #521','project',0,'Coordonator Principal',521000000002,pg_temp.g521_uid(1));
+insert into public.groups(name,category,competes_in_cup,application_level,manager_title,short,color) values ('Department #521','department',true,1,'BCE','D521','#123456');
+insert into public.groups(name,category,parent_id,application_level,shared_work_visibility,manager_title) values ('Child #521','team',(select id from public.groups where name='Department #521'),0,true,'Coordonator');
+insert into public.groups(name,category,application_level,shared_work_visibility) values ('Independent #521','team',0,true);
+insert into public.groups(name,category,application_level,manager_title,created_by) values ('Project #521','project',0,'Coordonator Principal',pg_temp.g521_uid(1)),('Archived #521','project',0,'Coordonator Principal',pg_temp.g521_uid(1));
 
 insert into public.group_members(group_id,member_id,group_role)
 select id,pg_temp.g521_uid(5),'member' from public.groups where name='Department #521'

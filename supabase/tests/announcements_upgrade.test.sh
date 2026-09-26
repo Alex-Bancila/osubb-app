@@ -8,6 +8,11 @@ db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
 cat <<'SQL'
 \set ON_ERROR_STOP on
 begin;
+-- #591 retired backfill keys. These stand-ins live only in this rollback replay.
+alter table public.groups add column legacy_dept_id text, add column legacy_team_id text, add column legacy_project_id bigint;
+update public.groups set legacy_dept_id=case name when 'Educațional' then 'edu' when 'Imagine & PR' then 'pr' when 'Resurse Umane' then 'hr' when 'Financiar' then 'fin' when 'Tineret' then 'youth' when 'Diverse' then 'diverse' when 'Secretariat' then 'secretariat' when 'OSUBB' then 'org' end;
+update public.groups set legacy_team_id=case name when 'Echipa IT' then 'it' when 'Echipa Interne' then 'interne' end;
+
 -- #68 attaches a fan-out trigger to the new columns. Disable it only within
 -- this rollback transaction while the pre-#581 table shape is replayed.
 do $$

@@ -27,7 +27,6 @@ const groupsById = new Map<number, Group>([
       min_level: 1,
       status: 'active',
       is_organization: false,
-      legacy_dept_id: 'edu',
     },
   ],
   [
@@ -43,7 +42,6 @@ const groupsById = new Map<number, Group>([
       min_level: 1,
       status: 'active',
       is_organization: false,
-      legacy_dept_id: 'pr',
     },
   ],
 ]);
