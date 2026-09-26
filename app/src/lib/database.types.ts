@@ -447,6 +447,124 @@ export type Database = {
         }
         Relationships: []
       }
+      evaluation_periods: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          closing_threshold: number | null
+          created_at: string
+          id: number
+          name: string
+          opened_at: string
+          opened_by: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_threshold?: number | null
+          created_at?: string
+          id?: never
+          name: string
+          opened_at?: string
+          opened_by: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_threshold?: number | null
+          created_at?: string
+          id?: never
+          name?: string
+          opened_at?: string
+          opened_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendance: {
         Row: {
           checked_in: boolean | null
@@ -3396,6 +3514,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      evaluation_period_ranking: {
+        Args: { p_period_id: number }
+        Returns: {
+          member_id: string
+          rank: number
+          task_points: number
+        }[]
       }
       express_task_interest: {
         Args: { p_task_id: number }
