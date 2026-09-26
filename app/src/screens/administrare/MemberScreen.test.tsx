@@ -251,3 +251,34 @@ it('says the Member is unavailable when the server returns no card', () => {
     screen.getByRole('heading', { name: 'Membru indisponibil' }),
   ).toBeVisible();
 });
+
+it('keeps the confirmation and the stored names when the page refetches', async () => {
+  const user = userEvent.setup();
+  const view = show();
+  const nickname = screen.getByLabelText('Pseudonim');
+  await user.clear(nickname);
+  await user.type(nickname, '  Anuța ');
+  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Numele a fost actualizat.',
+  );
+  // The invalidated query answers with the new Nickname.
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({ nickname: 'Anuța' }),
+  });
+  view.rerender(
+    <MemoryRouter initialEntries={['/administrare/membri/target']}>
+      <Routes>
+        <Route
+          path="/administrare/membri/:memberId"
+          element={<MemberScreen />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Numele a fost actualizat.',
+  );
+  expect(screen.getByLabelText('Pseudonim')).toHaveValue('Anuța');
+});

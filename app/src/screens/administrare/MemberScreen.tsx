@@ -51,6 +51,10 @@ function IdentityEditor({ member }: { member: AdminMember }) {
     if (!values) return;
     try {
       await change.mutateAsync({ memberId: member.memberId, ...values });
+      // Show what was stored (trimmed, blank Nickname as none); the refetch
+      // that follows keeps this editor mounted, so the message stays.
+      setNickname(values.nickname ?? '');
+      setFullName(values.fullName);
       setMessage('Numele a fost actualizat.');
     } catch (failure) {
       form.fail(failure, SAVE_FAILED);
@@ -207,12 +211,7 @@ export default function MemberScreen() {
           </div>
         )}
       </dl>
-      {canEdit && (
-        <IdentityEditor
-          key={`${data.memberId}:${data.nickname}:${data.fullName}`}
-          member={data}
-        />
-      )}
+      {canEdit && <IdentityEditor key={data.memberId} member={data} />}
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">Grupuri</h2>
         {!visibleGroups.length ? (
