@@ -447,6 +447,124 @@ export type Database = {
         }
         Relationships: []
       }
+      evaluation_periods: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          closing_threshold: number | null
+          created_at: string
+          id: number
+          name: string
+          opened_at: string
+          opened_by: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_threshold?: number | null
+          created_at?: string
+          id?: never
+          name: string
+          opened_at?: string
+          opened_by: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_threshold?: number | null
+          created_at?: string
+          id?: never
+          name?: string
+          opened_at?: string
+          opened_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_periods_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendance: {
         Row: {
           checked_in: boolean | null
@@ -1424,6 +1542,60 @@ export type Database = {
           tier?: string | null
         }
         Relationships: []
+      }
+      promotion_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          from_role: Database["public"]["Enums"]["member_role"]
+          id: number
+          initial_threshold: number | null
+          kind: string
+          min_tenure_months: number
+          percent: number | null
+          to_role: Database["public"]["Enums"]["member_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          from_role: Database["public"]["Enums"]["member_role"]
+          id?: never
+          initial_threshold?: number | null
+          kind: string
+          min_tenure_months: number
+          percent?: number | null
+          to_role: Database["public"]["Enums"]["member_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          from_role?: Database["public"]["Enums"]["member_role"]
+          id?: never
+          initial_threshold?: number | null
+          kind?: string
+          min_tenure_months?: number
+          percent?: number | null
+          to_role?: Database["public"]["Enums"]["member_role"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_rules_from_role_fkey"
+            columns: ["from_role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_rules_to_role_fkey"
+            columns: ["to_role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       push_deliveries: {
         Row: {
@@ -3024,6 +3196,10 @@ export type Database = {
           token: string
         }[]
       }
+      close_evaluation_period: {
+        Args: { p_period_id: number }
+        Returns: undefined
+      }
       complete_task_review: {
         Args: {
           p_difficulty: number
@@ -3397,6 +3573,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      evaluation_period_ranking: {
+        Args: { p_period_id: number }
+        Returns: {
+          member_id: string
+          rank: number
+          task_points: number
+        }[]
+      }
       express_task_interest: {
         Args: { p_task_id: number }
         Returns: {
@@ -3655,6 +3839,7 @@ export type Database = {
         }[]
       }
       my_unread_announcements_count: { Args: never; Returns: number }
+      open_evaluation_period: { Args: { p_name: string }; Returns: number }
       pending_request_decisions: {
         Args: never
         Returns: {
@@ -3686,6 +3871,7 @@ export type Database = {
           member_id: string
         }[]
       }
+      promotion_threshold_in_force: { Args: never; Returns: number }
       provision_profile: {
         Args: {
           p_appointed_by?: string
@@ -3774,6 +3960,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      retention_ranking: {
+        Args: { p_period_id: number }
+        Returns: {
+          cohort_size: number
+          inside: boolean
+          member_id: string
+          rank: number
+          role: Database["public"]["Enums"]["member_role"]
+          share_size: number
+          task_points: number
+        }[]
       }
       return_task_to_progress: {
         Args: { p_note: string; p_task_id: number }
@@ -3982,6 +4180,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_promotion_rule: {
+        Args: { p_initial_threshold: number; p_rule_id: number }
+        Returns: undefined
       }
       set_task_queue: {
         Args: { p_open: boolean; p_task_id: number }

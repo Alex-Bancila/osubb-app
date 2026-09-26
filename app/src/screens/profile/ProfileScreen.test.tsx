@@ -12,6 +12,10 @@ import type { Group, MemberGroup } from '../../queries/reference';
 import ProfileScreen from './ProfileScreen';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// Promotion progress (#634) has its own suite; here it is only a slot.
+vi.mock('../../components/profile/PromotionProgress', () => ({
+  PromotionProgress: () => <div data-testid="promotion-progress-slot" />,
+}));
 
 const authMock = vi.hoisted(() => ({
   claims: null as MemberClaims | null,
@@ -341,6 +345,9 @@ describe('ProfileScreen', () => {
     expect(screen.getByTestId('personal-points-card')).toBeInTheDocument();
     expect(screen.getByText('Punctaj personal')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+
+    // Promotion progress (#634) is mounted; it decides its own states.
+    expect(screen.getByTestId('promotion-progress-slot')).toBeInTheDocument();
 
     // Theme toggle
     expect(
