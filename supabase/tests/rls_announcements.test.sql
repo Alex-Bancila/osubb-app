@@ -25,12 +25,12 @@ insert into profiles(id,full_name,email,role,status) values
 ('f6000000-0000-0000-0000-0000000000f6','BC no roster','ann581-bc@test.local','bc','activ'),
 ('f7000000-0000-0000-0000-0000000000f7','Inactive','ann581-inactive@test.local','voluntar','inactiv');
 insert into group_members(group_id,member_id,group_role)
-select id,'f1000000-0000-0000-0000-0000000000f1'::uuid,'member' from groups where legacy_dept_id='edu'
-union all select id,'f2000000-0000-0000-0000-0000000000f2'::uuid,'member' from groups where legacy_dept_id='pr'
-union all select id,'f4000000-0000-0000-0000-0000000000f4'::uuid,'responsible' from groups where legacy_dept_id='edu'
-union all select id,'f5000000-0000-0000-0000-0000000000f5'::uuid,'manager' from groups where legacy_dept_id='edu';
+select id,'f1000000-0000-0000-0000-0000000000f1'::uuid,'member' from groups where name = 'Educațional'
+union all select id,'f2000000-0000-0000-0000-0000000000f2'::uuid,'member' from groups where name = 'Imagine & PR'
+union all select id,'f4000000-0000-0000-0000-0000000000f4'::uuid,'responsible' from groups where name = 'Educațional'
+union all select id,'f5000000-0000-0000-0000-0000000000f5'::uuid,'manager' from groups where name = 'Educațional';
 insert into groups(name,category,parent_id,application_level)
-values ('Child #581','team',(select id from groups where legacy_dept_id='edu'),0);
+values ('Child #581','team',(select id from groups where name = 'Educațional'),0);
 insert into groups(name,category,min_level,automatic_membership)
 values ('Automatic #581','team',3,true);
 insert into announcements(title,body,group_id)
@@ -39,13 +39,13 @@ insert into announcements(title,body,group_id)
 select 'Automatic local #581','Automatic.',id from groups where name='Automatic #581';
 insert into announcements(title,body,group_id,audience) values
 ('Org #581','All.',(select id from groups where is_organization),'org'),
-('EDU #581','Local.',(select id from groups where legacy_dept_id='edu'),'local'),
-('PR #581','Local.',(select id from groups where legacy_dept_id='pr'),'local');
+('EDU #581','Local.',(select id from groups where name = 'Educațional'),'local'),
+('PR #581','Local.',(select id from groups where name = 'Imagine & PR'),'local');
 
 select pg_temp.test_login_leadership('f1000000-0000-0000-0000-0000000000f1');
 select is((select count(*) from announcements),2::bigint,'ordinary EDU Member reads local EDU and org');
 select throws_ok($$insert into announcements(title,body,group_id)
-select 'Denied #581','x',id from groups where legacy_dept_id='edu'$$,
+select 'Denied #581','x',id from groups where name = 'Educațional'$$,
 '42501',null,'ordinary Member cannot compose');
 select lives_ok($$insert into announcement_reads(announcement_id,member_id)
 select id,'f1000000-0000-0000-0000-0000000000f1' from announcements where title='EDU #581'$$,
@@ -63,14 +63,14 @@ select throws_ok($$insert into announcements(title,body,group_id)
 select 'BCE denied #581','x',id from groups where is_organization$$,
 '42501',null,'BCE rank alone cannot compose for the Organization Group');
 select throws_ok($$insert into announcements(title,body,group_id)
-select 'BCE local denied #581','x',id from groups where legacy_dept_id='edu'$$,
+select 'BCE local denied #581','x',id from groups where name = 'Educațional'$$,
 '42501',null,'BCE rank alone cannot compose locally');
 reset role;
 
 select pg_temp.test_login_leadership('f4000000-0000-0000-0000-0000000000f4');
 select lives_ok($$insert into announcements(title,body,group_id,created_by)
 select 'Responsible EDU #581','x',id,'f4000000-0000-0000-0000-0000000000f4'
-from groups where legacy_dept_id='edu'$$,'Responsible composes for own Group');
+from groups where name = 'Educațional'$$,'Responsible composes for own Group');
 select lives_ok($$insert into announcements(title,body,group_id)
 select 'Responsible child #581','x',id from groups where name='Child #581'$$,
 'inherited Responsible composes for a Child Group');
@@ -78,9 +78,9 @@ select is((select count(*) from announcements where title='Responsible child #58
 'inherited Responsible insert actually created a Child Group announcement');
 select lives_ok($$insert into announcements(title,body,group_id,audience,created_by)
 select 'Responsible org audience #581','x',id,'org','f4000000-0000-0000-0000-0000000000f4'
-from groups where legacy_dept_id='edu'$$,'Responsible can choose org Audience without changing Origin');
+from groups where name = 'Educațional'$$,'Responsible can choose org Audience without changing Origin');
 select throws_ok($$insert into announcements(title,body,group_id)
-select 'Responsible PR denied #581','x',id from groups where legacy_dept_id='pr'$$,
+select 'Responsible PR denied #581','x',id from groups where name = 'Imagine & PR'$$,
 '42501',null,'Responsible cannot compose for unrelated Group');
 select lives_ok($$insert into announcements(title,body,group_id,created_by)
 select 'Responsible Organization #581','x',id,'f4000000-0000-0000-0000-0000000000f4'
@@ -96,7 +96,7 @@ select is((select count(*) from announcements where title='EDU #581'),0::bigint,
 'BC without Group Role cannot read unrelated local announcement by rank');
 select lives_ok($$insert into announcements(title,body,group_id,created_by)
 select 'BC local #581','x',id,'f6000000-0000-0000-0000-0000000000f6'
-from groups where legacy_dept_id='edu'$$,'BC can compose for any Group');
+from groups where name = 'Educațional'$$,'BC can compose for any Group');
 reset role;
 select is((select count(*) from announcements where title='BC local #581'),1::bigint,
 'BC write created the local row despite the narrower read policy');

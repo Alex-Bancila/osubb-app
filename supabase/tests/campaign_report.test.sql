@@ -110,11 +110,11 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('62500000-0000-0000-0000-000000000013', 'Ionela ReassignedA 625', 'reassigneda625@example.test', 'activ', 'activ'),
   ('62500000-0000-0000-0000-000000000014', 'Radu ReassignedB 625', 'reassignedb625@example.test', 'activ', 'activ');
 
-insert into public.departments (id, name, short, color) values
+insert into pg_temp.fixture_departments (id, name, short, color) values
   ('625-dept', 'Departament 625', 'D625', '#654321'),
   ('625-other', 'Alt Departament 625', 'A625', '#123987');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('62500000-0000-0000-0000-000000000001', '625-dept'),
   ('62500000-0000-0000-0000-000000000003', '625-other');
 -- Historical Department fixtures have no production mirror after #586.
@@ -128,7 +128,7 @@ insert into public.campaigns (id, group_id, name, created_by)
 overriding system value
 select 6250001, grp.id, 'Campania 625', '62500000-0000-0000-0000-000000000001'
   from public.groups as grp
- where grp.legacy_dept_id = '625-dept';
+ where grp.id = pg_temp.dept_group('625-dept');
 
 select is((select count(*) from public.campaigns where id = 6250001), 1::bigint,
   'the fixture Campaign exists and really carries 625-dept''s Group -- every assertion below is against it, never vacuous');

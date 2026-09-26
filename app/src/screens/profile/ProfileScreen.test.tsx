@@ -241,7 +241,7 @@ const pendingApplication: GroupApplication = {
   decided_at: null,
   decided_by: null,
   decision_note: null,
-  memberName: 'Maria Enache',
+  member: { memberId: 'p1', fullName: 'Maria Enache' },
 };
 
 function wrapper(queryClient = new QueryClient()) {
@@ -265,8 +265,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'voluntar',
       member_level: 1,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10, 20, 30],
     };
 
@@ -379,8 +377,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'vot',
       member_level: 3,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -400,8 +396,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'bce',
       member_level: 5,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -426,8 +420,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'bce',
       member_level: 5,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -610,8 +602,6 @@ describe('ProfileScreen', () => {
       authMock.claims = {
         member_role: 'bce',
         member_level: 5,
-        dept_ids: ['edu'],
-        team_ids: [],
         group_ids: [10],
       };
       setTestProfile({ ...mockProfile, role: 'bce' });

@@ -92,7 +92,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33800000-0000-0000-0000-000000000021', 'Executor Negativ 338', 'exec.negative.338@test.local', 'voluntar', 'activ'),
   ('33800000-0000-0000-0000-000000000022', 'Executor Neutru 338', 'exec.zero.338@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33800000-0000-0000-0000-000000000002', 'edu'),
   ('33800000-0000-0000-0000-000000000003', 'pr'),
   ('33800000-0000-0000-0000-000000000004', 'edu'),
@@ -110,20 +110,20 @@ insert into public.member_departments (member_id, dept_id) values
   ('33800000-0000-0000-0000-000000000021', 'edu'),
   ('33800000-0000-0000-0000-000000000022', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-338-ind', 'Echipa Independenta 338', null);
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-338-ind', '33800000-0000-0000-0000-000000000009');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Proiect #338', 'active',
    '33800000-0000-0000-0000-000000000006', '33800000-0000-0000-0000-000000000001');
 
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #338'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #338'),
    '33800000-0000-0000-0000-000000000007', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #338'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #338'),
    '33800000-0000-0000-0000-000000000008', 'member');
 
 -- The happy-path Executor already carries a sanction, so "the total returns
@@ -315,19 +315,19 @@ select 'Proiect lead propriu #338', 'Munca leadului', now() + interval '10 days'
        pg_temp.project_group(project.id), 'local', 'direct', 'in_review'::public.task_status,
        now() - interval '10 days', now() - interval '9 days', now() - interval '1 day',
        '33800000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #338'
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #338'
 union all
 select 'Proiect responsabil peste lead #338', 'Munca leadului, vazuta de responsabil', now() + interval '10 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'in_review'::public.task_status,
        now() - interval '10 days', now() - interval '9 days', now() - interval '1 day',
        '33800000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #338'
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #338'
 union all
 select 'Proiect membru simplu #338', 'Munca unui membru', now() + interval '10 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'in_review'::public.task_status,
        now() - interval '10 days', now() - interval '9 days', now() - interval '1 day',
        '33800000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #338';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #338';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33800000-0000-0000-0000-000000000006'::uuid, '33800000-0000-0000-0000-000000000001'::uuid,
        now() - interval '9 days'
@@ -350,7 +350,7 @@ insert into public.tasks
 select 'Proiect responsabil propriu #338', 'Munca responsabilului, nelivrata', now() - interval '2 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '10 days', '33800000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #338';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #338';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33800000-0000-0000-0000-000000000007', '33800000-0000-0000-0000-000000000001',
        now() - interval '9 days'
@@ -1050,9 +1050,6 @@ select extensions.dblink_exec('rt_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#338 committed%');
   delete from public.tasks where title like '%#338 committed%';
-  delete from public.member_departments where member_id in (
-    '33800000-0000-0000-0000-000000000051', '33800000-0000-0000-0000-000000000052',
-    '33800000-0000-0000-0000-000000000053', '33800000-0000-0000-0000-000000000054');
   delete from auth.users where id in (
     '33800000-0000-0000-0000-000000000051', '33800000-0000-0000-0000-000000000052',
     '33800000-0000-0000-0000-000000000053', '33800000-0000-0000-0000-000000000054');
@@ -1069,28 +1066,26 @@ select extensions.dblink_exec('rt_setup', $$
     ('33800000-0000-0000-0000-000000000052', 'Probe Manager 338', 'probe.manager.338@test.local', 'voluntar', 'activ'),
     ('33800000-0000-0000-0000-000000000053', 'Probe Executor 338', 'probe.executor.338@test.local', 'voluntar', 'activ'),
     ('33800000-0000-0000-0000-000000000054', 'Race Executor 338', 'race.exec.338@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33800000-0000-0000-0000-000000000051', 'edu'),
-    ('33800000-0000-0000-0000-000000000052', 'edu'),
-    ('33800000-0000-0000-0000-000000000053', 'edu'),
-    ('33800000-0000-0000-0000-000000000054', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('33800000-0000-0000-0000-000000000051'::uuid, 'edu'),
+    ('33800000-0000-0000-0000-000000000052'::uuid, 'edu'),
+    ('33800000-0000-0000-0000-000000000053'::uuid, 'edu'),
+    ('33800000-0000-0000-0000-000000000054'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33800000-%'
   on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
-  values ('Umbrela sonda #338 committed', 'Umbrela in lucru', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, 'todo',
+  values ('Umbrela sonda #338 committed', 'Umbrela in lucru', (select id from public.groups where name = 'Educațional'), 'umbrella', null, null, 'todo',
           now() - interval '5 days', '33800000-0000-0000-0000-000000000052');
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      created_at, started_at, submitted_at, created_by)
-  select 'Sonda blocaj redeschidere #338 committed', 'Sonda', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
+  select 'Sonda blocaj redeschidere #338 committed', 'Sonda', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review',
          parent.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          '33800000-0000-0000-0000-000000000052'
     from public.tasks as parent where parent.title = 'Umbrela sonda #338 committed';
@@ -1099,7 +1094,7 @@ select extensions.dblink_exec('rt_setup', $$
     (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, submitted_at, created_by)
   values
-    ('Cursa dubla redeschidere #338 committed', 'Doua redeschideri, un task', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
+    ('Cursa dubla redeschidere #338 committed', 'Doua redeschideri, un task', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review',
      now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
      '33800000-0000-0000-0000-000000000052');
 
@@ -1199,7 +1194,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33800000-0000-0000-0000-000000000051'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'and the Group roster row their evaluator authority rests on FOR SHARE too');
 select ok(coalesce((
   select bool_or(row_lock.modes && array['For Update', 'Update', 'No Key Update'])
@@ -1401,9 +1396,6 @@ select extensions.dblink_exec('rt_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#338 committed%');
   delete from public.tasks where title like '%#338 committed%';
-  delete from public.member_departments where member_id in (
-    '33800000-0000-0000-0000-000000000051', '33800000-0000-0000-0000-000000000052',
-    '33800000-0000-0000-0000-000000000053', '33800000-0000-0000-0000-000000000054');
   delete from auth.users where id in (
     '33800000-0000-0000-0000-000000000051', '33800000-0000-0000-0000-000000000052',
     '33800000-0000-0000-0000-000000000053', '33800000-0000-0000-0000-000000000054');

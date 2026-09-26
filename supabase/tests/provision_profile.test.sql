@@ -92,7 +92,7 @@ create function pg_temp.g602_roster_legacy(n integer) returns text
 language sql stable security definer set search_path = '' as $$
   select gm.group_role
     from public.group_members as gm
-    join public.groups as grp on grp.id = gm.group_id and grp.legacy_dept_id = 'fin'
+    join public.groups as grp on grp.id = gm.group_id and grp.name = 'Financiar'
    where gm.member_id = pg_temp.g602_uid(n)
 $$;
 
@@ -245,18 +245,16 @@ select lives_ok(
   format($$ select provision_profile(%L::uuid, 'Legacy Test', 'legacy.602@test.local',
                                      'voluntar', array[%s::bigint], %L::uuid) $$,
          pg_temp.g602_uid(10),
-         (select id from public.groups where legacy_dept_id = 'fin'),
+         (select id from public.groups where name = 'Financiar'),
          pg_temp.g602_uid(1)),
   'a legacy-backed Department Group is appointed like any other');
 reset role;
 select is(pg_temp.g602_roster_legacy(10), 'member',
   'the Department Group roster row is written directly, not derived by the mirror');
-select is(
-  (select count(*) from member_departments where member_id = pg_temp.g602_uid(10)),
-  0::bigint, 'and public.member_departments is not written any more (#590 drops it)');
-select is(
-  (select count(*) from team_members where member_id = pg_temp.g602_uid(10)),
-  0::bigint, 'nor public.team_members');
+select is(to_regclass('public.member_departments'), null::regclass,
+  'legacy Department roster storage is absent');
+select is(to_regclass('public.team_members'), null::regclass,
+  'legacy Team roster storage is absent');
 
 select * from finish();
 rollback;

@@ -59,7 +59,7 @@ it.each([
   ).rejects.toThrow(copy);
 });
 
-it('reads coordinator identities with nickname and full-name fallback', async () => {
+it('reads coordinator identities for MemberName (Nickname and full name)', async () => {
   rpc.mockResolvedValue({
     data: [
       {
@@ -82,13 +82,15 @@ it('reads coordinator identities with nickname and full-name fallback', async ()
   await expect(fetchGroupCoordination(3)).resolves.toEqual([
     {
       memberId: 'a',
-      name: 'Nickname',
+      fullName: 'Full name',
+      nickname: 'Nickname',
       groupRole: 'manager',
       positionTitle: null,
     },
     {
       memberId: 'b',
-      name: 'Second name',
+      fullName: 'Second name',
+      nickname: null,
       groupRole: 'responsible',
       positionTitle: 'Editor',
     },

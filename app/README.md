@@ -167,19 +167,20 @@ copy of that rule in TypeScript is a weaker one.
 
 ## Routes
 
-| Path             | Who reaches it                                                                    | Screen                     |
-| ---------------- | --------------------------------------------------------------------------------- | -------------------------- |
-| `/login`         | signed out                                                                        | magic-link request         |
-| `/auth/callback` | anyone — its job is turning a link into a session, so it runs before there is one | —                          |
-| `/no-profile`    | signed in without org claims                                                      | ADR-0003 gate 2            |
-| `/`              | members                                                                           | dashboard (#93–#95)        |
-| `/tracker`       | members                                                                           | task tracker (#88–#92)     |
-| `/calendar`      | members                                                                           | calendar (#96–#98)         |
-| `/anunturi`      | members                                                                           | announcements (#99–#101)   |
-| `/notificari`    | members                                                                           | notification centre (#101) |
-| `/voluntari`     | capability `seeDirectory` (rank BCE+)                                             | directory (#102–#103)      |
-| `/profil`        | members                                                                           | profile (#108)             |
-| `/administrare`  | capability `administer` (a Group Role anywhere, or BC+)                           | Administrare (#588)        |
+| Path             | Who reaches it                                                                      | Screen                     |
+| ---------------- | ----------------------------------------------------------------------------------- | -------------------------- |
+| `/login`         | signed out                                                                          | magic-link request         |
+| `/auth/callback` | anyone — its job is turning a link into a session, so it runs before there is one   | —                          |
+| `/auth/confirm`  | anyone — the emailed link lands here; only the Member's tap spends the token (#768) | click-to-confirm           |
+| `/no-profile`    | signed in without org claims                                                        | ADR-0003 gate 2            |
+| `/`              | members                                                                             | dashboard (#93–#95)        |
+| `/tracker`       | members                                                                             | task tracker (#88–#92)     |
+| `/calendar`      | members                                                                             | calendar (#96–#98)         |
+| `/anunturi`      | members                                                                             | announcements (#99–#101)   |
+| `/notificari`    | members                                                                             | notification centre (#101) |
+| `/voluntari`     | capability `seeDirectory` (rank BCE+)                                               | directory (#102–#103)      |
+| `/profil`        | members                                                                             | profile (#108)             |
+| `/administrare`  | capability `administer` (a Group Role anywhere, or BC+)                             | Administrare (#588)        |
 
 Everything unknown redirects to `/`, where the guard decides.
 

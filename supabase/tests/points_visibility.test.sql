@@ -50,7 +50,7 @@ insert into public.profiles (id, full_name, email, role) values
   ('f4000000-0000-0000-0000-0000000000f4', 'Frida BC',        'frida.bc@test.local',   'bc'),
   ('f5000000-0000-0000-0000-0000000000f5', 'Fane Moderator',  'fane.mod@test.local',   'moderator');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('f1000000-0000-0000-0000-0000000000f1', 'edu'),
   ('f2000000-0000-0000-0000-0000000000f2', 'edu'),
   ('f3000000-0000-0000-0000-0000000000f3', 'pr'),

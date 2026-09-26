@@ -58,12 +58,12 @@ function group(
     accepts_applications: true,
     automatic_membership: false,
     shared_work_visibility: true,
-    application_form_label: null,
-    application_form_url: null,
-    is_private: false,
     manager_title: 'Coordonator',
     competes_in_cup: false,
     counts_toward_parent_cup: false,
+    is_private: false,
+    application_form_label: null,
+    application_form_url: null,
     memberCount: 1,
     ...extra,
   };
@@ -72,7 +72,7 @@ const application: GroupApplication = {
   id: 7,
   group_id: 2,
   member_id: 'me',
-  memberName: 'Ana Pop',
+  member: { memberId: 'me', fullName: 'Ana Pop' },
   status: 'pending',
   note: 'Vreau să ajut',
   created_at: '2026-09-24T12:00:00Z',
@@ -92,12 +92,13 @@ beforeEach(() => {
       group(3, 'Doar AG', { application_level: 3 }),
       group(4, 'Arhivat', { status: 'archived' }),
       group(5, 'Automat', { automatic_membership: true }),
+      group(6, 'Grup privat', { is_private: true }),
     ]),
   );
   api.mine.mockReturnValue(ready([]));
   api.applications.mockReturnValue(ready([]));
   api.roster.mockReturnValue(
-    ready([{ memberId: 'manager', name: 'Ioana', groupRole: 'manager' }]),
+    ready([{ memberId: 'manager', fullName: 'Ioana', groupRole: 'manager' }]),
   );
   api.events.mockReturnValue(ready([]));
   api.mutate.mockReset().mockResolvedValue({});
@@ -109,9 +110,9 @@ function list() {
     </MemoryRouter>,
   );
 }
-function detail() {
+function detail(id = 2) {
   return render(
-    <MemoryRouter initialEntries={['/grupuri/2']}>
+    <MemoryRouter initialEntries={[`/grupuri/${id}`]}>
       <Routes>
         <Route path="/grupuri/:groupId" element={<MemberGroupScreen />} />
       </Routes>
@@ -127,8 +128,20 @@ it('lists only eligible active Groups and searches by name, with their first anc
   expect(screen.queryByText('Doar AG')).not.toBeInTheDocument();
   expect(screen.queryByText('Arhivat')).not.toBeInTheDocument();
   expect(screen.queryByText('Automat')).not.toBeInTheDocument();
+  // Ruling R25: a Private Group a Member can read is still never offered.
+  expect(screen.queryByText('Grup privat')).not.toBeInTheDocument();
   await userEvent.type(screen.getByRole('searchbox'), 'inexistent');
   expect(screen.getByRole('status')).toHaveTextContent('Nu sunt grupuri');
+});
+it('names the topmost ancestor the Member can read when the root is hidden', () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(2, 'Echipa Evenimente', { parent_id: 1, path: [1, 2] }),
+      group(7, 'Subechipa', { parent_id: 2, path: [1, 2, 7] }),
+    ]),
+  );
+  list();
+  expect(screen.getByText(/Echipă · Echipa Evenimente/)).toBeInTheDocument();
 });
 it('applies in a dialog and renders the pending server state with withdrawal', async () => {
   const view = list();
@@ -161,6 +174,20 @@ it('applies in a dialog and renders the pending server state with withdrawal', a
     </MemoryRouter>,
   );
   expect(screen.getByRole('button', { name: 'Aplică' })).toBeInTheDocument();
+});
+it('checks the optional note against its 1000-character limit before applying', async () => {
+  list();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Aplică' }));
+  const note = screen.getByLabelText('Mesaj (opțional)');
+  await user.click(note);
+  await user.paste('n'.repeat(1001));
+  await user.click(screen.getByRole('button', { name: 'Confirmă' }));
+  expect(
+    await screen.findByText('Nota are cel mult 1000 de caractere.'),
+  ).toBeInTheDocument();
+  expect(note).toHaveAttribute('aria-invalid', 'true');
+  expect(api.mutate).not.toHaveBeenCalled();
 });
 it.each([true, false])(
   'manager decides an Application: accept=%s',
@@ -200,6 +227,14 @@ it('ordinary Member sees Group details, role titles and upcoming empty state', (
   expect(screen.getByText('Nu sunt evenimente viitoare.')).toBeInTheDocument();
   expect(
     screen.queryByRole('link', { name: 'Administrare' }),
+  ).not.toBeInTheDocument();
+});
+it('a Private Group page carries the Privat badge and no Aplică', () => {
+  // Readable (the database decides that), accepting on paper, but private.
+  detail(6);
+  expect(screen.getByText('Privat')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Aplică' }),
   ).not.toBeInTheDocument();
 });
 it('applicant sees pending status and can withdraw on the Group page', () => {

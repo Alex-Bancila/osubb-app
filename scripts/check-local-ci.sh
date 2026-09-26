@@ -52,6 +52,7 @@ if [ "$ONLY" = all ] || [ "$ONLY" = repo ]; then
   step "repo: lint:links"    npm run lint:links
   step "repo: lint:shell"    npm run lint:shell
   step "repo: lint:deno"     npm run lint:deno
+  step "repo: lint:templates" npm run lint:templates
   step "repo: test:tooling"  npm run test:tooling
 fi
 

@@ -1,3 +1,4 @@
+import { MemberName } from '../../components/member/MemberName';
 import { useGroupApplications } from '../../queries/group-applications';
 import { ApplicationAction } from '../groups/ApplicationAction';
 
@@ -17,7 +18,9 @@ export function GroupApplicationsTab({
     <ul className="space-y-4">
       {applications.data.map((row) => (
         <li key={row.id} className="space-y-3 rounded-xl border p-4">
-          <h3 className="font-semibold">{row.memberName}</h3>
+          <h3>
+            <MemberName {...row.member} showFullName />
+          </h3>
           <p className="text-sm text-muted-foreground">
             {new Date(row.created_at).toLocaleDateString('ro-RO')}
           </p>

@@ -30,6 +30,9 @@ vi.mock('../../lib/capabilities', () => ({
 vi.mock('../../queries/notifications-realtime', () => ({
   useNotificationRealtime: vi.fn(),
 }));
+vi.mock('../../queries/push-subscription', () => ({
+  usePushSelfRepair: vi.fn(),
+}));
 
 import AppShell from './AppShell';
 import type { Capabilities } from '../../lib/capabilities';
@@ -37,8 +40,6 @@ import type { Capabilities } from '../../lib/capabilities';
 const ordinaryClaims = {
   member_role: 'voluntar',
   member_level: 1,
-  dept_ids: [],
-  team_ids: [],
   group_ids: [],
 };
 

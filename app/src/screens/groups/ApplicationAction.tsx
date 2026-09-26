@@ -6,7 +6,13 @@ import {
   DialogDescription,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { FieldError } from '../../components/ui/field';
 import { CommandError } from '../../lib/command-reasons';
+import {
+  fieldForReason as noteFields,
+  optionalNoteSchema,
+} from '../../lib/schemas/note';
+import { useFormValidation } from '../../lib/use-form-validation';
 import {
   useApplicationCommand,
   type ApplicationCommand,
@@ -32,9 +38,12 @@ export function ApplicationAction({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // The optional note is checked like every other form (#674, ruling R8).
+  const form = useFormValidation(optionalNoteSchema, { note }, noteFields);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting.current) return;
+    if (command.kind !== 'withdraw' && !form.validate()) return;
     submitting.current = true;
     setError(null);
     try {
@@ -62,6 +71,7 @@ export function ApplicationAction({
         onClick={() => {
           setOpen(true);
           setError(null);
+          form.reset();
           setSuccess(false);
         }}
       >
@@ -87,15 +97,19 @@ export function ApplicationAction({
           </DialogDescription>
           <form onSubmit={submit} className="grid gap-4">
             {command.kind !== 'withdraw' && (
-              <label className="grid gap-2">
-                Mesaj (opțional)
-                <textarea
-                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  disabled={mutation.isPending}
-                />
-              </label>
+              <div className="grid gap-2">
+                <label className="grid gap-2">
+                  Mesaj (opțional)
+                  <textarea
+                    className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    disabled={mutation.isPending}
+                    {...form.field('note')}
+                  />
+                </label>
+                <FieldError {...form.errorProps('note')} />
+              </div>
             )}
             {error && <p role="alert">{error}</p>}
             <div className="flex flex-wrap justify-end gap-2">

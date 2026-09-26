@@ -27,7 +27,6 @@ select extensions.dblink_exec('commands_522_setup', $setup$
   delete from public.campaigns where name='Race campaign #522';
   delete from public.completed_work_requests where description='Race request #522';
   delete from public.groups where name = 'Race #522';
-  delete from public.projects where name = 'Race #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
     '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
   insert into auth.users(id,email) values
@@ -38,13 +37,7 @@ select extensions.dblink_exec('commands_522_setup', $setup$
     ('52200000-0000-0000-0000-000000000090','Race coord','coord.race.522@test.local','voluntar','activ'),
     ('52200000-0000-0000-0000-000000000091','Race resp','resp.race.522@test.local','voluntar','activ'),
     ('52200000-0000-0000-0000-000000000092','Race BC','bc.race.522@test.local','bc','activ');
-  insert into public.projects(name,leader_id,created_by) values
-    ('Race #522','52200000-0000-0000-0000-000000000090','52200000-0000-0000-0000-000000000092');
-  insert into public.project_members(project_id,member_id,project_role)
-    select id,'52200000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #522'
-  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
-  insert into public.groups(name,category,legacy_project_id)
-    select name,'project',id from public.projects where name='Race #522';
+  insert into public.groups(name,category) values ('Race #522','project');
   insert into public.group_members(group_id,member_id,group_role)
     select id,'52200000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #522';
   insert into public.group_members(group_id,member_id,group_role)
@@ -131,7 +124,7 @@ select pg_temp.test_login('52200000-0000-0000-0000-000000000092',
   '{"member_role":"bc","member_level":6}');
 reset role;
 create temp table target_race_348 as select * from pg_temp.test_race(
-  $q$select (public.create_task('Race task #348', null, now()+interval '1 day', 'org', 'direct', p_executor_id => '52200000-0000-0000-0000-000000000093', p_group_id => (select id from public.groups where name='Race #522'))).status::text$q$,
+  $q$select (public.create_task('Race task #348', null, now()+interval '1 day', 'local', 'direct', p_executor_id => '52200000-0000-0000-0000-000000000093', p_group_id => (select id from public.groups where name='Race #522'))).status::text$q$,
   'select public.test_348_deactivate_target()');
 select is((select result_a from target_race_348),'todo','creation assigns a live, eligible Executor');
 select ok((select b_waited from target_race_348),'target deactivation waits for the creating transaction');
@@ -149,7 +142,6 @@ select extensions.dblink_exec('commands_522_setup', $$
   drop function public.test_522_revoke();
   delete from public.campaigns where name='Race campaign #522';
   delete from public.completed_work_requests where description='Race request #522';
-  delete from public.projects where name='Race #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
     '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
 $$);

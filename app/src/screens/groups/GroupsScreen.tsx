@@ -18,6 +18,8 @@ export default function GroupsScreen() {
     return <p role="status">Se încarcă grupurile…</p>;
   if (groups.isError || mine.isError || applications.isError)
     return <p role="alert">Nu am putut încărca grupurile. Reîncarcă pagina.</p>;
+  // Ruling R25: a Private Group is never offered here, even to a Member who
+  // can read it (acceptsApplication skips is_private rows).
   const available = groups.data.filter((group) =>
     acceptsApplication(group, level),
   );
@@ -54,7 +56,14 @@ export default function GroupsScreen() {
             (row) => row.id === group.id && (row.explicit || row.automatic),
           );
           const ancestor = groups.data.find(
-            (row) => row.id === group.path[0] && row.id !== group.id,
+            // The topmost ancestor the Member can read (the root, unless hidden).
+            (row) =>
+              row.id ===
+              group.path.find(
+                (id) =>
+                  id !== group.id &&
+                  groups.data.some((other) => other.id === id),
+              ),
           );
           return (
             <li

@@ -15,22 +15,9 @@
     <meta name="theme-color" content="#ED2025" />
     <title>OSUBB</title>
 
-    <script>
-      /* Apply the theme before first paint, so dark-mode users never see a white
-         flash. The toggle that writes this key arrives with the profile screen
-         (#108); until then we follow the OS. Same storage key as the mockup. */
-      (function () {
-        try {
-          var saved = localStorage.getItem('osubb-theme');
-          var dark = saved
-            ? saved === 'dark'
-            : matchMedia('(prefers-color-scheme: dark)').matches;
-          if (dark) document.documentElement.setAttribute('data-theme', 'dark');
-        } catch (e) {
-          /* private mode, storage disabled — light theme is a fine fallback */
-        }
-      })();
-    </script>
+    <!-- Theme before first paint. A blocking classic script from public/, not
+         inline: the Content-Security-Policy allows script-src 'self' only (#770). -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

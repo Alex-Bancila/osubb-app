@@ -75,7 +75,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('34400000-0000-0000-0000-000000000016', 'Membru Echipa Independenta Doi 344', 'membru.ind.doi.344@test.local', 'voluntar', 'activ'),
   ('34400000-0000-0000-0000-000000000017', 'Membru Dezactivat 344', 'membru.dezactivat.344@test.local', 'voluntar', 'inactiv');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('34400000-0000-0000-0000-000000000002', 'edu'),
   ('34400000-0000-0000-0000-000000000003', 'pr'),
   ('34400000-0000-0000-0000-000000000004', 'edu'),
@@ -89,27 +89,27 @@ insert into public.member_departments (member_id, dept_id) values
   ('34400000-0000-0000-0000-000000000014', 'edu'),
   ('34400000-0000-0000-0000-000000000017', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-344-dt', 'Echipa Departamentala 344', 'edu'),
   ('t-344-ind', 'Echipa Independenta 344', null);
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-344-dt', '34400000-0000-0000-0000-000000000012'),
   ('t-344-ind', '34400000-0000-0000-0000-000000000009'),
   ('t-344-ind', '34400000-0000-0000-0000-000000000016');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Proiect #344', 'active',
    '34400000-0000-0000-0000-000000000006', '34400000-0000-0000-0000-000000000001'),
   ('Proiect arhivat #344', 'archived',
    '34400000-0000-0000-0000-000000000006', '34400000-0000-0000-0000-000000000001');
 
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #344'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #344'),
    '34400000-0000-0000-0000-000000000007', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #344'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #344'),
    '34400000-0000-0000-0000-000000000008', 'member'),
-  ((select id from public.projects where name = 'Proiect arhivat #344'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect arhivat #344'),
    '34400000-0000-0000-0000-000000000008', 'member');
 
 -- ---- Test isolation: quiet every BC/Moderator this suite did not create.
@@ -157,13 +157,13 @@ insert into public.completed_work_requests (requester_id, group_id, description)
   ('34400000-0000-0000-0000-000000000017', pg_temp.dept_group('edu'), 'Cerere de la un membru dezactivat #344');
 insert into public.completed_work_requests (requester_id, group_id, description)
 select '34400000-0000-0000-0000-000000000008', pg_temp.project_group(project.id), 'A doua cerere de proiect #344'
-  from public.projects as project where project.name = 'Proiect #344';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #344';
 -- Filed while the Project was live, then the Project was archived. Only the
 -- direct insert can produce this shape: create_completed_work_request requires
 -- an active Project.
 insert into public.completed_work_requests (requester_id, group_id, description)
 select '34400000-0000-0000-0000-000000000008', pg_temp.project_group(project.id), 'Cerere pe un proiect arhivat intre timp #344'
-  from public.projects as project where project.name = 'Proiect arhivat #344';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect arhivat #344';
 -- Same shape, but filed by the LEAD themselves. This is the one caller who
 -- clears the command's visibility test on an archived Project without
 -- private.can_manage_project_work ever being consulted (requester_id =
@@ -171,12 +171,12 @@ select '34400000-0000-0000-0000-000000000008', pg_temp.project_group(project.id)
 -- reach the decider predicate's Project branch there -- see section 7b-bis.
 insert into public.completed_work_requests (requester_id, group_id, description)
 select '34400000-0000-0000-0000-000000000006', pg_temp.project_group(project.id), 'Cerere proprie a leadului pe proiect arhivat #344'
-  from public.projects as project where project.name = 'Proiect arhivat #344';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect arhivat #344';
 -- And on the ACTIVE Project: the lead files their own Request and later
 -- decides it themselves (section 8b).
 insert into public.completed_work_requests (requester_id, group_id, description)
 select '34400000-0000-0000-0000-000000000006', pg_temp.project_group(project.id), 'Cerere proprie a leadului pe proiectul activ #344'
-  from public.projects as project where project.name = 'Proiect #344';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #344';
 
 -- ==================== 1. Create: a Department Member's own Request ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000004', jsonb_build_object(
@@ -210,8 +210,8 @@ select (select id from public.completed_work_requests
          where description = 'Cerere proprie a leadului pe proiect arhivat #344') as archived_lead_request_id,
        (select id from public.completed_work_requests
          where description = 'Cerere proprie a leadului pe proiectul activ #344') as self_decider_request_id,
-       (select id from public.projects where name = 'Proiect #344') as project_id,
-       (select id from public.projects where name = 'Proiect arhivat #344') as archived_project_id;
+       (select id from pg_temp.fixture_projects where name = 'Proiect #344') as project_id,
+       (select id from pg_temp.fixture_projects where name = 'Proiect arhivat #344') as archived_project_id;
 grant select on f344 to authenticated;
 -- anon too: sections 2 and 7c assert the literal grant denial on the three
 -- wrappers while `set local role anon` is in force, and the fixture ids they
@@ -417,7 +417,7 @@ select isnt((select task_id from t344), null,
 
 select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s',
               task.kind, task.audience, task.assignment_mode, task.status,
-              (select legacy_dept_id from public.groups where id = task.group_id), task.created_by, task.difficulty, task.rating,
+              (select id from pg_temp.fixture_departments where group_id = task.group_id), task.created_by, task.difficulty, task.rating,
               (task.completed_at is not null)::text)
              from public.tasks as task where task.id = (select task_id from t344)),
   'task|local|direct|completed|edu|34400000-0000-0000-0000-000000000002|3|4|true',
@@ -899,9 +899,6 @@ select extensions.dblink_exec('cwr_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where created_by = '34400000-0000-0000-0000-000000000051');
   delete from public.tasks where created_by = '34400000-0000-0000-0000-000000000051';
-  delete from public.member_departments where member_id in (
-    '34400000-0000-0000-0000-000000000051', '34400000-0000-0000-0000-000000000052',
-    '34400000-0000-0000-0000-000000000053');
   delete from auth.users where id in (
     '34400000-0000-0000-0000-000000000051', '34400000-0000-0000-0000-000000000052',
     '34400000-0000-0000-0000-000000000053');
@@ -914,21 +911,19 @@ select extensions.dblink_exec('cwr_setup', $$
     ('34400000-0000-0000-0000-000000000051', 'Decident Comis 344', 'cwr.decider.344@test.local', 'bce', 'activ'),
     ('34400000-0000-0000-0000-000000000052', 'Solicitant Cursa 344', 'cwr.race.requester.344@test.local', 'voluntar', 'activ'),
     ('34400000-0000-0000-0000-000000000053', 'Solicitant Sonda 344', 'cwr.probe.requester.344@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('34400000-0000-0000-0000-000000000051', 'edu'),
-    ('34400000-0000-0000-0000-000000000052', 'edu'),
-    ('34400000-0000-0000-0000-000000000053', 'edu');
   -- #586: committed race fixtures require native Group roster rows.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34400000-0000-0000-0000-000000000051'::uuid, 'edu'),
+    ('34400000-0000-0000-0000-000000000052'::uuid, 'edu'),
+    ('34400000-0000-0000-0000-000000000053'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34400000-%'
   on conflict (group_id,member_id) do nothing;
 
   insert into public.completed_work_requests (requester_id, group_id, description) values
-    ('34400000-0000-0000-0000-000000000052', (select id from public.groups where legacy_dept_id = 'edu'), 'Cerere pentru cursa de aprobare #344 committed'),
-    ('34400000-0000-0000-0000-000000000053', (select id from public.groups where legacy_dept_id = 'edu'), 'Cerere pentru sonda de blocaj #344 committed');
+    ('34400000-0000-0000-0000-000000000052', (select id from public.groups where name = 'Educațional'), 'Cerere pentru cursa de aprobare #344 committed'),
+    ('34400000-0000-0000-0000-000000000053', (select id from public.groups where name = 'Educațional'), 'Cerere pentru sonda de blocaj #344 committed');
 $$);
 
 create temp table r344 as
@@ -977,7 +972,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.group_members') as row_lock
     join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '34400000-0000-0000-0000-000000000051'
-     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+     and membership.group_id = (select id from public.groups where name = 'Educațional')
 ), false), 'and the Group membership the BCE''s decider authority rests on FOR SHARE too');
 
 select extensions.dblink_exec('cwr_lock', 'rollback');
@@ -1188,9 +1183,6 @@ select extensions.dblink_exec('cwr_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where created_by = '34400000-0000-0000-0000-000000000051');
   delete from public.tasks where created_by = '34400000-0000-0000-0000-000000000051';
-  delete from public.member_departments where member_id in (
-    '34400000-0000-0000-0000-000000000051', '34400000-0000-0000-0000-000000000052',
-    '34400000-0000-0000-0000-000000000053');
   delete from auth.users where id in (
     '34400000-0000-0000-0000-000000000051', '34400000-0000-0000-0000-000000000052',
     '34400000-0000-0000-0000-000000000053');

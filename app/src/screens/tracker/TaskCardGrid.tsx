@@ -9,7 +9,7 @@ import {
 
 type CardOptions = Pick<
   ComponentProps<typeof TaskCard>,
-  'allowInterest' | 'joinable' | 'band' | 'titleLevel'
+  'allowInterest' | 'joinable' | 'titleLevel'
 >;
 
 /** One Task card per row, one column wide; the shell does the scrolling. */
@@ -24,7 +24,7 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
   now: Date;
   onOpenTask: (id: number) => void;
   highlightedId?: number | null;
-  /** Per-row card options: interest controls, band, heading level. */
+  /** Per-row card options: interest controls, heading level. */
   card?: (row: Row) => CardOptions;
 }) {
   const progress = useTaskProgress();

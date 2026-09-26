@@ -9,7 +9,7 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
-import { unsubscribeDevice, withTimeout } from './push-device';
+import { forgetPushOn, unsubscribeDevice, withTimeout } from './push-device';
 import { supabase } from './supabase';
 
 /** How long sign-out waits for this device's push row to be removed. */
@@ -19,9 +19,6 @@ const SIGN_OUT_PUSH_TIMEOUT_MS = 5000;
 export type MemberClaims = {
   member_role: string;
   member_level: number;
-  /** Legacy structure claims: nothing reads them; removed in #591. */
-  dept_ids?: string[];
-  team_ids?: string[];
   /**
    * Explicit Group memberships (ADR-0009 Wave 1); the Organization Group is
    * automatic and never listed. Stamped at token issue, so it can be up to an
@@ -100,8 +97,6 @@ function decodeClaims(accessToken: string): MemberClaims | null {
     return {
       member_role: meta.member_role,
       member_level: Number(meta.member_level ?? 0),
-      dept_ids: Array.isArray(meta.dept_ids) ? (meta.dept_ids as string[]) : [],
-      team_ids: Array.isArray(meta.team_ids) ? (meta.team_ids as string[]) : [],
       group_ids: Array.isArray(meta.group_ids)
         ? (meta.group_ids as number[])
         : [],
@@ -167,6 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextUserId = next?.user.id ?? null;
       if (lastUserId.current !== null && lastUserId.current !== nextUserId) {
         queryClient.clear();
+        // #769: a session that ended any other way than signOut() below must
+        // not leave the push self-repair trusting this Member on this device.
+        forgetPushOn(lastUserId.current);
       }
       lastUserId.current = nextUserId;
       setSession(next);

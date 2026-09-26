@@ -3,8 +3,11 @@
  * the cache boundary without a worker runtime.
  */
 
-/** Magic-link landings must reach the network, never the cached shell. */
-export const NAVIGATION_DENYLIST = [/^\/auth\/callback(?:[/?]|$)/];
+/**
+ * Emailed-link landings — `/auth/callback` and the click-to-confirm page
+ * `/auth/confirm` (#768) — must reach the network, never the cached shell.
+ */
+export const NAVIGATION_DENYLIST = [/^\/auth\/(?:callback|confirm)(?:[/?]|$)/];
 
 /**
  * Matches every request to the Supabase origin (REST, Auth, Realtime,
