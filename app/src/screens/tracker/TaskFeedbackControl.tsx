@@ -45,8 +45,8 @@ function FeedbackDialog({
       triggerLabel="Trimite înapoi în lucru"
       title="Trimite înapoi în lucru"
       description="Taskul revine în lucru cu feedback de aplicat. Nota rămâne în istoric și ajunge la Executor."
+      field="note"
       fieldLabel="Notă pentru Executor (obligatoriu)"
-      requiredMessage="Scrie o notă pentru Executor."
       confirmLabel="Confirmă feedbackul"
       failureMessage="Nu am putut trimite feedbackul."
       isPending={mutation.isPending}

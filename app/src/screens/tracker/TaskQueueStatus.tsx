@@ -8,7 +8,8 @@ export function QueuePosition({ queue }: { queue: OwnTaskQueue }) {
     queue.status === 'pending'
       ? queue.position === null
         ? 'Înscris în lista de așteptare. Poziția se actualizează.'
-        : `Locul ${queue.position} în lista de așteptare`
+        : // Ruling R9: every Candidate is queued; the card says where.
+          `Te-ai înscris pe locul ${queue.position}.`
       : queue.status === 'selected'
         ? 'Ai fost selectat pentru acest task.'
         : queue.status === 'withdrawn'

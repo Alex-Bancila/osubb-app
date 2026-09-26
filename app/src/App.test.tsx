@@ -42,10 +42,18 @@ vi.mock('./components/shell/AppShell', async () => {
   return { default: () => <Outlet /> };
 });
 vi.mock('./screens/login/LoginScreen', () => ({
-  default: () => <h1>Login screen</h1>,
+  default: ({ initialEmail }: { initialEmail?: string }) => (
+    <>
+      <h1>Login screen</h1>
+      <p>Prefilled: {initialEmail || '(none)'}</p>
+    </>
+  ),
 }));
 vi.mock('./screens/login/AuthCallback', () => ({
   default: () => <h1>Auth callback</h1>,
+}));
+vi.mock('./screens/login/AuthConfirm', () => ({
+  default: () => <h1>Auth confirm</h1>,
 }));
 vi.mock('./screens/no-profile/NoProfileScreen', () => ({
   default: () => <h1>No profile screen</h1>,
@@ -393,6 +401,32 @@ describe('route guards', () => {
 
     expect(
       screen.getByRole('heading', { name: 'Auth callback' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the click-to-confirm route available without a session', () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState({}, '', '/auth/confirm?token_hash=h&type=invite');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Auth confirm' }),
+    ).toBeInTheDocument();
+  });
+
+  it('prefills the login screen with the address handed over in router state', () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState(
+      { usr: { email: 'membru@exemplu.ro' }, key: 'retry', idx: 0 },
+      '',
+      '/login',
+    );
+
+    render(<App />);
+
+    expect(
+      screen.getByText('Prefilled: membru@exemplu.ro'),
     ).toBeInTheDocument();
   });
 

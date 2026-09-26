@@ -45,6 +45,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     managerId: null,
     color: '  ',
     short: null,
+    isPrivate: true,
   });
   expect(api.rpc).toHaveBeenLastCalledWith('create_group', {
     p_name: 'Amfiteatru',
@@ -54,6 +55,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_manager_id: null,
     p_color: null,
     p_short: null,
+    p_is_private: true,
   });
 
   await runGroupCommand({
@@ -65,6 +67,8 @@ it('sends every Administrare write through its own command, nulls included', asy
     applicationLevel: 1,
     sharedWorkVisibility: false,
     minLevel: 3,
+    applicationFormLabel: 'Formular de înscriere',
+    applicationFormUrl: 'https://forms.example.org/amfiteatru',
     confirmRemovals: true,
   });
   expect(api.rpc).toHaveBeenLastCalledWith('update_group', {
@@ -75,6 +79,8 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_application_level: 1,
     p_shared_work_visibility: false,
     p_min_level: 3,
+    p_application_form_label: 'Formular de înscriere',
+    p_application_form_url: 'https://forms.example.org/amfiteatru',
     p_confirm_removals: true,
   });
 
@@ -89,6 +95,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     color: '#C8102E',
     short: 'EDU',
     isOrganization: false,
+    isPrivate: false,
     confirmRemovals: false,
   });
   expect(api.rpc).toHaveBeenLastCalledWith('update_group_structure', {
@@ -101,6 +108,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_color: '#C8102E',
     p_short: 'EDU',
     p_is_organization: false,
+    p_is_private: false,
     p_confirm_removals: false,
   });
 
@@ -148,6 +156,8 @@ it('raises a translated refusal that still carries the server reason', async () 
     applicationLevel: null,
     sharedWorkVisibility: false,
     minLevel: 3,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
     confirmRemovals: false,
   }).catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(CommandError);

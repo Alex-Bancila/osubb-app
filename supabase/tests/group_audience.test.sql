@@ -175,7 +175,7 @@ select set_eq(
 select pg_temp.test_login_leadership(pg_temp.u601(1));
 select lives_ok(
   $q$select public.update_event((select id from e601 where name = 'org'), 'Audience org #601', 'sedinta',
-       (select id from g601 where name = 'org'), '2026-10-01 12:00+00', null, 'Aula', null, null, 0)$q$,
+       (select id from g601 where name = 'org'), '2026-10-01 12:00+00', null, 'Aula', null, null, 0, null)$q$,
   'BC moves an Organization Group Event to a new location');
 reset role;
 select set_eq(
@@ -198,7 +198,7 @@ select set_eq(
 select pg_temp.test_login_leadership(pg_temp.u601(1));
 select lives_ok(
   $q$select public.update_event((select id from e601 where name = 'move'), 'Audience move #601', 'sedinta',
-       (select id from g601 where name = 'diverse'), '2026-10-01 12:00+00', null, null, null, null, 0)$q$,
+       (select id from g601 where name = 'diverse'), '2026-10-01 12:00+00', null, null, null, null, 0, null)$q$,
   'BC moves a Department Event to another Department');
 reset role;
 select set_eq(

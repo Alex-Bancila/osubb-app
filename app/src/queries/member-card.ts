@@ -25,6 +25,8 @@ export type MemberCardGroup = {
   label: string;
   color: string | null;
   roleLabel: string;
+  /** A Private Group (#757), from the Group rows the viewer can read. */
+  isPrivate: boolean;
 };
 
 export type MemberCardData = {
@@ -35,7 +37,12 @@ export type MemberCardData = {
   /** `YYYY-MM-DD`, or null when the join date was never recorded. */
   joinedAt: string | null;
   avatarColor: string | null;
-  primaryGroup: { id: number; name: string; color: string | null } | null;
+  primaryGroup: {
+    id: number;
+    name: string;
+    color: string | null;
+    isPrivate: boolean;
+  } | null;
   /** The "+n" beside the primary Group chip. */
   otherMemberships: number;
   groups: MemberCardGroup[];
@@ -117,7 +124,10 @@ export async function fetchMemberCardRows(
 export function toMemberCardData(
   { card, contact }: MemberCardRows,
   roles?: Map<string, { name: string }>,
-  groups?: Map<number, { name: string; manager_title?: string | null }>,
+  groups?: Map<
+    number,
+    { name: string; manager_title?: string | null; is_private?: boolean }
+  >,
 ): MemberCardData | null {
   // No row: the Member does not exist, or the viewer is not an active Member.
   if (!card) return null;
@@ -136,6 +146,7 @@ export function toMemberCardData(
             id: card.primary_group_id,
             name: card.primary_group_name,
             color: card.primary_group_color,
+            isPrivate: groups?.get(card.primary_group_id)?.is_private === true,
           }
         : null,
     otherMemberships: card.other_memberships ?? 0,
@@ -156,6 +167,7 @@ export function toMemberCardData(
           groups?.get(item.group_id)?.manager_title || 'Coordonator',
           item.position_title,
         ),
+        isPrivate: groups?.get(item.group_id)?.is_private === true,
       };
     }),
     contact:

@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CommandError } from '../lib/command-reasons';
+import { reasonSchema } from '../lib/schemas/reason';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
@@ -13,16 +15,20 @@ const messages: Record<TaskGiveUpErrorKind, string> = {
   unknown: 'Nu am putut salva renunțarea. Încearcă din nou.',
 };
 
-export class TaskGiveUpError extends Error {
+/**
+ * A refused give-up. A reason we know keeps its shared copy (so the form can
+ * show it under the reason field); otherwise the code picks the copy.
+ */
+export class TaskGiveUpError extends CommandError {
   readonly kind: TaskGiveUpErrorKind;
 
-  constructor(kind: TaskGiveUpErrorKind) {
-    super(messages[kind]);
+  constructor(kind: TaskGiveUpErrorKind, error?: unknown) {
+    super(error, messages[kind]);
     this.kind = kind;
   }
 }
 
-export function taskGiveUpError(code?: string): TaskGiveUpError {
+export function taskGiveUpError(code?: string, error?: unknown) {
   return new TaskGiveUpError(
     code === 'PT400'
       ? 'reason_required'
@@ -33,18 +39,22 @@ export function taskGiveUpError(code?: string): TaskGiveUpError {
           : code === 'PT409'
             ? 'conflict'
             : 'unknown',
+    error,
   );
 }
 
 export async function giveUpTask(taskId: number, reason: string) {
-  const normalizedReason = reason.trim();
-  if (!normalizedReason) throw new TaskGiveUpError('reason_required');
+  const parsed = reasonSchema.safeParse({ reason });
+  if (!parsed.success)
+    throw new TaskGiveUpError('reason_required', {
+      message: parsed.error.issues[0]?.message,
+    });
 
   const { data, error } = await supabase.rpc('give_up_task', {
     p_task_id: taskId,
-    p_reason: normalizedReason,
+    p_reason: parsed.data.reason,
   });
-  if (error) throw taskGiveUpError(error.code);
+  if (error) throw taskGiveUpError(error.code, error);
   return data;
 }
 

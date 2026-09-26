@@ -1,67 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { createPwaOptions, createWorkboxOptions } from './pwa-config';
+import { createPwaOptions } from './pwa-config';
+import { NAVIGATION_DENYLIST, supabaseOriginPattern } from './sw-routes';
 
-function strategyFor(
-  options: ReturnType<typeof createWorkboxOptions>,
-  value: string,
-) {
-  const matches = options.runtimeCaching.filter((route) => {
-    if (typeof route.urlPattern === 'string') return route.urlPattern === value;
-    if (route.urlPattern instanceof RegExp) return route.urlPattern.test(value);
-    throw new Error('PWA route matchers must be serializable');
-  });
-  return matches.map((route) => route.handler);
-}
-
-describe('PWA cache boundary', () => {
-  it('keeps every Supabase API surface network-only', () => {
-    const workbox = createWorkboxOptions('https://project.supabase.co');
-
-    for (const path of [
-      '/rest/v1/tasks',
-      '/auth/v1/token',
-      '/realtime/v1/websocket',
-    ]) {
-      expect(
-        strategyFor(workbox, `https://project.supabase.co${path}`),
-      ).toEqual(['NetworkOnly']);
-    }
-    expect(strategyFor(workbox, 'https://example.com/rest/v1/tasks')).toEqual(
-      [],
-    );
-    expect(
-      strategyFor(
-        workbox,
-        'https://project.supabase.co.evil.test/rest/v1/tasks',
-      ),
-    ).toEqual([]);
-    expect(
-      workbox.runtimeCaching.every((route) => route.handler === 'NetworkOnly'),
-    ).toBe(true);
+describe('PWA build options', () => {
+  it('builds our own service worker from src/pwa/sw.ts (ADR-0010)', () => {
+    const options = createPwaOptions();
+    expect(options.strategies).toBe('injectManifest');
+    expect(options.srcDir).toBe('src/pwa');
+    expect(options.filename).toBe('sw.ts');
+    expect(options.registerType).toBe('prompt');
+    expect(options).not.toHaveProperty('workbox');
   });
 
-  it('precaches only the static shell and keeps auth callbacks out of fallback', () => {
-    const workbox = createWorkboxOptions('https://project.supabase.co');
-    expect(workbox.globPatterns).toEqual([
+  it('precaches only the static shell and its theme script', () => {
+    expect(createPwaOptions().injectManifest.globPatterns).toEqual([
       'index.html',
+      'theme-init.js',
       'assets/*.{js,css,woff2,png,svg,ico}',
     ]);
-
-    const [callbackDenylist] = workbox.navigateFallbackDenylist;
-    expect(callbackDenylist).toBeInstanceOf(RegExp);
-    if (!(callbackDenylist instanceof RegExp))
-      throw new Error('Missing callback denylist');
-    expect(callbackDenylist.test('/auth/callback')).toBe(true);
-    expect(callbackDenylist.test('/auth/callback/')).toBe(true);
-    expect(callbackDenylist.test('/auth/callback?code=magic-link-code')).toBe(
-      true,
-    );
-    expect(callbackDenylist.test('/calendar')).toBe(false);
   });
 
   it('publishes the Romanian install manifest with official square icons', () => {
-    const options = createPwaOptions('https://project.supabase.co');
-    expect(options.registerType).toBe('prompt');
+    const options = createPwaOptions();
     expect(options.manifest).toMatchObject({
       name: 'OSUBB',
       short_name: 'OSUBB',
@@ -74,5 +34,48 @@ describe('PWA cache boundary', () => {
         { src: '/pwa-512x512.png', sizes: '512x512', purpose: 'any maskable' },
       ],
     });
+  });
+});
+
+describe('service worker cache boundary', () => {
+  it('keeps every Supabase API surface network-only, and nothing else', () => {
+    const pattern = supabaseOriginPattern('https://project.supabase.co');
+    if (!pattern) throw new Error('Missing Supabase route');
+
+    for (const path of [
+      '/rest/v1/tasks',
+      '/auth/v1/token',
+      '/realtime/v1/websocket',
+      '/functions/v1/send-push',
+    ]) {
+      expect(pattern.test(`https://project.supabase.co${path}`)).toBe(true);
+    }
+    expect(pattern.test('https://example.com/rest/v1/tasks')).toBe(false);
+    expect(
+      pattern.test('https://project.supabase.co.evil.test/rest/v1/tasks'),
+    ).toBe(false);
+  });
+
+  it('installs without a Supabase route when the build carried no URL', () => {
+    expect(supabaseOriginPattern(undefined)).toBeNull();
+    expect(supabaseOriginPattern('')).toBeNull();
+    expect(supabaseOriginPattern('not a url')).toBeNull();
+  });
+
+  it('keeps emailed-link landings out of the navigation fallback', () => {
+    const denied = (path: string) =>
+      NAVIGATION_DENYLIST.some((pattern) => pattern.test(path));
+
+    expect(denied('/auth/callback')).toBe(true);
+    expect(denied('/auth/callback/')).toBe(true);
+    expect(denied('/auth/callback?code=magic-link-code')).toBe(true);
+    // The click-to-confirm page (#768) is never served from cache either.
+    expect(denied('/auth/confirm')).toBe(true);
+    expect(denied('/auth/confirm/')).toBe(true);
+    expect(denied('/auth/confirm?token_hash=abc&type=invite')).toBe(true);
+
+    expect(denied('/calendar')).toBe(false);
+    expect(denied('/auth/confirmed')).toBe(false);
+    expect(denied('/auth')).toBe(false);
   });
 });

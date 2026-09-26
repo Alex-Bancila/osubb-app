@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { Link } from 'react-router';
 import { HistoryIcon, MailIcon, PencilIcon, PhoneIcon } from 'lucide-react';
 import { cn } from 'cn';
+import { PrivateGroupBadge } from '@/components/group/PrivateGroupBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { MemberAvatar } from '@/components/ui/combobox';
@@ -156,6 +157,7 @@ function CardSections({
               }}
             />
             <span className="truncate">{primaryGroup.name}</span>
+            <PrivateGroupBadge isPrivate={primaryGroup.isPrivate} compact />
           </span>
           {otherMemberships > 0 && (
             <span
@@ -192,6 +194,7 @@ function CardSections({
                     }}
                   />
                   <span className="truncate">{group.label}</span>
+                  <PrivateGroupBadge isPrivate={group.isPrivate} />
                 </span>
                 <Badge variant="outline" className="shrink-0">
                   {group.roleLabel}
@@ -249,7 +252,7 @@ function CardSections({
               )}
             >
               <HistoryIcon aria-hidden="true" />
-              Vezi istoricul taskurilor
+              Vezi trackerul
             </Link>
           )}
           {manageRoles && (

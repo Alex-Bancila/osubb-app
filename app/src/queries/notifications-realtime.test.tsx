@@ -19,7 +19,7 @@ const memberId = 'a1000000-0000-0000-0000-000000000604';
 describe('notification Realtime signal', () => {
   beforeEach(() => resetSupabaseMock());
 
-  it('filters one channel to the member, invalidates both queries, and closes on sign-out', async () => {
+  it('filters one channel to the member, invalidates the notification and announcement queries, and closes on sign-out', async () => {
     const queryClient = new QueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const wrapper = ({ children }: { children: ReactNode }) => (
@@ -67,6 +67,14 @@ describe('notification Realtime signal', () => {
     });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: keys.notifications.unread(memberId),
+    });
+    // #68 lands one notification per Announcement: the Anunțuri badge and
+    // feed refresh on the same signal, without reading its payload.
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: keys.announcements.unread(memberId),
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: keys.announcements.feed(memberId),
     });
 
     rerender({ id: null });
