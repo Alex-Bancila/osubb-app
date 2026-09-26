@@ -106,6 +106,13 @@ describe('targetUrl', () => {
   });
 });
 
+describe('targetUrl near misses', () => {
+  it('never leaves the app for a path the URL parser reads as another host', () => {
+    for (const link of [String.raw`/\evil.test/phish`, '/\t/evil.test/phish'])
+      expect(targetUrl(link, ORIGIN)).toBe('https://app.osubb.ro/notificari');
+  });
+});
+
 describe('focusOrOpen', () => {
   function windowClient(url: string) {
     const client = {

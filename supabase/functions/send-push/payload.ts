@@ -65,14 +65,18 @@ export function appOrigin(): string | null {
  * The absolute URL a tap opens -- the same rule as the service worker's
  * `targetUrl` in app/src/pwa/push-payload.ts. An in-app route (`/tracker/12`)
  * opens itself; anything else (absent, empty, protocol-relative, an absolute
- * URL that would leave the app) opens the notification list.
+ * URL that would leave the app) opens the notification list. The resolved
+ * origin is checked too: the URL parser reads `/\host` (and a tab or new
+ * line inside `//`) as another host.
  */
 export function targetUrl(link: string | null, origin: string): string {
+  const fallback = new URL(NOTIFICATIONS_PATH, origin);
   const trimmed = link?.trim() ?? "";
-  const path = trimmed.startsWith("/") && !trimmed.startsWith("//")
-    ? trimmed
-    : NOTIFICATIONS_PATH;
-  return new URL(path, origin).href;
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return fallback.href;
+  }
+  const url = new URL(trimmed, origin);
+  return url.origin === fallback.origin ? url.href : fallback.href;
 }
 
 function serialize(

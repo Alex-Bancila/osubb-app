@@ -81,6 +81,8 @@ Deno.test("targetUrl opens what the service worker's tap opens", () => {
       "   ",
       "https://evil.test/phish",
       "//evil.test/phish",
+      String.raw`/\evil.test/phish`,
+      "/\t/evil.test/phish",
       "tracker/12",
     ]
   ) {

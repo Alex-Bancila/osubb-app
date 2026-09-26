@@ -52,12 +52,14 @@ export function parsePushPayload(text: string | null | undefined) {
  * same rule the in-app list applies (`inAppLink`).
  */
 export function targetUrl(link: string | null | undefined, origin: string) {
+  const fallback = new URL(NOTIFICATIONS_PATH, origin);
   const trimmed = link?.trim() ?? '';
-  const path =
-    trimmed.startsWith('/') && !trimmed.startsWith('//')
-      ? trimmed
-      : NOTIFICATIONS_PATH;
-  return new URL(path, origin).href;
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//'))
+    return fallback.href;
+  // The URL parser reads `/\host` (and a tab or new line inside `//`) as
+  // another host, so the resolved origin is checked too.
+  const url = new URL(trimmed, origin);
+  return url.origin === fallback.origin ? url.href : fallback.href;
 }
 
 /** The slice of the worker's `Clients` and `WindowClient` a tap needs. */
