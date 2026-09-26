@@ -125,12 +125,16 @@ going "back".
    with the web app (their contract changed in the same Release), Cloudflare's button alone leaves the
    functions on the new code. `release-production.yml` only ever runs from `refs/heads/main` — it refuses
    any other ref before the reviewer is even asked (ruling L10) — so "the previous `release/*` tag's commit"
-   means bringing `main` there with a **new** commit (`git revert` the offending commit(s), or a fresh commit
-   whose tree matches that tag), never a force-push to `main` (house rule 7). Push it, then run the one
-   command as usual: the `release` job redeploys every Edge Function from that commit's
-   `supabase/functions/`, rebuilds and redeploys the web app from the same commit, and tags a new `release/*`
-   name. If the revert touches `supabase/migrations/`, the `report` job's "already released, edited" warning
-   is expected — the migration itself still only ever moves forward, per the rule above.
+   means bringing `main` there with a **new** commit that reverts `app/` and `supabase/functions/` to that
+   tag's tree (`git revert` the offending commit(s), or a fresh commit matching that tree for those paths
+   only) — never a force-push to `main` (house rule 7), and never a commit that also deletes a migration
+   file already applied to production. Keep every migration file already applied: `db push --include-all`
+   matches by file against what it has already recorded, so a missing file for an already-applied migration
+   is a history mismatch, not a rollback. Push it, then run the one command as usual: the `release` job
+   redeploys every Edge Function from that commit's `supabase/functions/`, rebuilds and redeploys the web
+   app from the same commit, and tags a new `release/*` name. If restoring an accidentally-deleted migration
+   file is part of the revert, the `report` job's "already released, edited" warning is expected — the
+   migration itself still only ever moves forward, per the rule above.
 
 Edge Functions have no rollback control of their own; they return to a previous version only through path 2.
 
