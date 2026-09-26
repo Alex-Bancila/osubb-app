@@ -4,6 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import type { MemberIdentity } from '../components/member/member-identity';
 import { useAuth } from '../lib/auth';
 import { CommandError } from '../lib/command-reasons';
 import type { Database } from '../lib/database.types';
@@ -13,7 +14,8 @@ import { readAllRows } from './groups-admin';
 
 export type GroupApplication =
   Database['public']['Tables']['group_applications']['Row'] & {
-    memberName: string;
+    /** The applicant, named through MemberName (#676). */
+    member: MemberIdentity;
   };
 export async function fetchGroupApplications(
   memberId: string,
@@ -37,19 +39,25 @@ export async function fetchGroupApplications(
     ? await readAllRows((from, to) =>
         supabase
           .from('profiles_directory')
-          .select('id, full_name, nickname')
+          .select('id, full_name, nickname, avatar_color')
           .in('id', ids)
           .order('id')
           .range(from, to),
       )
     : [];
-  const names = new Map(
-    profiles.map((row) => [row.id, row.nickname ?? row.full_name]),
-  );
-  return rows.map((row) => ({
-    ...row,
-    memberName: names.get(row.member_id) ?? 'Membru',
-  }));
+  const byId = new Map(profiles.map((row) => [row.id, row]));
+  return rows.map((row) => {
+    const profile = byId.get(row.member_id);
+    return {
+      ...row,
+      member: {
+        memberId: row.member_id,
+        fullName: profile?.full_name ?? 'Membru',
+        nickname: profile?.nickname ?? null,
+        avatarColor: profile?.avatar_color ?? null,
+      },
+    };
+  });
 }
 export function useGroupApplications(groupId?: number) {
   const memberId = useAuth().session?.user.id;
@@ -131,7 +139,8 @@ export async function fetchGroupCoordination(groupId: number) {
   if (error) throw error;
   return data.map((row) => ({
     memberId: row.member_id,
-    name: row.nickname ?? row.full_name,
+    fullName: row.full_name,
+    nickname: row.nickname,
     groupRole: row.group_role,
     positionTitle: row.position_title,
   }));

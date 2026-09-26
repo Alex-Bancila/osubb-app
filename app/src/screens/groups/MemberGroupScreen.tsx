@@ -1,7 +1,9 @@
 import { Link, useParams } from 'react-router';
+import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
+import { MemberName } from '../../components/member/MemberName';
 import {
   useAdminGroups,
   useMyGroupRoles,
@@ -57,7 +59,10 @@ export default function MemberGroupScreen() {
           style={{ backgroundColor: group.color ?? '#5C5C61' }}
         />
         <div>
-          <h1 className="text-2xl font-semibold">{group.name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold">{group.name}</h1>
+            <PrivateGroupBadge isPrivate={group.is_private} />
+          </div>
           <p className="text-muted-foreground">
             {categoryLabel(group.category)}
           </p>
@@ -116,10 +121,17 @@ export default function MemberGroupScreen() {
             {roster.data
               .filter((row) => row.groupRole !== 'member')
               .map((row) => (
-                <li key={row.memberId}>
-                  {row.name}{' '}
+                <li
+                  key={row.memberId}
+                  className="flex flex-wrap items-center gap-x-2"
+                >
+                  <MemberName
+                    memberId={row.memberId}
+                    fullName={row.fullName}
+                    nickname={row.nickname}
+                    size="sm"
+                  />
                   <span className="text-muted-foreground">
-                    ·{' '}
                     {row.groupRole === 'manager'
                       ? (group.manager_title ?? 'Coordonator')
                       : (row.positionTitle ?? 'Responsabil')}
