@@ -3956,6 +3956,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      retention_ranking: {
+        Args: { p_period_id: number }
+        Returns: {
+          cohort_size: number
+          inside: boolean
+          member_id: string
+          rank: number
+          role: Database["public"]["Enums"]["member_role"]
+          share_size: number
+          task_points: number
+        }[]
+      }
       return_task_to_progress: {
         Args: { p_note: string; p_task_id: number }
         Returns: {

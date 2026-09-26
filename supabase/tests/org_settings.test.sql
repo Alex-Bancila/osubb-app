@@ -2,6 +2,7 @@
 -- member-readable key-value table and its one BC/Moderator command,
 -- public.set_org_setting, seeded with `adherence_form_url` for #52 (and, since
 -- #512, `adunarea_generala_group_id`, whose rules evaluation_rankings_read.test.sql
+-- owns; since #48, `vote_retention_percent`, whose rules retention_ranking.test.sql
 -- owns).
 --
 -- In order: the schema (RLS, the one read policy, the trigger, the named
@@ -102,13 +103,20 @@ select throws_ok(
 
 -- #512 seeds a second key, adunarea_generala_group_id; its value is whatever
 -- the demo seed pointed it at, so only its presence and audit are pinned here
--- (evaluation_rankings_read.test.sql owns its rules).
+-- (evaluation_rankings_read.test.sql owns its rules). #48 seeds a third,
+-- vote_retention_percent, at R20's placeholder 25 (retention_ranking.test.sql
+-- owns its rules).
 select results_eq(
-  $$ select key, key = 'adunarea_generala_group_id' or value is null, updated_by
+  $$ select key,
+            case key when 'adunarea_generala_group_id' then true
+                     when 'vote_retention_percent' then value = '25'
+                     else value is null end,
+            updated_by
        from public.org_settings order by key $$,
   $$ values ('adherence_form_url'::text, true, null::uuid),
-            ('adunarea_generala_group_id'::text, true, null::uuid) $$,
-  'the seed rows: adherence_form_url, empty, and #512''s adunarea_generala_group_id, neither set through the command -- and no other key');
+            ('adunarea_generala_group_id'::text, true, null::uuid),
+            ('vote_retention_percent'::text, true, null::uuid) $$,
+  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id and #48''s vote_retention_percent at 25, none set through the command -- and no other key');
 
 -- ==================== 3. Grants ====================
 
@@ -151,19 +159,20 @@ select is(
 -- ==================== 4. Reading ====================
 
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000001');
-select is((select count(*) from public.org_settings), 2::bigint, 'the Moderator reads every setting');
+select is((select count(*) from public.org_settings), 3::bigint, 'the Moderator reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000002');
-select is((select count(*) from public.org_settings), 2::bigint, 'BC reads every setting');
+select is((select count(*) from public.org_settings), 3::bigint, 'BC reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000003');
-select is((select count(*) from public.org_settings), 2::bigint, 'a BCE reads every setting');
+select is((select count(*) from public.org_settings), 3::bigint, 'a BCE reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select results_eq(
-  $$ select key, key = 'adunarea_generala_group_id' or value is null
+  $$ select key, key in ('adunarea_generala_group_id', 'vote_retention_percent') or value is null
        from public.org_settings order by key $$,
-  $$ values ('adherence_form_url'::text, true), ('adunarea_generala_group_id'::text, true) $$,
+  $$ values ('adherence_form_url'::text, true), ('adunarea_generala_group_id'::text, true),
+            ('vote_retention_percent'::text, true) $$,
   'an ordinary Member reads every setting, the empty adherence form included -- #52 sends it to exactly this Member');
 reset role;
 
@@ -372,8 +381,8 @@ reset role;
 
 select results_eq(
   $$ select count(*)::int from public.org_settings $$,
-  $$ values (2) $$,
-  'no command ever created a key beyond the two the migrations seed');
+  $$ values (3) $$,
+  'no command ever created a key beyond the three the migrations seed');
 
 select * from finish();
 rollback;
