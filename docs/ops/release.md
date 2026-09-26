@@ -205,13 +205,11 @@ Member's own inbox is at fault:
    provider being off or the rate limit being hit. Past that window the dashboard has already dropped the
    record, so absence there proves nothing — confirm with the Member directly (spam folder, and that the
    address on file is correct) before assuming the send failed.
-3. **If the fix is a mistyped address:** there is no re-send path today. `invite-member` refuses on purpose
-   when the profile already exists (`409`, `docs/backend/inviting.md` § "When something goes wrong") — that
-   is what protects an existing Member from being silently overwritten. Correcting the address and
-   re-sending, for a Member who has never signed in, is issue **#773**
-   ("Administrare: correct the email and re-send the invitation…", blocked by #103) — not built yet. Until it
-   ships there is no workaround: do not delete and re-invite the profile, which is exactly the
-   re-provisioning #773 exists to avoid.
+3. **If the fix is a mistyped address or a lost invitation:** Administrare → the Member's page →
+   **Retrimite invitația** corrects the address and re-sends the invitation to the same account, for a Member
+   who has never signed in (#773; `docs/backend/inviting.md` § "The invitation never arrived"). _Why not
+   delete and re-invite:_ that re-provisions the Member and loses their Groups and history; `invite-member`
+   refuses an existing profile on purpose (`409`) so it can never overwrite one.
 
 ## November recruitment pacing
 

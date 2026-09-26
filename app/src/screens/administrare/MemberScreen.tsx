@@ -20,6 +20,7 @@ import {
 } from '../../queries/admin-member';
 import { useAdminGroups, useMyGroupRoles } from '../../queries/groups-admin';
 import { statusLabel } from '../volunteers/directory-filters';
+import { ReinvitePanel } from './ReinvitePanel';
 import { RolePanel } from './RolePanel';
 
 const control =
@@ -212,6 +213,9 @@ export default function MemberScreen() {
         )}
       </dl>
       {canEdit && <IdentityEditor key={data.memberId} member={data} />}
+      {canEdit && (
+        <ReinvitePanel key={data.memberId} memberId={data.memberId} />
+      )}
       <section className="space-y-3 rounded-xl border p-5">
         <h2 className="text-lg font-semibold">Grupuri</h2>
         {!visibleGroups.length ? (

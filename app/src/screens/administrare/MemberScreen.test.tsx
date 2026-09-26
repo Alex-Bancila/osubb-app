@@ -29,6 +29,11 @@ vi.mock('./RolePanel', () => ({
     <p>Editor rol {selectedMemberId}</p>
   ),
 }));
+vi.mock('./ReinvitePanel', () => ({
+  ReinvitePanel: ({ memberId }: { memberId: string }) => (
+    <p>Retrimitere {memberId}</p>
+  ),
+}));
 import MemberScreen from './MemberScreen';
 
 const ready = { isPending: false, isError: false };
@@ -116,6 +121,7 @@ it('BC sees the Nickname over the full name, every Group Role and both editors',
     screen.getByRole('link', { name: 'Evenimente · Comunicare' }),
   ).toHaveAttribute('href', '/administrare/grupuri/2');
   expect(screen.getByText('Editor rol target')).toBeVisible();
+  expect(screen.getByText('Retrimitere target')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Salvează numele' })).toBeVisible();
   expect(
     (
@@ -142,6 +148,7 @@ it.each(['manager', 'responsible'])(
     expect(screen.queryByRole('link', { name: 'Proiecte' })).toBeNull();
     expect(screen.queryByLabelText('Pseudonim')).toBeNull();
     expect(screen.queryByText('Editor rol target')).toBeNull();
+    expect(screen.queryByText('Retrimitere target')).toBeNull();
   },
 );
 

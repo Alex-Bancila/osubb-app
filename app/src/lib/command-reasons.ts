@@ -318,6 +318,28 @@ const REASON_COPY = new Map<string, string>([
   ['full_name_required', 'Scrie numele complet.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
   ['email_invalid', 'Scrie o adresă de email validă.'],
+  // #773 (ruling L19): reinvite-member, the re-sent invitation.
+  [
+    'already_active',
+    'Membrul s-a autentificat deja, deci invitația nu se mai retrimite.',
+  ],
+  [
+    'already_confirmed',
+    'Adresa membrului este deja confirmată. Poate cere un link de autentificare din ecranul de login.',
+  ],
+  [
+    'member_inactive',
+    'Membrul nu este activ. Reactivează-l înainte de a-i retrimite invitația.',
+  ],
+  ['email_taken', 'Adresa este folosită deja de alt cont. Verifică adresa.'],
+  [
+    'email_sync_failed',
+    'Nu am putut schimba adresa, așa că nu s-a modificat nimic. Încearcă din nou.',
+  ],
+  [
+    'invite_failed',
+    'Invitația nu a putut fi trimisă. Încearcă din nou peste câteva minute.',
+  ],
 
   /* ---- Web Push on this device (#704) ---- */
   /* browser */
