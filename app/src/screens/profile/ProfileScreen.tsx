@@ -23,6 +23,7 @@ import EditProfileSheet from './EditProfileSheet';
 import ChangeEmailSection from './ChangeEmailSection';
 import { JoiningSection } from './JoiningSection';
 import { PushDeviceCard } from './PushDeviceCard';
+import { RoleTimeline } from './RoleTimeline';
 
 /** R18: the joining parts of the Groups card stop at this Level. */
 const JOINING_LEVEL_LIMIT = 5;
@@ -210,6 +211,8 @@ export default function ProfileScreen() {
               </Button>
             </div>
           </section>
+
+          <RoleTimeline profile={profile} />
 
           {/* Sign-in address and its change (#632) */}
           <ChangeEmailSection profile={profile} />
