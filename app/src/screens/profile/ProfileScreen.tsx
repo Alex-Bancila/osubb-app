@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import {
   Calendar,
-  Lock,
-  Mail,
   Moon,
   Pencil,
   Phone,
@@ -21,7 +19,7 @@ import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useMyGroups, useRoles } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
-import { ChangeEmailSection } from './ChangeEmailSection';
+import ChangeEmailSection from './ChangeEmailSection';
 import { JoiningSection } from './JoiningSection';
 import { PushDeviceCard } from './PushDeviceCard';
 

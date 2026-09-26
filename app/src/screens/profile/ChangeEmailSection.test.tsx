@@ -29,6 +29,7 @@ const baseProfile: MyProfile = {
   id: 'p1',
   full_name: 'Maria Enache',
   role: 'voluntar',
+  nickname: null,
   status: 'activ',
   avatar_color: '#ED2025',
   joined_year: 2025,
