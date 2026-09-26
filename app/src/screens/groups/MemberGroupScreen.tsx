@@ -3,6 +3,7 @@ import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
+import { MemberName } from '../../components/member/MemberName';
 import {
   useAdminGroups,
   useMyGroupRoles,
@@ -125,10 +126,17 @@ export default function MemberGroupScreen() {
             {roster.data
               .filter((row) => row.groupRole !== 'member')
               .map((row) => (
-                <li key={row.memberId}>
-                  {row.name}{' '}
+                <li
+                  key={row.memberId}
+                  className="flex flex-wrap items-center gap-x-2"
+                >
+                  <MemberName
+                    memberId={row.memberId}
+                    fullName={row.fullName}
+                    nickname={row.nickname}
+                    size="sm"
+                  />
                   <span className="text-muted-foreground">
-                    ·{' '}
                     {row.groupRole === 'manager'
                       ? (group.manager_title ?? 'Coordonator')
                       : (row.positionTitle ?? 'Responsabil')}

@@ -39,14 +39,14 @@ grant select on public.tasks_with_overdue to authenticated, service_role;
 insert into public.tasks
   (title, difficulty, group_id, status, assignment_mode, created_at, cancel_reason, rating)
 values
-  ('Legacy todo timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', 'direct', '2026-01-01 10:00+00', null, null),
-  ('Legacy progress timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'in_progress', 'direct', '2026-01-02 10:00+00', null, null),
-  ('Legacy review timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'in_review', 'direct', '2026-01-03 10:00+00', null, null),
-  ('Legacy completed timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'completed', 'direct', '2026-01-04 10:00+00', null, 3),
-  ('Legacy unfulfilled timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'unfulfilled', 'direct', '2026-01-05 10:00+00', null, 2),
-  ('Legacy cancelled timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'cancelled', 'direct', '2026-01-06 10:00+00', 'Anulat #293', null),
-  ('Legacy public todo timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', 'public', '2026-01-07 10:00+00', null, null),
-  ('Legacy public completed timestamps 293', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'completed', 'public', '2026-01-08 10:00+00', null, 4);
+  ('Legacy todo timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'todo', 'direct', '2026-01-01 10:00+00', null, null),
+  ('Legacy progress timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'in_progress', 'direct', '2026-01-02 10:00+00', null, null),
+  ('Legacy review timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'in_review', 'direct', '2026-01-03 10:00+00', null, null),
+  ('Legacy completed timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'completed', 'direct', '2026-01-04 10:00+00', null, 3),
+  ('Legacy unfulfilled timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'unfulfilled', 'direct', '2026-01-05 10:00+00', null, 2),
+  ('Legacy cancelled timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'cancelled', 'direct', '2026-01-06 10:00+00', 'Anulat #293', null),
+  ('Legacy public todo timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'todo', 'public', '2026-01-07 10:00+00', null, null),
+  ('Legacy public completed timestamps 293', 1, (select id from public.groups where name = 'Educațional'), 'completed', 'public', '2026-01-08 10:00+00', null, 4);
 
 create temp table before_tasks_293 as
 select count(*) as row_count,

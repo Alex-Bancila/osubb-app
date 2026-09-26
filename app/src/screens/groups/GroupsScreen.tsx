@@ -58,7 +58,14 @@ export default function GroupsScreen() {
           );
           const form = applicationForm(group);
           const ancestor = groups.data.find(
-            (row) => row.id === group.path[0] && row.id !== group.id,
+            // The topmost ancestor the Member can read (the root, unless hidden).
+            (row) =>
+              row.id ===
+              group.path.find(
+                (id) =>
+                  id !== group.id &&
+                  groups.data.some((other) => other.id === id),
+              ),
           );
           return (
             <li

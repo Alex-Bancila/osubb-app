@@ -37,32 +37,32 @@ insert into profiles(id,full_name,email,role) values
 ('69300000-0000-0000-0000-000000000011','Inactive','ann693-inactive@test.local','voluntar');
 
 insert into groups(name,category,parent_id,application_level)
-values ('Child #693','team',(select id from groups where legacy_dept_id='edu'),0);
+values ('Child #693','team',(select id from groups where name='Educațional'),0);
 insert into groups(name,category,parent_id,min_level,automatic_membership)
-values ('Automatic #693','team',(select id from groups where legacy_dept_id='edu'),9,true);
+values ('Automatic #693','team',(select id from groups where name='Educațional'),9,true);
 
 insert into group_members(group_id,member_id,group_role)
-select id,'69300000-0000-0000-0000-000000000001'::uuid,'member' from groups where legacy_dept_id='pr'
-union all select id,'69300000-0000-0000-0000-000000000002'::uuid,'member' from groups where legacy_dept_id='edu'
-union all select id,'69300000-0000-0000-0000-000000000003'::uuid,'member' from groups where legacy_dept_id='pr'
-union all select id,'69300000-0000-0000-0000-000000000004'::uuid,'responsible' from groups where legacy_dept_id='edu'
-union all select id,'69300000-0000-0000-0000-000000000005'::uuid,'manager' from groups where legacy_dept_id='edu'
+select id,'69300000-0000-0000-0000-000000000001'::uuid,'member' from groups where name='Imagine & PR'
+union all select id,'69300000-0000-0000-0000-000000000002'::uuid,'member' from groups where name='Educațional'
+union all select id,'69300000-0000-0000-0000-000000000003'::uuid,'member' from groups where name='Imagine & PR'
+union all select id,'69300000-0000-0000-0000-000000000004'::uuid,'responsible' from groups where name='Educațional'
+union all select id,'69300000-0000-0000-0000-000000000005'::uuid,'manager' from groups where name='Educațional'
 union all select id,'69300000-0000-0000-0000-000000000007'::uuid,'member' from groups where name='Child #693'
-union all select id,'69300000-0000-0000-0000-000000000011'::uuid,'member' from groups where legacy_dept_id='edu';
+union all select id,'69300000-0000-0000-0000-000000000011'::uuid,'member' from groups where name='Educațional';
 update profiles set status='inactiv' where id='69300000-0000-0000-0000-000000000011';
 
 insert into announcements(title,body,group_id,audience,created_by)
 select 'EDU local #693','Local.',id,'local','69300000-0000-0000-0000-000000000001'::uuid
-  from groups where legacy_dept_id='edu'
+  from groups where name='Educațional'
 union all
 select 'EDU org #693','All.',id,'org','69300000-0000-0000-0000-000000000001'::uuid
-  from groups where legacy_dept_id='edu'
+  from groups where name='Educațional'
 union all
 select 'Child local #693','Child.',id,'local','69300000-0000-0000-0000-000000000004'::uuid
   from groups where name='Child #693'
 union all
 select 'PR local #693','PR.',id,'local','69300000-0000-0000-0000-000000000003'::uuid
-  from groups where legacy_dept_id='pr';
+  from groups where name='Imagine & PR';
 
 create temp table ann693 as
 select (select id from announcements where title='EDU local #693') as edu_local,
@@ -80,11 +80,11 @@ insert into announcement_reads(announcement_id,member_id,read_at) values
 -- Expected Audiences, computed as owner from the same helper #68's fan-out calls
 -- and, for org, straight from profiles so the helper is not graded by itself.
 create temp table ann693_edu_audience as
-select member_id from private.group_audience((select id from groups where legacy_dept_id='edu')) as a(member_id);
+select member_id from private.group_audience((select id from groups where name='Educațional')) as a(member_id);
 create temp table ann693_child_audience as
 select member_id from private.group_audience((select id from groups where name='Child #693')) as a(member_id);
 create temp table ann693_pr_audience as
-select member_id from private.group_audience((select id from groups where legacy_dept_id='pr')) as a(member_id);
+select member_id from private.group_audience((select id from groups where name='Imagine & PR')) as a(member_id);
 create temp table ann693_active as select id as member_id from profiles where status='activ';
 grant select on ann693_edu_audience, ann693_child_audience, ann693_pr_audience, ann693_active to authenticated;
 

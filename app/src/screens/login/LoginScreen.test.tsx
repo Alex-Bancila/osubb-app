@@ -50,8 +50,6 @@ function memberAccessToken(): string {
     app_metadata: {
       member_role: 'voluntar',
       member_level: 1,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [],
     },
   };
@@ -79,6 +77,19 @@ describe('LoginScreen', () => {
   beforeEach(() => {
     auth.signInWithOtp.mockResolvedValue({ error: null });
     auth.verifyOtp.mockResolvedValue({ error: null });
+  });
+
+  it('starts from the address a failed emailed link handed over (#768)', async () => {
+    render(<LoginScreen initialEmail="membru@exemplu.ro" />);
+
+    expect(screen.getByLabelText('Email')).toHaveValue('membru@exemplu.ro');
+    fireEvent.click(screen.getByRole('button', { name: 'Trimite linkul' }));
+
+    await waitFor(() =>
+      expect(auth.signInWithOtp).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'membru@exemplu.ro' }),
+      ),
+    );
   });
 
   it('moves focus to the confirmation heading after sending a magic link', async () => {

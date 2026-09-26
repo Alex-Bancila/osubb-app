@@ -49,7 +49,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33000000-0000-0000-0000-000000000007', 'BC Inactiv 330', 'inactive.bc.330@test.local', 'bc', 'inactiv'),
   ('33000000-0000-0000-0000-000000000008', 'Fara Claimuri 330', 'claimless.330@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33000000-0000-0000-0000-000000000001', 'edu'),
   ('33000000-0000-0000-0000-000000000002', 'edu'),
   ('33000000-0000-0000-0000-000000000003', 'edu'),
@@ -79,9 +79,9 @@ values
 update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
  where title = 'Queue closed #330';
 
--- Public, LOCAL Opportunity in 'edu': an outsider reads it (#683, R6 ignores
--- the Audience) and a BCE of another Department reads it through R1, yet
--- neither is eligible to join its queue.
+-- Public, LOCAL Opportunity in 'edu': a BCE of another Department reads it
+-- through R1 yet may not join its queue (42501); an outsider does not even
+-- read it (#794, ruling R26), so to them it is not found (PT404).
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
@@ -490,14 +490,14 @@ select throws_ok(format($$ select public.express_task_interest(%s) $$,
   'a local Opportunity admits only Members of its own Origin, global read access notwithstanding');
 reset role;
 
--- The outsider has no Department at all. Since #683 (ruling R10) they READ
--- the local Opportunity -- an Other OSUBB Opportunity at the Group's Minimum
--- Level -- but the Audience still decides who may join: 42501, not PT404.
+-- The outsider has no Department at all. Since #794 (ruling R26) a local
+-- Opportunity of a Group they are not in is invisible to them again, so
+-- interest in it is refused as not found -- PT404, never a disclosure.
 select pg_temp.test_login('33000000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.express_task_interest(%s) $$,
-  (select local_task_id from f330)), '42501', 'task_audience_forbidden',
-  'a visible local Opportunity of a Group the caller is not in is seen but not joinable (#683)');
+  (select local_task_id from f330)), 'PT404', 'task_not_found',
+  'a local Opportunity of a Group the caller is not in is not found, not forbidden (#794)');
 select throws_ok(format($$ select public.withdraw_task_interest(%s) $$,
   (select withdraw_none_task_id from f330)), 'PT409', 'not_a_candidate',
   'withdrawing without a live pending Candidature is rejected');
@@ -619,10 +619,6 @@ select extensions.dblink_exec('ti_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.tasks where title like '%#330 committed%';
-  delete from public.member_departments where member_id in (
-    '33000000-0000-0000-0000-000000000021',
-    '33000000-0000-0000-0000-000000000022',
-    '33000000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '33000000-0000-0000-0000-000000000021',
     '33000000-0000-0000-0000-000000000022',
@@ -636,28 +632,26 @@ select extensions.dblink_exec('ti_setup', $$
     ('33000000-0000-0000-0000-000000000021', 'Race Manager 330', 'race.manager.330@test.local', 'bce', 'activ'),
     ('33000000-0000-0000-0000-000000000022', 'Race A 330', 'race.a.330@test.local', 'voluntar', 'activ'),
     ('33000000-0000-0000-0000-000000000023', 'Race B 330', 'race.b.330@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33000000-0000-0000-0000-000000000021', 'edu'),
-    ('33000000-0000-0000-0000-000000000022', 'edu'),
-    ('33000000-0000-0000-0000-000000000023', 'edu');
   -- #586: committed race fixtures require native Group roster rows.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('33000000-0000-0000-0000-000000000021'::uuid, 'edu'),
+    ('33000000-0000-0000-0000-000000000022'::uuid, 'edu'),
+    ('33000000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33000000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
-    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Local audience lock probe #330 committed', 'Sonda audienta locala', '2027-04-03 09:00:00+00',
-     (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
+     (select id from public.groups where name = 'Educațional'), 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Withdraw lock probe #330 committed', 'Sonda retragere', '2027-04-04 09:00:00+00',
-     (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
+     (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
 
   -- Directly fixtured (never through the command) so the held withdraw call
   -- below has a real live pending Candidature to resolve: withdraw's only
@@ -736,7 +730,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.group_members') as row_lock
     join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '33000000-0000-0000-0000-000000000022'
-     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+     and membership.group_id = (select id from public.groups where name = 'Educațional')
 ), false), 'a local-Audience express_task_interest holds the actor''s Group roster row FOR SHARE too');
 
 select extensions.dblink_exec('ti_lock', 'rollback');
@@ -866,10 +860,6 @@ select extensions.dblink_exec('ti_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.tasks where title like '%#330 committed%';
-  delete from public.member_departments where member_id in (
-    '33000000-0000-0000-0000-000000000021',
-    '33000000-0000-0000-0000-000000000022',
-    '33000000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '33000000-0000-0000-0000-000000000021',
     '33000000-0000-0000-0000-000000000022',

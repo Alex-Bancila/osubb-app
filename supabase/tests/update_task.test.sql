@@ -13,7 +13,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(138);
+select plan(141);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u(n integer) returns uuid language sql immutable as $$
@@ -29,7 +29,7 @@ insert into public.profiles (id, full_name, email, role, status)
 select pg_temp.u(n), 'Membru 626 ' || n, 'member.' || n || '.626@test.local',
        (case when n = 1 then 'bce' else 'voluntar' end)::public.member_role, 'activ'
   from generate_series(1, 8) as n;
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   (pg_temp.u(1), 'edu'), (pg_temp.u(2), 'edu'), (pg_temp.u(4), 'edu'), (pg_temp.u(7), 'edu');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -91,19 +91,23 @@ create function pg_temp.cand(p_task text, p_member uuid, p_age interval) returns
   select id, p_member, 'pending', now() - p_age from t626 where name = p_task
 $$;
 
--- Section 2: one Task per (status, field), each direct/org with exec_in.
-select pg_temp.mk(s.status_name || ':' || f.field, s.status, 'direct', 'org', pg_temp.u(2), s.round)
+-- Section 2: one Task per (status, field), each direct/local with exec_in --
+-- except the Audience one, which is public/local so that widening it to org
+-- is a legal edit (#794, ruling R26: a direct Task carries the local Audience).
+select pg_temp.mk(s.status_name || ':' || f.field, s.status,
+                  case when f.field = 'audience' then 'public' else 'direct' end, 'local',
+                  pg_temp.u(2), s.round)
   from (values ('todo', 'todo', 0), ('progress', 'in_progress', 0), ('feedback', 'in_progress', 1))
          as s (status_name, status, round)
  cross join (values ('title'), ('description'), ('deadline'), ('campaign_id'), ('audience'), ('assignment_mode'))
          as f (field);
 
 -- Section 3/4 targets.
-select pg_temp.mk('x:review', 'in_review', 'direct', 'org', pg_temp.u(2));
-select pg_temp.mk('x:done', 'completed', 'direct', 'org', null);
-select pg_temp.mk('x:cancelled', 'cancelled', 'direct', 'org', null);
-select pg_temp.mk('x:same', 'todo', 'direct', 'org', null);
-select pg_temp.mk('x:input', 'todo', 'direct', 'org', null);
+select pg_temp.mk('x:review', 'in_review', 'direct', 'local', pg_temp.u(2));
+select pg_temp.mk('x:done', 'completed', 'direct', 'local', null);
+select pg_temp.mk('x:cancelled', 'cancelled', 'direct', 'local', null);
+select pg_temp.mk('x:same', 'todo', 'direct', 'local', null);
+select pg_temp.mk('x:input', 'todo', 'direct', 'local', null);
 select pg_temp.mk('x:umbrella', 'todo', null, null, null, 0, 'umbrella');
 select pg_temp.mk('x:auth', 'todo', 'direct', 'local', pg_temp.u(2));
 
@@ -125,6 +129,8 @@ select pg_temp.cand('r8:narrow', pg_temp.u(7), '1 hour');
 select pg_temp.mk('r8:keep', 'todo', 'public', 'org', pg_temp.u(2));
 select pg_temp.cand('r8:keep', pg_temp.u(5), '2 hours');
 select pg_temp.cand('r8:keep', pg_temp.u(4), '1 hour');
+-- r8:direct is a legacy direct + org row (#794's migration corrects every
+-- such row and no command writes one now); narrowing it is still legal.
 select pg_temp.mk('r8:direct', 'in_progress', 'direct', 'org', pg_temp.u(3));
 select pg_temp.mk('r8:alone', 'in_progress', 'public', 'org', pg_temp.u(3));
 
@@ -222,7 +228,7 @@ begin
     when 'description' then pg_temp.args(p_name, p_clear_description => true)
     when 'deadline' then pg_temp.args(p_name, p_deadline => '2027-03-02 09:00:00+00')
     when 'campaign_id' then pg_temp.args(p_name, p_campaign => (select edu_campaign from f626))
-    when 'audience' then pg_temp.args(p_name, p_audience => 'local')
+    when 'audience' then pg_temp.args(p_name, p_audience => 'org')
     when 'assignment_mode' then pg_temp.args(p_name, p_mode => 'public')
   end);
 end;
@@ -235,7 +241,7 @@ create function pg_temp.field_check(p_name text, p_field text) returns text lang
       when 'description' then task.description is null
       when 'deadline' then task.deadline = '2027-03-02 09:00:00+00'::timestamptz
       when 'campaign_id' then task.campaign_id = (select edu_campaign from f626)
-      when 'audience' then task.audience = 'local'
+      when 'audience' then task.audience = 'org'
       when 'assignment_mode' then task.assignment_mode = 'public' and task.queue_opened_at is not null
                                   and task.queue_closed_at is null
     end,
@@ -303,7 +309,7 @@ select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input',
 select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('x:input', p_title => '  ab  ')),
   'PT400', 'title_too_short', '#673: the preview measures the trimmed title, so "  ab  " is too short');
 select throws_ok(format('select public.update_task(%s, %s, %L, %L, now() + interval ''7 days'', null, %L, %L, null, null)',
-    pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 2001), 'direct', 'org'),
+    pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 2001), 'direct', 'local'),
   'PT400', 'description_too_long', '#673: a description over 2000 characters is refused');
 select lives_ok(format('select public.update_task(%s)', pg_temp.args('todo:deadline', p_deadline => now() - interval '1 day')),
   '#673: update_task accepts a deadline in the past on an existing Task -- R8 judges the deadline only at creation');
@@ -319,10 +325,15 @@ select pg_temp.test_login_leadership(pg_temp.u(1));
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => '   ')),
   'PT400', 'title_required', 'a blank title is refused');
 select throws_ok(format('select public.update_task(%s, %s, %L, %L, null, null, %L, %L, null, null)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
-    'T626 x:input', 'd', 'direct', 'org'),
+    'T626 x:input', 'd', 'direct', 'local'),
   'PT400', 'deadline_required', 'an ordinary Task needs a deadline');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_audience => 'world')),
   'PT400', 'invalid_audience', 'an Audience outside local/org is refused');
+-- #794 (ruling R26): a directly assigned Task carries the local Audience.
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_audience => 'org')),
+  'PT400', 'direct_task_local_only', '#794: update_task refuses the org Audience on a direct Task');
+select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('x:input', p_audience => 'org')),
+  'PT400', 'direct_task_local_only', '#794: preview_task_update refuses it the same way');
 select throws_ok(format('select public.update_task(%s, %s, %L, %L, %L::timestamptz, null, null, %L, null, null)', pg_temp.t('x:input'), pg_temp.dept_group('edu'),
     'T626 x:input', 'd', '2027-03-01 09:00:00+00', 'org'),
   'PT400', 'invalid_assignment_mode', 'a null Assignment Mode on an ordinary Task is refused (full state, never a patch)');
@@ -356,14 +367,18 @@ select is((select task.title from public.tasks as task where task.id = pg_temp.t
   'no unauthorized call changed the Task');
 
 -- ==================== 5. Public -> Direct ====================
+-- #794 (ruling R26): a Task that goes Direct takes the local Audience in the
+-- same edit; keeping org is refused before any consequence is computed.
 select pg_temp.test_login_leadership(pg_temp.u(1));
-select is(pg_temp.preview(pg_temp.args('p2d', p_mode => 'direct')),
+select throws_ok(format('select public.update_task(%s, true)', pg_temp.args('p2d', p_mode => 'direct')),
+  'PT400', 'direct_task_local_only', '#794: Public -> Direct keeping the org Audience is refused, even with consequences accepted');
+select is(pg_temp.preview(pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   array['candidate_removed:' || pg_temp.u(5), 'candidate_removed:' || pg_temp.u(4), 'candidate_removed:' || pg_temp.u(6)],
   'the preview lists one candidate_removed per pending Candidate, in queue order');
-insert into previews values ('p2d', pg_temp.preview_json(pg_temp.args('p2d', p_mode => 'direct')));
-select throws_ok(format('select public.update_task(%s)', pg_temp.args('p2d', p_mode => 'direct')),
+insert into previews values ('p2d', pg_temp.preview_json(pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')));
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   'PT409', 'task_update_needs_confirmation', 'Public -> Direct without acceptance is refused');
-select throws_ok(format('select public.update_task(%s, false)', pg_temp.args('p2d', p_mode => 'direct')),
+select throws_ok(format('select public.update_task(%s, false)', pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   'PT409', 'task_update_needs_confirmation', 'an explicit p_accept_consequences = false is refused the same way');
 reset role;
 select is((select format('%s|%s|%s|%s', task.assignment_mode,
@@ -373,7 +388,7 @@ select is((select format('%s|%s|%s|%s', task.assignment_mode,
              from public.tasks as task where task.id = pg_temp.t('p2d')),
   'public|3|0|0', 'the refused edit wrote nothing: still public, three pending, no activity, no notification');
 select pg_temp.test_login_leadership(pg_temp.u(1));
-select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('p2d', p_mode => 'direct')),
+select lives_ok(format('select public.update_task(%s, true)', pg_temp.args('p2d', p_mode => 'direct', p_audience => 'local')),
   'with the consequences accepted the Task goes Direct');
 reset role;
 select is((select format('%s|%s|%s', task.assignment_mode, task.queue_opened_at is null, task.queue_closed_at is null)
@@ -391,8 +406,8 @@ select is((select format('%s|%s', a.member_id, a.ended_at is null) from public.t
   format('%s|t', pg_temp.u(2)), 'the Executor keeps the Task');
 select is((select count(*) from public.notifications as n
             where n.task_id = pg_temp.t('p2d') and n.member_id = pg_temp.u(2)
-              and n.body = 'Modificat: assignment_mode.'), 1::bigint,
-  'the Executor is told the Assignment Mode changed');
+              and n.body = 'Modificat: audience, assignment_mode.'), 1::bigint,
+  'the Executor is told the Audience and the Assignment Mode changed');
 select is(pg_temp.activity_consequences('p2d'), (select consequences from previews where name = 'p2d'),
   'the command applied exactly the consequence set the preview showed');
 
@@ -527,7 +542,7 @@ select is((select format('%s|%s|%s|%s|%s', task.title, task.assignment_mode,
 -- in the task_updated diff. The preview takes the same arity and refuses the
 -- same inputs at step 1.
 reset role;
-select pg_temp.mk('link:edit', 'todo', 'direct', 'org', null);
+select pg_temp.mk('link:edit', 'todo', 'direct', 'local', null);
 update public.tasks set link_label = 'Brief', link_url = 'https://example.org/brief'
  where id = pg_temp.t('link:edit');
 create function pg_temp.last_changed(p_name text) returns jsonb language sql stable as $$
@@ -596,11 +611,11 @@ insert into public.profiles (id, full_name, email, role, status) values
   (pg_temp.u(11), 'Eligible 627 B', 'eligible2.627@test.local', 'bce', 'activ');
 update public.groups set min_level = 2, application_level = greatest(application_level, 2)
  where id = pg_temp.dept_group('pr');
-select pg_temp.mk('627:add', 'in_progress', 'direct', 'org', pg_temp.u(10));
+select pg_temp.mk('627:add', 'in_progress', 'direct', 'local', pg_temp.u(10));
 select pg_temp.mk('627:remove', 'in_progress', 'public', 'org', pg_temp.u(2));
 select pg_temp.cand('627:remove', pg_temp.u(4), '2 hours');
 select pg_temp.cand('627:remove', pg_temp.u(10), '1 hour');
-select pg_temp.mk('627:campaign', 'todo', 'direct', 'org', null);
+select pg_temp.mk('627:campaign', 'todo', 'direct', 'local', null);
 update public.tasks set campaign_id = (select edu_campaign from f626) where id = pg_temp.t('627:campaign');
 select pg_temp.mk('627:combined', 'in_progress', 'public', 'org', pg_temp.u(11));
 select pg_temp.cand('627:combined', pg_temp.u(1), '1 hour');
@@ -680,7 +695,7 @@ with child as (
   insert into public.tasks (title, deadline, group_id, status, audience, assignment_mode,
     kind, parent_task_id, created_by)
   values ('T627 child', '2027-03-01 09:00:00+00', pg_temp.dept_group('edu'),
-    'todo', 'org', 'direct', 'task', pg_temp.t('627:umbrella'), pg_temp.u(9))
+    'todo', 'local', 'direct', 'task', pg_temp.t('627:umbrella'), pg_temp.u(9))
   returning id)
 insert into t626 select '627:child', id from child;
 select pg_temp.test_login_leadership(pg_temp.u(9));

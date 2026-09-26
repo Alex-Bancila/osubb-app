@@ -439,6 +439,11 @@ it('lists the roster with each Member Status and appoints through add_group_memb
   const table = screen.getByRole('table');
   expect(within(table).getByText('Inactiv')).toBeVisible();
   expect(within(table).getByText('Activ')).toBeVisible();
+  // Each name opens that Member's Administrare page (#103).
+  expect(within(table).getByRole('link', { name: 'Ana Pop' })).toHaveAttribute(
+    'href',
+    '/administrare/membri/a',
+  );
   // A Manager's roster row is not removed here: the position ends first.
   expect(within(table).getByText('Retrage întâi funcția')).toBeVisible();
 
@@ -791,7 +796,7 @@ it('notes on the Cereri tab that a Group with a form link takes sign-ups by form
         id: 7,
         group_id: 2,
         member_id: 'd',
-        memberName: 'Dana Ionescu',
+        member: { memberId: 'd', fullName: 'Dana Ionescu' },
         status: 'pending',
         note: 'Am aplicat înainte de formular.',
         created_at: '2026-09-24T12:00:00Z',
@@ -807,7 +812,7 @@ it('notes on the Cereri tab that a Group with a form link takes sign-ups by form
   await user.click(tab('Cereri'));
   expect(screen.getByText(note)).toBeVisible();
   // A link set later does not hide the Applications already filed.
-  expect(screen.getByRole('heading', { name: 'Dana Ionescu' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: /Dana Ionescu/ })).toBeVisible();
   expect(screen.getByText('Am aplicat înainte de formular.')).toBeVisible();
 });
 

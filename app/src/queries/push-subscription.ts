@@ -4,16 +4,19 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { reasonCopy } from '../lib/command-reasons';
 import {
   isDeviceSubscribed,
   pushSupported,
+  repairDevice,
+  storeRenewedSubscription,
   subscribeDevice,
   unsubscribeDevice,
   vapidPublicKey,
 } from '../lib/push-device';
+import { isPushSubscriptionChangedMessage } from '../pwa/push-renewal';
 import { keys } from './keys';
 
 export type PushPermission = NotificationPermission | 'unsupported';
@@ -92,4 +95,60 @@ export function usePushSubscription() {
       disableMutation.mutate();
     },
   };
+}
+
+/** Members whose device this page load has already repaired or tried to. */
+const repairedThisLoad = new Set<string>();
+
+/** Forget the once-per-load guard; for tests only. */
+export function resetPushSelfRepairForTests() {
+  repairedThisLoad.clear();
+}
+
+/**
+ * App-start self-repair of this device's Web Push subscription (#769,
+ * ADR-0010). Mounted once in the signed-in shell: after the service worker is
+ * ready it runs `repairDevice` once per page load, and while the app is open
+ * it stores the subscription the worker renewed on `pushsubscriptionchange`.
+ * Silent by design: a failure leaves the Profil switch showing the true state
+ * and is tried again at the next start.
+ */
+export function usePushSelfRepair() {
+  const { session } = useAuth();
+  const memberId = session?.user.id;
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const publicKey = vapidPublicKey();
+    if (!memberId || !publicKey || !pushSupported()) return;
+    const refresh = () =>
+      queryClient.invalidateQueries({ queryKey: keys.push.device(memberId) });
+
+    if (!repairedThisLoad.has(memberId)) {
+      repairedThisLoad.add(memberId);
+      repairDevice(memberId, publicKey).then(
+        (outcome) => {
+          if (outcome === 'repaired') void refresh();
+        },
+        () => undefined,
+      );
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      if (!isPushSubscriptionChangedMessage(event.data)) return;
+      storeRenewedSubscription(
+        memberId,
+        event.data.subscription,
+        event.data.oldSubscription,
+      ).then(
+        (stored) => {
+          if (stored) void refresh();
+        },
+        () => undefined,
+      );
+    };
+    const worker = navigator.serviceWorker;
+    worker.addEventListener('message', onMessage);
+    return () => worker.removeEventListener('message', onMessage);
+  }, [memberId, queryClient]);
 }

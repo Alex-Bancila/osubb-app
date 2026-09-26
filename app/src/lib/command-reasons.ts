@@ -19,12 +19,13 @@
  * fit every command that raises it.
  */
 const REASON_COPY = new Map<string, string>([
+  /* ---- Group Applications (#584, #589); already_group_member is below (#583) ---- */
   [
     'group_not_accepting_applications',
     'Acest grup nu primește cereri de înscriere.',
   ],
-  ['already_group_member', 'Ești deja membru în acest grup.'],
   ['application_pending', 'Ai deja o cerere în așteptare.'],
+  ['group_not_found', 'Grupul nu mai este disponibil.'],
   ['group_apply_forbidden', 'Nu îndeplinești nivelul necesar pentru a aplica.'],
   ['application_not_found', 'Cererea nu mai este disponibilă.'],
   ['application_not_pending', 'Cererea a fost deja soluționată.'],
@@ -95,6 +96,10 @@ const REASON_COPY = new Map<string, string>([
   [
     'private_group_local_only',
     'Taskurile unui grup privat sunt doar pentru membrii lui. Alege audiența locală.',
+  ],
+  [
+    'direct_task_local_only',
+    'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
   ],
   [
     'group_has_members_below_level',
@@ -321,10 +326,47 @@ const REASON_COPY = new Map<string, string>([
     'Nu mai ai permisiunea de a modifica acest membru. Reîncarcă pagina.',
   ],
   ['member_not_found', 'Membrul nu mai este disponibil. Reîncarcă pagina.'],
+  // #675 (ruling R5): the Nickname guard on `profiles`.
+  ['nickname_too_short', 'Pseudonimul are cel puțin 2 caractere.'],
+  ['nickname_too_long', 'Pseudonimul are cel mult 24 de caractere.'],
+  [
+    'nickname_invalid',
+    'Pseudonimul poate avea doar litere, cifre, spații, punct, cratimă sau underscore.',
+  ],
+  [
+    'nickname_taken',
+    'Pseudonimul este deja folosit de alt membru. Alege altul.',
+  ],
   /* browser */
   ['full_name_required', 'Scrie numele complet.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
   ['email_invalid', 'Scrie o adresă de email validă.'],
+  // #773 (ruling L19): reinvite-member, the re-sent invitation.
+  [
+    'already_active',
+    'Membrul s-a autentificat deja, deci invitația nu se mai retrimite.',
+  ],
+  [
+    'already_confirmed',
+    'Adresa membrului este deja confirmată. Poate cere un link de autentificare din ecranul de login.',
+  ],
+  [
+    'member_inactive',
+    'Membrul nu este activ. Reactivează-l înainte de a-i retrimite invitația.',
+  ],
+  ['email_taken', 'Adresa este folosită deja de alt cont. Verifică adresa.'],
+  [
+    'email_sync_failed',
+    'Nu am putut schimba adresa, așa că nu s-a modificat nimic. Încearcă din nou.',
+  ],
+  [
+    'email_out_of_sync',
+    'Adresa s-a schimbat doar pe jumătate. Anunță coordonatorul IT: trebuie corectată manual.',
+  ],
+  [
+    'invite_failed',
+    'Invitația nu a putut fi trimisă. Încearcă din nou peste câteva minute.',
+  ],
 
   /* ---- Web Push on this device (#704) ---- */
   /* browser */

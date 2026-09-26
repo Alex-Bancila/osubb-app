@@ -115,10 +115,13 @@ function TaskDetails({
             <dd>{task.difficulty ?? 'Neevaluat'}</dd>
           </div>
         )}
-        <div>
-          <dt className="font-semibold">Audiență</dt>
-          <dd>{task.audienceLabel}</dd>
-        </div>
+        {/* A direct Task is local only (R26): its Audience says nothing. */}
+        {task.assignmentMode === 'public' && (
+          <div>
+            <dt className="font-semibold">Audiență</dt>
+            <dd>{task.audienceLabel}</dd>
+          </div>
+        )}
         <div>
           <dt className="font-semibold">Atribuire</dt>
           <dd>
