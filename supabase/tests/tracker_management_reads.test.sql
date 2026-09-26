@@ -12,9 +12,9 @@ select id,email,email,'voluntar'::public.member_role,'activ'::public.member_stat
 update public.profiles set role='bce' where id='16800000-0000-0000-0000-000000000001';
 update public.profiles set role='bc',status='inactiv' where id='16800000-0000-0000-0000-000000000004';
 update public.profiles set role='bc' where id='16800000-0000-0000-0000-000000000006';
-insert into public.member_departments(member_id,dept_id) values('16800000-0000-0000-0000-000000000001','edu');
-insert into public.teams(id,name,dept_id) values('m168-independent','M168 Independent',null);
-insert into public.team_members(team_id,member_id) values('m168-independent','16800000-0000-0000-0000-000000000002');
+insert into pg_temp.fixture_member_departments(member_id,dept_id) values('16800000-0000-0000-0000-000000000001','edu');
+insert into pg_temp.fixture_teams(id,name,dept_id) values('m168-independent','M168 Independent',null);
+insert into pg_temp.fixture_team_members(team_id,member_id) values('m168-independent','16800000-0000-0000-0000-000000000002');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
 
@@ -85,14 +85,14 @@ reset role;
 -- distinguish the Groups sweep from the legacy departments/teams/projects sweep, and the
 -- reason is NOT that root authority flows down the path. It does not: the Organization
 -- Group's path is {itself} and it is nobody's ancestor. The reason is that the `org`
--- pseudo-department row is still there, so groups.legacy_dept_id = 'org' mirrors
+-- pseudo-department row is still there, so groups.name = 'OSUBB' mirrors
 -- departments.id = 'org' and the legacy sweep reaches the very same Group. Reverting
 -- can_manage_tasks() to the legacy sweep therefore survives this suite; reverting it to that
 -- same sweep with `d.id <> 'org'` excluded fails on exactly this assertion. Wave 3 drops the
 -- pseudo-department, and that is what makes this row load-bearing.
 -- The Group is picked by `category` deliberately (review D6): it is the Wave-3 spelling, and
 -- a test file is outside conventions.test.sql's function/policy sweep. Every consumer in the
--- wave says legacy_dept_id = 'org' instead, and must keep saying it.
+-- wave says name = 'OSUBB' instead, and must keep saying it.
 -- Rolled back with the suite; no production roster write.
 insert into public.group_members(group_id,member_id,group_role)
 select grp.id,pg_temp.g521_uid(12),'manager' from public.groups as grp where grp.category='organization';

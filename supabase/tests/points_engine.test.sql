@@ -37,9 +37,9 @@ insert into profiles (id, full_name, email, role) values
 
 -- Own throwaway department so dept_cup assertions stay exact even after
 -- Epic 5.2 seeds demo members into the real departments.
-insert into departments (id, name, short, color, kind)
+insert into pg_temp.fixture_departments (id, name, short, color, kind)
   values ('tst', 'Test Dept', 'TST', '#123456', 'department');
-insert into member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
   values ('aaaaaaaa-0000-0000-0000-000000000001', 'tst');
 
 -- ==================== rating_mult ====================

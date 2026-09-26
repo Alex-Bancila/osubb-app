@@ -245,6 +245,6 @@ select is(
   (select id from public.tasks where title = 'Umbrella 315'),
   'parent_task_id is visible through tasks_with_overdue');
 
-select throws_ok($$update public.tasks set group_id=(select id from public.groups where legacy_dept_id='pr') where title='Subtask 315'$$,'23514','subtask_origin_immutable','Group-only Subtask Origin edits are rejected');
+select throws_ok($$update public.tasks set group_id=(select id from public.groups where name = 'Imagine & PR') where title='Subtask 315'$$,'23514','subtask_origin_immutable','Group-only Subtask Origin edits are rejected');
 select * from finish();
 rollback;

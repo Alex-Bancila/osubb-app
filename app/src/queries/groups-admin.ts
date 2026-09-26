@@ -282,8 +282,9 @@ export type GroupCommand =
       applicationLevel: number | null;
       sharedWorkVisibility: boolean;
       minLevel: number;
-      /** The application form link (#697). update_group is a full-state
-       *  replace, so a save that omits it clears it: send the stored pair. */
+      /** The application form link (#697), edited in the settings form's
+       *  "Formular de înscriere" fields (#698). update_group is a full-state
+       *  replace: both null clears it, so a save always sends the pair. */
       applicationFormLabel: string | null;
       applicationFormUrl: string | null;
       confirmRemovals: boolean;

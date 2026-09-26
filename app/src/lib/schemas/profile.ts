@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { normalizeEmail, normalizePhone, trimText } from '../normalize';
-import { requiredText } from './text';
+import { memberNicknameSchema } from './nickname';
 
 /**
  * A phone number as `profiles_normalize_phone` stores it (#673, ruling R8):
@@ -26,11 +26,12 @@ export const emailSchema = z
   .pipe(z.email({ error: 'email_invalid' }));
 
 /**
- * The member's own profile fields. The full name is only sent by BC and the
- * Moderator (#675); the Nickname and its own rules belong to #699.
+ * The fields a Member edits on their own profile: the Nickname, the phone and
+ * the avatar colour. The full name is BC's and the Moderator's (#675, R5), so
+ * it is never part of this form.
  */
 export const profileSchema = z.object({
-  fullName: requiredText({ required: 'full_name_required' }).optional(),
+  nickname: memberNicknameSchema,
   phone: phoneSchema,
   avatarColor: z
     .string()
@@ -40,8 +41,11 @@ export const profileSchema = z.object({
 
 /** Where each reason about a profile is shown. */
 export const fieldForReason: Readonly<Record<string, string>> = {
+  nickname_too_short: 'nickname',
+  nickname_too_long: 'nickname',
+  nickname_invalid: 'nickname',
+  nickname_taken: 'nickname',
   phone_invalid: 'phone',
-  full_name_required: 'fullName',
   invalid_avatar_color: 'avatarColor',
   email_invalid: 'email',
 };
