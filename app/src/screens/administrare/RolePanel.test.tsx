@@ -341,6 +341,12 @@ it('keeps the target and reason on a refused command', async () => {
   expect(screen.getByLabelText('Motiv (opțional)')).toHaveValue('Verificare');
 });
 
+it('opens on the Member a Retention Signal links to (?membru=, #702)', () => {
+  renderPanel('/administrare?membru=target');
+  expect(screen.getByLabelText('Membru')).toHaveValue('target');
+  expect(screen.getByText('Rol actual: BCE')).toBeVisible();
+});
+
 it('links the chosen Member to their Administrare page (#103)', async () => {
   const user = userEvent.setup();
   renderPanel();
