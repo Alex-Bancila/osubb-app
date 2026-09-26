@@ -378,6 +378,17 @@ export default function AdministrareScreen() {
         </p>
       )}
 
+      {capabilities.data?.manageRoles === true && (
+        <nav aria-label="Panouri BC">
+          <Link
+            to="/administrare/perioade"
+            className="inline-flex min-h-11 items-center font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            Perioade de evaluare
+          </Link>
+        </nav>
+      )}
+
       {capabilities.data?.manageRoles === true && <RolePanel />}
 
       {pending ? (

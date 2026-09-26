@@ -4181,6 +4181,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_promotion_rule: {
+        Args: { p_initial_threshold: number; p_rule_id: number }
+        Returns: undefined
+      }
       set_task_queue: {
         Args: { p_open: boolean; p_task_id: number }
         Returns: {

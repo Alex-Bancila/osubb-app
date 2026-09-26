@@ -69,6 +69,9 @@ vi.mock('./screens/administrare/MemberScreen', () => ({
 vi.mock('./screens/administrare/GroupScreen', () => ({
   default: () => <h1>Grup screen</h1>,
 }));
+vi.mock('./screens/administrare/PeriodsScreen', () => ({
+  default: () => <h1>Perioade screen</h1>,
+}));
 vi.mock('./screens/dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
 }));
@@ -204,6 +207,26 @@ describe('route guards', () => {
     render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
     expect(screen.queryByRole('heading', { name: 'Grup screen' })).toBeNull();
+  });
+
+  it('opens Perioade de evaluare only for BC and the Moderator (manageRoles, #702)', async () => {
+    // A BCE administers a Group but does not manage Roles: sent home.
+    auth.useAuth.mockReturnValue(member);
+    grant('administer', 'seeDirectory', 'seeLeadership');
+    window.history.pushState({}, '', '/administrare/perioade');
+    const denied = render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(
+      screen.queryByRole('heading', { name: 'Perioade screen' }),
+    ).toBeNull();
+    denied.unmount();
+
+    grant('administer', 'manageRoles');
+    window.history.pushState({}, '', '/administrare/perioade');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Perioade screen' }),
+    ).toBeVisible();
   });
 
   it('opens a Member screen behind the same capability as the panel', async () => {

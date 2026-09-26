@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { commandErrorMessage } from '../../lib/command-reasons';
@@ -31,7 +31,16 @@ function changeError(error: unknown) {
   );
 }
 
-/** The Role and Status management surface; the server capability gates mount. */
+/** The query parameter that opens the panel on one Member (#702). */
+export const ROLE_PANEL_MEMBER_PARAM = 'membru';
+
+/**
+ * The Role and Status management surface; the server capability gates mount.
+ * `?membru=<id>` pre-selects a Member — the Perioade de evaluare panel's
+ * **Editează rolul** links here from a Retention Signal — and scrolls the
+ * panel into view. On a Member's own page (#103) `selectedMemberId` fixes the
+ * Member and the picker is not shown.
+ */
 export function RolePanel({
   selectedMemberId,
 }: { selectedMemberId?: string } = {}) {
@@ -40,7 +49,13 @@ export function RolePanel({
   const roles = useRoles();
   const groups = useAdminGroups();
   const change = useMemberChange();
-  const [memberId, setMemberId] = useState(selectedMemberId ?? '');
+  const [searchParams] = useSearchParams();
+  const requested = searchParams.get(ROLE_PANEL_MEMBER_PARAM) ?? '';
+  const [memberId, setMemberId] = useState(selectedMemberId ?? requested);
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (requested) panel.current?.scrollIntoView?.({ block: 'start' });
+  }, [requested]);
   const [roleDraft, setRoleDraft] = useState('');
   const [statusDraft, setStatusDraft] = useState('');
   const [reason, setReason] = useState('');
@@ -122,6 +137,7 @@ export function RolePanel({
 
   return (
     <section
+      ref={panel}
       aria-labelledby="roles-title"
       className="space-y-4 rounded-xl border bg-card p-4 md:p-5"
     >
