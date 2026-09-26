@@ -106,7 +106,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33300000-0000-0000-0000-000000000013', 'Executor Persoane 333', 'persona.executor.333@test.local', 'voluntar', 'activ'),
   ('33300000-0000-0000-0000-000000000014', 'Candidat Persoane 333', 'persona.candidate.333@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33300000-0000-0000-0000-000000000001', 'edu'),
   ('33300000-0000-0000-0000-000000000002', 'edu'),
   ('33300000-0000-0000-0000-000000000003', 'edu'),
@@ -750,12 +750,6 @@ select extensions.dblink_exec('stc_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#333 committed%');
   delete from public.tasks where title like '%#333 committed%';
-  delete from public.member_departments where member_id in (
-    '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
-    '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',
-    '33300000-0000-0000-0000-000000000025', '33300000-0000-0000-0000-000000000026',
-    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028',
-    '33300000-0000-0000-0000-000000000029', '33300000-0000-0000-0000-000000000030');
   delete from auth.users where id in (
     '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
     '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',
@@ -785,21 +779,19 @@ select extensions.dblink_exec('stc_setup', $$
     ('33300000-0000-0000-0000-000000000028', 'Cursa2 Retras 333', 'race2.withdrawer.333@test.local', 'voluntar', 'activ'),
     ('33300000-0000-0000-0000-000000000029', 'Cursa3 Primul 333', 'race3.first.333@test.local', 'voluntar', 'activ'),
     ('33300000-0000-0000-0000-000000000030', 'Cursa3 Doilea 333', 'race3.second.333@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33300000-0000-0000-0000-000000000021', 'edu'),
-    ('33300000-0000-0000-0000-000000000022', 'edu'),
-    ('33300000-0000-0000-0000-000000000023', 'edu'),
-    ('33300000-0000-0000-0000-000000000024', 'edu'),
-    ('33300000-0000-0000-0000-000000000025', 'edu'),
-    ('33300000-0000-0000-0000-000000000026', 'edu'),
-    ('33300000-0000-0000-0000-000000000027', 'edu'),
-    ('33300000-0000-0000-0000-000000000028', 'edu'),
-    ('33300000-0000-0000-0000-000000000029', 'edu'),
-    ('33300000-0000-0000-0000-000000000030', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('33300000-0000-0000-0000-000000000021'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000022'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000023'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000024'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000025'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000026'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000027'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000028'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000029'::uuid, 'edu'),
+    ('33300000-0000-0000-0000-000000000030'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33300000-%'
   on conflict (group_id,member_id) do nothing;
@@ -807,13 +799,13 @@ select extensions.dblink_exec('stc_setup', $$
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #333 committed', 'Sonda', '2027-10-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Lock probe #333 committed', 'Sonda', '2027-10-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race conflict #333 committed', 'Cursa cu conflict', '2027-10-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race conflict #333 committed', 'Cursa cu conflict', '2027-10-02 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race bystander #333 committed', 'Cursa fara conflict', '2027-10-03 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race bystander #333 committed', 'Cursa fara conflict', '2027-10-03 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021'),
-    ('Race twoselect #333 committed', 'Doi manageri, un loc gol', '2027-10-04 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race twoselect #333 committed', 'Doi manageri, un loc gol', '2027-10-04 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33300000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -1118,12 +1110,6 @@ select extensions.dblink_exec('stc_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#333 committed%');
   delete from public.tasks where title like '%#333 committed%';
-  delete from public.member_departments where member_id in (
-    '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
-    '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',
-    '33300000-0000-0000-0000-000000000025', '33300000-0000-0000-0000-000000000026',
-    '33300000-0000-0000-0000-000000000027', '33300000-0000-0000-0000-000000000028',
-    '33300000-0000-0000-0000-000000000029', '33300000-0000-0000-0000-000000000030');
   delete from auth.users where id in (
     '33300000-0000-0000-0000-000000000021', '33300000-0000-0000-0000-000000000022',
     '33300000-0000-0000-0000-000000000023', '33300000-0000-0000-0000-000000000024',

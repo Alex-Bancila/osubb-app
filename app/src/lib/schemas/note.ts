@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requiredText } from './text';
+import { optionalText, requiredText } from './text';
 
 /**
  * A decision or feedback note (#673, ruling R8): required, at most 1000
@@ -12,6 +12,14 @@ export const noteText = requiredText({
 });
 
 export const noteSchema = z.object({ note: noteText });
+
+/**
+ * An optional note (#724, ruling R8): blank is no note, otherwise at most 1000
+ * characters -- `apply_to_group` and `decide_group_application`.
+ */
+export const optionalNoteSchema = z.object({
+  note: optionalText({ max: 1000, tooLong: 'note_too_long' }),
+});
 
 /** Where each reason about a note is shown. */
 export const fieldForReason: Readonly<Record<string, 'note'>> = {

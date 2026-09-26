@@ -40,8 +40,6 @@ import type { Capabilities } from '../../lib/capabilities';
 const ordinaryClaims = {
   member_role: 'voluntar',
   member_level: 1,
-  dept_ids: [],
-  team_ids: [],
   group_ids: [],
 };
 
@@ -99,7 +97,10 @@ describe('AppShell', () => {
     const primary = screen.getByRole('navigation', {
       name: 'Navigare principală',
     });
-    expect(within(primary).getAllByRole('link')).toHaveLength(7);
+    expect(within(primary).getAllByRole('link')).toHaveLength(8);
+    expect(
+      within(primary).getByRole('link', { name: 'Grupuri' }),
+    ).toHaveAttribute('href', '/grupuri');
     expect(
       within(primary).getByRole('link', { name: 'Cereri' }),
     ).toHaveAttribute('href', '/cereri');
