@@ -54,6 +54,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Trophy,
     capability: 'seeLeadership',
   },
+  { path: '/grupuri', label: 'Grupuri', icon: Users },
   { path: '/cereri', label: 'Cereri', icon: ClipboardPlus },
   {
     path: '/administrare/campanii',

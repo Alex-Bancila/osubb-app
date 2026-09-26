@@ -19,6 +19,18 @@
  * fit every command that raises it.
  */
 const REASON_COPY = new Map<string, string>([
+  /* ---- Group Applications (#584, #589); already_group_member is below (#583) ---- */
+  [
+    'group_not_accepting_applications',
+    'Acest grup nu primește cereri de înscriere.',
+  ],
+  ['application_pending', 'Ai deja o cerere în așteptare.'],
+  ['group_not_found', 'Grupul nu mai este disponibil.'],
+  ['group_apply_forbidden', 'Nu îndeplinești nivelul necesar pentru a aplica.'],
+  ['application_not_found', 'Cererea nu mai este disponibilă.'],
+  ['application_not_pending', 'Cererea a fost deja soluționată.'],
+  ['application_withdraw_forbidden', 'Poți retrage doar propria cerere.'],
+  ['invalid_application_decision', 'Alege dacă accepți sau respingi cererea.'],
   /* ---- Group structure and settings (#582) ---- */
   [
     'group_manage_forbidden',

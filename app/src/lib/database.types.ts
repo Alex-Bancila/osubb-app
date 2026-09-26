@@ -3477,6 +3477,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      group_coordination: {
+        Args: { p_group_id: number }
+        Returns: {
+          full_name: string
+          group_role: string
+          member_id: string
+          nickname: string
+          position_title: string
+        }[]
+      }
       leadership_leaderboard: {
         Args: {
           p_campaign_id?: number

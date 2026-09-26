@@ -4,7 +4,7 @@ import {
   expectRoutable,
   issues,
 } from '../../test/schema-issues';
-import { fieldForReason, noteSchema } from './note';
+import { fieldForReason, noteSchema, optionalNoteSchema } from './note';
 
 const check = (note: string) => {
   const result = noteSchema.safeParse({ note });
@@ -33,3 +33,17 @@ it('maps both note reasons to the note', () => {
     ['note_required', 'note_too_long'],
   );
 });
+
+it.each([
+  ['  ', null, []],
+  ['n'.repeat(1000), 'n'.repeat(1000), []],
+  ['n'.repeat(1001), undefined, ['note: note_too_long']],
+])(
+  'an optional note %j: blank is no note, the limit still holds',
+  (note, parsed, expected) => {
+    const result = optionalNoteSchema.safeParse({ note });
+    expectRoutable(result, fieldForReason);
+    expect(issues(result)).toEqual(expected);
+    if (parsed !== undefined) expect(result.data).toEqual({ note: parsed });
+  },
+);
