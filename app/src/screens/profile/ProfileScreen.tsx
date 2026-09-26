@@ -21,6 +21,7 @@ import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useMyGroups, useRoles } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
+import RoleTimeline from './RoleTimeline';
 import { JoiningSection } from './JoiningSection';
 import { PushDeviceCard } from './PushDeviceCard';
 
@@ -210,6 +211,9 @@ export default function ProfileScreen() {
               </Button>
             </div>
           </section>
+
+          {/* Role Timeline */}
+          <RoleTimeline profile={profile} />
 
           {/* Contact Fields Card */}
           <section className="card p-6">

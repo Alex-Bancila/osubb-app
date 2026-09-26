@@ -55,6 +55,8 @@ export const keys = {
       ['profile', 'me', { memberId }] as const,
     groups: (memberId: string | undefined) =>
       ['profile', 'groups', { memberId }] as const,
+    roleHistory: (memberId: string | undefined) =>
+      ['profile', 'roleHistory', { memberId }] as const,
   },
   /* Other members as the viewer may see them. Keyed by viewer too: what a
      profile shows depends on who is looking (contact details, rosters). */
