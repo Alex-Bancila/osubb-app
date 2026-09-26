@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(13);
+select plan(14);
 
 -- ==================== Structure ====================
 select has_trigger('auth', 'users', 'users_sync_profile_email',
@@ -76,6 +76,15 @@ select is(
   (select email from profiles where id = 'f6320000-0000-0000-0000-000000000001'),
   'sentinela@test.local',
   'updating any other auth.users column leaves profiles.email alone');
+
+-- `update of email` also fires when email is set to its current value; the
+-- trigger's `when (old.email is distinct from new.email)` is what stops it.
+update auth.users set email = email
+ where id = 'f6320000-0000-0000-0000-000000000001';
+select is(
+  (select email from profiles where id = 'f6320000-0000-0000-0000-000000000001'),
+  'sentinela@test.local',
+  'setting auth.users.email to its current value leaves profiles.email alone');
 
 select is(
   (select email from profiles where id = 'f6320000-0000-0000-0000-000000000002'),
