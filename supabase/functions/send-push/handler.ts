@@ -20,6 +20,7 @@
 
 import { isSecretKey } from "../_shared/secret-keys.ts";
 import { InvalidSubscriptionError } from "./deps.ts";
+import { buildPushPayload } from "./payload.ts";
 import type {
   ClaimedDelivery,
   Outcome,
@@ -78,6 +79,7 @@ function parseSubscription(token: string): PushSubscriptionJson | null {
 async function deliver(
   row: ClaimedDelivery,
   deps: SendPushDeps,
+  origin: string | null,
   summary: SendPushSummary,
 ): Promise<void> {
   let outcome: Outcome = "failed";
@@ -88,13 +90,10 @@ async function deliver(
     // Never delete a Member's device over a shape this function cannot read.
     error = "invalid_subscription";
   } else {
-    // The payload is the Notification's own row and nothing else (ADR-0010).
-    const payload = JSON.stringify({
-      id: row.notification_id,
-      title: row.title,
-      body: row.body,
-      link: row.link,
-    });
+    // The Notification's own row and nothing else (ADR-0010), in the service
+    // worker's shape and, given an https app origin, the declarative one too
+    // (#778); the body is cut so it stays one push message.
+    const payload = buildPushPayload(row, origin);
     let response: PushResponse | null = null;
     try {
       response = await deps.send(subscription, payload);
@@ -169,11 +168,15 @@ export async function handleSendPush(
     failed: 0,
   };
 
+  const origin = deps.appOrigin();
+
   try {
     for (let batch = 0; batch < MAX_BATCHES; batch++) {
       const rows = await deps.claim(BATCH_SIZE);
       summary.claimed += rows.length;
-      await Promise.all(rows.map((row) => deliver(row, deps, summary)));
+      await Promise.all(
+        rows.map((row) => deliver(row, deps, origin, summary)),
+      );
       if (rows.length < BATCH_SIZE) break;
     }
   } catch (cause) {

@@ -248,6 +248,8 @@ Once a hosted app origin exists, a human sets it from a real terminal (house rul
 npx supabase secrets set ALLOWED_ORIGINS=https://<app-origin>
 ```
 
+`send-push` reads the same secret: its **first** entry is the app origin for the Declarative Web Push `navigate` URL (#778, `docs/backend/push.md`), so list the environment's own app origin first.
+
 ## Checking the whole flow still works (local, ~3 minutes)
 
 ```bash

@@ -22,6 +22,33 @@ describe('parsePushPayload', () => {
     });
   });
 
+  it('ignores the Declarative Web Push keys and any other top-level key (#778)', () => {
+    expect(
+      parsePushPayload(
+        JSON.stringify({
+          id: 42,
+          title: 'Task nou',
+          body: 'Ai primit „Afiș”.',
+          link: '/tracker/12',
+          web_push: 8030,
+          notification: {
+            title: 'Task nou',
+            body: 'Ai primit „Afiș”.',
+            navigate: 'https://app.osubb.ro/tracker/12',
+            tag: 'osubb-42',
+            lang: 'ro',
+          },
+          future_key: { anything: true },
+        }),
+      ),
+    ).toEqual({
+      id: 42,
+      title: 'Task nou',
+      body: 'Ai primit „Afiș”.',
+      link: '/tracker/12',
+    });
+  });
+
   it('accepts a Notification without a body or a link', () => {
     expect(
       parsePushPayload(
@@ -76,6 +103,13 @@ describe('targetUrl', () => {
     ]) {
       expect(targetUrl(link, ORIGIN)).toBe('https://app.osubb.ro/notificari');
     }
+  });
+});
+
+describe('targetUrl near misses', () => {
+  it('never leaves the app for a path the URL parser reads as another host', () => {
+    for (const link of [String.raw`/\evil.test/phish`, '/\t/evil.test/phish'])
+      expect(targetUrl(link, ORIGIN)).toBe('https://app.osubb.ro/notificari');
   });
 });
 
