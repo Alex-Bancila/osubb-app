@@ -434,7 +434,7 @@ describe('ProfileScreen', () => {
 
     expect(updateProfileMock.mutateAsync).toHaveBeenCalledWith({
       fullName: 'Maria Ionescu',
-      phone: '0722334455',
+      phone: '+40722334455',
       avatarColor: '#ED2025',
     });
   });

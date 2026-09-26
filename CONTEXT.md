@@ -54,7 +54,7 @@ The presentation label chosen when a Group is created: Department, Project, or T
 _Avoid_: Kind, type, group type
 
 **Minimum Level**:
-The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Opportunities and Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it but never lower it, and a creator cannot set it above their own Level.
+The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it but never lower it, and a creator cannot set it above their own Level.
 _Avoid_: Min level, access level, role gate
 
 **Group Role**:
@@ -88,6 +88,10 @@ _Avoid_: Team visibility, open board, transparency mode
 **Automatic Membership**:
 A Group setting under which every active Member at or above the Group's Minimum Level belongs to it. The roster follows each Member's Role, is never edited by hand, and accepts no Applications; Group Roles are still appointed.
 _Avoid_: Derived roster, virtual group, implicit membership
+
+**Private Group**:
+A Group setting under which the Group, every Group below it, and their Tasks and Events are visible only to their members, to the Group Managers and Group Responsibles on its path, and to BC and Moderator. A Private Group accepts no Applications and offers no organization-wide Opportunity; a Member enters it by Appointment and sees it from that moment.
+_Avoid_: Hidden group, secret group, invite-only group
 
 **Group Audience**:
 Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership. A Group's Announcements and the important changes to its Events reach its Group Audience, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
@@ -139,7 +143,7 @@ The Group that owns a Task. Every Task has exactly one Origin.
 _Avoid_: Scope when ownership is meant
 
 **Task Audience**:
-Whether the Candidate Queue of a public Task admits only the Origin Group's members or every Member its Minimum Level admits. Seeing an Opportunity does not depend on it; joining does.
+Whether a public Task is visible and joinable only by the Origin Group's members or by every active Member; a directly assigned Task carries the local Audience.
 _Avoid_: Visibility, scope
 
 **Assignment Mode**:
@@ -175,10 +179,6 @@ _Avoid_: Open status
 
 **Candidate**:
 A Member who has expressed interest in a public Task and is waiting, selected, withdrawn, or closed in its queue.
-
-**Other OSUBB Opportunity**:
-A visible Opportunity of a Group the Member is not in, presented greyed below the Opportunities of their own Groups. A Member sees every open Opportunity of a Group whose Minimum Level they satisfy, and may join it only when its Task Audience admits them. Opportunities and Events of the Organization Group are never "other": they belong to everyone and carry the OSUBB colour.
-_Avoid_: Foreign task, external opportunity
 
 **Candidate Queue**:
 The arrival-ordered list of every Member who expressed interest in a public Task. Nobody becomes Executor by arriving first: the Task Manager selects the Executor from the queue, and selects again when an Executor gives up.
@@ -325,6 +325,18 @@ The signed membership facts attached to a session, including Role, Level, and th
 
 **Capability**:
 A named product action available at or above an organizational Level, without replacing Group Role authority.
+
+**Privacy Notice**:
+The versioned statement of what OSUBB does with a Member's personal data, who processes it and what rights the Member has; the current version is shown in the application and approved by BC.
+_Avoid_: GDPR page, terms, consent form, cookie policy
+
+**Privacy Acknowledgement**:
+A Member's one-time confirmation that they have read a given version of the Privacy Notice, recorded with the time; BC and Moderator can see who has acknowledged the current version. It is a record of information given, not a consent.
+_Avoid_: GDPR approval, acceptance, agreement
+
+**Release**:
+The deliberate, human-approved act of carrying `main` into the production environment. Distinct from Promotion, which is a Member moving up a Role.
+_Avoid_: Promote to production, deploy (in the sense of production), push to prod
 
 ## Term → identifier
 

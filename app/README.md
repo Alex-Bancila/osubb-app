@@ -61,12 +61,20 @@ app/
     ├── assets/brand/       # OSUBB mark + wordmark, light/dark (own README)
     ├── lib/
     │   ├── supabase.ts             # the one shared client, env-driven
+    │   ├── push-device.ts          # this browser as a Web Push device: subscription + push_tokens row (#704)
     │   ├── auth.tsx                # session + decoded claims, useAuth() (+ auth.test.tsx)
     │   ├── auth-error-message.ts   # maps GoTrue errors to Romanian copy
     │   ├── capabilities.ts         # useCapabilities(): the server capability row (my_capabilities())
     │   ├── calendar-time.ts        # Bucharest wall-clock time conversions (+ calendar-time.test.ts)
     │   ├── database.types.ts       # generated — `npm run gen:types`, never hand-edited
-    │   └── format.ts               # dates, points, initials — Romanian locale
+    │   ├── format.ts               # dates, points, initials — Romanian locale
+    │   ├── command-reasons.ts      # the one reason → Romanian table (+ test)
+    │   ├── normalize.ts            # trim, lowercase email, phone → E.164 (+ test)
+    │   ├── schemas/                # one zod schema per entity + fieldForReason (#674)
+    │   ├── form-errors.ts          # zod issues + server reason → { field: message }
+    │   ├── use-form-validation.ts  # blur/submit validation, server reason under its field
+    │   ├── work-filter.ts          # the Work Filter: URL keys, cascade, Campaign rule, RPC bounds (+ test)
+    │   └── use-work-filter.ts      # useWorkFilter(): the filter in the query string, and its RPC params
     ├── queries/
     │   ├── client.ts       # QueryClient defaults; a refusal is not retried
     │   ├── keys.ts         # the key conventions — read this before adding a hook
@@ -76,22 +84,34 @@ app/
     │   ├── event-rsvp.ts   # the RSVP mutation (+ event-rsvp.test.tsx)
     │   ├── notifications.ts # my notifications, unread count, mark read / all read (+ test)
     │   ├── profile.ts      # the signed-in member's own profile row
+    │   ├── push-subscription.ts # usePushSubscription(): the Profil push switch (+ test)
     │   └── reference.ts    # departments/roles lookups for display
     ├── components/
     │   ├── ui/             # locally owned shadcn Base UI/Nova primitives
     │   ├── shell/          # AppShell.tsx, navItems.ts — one list drives sidebar/topbar/tab bar
-    │   └── states/         # Loading, Empty, ErrorState — every query renders all three (+ test)
+    │   ├── states/         # Loading, Empty, ErrorState — every query renders all three (+ test)
+    │   └── work-filter/    # WorkFilter: Grup principal → Subgrup → Campanie → dates, with chips (+ test)
     ├── screens/
     │   ├── Placeholder.tsx # stands in for a screen; says which issue builds it
-    │   ├── dashboard/      # DashboardScreen (+test), DeptCupCard, LeaderboardCard, MyPointsCard
+    │   ├── dashboard/      # DashboardScreen (+test), DeptCupCard, LeaderboardCard, MyPointsCard,
+    │   │                   # NextTaskCard, NextEventCard, next-items (R4's picks + deep links)
     │   ├── tracker/        # TrackerScreen.tsx — my tasks; the full Tracker rebuild is tracked
     │   │                   # in CLAUDE.md's queue, not here
-    │   ├── calendar/       # CalendarScreen (+test), EventCard, EventRsvpControls (+test),
-    │   │                   # calendar-presentation (+test)
+    │   ├── calendar/       # CalendarScreen (+test): Lună (CalendarMonth) / Agendă
+    │   │                   # (CalendarAgenda), view per device (calendar-view), Work
+    │   │                   # Filter, ?event=<id>; EventCard, EventRsvpControls (+test),
+    │   │                   # NewEventControl (+test), calendar-presentation (+test)
     │   ├── notifications/  # NotificationsScreen (+test), notifications-presentation (+test)
     │   ├── login/          # LoginScreen.tsx, AuthCallback.tsx — magic-link request + landing
-    │   ├── profile/        # ProfileScreen.tsx (+test), EditProfileSheet.tsx (+test) (#108)
+    │   ├── profile/        # ProfileScreen.tsx (+test), EditProfileSheet.tsx (+test) (#108),
+    │   │                   # PushDeviceCard (+test): Notificări pe acest dispozitiv (#704)
     │   └── no-profile/     # signed in, not a member (ADR-0003 gate 2)
+    ├── pwa/
+    │   ├── pwa-config.ts   # vite-plugin-pwa options: injectManifest, precache globs, manifest (+ test)
+    │   ├── sw.ts           # the service worker: precache, fallback, push + notificationclick (ADR-0010)
+    │   ├── sw-routes.ts    # its denylist and network-only Supabase rule (tested in pwa-config.test.ts)
+    │   ├── push-payload.ts # push payload parsing, tap target, focus-or-open (+ test)
+    │   └── PwaUpdatePrompt.tsx # asks before activating a waiting worker (+ test)
     ├── theme/
     │   ├── tokens.css       # Brand Book palette; originated as a copy of mockup/css/tokens.css,
     │   │                    # forked since — check both before assuming they still match
@@ -107,6 +127,23 @@ app/
 
 Each screen gets its own folder under `screens/` when there is something real
 to put in it.
+
+## Forms and validation
+
+Every form follows ruling R8 (#674). Its rules live in one zod schema per
+entity under `src/lib/schemas/`, which mirrors the server's limits (#673) and
+normalises before it measures: every text is trimmed, an email lowercased, a
+phone turned into E.164 exactly as `private.normalize_phone` does. A schema's
+issue messages are reason codes, never copy; `src/lib/command-reasons.ts` is
+the only place a reason becomes Romanian, for the browser's rules and the
+server's refusals alike.
+
+`useFormValidation(schema, values, fieldForReason)` checks a field on blur and
+the whole draft on submit, disables nothing before the first try, focuses the
+first broken field, and `fail(error, fallback)` puts a server reason under the
+field `fieldForReason` names (anything else in the form-level slot). Errors
+render through `FieldError` from `components/ui/field.tsx` — do not add a
+second error component or a per-feature reason table.
 
 ## Adding a query
 
@@ -131,19 +168,20 @@ copy of that rule in TypeScript is a weaker one.
 
 ## Routes
 
-| Path             | Who reaches it                                                                    | Screen                     |
-| ---------------- | --------------------------------------------------------------------------------- | -------------------------- |
-| `/login`         | signed out                                                                        | magic-link request         |
-| `/auth/callback` | anyone — its job is turning a link into a session, so it runs before there is one | —                          |
-| `/no-profile`    | signed in without org claims                                                      | ADR-0003 gate 2            |
-| `/`              | members                                                                           | dashboard (#93–#95)        |
-| `/tracker`       | members                                                                           | task tracker (#88–#92)     |
-| `/calendar`      | members                                                                           | calendar (#96–#98)         |
-| `/anunturi`      | members                                                                           | announcements (#99–#101)   |
-| `/notificari`    | members                                                                           | notification centre (#101) |
-| `/voluntari`     | capability `seeDirectory` (rank BCE+)                                             | directory (#102–#103)      |
-| `/profil`        | members                                                                           | profile (#108)             |
-| `/administrare`  | capability `administer` (a Group Role anywhere, or BC+)                           | Administrare (#588)        |
+| Path             | Who reaches it                                                                      | Screen                     |
+| ---------------- | ----------------------------------------------------------------------------------- | -------------------------- |
+| `/login`         | signed out                                                                          | magic-link request         |
+| `/auth/callback` | anyone — its job is turning a link into a session, so it runs before there is one   | —                          |
+| `/auth/confirm`  | anyone — the emailed link lands here; only the Member's tap spends the token (#768) | click-to-confirm           |
+| `/no-profile`    | signed in without org claims                                                        | ADR-0003 gate 2            |
+| `/`              | members                                                                             | dashboard (#93–#95)        |
+| `/tracker`       | members                                                                             | task tracker (#88–#92)     |
+| `/calendar`      | members                                                                             | calendar (#96–#98)         |
+| `/anunturi`      | members                                                                             | announcements (#99–#101)   |
+| `/notificari`    | members                                                                             | notification centre (#101) |
+| `/voluntari`     | capability `seeDirectory` (rank BCE+)                                               | directory (#102–#103)      |
+| `/profil`        | members                                                                             | profile (#108)             |
+| `/administrare`  | capability `administer` (a Group Role anywhere, or BC+)                             | Administrare (#588)        |
 
 Everything unknown redirects to `/`, where the guard decides.
 

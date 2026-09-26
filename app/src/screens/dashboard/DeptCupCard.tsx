@@ -1,5 +1,4 @@
-import { ribbonOutline } from 'ionicons/icons';
-import { IonIcon } from '@ionic/react';
+import { Award } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { useDeptCup } from '../../queries/points';
@@ -47,7 +46,7 @@ export default function DeptCupCard() {
     <section className="card">
       <header className="card-head">
         <h2 className="card-title">
-          <IonIcon icon={ribbonOutline} aria-hidden="true" />
+          <Award className="card-title-icon" aria-hidden="true" />
           Cupa Departamentelor
         </h2>
       </header>

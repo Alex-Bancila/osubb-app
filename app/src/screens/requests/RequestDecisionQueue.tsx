@@ -1,10 +1,12 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
+import { fieldForReason, noteSchema } from '../../lib/schemas/note';
+import { useFormValidation } from '../../lib/use-form-validation';
 import { EvaluationFields } from '../../components/tasks/EvaluationFields';
 import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
 import {
-  RequestDecisionError,
   usePendingDecisions,
   useRequestDecision,
   type PendingDecision,
@@ -25,6 +27,57 @@ function RequesterLine({ request }: { request: PendingDecision }) {
   );
 }
 
+/** Rejecting a Request: a required note of at most 1000 characters (R8). */
+function RejectForm({
+  pending,
+  onReject,
+  onCancel,
+}: {
+  pending: boolean;
+  onReject: (note: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [note, setNote] = useState('');
+  const form = useFormValidation(noteSchema, { note }, fieldForReason);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const values = form.validate();
+    if (!values) return;
+    try {
+      await onReject(values.note);
+    } catch (failure) {
+      form.fail(failure, 'Nu am putut salva decizia. Reîncearcă.');
+    }
+  }
+  return (
+    <form onSubmit={submit} noValidate className="space-y-3">
+      <div className="space-y-1">
+        <label className="block space-y-1">
+          <span>Motivul respingerii (obligatoriu)</span>
+          <textarea
+            required
+            className="min-h-24 w-full rounded-md border border-input bg-background p-3"
+            value={note}
+            disabled={pending}
+            onChange={(event) => setNote(event.target.value)}
+            {...form.field('note')}
+          />
+        </label>
+        <FieldError {...form.errorProps('note')} />
+      </div>
+      <FieldError>{form.formError}</FieldError>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={pending}>
+          Respinge cererea
+        </Button>
+        <Button variant="outline" disabled={pending} onClick={onCancel}>
+          Înapoi
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function RequestDecisionQueue() {
   const queue = usePendingDecisions();
   const mutation = useRequestDecision();
@@ -32,20 +85,16 @@ export function RequestDecisionQueue() {
     request: PendingDecision;
     kind: 'approve' | 'reject';
   } | null>(null);
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
   const submitting = useRef(false);
   function open(request: PendingDecision, kind: 'approve' | 'reject') {
     setSelected({ request, kind });
-    setNote('');
-    setError(null);
     setReceipt(null);
   }
+  /** Runs the decision; a refusal is thrown back to the form that asked. */
   async function decide(input: RequestDecision) {
     if (submitting.current) return;
     submitting.current = true;
-    setError(null);
     try {
       await mutation.mutateAsync(input);
       setSelected(null);
@@ -54,27 +103,8 @@ export function RequestDecisionQueue() {
           ? 'Cererea a fost aprobată. Activitatea și punctele au fost înregistrate.'
           : 'Cererea a fost respinsă. Solicitantul poate vedea nota deciziei.',
       );
-    } catch (failure) {
-      const safe =
-        failure instanceof RequestDecisionError
-          ? failure.message
-          : 'Nu am putut salva decizia. Reîncearcă.';
-      setError(safe);
-      throw new RequestDecisionError(safe);
     } finally {
       submitting.current = false;
-    }
-  }
-  async function reject(event: FormEvent) {
-    event.preventDefault();
-    if (!selected || !note.trim()) {
-      setError('Scrie o notă pentru această decizie.');
-      return;
-    }
-    try {
-      await decide({ kind: 'reject', requestId: selected.request.id, note });
-    } catch {
-      /* Safe feedback is retained above the form. */
     }
   }
   // Most members never decide a Request: until the server returns something
@@ -116,38 +146,18 @@ export function RequestDecisionQueue() {
               onSuccess={() => {}}
             />
           ) : (
-            <form onSubmit={reject} className="space-y-3">
-              <label className="block space-y-1">
-                <span>Motivul respingerii (obligatoriu)</span>
-                <textarea
-                  required
-                  className="min-h-24 w-full rounded-md border border-input bg-background p-3"
-                  value={note}
-                  disabled={mutation.isPending}
-                  onChange={(event) => setNote(event.target.value)}
-                />
-              </label>
-              {error && (
-                <p role="alert" className="text-destructive">
-                  {error}
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="submit"
-                  disabled={mutation.isPending || !note.trim()}
-                >
-                  Respinge cererea
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={mutation.isPending}
-                  onClick={() => setSelected(null)}
-                >
-                  Înapoi
-                </Button>
-              </div>
-            </form>
+            <RejectForm
+              key={selected.request.id}
+              pending={mutation.isPending}
+              onReject={(note) =>
+                decide({
+                  kind: 'reject',
+                  requestId: selected.request.id,
+                  note,
+                })
+              }
+              onCancel={() => setSelected(null)}
+            />
           )}
         </div>
       ) : null}

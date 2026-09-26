@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(64);
+select plan(74);
 truncate public.events, public.event_attendance cascade;
 create temp table people (n integer, name text, role public.member_role, status public.member_status);
 insert into people values
@@ -51,8 +51,12 @@ begin
  '{"member_role":"bc","member_level":6}'::jsonb);
 end; $$;
 select hasnt_function('public','create_event',array['text','text','text','timestamp with time zone','timestamp with time zone','text','integer','text','text','text'],'legacy overload is removed');
-select ok(not (select prosecdef from pg_proc where oid='public.create_event(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer)'::regprocedure),'wrapper is invoker');
-select ok((select prosecdef from pg_proc where oid='private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer)'::regprocedure),'implementation is definer');
+select ok(not (select prosecdef from pg_proc where oid='public.create_event(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint)'::regprocedure),'wrapper is invoker');
+select ok((select prosecdef from pg_proc where oid='private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint)'::regprocedure),'implementation is definer');
+-- #691: one signature per name -- PostgREST cannot choose between overloads.
+select is((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+           where (n.nspname,p.proname) in (('public','create_event'),('private','create_event_impl'))),
+          2::bigint,'create_event and create_event_impl each exist under exactly one signature');
 select ok(not has_table_privilege('authenticated','public.events','insert'),'direct insert denied');
 select ok(not has_table_privilege('authenticated','public.events','update'),'direct update denied');
 select ok(not has_table_privilege('authenticated','public.events','delete'),'direct delete denied');
@@ -204,6 +208,26 @@ select throws_ok($$select public.create_event('anon','sedinta',null,now())$$,'42
 -- Pin the message so the revoke on the WRAPPER is what this suite is testing.
 select throws_ok($$select public.create_event('anon','sedinta',null,now())$$,'42501','permission denied for function create_event','anon is stopped at the wrapper, not at the private schema behind it');
 reset role;
+-- ==================== #691: a Campaign on an Event ====================
+-- Persona 2 manages edu. The events_validate_campaign trigger decides; the command
+-- answers its two reasons (and an unknown id) as create_task's PT400 invalid_campaign.
+insert into public.campaigns(group_id,name,is_active,created_by) values
+((select id from fx where name='edu'),'Edu campaign #691',true,'37000000-0000-0000-0000-000000000001'),
+(pg_temp.dept_group('pr'),'Pr campaign #691',true,'37000000-0000-0000-0000-000000000001'),
+((select id from fx where name='edu'),'Edu inactive #691',false,'37000000-0000-0000-0000-000000000001');
+create temp table cx as select id,name from public.campaigns where name like '%#691';
+grant select on cx to authenticated;
+select pg_temp.login(2);
+select lives_ok($$select public.create_event('campaign own 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=(select id from cx where name='Edu campaign #691'))$$,'create_event accepts a Campaign of the Event''s own Group');
+select lives_ok($$select public.create_event('campaign ancestor 691','sedinta',(select id from fx where name='dt'),now()+interval '1 day',p_min_level:=3,p_campaign_id:=(select id from cx where name='Edu campaign #691'))$$,'create_event accepts a Campaign of a Group above the Event''s Group');
+select throws_ok($$select public.create_event('campaign foreign 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=(select id from cx where name='Pr campaign #691'))$$,'PT400','invalid_campaign','a Campaign of another Department is PT400 invalid_campaign, not a raw 23514');
+select throws_ok($$select public.create_event('campaign inactive 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=(select id from cx where name='Edu inactive #691'))$$,'PT400','invalid_campaign','an inactive Campaign is PT400 invalid_campaign');
+select throws_ok($$select public.create_event('campaign unknown 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=-1)$$,'PT400','invalid_campaign','an unknown Campaign id is PT400 invalid_campaign');
+reset role;
+select is((select campaign_id from public.events where title='campaign own 691'),(select id from cx where name='Edu campaign #691'),'the Campaign is stored on the Event');
+select is((select campaign_id from public.events where title='campaign ancestor 691'),(select id from cx where name='Edu campaign #691'),'an ancestor''s Campaign is stored on a child Group''s Event');
+select is((select campaign_id from public.events where title='case-2-edu'),null::bigint,'a call naming no Campaign stores none');
+select is((select count(*) from public.events where title like 'campaign % 691' and title not in ('campaign own 691','campaign ancestor 691')),0::bigint,'no refused Campaign call left a row behind');
 -- ==================== #673: constraints kit (R8) ====================
 -- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
 reset role;

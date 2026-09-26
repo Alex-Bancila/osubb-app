@@ -1,17 +1,24 @@
 /* ============================================================================
-   Calendar — a chronological OSUBB agenda.
+   Calendar — Lună and Agendă (#692).
 
-   The red spine is the screen's signature: it communicates sequence. Event
-   accents come from department reference data, but every colour is paired
-   with a written scope label so meaning never depends on colour alone.
+   The agenda's red spine communicates sequence; the month grid's signature is
+   the heavy day numeral with today in an OSUBB-red disc. Event chips are solid
+   colour tabs, Task deadlines hollow dashed tabs with a flag — two shapes, so
+   an Event and a deadline never differ by colour alone. Colour follows the
+   Tracker's rule (R10): own Groups in their colour, the Organization Group in
+   OSUBB red, Other OSUBB Events grey and labelled.
    ========================================================================== */
 
+:root {
+  --event-other: var(--ink-400);
+}
+
 .calendar-page {
-  max-width: 1080px;
+  max-width: 1120px;
 }
 
 .calendar-head {
-  max-width: 700px;
+  max-width: none;
 }
 
 .calendar-kicker {
@@ -29,6 +36,388 @@
   color: var(--text-muted);
   line-height: 1.55;
 }
+
+/* ---- View toggle: one segmented control, the chosen view inked ---------- */
+
+.calendar-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+}
+
+.calendar-view-toggle .calendar-view-option {
+  border-radius: var(--r-pill);
+  padding-inline: var(--s-4);
+  font-weight: var(--fw-bold);
+  color: var(--text-muted);
+}
+
+.calendar-view-toggle .calendar-view-option[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--surface);
+}
+
+.calendar-filter {
+  margin: 0 0 var(--s-6);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.calendar-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin: var(--s-4) 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ---- Lună ---------------------------------------------------------------- */
+
+.calendar-month-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.calendar-managed-toggle {
+  gap: var(--s-2);
+  font-weight: var(--fw-semibold);
+}
+
+.calendar-switch {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--ink-300);
+  transition: background 150ms ease;
+}
+
+.calendar-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--white);
+  transition: transform 150ms ease;
+}
+
+.calendar-managed-toggle[aria-pressed='true'] .calendar-switch {
+  background: var(--red);
+}
+
+.calendar-managed-toggle[aria-pressed='true'] .calendar-switch::after {
+  transform: translateX(12px);
+}
+
+.calendar-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.calendar-grid th {
+  padding: var(--s-2) var(--s-2) var(--s-1);
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.calendar-grid abbr {
+  text-decoration: none;
+}
+
+.calendar-grid td {
+  height: 7.25rem;
+  padding: 0;
+  border-top: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+
+.calendar-grid td + td {
+  border-left: 1px solid var(--border-soft);
+}
+
+.calendar-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-cell:hover {
+  background: var(--surface-2);
+}
+
+.calendar-cell:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.calendar-cell[aria-pressed='true'] {
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+.calendar-cell-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-extrabold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.calendar-cell[aria-current='date'] .calendar-cell-number {
+  background: var(--red);
+  color: var(--white);
+}
+
+.is-outside .calendar-cell-number {
+  color: var(--text-faint);
+  font-weight: var(--fw-semibold);
+}
+
+.is-outside .calendar-chips {
+  opacity: 0.55;
+}
+
+.calendar-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.calendar-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 6px;
+  border-left: 3px solid var(--chip-color);
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--chip-color) 14%, var(--surface));
+  color: var(--text);
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.35;
+}
+
+.calendar-chip.is-task {
+  border: 1px dashed var(--chip-color);
+  border-left-width: 3px;
+  background: transparent;
+}
+
+.calendar-chip.is-other {
+  color: var(--text-muted);
+}
+
+.calendar-chip-icon {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  color: var(--chip-color);
+}
+
+.calendar-chip-text {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-chip-more {
+  padding-left: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  margin: var(--s-3) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.calendar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.calendar-legend-swatch {
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--red);
+}
+
+.calendar-legend-swatch.is-other {
+  background: var(--event-other);
+}
+
+.calendar-selected-day {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.32fr) minmax(0, 1fr);
+  gap: var(--s-6);
+  margin-top: var(--s-7);
+}
+
+.calendar-selected-day .calendar-day-head {
+  position: static;
+}
+
+.calendar-day-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.calendar-selected-day .calendar-day-head + .calendar-day-empty {
+  grid-column: auto;
+  padding-top: var(--s-2);
+}
+
+.calendar-day-lists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-width: 0;
+}
+
+.calendar-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendar-task-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 56px;
+  padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--s-4) + 4px);
+  overflow: hidden;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.calendar-task-row:hover {
+  background: var(--surface-2);
+}
+
+.calendar-task-row:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.calendar-task-stripe {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--chip-color);
+}
+
+.calendar-task-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.calendar-task-title {
+  overflow: hidden;
+  font-weight: var(--fw-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-1);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.calendar-task-side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: var(--fs-xs);
+}
+
+.calendar-task-time {
+  color: var(--text-muted);
+}
+
+.calendar-task-time time {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-bold);
+}
+
+.calendar-task-status {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-weight: var(--fw-bold);
+}
+
+/* ---- Agendă -------------------------------------------------------------- */
 
 .calendar-agenda {
   display: flex;
@@ -115,6 +504,7 @@
   border-radius: var(--r-md);
   background: var(--surface);
   box-shadow: var(--sh-sm);
+  scroll-margin-block: var(--s-8);
 }
 
 .event-card::before {
@@ -123,6 +513,20 @@
   inset: 0 auto 0 0;
   width: 4px;
   background: var(--event-accent);
+}
+
+.event-card:focus {
+  outline: none;
+}
+
+.event-card:focus-visible,
+.event-card.is-highlighted {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 3px;
+}
+
+.event-card.is-other {
+  background: var(--surface-2);
 }
 
 .event-card-head {
@@ -134,7 +538,8 @@
 }
 
 .event-type,
-.event-scope {
+.event-scope,
+.event-relevance {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -156,11 +561,16 @@
   color: var(--text-muted);
 }
 
-/* The Group's category, drawn in the Group's own colour. It replaced a plain
-   dot when Events started naming a Group instead of a scope enum: the dot could
-   only carry the colour, the icon carries the kind of Group as well. */
+.event-relevance {
+  padding: 2px 9px;
+  border: 1px dashed var(--event-other);
+  color: var(--text-muted);
+}
+
+/* The Group's category, drawn in the Event's colour. */
 .event-scope-icon {
-  font-size: 14px;
+  width: 14px;
+  height: 14px;
   color: var(--event-accent);
 }
 
@@ -212,6 +622,15 @@
   line-height: 1.55;
 }
 
+.event-past {
+  margin: var(--s-5) 0 0;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+
 /* RSVP is a response strip, not a second card. Keeping it inside the event
    boundary makes the choice unambiguous while the thin rule preserves the
    agenda's visual hierarchy. */
@@ -250,63 +669,36 @@
   font-weight: var(--fw-medium);
 }
 
-.event-rsvp-state ion-spinner {
-  width: 14px;
-  height: 14px;
-}
-
 .event-rsvp-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
 }
 
-ion-button.event-rsvp-button {
-  min-height: 44px;
-  margin: 0;
-  --border-color: var(--border);
-  --border-radius: var(--r-sm);
-  --border-width: 1px;
-  --color: var(--text);
-  --padding-start: var(--s-4);
-  --padding-end: var(--s-4);
-  font-size: var(--fs-sm);
+.event-rsvp-button {
   font-weight: var(--fw-bold);
-  text-transform: none;
 }
 
-ion-button.event-rsvp-button::part(native) {
-  min-height: 44px;
+.event-rsvp-button.is-declined {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
 }
 
-ion-button.event-rsvp-button.is-going {
-  --background: var(--red);
-  --background-activated: var(--red-700);
-  --background-hover: var(--red-600);
-  --border-color: var(--red);
-  --color: var(--white);
+.event-rsvp-button.is-declined:hover {
+  background: color-mix(in srgb, var(--text) 88%, var(--surface));
+  color: var(--surface);
 }
 
-ion-button.event-rsvp-button.is-declined {
-  --background: var(--text);
-  --background-activated: color-mix(in srgb, var(--text) 78%, var(--surface));
-  --background-hover: color-mix(in srgb, var(--text) 88%, var(--surface));
-  --border-color: var(--text);
-  --color: var(--surface);
-}
-
-/* The toast is the visual feedback. This live region gives assistive
-   technology the same message without making it announce the toast twice. */
 .event-rsvp-live {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  margin: var(--s-3) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.event-rsvp-live.is-error {
+  color: var(--danger);
 }
 
 @media (max-width: 720px) {
@@ -314,7 +706,8 @@ ion-button.event-rsvp-button.is-declined {
     gap: var(--s-8);
   }
 
-  .calendar-day {
+  .calendar-day,
+  .calendar-selected-day {
     grid-template-columns: 1fr;
     gap: var(--s-4);
   }
@@ -335,6 +728,61 @@ ion-button.event-rsvp-button.is-declined {
   .calendar-event-list > li::before {
     left: calc(-1 * var(--s-5) - 7px);
   }
+
+  /* A phone's cell is too narrow for a title: chips become bars, and the
+     day listed below the grid does the reading. */
+  .calendar-grid td {
+    height: 4rem;
+  }
+
+  .calendar-grid th {
+    padding-inline: 0;
+    text-align: center;
+  }
+
+  .calendar-cell {
+    align-items: center;
+    padding: 4px 3px;
+  }
+
+  .calendar-cell-number {
+    width: 1.7rem;
+    height: 1.7rem;
+    font-size: var(--fs-sm);
+  }
+
+  .calendar-chips {
+    align-self: stretch;
+    gap: 2px;
+  }
+
+  .calendar-chip {
+    height: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: var(--chip-color);
+  }
+
+  .calendar-chip.is-task {
+    border: 0;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--chip-color) 0 3px,
+      transparent 3px 5px
+    );
+  }
+
+  .calendar-chip-icon,
+  .calendar-chip-text {
+    display: none;
+  }
+
+  .calendar-chip-more {
+    padding: 0;
+    font-size: 10px;
+    text-align: center;
+  }
 }
 
 @media (max-width: 420px) {
@@ -348,8 +796,24 @@ ion-button.event-rsvp-button.is-declined {
     gap: var(--s-2);
   }
 
-  .event-rsvp-actions ion-button {
+  .event-rsvp-actions > * {
     flex: 1 1 8rem;
+  }
+
+  .calendar-task-row {
+    flex-wrap: wrap;
+  }
+
+  .calendar-task-side {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-switch,
+  .calendar-switch::after {
+    transition: none;
   }
 }
 

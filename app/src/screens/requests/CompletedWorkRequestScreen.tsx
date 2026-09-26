@@ -5,6 +5,7 @@ import { TaskDetailsSheet } from '../tracker/TaskDetailsSheet';
 import { RequestStatusBadge } from './RequestStatusBadge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
+import { commandErrorMessage } from '../../lib/command-reasons';
 import { submitsWorkRequests } from '../../lib/capabilities';
 import {
   Card,
@@ -37,17 +38,12 @@ import { useGroups, type Group } from '../../queries/reference';
 // Child Group is shown by its own name.
 const NO_GROUPS: ReadonlyMap<number, Group> = new Map();
 
+/** A refused Request, in the shared copy of `command-reasons.ts`. */
 function safeSubmitError(error: unknown) {
-  const message =
-    typeof error === 'object' && error && 'message' in error
-      ? String(error.message)
-      : '';
-  if (message === 'description_required') return 'Descrierea este obligatorie.';
-  if (message === 'invalid_origin')
-    return 'Alege un grup pentru această activitate.';
-  if (message === 'request_origin_forbidden')
-    return 'Nu mai faci parte din grupul ales.';
-  return 'Cererea nu a putut fi trimisă. Încearcă din nou.';
+  return commandErrorMessage(
+    error,
+    'Cererea nu a putut fi trimisă. Încearcă din nou.',
+  );
 }
 
 export default function CompletedWorkRequestScreen() {

@@ -23,10 +23,14 @@ describe('Own Candidate Queue', () => {
   it('updates positions and explicitly labels selected and closed states', () => {
     useTaskQueue.mockReturnValue({ data: { status: 'pending', position: 3 } });
     const { rerender } = render(<TaskQueueStatus taskId={1} />);
-    expect(screen.getByRole('status')).toHaveTextContent('Locul 3');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Te-ai înscris pe locul 3.',
+    );
     useTaskQueue.mockReturnValue({ data: { status: 'pending', position: 2 } });
     rerender(<TaskQueueStatus taskId={1} />);
-    expect(screen.getByRole('status')).toHaveTextContent('Locul 2');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Te-ai înscris pe locul 2.',
+    );
     useTaskQueue.mockReturnValue({
       data: { status: 'selected', position: null },
     });

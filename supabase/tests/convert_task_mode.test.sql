@@ -20,7 +20,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(52);
+select plan(53);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -224,11 +224,15 @@ select throws_ok(format($$ select public.convert_task_mode(%s, 'bogus', 'local')
 select throws_ok(format($$ select public.convert_task_mode(%s, null, 'local') $$,
   (select id from public.tasks where title = 'Bad mode task #329')),
   'PT400', 'invalid_assignment_mode', 'a null Assignment Mode value is rejected');
+-- #794 (ruling R26): a directly assigned Task carries the local Audience.
+select throws_ok(format($$ select public.convert_task_mode(%s, 'direct', 'org') $$,
+  (select id from public.tasks where title = 'Bad audience task #329')),
+  'PT400', 'direct_task_local_only', '#794: direct + org is rejected -- a directly assigned Task carries the local Audience');
 reset role;
 select is((select count(*) from public.task_activity as activity
              join public.tasks as task on task.id = activity.task_id
             where task.title in ('Bad audience task #329', 'Bad mode task #329')), 0::bigint,
-  'the four rejected input calls wrote no activity row');
+  'the five rejected input calls wrote no activity row');
 
 -- ==================== 4. State preconditions ====================
 

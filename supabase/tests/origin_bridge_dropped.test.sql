@@ -40,7 +40,7 @@ select is(
     where n.nspname = 'public' and p.proname in ('create_task', 'create_completed_work_request', 'create_campaign')),
   array['create_campaign(bigint,text)',
         'create_completed_work_request(text,bigint)',
-        'create_task(text,text,timestamp with time zone,text,text,uuid,bigint,bigint,text,bigint)'],
+        'create_task(text,text,timestamp with time zone,text,text,uuid,bigint,bigint,text,bigint,text,text)'],
   'exactly one arity each: create_task, create_completed_work_request and create_campaign take a Group id only (no PostgREST overload ambiguity)');
 
 -- ==================== Both validators still fire on a Group-only write ====================
@@ -65,12 +65,12 @@ select ok((select 'security_invoker=on' = any (reloptions) from pg_class where o
       and has_table_privilege('authenticated', 'public.dept_cup', 'select')
       and not has_table_privilege('anon', 'public.dept_cup', 'select'),
   'dept_cup is recreated security_invoker with its grants');
-select ok(has_function_privilege('authenticated', 'public.department_cup(bigint)', 'execute')
-      and not has_function_privilege('anon', 'public.department_cup(bigint)', 'execute')
-      and has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid)', 'execute')
-      and not has_function_privilege('anon', 'public.leadership_member_tasks(uuid)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute')
+      and not has_function_privilege('anon', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute')
+      and has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'execute')
+      and not has_function_privilege('anon', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'execute'),
   'department_cup and leadership_member_tasks keep their grants');
-select is(pg_get_function_result('public.department_cup(bigint)'::regprocedure),
+select is(pg_get_function_result('public.department_cup(bigint, timestamptz, timestamptz)'::regprocedure),
   'TABLE(group_id bigint, name text, points integer, members bigint)',
   'department_cup returns (group_id, name, points, members)');
 
@@ -118,13 +118,13 @@ reset role;
 select pg_temp.test_login_leadership('57900000-0000-0000-0000-000000000002');
 select lives_ok(
   $$ select public.express_task_interest((select id from public.tasks where title = 'Org local opportunity 579')) $$,
-  'a Member with no roster row takes a local Organization Opportunity through Automatic Membership');
+  'a Member with no roster row joins a local Organization Opportunity through Automatic Membership');
 reset role;
 select is(
-  (select member_id from public.task_assignments
-    where task_id = (select id from public.tasks where title = 'Org local opportunity 579') and ended_at is null),
+  (select member_id from public.task_candidates
+    where task_id = (select id from public.tasks where title = 'Org local opportunity 579') and status = 'pending'),
   '57900000-0000-0000-0000-000000000002'::uuid,
-  'and becomes its first-come Executor');
+  'and joins its Candidate Queue as a pending Candidate (#682: interest always queues)');
 select pg_temp.test_login_leadership('57900000-0000-0000-0000-000000000002');
 select throws_ok(
   $$ select public.express_task_interest((select id from public.tasks where title = 'Native work 579')) $$,

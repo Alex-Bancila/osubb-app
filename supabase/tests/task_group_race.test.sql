@@ -41,7 +41,7 @@ select extensions.dblink_exec('task_627_setup', $setup$
   insert into public.tasks(title,description,deadline,group_id,status,started_at,audience,assignment_mode,kind,created_by,created_at)
     values ('Race task #627','Before move',now()+interval '2 days',
       (select id from public.groups where legacy_dept_id='edu'),
-      'in_progress',now()-interval '1 hour','org','direct','task','62700000-0000-0000-0000-000000000090',now()-interval '2 hours');
+      'in_progress',now()-interval '1 hour','local','direct','task','62700000-0000-0000-0000-000000000090',now()-interval '2 hours');
   insert into public.task_assignments(task_id,member_id,assigned_by)
     values ((select id from public.tasks where title='Race task #627'),
       '62700000-0000-0000-0000-000000000091','62700000-0000-0000-0000-000000000090');
@@ -65,7 +65,7 @@ create temp table race_627 as select * from pg_temp.test_race(
     (select id from public.groups where name='Race Group #627'),
     'Race task #627', 'Before move',
     (select deadline from public.tasks where title='Race task #627'),
-    null,'direct','org',true)).status::text$q$,
+    null,'direct','local',null,null,true)).status::text$q$,
   'select public.test_627_demote()');
 select is((select result_a from race_627),'in_progress',
   'move keeps already-rostered eligible Executor assigned before demotion');

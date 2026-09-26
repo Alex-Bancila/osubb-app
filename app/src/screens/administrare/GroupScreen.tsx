@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { cn } from 'cn';
+import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
@@ -112,6 +113,14 @@ export default function GroupScreen() {
         .sort((left, right) => left.name.localeCompare(right.name, 'ro')),
     [groups, id],
   );
+  // Every Group below this one, at any depth: what turning it private hides.
+  const subtree = useMemo(
+    () =>
+      groups
+        .filter((row) => row.id !== id && row.path.includes(id))
+        .sort((left, right) => left.name.localeCompare(right.name, 'ro')),
+    [groups, id],
+  );
   const levels = useMemo(
     () => [
       ...new Set([...(rolesQuery.data?.values() ?? [])].map((r) => r.level)),
@@ -129,7 +138,10 @@ export default function GroupScreen() {
     [group, id, myGroupsQuery.data, createTopLevel],
   );
 
-  async function run(next: GroupCommand): Promise<boolean> {
+  async function run(
+    next: GroupCommand,
+    onFailure?: (failure: unknown) => void,
+  ): Promise<boolean> {
     if (submitting.current) return false;
     submitting.current = true;
     setError(null);
@@ -142,9 +154,11 @@ export default function GroupScreen() {
     } catch (failure) {
       const known = failure instanceof CommandError;
       setLastReason(known ? failure.reason : undefined);
-      setError(
-        known ? failure.message : 'Nu am putut salva schimbarea. Reîncearcă.',
-      );
+      if (onFailure) onFailure(failure);
+      else
+        setError(
+          known ? failure.message : 'Nu am putut salva schimbarea. Reîncearcă.',
+        );
       return false;
     } finally {
       submitting.current = false;
@@ -192,6 +206,7 @@ export default function GroupScreen() {
             {group.name}
           </h1>
           <Badge variant="outline">{categoryLabel(group.category)}</Badge>
+          <PrivateGroupBadge isPrivate={group.is_private} />
           {group.status !== 'active' && (
             <Badge variant="secondary">{groupStatusLabel(group.status)}</Badge>
           )}
@@ -248,6 +263,7 @@ export default function GroupScreen() {
           <GroupSettingsTab
             group={group}
             parent={parent}
+            subtree={subtree}
             roster={roster}
             authority={authority}
             levels={levels}
@@ -309,7 +325,7 @@ export default function GroupScreen() {
               subgrupurilor lui. Raportul ei arată punctele obținute și cine a
               lucrat.
             </p>
-            <CampaignsPanel group={group} label={group.name} />
+            <CampaignsPanel group={group} label={group.name} groups={groups} />
           </div>
         )}
         {tab === 'cereri' && (

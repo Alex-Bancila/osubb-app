@@ -323,7 +323,7 @@ $$;
 -- roster appointed as its Responsibles. It accepts no applications or Cup.
 select public.create_group('Adunarea Generală','team');
 select public.update_group_structure(pg_temp.seed_group_id('Adunarea Generală'),
-  'team', false, false, true, 3, null, null, false);
+  'team', false, false, true, 3, null, null, false, false);
 select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
   'd0000000-0000-0000-0000-000000000006','responsible','Responsabil Adunarea Generală');
 select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
@@ -496,15 +496,15 @@ insert into demo_task_seed values
    pg_temp.demo_deadline(3), 'd0000000-0000-0000-0000-000000000007', now() - interval '2 days'),
 
   -- Public, open queue, nobody in it either: a second empty queue in a
-  -- different Department. No command leaves a `pending` Candidate with no
-  -- Executor (express_task_interest takes the first-come branch when there
-  -- is none), so this mirrors pr-open-queue rather than pairing with it.
+  -- different Department, mirroring pr-open-queue. Since #682 interest only
+  -- queues and the manager selects, so a pending Candidate with no Executor
+  -- is an ordinary state -- edu-public-queue's history passes through it.
   ('hr-open-queue', 'Voluntari pentru standul de recrutare',
    'Două ore la stand, în campus.', 'logistic', 'hr', null, null,
    'task', 'org', 'public', null, null,
    pg_temp.demo_deadline(11), 'd0000000-0000-0000-0000-000000000008', now() - interval '4 days'),
 
-  -- Public with a first-come Executor and two Members queued behind them.
+  -- Public with a manager-selected Executor and two Members queued behind them.
   ('edu-public-queue', 'Ajutor la standul Educațional',
    'Program de tutoriat pentru boboci, două ture.', 'logistic', 'edu', null, null,
    'task', 'local', 'public', null, null,
@@ -821,13 +821,13 @@ select fixture.key, fixture.task_key, fixture.member_id, fixture.assigned_at,
      now() - interval '9 days', 'd0000000-0000-0000-0000-000000000007'::uuid,
      null::timestamptz, null::text, null::text),
     ('edu-public-queue', 'edu-public-queue', 'd0000000-0000-0000-0000-000000000002',
-     now() - interval '5 days', 'd0000000-0000-0000-0000-000000000002', null, null, null),
+     now() - interval '5 days', 'd0000000-0000-0000-0000-000000000007', null, null, null),
     ('project-in-review', 'project-in-review', 'd0000000-0000-0000-0000-000000000002',
      now() - interval '14 days', 'd0000000-0000-0000-0000-000000000005', null, null, null),
     ('it-completed', 'it-completed', 'd0000000-0000-0000-0000-000000000008',
      now() - interval '20 days', 'd0000000-0000-0000-0000-000000000006', null, 'completed', null),
     ('edu-completed-late', 'edu-completed-late', 'd0000000-0000-0000-0000-000000000001',
-     now() - interval '28 days', 'd0000000-0000-0000-0000-000000000001', null, 'completed', null),
+     now() - interval '28 days', 'd0000000-0000-0000-0000-000000000007', null, 'completed', null),
     ('pr-unfulfilled', 'pr-unfulfilled', 'd0000000-0000-0000-0000-000000000003',
      now() - interval '25 days', 'd0000000-0000-0000-0000-000000000007', null, 'failed', null),
     ('edu-reopened-1', 'edu-reopened', 'd0000000-0000-0000-0000-000000000002',
@@ -892,16 +892,24 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.member_id, fixture.status
        case when fixture.assignment_key is null
             then null else pg_temp.demo_assignment_id(fixture.assignment_key) end
   from (values
-    -- Two Members queued behind a first-come Executor.
-    ('edu-public-queue', 'd0000000-0000-0000-0000-000000000001'::uuid, 'pending',
+    -- #682: nobody becomes Executor by arriving first. The first Member
+    -- queued and the manager selected them, leaving the queue open…
+    ('edu-public-queue', 'd0000000-0000-0000-0000-000000000002'::uuid, 'selected',
+     now() - interval '5 days 6 hours', now() - interval '5 days',
+     'd0000000-0000-0000-0000-000000000007'::uuid, 'edu-public-queue'::text),
+    -- …and two Members queued behind the selected Executor.
+    ('edu-public-queue', 'd0000000-0000-0000-0000-000000000001', 'pending',
      now() - interval '4 days', null::timestamptz, null::uuid, null::text),
     ('edu-public-queue', 'd0000000-0000-0000-0000-000000000005', 'pending',
      now() - interval '3 days', null, null, null),
-    -- hr-open-queue carries no Candidate at all (#296 fix round 1): no
-    -- command leaves a pending Candidature with no Executor, so it stays a
-    -- second empty queue rather than "one step on" from pr-open-queue.
-    -- Closed automatically when the Evaluation made the Task terminal:
-    -- decided_at, no decider.
+    -- hr-open-queue carries no Candidate at all (#296 fix round 1): it stays
+    -- a second empty queue, mirroring pr-open-queue.
+    -- edu-completed-late: the manager selected the first Member to queue…
+    ('edu-completed-late', 'd0000000-0000-0000-0000-000000000001', 'selected',
+     now() - interval '28 days 6 hours', now() - interval '28 days',
+     'd0000000-0000-0000-0000-000000000007', 'edu-completed-late'),
+    -- …and the later one was closed automatically when the Evaluation made the
+    -- Task terminal: decided_at, no decider.
     ('edu-completed-late', 'd0000000-0000-0000-0000-000000000002', 'closed',
      now() - interval '26 days', now() - interval '8 days', null, null),
     -- Chosen by the manager, who left the rest of the queue open…
@@ -1080,16 +1088,31 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '4 days'),
 
-    -- ---- edu-public-queue: first-come Executor, two Members queued behind
+    -- ---- edu-public-queue: the manager selected the first Candidate, two Members queued behind
     ('edu-public-queue', 'created', 'd0000000-0000-0000-0000-000000000007', null,
      null, 'todo', null,
      jsonb_build_object('kind', 'task', 'audience', 'local', 'assignment_mode', 'public',
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '6 days'),
-    ('edu-public-queue', 'executor_assigned', 'd0000000-0000-0000-0000-000000000002', 'edu-public-queue',
+    ('edu-public-queue', 'interest_expressed', 'd0000000-0000-0000-0000-000000000002', null,
      null, null, null,
-     jsonb_build_object('via', 'first_come', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
+     jsonb_build_object('position', 1,
+                        'candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-public-queue')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000002')),
+     interval '5 days 6 hours'),
+    ('edu-public-queue', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-public-queue',
+     null, null, null,
+     jsonb_build_object('via', 'select', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
      interval '5 days'),
+    ('edu-public-queue', 'candidate_selected', 'd0000000-0000-0000-0000-000000000007', 'edu-public-queue',
+     null, null, null,
+     jsonb_build_object('candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-public-queue')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000002'),
+                        'replaced_assignment_id', null, 'closed_remaining', false,
+                        'closed_candidates', 0),
+     interval '5 days' - interval '1 second'),
     ('edu-public-queue', 'started', 'd0000000-0000-0000-0000-000000000002', 'edu-public-queue',
      'todo', 'in_progress', null, '{}'::jsonb, interval '5 days' - interval '2 seconds'),
     ('edu-public-queue', 'interest_expressed', 'd0000000-0000-0000-0000-000000000001', null,
@@ -1149,16 +1172,31 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
                         'difficulty', 5, 'rating', 4, 'points', 5 * rating_mult(4)),
      interval '4 days'),
 
-    -- ---- edu-completed-late: first-come Executor, one Candidate closed with the Evaluation
+    -- ---- edu-completed-late: manager-selected Executor, one Candidate closed with the Evaluation
     ('edu-completed-late', 'created', 'd0000000-0000-0000-0000-000000000007', null,
      null, 'todo', null,
      jsonb_build_object('kind', 'task', 'audience', 'local', 'assignment_mode', 'public',
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '30 days'),
-    ('edu-completed-late', 'executor_assigned', 'd0000000-0000-0000-0000-000000000001', 'edu-completed-late',
+    ('edu-completed-late', 'interest_expressed', 'd0000000-0000-0000-0000-000000000001', null,
      null, null, null,
-     jsonb_build_object('via', 'first_come', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
+     jsonb_build_object('position', 1,
+                        'candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-completed-late')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000001')),
+     interval '28 days 6 hours'),
+    ('edu-completed-late', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-completed-late',
+     null, null, null,
+     jsonb_build_object('via', 'select', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
      interval '28 days'),
+    ('edu-completed-late', 'candidate_selected', 'd0000000-0000-0000-0000-000000000007', 'edu-completed-late',
+     null, null, null,
+     jsonb_build_object('candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-completed-late')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000001'),
+                        'replaced_assignment_id', null, 'closed_remaining', false,
+                        'closed_candidates', 0),
+     interval '28 days' - interval '1 second'),
     ('edu-completed-late', 'interest_expressed', 'd0000000-0000-0000-0000-000000000002', null,
      null, null, null,
      jsonb_build_object('position', 1,
