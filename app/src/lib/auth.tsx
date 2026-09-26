@@ -9,7 +9,7 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
-import { unsubscribeDevice, withTimeout } from './push-device';
+import { forgetPushOn, unsubscribeDevice, withTimeout } from './push-device';
 import { supabase } from './supabase';
 
 /** How long sign-out waits for this device's push row to be removed. */
@@ -167,6 +167,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextUserId = next?.user.id ?? null;
       if (lastUserId.current !== null && lastUserId.current !== nextUserId) {
         queryClient.clear();
+        // #769: a session that ended any other way than signOut() below must
+        // not leave the push self-repair trusting this Member on this device.
+        forgetPushOn(lastUserId.current);
       }
       lastUserId.current = nextUserId;
       setSession(next);

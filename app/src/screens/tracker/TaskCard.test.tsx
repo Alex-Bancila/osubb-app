@@ -275,6 +275,7 @@ describe('Member Task cards', () => {
 
     const organization = card({
       audience: 'org',
+      assignment_mode: 'public',
       group: {
         name: 'Organizație',
         short: 'ORG',
@@ -292,6 +293,19 @@ describe('Member Task cards', () => {
     // Colour is never the only carrier: the chips name the Group and Audience.
     expect(screen.getByText('Organizație')).toBeVisible();
     expect(screen.getByText('OSUBB')).toBeVisible();
+  });
+
+  it('shows the OSUBB chip only on a public org-Audience Task (R26)', () => {
+    const shows = (overrides: Partial<TaskPresentationRow>) => {
+      const { unmount } = card(overrides);
+      const found = screen.queryByText('OSUBB') !== null;
+      unmount();
+      return found;
+    };
+    expect(shows({ assignment_mode: 'public', audience: 'org' })).toBe(true);
+    expect(shows({ assignment_mode: 'public', audience: 'local' })).toBe(false);
+    // A direct Task is local only: a stale org Audience says nothing.
+    expect(shows({ assignment_mode: 'direct', audience: 'org' })).toBe(false);
   });
 
   it('anchors the list card for the deep link, never the sheet copy', () => {

@@ -174,17 +174,16 @@ it("disables the organization-wide Audience for a Private Group's Task, with the
   const user = await content();
   // A public Origin first, with the organization-wide Audience chosen.
   await chooseOrigin(user, 'Conferință');
+  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
   const audience = screen.getByLabelText('Audiență');
   expect(
-    within(audience).getByRole('option', {
-      name: 'Toți membrii eligibili OSUBB',
-    }),
+    within(audience).getByRole('option', { name: 'Toți membrii OSUBB' }),
   ).toBeEnabled();
   await user.selectOptions(audience, 'org');
 
   await chooseOrigin(user, 'Tineret');
   const org = within(audience).getByRole('option', {
-    name: 'Toți membrii eligibili OSUBB',
+    name: 'Toți membrii OSUBB',
   });
   expect(org).toBeDisabled();
   expect(audience).toHaveValue('local');
@@ -198,6 +197,68 @@ it("disables the organization-wide Audience for a Private Group's Task, with the
   expect(onDraft).toHaveBeenCalledWith(
     expect.objectContaining({ groupId: 4, audience: 'local' }),
   );
+});
+it('shows Audiență only on a public Task, sends local while Direct and restores the choice (R26)', async () => {
+  const onDraft = vi.fn().mockResolvedValue(undefined);
+  const { container } = render(
+    <TaskForm options={options} onDraft={onDraft} />,
+  );
+  const user = await content();
+  await chooseOrigin(user, 'Conferință');
+  const mode = screen.getByLabelText('Mod de atribuire');
+  // Direct is the default: a direct Task has no Audience.
+  expect(mode).toHaveValue('direct');
+  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
+
+  await user.selectOptions(mode, 'public');
+  const audience = screen.getByLabelText('Audiență');
+  expect(audience).toHaveAccessibleDescription(
+    'Cine vede taskul și se poate înscrie.',
+  );
+  expect(
+    within(audience)
+      .getAllByRole('option')
+      .map((option) => option.textContent),
+  ).toEqual(['Membrii grupului', 'Toți membrii OSUBB']);
+  await user.selectOptions(audience, 'org');
+  expect((await axe.run(container)).violations).toEqual([]);
+
+  // Back to Direct: the field goes and the draft is local.
+  await user.selectOptions(mode, 'direct');
+  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  await waitFor(() =>
+    expect(onDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ assignmentMode: 'direct', audience: 'local' }),
+    ),
+  );
+
+  // Public again: the earlier choice is back, and sent.
+  await user.selectOptions(mode, 'public');
+  expect(screen.getByLabelText('Audiență')).toHaveValue('org');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  await waitFor(() =>
+    expect(onDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ assignmentMode: 'public', audience: 'org' }),
+    ),
+  );
+});
+it('puts a direct_task_local_only refusal on Mod de atribuire (R26)', async () => {
+  const onDraft = vi.fn().mockRejectedValueOnce({
+    code: 'PT400',
+    message: 'direct_task_local_only',
+  });
+  render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = await content();
+  await chooseOrigin(user, 'Tineret');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  const mode = screen.getByLabelText('Mod de atribuire');
+  await waitFor(() =>
+    expect(mode).toHaveAccessibleDescription(
+      'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
+    ),
+  );
+  expect(mode).toHaveAttribute('aria-invalid', 'true');
 });
 it('sends only the root when no Group below is chosen, and starts on the one root there is', async () => {
   const onDraft = vi.fn();

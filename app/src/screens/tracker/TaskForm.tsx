@@ -22,6 +22,8 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import { DirectExecutorSelector } from './DirectExecutorSelector';
 import { TaskGroupCascade } from './TaskGroupCascade';
 import {
+  AUDIENCE_HINT,
+  AUDIENCE_LABELS,
   campaignsFor,
   groupLookup,
   isPrivateGroup,
@@ -354,33 +356,38 @@ export function TaskForm({
             </select>
             <FieldError {...form.errorProps('assignmentMode')} />
           </div>
-          <div>
-            <label htmlFor={`${id}-audience`} className="text-sm font-medium">
-              Audiență
-            </label>
-            <select
-              id={`${id}-audience`}
-              className={control}
-              value={localOnly ? 'local' : values.audience}
-              onChange={(event) =>
-                update({
-                  audience: event.target.value === 'org' ? 'org' : 'local',
-                })
-              }
-              {...form.field('audience')}
-            >
-              <option value="local">Membrii grupului de origine</option>
-              <option value="org" disabled={localOnly}>
-                Toți membrii eligibili OSUBB
-              </option>
-            </select>
-            <FieldError {...form.errorProps('audience')} />
-            <p className="text-sm text-muted-foreground">
-              {localOnly
-                ? PRIVATE_GROUP_AUDIENCE_HINT
-                : 'Cine se poate înscrie când taskul este public.'}
-            </p>
-          </div>
+          {/* A direct Task is local only (R26); `values.audience` keeps the
+              choice for when the mode goes back to Public. */}
+          {values.assignmentMode === 'public' && (
+            <div>
+              <label htmlFor={`${id}-audience`} className="text-sm font-medium">
+                Audiență
+              </label>
+              <select
+                id={`${id}-audience`}
+                className={control}
+                value={localOnly ? 'local' : values.audience}
+                onChange={(event) =>
+                  update({
+                    audience: event.target.value === 'org' ? 'org' : 'local',
+                  })
+                }
+                {...form.field('audience', `${id}-audience-hint`)}
+              >
+                <option value="local">{AUDIENCE_LABELS.local}</option>
+                <option value="org" disabled={localOnly}>
+                  {AUDIENCE_LABELS.org}
+                </option>
+              </select>
+              <FieldError {...form.errorProps('audience')} />
+              <p
+                id={`${id}-audience-hint`}
+                className="text-sm text-muted-foreground"
+              >
+                {localOnly ? PRIVATE_GROUP_AUDIENCE_HINT : AUDIENCE_HINT}
+              </p>
+            </div>
+          )}
           {values.assignmentMode === 'direct' && origin && (
             <div className="grid gap-1.5" {...form.slot('executorId')}>
               <DirectExecutorSelector

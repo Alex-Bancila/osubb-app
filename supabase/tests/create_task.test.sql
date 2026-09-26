@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(154);
+select plan(157);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -369,6 +369,12 @@ select throws_ok($$ select public.create_task('Bad audience #327', 'd', now() + 
   'an unknown Audience is rejected');
 select throws_ok($$ select public.create_task('Bad mode #327', 'd', now() + interval '7 days', 'local', 'auction', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'invalid_assignment_mode',
   'an unknown Assignment Mode is rejected');
+-- #794 (ruling R26): a directly assigned Task carries the local Audience --
+-- with an Executor or without one, refused before anything is written.
+select throws_ok($$ select public.create_task('Direct org #794', 'd', now() + interval '7 days', 'org', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'direct_task_local_only',
+  '#794: a direct Task with the org Audience is rejected');
+select throws_ok($$ select public.create_task('Direct org #794', 'd', now() + interval '7 days', 'org', 'direct', p_executor_id => '32700000-0000-0000-0000-000000000009', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'direct_task_local_only',
+  '#794: and so is one naming its Executor');
 select lives_ok($$ select public.create_task(E'\t Trimmed #327 \t', E'  spatiat  ', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$,
   'a padded title and description are accepted');
 reset role;
@@ -376,6 +382,8 @@ select is((select count(*) from public.tasks where title = 'Trimmed #327'), 1::b
   'the title is stored trimmed with regexp_replace, not btrim (tabs included)');
 select is((select description from public.tasks where title = 'Trimmed #327'), 'spatiat',
   'the description is stored trimmed');
+select is((select count(*) from public.tasks where title = 'Direct org #794'), 0::bigint,
+  '#794: neither refused direct + org creation wrote a Task');
 
 -- ==================== 5. Direct Assignment Mode with an Executor ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
@@ -1107,22 +1115,22 @@ reset role;
 select pg_temp.g521_task('command0','project',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
-select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command0'))$$,'create_task: Group persona 2 in project');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command0'))$$,'create_task: Group persona 2 in project');
 reset role;
 select pg_temp.g521_task('command1','project',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
-select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command1'))$$,'create_task: Group persona 3 in project');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command1'))$$,'create_task: Group persona 3 in project');
 reset role;
 select pg_temp.g521_task('command2','ind',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
-select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command2'))$$,'create_task: Group persona 6 in ind');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command2'))$$,'create_task: Group persona 6 in ind');
 reset role;
 select pg_temp.g521_task('command3','dt',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
-select throws_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
+select throws_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
 reset role;
 
 -- ==================== #673: constraints kit (R8) ====================

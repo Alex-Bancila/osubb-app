@@ -146,6 +146,67 @@ it('edits every field through update_task after a preview with no consequences',
   );
   expect(screen.getByRole('status')).toHaveFocus();
 });
+it('hides Audiență while Direct and opens it from the stored Audience on switching to Public (R26)', async () => {
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  const mode = screen.getByLabelText('Mod de atribuire');
+  expect(mode).toHaveValue('direct');
+  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
+
+  // The convert-to-public path starts from the Task's stored Audience.
+  await user.selectOptions(mode, 'public');
+  const audience = screen.getByLabelText('Audiență');
+  expect(audience).toHaveValue('local');
+  expect(audience).toHaveAccessibleDescription(
+    'Cine vede taskul și se poate înscrie.',
+  );
+  expect(
+    within(audience)
+      .getAllByRole('option')
+      .map((option) => option.textContent),
+  ).toEqual(['Membrii grupului', 'Toți membrii OSUBB']);
+  await user.selectOptions(audience, 'org');
+  await user.selectOptions(mode, 'direct');
+  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
+  await user.selectOptions(mode, 'public');
+  expect(screen.getByLabelText('Audiență')).toHaveValue('org');
+});
+it('sends local when a public org Task goes Direct (R26)', async () => {
+  render(
+    <TaskEditControl
+      task={{ ...task, assignment_mode: 'public', audience: 'org' }}
+      canManage
+    />,
+  );
+  const user = await openEditor();
+  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'direct');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  await waitFor(() =>
+    expect(state.preview).toHaveBeenCalledWith(
+      expect.objectContaining({ assignmentMode: 'direct', audience: 'local' }),
+    ),
+  );
+});
+it('puts a direct_task_local_only refusal on Mod de atribuire (R26)', async () => {
+  state.preview.mockRejectedValue(
+    new TaskEditError({ message: 'direct_task_local_only' }, 'fallback'),
+  );
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  await user.type(screen.getByLabelText('Titlu'), ' nou');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  const mode = screen.getByLabelText('Mod de atribuire');
+  await waitFor(() =>
+    expect(mode).toHaveAccessibleDescription(
+      'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
+    ),
+  );
+  expect(state.mutate).not.toHaveBeenCalled();
+});
 it('names every affected member and saves with their consequences accepted only after confirmation', async () => {
   state.preview.mockResolvedValue([
     { kind: 'candidate_removed', memberId: 'b', memberName: 'Bianca Pop' },

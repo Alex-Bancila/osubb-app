@@ -258,8 +258,10 @@ select is(
     where jobname = 'osubb-send-push' and schedule = '* * * * *' and active
       and command like '%net.http_post%/functions/v1/send-push%'
       and command like '%vault.decrypted_secrets where name = ''project_url''%'
-      and command like '%vault.decrypted_secrets where name = ''service_role_key''%'),
-  1::bigint, 'osubb-send-push runs every minute and reads the URL and key from Vault');
+      and command like '%''apikey'', (select decrypted_secret from vault.decrypted_secrets where name = ''secret_key'')%'
+      and command not like '%service_role_key%'
+      and command not like '%Authorization%'),
+  1::bigint, 'osubb-send-push runs every minute and sends the Vault row secret_key on apikey, with no legacy bearer (#769)');
 select is(
   (select count(*) from cron.job
     where jobname = 'osubb-prune-push-deliveries' and schedule = '15 3 * * *' and active),
@@ -271,8 +273,8 @@ begin
   if not exists (select 1 from vault.secrets where name = 'project_url') then
     perform vault.create_secret('http://send-push.test.invalid', 'project_url');
   end if;
-  if not exists (select 1 from vault.secrets where name = 'service_role_key') then
-    perform vault.create_secret('test-service-key', 'service_role_key');
+  if not exists (select 1 from vault.secrets where name = 'secret_key') then
+    perform vault.create_secret('sb_secret_test-703', 'secret_key');
   end if;
 end;
 $$;
@@ -292,9 +294,11 @@ select private.notify(array['70300000-0000-0000-0000-000000000003'::uuid], 'task
 select is(pg_temp.run_job('osubb-send-push'), 1::bigint,
   'with a due row the send job makes exactly one call');
 select ok(
-  (select url like '%/functions/v1/send-push' and headers ->> 'Authorization' like 'Bearer _%'
-     from net.http_request_queue order by id desc limit 1),
-  'the call targets send-push with a bearer from Vault');
+  (select request.url like '%/functions/v1/send-push'
+          and request.headers ->> 'apikey' = (select decrypted_secret from vault.decrypted_secrets where name = 'secret_key')
+          and not request.headers ? 'Authorization'
+     from net.http_request_queue as request order by request.id desc limit 1),
+  'the call targets send-push with the Vault secret_key on apikey and no Authorization header (#769)');
 
 truncate public.push_deliveries;
 select private.notify(array['70300000-0000-0000-0000-000000000003'::uuid], 'task', 'Patru', null, null, null, null);
