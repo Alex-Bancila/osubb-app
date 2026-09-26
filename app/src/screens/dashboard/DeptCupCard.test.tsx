@@ -30,7 +30,6 @@ const eduGroup: Group = {
   status: 'active',
   is_organization: false,
   // No bridge: the Cup row reaches its Group by `group_id` alone.
-  legacy_dept_id: null,
 };
 
 function setCup(rows: unknown[]) {

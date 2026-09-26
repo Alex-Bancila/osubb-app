@@ -123,8 +123,6 @@ describe('submitsWorkRequests', () => {
     return {
       member_role: 'voluntar',
       member_level: level,
-      dept_ids: [],
-      team_ids: [],
       group_ids: [],
     };
   }

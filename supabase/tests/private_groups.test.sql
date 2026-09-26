@@ -34,6 +34,8 @@
 --                                             -> "leadership_member_tasks: a BCE ..."
 --   campaigns_read without can_see_group (#759)
 --                                             -> "campaigns_read: the level-3 outsider ..." and "... BCE ..."
+--   group_coordination_impl without can_see_group (#589)
+--                                             -> "group_coordination: the level-3 outsider ..." and "... BCE ..."
 -- my_groups() needs no call of its own: its rows are the caller's own
 -- Group Roles, each of which can_see_group admits by construction, and the
 -- wrapper joins public.groups under groups_read. Its assertions below pin
@@ -44,7 +46,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(82);
+select plan(85);
 
 create function pg_temp.u756(n integer) returns uuid language sql immutable as $$
   select ('75600000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -382,6 +384,18 @@ select is(
   (select jsonb_path_query_array(card.memberships, '$[*].name') from public.member_card(pg_temp.u756(4)) as card),
   '["Private #756"]'::jsonb,
   'member_card: the ancestor Manager is');
+select pg_temp.test_login_leadership(pg_temp.u756(5));
+select is((select count(*) from public.group_coordination(pg_temp.g756('Private #756'))), 0::bigint,
+  'group_coordination: the level-3 outsider is not told who coordinates a Private Group');
+select pg_temp.test_login_leadership(pg_temp.u756(3));
+select is((select count(*) from public.group_coordination(pg_temp.g756('Private #756'))), 0::bigint,
+  'group_coordination: nor is a BCE without a Group Role (level 5 is below the gate)');
+select pg_temp.test_login_leadership(pg_temp.u756(4));
+select is(
+  (select array_agg(coordinator.member_id order by coordinator.member_id)
+     from public.group_coordination(pg_temp.g756('Private #756')) as coordinator),
+  array[pg_temp.u756(9), pg_temp.u756(11)],
+  'group_coordination: a member reads the Private Group''s Manager and Responsible');
 
 -- ==================== 9 · Automatic Membership inside a private subtree ====================
 

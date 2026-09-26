@@ -60,11 +60,12 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33400000-0000-0000-0000-000000000004', 'BC Inactiv 334', 'inactive.bc.334@test.local', 'bc', 'inactiv'),
   ('33400000-0000-0000-0000-000000000005', 'Fara Claimuri 334', 'claimless.334@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33400000-0000-0000-0000-000000000001', 'edu'),
   ('33400000-0000-0000-0000-000000000002', 'edu'),
   ('33400000-0000-0000-0000-000000000003', 'edu'),
   ('33400000-0000-0000-0000-000000000005', 'edu');
+select pg_temp.materialize_legacy_groups();
 
 -- ---- T1: start_task happy path -- a todo Task, direct mode, one Executor.
 insert into public.tasks
@@ -603,8 +604,6 @@ select extensions.dblink_exec('tp_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#334 committed%');
   delete from public.tasks where title like '%#334 committed%';
-  delete from public.member_departments where member_id in (
-    '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
   delete from auth.users where id in (
     '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
 
@@ -614,14 +613,11 @@ select extensions.dblink_exec('tp_setup', $$
   insert into public.profiles (id, full_name, email, role, status) values
     ('33400000-0000-0000-0000-000000000021', 'Probe Manager 334', 'probe.manager.334@test.local', 'bce', 'activ'),
     ('33400000-0000-0000-0000-000000000022', 'Probe Executor 334', 'probe.executor.334@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33400000-0000-0000-0000-000000000021', 'edu'),
-    ('33400000-0000-0000-0000-000000000022', 'edu');
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
   values
-    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
+    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'todo',
      '33400000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -686,8 +682,6 @@ select extensions.dblink_exec('tp_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#334 committed%');
   delete from public.tasks where title like '%#334 committed%';
-  delete from public.member_departments where member_id in (
-    '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
   delete from auth.users where id in (
     '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
 $$);
