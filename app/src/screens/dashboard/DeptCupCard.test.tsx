@@ -10,7 +10,6 @@ const hooks = vi.hoisted(() => ({
 
 vi.mock('../../queries/points', () => ({ useDeptCup: hooks.useDeptCup }));
 vi.mock('../../queries/reference', () => ({ useGroups: hooks.useGroups }));
-vi.mock('@ionic/react', () => ({ IonIcon: () => null }));
 
 import DeptCupCard from './DeptCupCard';
 

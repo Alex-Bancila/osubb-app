@@ -34,6 +34,7 @@ export type AdminGroup = Pick<
   | 'min_level'
   | 'status'
   | 'is_organization'
+  | 'is_private'
   | 'manager_title'
   | 'automatic_membership'
   | 'accepts_applications'
@@ -41,13 +42,15 @@ export type AdminGroup = Pick<
   | 'competes_in_cup'
   | 'counts_toward_parent_cup'
   | 'shared_work_visibility'
+  | 'application_form_label'
+  | 'application_form_url'
 > & {
   /** Roster rows. An Automatic-Membership Group has none by design. */
   memberCount: number;
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, manager_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility, application_form_label, application_form_url';
 
 /* Supabase caps a response at 1,000 rows; rosters pass that before the Group
    tree does, so every projection here is read in stable pages. */
@@ -266,6 +269,9 @@ export type GroupCommand =
       managerId: string | null;
       color: string | null;
       short: string | null;
+      /** A Private Group (#757, ruling R25). A Child Group of a private
+       *  parent is private whatever this says; the server copies it down. */
+      isPrivate: boolean;
     }
   | {
       kind: 'settings';
@@ -276,6 +282,11 @@ export type GroupCommand =
       applicationLevel: number | null;
       sharedWorkVisibility: boolean;
       minLevel: number;
+      /** The application form link (#697), edited in the settings form's
+       *  "Formular de înscriere" fields (#698). update_group is a full-state
+       *  replace: both null clears it, so a save always sends the pair. */
+      applicationFormLabel: string | null;
+      applicationFormUrl: string | null;
       confirmRemovals: boolean;
     }
   | {
@@ -289,6 +300,9 @@ export type GroupCommand =
       color: string | null;
       short: string | null;
       isOrganization: boolean;
+      /** The Private Group setting (#756). A full-state replace: a save that
+       *  does not mean to change it sends the stored value. */
+      isPrivate: boolean;
       confirmRemovals: boolean;
     }
   | { kind: 'archive'; groupId: number }
@@ -301,6 +315,16 @@ export type GroupCommand =
       groupRole: GroupRole;
       positionTitle: string | null;
     };
+
+/**
+ * How a screen runs a Group command: `true` when it saved. With `onFailure`
+ * the refusal goes back to the form that asked, which shows it under the
+ * field it belongs to (ruling R8), instead of above the page.
+ */
+export type RunGroupCommand = (
+  command: GroupCommand,
+  onFailure?: (failure: unknown) => void,
+) => Promise<boolean>;
 
 const FALLBACK = 'Nu am putut salva schimbarea. Reîncearcă.';
 
@@ -319,8 +343,10 @@ export async function runGroupCommand(command: GroupCommand) {
  * `as never` on the argument objects, deliberately: the generated Args types
  * mark every parameter non-null, because Supabase's generator has no way to
  * say "this one accepts null". These commands do — a null `p_manager_title`
- * clears the display name, a null `p_application_level` falls back to the
- * Minimum Level, a null `p_parent_id` means a top-level Group — and sending
+ * clears the display name, a null `p_application_level` is only valid while
+ * Applications are off (#731: the "same as Minimum Level" option sends the
+ * Minimum Level itself, never null), a null `p_parent_id` means a top-level
+ * Group — and sending
  * `undefined` instead would drop the key from the JSON body, which for a
  * full-state command is a different request. The cast is the lie the generated
  * type forces; the values below are the truth.
@@ -336,6 +362,7 @@ function callCommand(command: GroupCommand) {
         p_manager_id: command.managerId,
         p_color: trimmed(command.color),
         p_short: trimmed(command.short),
+        p_is_private: command.isPrivate,
       } as never);
     case 'settings':
       return supabase.rpc('update_group', {
@@ -346,6 +373,8 @@ function callCommand(command: GroupCommand) {
         p_application_level: command.applicationLevel,
         p_shared_work_visibility: command.sharedWorkVisibility,
         p_min_level: command.minLevel,
+        p_application_form_label: command.applicationFormLabel,
+        p_application_form_url: command.applicationFormUrl,
         p_confirm_removals: command.confirmRemovals,
       } as never);
     case 'structure':
@@ -359,6 +388,7 @@ function callCommand(command: GroupCommand) {
         p_color: trimmed(command.color),
         p_short: trimmed(command.short),
         p_is_organization: command.isOrganization,
+        p_is_private: command.isPrivate,
         p_confirm_removals: command.confirmRemovals,
       } as never);
     case 'archive':

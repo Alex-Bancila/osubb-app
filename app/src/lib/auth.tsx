@@ -9,7 +9,11 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
+import { forgetPushOn, unsubscribeDevice, withTimeout } from './push-device';
 import { supabase } from './supabase';
+
+/** How long sign-out waits for this device's push row to be removed. */
+const SIGN_OUT_PUSH_TIMEOUT_MS = 5000;
 
 /** What the JWT claims hook stamps into every member's token (spec §4.2). */
 export type MemberClaims = {
@@ -158,6 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextUserId = next?.user.id ?? null;
       if (lastUserId.current !== null && lastUserId.current !== nextUserId) {
         queryClient.clear();
+        // #769: a session that ended any other way than signOut() below must
+        // not leave the push self-repair trusting this Member on this device.
+        forgetPushOn(lastUserId.current);
       }
       lastUserId.current = nextUserId;
       setSession(next);
@@ -216,6 +223,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       claims,
       loading,
       signOut: async () => {
+        // A shared device must not keep receiving this member's pushes
+        // (#704). Best-effort and bounded: the row can only be deleted while
+        // still signed in, but a failure or a stalled browser API never
+        // blocks the sign-out itself.
+        const memberId = session?.user.id;
+        if (memberId) {
+          await withTimeout(
+            unsubscribeDevice(memberId),
+            SIGN_OUT_PUSH_TIMEOUT_MS,
+          ).catch(() => undefined);
+        }
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
         queryClient.clear();

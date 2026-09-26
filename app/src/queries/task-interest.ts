@@ -7,8 +7,11 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
-export type TaskInterestResult =
-  { kind: 'assigned' } | { kind: 'queued'; position: number };
+/**
+ * Joining only ever queues (ruling R9, #682): nobody becomes Executor by
+ * arriving first, so the one outcome is the Member's place in the queue.
+ */
+export type TaskInterestResult = { position: number };
 export type TaskInterestErrorKind =
   'forbidden' | 'conflict' | 'invalid' | 'unknown';
 const messages: Record<TaskInterestErrorKind, string> = {
@@ -64,7 +67,11 @@ export async function fetchOwnQueuePosition(
   return data?.my_position ?? null;
 }
 
-/** The first participant is assigned directly without a Candidate row. */
+/**
+ * Whether the Member is the Task's current Executor — chosen by a Task
+ * Manager (`select_task_candidate`) or assigned directly. The queue read uses
+ * it to report `selected`; joining never produces one.
+ */
 export async function hasOwnActiveAssignment(
   taskId: number,
   memberId: string,
@@ -88,14 +95,13 @@ export async function expressTaskInterest(
     p_task_id: taskId,
   });
   if (error) throw taskInterestError(error.code);
-  if (await hasOwnActiveAssignment(taskId, memberId))
-    return { kind: 'assigned' };
   const candidate = await fetchOwnCandidature(taskId, memberId);
-  if (candidate?.status === 'selected') return { kind: 'assigned' };
   if (candidate?.status === 'pending') {
     const position = await fetchOwnQueuePosition(taskId);
-    if (position !== null) return { kind: 'queued', position };
+    if (position !== null) return { position };
   }
+  // The queue changed between the command and the read (a manager selected
+  // or closed it): the lists are refetched on settle.
   throw new TaskInterestError('conflict');
 }
 

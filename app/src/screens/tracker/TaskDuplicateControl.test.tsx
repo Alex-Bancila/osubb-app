@@ -22,13 +22,19 @@ describe('Duplicate task', () => {
     render(<TaskDuplicateControl taskId={1} onDuplicated={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: 'Duplică' }));
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Alege un termen-limită valid',
-    );
-    fireEvent.change(screen.getByLabelText('Termen nou (ora Bucureștiului)'), {
-      target: { value: '2026-03-29T03:30' },
-    });
+    const date = screen.getByLabelText('Termen nou (ora Bucureștiului)');
+    // The rule is shown under the field, which takes focus (ruling R8).
+    expect(date).toHaveAccessibleDescription('Alege termenul taskului.');
+    expect(date).toHaveFocus();
+    fireEvent.change(date, { target: { value: '2026-03-29T03:30' } });
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));
+    expect(date).toHaveAccessibleDescription(
+      'Alege un termen valid, în ora României.',
+    );
+    // duplicate_task refuses a deadline in the past; so does the pop-up.
+    fireEvent.change(date, { target: { value: '2020-01-10T12:30' } });
+    await user.click(screen.getByRole('button', { name: 'Creează copia' }));
+    expect(date).toHaveAccessibleDescription('Termenul nu poate fi în trecut.');
     expect(duplicate).not.toHaveBeenCalled();
   });
   it('prevents duplicate submits, preserves the date on safe failure and retries', async () => {
@@ -47,7 +53,7 @@ describe('Duplicate task', () => {
       name: 'Duplică taskul',
     });
     const date = screen.getByLabelText('Termen nou (ora Bucureștiului)');
-    fireEvent.change(date, { target: { value: '2026-12-20T12:30' } });
+    fireEvent.change(date, { target: { value: '2030-12-20T12:30' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Duplică taskul' }));
     fireEvent.submit(screen.getByRole('form', { name: 'Duplică taskul' }));
     expect(duplicate).toHaveBeenCalledTimes(1);
@@ -61,9 +67,11 @@ describe('Duplicate task', () => {
         details: 'private internal query',
       }),
     );
-    expect(screen.getByRole('alert')).toHaveTextContent('Nu ai permisiunea');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Nu mai ai permisiunea',
+    );
     expect(screen.queryByText(/private internal/)).not.toBeInTheDocument();
-    expect(date).toHaveValue('2026-12-20T12:30');
+    expect(date).toHaveValue('2030-12-20T12:30');
     expect(navigate).not.toHaveBeenCalled();
     expect(
       (

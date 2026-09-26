@@ -1,35 +1,28 @@
-// PLACEHOLDER — the real rating guide does not exist yet. Issue #638 replaces
-// this text with the approved document. Keep every word of the guide in this
-// one module so that swap touches nothing else.
+// The words of the rating guide (ruling R22 of the 2026-09-23 grill). Every
+// Rating hint lives in this one module, so when the approved guide arrives
+// (#638) the swap touches nothing else. The Difficulty hints are reference
+// data (`difficulty_guide.note`, house rule 6) and are read from the server.
 
-export type RatingGuideSection = {
-  heading: string;
-  paragraphs: string[];
-};
+export type RatingHint = { value: 1 | 2 | 3 | 4 | 5; hint: string };
 
 export const ratingGuide = {
   title: 'Ghid de evaluare',
-  placeholderNotice:
-    'Text provizoriu: ghidul oficial de evaluare nu a fost încă aprobat.',
-  sections: [
-    {
-      heading: 'Lorem ipsum',
-      paragraphs: [
-        'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-      ],
-    },
-    {
-      heading: 'Dolor sit amet',
-      paragraphs: [
-        'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
-        'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.',
-      ],
-    },
-    {
-      heading: 'Consectetur adipiscing',
-      paragraphs: [
-        'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
-      ],
-    },
-  ] satisfies RatingGuideSection[],
+  description:
+    'Calificativul spune cât de bine a fost făcut taskul, iar dificultatea cât de greu a fost. Alege pentru fiecare treapta care descrie cel mai bine lucrarea.',
+  ratingHeading: 'Calificativ',
+  difficultyHeading: 'Dificultate',
+  ratingHints: [
+    { value: 1, hint: 'Nelivrat / inacceptabil' },
+    { value: 2, hint: 'Sub așteptări' },
+    { value: 3, hint: 'Conform așteptărilor' },
+    { value: 4, hint: 'Peste așteptări' },
+    { value: 5, hint: 'Excepțional' },
+  ] satisfies RatingHint[],
 };
+
+/** The hint for one Rating, or null outside 1–5. */
+export function ratingHint(value: number): string | null {
+  return (
+    ratingGuide.ratingHints.find((row) => row.value === value)?.hint ?? null
+  );
+}

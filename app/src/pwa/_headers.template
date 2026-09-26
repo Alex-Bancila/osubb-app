@@ -1,0 +1,53 @@
+# Cloudflare Pages response headers (ruling L12, #770).
+#
+# Rendered into dist/_headers by headersPlugin (headers-plugin.ts) at build,
+# with __SUPABASE_ORIGIN__ replaced by the origin of VITE_SUPABASE_URL and
+# __SUPABASE_REALTIME_ORIGIN__ by the same origin over ws(s), the way
+# supabase-js derives its Realtime URL. Pages sets no security headers of its
+# own, and without a Cloudflare zone this file is the only place HSTS can come
+# from.
+#
+# Every rule whose path matches applies, and a header named by two matching
+# rules gets both values joined with a comma. So Cache-Control is set only in
+# the path-specific rules below, never under /*.
+#
+# The CSP ships as Report-Only: violations show in DevTools and block nothing.
+# After a clean pass on staging, a follow-up renames the header to
+# Content-Security-Policy. style-src keeps 'unsafe-inline' while Ionic is in
+# the bundle (#699), then is retried without it. frame-ancestors is ignored in
+# Report-Only, which is why X-Frame-Options stays alongside it.
+
+/*
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' __SUPABASE_ORIGIN__ __SUPABASE_REALTIME_ORIGIN__; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  X-Robots-Tag: noindex
+
+# Content-hashed by Vite: a changed file gets a new name, so a year is safe.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The shell and everything that decides which bundle a member runs. A cached
+# sw.js would pin members to an old bundle.
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+/theme-init.js
+  Cache-Control: no-cache
+
+# Magic-link and confirmation landings carry one-time tokens.
+/auth/*
+  Cache-Control: no-store

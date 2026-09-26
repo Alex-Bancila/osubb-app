@@ -49,8 +49,8 @@ function ReopenDialog({
       triggerLabel="Redeschide taskul"
       title="Redeschide taskul"
       description="Taskul revine în lucru pentru același Executor. Punctele evaluării sunt inversate în aceeași operațiune: un premiu se scade, iar o penalizare se restituie. Istoricul rămâne păstrat."
+      field="reason"
       fieldLabel="Motiv (obligatoriu)"
-      requiredMessage="Scrie motivul redeschiderii."
       confirmLabel="Confirmă redeschiderea"
       failureMessage="Nu am putut redeschide taskul."
       isPending={mutation.isPending}

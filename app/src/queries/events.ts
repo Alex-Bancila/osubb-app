@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 
 import {
   bucharestDayKey,
@@ -19,7 +19,7 @@ import { keys } from './keys';
 // One string literal, not a concatenation: supabase-js parses this at the type
 // level to give `data` its shape, and a `+` defeats that.
 const EVENT_FIELDS =
-  'id, title, type, group_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)';
+  'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)';
 
 type EventTableRow = Database['public']['Tables']['events']['Row'];
 type GroupRow = Database['public']['Tables']['groups']['Row'];
@@ -41,7 +41,11 @@ type EventRow = Pick<
   | 'location'
   | 'capacity'
   | 'description'
-> & { group: EventGroup | null };
+> & {
+  /** Optional so a row read before #691 still maps; absent means none. */
+  campaign_id?: EventTableRow['campaign_id'];
+  group: EventGroup | null;
+};
 
 export type EventPresentation = {
   id: number;
@@ -50,6 +54,8 @@ export type EventPresentation = {
   groupId: number | null;
   /** Null when the Event names no Group, or names one RLS keeps from this member. */
   group: EventGroup | null;
+  /** The Event's Campaign label (#691), or null. */
+  campaignId: number | null;
   startsAt: string;
   endsAt: string | null;
   dayKey: string;
@@ -74,6 +80,7 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
     type: row.type,
     groupId: row.group_id,
     group: row.group,
+    campaignId: row.campaign_id ?? null,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     dayKey,
@@ -87,24 +94,28 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
 }
 
 /**
- * Upcoming means the start instant has not passed—not "today in Bucharest".
- * RLS remains the only visibility filter; the browser asks for no role/dept
- * branches and receives only the events this member may see.
- *
- * Project Events are no longer filtered out here. `events_read` is the whole
- * visibility rule (Minimum Level, ADR-0008 as amended by ADR-0009): a member
- * who may read a Project Event is a member the calendar should show it to, and
- * the old `scope <> 'project'` filter hid it from them for no reason — it was a
- * stand-in from before `scope` stopped being the visibility model.
+ * A half-open window on `starts_at`: `from` inclusive, `to` exclusive, both
+ * instants (the Work Filter's `rangeBounds` turns its days into them). Either
+ * end may be absent — no bound.
  */
-export async function fetchUpcomingEvents(
-  now: Date = new Date(),
+export type EventRange = { from?: string; to?: string };
+
+/**
+ * Every Event whose start falls in the window, oldest first.
+ *
+ * There is no `now` floor any more (#691, ADR-0008 amended 2026-09-23): past
+ * Events are readable, and `events_read` (Minimum Level) is the whole
+ * visibility rule — the browser asks for no role or Group branch and receives
+ * exactly the Events this member may see. The Calendar's "upcoming" default is
+ * a window that starts at today's Bucharest midnight, which the caller passes.
+ */
+export async function fetchEventsInRange(
+  range: EventRange,
 ): Promise<EventPresentation[]> {
-  const { data, error } = await supabase
-    .from('events')
-    .select(EVENT_FIELDS)
-    .gte('starts_at', now.toISOString())
-    .order('starts_at', { ascending: true });
+  let query = supabase.from('events').select(EVENT_FIELDS);
+  if (range.from) query = query.gte('starts_at', range.from);
+  if (range.to) query = query.lt('starts_at', range.to);
+  const { data, error } = await query.order('starts_at', { ascending: true });
   if (error) throw error;
 
   const rows: EventRow[] = data ?? [];
@@ -113,23 +124,44 @@ export async function fetchUpcomingEvents(
     .filter((event): event is EventPresentation => event !== null);
 }
 
-export function upcomingEventsQueryOptions(memberId: string) {
+export function eventsRangeQueryOptions(memberId: string, range: EventRange) {
   return {
-    queryKey: keys.events.upcoming(memberId),
-    queryFn: () => fetchUpcomingEvents(),
-    // The instant in `starts_at >= now()` moves continuously. Refetch whenever
-    // this screen mounts or regains focus instead of treating yesterday's
-    // upcoming list as fresh for the global 30-second cache window.
-    staleTime: 0,
+    queryKey: keys.events.range(memberId, range),
+    queryFn: () => fetchEventsInRange(range),
   } as const;
 }
 
-export function useUpcomingEvents() {
-  const { session } = useAuth();
-  const memberId = session?.user.id;
-
+/** The Calendar's read (and Acasă's, #700). `null` waits: nothing is sent. */
+export function useEventsInRange(range: EventRange | null) {
+  const memberId = useAuth().session?.user.id;
   return useQuery({
-    ...upcomingEventsQueryOptions(memberId ?? ''),
-    enabled: Boolean(memberId),
+    queryKey: keys.events.range(memberId ?? '', range ?? {}),
+    queryFn: memberId && range ? () => fetchEventsInRange(range) : skipToken,
+  });
+}
+
+/**
+ * One Event by id, for the `?event=<id>` deep link: null when it does not
+ * exist or RLS keeps it from this member — the two are indistinguishable, and
+ * the Calendar says the same thing about both.
+ */
+export async function fetchEvent(
+  eventId: number,
+): Promise<EventPresentation | null> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(EVENT_FIELDS)
+    .eq('id', eventId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toEventPresentation(data as EventRow) : null;
+}
+
+export function useEvent(eventId: number | null) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.events.detail(eventId ?? 0, memberId ?? ''),
+    queryFn:
+      memberId && eventId !== null ? () => fetchEvent(eventId) : skipToken,
   });
 }

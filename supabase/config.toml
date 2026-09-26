@@ -48,8 +48,10 @@ site_url = "http://localhost:5173"
 additional_redirect_urls = [
   "http://localhost:5173",
   "http://localhost:5173/auth/callback",
+  "http://localhost:5173/auth/confirm",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:5173/auth/callback",
+  "http://127.0.0.1:5173/auth/confirm",
 ]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
@@ -59,7 +61,7 @@ refresh_token_reuse_interval = 10
 enable_signup = false
 enable_manual_linking = false
 
-# Epic 2.2: inject member_role / member_level / dept_ids / team_ids into the JWT.
+# Epic 2.2: inject member_role / member_level / group_ids into the JWT (#591 dropped dept_ids / team_ids).
 # Hosted projects need this enabled once in Dashboard → Authentication → Hooks.
 [auth.hook.custom_access_token]
 enabled = true
@@ -75,16 +77,22 @@ enable_signup = true
 enable_confirmations = true
 double_confirm_changes = true
 
-# Both sign-in emails carry the link AND `{{ .Token }}` — the same one-time
+# All three emails carry the link AND `{{ .Token }}` — the same one-time
 # password, the same expiry, rendered twice. The code is what makes an installed
 # PWA on iOS usable at all: its storage is separate from Safari's, so a tapped
 # link signs the member into Safari while the app they installed keeps showing
 # the login screen. A link opened on a second device fails the same way. This is
 # not a new authentication path (#599, ADR-0003).
 #
+# The link goes to the app's `/auth/confirm?token_hash=…`, not to
+# `{{ .ConfirmationURL }}`: Supabase's verify endpoint spends the token on the
+# first GET, and Microsoft 365 link scanning makes that GET on delivery. The
+# page spends it only when the Member taps (ruling L7, #768).
+# `scripts/check-auth-templates.sh` keeps all three templates on that shape.
+#
 # `content_path` is resolved from the directory the CLI runs in — the repository
 # root — not from this file. Hosted projects never read config.toml: the same
-# two bodies are pasted into Authentication → Email Templates (#54, #77).
+# three bodies are pasted into Authentication → Email Templates (#54, #77).
 [auth.email.template.magic_link]
 subject = "Conectare la aplicația OSUBB"
 content_path = "./supabase/templates/magic-link.html"
@@ -92,6 +100,10 @@ content_path = "./supabase/templates/magic-link.html"
 [auth.email.template.invite]
 subject = "Ai fost invitat în aplicația OSUBB"
 content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.email_change]
+subject = "Confirmă schimbarea adresei de email"
+content_path = "./supabase/templates/email-change.html"
 
 # Google OAuth — fill client_id/secret from env when enabling (Epic 2.1).
 [auth.external.google]
@@ -114,3 +126,24 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/csv-import/index.ts"
+
+# #773 (ruling L19) — BC/Moderator correct the address of a Member who never
+# signed in and re-send the invitation. Same gate as invite-member: the
+# gateway checks the JWT, the function checks level >= 6 in the database.
+[functions.reinvite-member]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/reinvite-member/index.ts"
+
+# #703 (ADR-0010) — Web Push outbox sender, called every minute by the
+# pg_cron job osubb-send-push through pg_net. verify_jwt = false (#769, ruling
+# L8): the caller is authenticated by the project's secret key (sb_secret_...)
+# on the apikey header, which the handler compares in constant time. The
+# secret key is not a JWT, so the gateway's JWT check would refuse it, and the
+# legacy service_role JWT it used to check is retired by the end of 2026.
+[functions.send-push]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/send-push/index.ts"

@@ -79,8 +79,8 @@ drop function private.log_task_activity(bigint, text, uuid, bigint, public.task_
 -- log_task_activity's parameters do. This is the "any later task_status-typed
 -- object" the note above warned about; same treatment, same reasoning -- the
 -- scratch transaction rolls back, so they are never recreated here.
-drop function public.leadership_member_tasks(uuid);
-drop function private.leadership_member_tasks_impl(uuid);
+drop function public.leadership_member_tasks(uuid, timestamptz, timestamptz);
+drop function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz);
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks

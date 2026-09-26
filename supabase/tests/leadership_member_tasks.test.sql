@@ -7,23 +7,23 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(32);
+select plan(40);
 
-select has_function('public', 'leadership_member_tasks', array['uuid'], 'leadership drill-down is a public RPC');
-select function_returns('public', 'leadership_member_tasks', array['uuid'], 'setof record', 'drill-down returns records');
+select has_function('public', 'leadership_member_tasks', array['uuid', 'timestamp with time zone', 'timestamp with time zone'], 'leadership drill-down is a public RPC');
+select function_returns('public', 'leadership_member_tasks', array['uuid', 'timestamp with time zone', 'timestamp with time zone'], 'setof record', 'drill-down returns records');
 -- #523: the wrapper/body split itself. The gate lives in the private body,
 -- which is the only thing allowed to read Assignment history past RLS; the
 -- public entry point must stay invoker so it cannot become a second, wider
 -- door. Both directions of that mutation -- a `security definer` wrapper, or a
 -- `security invoker` body -- leave every behavioural assertion below green,
 -- which is why the split is pinned here rather than inferred from them.
-select is((select prosecdef from pg_proc where oid = 'public.leadership_member_tasks(uuid)'::regprocedure),
+select is((select prosecdef from pg_proc where oid = 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)'::regprocedure),
   false, 'the public drill-down wrapper is security invoker');
-select is((select prosecdef from pg_proc where oid = 'private.leadership_member_tasks_impl(uuid)'::regprocedure),
+select is((select prosecdef from pg_proc where oid = 'private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz)'::regprocedure),
   true, 'the private drill-down body is security definer -- it reads past RLS and gates itself');
-select ok(has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid)', 'EXECUTE'), 'authenticated may call the gated RPC');
-select ok(not has_function_privilege('anon', 'public.leadership_member_tasks(uuid)', 'EXECUTE'), 'anon cannot call the RPC');
-select ok(not has_function_privilege('service_role', 'public.leadership_member_tasks(uuid)', 'EXECUTE'), 'server role has no BCE+ bypass');
+select ok(has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'EXECUTE'), 'authenticated may call the gated RPC');
+select ok(not has_function_privilege('anon', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'EXECUTE'), 'anon cannot call the RPC');
+select ok(not has_function_privilege('service_role', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'EXECUTE'), 'server role has no BCE+ bypass');
 
 -- ==================== The drill-down carries the whole Task ====================
 -- J1's row click must render without a second query, so the drill-down has to
@@ -40,7 +40,7 @@ language sql as $$
   select coalesce(array_agg(a.name), '{}')
     from pg_proc p,
          unnest(p.proargnames, p.proargmodes) as a(name, mode)
-   where p.oid = 'public.leadership_member_tasks(uuid)'::regprocedure
+   where p.oid = 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)'::regprocedure
      and a.mode = 't'
 $$;
 
@@ -60,8 +60,9 @@ insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000005', 'responsabil260@example.test'),
   ('26000000-0000-0000-0000-000000000006', 'bc260@example.test');
 -- The two personas at the end pin the THRESHOLD rather than merely "some level
--- is denied": a responsabil sits at level 4, one rank below the gate, so a gate
--- accidentally loosened to `>= 4` must turn an assertion red; and a BC keeps the
+-- is denied": a vot sits at level 3, the highest live rank below the gate since
+-- #593 retired level 4, so a gate accidentally loosened below 5 must turn an
+-- assertion red; and a BC keeps the
 -- allow side from resting on BCE alone.
 insert into public.profiles (id, full_name, email, role, status) values
   ('26000000-0000-0000-0000-000000000001', 'BCE 260', 'bce260@example.test', 'bce', 'activ'),
@@ -167,13 +168,13 @@ select is((select count(*) from public.leadership_member_tasks('26000000-0000-00
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000004');
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
   'inactive BCE sees no protected rows despite stale claims');
--- The gate is `>= 5`, not `>= 4`. Without this pair every denied persona here
--- is level 2, inactive, demoted or claimless, so loosening the threshold by one
--- rank would leave the whole suite green -- and level 4 is exactly where the UI
--- already draws a different line (capabilities.ts: manageTasks: 4).
+-- The gate is `>= 5`. Without this pair every denied persona here is level 2,
+-- inactive, demoted or claimless, so loosening the threshold to the highest
+-- live rank below it (level 3, since #593 retired level 4) would leave the
+-- whole suite green.
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000005');
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
-  'a responsabil (level 4, one rank below the gate) cannot open another Member''s Tracker');
+  'a vot (level 3, the highest live rank below the gate) cannot open another Member''s Tracker');
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000006');
 select isnt((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
   'a BC does see the drill-down -- the allow side is not carried by BCE alone');
@@ -209,6 +210,64 @@ select is(
   'group_name follows the Group''s own name, not the legacy Origin name beside it');
 select ok(not (array['origin_type', 'origin_id', 'origin_name'] && pg_temp.drilldown_columns()),
   'the legacy Origin triple is gone -- group_id / group_name are the whole Origin (#579)');
+
+-- ==================== #677: the Work Filter deadline range ====================
+-- The drill-down's range reads the Task deadline, half-open [p_from, p_to).
+-- A Member of their own with two Assignments: one on a Task due at
+-- T1 = 2001-03-10 10:00Z, one on a Task with no deadline at all, which any
+-- bound excludes.
+reset role;
+insert into auth.users (id, email) values
+  ('26000000-0000-0000-0000-000000000007', 'range260@example.test');
+insert into public.profiles (id, full_name, email, role, status) values
+  ('26000000-0000-0000-0000-000000000007', 'Range 260', 'range260@example.test', 'activ', 'activ');
+insert into public.tasks (title, description, deadline, group_id, created_by)
+values
+  ('Dated Task 260', 'Due at T1', '2001-03-10 10:00:00+00', pg_temp.dept_group('edu'),
+   '26000000-0000-0000-0000-000000000001'),
+  ('Undated Task 260', 'No deadline', null, pg_temp.dept_group('edu'),
+   '26000000-0000-0000-0000-000000000001');
+insert into public.task_assignments (task_id, member_id, assigned_by)
+select id, '26000000-0000-0000-0000-000000000007', '26000000-0000-0000-0000-000000000001'
+  from public.tasks where title in ('Dated Task 260', 'Undated Task 260');
+
+select is((select count(*)::int from pg_proc
+            where proname = 'leadership_member_tasks' and pronamespace = 'public'::regnamespace), 1,
+  'exactly one leadership_member_tasks overload exists -- PostgREST can resolve the call (no PGRST203)');
+
+select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');
+select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007')), 2::bigint,
+  'with no range both Assignments are there, the undated Task included');
+select results_eq(
+  $$ select title from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007',
+       '2001-03-10 10:00:00+00', '2001-03-10 10:00:01+00') $$,
+  $$ values ('Dated Task 260'::text) $$,
+  'a Task due at T1 is in [T1, T1 + 1s) -- the from bound is inclusive');
+select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007',
+            '2001-03-10 10:00:00.000001+00', null)), 0::bigint,
+  'and not in [T1 + 1us, open) -- the from bound really filters, and the undated Task is out');
+select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007',
+            null, '2001-03-10 10:00:00+00')), 0::bigint,
+  'nor in [open, T1) -- the to bound is exclusive and really filters');
+select results_eq(
+  $$ select title from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007',
+       null, '2100-01-01 00:00:00+00') $$,
+  $$ values ('Dated Task 260'::text) $$,
+  'a to bound alone drops the Task with no deadline');
+select results_eq(
+  $$ select title from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007',
+       '1900-01-01 00:00:00+00', null) $$,
+  $$ values ('Dated Task 260'::text) $$,
+  'and so does a from bound alone');
+
+-- Step 1, before authority: an ordinary Member otherwise gets no rows.
+select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000003');
+select throws_ok(
+  $$ select * from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007',
+       '2001-04-10 10:00:00+00', '2001-03-10 10:00:00+00') $$,
+  'PT400', 'invalid_date_range',
+  'an inverted range is PT400 invalid_date_range, before the BCE+ gate');
+
 reset role;
 select * from finish();
 rollback;

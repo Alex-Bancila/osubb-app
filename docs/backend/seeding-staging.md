@@ -18,7 +18,7 @@ The workflow needs a direct database connection, which `SUPABASE_ACCESS_TOKEN` d
 2. Choose **Session pooler** and copy the URI. It looks like
    `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:5432/postgres`
 3. Replace `[YOUR-PASSWORD]` with the database password (the same one in `SUPABASE_DB_PASSWORD`).
-4. GitHub → repo **Settings → Secrets and variables → Actions → New repository secret**, named `STAGING_DB_URL`.
+4. GitHub → repo **Settings → Environments → staging → Add environment secret**, named `STAGING_DB_URL` (#110 moved the staging secrets out of the repository level, where any branch's run could read them).
 
 Use the **session pooler** (port 5432), not the direct `db.<ref>.supabase.co` connection: GitHub runners are IPv4-only and the direct host is IPv6-only on current projects. The transaction pooler (6543) is for application traffic, not for scripts that run in one transaction.
 
@@ -30,10 +30,10 @@ Use the **session pooler** (port 5432), not the direct `db.<ref>.supabase.co` co
 
 The job refuses to do anything unless both are true:
 
-| Check                                                      | Fails when                                                                     |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| the ref you typed equals the `SUPABASE_PROJECT_REF` secret | you meant a different project, or mistyped                                     |
-| `STAGING_DB_URL` contains that same ref                    | the URL secret points somewhere else — production, another project, an old one |
+| Check                                           | Fails when                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| the ref you typed equals `SUPABASE_PROJECT_REF` | you meant a different project, or mistyped                                     |
+| `STAGING_DB_URL` contains that same ref         | the URL secret points somewhere else — production, another project, an old one |
 
 Then it preflights (are the migrations applied? can this role write `auth.users`?) before writing anything, applies the seed **in a single transaction**, and prints the leaderboard it produced.
 
@@ -75,7 +75,7 @@ The job log ends with the leaderboard and a row count per table. It should match
 The demo dataset is built on the normalized Tracker model (ADR-0007) and carries one Task per approved path, so a role-matrix walkthrough never has to invent data:
 
 - **Origins** — Department (all five real ones), Department Team (`it`, under Diverse), Independent Team (`t-logistica`), and the active Project.
-- **Assignment modes** — direct with an Executor from creation; public with an open Queue and nobody in it (in two different Departments — no command leaves a pending Candidate with no Executor); public with a first-come Executor and two Members queued behind them.
+- **Assignment modes** — direct with an Executor from creation; public with an open Queue and nobody in it (in two different Departments); public with a manager-selected Executor and two Members queued behind them (#682: interest only queues, and the manager selects every Executor of a public Task).
 - **Lifecycle** — `todo`, `in_progress`, `in_review` after one round of feedback (`review_round = 1`), `completed` on time, `completed` late, `unfulfilled` at Rating 1 (a **negative** ledger row), and `cancelled` with a reason.
 - **The awkward ones** — a Task evaluated, reopened and evaluated again (a reversed Evaluation, a `task_reversal` ledger row and a second Evaluation on a second Assignment); an Umbrella whose three Subtasks are completed, in progress and cancelled; a Task duplicated from the unfulfilled one (same title, `duplicated_from_task_id` set); and completed-work requests in all three states, the approved one naming the Task its approval created.
 

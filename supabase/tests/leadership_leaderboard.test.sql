@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(60);
+select plan(70);
 create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
 returns bigint language sql stable as $$
   select coalesce((select id from public.groups where id = pg_temp.dept_group(p_dept) or id = pg_temp.team_group(p_team) or id = pg_temp.project_group(p_project)),-1)
@@ -23,36 +23,36 @@ $$;
 -- ==================== 1. Surface, shape and grants ====================
 
 select has_function('public', 'leadership_leaderboard',
-  array['bigint', 'bigint'],
+  array['bigint', 'bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'the filtered leadership Leaderboard read exists');
 select has_function('private', 'leadership_leaderboard_impl',
-  array['bigint', 'bigint'],
+  array['bigint', 'bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'its security-definer body exists in private');
 
 -- ADR-0007: "The leadership Leaderboard contains member name and Task points
 -- only." Pinning the result type is what keeps a later "while we are here"
 -- commit from adding role, email or Department to a leadership export.
 select is(
-  pg_get_function_result('public.leadership_leaderboard(bigint, bigint)'::regprocedure),
+  pg_get_function_result('public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)'::regprocedure),
   'TABLE(member_id uuid, full_name text, nickname text, points integer, rank integer)',
   'the board returns member id, full name, Nickname (#675), points and rank -- no role, no email, no Department');
 
 select is(
-  (select prosecdef from pg_proc where oid = 'public.leadership_leaderboard(bigint, bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)'::regprocedure),
   false, 'the public wrapper is security invoker');
 select is(
-  (select prosecdef from pg_proc where oid = 'private.leadership_leaderboard_impl(bigint, bigint)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)'::regprocedure),
   true, 'the private body is security definer -- it reads the whole ledger past RLS and gates itself');
 
-select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'authenticated may execute the leadership Leaderboard');
-select ok(not has_function_privilege('anon', 'public.leadership_leaderboard(bigint, bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'anon cannot execute the leadership Leaderboard');
-select ok(has_function_privilege('authenticated', 'private.leadership_leaderboard_impl(bigint, bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'authenticated may execute the body -- the security-invoker wrapper calls it as the caller');
-select ok(not has_function_privilege('anon', 'private.leadership_leaderboard_impl(bigint, bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'anon cannot reach the body directly');
-select ok(not has_function_privilege('service_role', 'private.leadership_leaderboard_impl(bigint, bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('service_role', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'the server role cannot bypass the BCE+ gate through the private body');
 
 -- #258 is additive. `app/src/queries/points.ts` still reads the legacy
@@ -91,10 +91,9 @@ insert into public.profiles (id, full_name, email, role, status) values
   -- its Task's Origin or not at all.
   ('25800000-0000-0000-0000-000000000002', 'Mihai Executor 258', 'executor258@example.test', 'activ', 'activ'),
   ('25800000-0000-0000-0000-000000000003', 'Inactive BCE 258', 'inactivebce258@example.test', 'bce', 'inactiv'),
-  -- Level 4 -- the rank directly below the gate, and the plausible drift:
-  -- `app/src/lib/capabilities.ts` already draws a `manageTasks: 4` line, so a
-  -- gate loosened to `>= 4` would hand every Project Responsible the whole
-  -- organisation's points. Ruling 5: pin the threshold, not "some lower role".
+  -- Level 3 -- the highest live rank below the gate since #593 retired level 4.
+  -- A gate loosened below 5 would hand this persona the whole organisation's
+  -- points. Ruling 5: pin the threshold, not "some lower role".
   ('25800000-0000-0000-0000-000000000004', 'Responsabil 258', 'responsabil258@example.test', 'vot', 'activ'),
   -- Level 6 -- proves the allow side is not carried by BCE alone.
   ('25800000-0000-0000-0000-000000000005', 'BC 258', 'bc258@example.test', 'bc', 'activ'),
@@ -421,6 +420,93 @@ select is((select points from public.leadership_leaderboard(pg_temp.g523_group('
 select is((select count(*) from public.department_cup() where group_id = pg_temp.dept_group('diverse')), 0::bigint,
   'the Department Cup includes only Groups whose competing setting is enabled');
 
+-- ==================== 8b. The Work Filter date range (#677) ====================
+-- The range reads the award instant: task_evaluations.evaluated_at through
+-- points_ledger.evaluation_id, shared by a credit and its reversal. Two
+-- members on a Project of their own, dated in 2001 so no seeded or earlier
+-- fixture award (all at now()) can fall inside any range below:
+--   Irina keeps 4 x 3 = 12, awarded at T1 = 2001-03-10 10:00Z;
+--   Radu is awarded 2 x 3 = 6 at T1 and reversed at T2 = 2001-04-10 10:00Z,
+--   the reversal's own ledger row dated T2 -- so a body filtering on
+--   points_ledger.created_at would split the pair and fail below.
+reset role;
+insert into auth.users (id, email) values
+  ('25800000-0000-0000-0000-000000000013', 'interval258@example.test'),
+  ('25800000-0000-0000-0000-000000000014', 'reversat258@example.test');
+insert into public.profiles (id, full_name, email, role, status) values
+  ('25800000-0000-0000-0000-000000000013', 'Irina Interval 258', 'interval258@example.test', 'activ', 'activ'),
+  ('25800000-0000-0000-0000-000000000014', 'Radu Reversat 258', 'reversat258@example.test', 'activ', 'activ');
+insert into pg_temp.fixture_projects (id, name, status, leader_id, created_by)
+overriding system value values
+  (2580005, 'Project Interval 258', 'active', '25800000-0000-0000-0000-000000000001',
+   '25800000-0000-0000-0000-000000000001');
+select pg_temp.materialize_legacy_groups();
+
+insert into public.tasks
+  (title, description, deadline, group_id, status, difficulty, rating,
+   created_by, created_at, completed_at)
+select fixture.title, 'Fixture', now() - interval '2 days', pg_temp.project_group(2580005),
+       'completed', fixture.difficulty, 5, '25800000-0000-0000-0000-000000000001',
+       now() - interval '3 days', now()
+  from (values ('LB Dated Kept Task 258', 4), ('LB Dated Reversed Task 258', 2))
+    as fixture (title, difficulty);
+
+select pg_temp.test_credit_task(task.id, credit.member_id, '25800000-0000-0000-0000-000000000001',
+                                p_awarded_at => '2001-03-10 10:00:00+00')
+  from (values
+    ('LB Dated Kept Task 258',     '25800000-0000-0000-0000-000000000013'::uuid),
+    ('LB Dated Reversed Task 258', '25800000-0000-0000-0000-000000000014')
+  ) as credit (title, member_id)
+  join public.tasks as task on task.title = credit.title
+ order by task.id;
+select pg_temp.test_reverse_award(task.id, '25800000-0000-0000-0000-000000000014',
+                                  '2001-04-10 10:00:00+00')
+  from public.tasks as task where task.title = 'LB Dated Reversed Task 258';
+
+select is((select count(*)::int from pg_proc
+            where proname = 'leadership_leaderboard' and pronamespace = 'public'::regnamespace), 1,
+  'exactly one leadership_leaderboard overload exists -- PostgREST can resolve the call (no PGRST203)');
+
+select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000001');
+
+select results_eq(
+  $$ select full_name, points from public.leadership_leaderboard(pg_temp.project_group(2580005)) $$,
+  $$ values ('Irina Interval 258'::text, 12), ('Radu Reversat 258', 0) $$,
+  'with no range the dated Project board is what it always was: the kept award and the netted reversal');
+select results_eq(
+  $$ select full_name, points from public.leadership_leaderboard(pg_temp.project_group(2580005), null,
+       '2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00') $$,
+  $$ values ('Irina Interval 258'::text, 12), ('Radu Reversat 258', 0) $$,
+  'an award at T1 reversed at T2 counts zero in [T1, T2) -- the reversal is dated by its Evaluation, not by its own ledger row');
+select is((select count(*) from public.leadership_leaderboard(pg_temp.project_group(2580005), null,
+            '2001-04-10 10:00:00+00', null)), 0::bigint,
+  'and nothing at all in [T2, open) -- no phantom negative leaks into the later range');
+select is((select points from public.leadership_leaderboard(pg_temp.project_group(2580005), null,
+            '2001-03-10 10:00:00+00', '2001-03-10 10:00:01+00')
+            where member_id = '25800000-0000-0000-0000-000000000013'), 12,
+  'an award at T1 counts in [T1, T1 + 1s) -- the from bound is inclusive');
+select is((select count(*) from public.leadership_leaderboard(pg_temp.project_group(2580005), null,
+            '2001-03-10 10:00:00.000001+00', null)), 0::bigint,
+  'and not in [T1 + 1us, open) -- the from bound really filters');
+select is((select count(*) from public.leadership_leaderboard(pg_temp.project_group(2580005), null,
+            null, '2001-03-10 10:00:00+00')), 0::bigint,
+  'nor in [open, T1) -- the to bound is exclusive and really filters');
+select is((select count(*) from public.leadership_leaderboard(pg_temp.project_group(2580005), null,
+            '2001-03-10 10:00:00+00', '2001-03-10 10:00:00+00')), 0::bigint,
+  'an equal pair is an empty range, not an error');
+select throws_ok(
+  $$ select * from public.leadership_leaderboard(null, null, '2001-04-10 10:00:00+00', '2001-03-10 10:00:00+00') $$,
+  'PT400', 'invalid_date_range',
+  'an inverted range is PT400 invalid_date_range');
+
+-- Step 1, before authority: an ordinary Member is otherwise answered with an
+-- empty board, never an error, so the PT400 proves the range is judged first.
+select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000002');
+select throws_ok(
+  $$ select * from public.leadership_leaderboard(null, null, '2001-04-10 10:00:00+00', '2001-03-10 10:00:00+00') $$,
+  'PT400', 'invalid_date_range',
+  'the inverted range is refused before the BCE+ gate -- even a caller the gate would answer with no rows');
+
 -- ==================== 9. The BCE+ gate returns no rows, never an error ====================
 
 select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000002');
@@ -435,9 +521,9 @@ select is((select count(*) from public.leadership_leaderboard()
 -- Ruling 5: the threshold is pinned by the rank immediately below it.
 select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000004');
 select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
-  'a responsabil (level 4, one rank below the gate) sees no protected rows');
+  'a vot (level 3, the highest live rank below the gate) sees no protected rows');
 select is((select count(*) from public.leadership_leaderboard(pg_temp.g523_group('258-dept'))), 0::bigint,
-  'a responsabil gets no rows from a filtered read either -- the gate is >= 5, not >= 4');
+  'a vot gets no rows from a filtered read either -- the gate is >= 5');
 
 -- …and the allow side by every role the function's comment promises it to, not
 -- by BCE alone: BC (6) and Moderator (9).
@@ -475,7 +561,7 @@ set local role anon;
 select throws_ok('select * from public.leadership_leaderboard()', '42501', null,
   'anon holds no grant on the leadership Leaderboard');
 select throws_ok(
-  'select * from private.leadership_leaderboard_impl(null, null)', '42501', null,
+  'select * from private.leadership_leaderboard_impl(null, null, null, null)', '42501', null,
   'anon cannot reach the body behind it either');
 reset role;
 

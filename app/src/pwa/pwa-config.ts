@@ -1,27 +1,30 @@
 import type { VitePWAOptions } from 'vite-plugin-pwa';
 
-function createWorkboxOptions(supabaseUrl: string) {
-  const supabaseOrigin = new URL(supabaseUrl).origin;
-  const escapedOrigin = supabaseOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
+/**
+ * The service worker is our own `src/pwa/sw.ts` (ADR-0010, #704): Web Push
+ * needs `push` and `notificationclick` handlers, which `generateSW` cannot
+ * carry. The plugin still injects the precache manifest; the routing rules
+ * that used to live here (navigation fallback, `/auth/*` link denylist,
+ * network-only Supabase) are in `sw.ts` and `sw-routes.ts`.
+ */
+function createInjectManifestOptions() {
   return {
-    cleanupOutdatedCaches: true,
-    clientsClaim: false,
-    skipWaiting: false,
-    globPatterns: ['index.html', 'assets/*.{js,css,woff2,png,svg,ico}'],
-    navigateFallback: 'index.html',
-    navigateFallbackDenylist: [/^\/auth\/callback(?:[/?]|$)/],
-    runtimeCaching: [
-      {
-        urlPattern: new RegExp(`^${escapedOrigin}(?:/|$)`),
-        handler: 'NetworkOnly',
-      },
+    /* `theme-init.js` is the blocking theme script `index.html` loads from
+       `<head>` (#770): an offline start needs it as much as the shell. The
+       Cloudflare `_headers` file matches none of these and stays out. */
+    globPatterns: [
+      'index.html',
+      'theme-init.js',
+      'assets/*.{js,css,woff2,png,svg,ico}',
     ],
-  } satisfies VitePWAOptions['workbox'];
+  } satisfies VitePWAOptions['injectManifest'];
 }
 
-function createPwaOptions(supabaseUrl: string) {
+function createPwaOptions() {
   return {
+    strategies: 'injectManifest',
+    srcDir: 'src/pwa',
+    filename: 'sw.ts',
     registerType: 'prompt',
     includeAssets: ['icon.png'],
     manifest: {
@@ -49,8 +52,8 @@ function createPwaOptions(supabaseUrl: string) {
         },
       ],
     },
-    workbox: createWorkboxOptions(supabaseUrl),
+    injectManifest: createInjectManifestOptions(),
   } satisfies Partial<VitePWAOptions>;
 }
 
-export { createPwaOptions, createWorkboxOptions };
+export { createInjectManifestOptions, createPwaOptions };

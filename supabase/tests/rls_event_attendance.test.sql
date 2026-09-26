@@ -62,8 +62,8 @@ insert into pg_temp.fixture_member_departments (member_id, dept_id) values
 -- 'RSVP imagine' carries min_level 3 (#519 retires min_level 4) specifically
 -- to stay the one Event hidden from a level-1 Voluntar below (the fixture
 -- this file needs for "a member cannot RSVP to an event hidden by event
--- RLS"); it is still level >= 4 (Corina, min_level 0/0/4) that reads every
--- attendance row.
+-- RLS"); since #593 it is level >= 5 (Corina with a level-5 token) that reads
+-- every attendance row, and a stale level-4 token reads only its own.
 insert into events (title, type, group_id, min_level, starts_at) values
   ('RSVP organizație', 'sedinta', pg_temp.dept_group('org'), 0, now() + interval '1 day'),
   ('RSVP educațional', 'sedinta', pg_temp.dept_group('edu'), 0, now() + interval '2 days'),

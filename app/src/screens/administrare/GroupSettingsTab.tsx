@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
+import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -9,20 +11,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import {
+  applicationFormFailure,
+  fieldForReason,
+  groupSettingsSchema,
+  groupStructureSchema,
+} from '../../lib/schemas/group';
+import { reasonCopy } from '../../lib/command-reasons';
+import { useFormValidation } from '../../lib/use-form-validation';
 import type {
   AdminGroup,
   GroupAuthority,
-  GroupCommand,
   RosterEntry,
+  RunGroupCommand,
 } from '../../queries/groups-admin';
 import {
   GROUP_CATEGORIES,
   membersBelowLevel,
   minLevelChoices,
+  PRIVATE_GROUP_HINT,
 } from './group-tree';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+const SAVE_FAILED = 'Nu am putut salva schimbarea. Reîncearcă.';
 
 function Check({
   label,
@@ -82,6 +94,45 @@ function RemovalPreview({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * What turning a Group private does, named before anything is sent (ruling
+ * R25): the Group and every Group below it disappear for everyone outside
+ * them, and their Applications stop. The confirmation is the second press of
+ * the save button, like the Minimum-Level removals above.
+ */
+function PrivatePreview({
+  group,
+  subtree,
+}: {
+  group: AdminGroup;
+  subtree: AdminGroup[];
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+      <p className="text-sm font-medium">
+        {subtree.length === 0
+          ? `${group.name} va fi vizibil doar membrilor lui, coordonatorilor de pe traseu și BC.`
+          : subtree.length === 1
+            ? `${group.name} și subgrupul lui vor fi vizibile doar membrilor lor, coordonatorilor de pe traseu și BC:`
+            : `${group.name} și toate cele ${subtree.length} subgrupuri ale lui vor fi vizibile doar membrilor lor, coordonatorilor de pe traseu și BC:`}
+      </p>
+      {subtree.length > 0 && (
+        <ul
+          className="space-y-1 text-sm"
+          aria-label="Subgrupuri care devin private"
+        >
+          {subtree.map((below) => (
+            <li key={below.id}>{below.name}</li>
+          ))}
+        </ul>
+      )}
+      <p className="text-sm text-muted-foreground">
+        Cererile de înscriere se opresc, iar cele în așteptare se retrag.
+      </p>
     </div>
   );
 }
@@ -168,6 +219,7 @@ function ArchiveGroupDialog({
 export function GroupSettingsTab({
   group,
   parent,
+  subtree = [],
   roster,
   authority,
   levels,
@@ -179,6 +231,8 @@ export function GroupSettingsTab({
 }: {
   group: AdminGroup;
   parent: AdminGroup | undefined;
+  /** Every Group below this one: what turning it private also hides. */
+  subtree?: AdminGroup[];
   roster: RosterEntry[];
   authority: GroupAuthority;
   levels: number[];
@@ -187,7 +241,7 @@ export function GroupSettingsTab({
   error: string | null;
   /** The server's last refusal reason, so a stale form re-asks (R23). */
   lastReason: string | undefined;
-  onRun: (command: GroupCommand) => Promise<boolean>;
+  onRun: RunGroupCommand;
 }) {
   const [name, setName] = useState(group.name);
   const [managerTitle, setManagerTitle] = useState(group.manager_title ?? '');
@@ -195,6 +249,11 @@ export function GroupSettingsTab({
   const [applicationLevel, setApplicationLevel] = useState(
     group.application_level === null ? '' : String(group.application_level),
   );
+  // The application form link (#698): one pair, saved and cleared together.
+  const [applicationForm, setApplicationForm] = useState({
+    label: group.application_form_label ?? '',
+    url: group.application_form_url ?? '',
+  });
   const [shared, setShared] = useState(group.shared_work_visibility);
   const [minLevel, setMinLevel] = useState(String(group.min_level));
   const [confirmed, setConfirmed] = useState(false);
@@ -211,6 +270,8 @@ export function GroupSettingsTab({
   const [color, setColor] = useState(group.color ?? '');
   const [short, setShort] = useState(group.short ?? '');
   const [isOrganization, setIsOrganization] = useState(group.is_organization);
+  const [isPrivate, setIsPrivate] = useState(group.is_private);
+  const [privateConfirmed, setPrivateConfirmed] = useState(false);
 
   // A refused save is the server saying the form was stale: re-ask before the
   // next attempt rather than resending the flag it already rejected. Adjusted
@@ -223,48 +284,97 @@ export function GroupSettingsTab({
   }
 
   const root = group.parent_id === null;
+  // Mirrors update_group_structure (#756): a Child Group of a Private Group
+  // stays private (private_parent), and the Organization Group is never
+  // private (private_not_allowed_for_organization).
+  const inheritsPrivate = parent?.is_private === true;
+  const privateValue = inheritsPrivate || (!isOrganization && isPrivate);
+  const turningPrivate = privateValue && !group.is_private;
   const chosenMinLevel = Number(minLevel);
   const choices = minLevelChoices(levels, parent?.min_level ?? 0, actorLevel);
   const leaving = membersBelowLevel(roster, chosenMinLevel);
   const needsConfirmation =
     chosenMinLevel > group.min_level && leaving.length > 0;
 
+  // Ruling R8: each form checks its fields on blur and on save, and a refusal
+  // lands under the field it names.
+  const settingsForm = useFormValidation(
+    groupSettingsSchema,
+    {
+      name,
+      managerTitle,
+      acceptsApplications: accepts,
+      // '' is "Ca nivelul minim al grupului": send the Minimum Level chosen
+      // in this same save (#731), not null -- update_group refuses a null
+      // level while Applications are on.
+      applicationLevel: accepts
+        ? applicationLevel === ''
+          ? chosenMinLevel
+          : Number(applicationLevel)
+        : null,
+      sharedWorkVisibility: shared,
+      minLevel: chosenMinLevel,
+      applicationForm,
+    },
+    fieldForReason,
+  );
+  const structureForm = useFormValidation(
+    groupStructureSchema,
+    { color, short },
+    fieldForReason,
+  );
+
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
+    const values = settingsForm.validate();
+    if (!values) return;
     if (needsConfirmation && !confirmed) {
       setConfirmed(true);
       return;
     }
-    const saved = await onRun({
-      kind: 'settings',
-      groupId: group.id,
-      name,
-      managerTitle: managerTitle,
-      acceptsApplications: accepts,
-      applicationLevel:
-        accepts && applicationLevel !== '' ? Number(applicationLevel) : null,
-      sharedWorkVisibility: shared,
-      minLevel: chosenMinLevel,
-      confirmRemovals: needsConfirmation,
-    });
+    const { applicationForm: form, ...settings } = values;
+    const saved = await onRun(
+      {
+        kind: 'settings',
+        groupId: group.id,
+        ...settings,
+        // Both or neither (the schema's pair rule): an emptied pair clears it.
+        applicationFormLabel: form.label,
+        applicationFormUrl: form.url,
+        confirmRemovals: needsConfirmation,
+      },
+      (failure) =>
+        settingsForm.fail(applicationFormFailure(failure), SAVE_FAILED),
+    );
     if (saved) setConfirmed(false);
   }
 
   async function saveStructure(event: FormEvent) {
     event.preventDefault();
-    await onRun({
-      kind: 'structure',
-      groupId: group.id,
-      category,
-      competesInCup: competes,
-      countsTowardParentCup: countsToward,
-      automaticMembership: automatic,
-      minLevel: root ? Number(structureMinLevel) : group.min_level,
-      color: color || null,
-      short: short || null,
-      isOrganization,
-      confirmRemovals: false,
-    });
+    const values = structureForm.validate();
+    if (!values) return;
+    if (turningPrivate && !privateConfirmed) {
+      setPrivateConfirmed(true);
+      return;
+    }
+    const saved = await onRun(
+      {
+        kind: 'structure',
+        groupId: group.id,
+        category,
+        competesInCup: competes,
+        countsTowardParentCup: countsToward,
+        automaticMembership: automatic,
+        minLevel: root ? Number(structureMinLevel) : group.min_level,
+        color: values.color,
+        short: values.short,
+        isOrganization,
+        isPrivate: privateValue,
+        confirmRemovals: false,
+      },
+      (failure) => structureForm.fail(failure, SAVE_FAILED),
+    );
+    if (saved) setPrivateConfirmed(false);
   }
 
   if (!authority.manageGroup && !authority.editStructure)
@@ -277,66 +387,96 @@ export function GroupSettingsTab({
   return (
     <div className="space-y-8">
       {authority.manageGroup && (
-        <form onSubmit={saveSettings} className="max-w-xl space-y-4">
+        <form onSubmit={saveSettings} noValidate className="max-w-xl space-y-4">
           <h3 className="text-lg font-semibold">Setările grupului</h3>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Numele grupului</span>
-            <input
-              className={control}
-              value={name}
-              required
-              maxLength={120}
-              disabled={busy}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">Numele grupului</span>
+              <input
+                className={control}
+                value={name}
+                required
+                disabled={busy}
+                onChange={(event) => setName(event.target.value)}
+                {...settingsForm.field('name')}
+              />
+            </label>
+            <FieldError {...settingsForm.errorProps('name')} />
+          </div>
 
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">
-              Cum se numește coordonatorul
-            </span>
-            <input
-              className={control}
-              value={managerTitle}
-              maxLength={80}
-              placeholder="BCE, Coordonator Principal…"
-              disabled={busy}
-              onChange={(event) => setManagerTitle(event.target.value)}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">
+                Cum se numește coordonatorul
+              </span>
+              <input
+                className={control}
+                value={managerTitle}
+                maxLength={80}
+                placeholder="BCE, Coordonator Principal…"
+                disabled={busy}
+                onChange={(event) => setManagerTitle(event.target.value)}
+                {...settingsForm.field('managerTitle')}
+              />
+            </label>
+            <FieldError {...settingsForm.errorProps('managerTitle')} />
+          </div>
 
           <Check
             label="Primește cereri de înscriere"
-            hint="Membrii pot cere să intre în grup."
+            hint={
+              group.is_private
+                ? reasonCopy('group_private')
+                : 'Membrii pot cere să intre în grup.'
+            }
             checked={accepts}
-            disabled={busy}
+            disabled={busy || group.is_private}
             onChange={setAccepts}
           />
 
           {accepts && (
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">
-                Nivelul de la care se poate cere înscrierea
-              </span>
-              <select
-                className={control}
-                value={applicationLevel}
-                disabled={busy}
-                onChange={(event) => setApplicationLevel(event.target.value)}
-              >
-                <option value="">Ca nivelul minim al grupului</option>
-                {levels
-                  .filter((level) => level >= chosenMinLevel)
-                  .sort((left, right) => left - right)
-                  .map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-              </select>
-            </label>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">
+                  Nivelul de la care se poate cere înscrierea
+                </span>
+                <select
+                  className={control}
+                  value={applicationLevel}
+                  disabled={busy}
+                  onChange={(event) => setApplicationLevel(event.target.value)}
+                  {...settingsForm.field('applicationLevel')}
+                >
+                  <option value="">Ca nivelul minim al grupului</option>
+                  {levels
+                    .filter((level) => level >= chosenMinLevel)
+                    .sort((left, right) => left - right)
+                    .map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <FieldError {...settingsForm.errorProps('applicationLevel')} />
+            </div>
           )}
+
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium">
+              Formular de înscriere
+            </legend>
+            <AttachedLinkFields
+              value={applicationForm}
+              onChange={setApplicationForm}
+              form={settingsForm}
+              name="applicationForm"
+              labelText="Eticheta butonului"
+              urlText="Adresa formularului"
+              disabled={busy}
+            />
+          </fieldset>
 
           <Check
             label="Toți membrii văd taskurile grupului"
@@ -355,6 +495,7 @@ export function GroupSettingsTab({
                 setMinLevel(event.target.value);
                 setConfirmed(false);
               }}
+              {...settingsForm.field('minLevel')}
             >
               {[...new Set([group.min_level, ...choices])]
                 .sort((left, right) => left - right)
@@ -371,10 +512,12 @@ export function GroupSettingsTab({
               </span>
             )}
           </label>
+          <FieldError {...settingsForm.errorProps('minLevel')} />
 
           {needsConfirmation && (
             <RemovalPreview leaving={leaving} minLevel={chosenMinLevel} />
           )}
+          <FieldError>{settingsForm.formError}</FieldError>
 
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={busy}>
@@ -389,7 +532,11 @@ export function GroupSettingsTab({
       )}
 
       {authority.editStructure && (
-        <form onSubmit={saveStructure} className="max-w-xl space-y-4">
+        <form
+          onSubmit={saveStructure}
+          noValidate
+          className="max-w-xl space-y-4"
+        >
           <h3 className="text-lg font-semibold">Structura grupului</h3>
 
           <label className="grid gap-1.5">
@@ -463,31 +610,66 @@ export function GroupSettingsTab({
             onChange={setAutomatic}
           />
 
+          <Check
+            label="Grup privat"
+            hint={
+              isOrganization
+                ? reasonCopy('private_not_allowed_for_organization')
+                : inheritsPrivate
+                  ? reasonCopy('private_parent')
+                  : group.is_private && !isPrivate && subtree.length > 0
+                    ? 'Subgrupurile rămân private. Fiecare se face public din setările lui.'
+                    : PRIVATE_GROUP_HINT
+            }
+            checked={privateValue}
+            disabled={busy || inheritsPrivate || isOrganization}
+            onChange={(checked) => {
+              setIsPrivate(checked);
+              setPrivateConfirmed(false);
+            }}
+          />
+          {turningPrivate && privateConfirmed && (
+            <PrivatePreview group={group} subtree={subtree} />
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Prescurtare</span>
-              <input
-                className={control}
-                value={short}
-                maxLength={16}
-                disabled={busy}
-                onChange={(event) => setShort(event.target.value)}
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Culoare</span>
-              <input
-                className={control}
-                value={color}
-                placeholder="#C8102E"
-                disabled={busy}
-                onChange={(event) => setColor(event.target.value)}
-              />
-            </label>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">Prescurtare</span>
+                <input
+                  className={control}
+                  value={short}
+                  maxLength={16}
+                  disabled={busy}
+                  onChange={(event) => setShort(event.target.value)}
+                  {...structureForm.field('short')}
+                />
+              </label>
+              <FieldError {...structureForm.errorProps('short')} />
+            </div>
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">Culoare</span>
+                <input
+                  className={control}
+                  value={color}
+                  placeholder="#C8102E"
+                  disabled={busy}
+                  onChange={(event) => setColor(event.target.value)}
+                  {...structureForm.field('color')}
+                />
+              </label>
+              <FieldError {...structureForm.errorProps('color')} />
+            </div>
           </div>
+          <FieldError>{structureForm.formError}</FieldError>
 
           <Button type="submit" variant="outline" disabled={busy}>
-            Salvează structura
+            {turningPrivate && !privateConfirmed
+              ? 'Vezi ce devine privat'
+              : turningPrivate
+                ? 'Confirmă și salvează'
+                : 'Salvează structura'}
           </Button>
         </form>
       )}

@@ -28,7 +28,7 @@ select has_index('public', 'notifications', 'notifications_unread_idx',
 -- ==================== Fixtures ====================
 -- The demo seed fills this table; the counts below are about this file's
 -- rows. Cleared inside the transaction, which rolls back.
-truncate notifications;
+truncate notifications cascade; -- #703: push_deliveries references it
 
 insert into auth.users (id, email) values
   ('a2000000-0000-0000-0000-0000000000a2', 'nadia.noti@test.local');

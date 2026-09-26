@@ -2,6 +2,7 @@ import { ro } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BUCHAREST_TIME_ZONE } from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
+import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';
 
 export type AnnouncementPriority =
@@ -28,6 +29,8 @@ export type AnnouncementPresentation = {
   audience: string;
   audienceLabel: string;
   author: string | null;
+  /** The author as a Member Card button; null on a legacy row without `created_by`. */
+  authorMember: MemberIdentity | null;
   priority: AnnouncementPriority;
   category: string | null;
   pinned: boolean;
@@ -65,6 +68,7 @@ export function formatAnnouncementDate(instant: string): string {
 export function toAnnouncementPresentation(
   row: RawAnnouncementRow,
   groupsById?: ReadonlyMap<number, Group>,
+  members?: ReadonlyMap<string, MemberIdentity>,
 ): AnnouncementPresentation {
   const origin = groupsById?.get(row.group_id);
   const group: AnnouncementGroup = origin
@@ -89,6 +93,13 @@ export function toAnnouncementPresentation(
     audience: row.audience,
     audienceLabel: row.audience === 'org' ? 'Toată organizația' : 'Doar grupul',
     author: row.author,
+    authorMember: row.created_by
+      ? (members?.get(row.created_by) ?? {
+          memberId: row.created_by,
+          // The stored byline stands in until the directory answers.
+          fullName: row.author?.trim() || 'Membru OSUBB',
+        })
+      : null,
     priority: row.priority,
     category: row.category,
     pinned: row.pinned,
@@ -100,17 +111,81 @@ export function toAnnouncementPresentation(
   };
 }
 
+/**
+ * Ruling R15: three bands, newest first inside each — pinned (read or not),
+ * then unread, then read. Read state is per Member, so the order is decided
+ * here rather than by the server's `pinned, published_at` sort.
+ */
+function band(item: AnnouncementPresentation): number {
+  if (item.pinned) return 0;
+  return item.isRead ? 2 : 1;
+}
+
 export function sortAnnouncements(
   items: AnnouncementPresentation[],
 ): AnnouncementPresentation[] {
-  return [...items].sort((left, right) => {
-    // Pinned announcements come first
-    if (left.pinned !== right.pinned) {
-      return left.pinned ? -1 : 1;
-    }
-    // Newest publication date first
-    return Date.parse(right.publishedAt) - Date.parse(left.publishedAt);
-  });
+  return [...items].sort(
+    (left, right) =>
+      band(left) - band(right) ||
+      Date.parse(right.publishedAt) - Date.parse(left.publishedAt),
+  );
+}
+
+/** `3 anunțuri necitite` — the Anunțuri badge's accessible name, in words. */
+export function unreadAnnouncementsLabel(count: number): string {
+  return count === 1 ? '1 anunț necitit' : `${count} anunțuri necitite`;
+}
+
+/**
+ * Whether to ask `announcement_readers` at all (R15): the author, BC/Moderator
+ * by live rank (`my_capabilities().manage_roles`, level ≥ 6, not the token's
+ * claim), or — for a local Audience only — a Manager or Responsible on the
+ * Origin's path. `my_groups()` already carries the Roles inherited from an
+ * ancestor. The server decides regardless; this only spares the others a
+ * request that can only answer PT404.
+ */
+export function mayAskForReaders(
+  announcement: Pick<
+    AnnouncementPresentation,
+    'authorMember' | 'audience' | 'groupId'
+  >,
+  viewer: {
+    memberId: string | undefined;
+    /** BC/Moderator by live rank (`useCapability('manageRoles')`). */
+    bcOrModerator: boolean;
+    groups: readonly { id: number; group_role: string }[] | undefined;
+  },
+): boolean {
+  if (!viewer.memberId) return false;
+  if (announcement.authorMember?.memberId === viewer.memberId) return true;
+  if (viewer.bcOrModerator) return true;
+  if (announcement.audience !== 'local') return false;
+  return (viewer.groups ?? []).some(
+    (group) =>
+      group.id === announcement.groupId &&
+      (group.group_role === 'manager' || group.group_role === 'responsible'),
+  );
+}
+
+export type AnnouncementReader = {
+  member: MemberIdentity;
+  /** Null while the recipient has not opened the Announcement. */
+  readAt: string | null;
+};
+
+/** `Citit de 4 din 12` — the Audience that has opened it, over the whole Audience. */
+export function readersSummary(readers: readonly AnnouncementReader[]): {
+  read: AnnouncementReader[];
+  unread: AnnouncementReader[];
+  label: string;
+} {
+  const read = readers.filter((reader) => reader.readAt !== null);
+  const unread = readers.filter((reader) => reader.readAt === null);
+  return {
+    read,
+    unread,
+    label: `Citit de ${read.length} din ${readers.length}`,
+  };
 }
 
 export function countUnreadAnnouncements(

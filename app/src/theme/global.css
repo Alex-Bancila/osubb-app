@@ -10,8 +10,8 @@
    mapping, both themes.
    ========================================================================== */
 
-/* TODO(#692, #699, #700): this `--ion-*` block goes when the last of the
-   Calendar (#692), Profil (#699) and Acasă (#700) rebuilds removes Ionic. */
+/* TODO(#699): this `--ion-*` block goes when the Profil rebuild (#699), the
+   last screen on Ionic, removes it (the Calendar left in #692, Acasă in #700). */
 :root {
   /* Brand red as Ionic's primary. The -rgb pairs are literals because Ionic
      composes them into rgba() and CSS cannot do that with a var() colour. */

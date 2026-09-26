@@ -8,11 +8,15 @@ export function createSupabaseMock() {
     eq: vi.fn(),
     gt: vi.fn(),
     gte: vi.fn(),
+    lt: vi.fn(),
     neq: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),
     range: vi.fn(),
     update: vi.fn(),
+    insert: vi.fn(),
+    upsert: vi.fn(),
+    delete: vi.fn(),
     maybeSingle: vi.fn(),
     channel: vi.fn(),
     on: vi.fn(),
@@ -34,11 +38,13 @@ export function createSupabaseMock() {
     mocks.eq.mockReturnValue(mocks);
     mocks.gt.mockReturnValue(mocks);
     mocks.gte.mockReturnValue(mocks);
+    mocks.lt.mockReturnValue(mocks);
     mocks.neq.mockReturnValue(mocks);
     mocks.order.mockReturnValue(mocks);
     mocks.limit.mockReturnValue(mocks);
     mocks.range.mockReturnValue(mocks);
     mocks.update.mockReturnValue(mocks);
+    mocks.delete.mockReturnValue(mocks);
     mocks.channel.mockReturnValue(mocks);
     mocks.on.mockReturnValue(mocks);
     mocks.subscribe.mockReturnValue(mocks);
