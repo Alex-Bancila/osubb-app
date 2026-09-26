@@ -16,6 +16,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { formatLongDate, formatPoints, initials } from '../../lib/format';
+import { PromotionProgress } from '../../components/profile/PromotionProgress';
 import { useTheme } from '../../lib/theme';
 import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
@@ -290,6 +291,8 @@ export default function ProfileScreen() {
               </div>
             </section>
           )}
+
+          <PromotionProgress />
 
           {/* Groups Card */}
           <section className="card p-6" data-testid="groups-card">
