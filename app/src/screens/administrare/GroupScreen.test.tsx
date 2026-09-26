@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   members: vi.fn(),
   mutate: vi.fn(),
   roles: vi.fn(),
+  applications: vi.fn(),
   level: { value: 6 },
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -40,8 +41,10 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useAppointableMembers: api.members,
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
 }));
-vi.mock('./GroupApplicationsTab', () => ({
-  GroupApplicationsTab: () => <p>Cereri de înscriere</p>,
+// The real Cereri tab, over mocked reads: the tab's rows are what it shows.
+vi.mock('../../queries/group-applications', () => ({
+  useGroupApplications: api.applications,
+  useApplicationCommand: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('../campaigns/CampaignsPanel', () => ({
   CampaignsPanel: ({ group: owner }: { group: { name: string } }) => (
@@ -170,6 +173,11 @@ beforeEach(() => {
   api.myGroups.mockReturnValue({ data: [], isPending: false, isError: false });
   api.roster.mockReturnValue({ data: roster, isPending: false });
   api.members.mockReturnValue({ data: members });
+  api.applications.mockReturnValue({
+    data: [],
+    isPending: false,
+    isError: false,
+  });
   api.roles.mockReturnValue({
     data: new Map([
       ['recrut', { name: 'Recrut', level: 0 }],
@@ -213,9 +221,9 @@ it('heads the Group with its place in the tree and offers the five built tabs', 
     'Campanii',
   ])
     expect(tab(name)).toBeVisible();
-  // The Applications tab delegates to its separately tested command surface.
+  // The Applications tab's commands are tested with #589's screens.
   await userEvent.click(tab('Cereri'));
-  expect(screen.getByText(/Cereri de înscriere/)).toBeVisible();
+  expect(screen.getByText('Nu sunt cereri în așteptare.')).toBeVisible();
   expect(
     (
       await axe.run(container, {
@@ -756,4 +764,83 @@ it('reuses the Campaign panel rather than building a second one', async () => {
 it('says plainly when the Group is not one the caller may read', () => {
   show(404);
   expect(screen.getByRole('alert')).toHaveTextContent('Nu ai acces');
+});
+
+it('notes on the Cereri tab that a Group with a form link takes sign-ups by form, and still lists Applications (#698)', async () => {
+  const user = userEvent.setup();
+  const note =
+    'Grupul primește înscrieri prin formular; adaugă membrii din Roster.';
+  const first = show();
+  await user.click(tab('Cereri'));
+  expect(screen.queryByText(note)).toBeNull();
+  first.unmount();
+
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? {
+            ...row,
+            accepts_applications: true,
+            application_level: 1,
+            application_form_label: 'Formular de înscriere',
+            application_form_url: 'https://forms.example.org/logistica',
+          }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  api.applications.mockReturnValue({
+    data: [
+      {
+        id: 7,
+        group_id: 2,
+        member_id: 'd',
+        member: { memberId: 'd', fullName: 'Dana Ionescu' },
+        status: 'pending',
+        note: 'Am aplicat înainte de formular.',
+        created_at: '2026-09-24T12:00:00Z',
+        decided_at: null,
+        decided_by: null,
+        decision_note: null,
+      },
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  await user.click(tab('Cereri'));
+  expect(screen.getByText(note)).toBeVisible();
+  // A link set later does not hide the Applications already filed.
+  expect(screen.getByRole('heading', { name: /Dana Ionescu/ })).toBeVisible();
+  expect(screen.getByText('Am aplicat înainte de formular.')).toBeVisible();
+});
+
+it("resets the settings form to the Group it now shows, so one Group's form link is never saved onto another (#698)", async () => {
+  const user = userEvent.setup();
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? {
+            ...row,
+            application_form_label: 'Formular Logistică',
+            application_form_url: 'https://forms.example.org/logistica',
+          }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(screen.getByLabelText('Eticheta butonului')).toHaveValue(
+    'Formular Logistică',
+  );
+  // The breadcrumb moves to the parent while the screen stays mounted.
+  await user.click(screen.getByRole('link', { name: 'Educațional' }));
+  expect(
+    await screen.findByRole('heading', { name: 'Educațional' }),
+  ).toBeVisible();
+  expect(screen.getByLabelText('Numele grupului')).toHaveValue('Educațional');
+  expect(screen.getByLabelText('Eticheta butonului')).toHaveValue('');
+  expect(screen.getByLabelText('Adresa formularului')).toHaveValue('');
 });

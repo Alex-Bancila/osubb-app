@@ -22,6 +22,11 @@ type AttachedLinkFieldsProps = {
    * its own; `"link"` for `announcementSchema`'s nested `link` field.
    */
   name?: string;
+  /** The two field labels, when a form names the pair in its own words
+   *  (the Group settings' "Eticheta butonului" / "Adresa formularului"). */
+  labelText?: string;
+  urlText?: string;
+  disabled?: boolean;
 };
 
 /**
@@ -37,6 +42,9 @@ export function AttachedLinkFields({
   onChange,
   form,
   name = '',
+  labelText = 'Etichetă link',
+  urlText = 'Adresă link',
+  disabled = false,
 }: AttachedLinkFieldsProps) {
   const labelField = name ? `${name}.label` : 'label';
   const urlField = name ? `${name}.url` : 'url';
@@ -44,9 +52,10 @@ export function AttachedLinkFields({
     <div className="space-y-3">
       <div className="space-y-1.5">
         <label className={fieldClass}>
-          Etichetă link
+          {labelText}
           <input
             className={inputClass}
+            disabled={disabled}
             value={value.label}
             onChange={(event) =>
               onChange({ ...value, label: event.target.value })
@@ -58,9 +67,10 @@ export function AttachedLinkFields({
       </div>
       <div className="space-y-1.5">
         <label className={fieldClass}>
-          Adresă link
+          {urlText}
           <input
             className={inputClass}
+            disabled={disabled}
             type="url"
             placeholder="https://"
             value={value.url}

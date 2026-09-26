@@ -6,7 +6,8 @@ import { useAdminGroups, useMyGroupRoles } from '../../queries/groups-admin';
 import { useGroupApplications } from '../../queries/group-applications';
 import { categoryLabel } from '../administrare/group-tree';
 import { ApplicationAction } from './ApplicationAction';
-import { acceptsApplication } from './application-eligibility';
+import { ApplicationFormLink } from './ApplicationFormLink';
+import { acceptsApplication, applicationForm } from './application-eligibility';
 
 export default function GroupsScreen() {
   const groups = useAdminGroups();
@@ -55,6 +56,7 @@ export default function GroupsScreen() {
           const membership = mine.data.find(
             (row) => row.id === group.id && (row.explicit || row.automatic),
           );
+          const form = applicationForm(group);
           const ancestor = groups.data.find(
             // The topmost ancestor the Member can read (the root, unless hidden).
             (row) =>
@@ -99,6 +101,8 @@ export default function GroupsScreen() {
                     command={{ kind: 'withdraw', applicationId: pending.id }}
                   />
                 </div>
+              ) : form ? (
+                <ApplicationFormLink label={form.label} url={form.url} />
               ) : (
                 <ApplicationAction
                   label="Aplică"

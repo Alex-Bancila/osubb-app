@@ -262,6 +262,8 @@ export default function GroupScreen() {
       >
         {tab === 'setari' && (
           <GroupSettingsTab
+            // A new Group is a new draft: every field starts from its row.
+            key={group.id}
             group={group}
             parent={parent}
             subtree={subtree}
@@ -330,7 +332,21 @@ export default function GroupScreen() {
           </div>
         )}
         {tab === 'cereri' && (
-          <GroupApplicationsTab groupId={id} canDecide={authority.manageWork} />
+          <div className="space-y-4">
+            {/* #698 (ruling R18): with a form link, applicants go to the form
+                and join by Appointment. Applications filed before the link
+                was set still list below, to be decided. */}
+            {group.application_form_url && (
+              <p className="text-muted-foreground">
+                Grupul primește înscrieri prin formular; adaugă membrii din
+                Roster.
+              </p>
+            )}
+            <GroupApplicationsTab
+              groupId={id}
+              canDecide={authority.manageWork}
+            />
+          </div>
         )}
       </div>
 

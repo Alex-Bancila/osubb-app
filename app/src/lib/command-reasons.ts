@@ -107,6 +107,17 @@ const REASON_COPY = new Map<string, string>([
   ],
   ['group_has_open_work', 'Grupul are lucru neterminat.'],
   ['nothing_to_update', 'Nu ai schimbat nimic.'],
+  /* ---- The Group's application form link (#698, ruling R18) ---- */
+  /* browser: update_group judges the pair with #684's Attached Link reasons
+     (link_incomplete, link_label_too_long, link_url_invalid); the settings
+     form renames those to these (`applicationFormFailure` in
+     `lib/schemas/group.ts`), so the copy names the fields on screen. */
+  ['application_form_incomplete', 'Completează și eticheta, și adresa.'],
+  ['application_form_label_too_long', 'Eticheta are cel mult 60 de caractere.'],
+  [
+    'application_form_url_invalid',
+    'Adresa trebuie să înceapă cu http:// sau https://.',
+  ],
 
   /* ---- Group roster and Group Roles (#583) ---- */
   ['invalid_group_role', 'Alege o funcție validă.'],
