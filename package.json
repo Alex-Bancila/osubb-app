@@ -11,8 +11,9 @@
     "lint:links": "remark . --frail --quiet --use remark-validate-links --ignore-pattern '**/node_modules/**' --ignore-pattern 'app/coverage/**'",
     "lint:shell": "bash scripts/check-shell-syntax.sh",
     "lint:deno": "deno lint --config supabase/functions/deno.json supabase/functions",
-    "test:tooling": "bash scripts/check-markdown-links.test.sh && bash scripts/check-shell-syntax.test.sh",
-    "check:root": "npm run format:check && npm run lint:links && npm run lint:shell && npm run lint:deno && npm run test:tooling",
+    "lint:templates": "bash scripts/check-auth-templates.sh",
+    "test:tooling": "bash scripts/check-markdown-links.test.sh && bash scripts/check-shell-syntax.test.sh && bash scripts/check-auth-templates.test.sh",
+    "check:root": "npm run format:check && npm run lint:links && npm run lint:shell && npm run lint:deno && npm run lint:templates && npm run test:tooling",
     "check:app": "npm --prefix app run typecheck && npm --prefix app run lint && npm --prefix app run format:check && npm --prefix app run test:run && npm --prefix app run build",
     "check": "npm run check:root && npm run check:app"
   },

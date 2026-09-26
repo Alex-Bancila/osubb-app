@@ -65,6 +65,9 @@ function group(
     competes_in_cup: false,
     counts_toward_parent_cup: true,
     shared_work_visibility: false,
+    is_private: false,
+    application_form_label: null,
+    application_form_url: null,
     memberCount: 4,
     ...extra,
   };
@@ -256,10 +259,106 @@ it('offers "Creează Grup" only with the capability, and creates through the com
     managerId: null,
     color: null,
     short: null,
+    isPrivate: false,
   });
   await waitFor(() =>
     expect(screen.getByText('Grupul a fost creat.')).toBeVisible(),
   );
+});
+
+it('creates a Private Group when BC ticks "Grup privat" (#757)', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
+  await user.type(within(dialog).getByLabelText('Numele grupului'), 'Audit');
+  const privacy = within(dialog).getByRole('checkbox', {
+    name: /Grup privat/,
+  });
+  expect(privacy).not.toBeChecked();
+  expect(privacy).toBeEnabled();
+  expect(dialog).toHaveTextContent(
+    'Vizibil doar membrilor, coordonatorilor de pe traseu și BC. Fără cereri de înscriere; intrarea se face prin adăugare directă.',
+  );
+  await user.click(privacy);
+  await user.click(within(dialog).getByRole('button', { name: 'Creează' }));
+
+  expect(api.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'create',
+      name: 'Audit',
+      parentId: null,
+      isPrivate: true,
+    }),
+  );
+});
+
+it('marks a Private Group in the tree with the Privat badge, and no public one (#757)', async () => {
+  api.groups.mockReturnValue({
+    data: [
+      group(1, 'Educațional', [1], null),
+      group(3, 'Balul Bobocilor', [3], null, {
+        category: 'project',
+        is_private: true,
+      }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  const { container } = show();
+  const privateRow = screen
+    .getByRole('link', { name: 'Balul Bobocilor' })
+    .closest('tr') as HTMLElement;
+  const publicRow = screen
+    .getByRole('link', { name: 'Educațional' })
+    .closest('tr') as HTMLElement;
+  expect(within(privateRow).getByText('Privat')).toBeVisible();
+  expect(within(publicRow).queryByText('Privat')).toBeNull();
+  expect(screen.getAllByText('Privat')).toHaveLength(1);
+  expect(
+    (
+      await axe.run(container, {
+        rules: { 'color-contrast': { enabled: false } },
+      })
+    ).violations,
+  ).toEqual([]);
+});
+
+it("marks a Private Group in a Manager's own list too (#757)", () => {
+  capabilities({ createTopLevelGroups: false });
+  api.groups.mockReturnValue({
+    data: [
+      group(1, 'Educațional', [1], null),
+      group(2, 'Logistică', [1, 2], 1, { is_private: true }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  api.myGroups.mockReturnValue({
+    data: [
+      {
+        id: 2,
+        name: 'Logistică',
+        short: '',
+        color: '',
+        category: 'team',
+        path: [1, 2],
+        min_level: 1,
+        status: 'active',
+        is_organization: false,
+        group_role: 'manager',
+        explicit: true,
+        automatic: false,
+      },
+    ] satisfies MyGroup[],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  const row = screen
+    .getByRole('link', { name: 'Logistică' })
+    .closest('tr') as HTMLElement;
+  expect(within(row).getByText('Privat')).toBeVisible();
 });
 
 it('says so, once, when the tree cannot be read', () => {

@@ -229,3 +229,110 @@
   color: color-mix(in srgb, var(--dept) 52%, white);
   background: color-mix(in srgb, var(--dept) 24%, transparent);
 }
+
+/* ---------- what is next: Următorul task, Următorul eveniment (#700) ----------
+   Two slots, side by side on a wide screen and stacked on a phone. Each is a
+   small red-marked heading with its deep link, over the page's own card — the
+   Tracker's TaskCard, the Calendar's EventCard — so what a Member sees here is
+   exactly what they will find when the link opens it. */
+.next-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: var(--s-5);
+  margin: 0 0 var(--s-4);
+}
+
+.next-slot {
+  min-width: 0;
+}
+
+.next-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-3);
+  margin: 0 0 var(--s-2);
+}
+
+.next-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.next-title svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--red-600);
+}
+
+/* A 44px target, however short its words. */
+.next-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 44px;
+  padding: 0 var(--s-1);
+  border-radius: var(--r-sm);
+  color: var(--red-600);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  text-decoration: none;
+  text-underline-offset: 4px;
+}
+.next-link:hover {
+  text-decoration: underline;
+}
+.next-link:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+.next-link svg {
+  width: 16px;
+  height: 16px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .next-link svg {
+    transition: transform 150ms ease-out;
+  }
+  .next-link:hover svg {
+    transform: translateX(2px);
+  }
+}
+
+/* Loading, empty and error sit in a card-shaped frame, dashed: the slot is
+   there, and it is waiting or empty — not broken. */
+.next-placeholder {
+  padding: var(--s-4) var(--s-5);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+/* The Calendar's card prints only the time — its Agendă puts the day above
+   it — so the day goes above it here too. */
+.next-when {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+}
+.next-when time {
+  display: inline-block;
+}
+.next-when time::first-letter {
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .next-grid {
+    grid-template-columns: 1fr;
+  }
+}

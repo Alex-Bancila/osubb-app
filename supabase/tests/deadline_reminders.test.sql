@@ -24,7 +24,7 @@ select extensions.dblink_exec('deadline_lock', 'rollback;');
 select extensions.dblink_disconnect('deadline_retry');
 select extensions.dblink_disconnect('deadline_lock');
 truncate public.tasks cascade;
-truncate public.notifications;
+truncate public.notifications cascade; -- #703: push_deliveries references it
 insert into auth.users (id, email) values
   ('06900000-0000-0000-0000-000000000001', 'deadline-bc69@test.local'),
   ('06900000-0000-0000-0000-000000000002', 'deadline-bce69@test.local'),

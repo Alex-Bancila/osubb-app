@@ -7,13 +7,18 @@ import {
   useLocation,
 } from 'react-router';
 import { useAuth } from './lib/auth';
-import { authDestination, loginDestination } from './lib/auth-destination';
+import {
+  authDestination,
+  loginDestination,
+  loginEmailFrom,
+} from './lib/auth-destination';
 import { useCapability, type Capability } from './lib/capabilities';
 import LeadershipScreen from './screens/leadership/LeadershipScreen';
 import MemberTrackerScreen from './screens/leadership/MemberTrackerScreen';
 import AppShell from './components/shell/AppShell';
 import LoginScreen from './screens/login/LoginScreen';
 import AuthCallback from './screens/login/AuthCallback';
+import AuthConfirm from './screens/login/AuthConfirm';
 import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import CampaignsScreen from './screens/campaigns/CampaignsScreen';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
@@ -29,6 +34,7 @@ const CalendarScreen = lazy(() => import('./screens/calendar/CalendarScreen'));
 const AdministrareScreen = lazy(
   () => import('./screens/administrare/AdministrareScreen'),
 );
+const MemberScreen = lazy(() => import('./screens/administrare/MemberScreen'));
 const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
 
 /* Shown while the stored session is being read — a beat, not a screen. It
@@ -142,6 +148,12 @@ function RequireCapability({
   );
 }
 
+/** The login screen, prefilled when `/auth/confirm` sent the Member back. */
+function LoginRoute() {
+  const { state } = useLocation();
+  return <LoginScreen initialEmail={loginEmailFrom(state)} />;
+}
+
 /** Keeps a signed-in member off the front door. */
 function FrontDoor({ children }: { children: ReactElement }) {
   const { session, claims, loading } = useAuth();
@@ -161,7 +173,7 @@ export default function App() {
           path="/login"
           element={
             <FrontDoor>
-              <LoginScreen />
+              <LoginRoute />
             </FrontDoor>
           }
         />
@@ -169,6 +181,9 @@ export default function App() {
         {/* Deliberately unguarded: this route's whole job is to turn a link
               into a session, so it has to run before there is one. */}
         <Route path="/auth/callback" element={<AuthCallback />} />
+        {/* Same reason, and nothing happens here until the Member taps: a
+              mail scanner fetching the link must not spend it (#768). */}
+        <Route path="/auth/confirm" element={<AuthConfirm />} />
 
         <Route
           path="/no-profile"
@@ -254,6 +269,16 @@ export default function App() {
               <RequireCapability capability="administer">
                 <DeferredRoute>
                   <AdministrareScreen />
+                </DeferredRoute>
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/administrare/membri/:memberId"
+            element={
+              <RequireCapability capability="administer">
+                <DeferredRoute>
+                  <MemberScreen />
                 </DeferredRoute>
               </RequireCapability>
             }

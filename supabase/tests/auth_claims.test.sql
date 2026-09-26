@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(29);
 
 -- ==================== Helper defaults (no JWT in this session) ====================
 select is(auth_level(), 0, 'auth_level() defaults to 0 without a JWT');
@@ -173,6 +173,10 @@ select ok(
 select ok(
   has_table_privilege('supabase_auth_admin', 'public.group_members', 'select'),
   'the Auth server may read group_members');
+
+-- #591: the two legacy roster-claim helpers are gone.
+select hasnt_function('public', 'auth_in_dept', array['text'], 'auth_in_dept() no longer exists (#591)');
+select hasnt_function('public', 'auth_in_team', array['text'], 'auth_in_team() no longer exists (#591)');
 
 select * from finish();
 rollback;

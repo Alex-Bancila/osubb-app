@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CommandError } from '../../lib/command-reasons';
 
 const mutation = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -50,8 +51,10 @@ describe('Task give-up control', () => {
       taskId: 17,
       reason: 'Nu mai pot participa',
     });
+    // #682: nobody is promoted -- the Task goes back to "De făcut" and the
+    // manager chooses the next Executor from the queue.
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Ai renunțat la task',
+      'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.',
     );
     expect(
       screen.queryByLabelText('Motivul renunțării'),
@@ -60,7 +63,9 @@ describe('Task give-up control', () => {
 
   it('preserves the reason and shows a safe command failure', async () => {
     const user = userEvent.setup();
-    mutation.mutateAsync.mockRejectedValue(new Error('Taskul s-a schimbat.'));
+    mutation.mutateAsync.mockRejectedValue(
+      new CommandError(null, 'Taskul s-a schimbat.'),
+    );
     render(<TaskGiveUpControl taskId={17} />);
 
     await user.click(screen.getByRole('button', { name: 'Renunță la task' }));

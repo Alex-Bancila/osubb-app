@@ -32,16 +32,16 @@ select ok(
   and not has_table_privilege('anon', 'public.points_ledger', 'select'),
   'anonymous clients have neither points read grant'
 );
-select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint,bigint)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint,bigint,timestamptz,timestamptz)', 'execute'),
   'authenticated may reach the gated leadership Leaderboard');
-select ok(has_function_privilege('authenticated', 'public.department_cup(bigint)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute'),
   'authenticated may reach the gated Department Cup');
-select ok(has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'execute'),
   'authenticated may reach the gated member drill-down');
 select ok(
-  not has_function_privilege('service_role', 'public.leadership_leaderboard(bigint,bigint)', 'execute')
-  and not has_function_privilege('service_role', 'public.department_cup(bigint)', 'execute')
-  and not has_function_privilege('service_role', 'public.leadership_member_tasks(uuid)', 'execute'),
+  not has_function_privilege('service_role', 'public.leadership_leaderboard(bigint,bigint,timestamptz,timestamptz)', 'execute')
+  and not has_function_privilege('service_role', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute')
+  and not has_function_privilege('service_role', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'execute'),
   'service_role has no accidental leadership-wrapper bypass'
 );
 

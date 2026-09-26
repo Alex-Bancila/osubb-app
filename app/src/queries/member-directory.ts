@@ -15,6 +15,9 @@ export type DirectoryGroup = {
   path: number[];
 };
 
+/** The Voluntari chip (R17): the Member's earliest-joined top-level Group. */
+export type PrimaryGroup = { id: number; name: string; color: string | null };
+
 export type DirectoryMember = {
   id: string;
   /** The full name. */
@@ -27,10 +30,49 @@ export type DirectoryMember = {
   /** Higher is more senior; orders the role filter and sorting. */
   roleLevel: number;
   status: string;
+  /** Every explicit membership, kept only for the Group filter (path-based). */
   groups: DirectoryGroup[];
+  /** The one chip Voluntari shows (R17): the earliest-joined top-level Group. */
+  primaryGroup: PrimaryGroup | null;
+  /** The "+n" beside the chip: the Member's other explicit memberships. */
+  otherMemberships: number;
   points: number;
   contact: { email: string | null; phone: string | null } | undefined;
 };
+
+/** One explicit membership row, enough to pick the Voluntari chip (R17). */
+export type MembershipCandidate = {
+  id: number;
+  name: string;
+  color: string | null;
+  parentId: number | null;
+  createdAt: string;
+};
+
+/**
+ * The same rule as `private.member_card_impl` (R6, R17): among a Member's
+ * active, non-Organization explicit memberships, the chip is the top-level
+ * one (no parent) with the earliest roster `created_at`; "+n" counts every
+ * other explicit membership, top-level or not.
+ */
+export function primaryGroupOf(rows: MembershipCandidate[]): {
+  primaryGroup: PrimaryGroup | null;
+  otherMemberships: number;
+} {
+  const primary = rows
+    .filter((row) => row.parentId === null)
+    .sort(
+      (a, b) =>
+        Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id - b.id,
+    )
+    .at(0);
+  return {
+    primaryGroup: primary
+      ? { id: primary.id, name: primary.name, color: primary.color }
+      : null,
+    otherMemberships: rows.length - (primary ? 1 : 0),
+  };
+}
 
 // Supabase caps each response at 1,000 rows. Memberships can exceed that
 // before the directory does, so every projection is read in stable pages.
@@ -71,7 +113,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       readAllRows((from, to) =>
         supabase
           .from('group_members')
-          .select('member_id, group_id')
+          .select('member_id, group_id, created_at')
           .order('group_id')
           .order('member_id')
           .range(from, to),
@@ -79,7 +121,9 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       readAllRows((from, to) =>
         supabase
           .from('groups')
-          .select('id, name, category, path, status, is_organization')
+          .select(
+            'id, name, category, path, status, is_organization, parent_id, color',
+          )
           .order('id')
           .range(from, to),
       ),
@@ -102,6 +146,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
   const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
   const pointsById = new Map(points.map((row) => [row.member_id, row.points]));
   const groupsByMember = new Map<string, DirectoryGroup[]>();
+  const membershipsByMember = new Map<string, MembershipCandidate[]>();
   for (const membership of memberships) {
     const group = groupById.get(membership.group_id);
     // Archived Groups and the Organization Group say nothing about a member.
@@ -115,10 +160,23 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       path: group.path,
     });
     groupsByMember.set(membership.member_id, list);
+
+    const candidates = membershipsByMember.get(membership.member_id) ?? [];
+    candidates.push({
+      id: group.id,
+      name: group.name,
+      color: group.color,
+      parentId: group.parent_id,
+      createdAt: membership.created_at,
+    });
+    membershipsByMember.set(membership.member_id, candidates);
   }
   return profiles.flatMap((profile) => {
     if (!profile.id) return [];
     const role = profile.role ? roleById.get(profile.role) : undefined;
+    const { primaryGroup, otherMemberships } = primaryGroupOf(
+      membershipsByMember.get(profile.id) ?? [],
+    );
     return [
       {
         id: profile.id,
@@ -128,6 +186,8 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
         roleId: profile.role,
         role: role?.name ?? profile.role ?? '—',
         roleLevel: role?.level ?? -1,
+        primaryGroup,
+        otherMemberships,
         status: profile.status ?? '—',
         // Top-level Groups first, then by name, so a Department leads its teams.
         groups: (groupsByMember.get(profile.id) ?? []).sort(

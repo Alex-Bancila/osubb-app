@@ -74,6 +74,9 @@ function group(
     competes_in_cup: false,
     counts_toward_parent_cup: true,
     shared_work_visibility: false,
+    is_private: false,
+    application_form_label: null,
+    application_form_url: null,
     memberCount: 3,
     ...extra,
   };
@@ -278,11 +281,13 @@ it('names who leaves before it raises the Minimum Level, and only then confirms'
     kind: 'settings',
     groupId: 2,
     name: 'Logistică',
-    managerTitle: '',
+    managerTitle: null,
     acceptsApplications: false,
     applicationLevel: null,
     sharedWorkVisibility: false,
     minLevel: 3,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
     confirmRemovals: true,
   });
 });
@@ -313,6 +318,89 @@ it('re-asks when the server says the form was stale', async () => {
   ).toBeVisible();
 });
 
+it('sends the Minimum Level for "Ca nivelul minim al grupului", following a Minimum Level change made in the same save (#731)', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(
+    screen.getByRole('checkbox', { name: /Primește cereri de înscriere/ }),
+  );
+  expect(
+    screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
+  ).toHaveValue('');
+  // Lowering the Minimum Level never removes anyone, so this saves directly.
+  await user.selectOptions(screen.getByLabelText('Nivel minim'), '0');
+  await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
+  expect(api.mutate).toHaveBeenCalledWith({
+    kind: 'settings',
+    groupId: 2,
+    name: 'Logistică',
+    managerTitle: null,
+    acceptsApplications: true,
+    applicationLevel: 0,
+    sharedWorkVisibility: false,
+    minLevel: 0,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
+    confirmRemovals: false,
+  });
+});
+
+it('keeps an explicit Application Level as chosen', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(
+    screen.getByRole('checkbox', { name: /Primește cereri de înscriere/ }),
+  );
+  await user.selectOptions(
+    screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
+    '5',
+  );
+  await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
+  expect(api.mutate).toHaveBeenCalledWith({
+    kind: 'settings',
+    groupId: 2,
+    name: 'Logistică',
+    managerTitle: null,
+    acceptsApplications: true,
+    applicationLevel: 5,
+    sharedWorkVisibility: false,
+    minLevel: 1,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
+    confirmRemovals: false,
+  });
+});
+
+it('sends a stored application form link back, so saving the settings never clears it (#697)', async () => {
+  const user = userEvent.setup();
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? {
+            ...row,
+            application_form_label: 'Formular de înscriere',
+            application_form_url: 'https://forms.example.org/logistica',
+          }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  show();
+  // Lowering the Minimum Level never removes anyone, so this saves directly.
+  await user.selectOptions(screen.getByLabelText('Nivel minim'), '0');
+  await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
+  expect(api.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'settings',
+      groupId: 2,
+      minLevel: 0,
+      applicationFormLabel: 'Formular de înscriere',
+      applicationFormUrl: 'https://forms.example.org/logistica',
+    }),
+  );
+});
+
 it('archives through the command and explains unfinished work in the Group', async () => {
   const user = userEvent.setup();
   api.mutate.mockRejectedValue(
@@ -340,6 +428,11 @@ it('lists the roster with each Member Status and appoints through add_group_memb
   const table = screen.getByRole('table');
   expect(within(table).getByText('Inactiv')).toBeVisible();
   expect(within(table).getByText('Activ')).toBeVisible();
+  // Each name opens that Member's Administrare page (#103).
+  expect(within(table).getByRole('link', { name: 'Ana Pop' })).toHaveAttribute(
+    'href',
+    '/administrare/membri/a',
+  );
   // A Manager's roster row is not removed here: the position ends first.
   expect(within(table).getByText('Retrage întâi funcția')).toBeVisible();
 
@@ -467,12 +560,187 @@ it('creates a Child Group under this Group and archives one, in pop-ups', async 
     managerId: null,
     color: null,
     short: null,
+    isPrivate: false,
   });
 
   await user.click(screen.getByRole('button', { name: 'Arhivează Foto' }));
   const archive = await screen.findByRole('dialog', { name: 'Arhivează Foto' });
   await user.click(within(archive).getByRole('button', { name: 'Arhivează' }));
   expect(api.mutate).toHaveBeenLastCalledWith({ kind: 'archive', groupId: 5 });
+});
+
+/* ---------------------------------------------- Private Groups (#757, R25) */
+
+const privateTree = [
+  tree[0] as AdminGroup,
+  group(2, 'Logistică', [1, 2], 1, { min_level: 1, is_private: true }),
+  group(5, 'Foto', [1, 2, 5], 2, { min_level: 1, is_private: true }),
+];
+
+it('marks a Private Group beside its name on the Group screen and in its Child list, never a public one', async () => {
+  const user = userEvent.setup();
+  const publicView = show(1);
+  expect(screen.queryByText('Privat')).toBeNull();
+  publicView.unmount();
+
+  api.groups.mockReturnValue({
+    data: privateTree,
+    isPending: false,
+    isError: false,
+  });
+  const { container } = show(2);
+  const heading = screen.getByRole('heading', { name: 'Logistică' });
+  expect(
+    within(heading.parentElement as HTMLElement).getByText('Privat'),
+  ).toBeVisible();
+  await user.click(tab('Grupuri copil'));
+  const children = screen.getByRole('list', { name: 'Subgrupuri' });
+  expect(within(children).getByText('Privat')).toBeVisible();
+  expect(
+    (
+      await axe.run(container, {
+        rules: { 'color-contrast': { enabled: false } },
+      })
+    ).violations,
+  ).toEqual([]);
+});
+
+it('creates a Child Group of a Private Group private, with the switch on and locked', async () => {
+  const user = userEvent.setup();
+  api.groups.mockReturnValue({
+    data: privateTree,
+    isPending: false,
+    isError: false,
+  });
+  // A Group Manager, not BC: inheriting privacy needs no level-6 choice.
+  capabilities(false);
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
+  show(2);
+  await user.click(tab('Grupuri copil'));
+  await user.click(screen.getByRole('button', { name: 'Subgrup nou' }));
+  const create = await screen.findByRole('dialog', {
+    name: 'Subgrup al Logistică',
+  });
+  const privacy = within(create).getByRole('checkbox', {
+    name: /Grup privat/,
+  });
+  expect(privacy).toBeChecked();
+  expect(privacy).toBeDisabled();
+  expect(create).toHaveTextContent(
+    'Logistică este privat, deci și grupul nou va fi privat.',
+  );
+  await user.type(within(create).getByLabelText('Numele grupului'), 'Sunet');
+  await user.click(within(create).getByRole('button', { name: 'Creează' }));
+  expect(api.mutate).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: 'create', parentId: 2, isPrivate: true }),
+  );
+});
+
+it('offers a private Child under a public parent only to BC and the Moderator', async () => {
+  const user = userEvent.setup();
+  capabilities(false);
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
+  const manager = show(2);
+  await user.click(tab('Grupuri copil'));
+  await user.click(screen.getByRole('button', { name: 'Subgrup nou' }));
+  const create = await screen.findByRole('dialog', {
+    name: 'Subgrup al Logistică',
+  });
+  // create_group refuses a private Child under a public parent below level 6.
+  expect(
+    within(create).queryByRole('checkbox', { name: /Grup privat/ }),
+  ).toBeNull();
+  manager.unmount();
+
+  capabilities(true);
+  api.myGroups.mockReturnValue({ data: [] });
+  show(2);
+  await user.click(tab('Grupuri copil'));
+  await user.click(screen.getByRole('button', { name: 'Subgrup nou' }));
+  const bc = await screen.findByRole('dialog', {
+    name: 'Subgrup al Logistică',
+  });
+  const privacy = within(bc).getByRole('checkbox', { name: /Grup privat/ });
+  expect(privacy).toBeEnabled();
+  await user.click(privacy);
+  await user.type(within(bc).getByLabelText('Numele grupului'), 'Audit');
+  await user.click(within(bc).getByRole('button', { name: 'Creează' }));
+  expect(api.mutate).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: 'create', parentId: 2, isPrivate: true }),
+  );
+});
+
+it('turns a Group private only after naming the subtree it hides', async () => {
+  const user = userEvent.setup();
+  show(2);
+  const privacy = await screen.findByRole('checkbox', { name: /Grup privat/ });
+  expect(privacy).not.toBeChecked();
+  await user.click(privacy);
+
+  const save = screen.getByRole('button', { name: 'Vezi ce devine privat' });
+  await user.click(save);
+  // Nothing is sent yet: the preview names every Group below first.
+  expect(api.mutate).not.toHaveBeenCalled();
+  const hidden = screen.getByRole('list', {
+    name: 'Subgrupuri care devin private',
+  });
+  expect(within(hidden).getByText('Foto')).toBeVisible();
+  expect(screen.getByText(/Cererile de înscriere se opresc/)).toBeVisible();
+
+  await user.click(
+    screen.getByRole('button', { name: 'Confirmă și salvează' }),
+  );
+  expect(api.mutate).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'structure',
+      groupId: 2,
+      isPrivate: true,
+    }),
+  );
+});
+
+it('makes a Private Group public again in one save, and says its Child Groups stay private', async () => {
+  const user = userEvent.setup();
+  api.groups.mockReturnValue({
+    data: privateTree,
+    isPending: false,
+    isError: false,
+  });
+  show(2);
+  const privacy = await screen.findByRole('checkbox', { name: /Grup privat/ });
+  expect(privacy).toBeChecked();
+  await user.click(privacy);
+  expect(privacy).toHaveAccessibleName(/Subgrupurile rămân private/);
+  await user.click(screen.getByRole('button', { name: 'Salvează structura' }));
+  expect(api.mutate).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'structure',
+      groupId: 2,
+      isPrivate: false,
+    }),
+  );
+});
+
+it("locks a Private Group's Applications and a private parent's Child Group, with the reason", async () => {
+  api.groups.mockReturnValue({
+    data: privateTree,
+    isPending: false,
+    isError: false,
+  });
+  show(5);
+  const applications = await screen.findByRole('checkbox', {
+    name: /Primește cereri de înscriere/,
+  });
+  expect(applications).toBeDisabled();
+  expect(applications).toHaveAccessibleName(
+    /Un grup privat nu primește cereri de înscriere/,
+  );
+  const privacy = screen.getByRole('checkbox', { name: /Grup privat/ });
+  expect(privacy).toBeChecked();
+  expect(privacy).toBeDisabled();
+  expect(privacy).toHaveAccessibleName(
+    /rămâne privat cât timp grupul părinte e privat/,
+  );
 });
 
 it('reuses the Campaign panel rather than building a second one', async () => {

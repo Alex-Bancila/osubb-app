@@ -33,12 +33,9 @@ export function TaskInterestControls({
         await withdraw.mutateAsync(taskId);
         setMessage('Te-ai retras din lista de așteptare.');
       } else {
-        const result = await join.mutateAsync(taskId);
-        setMessage(
-          result.kind === 'assigned'
-            ? 'Ai fost selectat ca Executor.'
-            : `Te-ai înscris pe locul ${result.position} în lista de așteptare.`,
-        );
+        const { position } = await join.mutateAsync(taskId);
+        // Ruling R9: joining only ever queues.
+        setMessage(`Te-ai înscris pe locul ${position} în lista de așteptare.`);
       }
     } catch (failure) {
       setError(

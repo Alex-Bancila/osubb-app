@@ -24,10 +24,22 @@ export const keys = {
     all: ['points'] as const,
     leadership: (
       memberId: string | undefined,
-      filters: { groupId?: number; campaignId?: number },
+      // The Work Filter's RPC arguments (#678); null while its range is invalid.
+      filters: {
+        p_group_id?: number;
+        p_campaign_id?: number;
+        p_from?: string;
+        p_to?: string;
+      } | null,
     ) => ['points', 'leadership', memberId, filters] as const,
-    leadershipCup: (memberId: string | undefined, campaignId?: number) =>
-      ['points', 'leadership-cup', memberId, campaignId] as const,
+    leadershipCup: (
+      memberId: string | undefined,
+      filters: {
+        p_campaign_id?: number;
+        p_from?: string;
+        p_to?: string;
+      } | null,
+    ) => ['points', 'leadership-cup', memberId, filters] as const,
     board: (memberId: string | undefined) =>
       ['points', 'board', { memberId }] as const,
     me: (memberId: string | undefined) =>
@@ -50,6 +62,15 @@ export const keys = {
     all: ['members'] as const,
     card: (memberId: string, viewerId: string | undefined) =>
       ['members', 'card', { memberId, viewerId }] as const,
+    /** A Member's Administrare page (#103): card, status and ledger rows. */
+    admin: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'admin', { memberId, viewerId }] as const,
+    /** Avatar colour and Voluntari chip for a set of Members (sorted ids). */
+    identities: (viewerId: string | undefined, memberIds: readonly string[]) =>
+      ['members', 'identities', { viewerId, memberIds }] as const,
+    /** Nickname, full name and avatar colour for a set of Members (sorted ids). */
+    names: (viewerId: string | undefined, memberIds: readonly string[]) =>
+      ['members', 'names', { viewerId, memberIds }] as const,
   },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare
@@ -66,8 +87,12 @@ export const keys = {
       ['tasks', 'form-options', { memberId }] as const,
     directExecutors: (memberId: string | undefined) =>
       ['tasks', 'direct-executors', { memberId }] as const,
-    memberHistory: (memberId: string | undefined, targetId: string) =>
-      ['tasks', 'member-history', memberId, targetId] as const,
+    memberHistory: (
+      memberId: string | undefined,
+      targetId: string,
+      // The deadline range (#677); null while the Work Filter's is inverted.
+      range: { p_from?: string; p_to?: string } | null = {},
+    ) => ['tasks', 'member-history', memberId, targetId, range] as const,
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
     open: () => ['tasks', 'open'] as const,
@@ -85,6 +110,9 @@ export const keys = {
       ['tasks', 'detail', { taskId, memberId }] as const,
     managed: (memberId: string | undefined) =>
       ['tasks', 'managed', { memberId }] as const,
+    /* Tasks where I hold a pending candidature (the Calendar's chips, #692). */
+    candidatures: (memberId: string | undefined) =>
+      ['tasks', 'candidatures', { memberId }] as const,
     leadershipCapability: (memberId: string | undefined) =>
       ['tasks', 'leadership-capability', { memberId }] as const,
     leadership: (memberId: string | undefined) =>
@@ -95,8 +123,11 @@ export const keys = {
     all: ['campaigns'] as const,
     list: (memberId: string | undefined, groupId?: number) =>
       ['campaigns', { memberId, groupId }] as const,
-    report: (memberId: string | undefined, campaignId: number) =>
-      ['campaigns', 'report', { memberId, campaignId }] as const,
+    report: (
+      memberId: string | undefined,
+      campaignId: number,
+      range: { p_from?: string; p_to?: string } = {},
+    ) => ['campaigns', 'report', { memberId, campaignId, ...range }] as const,
   },
   /* Administrare's own reads: the Group tree with its settings and member
      counts, and one Group's roster. They start with `['groups']`, so every
@@ -112,6 +143,9 @@ export const keys = {
       ['groups', 'appointable', { memberId }] as const,
     mine: (memberId: string | undefined) =>
       ['groups', 'mine', { memberId }] as const,
+    /* The Work Filter's Group and Campaign choices on the Tracker. */
+    filterOptions: (memberId: string | undefined) =>
+      ['groups', 'filter-options', { memberId }] as const,
   },
   requests: {
     decisions: (memberId: string | undefined) =>
@@ -126,15 +160,30 @@ export const keys = {
     all: ['events'] as const,
     formOptions: (memberId: string | undefined) =>
       ['events', 'form-options', { memberId }] as const,
-    upcoming: (memberId: string) =>
-      ['events', 'upcoming', { memberId }] as const,
+    /* The Calendar's window on `starts_at` (#692), and Acasă's (#700). */
+    range: (memberId: string, range: { from?: string; to?: string }) =>
+      [
+        'events',
+        'range',
+        { memberId, from: range.from, to: range.to },
+      ] as const,
+    detail: (eventId: number, memberId: string) =>
+      ['events', 'detail', { eventId, memberId }] as const,
     rsvp: (eventId: number, memberId: string) =>
       ['events', 'rsvp', { eventId, memberId }] as const,
+    /* The Events I answered "Vin" to: an Other OSUBB Event turns to colour. */
+    going: (memberId: string) => ['events', 'going', { memberId }] as const,
   },
   announcements: {
     all: ['announcements'] as const,
     feed: (memberId?: string) =>
       ['announcements', 'feed', { memberId }] as const,
+    /* The Anunțuri badge. Under `['announcements']`, so marking one read
+       refreshes the feed and the badge from the same invalidation. */
+    unread: (memberId: string | undefined) =>
+      ['announcements', 'unread', { memberId }] as const,
+    readers: (announcementId: number, memberId: string | undefined) =>
+      ['announcements', 'readers', { announcementId, memberId }] as const,
   },
   /* Leadership page support reads (the metrics themselves live under points
      and tasks, so evaluations refresh them). */
@@ -142,8 +191,6 @@ export const keys = {
     all: ['leadership'] as const,
     filters: (memberId: string | undefined) =>
       ['leadership', 'filters', { memberId }] as const,
-    memberName: (memberId: string | undefined, targetId: string) =>
-      ['leadership', 'member-name', { memberId, targetId }] as const,
   },
   notifications: {
     all: ['notifications'] as const,
@@ -154,5 +201,14 @@ export const keys = {
       ['notifications', 'list', { memberId }] as const,
     unread: (memberId?: string) =>
       ['notifications', 'unread', { memberId }] as const,
+  },
+  /* Whether this browser receives Web Push for the member (#704): its
+     subscription and its `push_tokens` row. "Mine", so keyed by member. */
+  push: {
+    device: (memberId: string | undefined) =>
+      ['push', 'device', { memberId }] as const,
+    /* The member's per-kind push preferences (#635), for all their devices. */
+    preferences: (memberId: string | undefined) =>
+      ['push', 'preferences', { memberId }] as const,
   },
 } as const;

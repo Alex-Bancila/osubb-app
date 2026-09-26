@@ -1,52 +1,26 @@
 -- #332: public.give_up_task -- the Executor leaves a Task they hold, giving a
--- required reason, and the oldest pending Candidate is promoted into the slot
--- they vacate IN THE SAME TRANSACTION.
+-- required reason.
 --
--- The safety property this suite exists for: a Task must never be left with
--- two Executors, and must never be left with none while its Candidate Queue
--- still has someone waiting. The give-up and the promotion are one atomic
--- step serialized on the tasks row FOR UPDATE, taken before any Assignment or
--- Candidature state is read -- the same serialization point #330's
--- express_task_interest uses, which is exactly why the two commands can race
--- and still agree. Sections 9 and 10 run that race in the two interesting
--- queue shapes: an EMPTY queue (section 9) and a NON-EMPTY one (section 10,
--- where the promoted Candidate wins the slot and the outsider queues behind
--- them). pg_temp.test_race always runs the give-up (session A) to completion
--- before express_task_interest (session B) is even sent, so only the
--- give-up-first order is ever actually exercised in either section -- the
--- assertions admit either legitimate mechanism (first_come or
--- queue_promotion) as a matter of correctness, not because both commit orders
--- were run.
+-- #682 (ruling R9, ADR-0007 amended 2026-09-23): nobody is promoted into the
+-- vacated slot. A public Task returns to todo (started_at cleared) with its
+-- Candidate Queue exactly as it was, the managers get the pinned "Renunțare"
+-- notification, and the manager selects the next Executor with
+-- select_task_candidate (section 2 composes the two). A direct Task keeps its
+-- status and simply ends up with no Executor -- the state #342's
+-- assign_task_executor exists to remedy; section 3 pins that unchanged path.
 --
--- Honest limitation, found by mutation rather than assumed (see
--- task-7-report.md Sec5 M2): with the tasks-row FOR UPDATE removed from
--- give_up_task_impl, both races STILL report b_waited = true and land on the
--- same end state -- session B still blocks on the Task row, because every
--- write the promotion makes (the new Assignment, its executor_assigned row,
--- the candidate_selected row) carries a task_id foreign key and so takes a
--- FOR KEY SHARE lock on it regardless, and session B's own FOR UPDATE
--- conflicts with that KEY SHARE just the same. Only section 8's pgrowlocks
--- probe actually fails under that mutation. The point still stands that the
--- explicit lock is what should serialize this: KEY SHARE does not conflict
--- with KEY SHARE, so two commands BOTH missing the explicit FOR UPDATE would
--- not serialize against each other at all.
---
--- The Task's status never changes: an in_progress Task stays in_progress for
--- the promoted Executor (started_at is already set and is not rewound), a todo
--- Task stays todo. A direct Task has no queue at all, so it simply ends up
--- with no Executor -- which is the exact state #342's assign_task_executor
--- exists to remedy; section 3 composes the two commands to prove it.
---
--- Fixed in the review round (stack-context.md carry-forward, #332): the
--- promotion originally picked the oldest pending Candidature with no
--- liveness filter, so a deactivated Candidate at the head of the queue made
--- private.open_task_assignment raise PT400 invalid_executor and rolled the
--- whole give-up back with it -- an Executor unable to leave a Task because a
--- DIFFERENT person was deactivated. Section 6 now pins the fix: a deactivated
--- head-of-queue Candidate is skipped and left pending (never closed) while
--- the active Candidate behind them is promoted, and a queue holding only
--- deactivated Candidates lets the give-up succeed with nobody promoted, same
--- as an empty queue.
+-- The safety property this suite exists for: the give-up never opens an
+-- Assignment and never changes a Candidature, whatever the queue holds --
+-- a deactivated Candidate, the giver-upper's own hand-fixtured Candidature,
+-- or a live Member (section 6). The give-up serializes on the tasks row FOR
+-- UPDATE, taken before any Assignment or Candidature state is read -- the same
+-- serialization point express_task_interest uses. Sections 9 and 10 race the
+-- two in the two queue shapes (EMPTY and NON-EMPTY): the interested Member
+-- blocks, wakes into an Executor-less Task and queues. pg_temp.test_race
+-- always runs the give-up (session A) to completion before
+-- express_task_interest (session B) is even sent, so only the give-up-first
+-- order is exercised; the other order ends the same way because interest
+-- never opens an Assignment.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -55,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(99);
+select plan(90);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -106,8 +80,8 @@ insert into pg_temp.fixture_member_departments (member_id, dept_id) values
 select pg_temp.materialize_legacy_groups();
 
 
--- ---- T1: the promotion happy path -- a public Task in progress, one
--- Executor, two pending Candidates in a known order.
+-- ---- T1: the #682 happy path -- a public Task in progress, one Executor,
+-- two pending Candidates in a known order.
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
@@ -123,12 +97,13 @@ union all
 select id, '33200000-0000-0000-0000-000000000004'::uuid, 'pending', now() - interval '1 hour'
   from public.tasks where title = 'Renuntare cu coada #332';
 
--- ---- T2: a direct Task -- no queue, so the give-up simply empties the slot.
+-- ---- T2: a direct Task in progress -- no queue, so the give-up simply
+-- empties the slot and, unlike a public Task, keeps its status (#682).
 insert into public.tasks
-  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
+  (title, description, deadline, group_id, audience, assignment_mode, status, started_at, created_by)
 values
-  ('Renuntare directa #332', 'Fara coada', '2027-07-02 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
-   '33200000-0000-0000-0000-000000000001');
+  ('Renuntare directa #332', 'Fara coada', '2027-07-02 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
+   now(), '33200000-0000-0000-0000-000000000001');
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33200000-0000-0000-0000-000000000009', '33200000-0000-0000-0000-000000000001', now()
   from public.tasks where title = 'Renuntare directa #332';
@@ -183,8 +158,9 @@ insert into public.task_assignments (task_id, member_id, assigned_by, assigned_a
 select id, '33200000-0000-0000-0000-000000000002', '33200000-0000-0000-0000-000000000001', now()
   from public.tasks where title = 'Anulat #332';
 
--- ---- T7: a queue with ONLY a deactivated Candidate (section 6) -- the
--- give-up now succeeds with nobody promoted, same as an empty queue.
+-- ---- T7..T10 (section 6): four queue shapes that the retired promotion
+-- once treated differently. Since #682 the give-up leaves every one of them
+-- untouched. T7: a queue with ONLY a deactivated Candidate.
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
@@ -198,9 +174,8 @@ select id, '33200000-0000-0000-0000-000000000007', 'pending', now() - interval '
   from public.tasks where title = 'Candidat dezactivat #332';
 
 -- ---- T8: a deactivated Candidate at the HEAD of the queue (007, joined
--- first) with an active Candidate behind them (006, joined second) --
--- section 6's discriminating case: the dead head is skipped in place, the
--- live Candidate behind them is promoted.
+-- first) with an active Candidate behind them (006, joined second) -- the
+-- shape in which a promotion would reach a live Member.
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
@@ -218,8 +193,7 @@ select id, '33200000-0000-0000-0000-000000000006'::uuid, 'pending', now() - inte
 
 -- ---- T9: the giver-upper (013) also holds a pending Candidature on their
 -- OWN Task, joined before a genuinely different active Member (003, reused
--- from T1) joins later -- the actor-exclusion guard's discriminating case.
--- Hand-fixtured, same as T6: task_candidates has no check constraint,
+-- from T1) joins later. Hand-fixtured, same as T6: task_candidates has no check constraint,
 -- trigger or FK stopping an Executor from being inserted as a Candidate on
 -- their own Task, so this shape is reachable only by a hand-built row, not
 -- by any command on main -- exactly the precedent T6 sets for the state
@@ -240,8 +214,7 @@ select id, '33200000-0000-0000-0000-000000000003'::uuid, 'pending', now() - inte
   from public.tasks where title = 'Auto-candidatura cu altul #332';
 
 -- ---- T10: the giver-upper (014) is the ONLY pending Candidate on their own
--- Task -- the cheap second case: excluded from their own promotion, nobody
--- is promoted, and the Task ends Executor-less exactly like an empty queue.
+-- Task; their Candidature stays pending like any other.
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, started_at, queue_opened_at, created_by)
 values
@@ -310,7 +283,7 @@ select ok(has_function_privilege('authenticated',
   'private.give_up_task_impl(bigint, text)'::regprocedure, 'execute'),
   'authenticated can execute private.give_up_task_impl');
 
--- ==================== 2. Give up with a queue: the atomic promotion ====================
+-- ==================== 2. Give up with a queue: no promotion (#682) ====================
 -- The reason is passed with surrounding whitespace to prove it is trimmed with
 -- the regexp_replace idiom (never btrim) everywhere it lands: the Assignment's
 -- end_note, the activity note, details.reason and the managers' notification.
@@ -329,85 +302,52 @@ select is((select format('%s|%s|%s', (assignment.ended_at is not null)::text,
               and assignment.member_id = '33200000-0000-0000-0000-000000000002'),
   'true|gave_up|Nu mai am timp.',
   'the Executor''s Assignment is ended with end_reason gave_up and the trimmed reason as its end_note');
-select is((select format('%s|%s|%s', count(*), min(assignment.member_id::text),
-                         min(assignment.assigned_by::text))
+select is((select format('%s|%s', count(*), count(*) filter (where assignment.ended_at is null))
              from public.task_assignments as assignment
-            where assignment.task_id = (select queue_task_id from f332)
-              and assignment.ended_at is null),
-  '1|33200000-0000-0000-0000-000000000003|33200000-0000-0000-0000-000000000002',
-  'exactly one active Assignment survives, held by the promoted Candidate and recorded as opened by the giver-upper');
-select is((select format('%s|%s|%s|%s', candidate.status, candidate.decided_by,
-                         (candidate.decided_at is not null)::text,
-                         (candidate.assignment_id = (select assignment.id from public.task_assignments as assignment
-                                                      where assignment.task_id = candidate.task_id
-                                                        and assignment.ended_at is null))::text)
+            where assignment.task_id = (select queue_task_id from f332)),
+  '1|0',
+  'no Assignment is opened for anybody -- the Task has no Executor until the manager selects one');
+select is((select string_agg(format('%s:%s:%s:%s', candidate.member_id, candidate.status,
+                                    (candidate.decided_at is null and candidate.decided_by is null)::text,
+                                    (candidate.assignment_id is null)::text),
+                             ',' order by candidate.joined_at, candidate.id)
              from public.task_candidates as candidate
-            where candidate.task_id = (select queue_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000003'),
-  'selected|33200000-0000-0000-0000-000000000002|true|true',
-  'the promoted Candidature is selected, decided by the giver-upper, and points at the NEW Assignment (task_candidates_decision_shape_ck)');
-select is((select format('%s|%s|%s', candidate.status,
-                         (candidate.decided_at is null)::text, (candidate.assignment_id is null)::text)
-             from public.task_candidates as candidate
-            where candidate.task_id = (select queue_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000004'),
-  'pending|true|true',
-  'the Candidate behind them is untouched -- still pending, still undecided');
+            where candidate.task_id = (select queue_task_id from f332)),
+  '33200000-0000-0000-0000-000000000003:pending:true:true,33200000-0000-0000-0000-000000000004:pending:true:true',
+  'both Candidates are still pending and undecided, in their arrival order -- the queue is intact');
 
 select pg_temp.test_login('33200000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select is((select private.queue_position((select queue_task_id from f332),
-            '33200000-0000-0000-0000-000000000004')), 1,
-  'the remaining Candidate moves from position 2 to position 1 -- queue order is derived, never renumbered');
+            '33200000-0000-0000-0000-000000000004')), 2,
+  'the second Candidate is still at position 2 -- nobody ahead of them left the queue');
 reset role;
 
-select is((select format('%s|%s|%s|%s|%s|%s', activity.kind, activity.actor_id,
+select is((select format('%s|%s|%s|%s|%s|%s|%s', activity.kind, activity.actor_id,
                          (activity.assignment_id = (select assignment.id from public.task_assignments as assignment
                                                      where assignment.task_id = activity.task_id
                                                        and assignment.member_id = '33200000-0000-0000-0000-000000000002'))::text,
                          activity.note, activity.details ->> 'reason',
-                         (activity.from_status is null and activity.to_status is null)::text)
+                         activity.from_status, activity.to_status)
              from public.task_activity as activity
             where activity.task_id = (select queue_task_id from f332)
               and activity.kind = 'gave_up'),
-  'gave_up|33200000-0000-0000-0000-000000000002|true|Nu mai am timp.|Nu mai am timp.|true',
-  'the gave_up row names the giver-upper, carries the ENDED Assignment''s id, the trimmed reason as note and details.reason, and no status change');
-select is((select format('%s|%s|%s|%s', activity.actor_id,
-                         (activity.assignment_id = (select assignment.id from public.task_assignments as assignment
-                                                     where assignment.task_id = activity.task_id
-                                                       and assignment.ended_at is null))::text,
-                         activity.details ->> 'candidate_id', activity.details ->> 'promoted')
-             from public.task_activity as activity
-            where activity.task_id = (select queue_task_id from f332)
-              and activity.kind = 'candidate_selected'),
-  format('33200000-0000-0000-0000-000000000002|true|%s|true',
-    (select candidate.id from public.task_candidates as candidate
-      where candidate.task_id = (select queue_task_id from f332)
-        and candidate.member_id = '33200000-0000-0000-0000-000000000003')),
-  'the candidate_selected row carries the NEW Assignment''s id, details.candidate_id and details.promoted = true');
-select is((select format('%s|%s|%s', activity.details ->> 'via', activity.details ->> 'member_id',
-                         (activity.assignment_id = (select assignment.id from public.task_assignments as assignment
-                                                     where assignment.task_id = activity.task_id
-                                                       and assignment.ended_at is null))::text)
-             from public.task_activity as activity
-            where activity.task_id = (select queue_task_id from f332)
-              and activity.kind = 'executor_assigned'),
-  'queue_promotion|33200000-0000-0000-0000-000000000003|true',
-  'private.open_task_assignment writes the executor_assigned row with details.via = queue_promotion');
-select is((select count(*) from public.task_activity
-            where task_id = (select queue_task_id from f332)), 3::bigint,
-  'exactly three activity rows are written: gave_up, executor_assigned and candidate_selected');
-select is((select format('%s|%s', task.status, (task.started_at is not null)::text)
+  'gave_up|33200000-0000-0000-0000-000000000002|true|Nu mai am timp.|Nu mai am timp.|in_progress|todo',
+  'the gave_up row names the giver-upper, carries the ENDED Assignment''s id, the trimmed reason, and the in_progress -> todo change');
+select is((select string_agg(activity.kind, ',' order by activity.id) from public.task_activity as activity
+            where activity.task_id = (select queue_task_id from f332)),
+  'gave_up',
+  'gave_up is the only activity row -- no executor_assigned, no candidate_selected');
+select is((select format('%s|%s|%s', task.status, (task.started_at is null)::text, task.review_round)
              from public.tasks as task where task.id = (select queue_task_id from f332)),
-  'in_progress|true',
-  'the Task''s status does not change -- an in_progress Task stays in_progress for the promoted Executor, started_at intact');
+  'todo|true|0',
+  'the public Task returns to todo with started_at cleared (tasks_started_at_state_ck) and review_round kept');
 
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
              where notification.task_id = %s $$, (select queue_task_id from f332)),
-  $$ values ('33200000-0000-0000-0000-000000000001'::uuid),
-         ('33200000-0000-0000-0000-000000000003'::uuid) $$,
-  'exactly the Task manager and the promoted Candidate are notified -- the giver-upper, as actor, hears nothing');
+  $$ values ('33200000-0000-0000-0000-000000000001'::uuid) $$,
+  'only the Task manager is notified -- no Candidate hears "Task nou", and the giver-upper, as actor, hears nothing');
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
              where notification.task_id = %s and notification.title like 'Renunțare:%%' $$,
@@ -421,12 +361,36 @@ select is((select format('%s|%s|%s', notification.title, notification.body,
               and notification.member_id = '33200000-0000-0000-0000-000000000001'),
   'Renunțare: Renuntare cu coada #332|Executor 332 a renunțat: Nu mai am timp.|true',
   'the manager notification uses the pinned Romanian give-up copy with the trimmed reason, and is never coalesced');
+
+-- The manager selects again from the intact queue -- the second Candidate,
+-- keeping the first one pending. select_task_candidate is the only way an
+-- Executor is chosen on a public Task (#682). Resolved as the owner (#328).
+create temp table pick332 as
+select candidate.id as candidate_id
+  from public.task_candidates as candidate
+ where candidate.task_id = (select queue_task_id from f332)
+   and candidate.member_id = '33200000-0000-0000-0000-000000000004';
+grant select on pick332 to authenticated;
+select pg_temp.test_login('33200000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.select_task_candidate(%s, %s, false) $$,
+  (select queue_task_id from f332), (select candidate_id from pick332)),
+  'after the give-up the manager selects a Candidate from the intact queue');
+reset role;
+select is((select format('%s|%s', (select assignment.member_id from public.task_assignments as assignment
+                                    where assignment.task_id = (select queue_task_id from f332)
+                                      and assignment.ended_at is null),
+                         (select candidate.status from public.task_candidates as candidate
+                           where candidate.task_id = (select queue_task_id from f332)
+                             and candidate.member_id = '33200000-0000-0000-0000-000000000003'))),
+  '33200000-0000-0000-0000-000000000004|pending',
+  'the chosen Candidate holds the one active Assignment and the other is still pending');
 select is((select format('%s|%s', notification.title, notification.body)
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f332)
-              and notification.member_id = '33200000-0000-0000-0000-000000000003'),
+              and notification.member_id = '33200000-0000-0000-0000-000000000004'),
   'Task nou: Renuntare cu coada #332|Ți-a fost atribuit acest task. Deadline: 01.07.2027 12:00.',
-  'the promoted Candidate gets the pinned "Task nou" notification from private.open_task_assignment');
+  'the chosen Member gets the pinned "Task nou" notification');
 
 -- ==================== 3. A direct Task ends with no Executor, then #342 fills it ====================
 
@@ -455,6 +419,13 @@ select is((select count(*) from public.task_candidates
 select is((select format('%s|%s', count(*), count(*) filter (where kind = 'gave_up'))
              from public.task_activity where task_id = (select direct_task_id from f332)),
   '1|1', 'exactly one activity row is written -- gave_up alone, with no promotion to record');
+select is((select format('%s|%s|%s|%s', task.status, (task.started_at is not null)::text,
+                         coalesce(activity.from_status::text, '-'), coalesce(activity.to_status::text, '-'))
+             from public.tasks as task
+             join public.task_activity as activity on activity.task_id = task.id and activity.kind = 'gave_up'
+            where task.id = (select direct_task_id from f332)),
+  'in_progress|true|-|-',
+  'a direct Task keeps its status and started_at, and its gave_up row records no status change (#682: direct Tasks are unchanged)');
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
              where notification.task_id = %s $$, (select direct_task_id from f332)),
@@ -593,141 +564,79 @@ select is((select format('%s|%s', count(*) filter (where ended_at is null),
   '1|33200000-0000-0000-0000-000000000002',
   'the persona Task still has its one active Assignment, still held by the same Executor');
 
--- ==================== 6. Liveness filter: deactivated Candidates are skipped ====================
--- The promotion joins the pending Candidature to profiles filtered to
--- status = 'activ' (stack-context.md carry-forward, #332): a deactivated
--- Candidate is stale and unpromotable, but SKIPPED rather than closed --
--- closing a Candidature is a manager act (#331/#333) with its own
--- notification, not a side effect of someone else's give-up.
+-- ==================== 6. The queue is never touched, whatever it holds ====================
+-- The four queue shapes the retired promotion once distinguished -- only a
+-- deactivated Candidate, a deactivated head with a live Candidate behind it,
+-- the giver-upper's own Candidature ahead of a live Member, and the
+-- giver-upper's own Candidature alone. Since #682 each give-up succeeds,
+-- opens no Assignment, leaves every Candidature exactly as it was and returns
+-- the public Task to todo.
 
--- ---- T7: a queue with ONLY a deactivated Candidate -- the give-up succeeds
--- with nobody promoted, exactly like an empty queue.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000011', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.give_up_task(%s, 'Renunt.') $$,
   (select dead_queue_task_id from f332)),
-  'a queue holding only a deactivated Candidate does not block the give-up -- it succeeds with nobody promoted');
+  'T7: a queue holding only a deactivated Candidate does not block the give-up');
 reset role;
 
-select is((select format('%s|%s', count(*), count(*) filter (where ended_at is null))
-             from public.task_assignments where task_id = (select dead_queue_task_id from f332)),
-  '1|0', 'the Task is left with no active Assignment -- exactly the empty-queue end state');
-select is((select format('%s|%s|%s|%s', candidate.status,
-                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
-                         (candidate.assignment_id is null)::text)
-             from public.task_candidates as candidate
-            where candidate.task_id = (select dead_queue_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000007'),
-  'pending|true|true|true',
-  'the deactivated Candidate''s row is untouched -- still pending, still undecided, no Assignment -- closing it is a manager act, not a side effect');
-select is((select count(*) from public.task_activity
-            where task_id = (select dead_queue_task_id from f332) and kind = 'candidate_selected'), 0::bigint,
-  'no candidate_selected row is written -- nobody was promoted');
-
--- ---- T8: a deactivated Candidate at the HEAD of the queue, an active
--- Candidate behind them -- the head is skipped in place, the active one is
--- promoted. The reviewer's specific demand: "skip" must not be
--- implementable as "close", so the skipped row's decision columns are
--- asserted still null, not just its status.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000012', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.give_up_task(%s, 'Renunt si eu.') $$,
   (select dead_head_task_id from f332)),
-  'the Executor gives up a Task whose queue head is deactivated -- the promotion skips them and reaches the active Candidate behind');
+  'T8: a deactivated head with a live Candidate behind it does not block the give-up either');
 reset role;
 
-select is((select format('%s|%s|%s|%s', candidate.status,
-                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
-                         (candidate.assignment_id is null)::text)
-             from public.task_candidates as candidate
-            where candidate.task_id = (select dead_head_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000007'),
-  'pending|true|true|true',
-  'the deactivated head-of-queue Candidate is SKIPPED, not closed -- still pending, and decided_at/decided_by/assignment_id are all still null');
-select is((select format('%s|%s|%s|%s', candidate.status, candidate.decided_by,
-                         (candidate.decided_at is not null)::text,
-                         (candidate.assignment_id = (select assignment.id from public.task_assignments as assignment
-                                                      where assignment.task_id = candidate.task_id
-                                                        and assignment.ended_at is null))::text)
-             from public.task_candidates as candidate
-            where candidate.task_id = (select dead_head_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000006'),
-  'selected|33200000-0000-0000-0000-000000000012|true|true',
-  'the active Candidate behind the deactivated head is the one actually promoted, decided by the giver-upper, pointing at the new Assignment');
-select is((select format('%s|%s', count(*), min(assignment.member_id::text))
-             from public.task_assignments as assignment
-            where assignment.task_id = (select dead_head_task_id from f332)
-              and assignment.ended_at is null),
-  '1|33200000-0000-0000-0000-000000000006',
-  'exactly one active Assignment survives, held by the active Candidate promoted from behind the deactivated head');
-select is((select count(*) from public.task_activity
-            where task_id = (select dead_head_task_id from f332) and kind = 'candidate_selected'), 1::bigint,
-  'exactly one candidate_selected row is written -- for the promoted Candidate, not the skipped one');
-
--- ---- T9: the actor-exclusion guard (candidate.member_id <> v_actor). The
--- giver-upper is themselves a pending Candidate on their own Task, having
--- joined the queue before a genuinely different, still-active Member -- the
--- guard must skip the giver-upper and reach the Candidate behind them,
--- exactly as the liveness filter above skips a dead head-of-queue Candidate.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000013', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.give_up_task(%s, 'Renunt, dar sunt si eu in coada.') $$,
   (select self_and_other_task_id from f332)),
-  'the giver-upper is also a pending Candidate on their own Task -- the give-up still succeeds');
+  'T9: the giver-upper is also a pending Candidate on their own Task -- the give-up still succeeds');
 reset role;
 
-select is((select format('%s|%s', count(*), min(assignment.member_id::text))
-             from public.task_assignments as assignment
-            where assignment.task_id = (select self_and_other_task_id from f332)
-              and assignment.ended_at is null),
-  '1|33200000-0000-0000-0000-000000000003',
-  'the genuinely different, later-joined Candidate is promoted -- not the giver-upper who was queued ahead of them');
-select is((select format('%s|%s|%s|%s', candidate.status,
-                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
-                         (candidate.assignment_id is null)::text)
-             from public.task_candidates as candidate
-            where candidate.task_id = (select self_and_other_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000013'),
-  'pending|true|true|true',
-  'the giver-upper''s own self-candidature is left exactly as it was -- still pending, still undecided, no Assignment -- the guard excludes them, it does not close them');
-select is((select format('%s|%s|%s|%s', candidate.status, candidate.decided_by,
-                         (candidate.decided_at is not null)::text,
-                         (candidate.assignment_id = (select assignment.id from public.task_assignments as assignment
-                                                      where assignment.task_id = candidate.task_id
-                                                        and assignment.ended_at is null))::text)
-             from public.task_candidates as candidate
-            where candidate.task_id = (select self_and_other_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000003'),
-  'selected|33200000-0000-0000-0000-000000000013|true|true',
-  'the other Candidate is selected, decided by the giver-upper, and points at the new Assignment');
-select is((select count(*) from public.task_activity
-            where task_id = (select self_and_other_task_id from f332) and kind = 'candidate_selected'), 1::bigint,
-  'exactly one candidate_selected row is written -- for the other Candidate, not the giver-upper');
-
--- ---- T10: the giver-upper is the ONLY pending Candidate on their own Task
--- -- the cheap second case. Excluded from their own promotion, so nobody is
--- promoted and the Task ends Executor-less, exactly like an empty queue.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000014', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.give_up_task(%s, 'Sunt singurul candidat.') $$,
   (select self_only_task_id from f332)),
-  'the giver-upper is the only pending Candidate on their own Task -- the give-up still succeeds with nobody promoted');
+  'T10: the giver-upper is the only pending Candidate on their own Task -- the give-up still succeeds');
 reset role;
 
-select is((select format('%s|%s', count(*), count(*) filter (where ended_at is null))
-             from public.task_assignments where task_id = (select self_only_task_id from f332)),
-  '1|0', 'the Task is left with no active Assignment -- exactly the empty-queue end state');
-select is((select format('%s|%s|%s|%s', candidate.status,
-                         (candidate.decided_at is null)::text, (candidate.decided_by is null)::text,
-                         (candidate.assignment_id is null)::text)
-             from public.task_candidates as candidate
-            where candidate.task_id = (select self_only_task_id from f332)
-              and candidate.member_id = '33200000-0000-0000-0000-000000000014'),
-  'pending|true|true|true',
-  'the giver-upper''s self-candidature is untouched -- still pending, still undecided, no Assignment');
+select is((select count(*) from public.task_assignments
+            where ended_at is null
+              and task_id in (select dead_queue_task_id from f332
+                              union all select dead_head_task_id from f332
+                              union all select self_and_other_task_id from f332
+                              union all select self_only_task_id from f332)), 0::bigint,
+  'none of the four Tasks has an active Assignment -- nobody was promoted, not even the live Candidate behind a dead head');
+select is((select count(*) from public.task_candidates
+            where (status <> 'pending' or decided_at is not null or decided_by is not null
+                   or assignment_id is not null)
+              and task_id in (select dead_queue_task_id from f332
+                              union all select dead_head_task_id from f332
+                              union all select self_and_other_task_id from f332
+                              union all select self_only_task_id from f332)), 0::bigint,
+  'every Candidature on the four Tasks is still pending and undecided -- skipped is not closed, and nothing is selected');
+select is((select count(*) from public.task_candidates
+            where status = 'pending'
+              and task_id in (select dead_queue_task_id from f332
+                              union all select dead_head_task_id from f332
+                              union all select self_and_other_task_id from f332
+                              union all select self_only_task_id from f332)), 6::bigint,
+  'all six Candidatures across the four queues are still there');
 select is((select count(*) from public.task_activity
-            where task_id = (select self_only_task_id from f332) and kind = 'candidate_selected'), 0::bigint,
-  'no candidate_selected row is written -- nobody was promoted');
+            where kind in ('executor_assigned', 'candidate_selected')
+              and task_id in (select dead_queue_task_id from f332
+                              union all select dead_head_task_id from f332
+                              union all select self_and_other_task_id from f332
+                              union all select self_only_task_id from f332)), 0::bigint,
+  'no executor_assigned or candidate_selected row is written on any of them');
+select is((select string_agg(distinct format('%s|%s', task.status, (task.started_at is null)::text), ',')
+             from public.tasks as task
+            where task.id in (select dead_queue_task_id from f332
+                              union all select dead_head_task_id from f332
+                              union all select self_and_other_task_id from f332
+                              union all select self_only_task_id from f332)),
+  'todo|true',
+  'each of the four public Tasks is back in todo with started_at cleared');
 
 -- ==================== 7. The command is the only write path ====================
 
@@ -750,19 +659,11 @@ reset role;
 -- Sections 9 and 10 prove that a concurrent express_task_interest BLOCKS;
 -- this probe proves WHERE -- the tasks row FOR UPDATE taken before any
 -- Assignment or Candidature is read, the Executor's own live profile row held
--- FOR SHARE by private.require_task_executor, that same helper's FOR UPDATE on
--- the active Assignment, and the promotion's FOR UPDATE on the Candidature it
--- is about to select. Honest limitation, verified by mutation rather than
--- assumed: the tasks-row and promotion-order probes below DO discriminate
--- (removing the tasks FOR UPDATE fails the first assertion here; reversing the
--- promotion's ORDER BY fails eight assertions in section 2), but the
--- candidate-row assertion does NOT -- deleting `for update` from the
--- promotion's SELECT leaves the whole suite green, because the UPDATE that
--- promotes the row takes an equivalent lock a moment later inside the same
--- held transaction. That token is defense in depth, kept because the tasks
--- lock is what actually serializes the promotion and a future edit that moves
--- the SELECT away from its UPDATE would need it; the assertion documents the
--- lock, it does not prove the keyword.
+-- FOR SHARE by private.require_task_executor, and that same helper's FOR
+-- UPDATE on the active Assignment. The probe Task has a pending Candidate, and
+-- the last assertion pins that the give-up locks NO Candidature at all: the
+-- retired promotion locked the head of the queue FOR UPDATE, so restoring it
+-- turns that assertion red (#682).
 --
 -- Sections 8-10 work on COMMITTED fixtures, created and removed through their
 -- own dblink connection: pg_temp.test_race commits both of its sessions for
@@ -894,26 +795,23 @@ select ok(coalesce((
    where assignment.task_id = (select probe_task_id from r332)
      and assignment.member_id = '33200000-0000-0000-0000-000000000027'
 ), false), 'the Executor''s own Assignment row is locked FOR UPDATE before it is ended');
-select ok(coalesce((
-  select bool_or(row_lock.modes && array['For Update', 'Update', 'No Key Update'])
+select ok(not exists (
+  select 1
     from extensions.pgrowlocks('public.task_candidates') as row_lock
     join public.task_candidates as candidate on candidate.ctid = row_lock.locked_row
    where candidate.task_id = (select probe_task_id from r332)
-     and candidate.member_id = '33200000-0000-0000-0000-000000000028'
-), false), 'the Candidature about to be promoted is locked FOR UPDATE too -- defense in depth behind the Task lock');
+), 'give_up_task takes no lock on any Candidature -- the queue is never read for a promotion (#682)');
 
 select extensions.dblink_exec('gut_lock', 'rollback');
 select extensions.dblink_disconnect('gut_lock');
 
 -- ==================== 9. Race: give up vs express interest, EMPTY queue ====================
--- The Executor leaves while an outsider claims the Task. pg_temp.test_race
+-- The Executor leaves while an outsider expresses interest. pg_temp.test_race
 -- always runs the give-up (session A) to completion before
 -- express_task_interest (session B) is even sent, so only the give-up-first
--- order is ever actually exercised here -- not both commit orders. The
--- invariant is what is asserted -- exactly one active Assignment, both
--- callers succeeding -- and the via check admits either legitimate mechanism
--- (first_come or queue_promotion) as a matter of correctness, not because
--- both interleavings were run.
+-- order is exercised. Since #682 either order ends the same way: interest
+-- never opens an Assignment, so the Task is left Executor-less with the
+-- outsider as its one pending Candidate.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000022', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table race332empty as
@@ -934,54 +832,42 @@ select ok((select b_waited from race332empty),
 select is((select result_a from race332empty), (select race_empty_task_id::text from r332),
   'the give-up succeeds and returns the Task row');
 select is((select result_b from race332empty), (select race_empty_task_id::text from r332),
-  'the concurrent express_task_interest also succeeds -- it never sees a raw unique_violation');
-select is((select format('%s|%s', count(*), min(assignment.member_id::text))
-             from public.task_assignments as assignment
+  'the concurrent express_task_interest also succeeds');
+select is((select count(*) from public.task_assignments as assignment
             where assignment.task_id = (select race_empty_task_id from r332)
-              and assignment.ended_at is null),
+              and assignment.ended_at is null), 0::bigint,
+  'no active Assignment survives the race -- the outsider did not take the vacated slot (#682)');
+select is((select count(*) from public.task_activity
+            where task_id = (select race_empty_task_id from r332) and kind = 'executor_assigned'), 0::bigint,
+  'the race wrote no executor_assigned row');
+select is((select format('%s|%s', count(*), min(candidate.member_id::text))
+             from public.task_candidates as candidate
+            where candidate.task_id = (select race_empty_task_id from r332)
+              and candidate.status = 'pending'),
   '1|33200000-0000-0000-0000-000000000023',
-  'exactly one active Assignment survives the race, and it belongs to the outsider -- the same end state under either commit order');
-select ok((select activity.details ->> 'via' in ('first_come', 'queue_promotion')
-             from public.task_activity as activity
-            where activity.task_id = (select race_empty_task_id from r332)
-              and activity.kind = 'executor_assigned'
-              and activity.assignment_id = (select assignment.id from public.task_assignments as assignment
-                                             where assignment.task_id = (select race_empty_task_id from r332)
-                                               and assignment.ended_at is null)),
-  'the surviving Assignment was opened by one of the two legitimate mechanisms -- first_come or queue_promotion, whichever order won');
-select is((select count(*) from public.task_candidates
-            where task_id = (select race_empty_task_id from r332) and status = 'pending'), 0::bigint,
-  'nobody is left waiting in the queue: the one interested Member became the Executor rather than queueing behind nobody');
+  'the outsider is the one pending Candidate, waiting for the manager''s selection');
 select is((select count(*) from public.task_activity
             where task_id = (select race_empty_task_id from r332) and kind = 'gave_up'), 1::bigint,
   'the race wrote exactly one gave_up row');
 
 -- ==================== 10. Race: give up vs express interest, NON-EMPTY queue ====================
--- The mutation-sensitive one. The give-up promotes its Candidate while an
--- outsider expresses interest. Because the promotion happens under the tasks
--- row FOR UPDATE, the outsider blocks, wakes into a Task that already has its
--- new Executor, and queues.
+-- The give-up runs while an outsider expresses interest on a Task that
+-- already has a pending Candidate. The outsider blocks on the tasks row, wakes
+-- into an Executor-less Task and queues BEHIND the existing Candidate: the
+-- queue keeps its arrival order and nobody is promoted.
 --
 -- Honest limitation, found by mutation rather than assumed (see
--- task-7-report.md Sec5 M2): removing that FOR UPDATE from
--- give_up_task_impl does NOT break this section loudly. Every write the
--- promotion makes under open_task_assignment -- the new task_assignments
--- row, its executor_assigned task_activity row, and the candidate_selected
--- row -- carries a task_id foreign key, so the giving-up session still takes
--- a FOR KEY SHARE lock on the Task row regardless of the explicit keyword,
--- and the outsider's own FOR UPDATE conflicts with that KEY SHARE just the
--- same. The outsider still blocks, still wakes into the post-promotion
--- state, and this section stays green under that mutation; only section 8's
--- pgrowlocks probe on the tasks row actually fails. KEY SHARE does not
--- conflict with KEY SHARE, so two commands BOTH missing the explicit FOR
--- UPDATE would not serialize against each other at all -- the explicit lock
--- is what makes this serialization intentional rather than an incidental
--- side effect of the FK.
+-- task-7-report.md Sec5 M2): the outsider would still block with the tasks
+-- FOR UPDATE removed from give_up_task_impl, because the give-up's own writes
+-- (the ended Assignment's gave_up activity row carries a task_id foreign key)
+-- take a FOR KEY SHARE on the Task row, which the outsider's FOR UPDATE
+-- conflicts with. Only section 8's pgrowlocks probe fails under that
+-- mutation; the explicit lock is what makes the serialization intentional.
 select pg_temp.test_login('33200000-0000-0000-0000-000000000024', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 create temp table race332promo as
 select * from pg_temp.test_race(
-  format($$ select (public.give_up_task(%s, 'Renunt si promovez.')).id::text $$,
+  format($$ select (public.give_up_task(%s, 'Renunt, coada ramane.')).id::text $$,
     (select race_promo_task_id from r332)),
   format($$ with claims as (select set_config('request.jwt.claims', %L, true))
             select (public.express_task_interest(%s)).id::text from claims $$,
@@ -993,32 +879,27 @@ select * from pg_temp.test_race(
 reset role;
 
 select ok((select b_waited from race332promo),
-  'the interested outsider BLOCKS while the promotion runs -- the give-up and its promotion are one atomic step');
+  'the interested outsider BLOCKS while the give-up runs');
 select is((select result_a from race332promo), (select race_promo_task_id::text from r332),
-  'the give-up with a promotion succeeds and returns the Task row');
+  'the give-up succeeds and returns the Task row');
 select is((select result_b from race332promo), (select race_promo_task_id::text from r332),
-  'the concurrent express_task_interest succeeds too -- it queues behind the promoted Executor instead of racing them for the slot');
-select is((select format('%s|%s', count(*), min(assignment.member_id::text))
-             from public.task_assignments as assignment
+  'the concurrent express_task_interest succeeds too');
+select is((select count(*) from public.task_assignments as assignment
             where assignment.task_id = (select race_promo_task_id from r332)
-              and assignment.ended_at is null),
-  '1|33200000-0000-0000-0000-000000000025',
-  'exactly one active Assignment survives, held by the promoted Candidate -- the queue outranks a latecomer');
-select is((select format('%s|%s', count(*), min(candidate.member_id::text))
+              and assignment.ended_at is null), 0::bigint,
+  'no active Assignment survives -- the waiting Candidate was not promoted (#682)');
+select is((select string_agg(candidate.member_id::text, ',' order by candidate.joined_at, candidate.id)
              from public.task_candidates as candidate
             where candidate.task_id = (select race_promo_task_id from r332)
               and candidate.status = 'pending'),
-  '1|33200000-0000-0000-0000-000000000026',
-  'the latecomer is the one pending Candidate, queued behind the Member the promotion chose');
-select is((select format('%s|%s', candidate.status,
-                         (candidate.assignment_id = (select assignment.id from public.task_assignments as assignment
-                                                      where assignment.task_id = candidate.task_id
-                                                        and assignment.ended_at is null))::text)
+  '33200000-0000-0000-0000-000000000025,33200000-0000-0000-0000-000000000026',
+  'the existing Candidate is still first and the latecomer queues behind them');
+select is((select format('%s|%s', candidate.status, (candidate.assignment_id is null)::text)
              from public.task_candidates as candidate
             where candidate.task_id = (select race_promo_task_id from r332)
               and candidate.member_id = '33200000-0000-0000-0000-000000000025'),
-  'selected|true',
-  'the promoted Candidature is selected and points at the surviving Assignment -- the promotion committed as one unit with the give-up');
+  'pending|true',
+  'the waiting Candidature is untouched -- still pending, pointing at no Assignment');
 
 -- ---- clean up everything the committed sessions left behind ----
 -- task_activity is append-only by trigger, including for its owner, so the

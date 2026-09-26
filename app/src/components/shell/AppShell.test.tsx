@@ -8,6 +8,7 @@ const queries = vi.hoisted(() => ({
   useMyProfile: vi.fn(),
   useRoles: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
+  useUnreadAnnouncementsCount: vi.fn(),
   useCapabilities: vi.fn(),
 }));
 
@@ -16,6 +17,9 @@ vi.mock('../../queries/profile', () => ({
   useMyProfile: queries.useMyProfile,
 }));
 vi.mock('../../queries/reference', () => ({ useRoles: queries.useRoles }));
+vi.mock('../../queries/announcements', () => ({
+  useUnreadAnnouncementsCount: queries.useUnreadAnnouncementsCount,
+}));
 vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
 }));
@@ -25,6 +29,9 @@ vi.mock('../../lib/capabilities', () => ({
 }));
 vi.mock('../../queries/notifications-realtime', () => ({
   useNotificationRealtime: vi.fn(),
+}));
+vi.mock('../../queries/push-subscription', () => ({
+  usePushSelfRepair: vi.fn(),
 }));
 
 import AppShell from './AppShell';
@@ -80,6 +87,7 @@ describe('AppShell', () => {
       data: new Map([['voluntar', { name: 'Voluntar' }]]),
     });
     queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
     queries.useCapabilities.mockReturnValue({ data: capabilities() });
   });
 
@@ -154,6 +162,52 @@ describe('AppShell', () => {
     ).toBeInTheDocument();
   });
 
+  it('badges Anunțuri with the unread-announcements count on the sidebar and the mobile tab', () => {
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 2 });
+
+    renderShell();
+
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    const entry = within(primary).getByRole('link', { name: /Anunțuri/ });
+    expect(entry).toHaveTextContent('2');
+    expect(within(entry).getByText('2 anunțuri necitite')).toBeInTheDocument();
+
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    const tab = within(quick).getByRole('link', {
+      name: 'Anunțuri, 2 anunțuri necitite',
+    });
+    expect(tab).toHaveAttribute('href', '/anunturi');
+    expect(tab).toHaveTextContent('2');
+  });
+
+  it('says a single unread Announcement in the singular', () => {
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 1 });
+
+    renderShell();
+
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(
+      within(quick).getByRole('link', { name: 'Anunțuri, 1 anunț necitit' }),
+    ).toBeInTheDocument();
+  });
+
+  it('drops the Anunțuri badge from both surfaces once the count reaches 0', () => {
+    renderShell();
+
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', { name: 'Anunțuri' }),
+    ).toHaveTextContent(/^Anunțuri$/);
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(
+      within(quick).getByRole('link', { name: 'Anunțuri' }),
+    ).toHaveTextContent(/^Anunțuri$/);
+  });
+
   it('leaves the notification entry unbadged once everything is read', () => {
     renderShell();
 
@@ -163,6 +217,37 @@ describe('AppShell', () => {
     expect(
       within(primary).getByRole('link', { name: 'Notificări' }),
     ).toHaveTextContent(/^Notificări$/);
+  });
+
+  it('shows the mobile header bell with the unread count, hidden at desktop width', () => {
+    queries.useUnreadNotificationCount.mockReturnValue({ data: 3 });
+
+    const { container } = renderShell();
+    const header = within(container.querySelector('header') as HTMLElement);
+
+    const bell = header.getByRole('link', {
+      name: 'Notificări, 3 notificări necitite',
+    });
+    expect(bell).toHaveAttribute('href', '/notificari');
+    expect(bell).toHaveClass('lg:hidden');
+    expect(bell).toHaveTextContent('3');
+  });
+
+  it('leaves the mobile header bell unbadged once everything is read', () => {
+    const { container } = renderShell();
+    const header = within(container.querySelector('header') as HTMLElement);
+
+    const bell = header.getByRole('link', { name: 'Notificări' });
+    expect(bell).toHaveAttribute('href', '/notificari');
+    expect(bell).not.toHaveTextContent(/\d/);
+  });
+
+  it('keeps the mobile header bell in its active state on the notifications screen itself', () => {
+    const { container } = renderShell('/notificari');
+    const header = within(container.querySelector('header') as HTMLElement);
+
+    const bell = header.getByRole('link', { name: 'Notificări' });
+    expect(bell).toHaveAttribute('aria-current', 'page');
   });
 
   it('uses the complete official logo as decorative mobile branding', () => {

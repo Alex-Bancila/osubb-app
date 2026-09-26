@@ -4,6 +4,7 @@ import {
   useAnnouncementsFeed,
   useMarkAnnouncementRead,
 } from '../../queries/announcements';
+import { useMemberIdentities } from '../../queries/member-identities';
 import { useGroups } from '../../queries/reference';
 import {
   countUnreadAnnouncements,
@@ -53,9 +54,13 @@ export default function AnnouncementsScreen() {
   }
 
   const rawAnnouncements = feedQuery.data ?? [];
+  // Authors as Member Card buttons: one directory read for the whole feed.
+  const authors = useMemberIdentities(
+    rawAnnouncements.flatMap((row) => (row.created_by ? [row.created_by] : [])),
+  );
   const announcements: AnnouncementPresentation[] = sortAnnouncements(
     rawAnnouncements.map((row) =>
-      toAnnouncementPresentation(row, groupsQuery.data),
+      toAnnouncementPresentation(row, groupsQuery.data, authors.data),
     ),
   );
 

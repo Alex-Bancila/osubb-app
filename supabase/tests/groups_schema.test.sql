@@ -16,7 +16,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(63);
+select plan(66);
 
 -- ==================== 1. Shape ====================
 
@@ -126,6 +126,10 @@ select throws_ok($$ insert into public.groups (name, category)
   'two native sibling Groups cannot share a name, case-insensitively');
 
 select ok((select indpred is null from pg_index where indexrelid='public.groups_parent_name_uidx'::regclass), 'sibling name uniqueness covers every Group');
+-- #591: the Wave 1 backfill keys are gone from the live schema.
+select hasnt_column('public', 'groups', 'legacy_dept_id', 'groups.legacy_dept_id is dropped (#591)');
+select hasnt_column('public', 'groups', 'legacy_team_id', 'groups.legacy_team_id is dropped (#591)');
+select hasnt_column('public', 'groups', 'legacy_project_id', 'groups.legacy_project_id is dropped (#591)');
 
 -- The Organization marker (Wave 3 T1, ADR-0009 R1). The reference Organization
 -- Group — the one the backfill marked — is already in this database, so the row
