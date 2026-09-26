@@ -7,7 +7,9 @@ migration=$(printf '%s\n' supabase/migrations/*_retire_level_four.sql)
 db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
 output=$(mktemp)
 trap 'rm -f "$output"' EXIT
-preflight() { sed '/^drop policy event_attendance_read/,$d' "$migration"; }
+# The guard is the migration's first statement: everything up to the end of
+# its DO block.
+preflight() { sed -n '1,/^end $$;/p' "$migration"; }
 if {
   cat <<'SQL'
 begin;

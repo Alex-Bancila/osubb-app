@@ -60,8 +60,9 @@ insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000005', 'responsabil260@example.test'),
   ('26000000-0000-0000-0000-000000000006', 'bc260@example.test');
 -- The two personas at the end pin the THRESHOLD rather than merely "some level
--- is denied": a responsabil sits at level 4, one rank below the gate, so a gate
--- accidentally loosened to `>= 4` must turn an assertion red; and a BC keeps the
+-- is denied": a vot sits at level 3, the highest live rank below the gate since
+-- #593 retired level 4, so a gate accidentally loosened below 5 must turn an
+-- assertion red; and a BC keeps the
 -- allow side from resting on BCE alone.
 insert into public.profiles (id, full_name, email, role, status) values
   ('26000000-0000-0000-0000-000000000001', 'BCE 260', 'bce260@example.test', 'bce', 'activ'),
@@ -167,13 +168,13 @@ select is((select count(*) from public.leadership_member_tasks('26000000-0000-00
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000004');
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
   'inactive BCE sees no protected rows despite stale claims');
--- The gate is `>= 5`, not `>= 4`. Without this pair every denied persona here
--- is level 2, inactive, demoted or claimless, so loosening the threshold by one
--- rank would leave the whole suite green -- and level 4 is exactly where the UI
--- already draws a different line (capabilities.ts: manageTasks: 4).
+-- The gate is `>= 5`. Without this pair every denied persona here is level 2,
+-- inactive, demoted or claimless, so loosening the threshold to the highest
+-- live rank below it (level 3, since #593 retired level 4) would leave the
+-- whole suite green.
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000005');
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
-  'a responsabil (level 4, one rank below the gate) cannot open another Member''s Tracker');
+  'a vot (level 3, the highest live rank below the gate) cannot open another Member''s Tracker');
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000006');
 select isnt((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 0::bigint,
   'a BC does see the drill-down -- the allow side is not carried by BCE alone');

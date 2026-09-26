@@ -1,12 +1,16 @@
 -- #593: deploy only after the human re-ranking in #592. No holder is
 -- silently reassigned, including inactive profiles.
-do $$ begin
- if exists(select 1 from public.profiles where role::text='responsabil') then
-  raise exception using errcode='23514',message='responsabil_holder_remains';
+do $$ declare v_holders bigint; begin
+ select count(*) into v_holders from public.profiles where role::text='responsabil';
+ if v_holders > 0 then
+  raise exception using errcode='23514',message='responsabil_holder_remains',
+   detail=format('%s profile(s), of any status, still hold the retired responsabil rank.', v_holders),
+   hint='Re-rank every holder with public.set_member_role first (#592); nothing was changed.';
  end if;
 end $$;
-drop policy event_attendance_read on public.event_attendance;
-create policy event_attendance_read on public.event_attendance for select to authenticated
+-- OD3: colleague attendance moves from level 4 to level 5 (a level only ever
+-- moves up). The policy keeps its command, roles and every other limb.
+alter policy event_attendance_read on public.event_attendance
 using(public.auth_is_member() and exists(select 1 from public.events e where e.id=event_attendance.event_id)
  and (member_id=(select auth.uid()) or public.auth_level()>=5));
 
@@ -51,6 +55,7 @@ create view public.leaderboard with(security_invoker=on) as  SELECT mp.member_id
   WHERE (public.auth_level() >= 5 OR (CURRENT_USER <> ALL (ARRAY['authenticated'::name, 'anon'::name]))) AND pr.status = 'activ'::public.member_status;
 revoke all on public.leaderboard from public,anon,authenticated,service_role;
 grant select on public.leaderboard to authenticated,service_role;
+comment on view public.leaderboard is 'Legacy global leaderboard, now visible only to BCE, BC, Moderator, and trusted server roles. A task-only leadership leaderboard replaces its contents in a later migration.';
 create view public.profiles_directory with(security_invoker=on) as  SELECT profiles.id,
     profiles.full_name,
     profiles.role,
@@ -80,10 +85,17 @@ declare
   v_member      public.profiles%rowtype;
 begin
   -- 1. Malformed for every caller, so it is answered ahead of any authority
-  --    verdict (conventions section 2). The enum excludes retired ranks.
+  --    verdict (conventions section 2). The retired rank is no longer a value
+  --    of the enum (#593), so it cannot reach this command at all.
   if p_role is null then
     raise sqlstate 'PT400' using message = 'invalid_member_role';
   end if;
+
+  -- #724 (ruling R8). Measured exactly as it is stored -- trimmed -- and
+  -- malformed for every caller, so it is answered before any authority
+  -- verdict; a blank reason still falls back to the fixed string below.
+  perform private.require_text_length('reason',
+    regexp_replace(p_reason, '^[[:space:]]+|[[:space:]]+$', '', 'g'), null, 1000);
 
   -- 2. Authority. One reason string for every denial -- a caller must not be
   --    able to tell "you are not BC" from "you may not touch that Member" from
@@ -254,6 +266,8 @@ AS $function$
      where membership.member_id = p_member_id
        and member_group.status = 'active'
        and not member_group.is_organization
+       -- #756: a Private Group is named only to a viewer who can see it.
+       and private.can_see_group(member_group.id, (select auth.uid()))
   ),
   primary_membership as (
     select explicit_memberships.group_id,
