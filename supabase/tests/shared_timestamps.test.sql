@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(12);
+select plan(10);
 
 select has_function('private', 'set_updated_at', array[]::text[],
   'the shared timestamp trigger function exists');
@@ -13,14 +13,6 @@ select function_returns('private', 'set_updated_at', array[]::text[], 'trigger',
 select ok(
   not has_function_privilege('authenticated', 'private.set_updated_at()', 'execute'),
   'authenticated clients cannot call the private trigger helper');
-select ok(
-  exists (
-    select 1 from pg_trigger
-     where tgrelid = 'public.projects'::regclass
-       and tgname = 'projects_set_updated_at'
-       and not tgisinternal
-  ),
-  'projects use the shared timestamp trigger');
 select ok(
   exists (
     select 1 from pg_trigger
@@ -48,15 +40,6 @@ insert into public.profiles (id, full_name, email, role) values
   ('a3680000-0000-0000-0000-000000000001', 'Lead 368', 'lead.368@test.local', 'responsabil'),
   ('a3680000-0000-0000-0000-000000000002', 'Creator 368', 'creator.368@test.local', 'bc');
 
-insert into public.projects (
-  id, name, leader_id, created_by, created_at, updated_at
-) overriding system value values (
-  368001, 'Project timestamp fixture',
-  'a3680000-0000-0000-0000-000000000001',
-  'a3680000-0000-0000-0000-000000000002',
-  now() - interval '2 days', now() - interval '1 day'
-);
--- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
 
 insert into public.campaigns (
@@ -67,18 +50,11 @@ insert into public.campaigns (
   now() - interval '2 days', now() - interval '1 day'
 );
 
-update public.projects
-   set name = 'Updated project fixture',
-       updated_at = '2000-01-01 00:00:00+00'
- where id = 368001;
 update public.campaigns
    set name = 'Updated campaign fixture',
        updated_at = '2000-01-01 00:00:00+00'
  where id = 368001;
 
-select ok(
-  (select updated_at > now() - interval '1 minute' from public.projects where id = 368001),
-  'an arbitrary project update refreshes updated_at');
 select ok(
   (select updated_at > now() - interval '1 minute' from public.campaigns where id = 368001),
   'an arbitrary campaign update refreshes updated_at');
@@ -107,8 +83,7 @@ select ok(
   'command-appointed demo Group Managers receive created_at automatically');
 
 select ok(
-  not has_table_privilege('authenticated', 'public.projects', 'update')
-  and not has_table_privilege('authenticated', 'public.campaigns', 'update'),
+  not has_table_privilege('authenticated', 'public.campaigns', 'update'),
   'the migration does not broaden client update privileges');
 
 select * from finish();

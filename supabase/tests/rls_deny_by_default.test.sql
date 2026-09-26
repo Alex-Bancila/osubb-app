@@ -30,21 +30,21 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role, status) values
   ('ffffffff-0000-0000-0000-000000000006', 'Flavia Test', 'flavia.rls@test.local', 'voluntar', 'activ'),
   ('eeeeeeee-0000-0000-0000-000000000156', 'Dana Claimless', 'dana.claimless@test.local', 'voluntar', 'inactiv');
-insert into projects (name, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, leader_id, created_by) values
   ('RLS Project',
    'ffffffff-0000-0000-0000-000000000006',
    'ffffffff-0000-0000-0000-000000000006');
 -- #585 retired the Project leader synchronization command path. Populate this
 -- legacy table explicitly so the deny-by-default sweep remains non-vacuous.
-insert into project_members(project_id, member_id, project_role)
+insert into pg_temp.fixture_project_members(project_id, member_id, project_role)
 select id, 'ffffffff-0000-0000-0000-000000000006', 'responsible'
-  from projects where name='RLS Project';
-insert into member_departments (member_id, dept_id)
+  from pg_temp.fixture_projects where name='RLS Project';
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
   values ('ffffffff-0000-0000-0000-000000000006', 'edu');
 insert into campaigns (group_id, name, created_by)
   values (pg_temp.dept_group('edu'), 'RLS Campaign', 'ffffffff-0000-0000-0000-000000000006');
-insert into teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
-insert into team_members (team_id, member_id)
+insert into pg_temp.fixture_teams (id, name, dept_id) values ('t-rls', 'RLS Team', 'edu');
+insert into pg_temp.fixture_team_members (team_id, member_id)
   values ('t-rls', 'ffffffff-0000-0000-0000-000000000006');
 -- #507: the Group model's two Wave 1 shadow tables. They hold no rows of
 -- their own yet (#508 backfills), so without these fixtures both sweeps below
@@ -368,9 +368,9 @@ select ok(has_table_privilege('supabase_auth_admin', 'profiles', 'select'),
 select is(
   (select count(*) from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'roles', 'member_departments', 'team_members', 'groups', 'group_members')
+      and tablename in ('profiles', 'roles', 'groups', 'group_members')
       and 'supabase_auth_admin' = any (roles)),
-  6::bigint, 'claims-hook read policies cover all six tables (logins keep working)');
+  4::bigint, 'claims-hook read policies cover all four tables (logins keep working)');
 
 -- ==================== Grant posture ====================
 -- Epic 3.2a narrowed this from a table grant to column grants: members may

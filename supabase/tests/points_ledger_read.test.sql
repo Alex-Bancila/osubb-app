@@ -57,7 +57,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('b5600000-0000-0000-0000-000000000009', 'Ledger Moderator', 'ledger.moderator@test.local', 'moderator', 'activ'),
   ('b5600000-0000-0000-0000-000000000010', 'Ledger Inactive', 'ledger.inactive@test.local', 'voluntar', 'inactiv');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('b5600000-0000-0000-0000-000000000001', 'edu'),
   ('b5600000-0000-0000-0000-000000000004', 'edu'),
   ('b5600000-0000-0000-0000-000000000005', 'edu');

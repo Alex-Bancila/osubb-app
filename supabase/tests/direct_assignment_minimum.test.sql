@@ -8,7 +8,7 @@ select plan(7);
 \ir _group_task_fixtures.psql
 select pg_temp.g521_task('minimum350', 'project');
 -- OD9: a rolled-back setting fixture, not a production Group write path.
-update public.groups set min_level=3, application_level=3 where legacy_project_id=(select id from public.projects where name='Project #521');
+update public.groups set min_level=3, application_level=3 where name='Project #521';
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select throws_ok(format('select public.assign_task_executor(%s,%L)',
  (select id from g521_tasks where name='minimum350'),pg_temp.g521_uid(5)),

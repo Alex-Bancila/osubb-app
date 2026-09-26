@@ -81,14 +81,14 @@ insert into public.tasks
   (title, difficulty, group_id, status, created_at, started_at, submitted_at,
    completed_at, unfulfilled_at, cancelled_at, cancel_reason, rating)
 values
-  ('Legacy multi todo 290', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', '2026-01-01 10:00+00', null, null, null, null, null, null, null),
-  ('Legacy multi progress 290', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'in_progress', '2026-01-02 10:00+00', '2026-01-02 11:00+00', null, null, null, null, null, null),
-  ('Legacy review 290', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'in_review', '2026-01-03 10:00+00', '2026-01-03 11:00+00', '2026-01-03 12:00+00', null, null, null, null, null),
-  ('Legacy completed 290', 3, (select id from public.groups where legacy_dept_id = 'edu'), 'completed', '2026-01-04 10:00+00', null, null, '2026-01-05 10:00+00', null, null, null, 4),
-  ('Legacy unfulfilled 290', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'unfulfilled', '2026-01-06 10:00+00', null, null, null, '2026-01-07 10:00+00', null, null, 2),
-  ('Legacy cancelled 290', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'cancelled', '2026-01-08 10:00+00', null, null, null, null, '2026-01-09 10:00+00', 'Anulat #290', null),
-  ('Legacy no participant 290', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', '2026-01-10 10:00+00', null, null, null, null, null, null, null),
-  ('Unrelated new history 290', 1, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', '2026-01-11 10:00+00', null, null, null, null, null, null, null);
+  ('Legacy multi todo 290', 1, (select id from public.groups where name = 'Educațional'), 'todo', '2026-01-01 10:00+00', null, null, null, null, null, null, null),
+  ('Legacy multi progress 290', 1, (select id from public.groups where name = 'Educațional'), 'in_progress', '2026-01-02 10:00+00', '2026-01-02 11:00+00', null, null, null, null, null, null),
+  ('Legacy review 290', 1, (select id from public.groups where name = 'Educațional'), 'in_review', '2026-01-03 10:00+00', '2026-01-03 11:00+00', '2026-01-03 12:00+00', null, null, null, null, null),
+  ('Legacy completed 290', 3, (select id from public.groups where name = 'Educațional'), 'completed', '2026-01-04 10:00+00', null, null, '2026-01-05 10:00+00', null, null, null, 4),
+  ('Legacy unfulfilled 290', 1, (select id from public.groups where name = 'Educațional'), 'unfulfilled', '2026-01-06 10:00+00', null, null, null, '2026-01-07 10:00+00', null, null, 2),
+  ('Legacy cancelled 290', 1, (select id from public.groups where name = 'Educațional'), 'cancelled', '2026-01-08 10:00+00', null, null, null, null, '2026-01-09 10:00+00', 'Anulat #290', null),
+  ('Legacy no participant 290', 1, (select id from public.groups where name = 'Educațional'), 'todo', '2026-01-10 10:00+00', null, null, null, null, null, null, null),
+  ('Unrelated new history 290', 1, (select id from public.groups where name = 'Educațional'), 'todo', '2026-01-11 10:00+00', null, null, null, null, null, null, null);
 
 -- Deliberately shuffled input proves selection does not depend on insert order.
 insert into public.task_assignees (task_id, member_id)

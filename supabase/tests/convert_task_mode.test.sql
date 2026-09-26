@@ -37,7 +37,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('32900000-0000-0000-0000-000000000004', 'BC Inactiv 329', 'inactive.bc.329@test.local', 'bc', 'inactiv'),
   ('32900000-0000-0000-0000-000000000005', 'Fara Claimuri 329', 'claimless.329@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('32900000-0000-0000-0000-000000000001', 'edu'),
   ('32900000-0000-0000-0000-000000000003', 'edu');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
@@ -393,24 +393,21 @@ select extensions.dblink_connect('ctm_lock_setup', format(
 select extensions.dblink_exec('ctm_lock_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('ctm_lock_setup', $$
   delete from public.tasks where title = 'Lock Probe Task #329';
-  delete from public.member_departments where member_id = '32900000-0000-0000-0000-000000000021';
   delete from auth.users where id = '32900000-0000-0000-0000-000000000021';
   insert into auth.users (id, email) values
     ('32900000-0000-0000-0000-000000000021', 'lock.probe.bce.329@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('32900000-0000-0000-0000-000000000021', 'Lock Probe BCE 329',
      'lock.probe.bce.329@test.local', 'bce', 'activ');
-  insert into public.member_departments (member_id, dept_id)
-  values ('32900000-0000-0000-0000-000000000021', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('32900000-0000-0000-0000-000000000021'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '32900000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, created_by) values
-    ('Lock Probe Task #329', 'Descriere lock', '2027-02-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
+    ('Lock Probe Task #329', 'Descriere lock', '2027-02-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'todo',
      '32900000-0000-0000-0000-000000000021');
 $$);
 
@@ -462,14 +459,13 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '32900000-0000-0000-0000-000000000021'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'convert_task_mode holds the Group roster row its authority rests on FOR SHARE');
 
 select extensions.dblink_exec('ctm_lock', 'rollback');
 select extensions.dblink_disconnect('ctm_lock');
 select extensions.dblink_exec('ctm_lock_setup', $$
   delete from public.tasks where title = 'Lock Probe Task #329';
-  delete from public.member_departments where member_id = '32900000-0000-0000-0000-000000000021';
   delete from auth.users where id = '32900000-0000-0000-0000-000000000021';
 $$);
 select extensions.dblink_disconnect('ctm_lock_setup');

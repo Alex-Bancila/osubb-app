@@ -20,10 +20,10 @@ set local client_min_messages = warning;
 alter function private.has_open_org_opportunity(bigint) rename to has_open_org_opportunity_before_794;
 
 insert into public.tasks (title, group_id, audience, assignment_mode, queue_opened_at) values
-  ('Upgrade 794 direct org',   (select id from public.groups where legacy_dept_id = 'edu'), 'org',   'direct', null),
-  ('Upgrade 794 direct local', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', null),
-  ('Upgrade 794 public org',   (select id from public.groups where legacy_dept_id = 'edu'), 'org',   'public', now()),
-  ('Upgrade 794 public local', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'public', now());
+  ('Upgrade 794 direct org',   (select id from public.groups where name = 'Educațional'), 'org',   'direct', null),
+  ('Upgrade 794 direct local', (select id from public.groups where name = 'Educațional'), 'local', 'direct', null),
+  ('Upgrade 794 public org',   (select id from public.groups where name = 'Educațional'), 'org',   'public', now()),
+  ('Upgrade 794 public local', (select id from public.groups where name = 'Educațional'), 'local', 'public', now());
 
 create temp table activity_before_794 as select count(*) as n from public.task_activity;
 SQL

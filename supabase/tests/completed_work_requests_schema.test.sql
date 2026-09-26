@@ -84,25 +84,25 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('32105000-0000-0000-0000-000000000010', 'CWRS Moderator', 'cwrs.moderator@test.local', 'moderator', 'activ'),
   ('32105000-0000-0000-0000-000000000011', 'CWRS Deactivated Requester', 'cwrs.deactivated-requester@test.local', 'voluntar', 'inactiv');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('32105000-0000-0000-0000-000000000002', 'edu'),
   ('32105000-0000-0000-0000-000000000003', 'pr');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('cwrs-dept-team-321', 'CWRS Department Team', 'edu'),
   ('cwrs-indep-team-321', 'CWRS Independent Team', null);
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('cwrs-indep-team-321', '32105000-0000-0000-0000-000000000007'),
   ('cwrs-indep-team-321', '32105000-0000-0000-0000-000000000008');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('CWRS Schema Project 321', 'active',
    '32105000-0000-0000-0000-000000000005',
    '32105000-0000-0000-0000-000000000005');
-insert into public.project_members (project_id, member_id, project_role)
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role)
 select project.id, '32105000-0000-0000-0000-000000000006', 'member'
-  from public.projects as project
+  from pg_temp.fixture_projects as project
  where project.name = 'CWRS Schema Project 321';
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -113,7 +113,7 @@ values ('CWRS schema fixture task 321', pg_temp.dept_group('edu'));
 
 create temp table fx as
 select
-  pg_temp.project_group((select id from public.projects where name = 'CWRS Schema Project 321')) as project_group_id,
+  pg_temp.project_group((select id from pg_temp.fixture_projects where name = 'CWRS Schema Project 321')) as project_group_id,
   (select id from public.tasks where title = 'CWRS schema fixture task 321') as task_id;
 grant select on fx to authenticated;
 

@@ -8,6 +8,11 @@ db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
 cat <<'SQL'
 \set ON_ERROR_STOP on
 begin;
+-- #591 retired backfill keys. These stand-ins live only in this rollback replay.
+alter table public.groups add column legacy_dept_id text, add column legacy_team_id text, add column legacy_project_id bigint;
+update public.groups set legacy_dept_id=case name when 'Educațional' then 'edu' when 'Imagine & PR' then 'pr' when 'Resurse Umane' then 'hr' when 'Financiar' then 'fin' when 'Tineret' then 'youth' when 'Diverse' then 'diverse' when 'Secretariat' then 'secretariat' when 'OSUBB' then 'org' end;
+update public.groups set legacy_team_id=case name when 'Echipa IT' then 'it' when 'Echipa Interne' then 'interne' end;
+
 -- #68 attaches a fan-out trigger to the new columns. Disable it only within
 -- this rollback transaction while the pre-#581 table shape is replayed.
 do $$
@@ -23,6 +28,9 @@ drop policy announcements_create on public.announcements;
 drop policy announcements_update on public.announcements;
 drop policy announcements_delete on public.announcements;
 drop function private.can_read_announcement(bigint,text);
+-- #590 removed the final legacy column; restore it only for this historical replay.
+alter table public.announcements add column dept_id text;
+update public.announcements a set dept_id=g.legacy_dept_id from public.groups g where g.id=a.group_id;
 alter table public.announcements drop column audience, drop column group_id;
 create policy announcements_read on public.announcements for select to authenticated using (public.auth_is_member());
 create policy announcements_manage on public.announcements for all to authenticated

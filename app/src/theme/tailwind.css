@@ -1,4 +1,5 @@
-/* Ionic ships an unlayered native-button reset. Tailwind's generated utilities
+/* global.css keeps an unlayered native-button reset (inherited from Ionic, #699)
+   and the screen stylesheets are unlayered too. Tailwind's generated utilities
    need important precedence whenever a shadcn primitive opts into them. */
 @import 'tailwindcss' important;
 @import 'tw-animate-css';
