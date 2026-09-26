@@ -361,15 +361,20 @@ end;
 $function$;
 
 -- Native fixture materializer: aliases exist only in pg_temp descriptor rows.
+-- A descriptor without a group_id falls back to its name, scoped to the parent
+-- the materializer gives it (Group names are unique among siblings only):
+-- Departments and Projects are roots, a Team sits under its Department's
+-- Group (or at the root), and the seeded demo Teams under their seeded parents.
 create or replace function pg_temp.dept_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
- select coalesce((select g.id from public.groups g where g.id=d.group_id),(select g.id from public.groups g where g.name=d.name limit 1)) from pg_temp.fixture_departments d where d.id=p_key
+ select coalesce((select g.id from public.groups g where g.id=d.group_id),(select g.id from public.groups g where g.name=d.name and g.parent_id is null)) from pg_temp.fixture_departments d where d.id=p_key
 $$;
 create or replace function pg_temp.team_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
- select coalesce((select coalesce((select g.id from public.groups g where g.id=t.group_id),(select g.id from public.groups g where g.name=t.name limit 1)) from pg_temp.fixture_teams t where t.id=p_key),
- (select g.id from public.groups g where g.name=case p_key when 't-app' then 'Echipa Aplicație' when 't-recruti' then 'Echipa Recruți' when 't-logistica' then 'Echipa Logistică' end limit 1))
+ select coalesce((select coalesce((select g.id from public.groups g where g.id=t.group_id),(select g.id from public.groups g where g.name=t.name and g.parent_id is not distinct from pg_temp.dept_group(t.dept_id))) from pg_temp.fixture_teams t where t.id=p_key),
+ (select g.id from public.groups g where g.name=case p_key when 't-app' then 'Echipa Aplicație' when 't-recruti' then 'Echipa Recruți' when 't-logistica' then 'Echipa Logistică' end
+    and g.parent_id is not distinct from (select r.id from public.groups r where r.parent_id is null and r.name=case p_key when 't-app' then 'Diverse' when 't-recruti' then 'Educațional' end)))
 $$;
 create or replace function pg_temp.project_group(p_key bigint) returns bigint language sql stable security definer set search_path='' as $$
- select coalesce((select g.id from public.groups g where g.id=p.group_id),(select g.id from public.groups g where g.name=p.name limit 1)) from pg_temp.fixture_projects p where p.id=p_key
+ select coalesce((select g.id from public.groups g where g.id=p.group_id),(select g.id from public.groups g where g.name=p.name and g.parent_id is null)) from pg_temp.fixture_projects p where p.id=p_key
 $$;
 create or replace function pg_temp.materialize_legacy_groups() returns void language plpgsql security definer set search_path='' as $$
 declare fixture record; v_id bigint;
