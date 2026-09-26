@@ -106,7 +106,7 @@ What this means, stated once so nobody is surprised on 2 October:
 
   `--resume-tasks-from` skips the Members (they must all exist already) and imports the Task rows from that row on. If the failing row had already filed its Request, the run says so and gives the Request's number: approve it in Administrare → Cereri with that row's Difficulty and Rating, and resume from the next row, which is the row the printed command names.
 
-- **When a call gets no answer at all** (a dropped connection or a timeout rather than a refusal), the run cannot know whether it wrote, and says so instead of guessing. Inside the history it prints two resume commands: one for when the row's Request is not in Administrare → Cereri, one for when it is. Before the history, the next run's preflight refuses if the lost call did create a user.
+- **When a call gets no answer at all** (a dropped connection or a timeout rather than a refusal), the run cannot know whether it wrote, and says so instead of guessing. When a Request's **filing** got no answer, it prints two resume commands: one for when the row's Request is not in Administrare → Cereri, one for when it is. When its **approval** got no answer, the Request exists and only its status is unknown: the run names it, says to approve it only if it is still pending, and offers only the next row, because resuming from the same row would import that Task twice. Before the history, the next run's preflight refuses if the lost call did create a user.
 
 ## Rehearsing the real run
 

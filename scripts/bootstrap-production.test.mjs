@@ -497,6 +497,19 @@ test('a Task call that gets no answer is reported as unknown, never as nothing w
   assert.match(output, /If it is there: .*--resume-tasks-from 4$/m);
 });
 
+test('an approval that gets no answer names its Request and never offers the same row again', async () => {
+  const project = fakeProject({
+    drop: (call) =>
+      call.path.endsWith('/approve_completed_work_request') && call.body.p_request_id === 102,
+  });
+  const { code, output } = await run([...BOTH, '--execute'], project);
+  assert.equal(code, 1);
+  assert.match(output, /tasks row 3: Request 102 was filed, but its approval got no answer/);
+  assert.match(output, /Never resume from row 3\./);
+  assert.doesNotMatch(output, /--resume-tasks-from 3$/m);
+  assert.match(output, /Then resume with: .*--resume-tasks-from 4$/m);
+});
+
 test('the secret key is sent over https, or over http to a local stack only', async () => {
   for (const [url, expected] of [
     ['http://example-ref.supabase.co', 2],

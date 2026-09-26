@@ -922,7 +922,17 @@ export async function main(argv, { env, fetchImpl, log, readFile, now = new Date
   const pending = ctx.pending;
   const following = pending ? nextRow(tasks, pending.row) : null;
   const approveHint = "approve it if it is still pending, with the row's Difficulty and Rating";
-  if (pending && noAnswer) {
+  if (pending?.request && noAnswer) {
+    // The Request exists; only its status is unknown. Resuming from this row
+    // would file a second one, and an approved Task cannot be deleted.
+    log(
+      `tasks row ${pending.row}: Request ${pending.request} was filed, but its approval got no answer ` +
+        `(${failure.message}). Open Request ${pending.request} in Administrare → Cereri: if it is still ` +
+        `pending, approve it with the row's Difficulty and Rating; if it is approved, do nothing. ` +
+        `Never resume from row ${pending.row}.`,
+    );
+    if (following !== null) log(`Then resume with: ${resume(following)}`);
+  } else if (pending && noAnswer) {
     log(
       `tasks row ${pending.row}: the server gave no answer (${failure.message}), so the outcome is ` +
         `unknown. Check Administrare → Cereri for this row's Request before resuming.`,
