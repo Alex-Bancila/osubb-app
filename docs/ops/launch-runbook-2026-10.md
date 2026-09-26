@@ -237,9 +237,9 @@ what a missing value means. Commit it to `main` (docs-only commits are allowed).
    `docs/backend/push.md` in the SQL Editor and watch the phone.
 4. Merge the other green PRs as they come (Wave 3 tail, Wave 4, Wave 5 leftovers, N1, N3, N4, #78). Each
    merge redeploys staging; that is expected.
-5. Send the board the Privacy Notice text (`docs/legal/politica-de-confidentialitate.md`) after filling
-   the placeholders at its top; ask for approval by Wednesday. Their approval is recorded in the PR that
-   bumps the version to `1.0`.
+5. Open `/confidentialitate` on staging and confirm the notice text and version `1.0` are the approved
+   ones (`docs/legal/politica-de-confidentialitate.md`, approved in #802). Every Member acknowledges that
+   version at first sign-in, so it must be the final text before the first invitation.
 
 ## §10 Merge cut-off — Wednesday 30 Sep, end of day
 
@@ -280,13 +280,14 @@ anything on Thursday except fixes found by the acceptance run.
    domain **Active** (certificate issued; minutes to an hour). Open `https://app.osubb.ro`: the login
    screen, no certificate warning.
 5. Run §7.5 if not done, then **Run workflow** again so the web build carries `VITE_VAPID_PUBLIC_KEY`.
-6. `#112 --dry-run` against staging with Dobre; compare against the sheet row by row.
+6. `#112 --dry-run` against staging with Dobre; compare against the sheet row by row (commands and
+   input contract: `docs/backend/production-bootstrap.md`).
 7. Prepare the invitation message and the one-page quickstart (Romanian): iPhone Home Screen steps
    first, then the sign-in flow (button, then code), then the Privacy Notice link.
 
 ## §12 Launch day — Friday 2 Oct
 
-1. Morning: `npx supabase db dump …` (still empty). Run `#112` for real against production. Sign in at
+1. Morning: `npx supabase db dump …` (still empty). Run `#112` for real against production (`--execute`, same doc). Sign in at
    `https://app.osubb.ro` as the Moderator (yourself): the click-to-confirm page, the code path on the
    phone, install, push, one Task end to end.
 2. **Go / no-go** with the open list from GitHub in front of you (ruling L15). If go:

@@ -36,6 +36,9 @@ vi.mock('../../queries/groups-admin', async (original) => ({
 vi.mock('./RolePanel', () => ({
   RolePanel: () => <section aria-label="Role panel" />,
 }));
+vi.mock('./PrivacyPanel', () => ({
+  PrivacyPanel: () => <section aria-label="Privacy panel" />,
+}));
 import AdministrareScreen from './AdministrareScreen';
 
 vi.setConfig({ testTimeout: 15_000 });
@@ -111,10 +114,11 @@ beforeEach(() => {
   capabilities({ createTopLevelGroups: true });
 });
 
-it('mounts the Role panel only from the live server capability', () => {
+it('mounts the Role and Confidențialitate panels only from the live server capability', () => {
   capabilities({ manageRoles: false });
   const view = show();
   expect(screen.queryByRole('region', { name: 'Role panel' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Privacy panel' })).toBeNull();
   capabilities({ manageRoles: true });
   view.rerender(
     <MemoryRouter>
@@ -122,6 +126,7 @@ it('mounts the Role panel only from the live server capability', () => {
     </MemoryRouter>,
   );
   expect(screen.getByRole('region', { name: 'Role panel' })).toBeVisible();
+  expect(screen.getByRole('region', { name: 'Privacy panel' })).toBeVisible();
 });
 
 function show() {
@@ -371,4 +376,20 @@ it('says so, once, when the tree cannot be read', () => {
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Nu am putut încărca grupurile.',
   );
+});
+
+it('offers the Perioade de evaluare entry only with manageRoles (#702)', () => {
+  // A Group Manager or a BCE administers Groups but does not manage Roles.
+  capabilities({ createTopLevelGroups: true, manageRoles: false });
+  const view = show();
+  expect(
+    screen.queryByRole('link', { name: 'Perioade de evaluare' }),
+  ).toBeNull();
+  view.unmount();
+
+  capabilities({ createTopLevelGroups: true, manageRoles: true });
+  show();
+  expect(
+    screen.getByRole('link', { name: 'Perioade de evaluare' }),
+  ).toHaveAttribute('href', '/administrare/perioade');
 });

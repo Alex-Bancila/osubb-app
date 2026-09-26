@@ -7,7 +7,7 @@ How an in-app Notification reaches a Member's browser when the app is closed (AD
 1. Something writes a `notifications` row (`private.notify`, a Task command, a Fan-out). Suppression was already applied there: a row that exists is deliverable, and push never re-applies `notif_suppression`.
 2. The trigger `notifications_enqueue_push` (`private.enqueue_push_deliveries`) writes one `public.push_deliveries` row per `push_tokens` row of the recipient with `platform = 'web'`. Only an **insert** enqueues: when `private.notify` refreshes an unread row through its dedupe key, the device is not buzzed again. **Per-Member preferences (#635)** are checked here and nowhere else: when the recipient has a `notification_push_preferences` row for the Notification's kind with `push_enabled = false`, and the Notification is not `critical`, no outbox row is written — the in-app row already exists and stays. No row means push is on. Only `announce`, `event` and `deadline` can be muted (`notification_push_preferences_kind_ck` refuses `task` and `system`), and a critical Announcement's Notification is written with `critical = true` by the fan-out, so it pushes regardless. `send-push` needs no change: it only ever sees rows that were enqueued.
 3. Every minute the `pg_cron` job **`osubb-send-push`** checks for a due row. With none, it stops there — one index probe, no HTTP call. With one, it POSTs to `<project_url>/functions/v1/send-push` through `pg_net`, with the project's secret key (`sb_secret_…`) on the `apikey` header. Both values come from Vault (`project_url`, `secret_key`).
-4. `send-push` runs with `verify_jwt = false` and authenticates the call itself (#769): the `apikey` header must equal one of the project's secret keys, compared in constant time, or it answers `401`. It reads those keys from `SUPABASE_SECRET_KEYS`, which the platform injects into every function; nothing reads a `role` claim or the legacy `service_role` JWT any more. Its own database client uses the same secret key. It claims up to 100 rows at a time with `public.claim_push_deliveries` (`for update skip locked`, so overlapping runs never send one row twice; up to 10 batches per run), encrypts `{ id, title, body, link }` for each browser subscription, signs it with VAPID, and records the answer with `public.settle_push_delivery`:
+4. `send-push` runs with `verify_jwt = false` and authenticates the call itself (#769): the `apikey` header must equal one of the project's secret keys, compared in constant time, or it answers `401`. It reads those keys from `SUPABASE_SECRET_KEYS`, which the platform injects into every function; nothing reads a `role` claim or the legacy `service_role` JWT any more. Its own database client uses the same secret key. It claims up to 100 rows at a time with `public.claim_push_deliveries` (`for update skip locked`, so overlapping runs never send one row twice; up to 10 batches per run), encrypts `{ id, title, body, link }` (plus its declarative copy, see [Declarative Web Push](#declarative-web-push-778)) for each browser subscription, signs it with VAPID, and records the answer with `public.settle_push_delivery`:
 
 | Push service answer                     | Outcome                                                                                        |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -23,6 +23,45 @@ A claim is a five-minute lease. If the function dies between claiming and settli
 7. The daily job **`osubb-purge-cron-history`** (03:45 UTC) deletes `cron.job_run_details` rows older than 14 days. `osubb-send-push` alone writes 1,440 a day and pg_cron never deletes one.
 
 No client can read or write `push_deliveries`: RLS is on, there is no policy, and nothing is granted to `anon`, `authenticated` or `service_role`. Only the two `security definer` functions above (executable by `service_role` alone) and the trigger touch it.
+
+## Declarative Web Push (#778)
+
+Safari 18.4+ on iOS and 18.5+ on macOS can show a push without waking the service worker, which is more reliable on iOS (no service-worker wake-up budget). `send-push` therefore sends one JSON payload with both shapes of the same Notification:
+
+```json
+{
+  "id": 42,
+  "title": "Task nou",
+  "body": "Ai primit „Afiș”.",
+  "link": "/tracker/12",
+  "web_push": 8030,
+  "notification": {
+    "title": "Task nou",
+    "body": "Ai primit „Afiș”.",
+    "navigate": "https://app.osubb.ro/tracker/12",
+    "tag": "osubb-42",
+    "lang": "ro"
+  }
+}
+```
+
+- **Safari** sees `web_push: 8030` and shows `notification` itself; a tap opens `navigate`. No `mutable` key is sent, so the service worker's `push` handler does not also run — one notification.
+- **Every other browser** passes the whole object to the service worker, whose `push` handler reads `id`, `title`, `body` and `link` and ignores every other key (`parsePushPayload`, unchanged) — one notification.
+- **`navigate`** is the URL the service worker's tap would open: the in-app `link` on the app's origin, or `/notificari` when there is none or it is not an in-app route. The origin is the **first `ALLOWED_ORIGINS` entry** — the setting `invite-member` already needs (`docs/backend/inviting.md`), and function secrets are shared by every function in a project. Only an `https` origin counts: with `ALLOWED_ORIGINS` unset (locally, or an environment not set up yet) or malformed, the declarative keys are left out and every browser, Safari included, uses the service worker as before. So keep the app's own origin first in that list.
+- **Size.** A push message is one encrypted record of at most 4096 bytes, about 3993 bytes of JSON. The declarative copy repeats title and body, so `send-push` keeps the payload within 3800 bytes of UTF-8 by cutting the body on a character boundary with `…` (the same cut in both shapes); a long Announcement body is the realistic case. The full text stays in the in-app list. A title or link too long to fit on its own would drop the link (the tap opens `/notificari`) and then cut the title; nothing the app writes today gets there.
+- **Privacy** is unchanged: the declarative copy carries the same title, body and link, nothing new.
+
+### Manual check on devices
+
+Device tests cannot run in CI. After the first deploy of this change to an environment (staging first), with `ALLOWED_ORIGINS` set to that environment's app origin, send one Notification with the canary query in [step 6](#6-canary-device-after-every-send-push-deploy) to each device below and tick it when **exactly one** notification appears and a tap opens the right screen:
+
+- [ ] iPhone, iOS 18.4 or later, the app added to the Home Screen and **Notificări pe acest dispozitiv** on (the declarative path).
+- [ ] iPhone on iOS 16.4–18.3, if one is at hand (the service-worker path; the declarative keys must be ignored).
+- [ ] Chrome on Android, installed app or tab.
+- [ ] Chrome on desktop.
+- [ ] Firefox on desktop.
+- [ ] One Notification with a link (`/tracker/<id>`) and one without (opens **Notificări**), on the iPhone at least.
+- [ ] One critical Announcement with a body of about 2000 characters: it arrives, cut with `…`, and its row is `sent` (not `failed` with `HTTP 413`).
 
 ## Library
 

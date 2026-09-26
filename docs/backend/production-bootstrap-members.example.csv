@@ -1,0 +1,6 @@
+email,full_name,phone,role,group_path,group_role,position_title,joined_at,appointed_by_email
+moderator@example.com,Alex Exemplu,0730 655 145,moderator,Diverse / Echipa IT,member,,2023-10-01,
+presedinte@example.com,Ioana Exemplu,+40 740 111 222,bc,Secretariat,member,,2022-10-15,
+bce.edu@example.com,Mihai Exemplu,,bce,EDU,manager,,2023-03-01,
+bce.tineret@example.com,"Pop, Ana",0040 751 222 333,bce,Tineret,manager,,,presedinte@example.com
+responsabil.it@example.com,Dan Exemplu,,bce,Diverse / Echipa IT,responsible,Coordonator IT,,

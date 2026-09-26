@@ -2,8 +2,10 @@
  * The pure half of the service worker's push handling (#704, ADR-0010), kept
  * out of `sw.ts` so Vitest covers it without a worker runtime.
  *
- * `send-push` (#703) sends exactly `{ id, title, body, link }` — the
- * Notification's own row and nothing else.
+ * `send-push` (#703) sends `{ id, title, body, link }` — the Notification's
+ * own row and nothing else — plus, since #778, the same text as a Declarative
+ * Web Push (`web_push`, `notification`) for Safari, which shows that one
+ * without waking this worker. Every other top-level key is ignored here.
  */
 export type PushPayload = {
   id: number;
@@ -50,12 +52,14 @@ export function parsePushPayload(text: string | null | undefined) {
  * same rule the in-app list applies (`inAppLink`).
  */
 export function targetUrl(link: string | null | undefined, origin: string) {
+  const fallback = new URL(NOTIFICATIONS_PATH, origin);
   const trimmed = link?.trim() ?? '';
-  const path =
-    trimmed.startsWith('/') && !trimmed.startsWith('//')
-      ? trimmed
-      : NOTIFICATIONS_PATH;
-  return new URL(path, origin).href;
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//'))
+    return fallback.href;
+  // The URL parser reads `/\host` (and a tab or new line inside `//`) as
+  // another host, so the resolved origin is checked too.
+  const url = new URL(trimmed, origin);
+  return url.origin === fallback.origin ? url.href : fallback.href;
 }
 
 /** The slice of the worker's `Clients` and `WindowClient` a tap needs. */

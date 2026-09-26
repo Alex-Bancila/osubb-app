@@ -1,9 +1,13 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('../lib/supabase', () => ({ supabase: { rpc } }));
 import {
   fetchGroupCoordination,
   runApplicationCommand,
+  useApplicationCommand,
 } from './group-applications';
 beforeEach(() =>
   rpc.mockResolvedValue({ data: { id: 7, status: 'pending' }, error: null }),
@@ -28,6 +32,20 @@ it('withdraws the server Application id', async () => {
   expect(rpc).toHaveBeenCalledWith('withdraw_group_application', {
     p_application_id: 7,
   });
+});
+it('marks the pending-Applications reads stale after a command, so a withdrawn one leaves Profil and /grupuri (#699)', async () => {
+  const client = new QueryClient();
+  const applications = ['groups', 'applications', { memberId: 'm' }];
+  client.setQueryData(applications, [{ id: 7 }]);
+  const { result } = renderHook(() => useApplicationCommand(), {
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children),
+  });
+  expect(client.getQueryState(applications)?.isInvalidated).toBe(false);
+  await act(() =>
+    result.current.mutateAsync({ kind: 'withdraw', applicationId: 7 }),
+  );
+  expect(client.getQueryState(applications)?.isInvalidated).toBe(true);
 });
 it.each([true, false])(
   'submits the decision %s and separate decision note',

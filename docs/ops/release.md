@@ -187,6 +187,30 @@ needs VAPID signing, the push service, and a subscribed device end to end, and i
 automated gate so a stale or revoked canary subscription fails as a visible follow-up step, never as a Release
 blocked for a reason that has nothing to do with the code going out.
 
+## Uptime check
+
+`.github/workflows/uptime.yml` runs every 15 minutes (and on demand) and watches from outside the app,
+independent of any deploy (#777, ruling L20 — deferred to after launch, no new vendor). It checks each
+origin's `/` for `200`, a `content-security-policy` (or `-report-only`) header, and
+`manifest.webmanifest` served as `application/manifest+json` — the same three things the
+[smoke checks](#smoke-checks) above check right after a deploy — and, if given a Supabase project URL,
+that its `/rest/v1/` root answers `200` or `401` rather than the `5xx` a paused project gives.
+
+Alex sets two repository variables once #109 gives staging a real address:
+
+- `UPTIME_URLS` — comma-separated origins to watch, e.g.
+  `https://app.osubb.ro,https://osubb-staging.pages.dev`.
+- `UPTIME_SUPABASE_URLS` — optional, comma-separated Supabase project URLs (no path) to watch on
+  `/rest/v1/`; pair it with `UPTIME_SUPABASE_KEY` (any string — an unrecognised key still answers `401`,
+  a pass here).
+
+Until `UPTIME_URLS` is set the workflow exits without checking anything: staging has no address yet, and
+nothing should alert before then. A failure opens a GitHub issue labelled `uptime` titled
+`Uptime: <host> failing since <UTC time>` with the curl output (or adds a comment to the one already open
+for that host, so an outage gets one issue, not one per run); the next green run closes it with a comment.
+_Known limitation:_ a GitHub Actions `schedule` trigger can run several minutes late under load, so "within
+minutes" is Actions' promise, not a guaranteed one.
+
 ## The Resend "never arrived" lookup
 
 A Member says an invitation or a sign-in email never showed up. Before assuming Resend is broken, or the
