@@ -86,6 +86,10 @@ const REASON_COPY = new Map<string, string>([
     'Taskurile unui grup privat sunt doar pentru membrii lui. Alege audiența locală.',
   ],
   [
+    'direct_task_local_only',
+    'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
+  ],
+  [
     'group_has_members_below_level',
     'Unii membri au nivelul sub noul nivel minim. Confirmă scoaterea lor.',
   ],

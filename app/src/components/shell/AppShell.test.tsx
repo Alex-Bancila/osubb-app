@@ -30,6 +30,9 @@ vi.mock('../../lib/capabilities', () => ({
 vi.mock('../../queries/notifications-realtime', () => ({
   useNotificationRealtime: vi.fn(),
 }));
+vi.mock('../../queries/push-subscription', () => ({
+  usePushSelfRepair: vi.fn(),
+}));
 
 import AppShell from './AppShell';
 import type { Capabilities } from '../../lib/capabilities';

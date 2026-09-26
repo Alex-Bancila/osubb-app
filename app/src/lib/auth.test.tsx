@@ -165,6 +165,26 @@ describe('AuthProvider cache hygiene', () => {
     );
   });
 
+  it('forgets that push is on here for a member whose session ends (#769)', async () => {
+    localStorage.setItem('osubb.push-on.a', '1');
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <div />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    notifyListener()('SIGNED_IN', sessionFor('a'));
+    expect(localStorage.getItem('osubb.push-on.a')).toBe('1');
+    notifyListener()('SIGNED_OUT', null);
+
+    await waitFor(() =>
+      expect(localStorage.getItem('osubb.push-on.a')).toBeNull(),
+    );
+  });
+
   it('clears the query cache when a different member signs in', async () => {
     const client = new QueryClient();
     render(
