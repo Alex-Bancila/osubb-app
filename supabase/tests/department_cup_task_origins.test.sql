@@ -1,6 +1,6 @@
 -- department_cup_task_origins.test.sql — #259: Department Cup totals follow the
 -- Task Origin, never the Executor's current memberships, and the Cup takes
--- exactly one filter: the Campaign.
+-- the Campaign filter and (#677) the Work Filter's award date range.
 --
 -- Fixture prefix: 25900000-… (issue #259). Runs in one transaction and rolls
 -- back, so the local demo seed survives untouched; every "before" figure is
@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(51);
+select plan(60);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -23,13 +23,13 @@ select ok(has_table_privilege('authenticated', 'public.dept_cup', 'SELECT'),
   'authenticated may select the Department Cup view');
 select ok(not has_table_privilege('anon', 'public.dept_cup', 'SELECT'),
   'anon cannot select the Department Cup view');
-select has_function('public', 'department_cup', array['bigint'],
+select has_function('public', 'department_cup', array['bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'the Campaign-filtered Department Cup read exists');
-select ok(has_function_privilege('authenticated', 'public.department_cup(bigint)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'public.department_cup(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'authenticated may execute the Campaign-filtered Department Cup read');
-select ok(not has_function_privilege('anon', 'public.department_cup(bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.department_cup(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'anon cannot execute the Campaign-filtered Department Cup read');
-select ok(not has_function_privilege('service_role', 'private.department_cup_rows(bigint)', 'EXECUTE'),
+select ok(not has_function_privilege('service_role', 'private.department_cup_rows(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'the server role cannot bypass the BCE+ gate through the private body');
 -- Pins the view-level revoke too, not only the function grant above: dept_cup
 -- is security_invoker over a body service_role has no `usage` on `private` to
@@ -47,14 +47,14 @@ select ok(not has_table_privilege('service_role', 'public.dept_cup', 'SELECT'),
 -- direction of that mutation -- a `security definer` wrapper, or a
 -- `security invoker` body -- moves a single figure in this file, so the split
 -- is pinned here instead of being inferred from the standings below.
-select is((select prosecdef from pg_proc where oid = 'public.department_cup(bigint)'::regprocedure),
+select is((select prosecdef from pg_proc where oid = 'public.department_cup(bigint, timestamptz, timestamptz)'::regprocedure),
   false, 'the public Department Cup wrapper is security invoker');
-select is((select prosecdef from pg_proc where oid = 'private.department_cup_rows(bigint)'::regprocedure),
+select is((select prosecdef from pg_proc where oid = 'private.department_cup_rows(bigint, timestamptz, timestamptz)'::regprocedure),
   true, 'the private Department Cup body is security definer -- it reads the whole ledger past RLS and gates itself');
 
 -- ==================== 2. Group settings define the competing set ====================
 select set_eq(
-  $$select legacy_dept_id from public.groups where competes_in_cup$$,
+  $$select d.id from public.groups g join pg_temp.fixture_departments d on d.group_id=g.id where g.competes_in_cup$$,
   $$select unnest(array['edu','pr','youth','fin','hr']::text[])$$,
   'seeded Group settings identify the five current competitors');
 
@@ -80,7 +80,7 @@ insert into public.profiles (id, full_name, email, role, status) values
 
 -- The Executor belongs to no Department at all: every point below has to reach
 -- a Department through its Task's Origin or not at all.
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('259-dept-team', 'Department Team 259', 'edu'),
   ('259-independent', 'Independent Team 259', null);
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
@@ -95,7 +95,7 @@ overriding system value values
   (2590001, pg_temp.dept_group('edu'), 'Campania A 259', '25900000-0000-0000-0000-000000000001'),
   (2590002, pg_temp.dept_group('edu'), 'Campania B 259', '25900000-0000-0000-0000-000000000001');
 
-insert into public.projects (id, name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (id, name, status, leader_id, created_by)
 overriding system value values
   (2590003, 'Project 259', 'active', '25900000-0000-0000-0000-000000000001',
    '25900000-0000-0000-0000-000000000001');
@@ -204,23 +204,23 @@ select set_eq(
 
 -- #523: settings and deep paths, all changed only in this rolled-back fixture.
 reset role;
-update public.groups set counts_toward_parent_cup=false where legacy_team_id='259-dept-team';
+update public.groups set counts_toward_parent_cup=false where id = pg_temp.team_group('259-dept-team');
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),0,
   'a child link that does not count blocks its Task points');
-update public.groups set counts_toward_parent_cup=true where legacy_team_id='259-dept-team';
-update public.groups set competes_in_cup=false where legacy_dept_id='youth';
+update public.groups set counts_toward_parent_cup=true where id = pg_temp.team_group('259-dept-team');
+update public.groups set competes_in_cup=false where name = 'Tineret';
 select is((select count(*) from public.dept_cup where group_id = pg_temp.dept_group('youth')),0::bigint,
   'disabling competition removes a Group row');
-update public.groups set competes_in_cup=true where legacy_dept_id='youth';
+update public.groups set competes_in_cup=true where name = 'Tineret';
 
 -- Two native ancestors above a mapped leaf exercise arbitrary depth without
 -- bypassing #519's Task/Request legacy-Origin compatibility boundary.
 insert into public.groups(name,category,parent_id,path)
-select 'Cup native child 523','team',id,'{}' from public.groups where legacy_dept_id='edu';
+select 'Cup native child 523','team',id,'{}' from public.groups where name = 'Educațional';
 insert into public.groups(name,category,parent_id,path)
 select 'Cup native grandchild 523','project',id,'{}' from public.groups where name='Cup native child 523';
 update public.groups set parent_id=(select id from public.groups where name='Cup native grandchild 523')
-where legacy_team_id='259-dept-team';
+where id = pg_temp.team_group('259-dept-team');
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),15,
   'two native levels and the mapped leaf all count toward the competing root');
 update public.groups set counts_toward_parent_cup=false where name='Cup native grandchild 523';
@@ -230,27 +230,27 @@ update public.groups set counts_toward_parent_cup=true where name='Cup native gr
 update public.groups set counts_toward_parent_cup=false where name='Cup native child 523';
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),0,
   'the upper native link can independently block the Cup contribution');
-select is((select points from public.leadership_leaderboard((select id from public.groups where legacy_dept_id='edu'),2590002)
+select is((select points from public.leadership_leaderboard((select id from public.groups where name = 'Educațional'),2590002)
   where member_id='25900000-0000-0000-0000-000000000002'),15,
   'Cup participation settings never remove work from a Group subtree Leaderboard');
 update public.groups set counts_toward_parent_cup=true where name='Cup native child 523';
-update public.groups set counts_toward_parent_cup=false where legacy_dept_id='edu';
+update public.groups set counts_toward_parent_cup=false where name = 'Educațional';
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')),15,
   'the root flag is not a link below itself and does not discard descendant points');
 select is((select points from public.department_cup(2590001) where group_id = pg_temp.dept_group('edu')),12,
   'a competing Group keeps its own direct work regardless of its parent flag');
-update public.groups set counts_toward_parent_cup=true where legacy_dept_id='edu';
+update public.groups set counts_toward_parent_cup=true where name = 'Educațional';
 
-update public.groups set competes_in_cup=true where legacy_project_id=2590003;
-select is((select points from public.dept_cup where group_id=(select id from public.groups where legacy_project_id=2590003)),15,
+update public.groups set competes_in_cup=true where id = pg_temp.project_group(2590003);
+select is((select points from public.dept_cup where group_id=(select id from public.groups where id = pg_temp.project_group(2590003))),15,
   'a Project presentation label never prevents a Group from competing');
-update public.groups set competes_in_cup=false where legacy_project_id=2590003;
-select ok(exists(select 1 from public.dept_cup cup join public.groups grp on grp.id=cup.group_id where grp.legacy_dept_id='edu'),
+update public.groups set competes_in_cup=false where id = pg_temp.project_group(2590003);
+select ok(exists(select 1 from public.dept_cup cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
   'unfiltered Cup includes the actual Group identifier');
-select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.legacy_dept_id='edu'),
+select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
   'Campaign-filtered Cup includes the actual Group identifier');
 select is((select members from public.dept_cup where group_id = pg_temp.dept_group('edu')),
-  (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where legacy_dept_id='edu')),
+  (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where name = 'Educațional')),
   'Cup roster counts active explicit members of the competitor itself');
 
 -- #523: the attribution rule is the *nearest* competing ancestor-or-self, not
@@ -281,6 +281,68 @@ select is((select points from public.department_cup(2590002) where group_id = pg
 update public.groups set competes_in_cup = false where name = 'Cup native child 523';
 alter table public.groups add constraint groups_competes_top_level_ck
   check (not competes_in_cup or parent_id is null);
+
+-- ==================== 5b. The Work Filter date range (#677) ====================
+-- The Cup reads the award instant (task_evaluations.evaluated_at through
+-- points_ledger.evaluation_id). Two more edu awards, dated in 2001 so every
+-- other award in the database (all at now()) falls outside [T1, T2):
+--   6 (2 x 3) awarded at T1 = 2001-03-10 10:00Z and kept;
+--   3 (1 x 3) awarded at T1 and reversed at T2 = 2001-04-10 10:00Z, its
+--   reversal row dated T2 -- a body reading points_ledger.created_at would
+--   count the +3 in [T1, T2) and the -3 in [T2, open).
+insert into public.tasks
+  (title, description, deadline, group_id, status, difficulty, rating,
+   created_by, created_at, completed_at)
+select fixture.title, 'Fixture', now() - interval '2 days', pg_temp.dept_group('edu'),
+       'completed', fixture.difficulty, 5, '25900000-0000-0000-0000-000000000001',
+       now() - interval '3 days', now()
+  from (values ('Cup Dated Kept 259', 2), ('Cup Dated Reversed 259', 1))
+    as fixture (title, difficulty);
+select pg_temp.test_credit_task(task.id, '25900000-0000-0000-0000-000000000002',
+                                '25900000-0000-0000-0000-000000000001',
+                                p_awarded_at => '2001-03-10 10:00:00+00')
+  from public.tasks as task
+ where task.title like 'Cup Dated % 259'
+ order by task.id;
+select pg_temp.test_reverse_award(task.id, '25900000-0000-0000-0000-000000000002',
+                                  '2001-04-10 10:00:00+00')
+  from public.tasks as task where task.title = 'Cup Dated Reversed 259';
+
+select is((select count(*)::int from pg_proc
+            where proname = 'department_cup' and pronamespace = 'public'::regnamespace), 1,
+  'exactly one department_cup overload exists -- PostgREST can resolve the call (no PGRST203)');
+
+select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
+
+select is((select points from public.department_cup(null, '2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00')
+            where group_id = pg_temp.dept_group('edu')), 6,
+  'in [T1, T2) edu holds the kept award only -- the award reversed at T2 nets to zero inside the range of its Evaluation');
+select is((select points from public.department_cup(null, '2001-04-10 10:00:00+00', null)
+            where group_id = pg_temp.dept_group('edu')),
+          (select points - 6 from public.dept_cup where group_id = pg_temp.dept_group('edu')),
+  'in [T2, open) edu holds everything but the 2001 awards -- the reversal leaves no phantom -3 behind');
+select is((select points from public.department_cup(null, '2001-03-10 10:00:00+00', '2001-03-10 10:00:01+00')
+            where group_id = pg_temp.dept_group('edu')), 6,
+  'an award at T1 counts in [T1, T1 + 1s) -- the from bound is inclusive');
+select is((select points from public.department_cup(null, '2001-03-10 10:00:00.000001+00', '2001-04-10 10:00:00+00')
+            where group_id = pg_temp.dept_group('edu')), 0,
+  'and not in [T1 + 1us, T2) -- the from bound really filters');
+select is((select sum(points)::int from public.department_cup(null, null, '2001-03-10 10:00:00+00')), 0,
+  'nothing in the whole Cup falls in [open, T1) -- the to bound is exclusive and really filters');
+select is((select points from public.dept_cup where group_id = pg_temp.dept_group('edu')),
+          (select points from public.department_cup(null, null, null) where group_id = pg_temp.dept_group('edu')),
+  'the dept_cup view is the unbounded read, the 2001 awards included');
+select is((select points from public.department_cup(2590001, '2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00')
+            where group_id = pg_temp.dept_group('edu')), 0,
+  'the Campaign and the range combine: Campania A has no award in 2001');
+
+-- Step 1, before authority: an ordinary Member otherwise gets no rows, never
+-- an error.
+select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000002');
+select throws_ok(
+  $$ select * from public.department_cup(null, '2001-04-10 10:00:00+00', '2001-03-10 10:00:00+00') $$,
+  'PT400', 'invalid_date_range',
+  'an inverted range is PT400 invalid_date_range, before the BCE+ gate');
 
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 

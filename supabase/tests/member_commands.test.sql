@@ -11,13 +11,15 @@
 -- No pg_temp.test_race here on purpose: these commands take one target lock on
 -- public.profiles and the host defect in #596 makes the blocking path
 -- unreliable locally.
+--
+-- #724 adds the 1000-character limit on both reasons (ruling R8), at the end.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(108);
+select plan(119);
 
 -- ==================== Structure ====================
 
@@ -93,12 +95,11 @@ select is(has_function_privilege('service_role', 'private.revoke_member_sessions
 select is(has_function_privilege('public', 'private.revoke_member_sessions(uuid)', 'execute'), false,
   'and the default PUBLIC execute grant Postgres hands every new function was revoked');
 
--- Deliberately NOT asserted here: that `authenticated` has lost
--- `update (role, status)` on `profiles`. #580 leaves that grant in place, so
--- the direct path still exists beside these commands and the audit is complete
--- only for callers who use them. Closing it is a security-boundary change for
--- every client and belongs in its own PR — the migration header says so, and
--- `rls_profiles_write.test.sql` still pins the behaviour that is true today.
+-- #610: clients must use the commands whose effects this suite verifies.
+select ok(not has_column_privilege('authenticated', 'public.profiles', 'role', 'update'),
+  'Role changes have no direct client write path');
+select ok(not has_column_privilege('authenticated', 'public.profiles', 'status', 'update'),
+  'Membership Status changes have no direct client write path');
 
 -- ==================== Fixtures ====================
 
@@ -135,7 +136,7 @@ insert into profiles (id, full_name, email, role, status) values
 
 -- One Department membership, so the Wave 1 mirror has Group Roles to move if
 -- the command ever reached for them.
-insert into member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
   values ('58000000-0000-0000-0000-00000000000a', 'edu');
 
 -- Three native Groups spanning the Minimum Level boundary a demotion crosses.
@@ -705,6 +706,45 @@ select throws_ok($$select public.set_member_role(
 select throws_ok($$select public.set_member_status(
   '61200000-0000-0000-0000-000000000001', 'activ', 'A reason grants no authority')$$,
   '42501', 'member_manage_forbidden', 'a supplied status reason does not bypass authority');
+reset role;
+
+-- #724 (ruling R8): a Role or Status change reason is at most 1000
+-- characters, measured as it is stored -- trimmed -- at step 1. Removing a
+-- check turns its 1001-character assertion into a success (role_history.reason
+-- has no length constraint underneath); moving it below the gate turns the
+-- no-authority assertions at the end into 42501.
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
+select is((select status::text from public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('s', 1000))),
+  'activ', 'set_member_status accepts a 1000-character reason');
+select throws_ok($$select public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'inactiv', repeat('s', 1001))$$,
+  'PT400', 'reason_too_long', 'set_member_status refuses a 1001-character reason');
+select is((select status::text from public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'inactiv', E' \t' || repeat('s', 1000) || E'\n ')),
+  'inactiv', 'set_member_status measures the reason after trimming it');
+select is((select role::text from public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('r', 1000))),
+  'activ', 'set_member_role accepts a 1000-character reason');
+select throws_ok($$select public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'vot', repeat('r', 1001))$$,
+  'PT400', 'reason_too_long', 'set_member_role refuses a 1001-character reason');
+select is((select role::text from public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'vot', E' \t' || repeat('r', 1000) || E'\n ')),
+  'vot', 'set_member_role measures the reason after trimming it');
+reset role;
+select is((select array_agg(char_length(reason) order by id) from public.role_history
+  where member_id = '61200000-0000-0000-0000-000000000001'
+    and reason ~ '^[rs]+$'),
+  array[1000, 1000, 1000, 1000],
+  'the four accepted reasons are stored whole and trimmed; the two refused ones wrote nothing');
+select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000003');
+select throws_ok($$select public.set_member_role(
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('r', 1001))$$,
+  'PT400', 'reason_too_long', 'set_member_role answers reason_too_long before the gate, even without authority');
+select throws_ok($$select public.set_member_status(
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('s', 1001))$$,
+  'PT400', 'reason_too_long', 'set_member_status answers reason_too_long before the gate, even without authority');
 reset role;
 
 select * from finish();

@@ -7,6 +7,7 @@ import {
   UserRound,
   Calendar,
 } from 'lucide-react';
+import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import {
   Sheet,
@@ -21,6 +22,7 @@ import {
   priorityMeta,
   type AnnouncementPresentation,
 } from './announcements-presentation';
+import AnnouncementReaders from './AnnouncementReaders';
 
 type AnnouncementDetailsSheetProps = {
   announcement: AnnouncementPresentation | null;
@@ -124,15 +126,21 @@ export default function AnnouncementDetailsSheet({
 
             <div className="grid grid-cols-1 gap-3 rounded-lg border bg-muted/40 p-4 text-xs sm:grid-cols-2">
               <div className="flex items-center gap-2 text-muted-foreground">
-                <UserRound
-                  className="size-4 text-foreground"
-                  aria-hidden="true"
-                />
-                <div>
+                {!announcement.authorMember && (
+                  <UserRound
+                    className="size-4 text-foreground"
+                    aria-hidden="true"
+                  />
+                )}
+                <div className="min-w-0">
                   <span className="block font-medium text-foreground">
                     Autor
                   </span>
-                  <span>{announcement.author ?? 'OSUBB'}</span>
+                  {announcement.authorMember ? (
+                    <MemberName {...announcement.authorMember} size="sm" />
+                  ) : (
+                    <span>{announcement.author ?? 'OSUBB'}</span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -150,6 +158,8 @@ export default function AnnouncementDetailsSheet({
                 </div>
               </div>
             </div>
+
+            <AnnouncementReaders announcement={announcement} />
 
             <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
               {announcement.body}

@@ -1,50 +1,57 @@
-import type { DirectoryGroup } from '../../queries/member-directory';
+import type { PrimaryGroup } from '../../queries/member-directory';
 
 /**
- * A member's Groups, kept to one readable line: the first few as chips, the
- * rest behind a "+N" that names them on hover and opens the full profile.
+ * A member's Groups, kept to one readable line (R17): the earliest-joined
+ * top-level Group as one chip in its own colour, and "+n" for every other
+ * explicit membership. Both the chip and "+n" open the Member Card.
  */
 export function MemberGroups({
-  groups,
-  max = 2,
+  primaryGroup,
+  otherMemberships,
   memberName,
-  onShowAll,
+  onOpen,
 }: {
-  groups: DirectoryGroup[];
-  max?: number;
+  primaryGroup: PrimaryGroup | null;
+  otherMemberships: number;
   memberName: string;
-  onShowAll: () => void;
+  onOpen: () => void;
 }) {
-  if (!groups.length) return <span className="text-muted-foreground">—</span>;
-  const shown = groups.slice(0, max);
-  const hidden = groups.slice(max);
+  if (!primaryGroup) return <span className="text-muted-foreground">—</span>;
   return (
-    <ul className="flex min-w-0 flex-nowrap items-center gap-1">
-      {shown.map((group) => (
-        <li key={group.id} className="min-w-0 shrink">
-          <span
-            title={group.label}
-            className="block max-w-32 truncate rounded-full border border-border px-2 py-0.5 text-xs font-medium"
-          >
-            {group.label}
-          </span>
-        </li>
-      ))}
-      {hidden.length > 0 && (
-        <li className="shrink-0">
-          <button
-            type="button"
-            onClick={onShowAll}
-            title={hidden.map((group) => group.label).join('\n')}
-            aria-label={`+${hidden.length} grupuri: ${hidden
-              .map((group) => group.label)
-              .join(', ')}. Vezi profilul membrului ${memberName}`}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-2 text-xs font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            +{hidden.length}
-          </button>
-        </li>
+    <span className="flex min-w-0 flex-nowrap items-center gap-1.5">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-haspopup="dialog"
+        aria-label={`Grupul ${primaryGroup.name}. Vezi profilul membrului ${memberName}`}
+        className="inline-flex min-h-11 max-w-32 shrink items-center gap-1.5 truncate rounded-full border px-2.5 py-0.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-ring"
+        style={{
+          borderColor: primaryGroup.color ?? 'var(--border)',
+          backgroundColor: primaryGroup.color
+            ? `color-mix(in oklab, ${primaryGroup.color} 12%, transparent)`
+            : undefined,
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: primaryGroup.color ?? 'var(--brand-red)' }}
+        />
+        <span className="truncate">{primaryGroup.name}</span>
+      </button>
+      {otherMemberships > 0 && (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-haspopup="dialog"
+          aria-label={`${
+            otherMemberships === 1 ? '+1 grup' : `+${otherMemberships} grupuri`
+          }. Vezi profilul membrului ${memberName}`}
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full px-2 text-xs font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          +{otherMemberships}
+        </button>
       )}
-    </ul>
+    </span>
   );
 }

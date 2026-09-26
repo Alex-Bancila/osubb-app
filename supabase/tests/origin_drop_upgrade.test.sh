@@ -31,9 +31,16 @@ psql_run() {
 # the legacy columns carry their real constraints, foreign keys and indexes.
 teardown() {
   cat <<'SQL'
+-- #591 retired backfill keys. These stand-ins live only in this rollback replay.
+alter table public.groups add column legacy_dept_id text, add column legacy_team_id text, add column legacy_project_id bigint;
+update public.groups set legacy_dept_id=case name when 'Educațional' then 'edu' when 'Imagine & PR' then 'pr' when 'Resurse Umane' then 'hr' when 'Financiar' then 'fin' when 'Tineret' then 'youth' when 'Diverse' then 'diverse' when 'Secretariat' then 'secretariat' when 'OSUBB' then 'org' end;
+update public.groups set legacy_team_id=case name when 'Echipa IT' then 'it' when 'Echipa Interne' then 'interne' end;
+
 -- The new arities are created with plain `create function` by the migration.
-drop function public.create_task(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint);
-drop function private.create_task_impl(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint);
+-- #684 later widened create_task by the Attached Link pair; the live arity is
+-- the one to clear before the replay recreates #579's Group-only one.
+drop function public.create_task(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint, text, text);
+drop function private.create_task_impl(text, text, timestamptz, text, text, uuid, bigint, bigint, text, bigint, text, text);
 drop function public.create_completed_work_request(text, bigint);
 drop function private.create_completed_work_request_impl(text, bigint);
 
@@ -54,6 +61,19 @@ create function private.sync_task_group_origin() returns trigger language plpgsq
 create function private.sync_request_group_origin() returns trigger language plpgsql as 'begin return new; end';
 create function private.sync_campaign_group_origin() returns trigger language plpgsql as 'begin return new; end';
 create function private.sync_event_group_origin() returns trigger language plpgsql as 'begin return new; end';
+-- #677 widened the Cup and the Member drill-down by the Work Filter range, so
+-- the pre-#677 arities this migration drops get stand-ins too. The widened
+-- arities stay alongside under their own signatures until the rollback.
+create function private.department_cup_rows(bigint) returns void language sql as '';
+create function public.department_cup(bigint) returns void language sql as '';
+create function private.leadership_member_tasks_impl(uuid) returns void language sql as '';
+create function public.leadership_member_tasks(uuid) returns void language sql as '';
+-- #691 widened create_event_impl / update_event_impl by p_campaign_id; section 10
+-- of the migration re-comments the pre-#691 arities, so they get stand-ins too.
+create function private.create_event_impl(text, text, bigint, timestamptz, timestamptz, text, integer, text, integer)
+returns public.events language sql as 'select null::public.events';
+create function private.update_event_impl(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer)
+returns public.events language sql as 'select null::public.events';
 
 -- The resolver, verbatim from 20260919135332_group_id_on_work_and_events.sql: the guards call it.
 create function private.group_id_for_legacy_origin(p_dept_id text, p_team_id text, p_project_id bigint)
@@ -67,6 +87,16 @@ returns bigint language sql stable security definer set search_path = '' as $$
            else false
          end;
 $$;
+
+-- #590 retired these tables. Recreate only their historical key shape inside
+-- this rollback-only replay, so the old foreign keys can still be exercised.
+create table public.departments (id text primary key);
+insert into public.departments select distinct legacy_dept_id from public.groups where legacy_dept_id is not null;
+create table public.teams (id text primary key, name text, dept_id text, is_interne boolean, unique(id,dept_id));
+insert into public.teams(id,name,dept_id,is_interne)
+select g.legacy_team_id,g.name,parent.legacy_dept_id,false from public.groups g
+left join public.groups parent on parent.id=g.parent_id where g.legacy_team_id is not null;
+create table public.projects (id bigint generated always as identity primary key, name text, status text, leader_id uuid, created_by uuid);
 
 -- The legacy columns, backfilled from each row's own Group as the bridge kept them.
 create type public.event_scope as enum ('team', 'dept', 'project', 'org');

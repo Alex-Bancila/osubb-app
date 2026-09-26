@@ -6,6 +6,7 @@
 - **Amended:** 2026-09-18 — ADR-0009: Origins are Groups; the Work origins, Campaigns, and Authorization sections are read through ADR-0009's settings and Group Roles
 - **Amended:** 2026-09-21 — the edit window: every Task field is editable until review, Group changes with accepted consequences, Public → Direct closes the queue; Campaigns report points and contributors
 - **Amended:** 2026-09-23 — the Candidate Queue never promotes by arrival: interest only queues, the Task Manager selects, and give-up or an edit that removes the Executor returns the Task to To do with its queue intact
+- **Amended:** 2026-09-25 — visibility follows the Task Audience: a Member sees their own Groups' Tasks and, elsewhere, only organization-wide public Tasks; supersedes the 2026-09-23 Minimum Level visibility amendment
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -157,4 +158,12 @@ Managers learn of new Candidates through the coalesced queue-count notification;
 
 ## Amendment (2026-09-23) — every open Opportunity is visible at its Group's Minimum Level
 
+_Superseded 2026-09-25 by the amendment below (ruling R26); the text is kept for the record._
+
 Read §Authorization's "eligible public Opportunities" as: every open Opportunity (public, queue open, not terminal) of a Group whose Minimum Level the Member satisfies, whatever its Audience. Audience decides only who may express interest: a local-Audience Opportunity of a Group the Member is not in is visible but not joinable. The Tracker presents the Opportunities of the Member's own Groups in the Group's colour and the rest greyed as **Other OSUBB Opportunities**, each band in deadline order, mirroring ADR-0008's Relevant / Other OSUBB Event treatment; Opportunities of the Organization Group are everyone's and take the OSUBB colour. Direct Tasks and Tasks with a closed queue stay invisible to non-participants. This widens the read policy on purpose so Members can see what other Groups do and apply to them (grilling of 2026-09-23).
+
+## Amendment (2026-09-25) — visibility follows the Task Audience
+
+Read §Authorization's "eligible public Opportunities" as follows. A Member sees the Tasks of their own Groups with a member's visibility; the Group Managers and Group Responsibles on the Group's path, and BC and Moderator, see them as before. From any other Group a Member sees only public Tasks whose Audience is organization-wide (`org`), and every active Member may see and join those with no Minimum Level gate. A local-Audience Task of a Group the Member is not in is invisible to them. The greyed **Other OSUBB Opportunities** band is retired, so Disponibile keeps only the band of the Member's own Groups and the Organization Group. The Task form offers the Audience only when the Assignment Mode is public (Candidate Queue); a directly assigned Task carries the local Audience. Private Groups are unchanged: their Tasks still cannot carry the organization-wide Audience (ADR-0009, ruling R25). Events and the Calendar are unchanged (ADR-0008 as amended stands); whether Events should follow the same rule is an open point for Alex.
+
+This supersedes the 2026-09-23 amendment "every open Opportunity is visible at its Group's Minimum Level", whose text stays above for the record. The trade-off: a Member no longer sees what other Groups work on unless those Groups open it to the whole organization, in exchange for a Group's local work staying local (ruling R26, 2026-09-25).

@@ -59,7 +59,9 @@ const members: DirectoryMember[] = [
     role: 'Voluntar',
     roleLevel: 1,
     status: 'activ',
-    groups: [g(2)],
+    groups: [g(1), g(2)],
+    primaryGroup: { id: 1, name: 'Educațional', color: '#284C93' },
+    otherMemberships: 1,
     points: -2,
     contact: { email: 'stefan@example.test', phone: null },
   },
@@ -73,6 +75,8 @@ const members: DirectoryMember[] = [
     roleLevel: 6,
     status: 'inactiv',
     groups: [g(4)],
+    primaryGroup: { id: 4, name: 'Imagine & PR', color: '#C0392B' },
+    otherMemberships: 0,
     points: 0,
     contact: undefined,
   },
@@ -87,6 +91,11 @@ const members: DirectoryMember[] = [
     roleLevel: 3,
     status: 'activ',
     groups: [g(1), g(4), g(3), g(5), g(6), g(7), g(8)],
+    // Educațional is her earliest-joined top-level Group (the chip); every
+    // other explicit membership — including the later-joined Imagine & PR —
+    // folds into "+6".
+    primaryGroup: { id: 1, name: 'Educațional', color: '#284C93' },
+    otherMemberships: 6,
     points: 40,
     contact: { email: 'maria@example.test', phone: '0700' },
   },
@@ -156,29 +165,49 @@ describe('Member directory', () => {
     expect(screen.getByRole('status')).toHaveTextContent('1 din 3 membri');
   });
 
-  it('keeps a member with many Groups on one readable line and lists the rest', async () => {
+  it('shows one Group chip (the earliest-joined top-level Group) and "+n" for the rest', () => {
+    render(<VolunteersScreen />);
+    const row = rowOf('Maria Dobre');
+    // One chip only — never the "+n" member's other Groups.
+    const chip = within(row).getByRole('button', {
+      name: 'Grupul Educațional. Vezi profilul membrului Maria Dobre',
+    });
+    expect(chip).toHaveTextContent('Educațional');
+    expect(chip.className).toContain('truncate');
+    expect(within(row).queryByText('Imagine & PR')).toBeNull();
+    const more = within(row).getByRole('button', {
+      name: '+6 grupuri. Vezi profilul membrului Maria Dobre',
+    });
+    expect(more).toHaveTextContent('+6');
+  });
+
+  it('opens the Member Card from "+n"', async () => {
     const user = userEvent.setup();
     render(<VolunteersScreen />);
     const row = rowOf('Maria Dobre');
-    // Two chips, then "+5" naming the other five.
-    expect(within(row).getByText('Educațional')).toBeVisible();
-    expect(within(row).getByText('Imagine & PR')).toBeVisible();
-    expect(within(row).queryByText('Foto · Imagine & PR')).toBeNull();
-    const more = within(row).getByRole('button', { name: /^\+5 grupuri/ });
-    expect(more).toHaveTextContent('+5');
-    expect(more).toHaveAccessibleName(
-      '+5 grupuri: Mentorat · Educațional, Foto · Imagine & PR, Balul Bobocilor, Zilele Studenților, Voluntariat de iarnă. Vezi profilul membrului Maria Dobre',
+    await user.click(
+      within(row).getByRole('button', {
+        name: '+6 grupuri. Vezi profilul membrului Maria Dobre',
+      }),
     );
-    expect(more.title.split('\n')).toHaveLength(5);
-    // Every chip truncates instead of stretching the row.
-    for (const chip of within(row).getAllByTitle(/./))
-      if (chip !== more) expect(chip.className).toContain('truncate');
-
-    await user.click(more);
     const dialog = await screen.findByRole('dialog', { name: 'Maria Dobre' });
     expect(within(dialog).getAllByRole('listitem')).toHaveLength(7);
     // The row shows 40 points; the Member Card never does.
     expect(dialog).not.toHaveTextContent('puncte');
+  });
+
+  it('opens the Member Card from the Group chip too', async () => {
+    const user = userEvent.setup();
+    render(<VolunteersScreen />);
+    const row = rowOf('Maria Dobre');
+    await user.click(
+      within(row).getByRole('button', {
+        name: 'Grupul Educațional. Vezi profilul membrului Maria Dobre',
+      }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Maria Dobre' }),
+    ).toBeVisible();
   });
 
   it('opens the Member Card from the name, with the full name under a Nickname', async () => {
@@ -279,7 +308,7 @@ describe('Member directory', () => {
     );
     expect(screen.queryByRole('table')).toBeNull();
     expect(
-      screen.getAllByRole('button', { name: /^\+4 grupuri/ }),
+      screen.getAllByRole('button', { name: /^\+6 grupuri/ }),
     ).toHaveLength(1);
     await user.type(
       screen.getByRole('searchbox', { name: 'Caută un membru' }),

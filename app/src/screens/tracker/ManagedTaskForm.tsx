@@ -1,12 +1,10 @@
 import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/button';
+import { CommandError } from '../../lib/command-reasons';
+import { taskDraftSchema } from '../../lib/schemas/task';
 import { useTaskFormOptions } from '../../queries/task-form-options';
 import { TaskForm } from './TaskForm';
 import type { TaskDraft } from './task-form-model';
-import {
-  taskDraftErrorMessage,
-  validateTaskDraft,
-} from './task-draft-validation';
 
 export function ManagedTaskForm({
   onDraft,
@@ -24,28 +22,31 @@ export function ManagedTaskForm({
   pendingLabel?: string;
 }) {
   const query = useTaskFormOptions();
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
+  /**
+   * Re-check the draft against a fresh options read before the command. Any
+   * refusal — the fresh read, the schema, the command — is thrown back to the
+   * form, which shows it under its field (ruling R8) with the draft kept.
+   */
   async function prepare(draft: TaskDraft) {
     if (submitting.current) return;
     submitting.current = true;
     setPending(true);
-    setError(null);
     try {
       const fresh = await query.refetch();
-      if (fresh.isError || !fresh.data) {
-        setError('Nu am putut verifica opțiunile actuale. Încearcă din nou.');
-        return;
-      }
-      const invalid = validateTaskDraft(draft, fresh.data);
-      if (invalid) {
-        setError(invalid);
-        return;
-      }
-      await onDraft(draft);
-    } catch (failure) {
-      setError(taskDraftErrorMessage(failure));
+      if (fresh.isError || !fresh.data)
+        throw new CommandError(
+          null,
+          'Nu am putut verifica opțiunile actuale. Încearcă din nou.',
+        );
+      const checked = taskDraftSchema(fresh.data).safeParse(draft);
+      if (!checked.success)
+        throw new CommandError(
+          { message: checked.error.issues[0]?.message },
+          'Nu am putut pregăti taskul. Încearcă din nou.',
+        );
+      await onDraft(checked.data);
     } finally {
       submitting.current = false;
       setPending(false);
@@ -81,11 +82,6 @@ export function ManagedTaskForm({
         </fieldset>
       )}
       {pending && <p role="status">{pendingLabel}</p>}
-      {error && !query.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

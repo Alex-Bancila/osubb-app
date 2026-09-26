@@ -10,7 +10,6 @@ const hooks = vi.hoisted(() => ({
 
 vi.mock('../../queries/points', () => ({ useDeptCup: hooks.useDeptCup }));
 vi.mock('../../queries/reference', () => ({ useGroups: hooks.useGroups }));
-vi.mock('@ionic/react', () => ({ IonIcon: () => null }));
 
 import DeptCupCard from './DeptCupCard';
 
@@ -31,7 +30,6 @@ const eduGroup: Group = {
   status: 'active',
   is_organization: false,
   // No bridge: the Cup row reaches its Group by `group_id` alone.
-  legacy_dept_id: null,
 };
 
 function setCup(rows: unknown[]) {

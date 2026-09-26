@@ -20,7 +20,6 @@ const orgGroup: Group = {
   status: 'active',
   is_organization: true,
   automatic_membership: true,
-  legacy_dept_id: 'org',
 };
 
 const agGroup: Group = {
@@ -35,7 +34,6 @@ const agGroup: Group = {
   status: 'active',
   is_organization: false,
   automatic_membership: true,
-  legacy_dept_id: null,
 };
 
 const eduDeptGroup: Group = {
@@ -50,7 +48,6 @@ const eduDeptGroup: Group = {
   status: 'active',
   is_organization: false,
   automatic_membership: false,
-  legacy_dept_id: 'edu',
 };
 
 const itTeamGroup: Group = {
@@ -65,7 +62,6 @@ const itTeamGroup: Group = {
   status: 'active',
   is_organization: false,
   automatic_membership: false,
-  legacy_dept_id: null,
 };
 
 const archivedGroup: Group = {
@@ -80,7 +76,6 @@ const archivedGroup: Group = {
   status: 'archived',
   is_organization: false,
   automatic_membership: false,
-  legacy_dept_id: null,
 };
 
 const testGroupsMap = new Map<number, Group>([

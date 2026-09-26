@@ -43,7 +43,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(66);
+select plan(80);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -60,11 +60,12 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33400000-0000-0000-0000-000000000004', 'BC Inactiv 334', 'inactive.bc.334@test.local', 'bc', 'inactiv'),
   ('33400000-0000-0000-0000-000000000005', 'Fara Claimuri 334', 'claimless.334@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33400000-0000-0000-0000-000000000001', 'edu'),
   ('33400000-0000-0000-0000-000000000002', 'edu'),
   ('33400000-0000-0000-0000-000000000003', 'edu'),
   ('33400000-0000-0000-0000-000000000005', 'edu');
+select pg_temp.materialize_legacy_groups();
 
 -- ---- T1: start_task happy path -- a todo Task, direct mode, one Executor.
 insert into public.tasks
@@ -259,14 +260,14 @@ select ok(has_function_privilege('authenticated',
   'private.start_task_impl(bigint)'::regprocedure, 'execute'),
   'authenticated can execute private.start_task_impl');
 
-select has_function('public', 'submit_task_for_review', array['bigint'],
-  'public.submit_task_for_review exists with the pinned one-parameter signature');
+select has_function('public', 'submit_task_for_review', array['bigint', 'text', 'text', 'text'],
+  'public.submit_task_for_review exists with the pinned signature: the Task plus #684''s optional note and link');
 select is(pg_get_function_identity_arguments(
-    'public.submit_task_for_review(bigint)'::regprocedure),
-  'p_task_id bigint',
+    'public.submit_task_for_review(bigint, text, text, text)'::regprocedure),
+  'p_task_id bigint, p_note text, p_link_label text, p_link_url text',
   'submit_task_for_review exposes no actor parameter -- the actor is always auth.uid()');
 select is(pg_get_function_result(
-    'public.submit_task_for_review(bigint)'::regprocedure),
+    'public.submit_task_for_review(bigint, text, text, text)'::regprocedure),
   'tasks', 'submit_task_for_review returns the affected Task row');
 select ok(not (select procedure.prosecdef
     from pg_proc as procedure
@@ -285,13 +286,13 @@ select ok(coalesce((
      where namespace.nspname = 'private' and procedure.proname = 'submit_task_for_review_impl'
   ), false), 'submit_task_for_review_impl pins an empty search_path');
 select ok(has_function_privilege('authenticated',
-  'public.submit_task_for_review(bigint)'::regprocedure, 'execute'),
+  'public.submit_task_for_review(bigint, text, text, text)'::regprocedure, 'execute'),
   'authenticated can execute public.submit_task_for_review');
 select ok(not has_function_privilege('anon',
-  'public.submit_task_for_review(bigint)'::regprocedure, 'execute'),
+  'public.submit_task_for_review(bigint, text, text, text)'::regprocedure, 'execute'),
   'anon cannot execute public.submit_task_for_review');
 select ok(has_function_privilege('authenticated',
-  'private.submit_task_for_review_impl(bigint)'::regprocedure, 'execute'),
+  'private.submit_task_for_review_impl(bigint, text, text, text)'::regprocedure, 'execute'),
   'authenticated can execute private.submit_task_for_review_impl');
 
 -- ==================== 2. start_task happy path -- no notification ====================
@@ -345,6 +346,10 @@ select is((select format('%s|%s|%s|%s|%s|%s', activity.kind, activity.actor_id,
             where activity.task_id = (select submit_happy_task_id from f334)),
   'submitted|33400000-0000-0000-0000-000000000002|true|in_progress|in_review|true',
   'the submitted activity row names the Executor, carries the active Assignment id, and the in_progress -> in_review transition');
+select is((select activity.details from public.task_activity as activity
+            where activity.task_id = (select submit_happy_task_id from f334)),
+  '{}'::jsonb,
+  '#684: submit_task_for_review(p_task_id) alone still works -- no note, and details {} without a link');
 select is((select count(*) from public.task_activity
             where task_id = (select submit_happy_task_id from f334)), 1::bigint,
   'exactly one activity row is written');
@@ -599,8 +604,6 @@ select extensions.dblink_exec('tp_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#334 committed%');
   delete from public.tasks where title like '%#334 committed%';
-  delete from public.member_departments where member_id in (
-    '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
   delete from auth.users where id in (
     '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
 
@@ -610,14 +613,11 @@ select extensions.dblink_exec('tp_setup', $$
   insert into public.profiles (id, full_name, email, role, status) values
     ('33400000-0000-0000-0000-000000000021', 'Probe Manager 334', 'probe.manager.334@test.local', 'bce', 'activ'),
     ('33400000-0000-0000-0000-000000000022', 'Probe Executor 334', 'probe.executor.334@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33400000-0000-0000-0000-000000000021', 'edu'),
-    ('33400000-0000-0000-0000-000000000022', 'edu');
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
   values
-    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
+    ('Lock probe start #334 committed', 'Sonda', '2027-12-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'todo',
      '33400000-0000-0000-0000-000000000021');
 
   insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
@@ -682,8 +682,6 @@ select extensions.dblink_exec('tp_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#334 committed%');
   delete from public.tasks where title like '%#334 committed%';
-  delete from public.member_departments where member_id in (
-    '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
   delete from auth.users where id in (
     '33400000-0000-0000-0000-000000000021', '33400000-0000-0000-0000-000000000022');
 $$);
@@ -721,6 +719,82 @@ update public.tasks set created_by=pg_temp.g521_uid(8) where id=(select id from 
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select lives_ok($$select public.submit_task_for_review((select id from g521_tasks where name='executor3'))$$,'task_progress_commands: Executor persona 8 remains authorized');
+reset role;
+
+-- ==================== #684: the Submission Note and its Attached Link ====================
+-- Three fresh in_progress Tasks held by Executor 002 (who carries the Nickname
+-- 'Exec 334' since section 4), managed by their creator 001.
+reset role;
+insert into public.tasks
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, started_at, created_by)
+select title, 'Nota #684', '2027-11-20 09:00:00+00', pg_temp.dept_group('edu'), 'local', 'direct', 'in_progress',
+       now() - interval '2 hours', now() - interval '1 hour', '33400000-0000-0000-0000-000000000001'
+  from (values ('Cu nota #684'), ('Nota goala #684'), ('Nota lunga #684')) as t (title);
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select id, '33400000-0000-0000-0000-000000000002', '33400000-0000-0000-0000-000000000001', now()
+  from public.tasks where title in ('Cu nota #684', 'Nota goala #684', 'Nota lunga #684');
+create temp table f684 as
+select (select id from public.tasks where title = 'Cu nota #684') as note_task_id,
+       (select id from public.tasks where title = 'Nota goala #684') as blank_task_id,
+       (select id from public.tasks where title = 'Nota lunga #684') as long_task_id;
+grant select on f684 to authenticated;
+
+select pg_temp.test_login('33400000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok(format($$ select public.submit_task_for_review(%s, repeat('n', 1001)) $$,
+  (select note_task_id from f684)), 'PT400', 'note_too_long',
+  '#684: a Submission Note over 1000 characters is refused');
+select throws_ok(format($$ select public.submit_task_for_review(%s, 'Gata', p_link_label => 'Raport') $$,
+  (select note_task_id from f684)), 'PT400', 'link_incomplete',
+  '#684: a label without an address is refused');
+select throws_ok(format($$ select public.submit_task_for_review(%s, 'Gata', p_link_label => 'FTP', p_link_url => 'ftp://example.org/r') $$,
+  (select note_task_id from f684)), 'PT400', 'link_url_invalid',
+  '#684: a non-http(s) address is refused');
+select lives_ok(format($$ select public.submit_task_for_review(%s, %L, %L, %L) $$,
+  (select note_task_id from f684), E'  Am terminat.\nDetaliile sunt in raport.  ',
+  '  Raport final  ', ' https://example.org/raport '),
+  '#684: the Executor submits with a Submission Note and an Attached Link');
+select lives_ok(format($$ select public.submit_task_for_review(%s, %L) $$,
+  (select blank_task_id from f684), E'  \n  '),
+  '#684: a blank Submission Note is accepted -- and stored as no note');
+select lives_ok(format($$ select public.submit_task_for_review(%s, %L) $$,
+  (select long_task_id from f684), repeat('a', 130) || E'\nA doua linie'),
+  '#684: a long first line is accepted');
+reset role;
+
+select is((select format('%s|%s', activity.note, activity.details)
+             from public.task_activity as activity
+            where activity.task_id = (select note_task_id from f684) and activity.kind = 'submitted'),
+  E'Am terminat.\nDetaliile sunt in raport.|{"link_url": "https://example.org/raport", "link_label": "Raport final"}',
+  '#684: the submitted row carries the trimmed note and the trimmed link in details');
+select is((select notification.body from public.notifications as notification
+            where notification.task_id = (select note_task_id from f684)
+              and notification.title like 'De verificat:%'),
+  'Exec 334 a trimis taskul spre verificare. Am terminat.',
+  '#684: the "De verificat" body ends with the note''s first line');
+select is((select format('%s|%s', activity.note is null, activity.details)
+             from public.task_activity as activity
+            where activity.task_id = (select blank_task_id from f684) and activity.kind = 'submitted'),
+  't|{}',
+  '#684: a blank note is null, never an empty string, and no link means details {}');
+select is((select notification.body from public.notifications as notification
+            where notification.task_id = (select blank_task_id from f684)
+              and notification.title like 'De verificat:%'),
+  'Exec 334 a trimis taskul spre verificare.',
+  '#684: without a note the "De verificat" body is the pinned copy alone');
+select is((select notification.body from public.notifications as notification
+            where notification.task_id = (select long_task_id from f684)
+              and notification.title like 'De verificat:%'),
+  'Exec 334 a trimis taskul spre verificare. ' || repeat('a', 120) || '…',
+  '#684: the first line is cut at 120 characters with an ellipsis');
+select is((select count(*) from public.task_activity
+            where task_id = (select note_task_id from f684) and kind = 'submitted'), 1::bigint,
+  '#684: the refused calls wrote nothing -- one submitted row only');
+
+-- Step 1 answers a claimless caller before the gate.
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.submit_task_for_review(0, repeat('n', 1001)) $$,
+  'PT400', 'note_too_long', '#684: the note length is judged before the gate');
 reset role;
 
 select * from finish();

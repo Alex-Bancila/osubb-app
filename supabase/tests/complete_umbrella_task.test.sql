@@ -70,7 +70,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('34000000-0000-0000-0000-000000000011', 'Fara Claimuri 340', 'claimless.340@test.local', 'voluntar', 'activ'),
   ('34000000-0000-0000-0000-000000000012', 'Executor Creditat 340', 'exec.credited.340@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('34000000-0000-0000-0000-000000000002', 'edu'),
   ('34000000-0000-0000-0000-000000000003', 'pr'),
   ('34000000-0000-0000-0000-000000000004', 'edu'),
@@ -78,18 +78,18 @@ insert into public.member_departments (member_id, dept_id) values
   ('34000000-0000-0000-0000-000000000011', 'edu'),
   ('34000000-0000-0000-0000-000000000012', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-340-ind', 'Echipa Independenta 340', null);
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-340-ind', '34000000-0000-0000-0000-000000000006');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Proiect #340', 'active',
    '34000000-0000-0000-0000-000000000007', '34000000-0000-0000-0000-000000000001');
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #340'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #340'),
    '34000000-0000-0000-0000-000000000008', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #340'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #340'),
    '34000000-0000-0000-0000-000000000009', 'member');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -209,7 +209,7 @@ insert into public.tasks
   (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
 select 'Umbrela proiect lead #340', 'Leadul o finalizeaza', pg_temp.project_group(project.id), 'umbrella', null, null, 'todo',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
-  from public.projects as project where project.name = 'Proiect #340';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #340';
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    cancelled_at, cancel_reason, created_at, created_by)
@@ -217,7 +217,7 @@ select 'Subtask proiect lead #340', 'Deja incheiat', now() + interval '10 days',
        'cancelled', parent.id, now() - interval '2 days', 'Nu mai e nevoie #340',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.tasks as parent
-  join public.projects as project on pg_temp.project_group(project.id) = parent.group_id
+  join pg_temp.fixture_projects as project on pg_temp.project_group(project.id) = parent.group_id
  where parent.title = 'Umbrela proiect lead #340';
 
 -- ---- U-PROJ-RESP + S-PROJ-RESP: the Project Responsible's positive case.
@@ -225,7 +225,7 @@ insert into public.tasks
   (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
 select 'Umbrela proiect responsabil #340', 'Responsabilul o finalizeaza', pg_temp.project_group(project.id), 'umbrella', null, null, 'todo',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
-  from public.projects as project where project.name = 'Proiect #340';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #340';
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
    cancelled_at, cancel_reason, created_at, created_by)
@@ -233,7 +233,7 @@ select 'Subtask proiect responsabil #340', 'Deja incheiat', now() + interval '10
        'cancelled', parent.id, now() - interval '2 days', 'Nu mai e nevoie #340',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
   from public.tasks as parent
-  join public.projects as project on pg_temp.project_group(project.id) = parent.group_id
+  join pg_temp.fixture_projects as project on pg_temp.project_group(project.id) = parent.group_id
  where parent.title = 'Umbrela proiect responsabil #340';
 
 -- ---- U-PROJ-DENY: zero Subtasks -- the plain Project member's denial.
@@ -241,7 +241,7 @@ insert into public.tasks
   (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
 select 'Umbrela proiect refuz #340', 'Membrul simplu nu o poate finaliza', pg_temp.project_group(project.id), 'umbrella', null, null, 'todo',
        now() - interval '10 days', '34000000-0000-0000-0000-000000000001'
-  from public.projects as project where project.name = 'Proiect #340';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #340';
 
 -- ---- T-HIDDEN: a 'local' pr Task an edu-only member cannot even see.
 insert into public.tasks
@@ -394,7 +394,7 @@ select profile.id
    and (profile.role in ('bc', 'moderator')
         or (profile.role = 'bce'
             and exists (select 1
-                          from public.member_departments as membership
+                          from pg_temp.fixture_member_departments as membership
                          where membership.member_id = profile.id
                            and membership.dept_id = 'edu')));
 
@@ -582,7 +582,6 @@ select extensions.dblink_exec('cu_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#340 committed%');
   delete from public.tasks where title like '%#340 committed%';
-  delete from public.member_departments where member_id = '34000000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34000000-0000-0000-0000-000000000051';
 $$);
 
@@ -591,31 +590,29 @@ select extensions.dblink_exec('cu_setup', $$
     ('34000000-0000-0000-0000-000000000051', 'probe.manager.340@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('34000000-0000-0000-0000-000000000051', 'Probe Manager 340', 'probe.manager.340@test.local', 'bce', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('34000000-0000-0000-0000-000000000051', 'edu');
   -- #586: committed race fixtures require native Group roster rows.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34000000-0000-0000-0000-000000000051'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34000000-%'
   on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, group_id, kind, audience, assignment_mode, status, created_at, created_by)
-  values ('Umbrela sonda #340 committed', 'Umbrela', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, 'todo',
+  values ('Umbrela sonda #340 committed', 'Umbrela', (select id from public.groups where name = 'Educațional'), 'umbrella', null, null, 'todo',
           now() - interval '5 days', '34000000-0000-0000-0000-000000000051');
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      cancelled_at, cancel_reason, created_at, created_by)
-  select 'Sonda subtask A #340 committed', 'Primul', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'cancelled',
+  select 'Sonda subtask A #340 committed', 'Primul', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'cancelled',
          parent.id, now() - interval '1 day', 'Sonda', now() - interval '5 days', '34000000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #340 committed';
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, parent_task_id,
      cancelled_at, cancel_reason, created_at, created_by)
-  select 'Sonda subtask B #340 committed', 'Al doilea', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'cancelled',
+  select 'Sonda subtask B #340 committed', 'Al doilea', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'cancelled',
          parent.id, now() - interval '1 day', 'Sonda', now() - interval '5 days', '34000000-0000-0000-0000-000000000051'
     from public.tasks as parent where parent.title = 'Umbrela sonda #340 committed';
 $$);
@@ -794,7 +791,6 @@ select extensions.dblink_exec('cu_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#340 committed%');
   delete from public.tasks where title like '%#340 committed%';
-  delete from public.member_departments where member_id = '34000000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34000000-0000-0000-0000-000000000051';
 $$);
 select extensions.dblink_disconnect('cu_setup');

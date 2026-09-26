@@ -24,13 +24,15 @@
 -- written as the owner (conventions OD9: rolled back, no client write path
 -- implied). They are native Groups — no legacy_* — so the partial sibling-name
 -- index behaves as it will after #591.
+--
+-- #724 adds section 14: ruling R8's 1000-character limit on both notes.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(79);
+select plan(87);
 
 -- ==================== Fixtures ====================
 
@@ -607,7 +609,7 @@ values (pg_temp.g584_group('Prag #584'), pg_temp.g584_uid(5), 'Cerere veche');
 
 select pg_temp.g584_bc();
 select lives_ok(
-  format($$select public.update_group(%s, 'Prag #584', null, true, 1, false, 1, true)$$,
+  format($$select public.update_group(%s, 'Prag #584', null, true, 1, false, 1, null, null, true)$$,
          pg_temp.g584_group('Prag #584')),
   'update_group: BC raises the Minimum Level above a Member with p_confirm_removals');
 reset role;
@@ -644,6 +646,73 @@ select is(
       and dedupe_key = 'application:' || (select arch_id from fx584_arch)::text),
   '/grupuri/' || pg_temp.g584_group('Arhivabil #584')::text,
   'ruling R30: the applicant is told, and the link is the member-facing Group page');
+
+-- ==================== 14 · #724 (ruling R8): notes at most 1000 characters ====================
+-- Both notes are measured as they are stored -- trimmed -- at step 1, so a
+-- 1001-character note is PT400 note_too_long for every caller, a claimless
+-- session and a Member with no authority included. Removing either check
+-- turns its 1001-character assertion into a success (the table has no length
+-- constraint underneath), and moving it below the gate turns the claimless /
+-- no-authority assertion into a 42501.
+
+insert into public.groups (name, category, min_level, accepts_applications, application_level, created_by)
+values ('Limite #724', 'department', 0, true, 1, pg_temp.g584_uid(1));
+insert into public.group_members (group_id, member_id, group_role, position_title)
+values (pg_temp.g584_group('Limite #724'), pg_temp.g584_uid(2), 'manager', null);
+
+select pg_temp.test_clear_jwt();
+set local role authenticated;
+select throws_ok(
+  format($$select public.apply_to_group(%s, %L)$$, pg_temp.g584_group('Limite #724'), repeat('n', 1001)),
+  'PT400', 'note_too_long',
+  'apply_to_group: a 1001-character note is refused before the gate, even for a claimless session');
+reset role;
+
+select pg_temp.g584_as(10);
+select throws_ok(
+  format($$select public.apply_to_group(%s, %L)$$, pg_temp.g584_group('Limite #724'), repeat('n', 1001)),
+  'PT400', 'note_too_long',
+  'apply_to_group: a 1001-character note is note_too_long');
+select lives_ok(
+  format($$select public.apply_to_group(%s, %L)$$, pg_temp.g584_group('Limite #724'), '  ' || repeat('n', 1000) || '  '),
+  'apply_to_group: a 1000-character note is accepted, measured after trimming');
+reset role;
+select is(
+  (select char_length(note) from public.group_applications
+    where group_id = pg_temp.g584_group('Limite #724') and member_id = pg_temp.g584_uid(10)),
+  1000, 'apply_to_group: the 1000-character note is stored trimmed and whole');
+create temp table fx724 as
+  select id as app_id from public.group_applications
+   where group_id = pg_temp.g584_group('Limite #724') and member_id = pg_temp.g584_uid(10);
+grant select on fx724 to authenticated;
+
+select pg_temp.g584_as(9);
+select throws_ok(
+  format($$select public.decide_group_application(%s, false, %L)$$,
+    (select app_id from fx724),
+    repeat('d', 1001)),
+  'PT400', 'note_too_long',
+  'decide_group_application: a 1001-character decision note is refused before the gate, even without authority');
+reset role;
+
+select pg_temp.g584_as(2);
+select throws_ok(
+  format($$select public.decide_group_application(%s, false, %L)$$,
+    (select app_id from fx724),
+    repeat('d', 1001)),
+  'PT400', 'note_too_long',
+  'decide_group_application: a 1001-character decision note is note_too_long');
+select lives_ok(
+  format($$select public.decide_group_application(%s, false, %L)$$,
+    (select app_id from fx724),
+    '  ' || repeat('d', 1000) || '  '),
+  'decide_group_application: a 1000-character decision note is accepted, measured after trimming');
+reset role;
+select ok(
+  (select status = 'declined' and char_length(decision_note) = 1000
+     from public.group_applications
+    where group_id = pg_temp.g584_group('Limite #724') and member_id = pg_temp.g584_uid(10)),
+  'decide_group_application: the decline landed with its 1000-character note stored trimmed');
 
 -- ==================== 13 · grants ====================
 

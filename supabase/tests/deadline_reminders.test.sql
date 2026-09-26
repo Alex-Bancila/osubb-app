@@ -24,7 +24,7 @@ select extensions.dblink_exec('deadline_lock', 'rollback;');
 select extensions.dblink_disconnect('deadline_retry');
 select extensions.dblink_disconnect('deadline_lock');
 truncate public.tasks cascade;
-truncate public.notifications;
+truncate public.notifications cascade; -- #703: push_deliveries references it
 insert into auth.users (id, email) values
   ('06900000-0000-0000-0000-000000000001', 'deadline-bc69@test.local'),
   ('06900000-0000-0000-0000-000000000002', 'deadline-bce69@test.local'),
@@ -34,20 +34,20 @@ insert into profiles (id, full_name, email, role, status) values
   ('06900000-0000-0000-0000-000000000002', 'BCE Executor', 'deadline-bce69@test.local', 'bce', 'activ'),
   ('06900000-0000-0000-0000-000000000003', 'Inactive Executor', 'deadline-inactive69@test.local', 'voluntar', 'inactiv');
 insert into tasks (title, group_id, deadline, status, kind) values
-  ('due todo', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '1 hour', 'todo', 'task'),
-  ('due progress', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '48 hours', 'in_progress', 'task'),
-  ('due review', (select id from public.groups where legacy_dept_id = 'edu'), now(), 'todo', 'task'),
-  ('too late', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '49 hours', 'todo', 'task'),
-  ('already overdue', (select id from public.groups where legacy_dept_id = 'edu'), now() - interval '1 second', 'todo', 'task'),
-  ('inactive executor', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '1 hour', 'todo', 'task'),
-  ('no executor', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '1 hour', 'todo', 'task');
+  ('due todo', (select id from public.groups where name = 'Educațional'), now() + interval '1 hour', 'todo', 'task'),
+  ('due progress', (select id from public.groups where name = 'Educațional'), now() + interval '48 hours', 'in_progress', 'task'),
+  ('due review', (select id from public.groups where name = 'Educațional'), now(), 'todo', 'task'),
+  ('too late', (select id from public.groups where name = 'Educațional'), now() + interval '49 hours', 'todo', 'task'),
+  ('already overdue', (select id from public.groups where name = 'Educațional'), now() - interval '1 second', 'todo', 'task'),
+  ('inactive executor', (select id from public.groups where name = 'Educațional'), now() + interval '1 hour', 'todo', 'task'),
+  ('no executor', (select id from public.groups where name = 'Educațional'), now() + interval '1 hour', 'todo', 'task');
 insert into tasks (title, group_id, deadline, status, kind, audience, assignment_mode) values
-  ('umbrella', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '1 hour', 'todo', 'umbrella', null, null);
+  ('umbrella', (select id from public.groups where name = 'Educațional'), now() + interval '1 hour', 'todo', 'umbrella', null, null);
 update tasks set status = 'in_review', submitted_at = now() where title = 'due review';
 insert into tasks (title, group_id, deadline, status, completed_at, unfulfilled_at, cancelled_at, cancel_reason, difficulty, rating) values
-  ('completed', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '1 hour', 'completed', now(), null, null, null, 2, 4),
-  ('unfulfilled', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '1 hour', 'unfulfilled', null, now(), null, null, 2, 1),
-  ('cancelled', (select id from public.groups where legacy_dept_id = 'edu'), now() + interval '1 hour', 'cancelled', null, null, now(), 'No longer needed', null, null);
+  ('completed', (select id from public.groups where name = 'Educațional'), now() + interval '1 hour', 'completed', now(), null, null, null, 2, 4),
+  ('unfulfilled', (select id from public.groups where name = 'Educațional'), now() + interval '1 hour', 'unfulfilled', null, now(), null, null, 2, 1),
+  ('cancelled', (select id from public.groups where name = 'Educațional'), now() + interval '1 hour', 'cancelled', null, null, now(), 'No longer needed', null, null);
 insert into task_assignments (task_id, member_id)
 select id, case when title = 'inactive executor' then '06900000-0000-0000-0000-000000000003'::uuid
                 when title = 'due progress' then '06900000-0000-0000-0000-000000000002'::uuid

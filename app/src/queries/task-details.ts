@@ -2,7 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-import { TASK_PRESENTATION_FIELDS } from './tasks';
+import { latestSubmissionOnly, TASK_PRESENTATION_FIELDS } from './tasks';
 import { attachVisibleTaskExecutors } from './task-executors';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
@@ -14,9 +14,9 @@ export type TaskDetailsData = {
 export async function fetchTaskDetails(
   taskId: number,
 ): Promise<TaskDetailsData | null> {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select(TASK_PRESENTATION_FIELDS)
+  const { data, error } = await latestSubmissionOnly(
+    supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+  )
     .eq('id', taskId)
     .maybeSingle();
   if (error) throw error;
@@ -35,9 +35,9 @@ export async function fetchTaskDetails(
   if (task.kind === 'umbrella') {
     const pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
-      const children = await supabase
-        .from('tasks')
-        .select(TASK_PRESENTATION_FIELDS)
+      const children = await latestSubmissionOnly(
+        supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+      )
         .eq('parent_task_id', taskId)
         .order('id')
         .range(offset, offset + pageSize - 1);

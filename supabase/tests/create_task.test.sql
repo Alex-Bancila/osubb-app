@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(138);
+select plan(157);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -58,20 +58,20 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('32700000-0000-0000-0000-000000000010', 'BC Inactiv 327', 'inactive.bc.327@test.local', 'bc', 'inactiv'),
   ('32700000-0000-0000-0000-000000000011', 'Fara Claimuri 327', 'claimless.327@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('32700000-0000-0000-0000-000000000006', 'edu'),
   ('32700000-0000-0000-0000-000000000007', 'pr'),
   ('32700000-0000-0000-0000-000000000008', 'edu'),
   ('32700000-0000-0000-0000-000000000009', 'pr');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-327-ind', 'Echipa Independenta 327', null),
   ('t-327-dt', 'Echipa Departamentala 327', 'edu');
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-327-ind', '32700000-0000-0000-0000-000000000004');
 
-insert into public.projects (name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by)
 values ('Proiect #327', 'active',
         '32700000-0000-0000-0000-000000000001',
         '32700000-0000-0000-0000-000000000005'),
@@ -79,10 +79,10 @@ values ('Proiect #327', 'active',
         '32700000-0000-0000-0000-000000000001',
         '32700000-0000-0000-0000-000000000005');
 
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #327'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #327'),
    '32700000-0000-0000-0000-000000000002', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #327'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #327'),
    '32700000-0000-0000-0000-000000000003', 'member');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -121,22 +121,22 @@ values ('Task independent #327', pg_temp.team_group('t-327-ind'), 'local', 'dire
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect #327', pg_temp.project_group(project.id), 'local', 'direct', 'todo',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #327';
 
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect lead executant #327', pg_temp.project_group(project.id), 'local', 'direct', 'in_progress',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #327';
 
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect responsabil executant #327', pg_temp.project_group(project.id), 'local', 'direct', 'in_progress',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #327';
 
 insert into public.tasks (title, group_id, audience, assignment_mode, status, created_by)
 select 'Task proiect arhivat #327', pg_temp.project_group(project.id), 'local', 'direct', 'todo',
        '32700000-0000-0000-0000-000000000005'
-  from public.projects as project where project.name = 'Proiect arhivat #327';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect arhivat #327';
 
 update public.tasks set started_at = now()
  where title in ('Task proiect lead executant #327',
@@ -154,8 +154,8 @@ select task.id, '32700000-0000-0000-0000-000000000002',
 
 create temp table f327 as
 select
-  (select id from public.projects where name = 'Proiect #327') as project_id,
-  (select id from public.projects where name = 'Proiect arhivat #327') as archived_project_id,
+  (select id from pg_temp.fixture_projects where name = 'Proiect #327') as project_id,
+  (select id from pg_temp.fixture_projects where name = 'Proiect arhivat #327') as archived_project_id,
   (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie #327') as edu_campaign_id,
   (select id from public.campaigns where group_id = pg_temp.dept_group('pr') and name = 'Campanie PR #327') as pr_campaign_id,
   (select id from public.campaigns where group_id = pg_temp.dept_group('edu') and name = 'Campanie inactiva #327') as inactive_campaign_id,
@@ -174,16 +174,16 @@ grant select on f327 to authenticated;
 
 select has_function('public', 'create_task',
   array['text', 'text', 'timestamptz', 'text', 'text',
-        'uuid', 'bigint', 'bigint', 'text', 'bigint'],
-  'public.create_task exists with the pinned Group-only ten-parameter signature (#579)');
+        'uuid', 'bigint', 'bigint', 'text', 'bigint', 'text', 'text'],
+  'public.create_task exists with the pinned Group-only signature plus the #684 Attached Link pair');
 
 select is(pg_get_function_identity_arguments(
-    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
-  'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint',
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure),
+  'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text',
   'create_task exposes no actor parameter — the actor is always auth.uid()');
 
 select is(pg_get_function_result(
-    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure),
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure),
   'tasks', 'create_task returns the created Task row');
 
 select ok(not (select procedure.prosecdef
@@ -217,15 +217,15 @@ select ok(coalesce((
 ), false), 'every function in the kit pins an empty search_path');
 
 select ok(has_function_privilege('authenticated',
-  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure,
   'execute'), 'authenticated can execute public.create_task');
 
 select ok(not has_function_privilege('anon',
-  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure,
   'execute'), 'anon cannot execute public.create_task');
 
 select ok(has_function_privilege('authenticated',
-  'private.create_task_impl(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint)'::regprocedure,
+  'private.create_task_impl(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text)'::regprocedure,
   'execute'), 'authenticated can execute private.create_task_impl');
 
 select ok(has_function_privilege('authenticated',
@@ -369,6 +369,12 @@ select throws_ok($$ select public.create_task('Bad audience #327', 'd', now() + 
   'an unknown Audience is rejected');
 select throws_ok($$ select public.create_task('Bad mode #327', 'd', now() + interval '7 days', 'local', 'auction', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'invalid_assignment_mode',
   'an unknown Assignment Mode is rejected');
+-- #794 (ruling R26): a directly assigned Task carries the local Audience --
+-- with an Executor or without one, refused before anything is written.
+select throws_ok($$ select public.create_task('Direct org #794', 'd', now() + interval '7 days', 'org', 'direct', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'direct_task_local_only',
+  '#794: a direct Task with the org Audience is rejected');
+select throws_ok($$ select public.create_task('Direct org #794', 'd', now() + interval '7 days', 'org', 'direct', p_executor_id => '32700000-0000-0000-0000-000000000009', p_group_id => pg_temp.dept_group('edu')) $$, 'PT400', 'direct_task_local_only',
+  '#794: and so is one naming its Executor');
 select lives_ok($$ select public.create_task(E'\t Trimmed #327 \t', E'  spatiat  ', now() + interval '7 days', 'local', 'direct', p_group_id => pg_temp.dept_group('edu')) $$,
   'a padded title and description are accepted');
 reset role;
@@ -376,6 +382,8 @@ select is((select count(*) from public.tasks where title = 'Trimmed #327'), 1::b
   'the title is stored trimmed with regexp_replace, not btrim (tabs included)');
 select is((select description from public.tasks where title = 'Trimmed #327'), 'spatiat',
   'the description is stored trimmed');
+select is((select count(*) from public.tasks where title = 'Direct org #794'), 0::bigint,
+  '#794: neither refused direct + org creation wrote a Task');
 
 -- ==================== 5. Direct Assignment Mode with an Executor ====================
 select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
@@ -705,9 +713,6 @@ select extensions.dblink_exec('task_lock_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
-  delete from public.member_departments where member_id in (
-    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
-    '32700000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
     '32700000-0000-0000-0000-000000000023');
@@ -724,20 +729,18 @@ select extensions.dblink_exec('task_lock_setup', $$
      'lock.probe.evaluator.327@test.local', 'bce', 'activ'),
     ('32700000-0000-0000-0000-000000000023', 'Lock Probe Executor 327',
      'lock.probe.executor.327@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('32700000-0000-0000-0000-000000000021', 'edu'),
-    ('32700000-0000-0000-0000-000000000022', 'edu'),
-    ('32700000-0000-0000-0000-000000000023', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('32700000-0000-0000-0000-000000000021'::uuid, 'edu'),
+    ('32700000-0000-0000-0000-000000000022'::uuid, 'edu'),
+    ('32700000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '32700000-%'
   on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
-  values ('Lock Probe Umbrella #327', (select id from public.groups where legacy_dept_id = 'edu'), 'umbrella', null, null, null, null, 'todo',
+  values ('Lock Probe Umbrella #327', (select id from public.groups where name = 'Educațional'), 'umbrella', null, null, null, null, 'todo',
           '32700000-0000-0000-0000-000000000021');
   -- An EXISTING Subtask of that Umbrella, already submitted, with a live
   -- Executor: everything private.complete_task_review needs, so that the
@@ -746,7 +749,7 @@ select extensions.dblink_exec('task_lock_setup', $$
     (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, submitted_at, parent_task_id, created_by)
   select 'Lock Probe Subtask Existent #327', 'De evaluat in paralel',
-         now() + interval '7 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
+         now() + interval '7 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review',
          now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          parent.id, '32700000-0000-0000-0000-000000000021'
     from public.tasks as parent where parent.title = 'Lock Probe Umbrella #327';
@@ -807,7 +810,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '32700000-0000-0000-0000-000000000021'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'a BCE create holds the Group roster row its authority rests on FOR SHARE');
 
 -- Ruling 20's payoff, reproduced rather than argued. Session task_lock still
@@ -877,9 +880,6 @@ select extensions.dblink_exec('task_lock_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
-  delete from public.member_departments where member_id in (
-    '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
-    '32700000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
     '32700000-0000-0000-0000-000000000023');
@@ -1107,22 +1107,22 @@ reset role;
 select pg_temp.g521_task('command0','project',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
-select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command0'))$$,'create_task: Group persona 2 in project');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command0'))$$,'create_task: Group persona 2 in project');
 reset role;
 select pg_temp.g521_task('command1','project',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
-select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command1'))$$,'create_task: Group persona 3 in project');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command1'))$$,'create_task: Group persona 3 in project');
 reset role;
 select pg_temp.g521_task('command2','ind',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(6));
-select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command2'))$$,'create_task: Group persona 6 in ind');
+select lives_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command2'))$$,'create_task: Group persona 6 in ind');
 reset role;
 select pg_temp.g521_task('command3','dt',null,'todo','direct','umbrella');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
-select throws_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'org', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
+select throws_ok($$select public.create_task('Subtask #521', null, now()+interval '1 day', 'local', 'direct', p_executor_id => pg_temp.g521_uid(10), p_parent_task_id => (select id from g521_tasks where name='command3'))$$,'42501','task_manage_forbidden','create_task: Group persona 8 in dt');
 reset role;
 
 -- ==================== #673: constraints kit (R8) ====================
@@ -1139,6 +1139,59 @@ select throws_ok($$ select public.create_task('Titlu bun #673', repeat('d', 2001
   'PT400', 'description_too_long', 'a description over 2000 characters is refused before the gate');
 select throws_ok($$ select public.create_task('Titlu bun #673', 'd', now() - interval '1 day', 'local', 'direct') $$,
   'PT400', 'deadline_in_past', 'a deadline in the past is refused at creation, before the gate');
+reset role;
+
+-- ==================== #684: the Attached Link (R7) ====================
+-- The schema: the pair is held by tasks_link_ck, the rules underneath by
+-- tasks_link_format_ck. Named, never null (Ruling 23).
+select col_type_is('public', 'tasks', 'link_label', 'text', 'tasks.link_label is text');
+select col_type_is('public', 'tasks', 'link_url', 'text', 'tasks.link_url is text');
+select is((select pg_get_constraintdef(oid) from pg_constraint
+            where conrelid = 'public.tasks'::regclass and conname = 'tasks_link_ck'),
+  'CHECK (((link_url IS NULL) = (link_label IS NULL)))',
+  'tasks_link_ck: the label and the address are set together or not at all');
+select throws_ok($$ update public.tasks set link_label = 'Doar eticheta' where title = 'BC dept task #327' $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_link_ck"',
+  'a direct half-set write is refused by tasks_link_ck');
+select throws_ok($$ update public.tasks set link_label = 'FTP', link_url = 'ftp://example.org' where title = 'BC dept task #327' $$,
+  '23514', 'new row for relation "tasks" violates check constraint "tasks_link_format_ck"',
+  'a direct non-http(s) write is refused by tasks_link_format_ck');
+
+select pg_temp.test_login('32700000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok($$ select public.create_task('Cu link #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => '  Brief  ', p_link_url => E'\thttps://example.org/brief  ') $$,
+  'create_task accepts both link fields');
+select lives_ok($$ select public.create_task('Fara link #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => '   ', p_link_url => null) $$,
+  'create_task treats a blank label with no address as no link at all');
+select lives_ok($$ select public.create_task('Umbrela cu link #684', 'd', null, null, null, p_kind => 'umbrella',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Plan', p_link_url => 'https://example.org/plan') $$,
+  'an Umbrella may carry a link like any Task');
+select throws_ok($$ select public.create_task('Link incomplet #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Doar eticheta') $$,
+  'PT400', 'link_incomplete', 'one of the two link fields alone is refused');
+select throws_ok($$ select public.create_task('Link ftp #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'FTP', p_link_url => 'ftp://example.org/x') $$,
+  'PT400', 'link_url_invalid', 'a non-http(s) address is refused');
+select throws_ok($$ select public.create_task('Link lung #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 2030)) $$,
+  'PT400', 'link_url_too_long', 'an address over 2048 characters is refused');
+select throws_ok($$ select public.create_task('Eticheta lunga #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => repeat('e', 61), p_link_url => 'https://example.org/x') $$,
+  'PT400', 'link_label_too_long', 'a label over 60 characters is refused');
+reset role;
+select is((select format('%s|%s', task.link_label, task.link_url) from public.tasks as task where task.title = 'Cu link #684'),
+  'Brief|https://example.org/brief', 'both link fields are stored trimmed');
+select is((select format('%s|%s', task.link_label is null, task.link_url is null) from public.tasks as task where task.title = 'Fara link #684'),
+  't|t', 'with neither link field both columns are null');
+select is((select task.link_url from public.tasks as task where task.title = 'Umbrela cu link #684'),
+  'https://example.org/plan', 'the Umbrella keeps its link');
+-- Step 1: the pair rule answers a claimless caller before the gate.
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_task('Titlu bun #684', 'd', now() + interval '7 days', 'local', 'direct',
+    p_link_url => 'https://example.org/x') $$,
+  'PT400', 'link_incomplete', 'a half-set link is refused before the gate');
 reset role;
 
 select * from finish();

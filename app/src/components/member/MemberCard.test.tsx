@@ -27,7 +27,12 @@ const card: MemberCardData = {
   roleLabel: 'Voluntar Activ',
   joinedAt: '2024-03-12',
   avatarColor: '#284C93',
-  primaryGroup: { id: 1, name: 'Educațional', color: '#284C93' },
+  primaryGroup: {
+    id: 1,
+    name: 'Educațional',
+    color: '#284C93',
+    isPrivate: false,
+  },
   otherMemberships: 2,
   groups: [
     {
@@ -36,6 +41,7 @@ const card: MemberCardData = {
       label: 'Educațional',
       color: '#284C93',
       roleLabel: 'Membru',
+      isPrivate: false,
     },
     {
       id: 7,
@@ -43,6 +49,7 @@ const card: MemberCardData = {
       label: 'Mentorat · Educațional',
       color: null,
       roleLabel: 'Coordonator',
+      isPrivate: false,
     },
     {
       id: 9,
@@ -50,6 +57,8 @@ const card: MemberCardData = {
       label: 'Balul Bobocilor',
       color: '#7500A0',
       roleLabel: 'Responsabil logistică',
+      // A Private Group (#757): the viewer sees it, so it is marked.
+      isPrivate: true,
     },
   ],
   contact: null,
@@ -106,6 +115,18 @@ it('shows the Nickname, full name, Role, join date, first Department + n and the
   expect((await axe.run(dialog)).violations).toEqual([]);
 });
 
+it('marks a Private Group in the Groups list, and no public one (#757)', async () => {
+  const dialog = await openCard();
+  const groups = within(dialog).getByRole('region', { name: 'Grupuri' });
+  const items = within(groups).getAllByRole('listitem');
+  expect(within(items[2] as HTMLElement).getByText('Privat')).toBeVisible();
+  expect(within(items[0] as HTMLElement).queryByText('Privat')).toBeNull();
+  expect(within(items[1] as HTMLElement).queryByText('Privat')).toBeNull();
+  // The public primary chip carries no lock either.
+  expect(within(dialog).getAllByText('Privat')).toHaveLength(1);
+  expect((await axe.run(dialog)).violations).toEqual([]);
+});
+
 it('omits the join line when the date was never recorded, and the chip without a Group', async () => {
   answer({ joinedAt: null, primaryGroup: null, otherMemberships: 0 });
   const dialog = await openCard();
@@ -142,7 +163,7 @@ it('links to the tracker for leadership viewers and to Administrare for manageRo
   capabilities.seeLeadership = true;
   let dialog = await openCard();
   expect(
-    within(dialog).getByRole('link', { name: 'Vezi istoricul taskurilor' }),
+    within(dialog).getByRole('link', { name: 'Vezi trackerul' }),
   ).toHaveAttribute('href', '/tracker/membru/m-1');
   expect(within(dialog).queryByRole('link', { name: 'Editează' })).toBeNull();
 
@@ -157,7 +178,7 @@ it('links to the tracker for leadership viewers and to Administrare for manageRo
     within(dialog).getByRole('link', { name: 'Editează' }),
   ).toHaveAttribute('href', '/administrare/membri/m-1');
   expect(
-    within(dialog).queryByRole('link', { name: 'Vezi istoricul taskurilor' }),
+    within(dialog).queryByRole('link', { name: 'Vezi trackerul' }),
   ).toBeNull();
 });
 

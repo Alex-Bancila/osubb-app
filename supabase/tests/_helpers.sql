@@ -9,6 +9,10 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 \endif
 
+-- #590: historical fixture descriptions are transaction-local data only.
+-- Work and authority assertions always target the real native Group tables.
+\ir _group_fixture_data.psql
+
 create or replace function pg_temp.test_login(
   p_uid uuid,
   p_app_metadata jsonb
@@ -40,16 +44,6 @@ begin
   select jsonb_build_object(
            'member_role', profile.role,
            'member_level', role.level,
-           'dept_ids', coalesce((
-             select jsonb_agg(membership.dept_id order by membership.dept_id)
-               from public.member_departments as membership
-              where membership.member_id = profile.id
-           ), '[]'::jsonb),
-           'team_ids', coalesce((
-             select jsonb_agg(membership.team_id order by membership.team_id)
-               from public.team_members as membership
-              where membership.member_id = profile.id
-           ), '[]'::jsonb),
            'group_ids', coalesce((
              select jsonb_agg(membership.group_id order by membership.group_id)
                from public.group_members as membership
@@ -272,7 +266,10 @@ create or replace function pg_temp.test_credit_task(
   p_task_id   bigint,
   p_member_id uuid,
   p_evaluator uuid,
-  p_note      text default 'fixture evaluation'
+  p_note      text default 'fixture evaluation',
+  -- #677: the award instant -- the Evaluation's evaluated_at and its ledger
+  -- row's created_at. Null keeps the transaction's now().
+  p_awarded_at timestamptz default null
 ) returns int
 language plpgsql
 as $function$
@@ -311,118 +308,128 @@ begin
 
   insert into public.task_evaluations
     (task_id, assignment_id, evaluated_by, outcome,
-     difficulty, rating, points, note)
+     difficulty, rating, points, note, evaluated_at)
   values (p_task_id, v_assignment_id, p_evaluator, v_outcome,
-          v_task.difficulty, v_task.rating, v_points, p_note)
+          v_task.difficulty, v_task.rating, v_points, p_note,
+          coalesce(p_awarded_at, now()))
   returning id into v_evaluation_id;
 
   insert into public.points_ledger
-    (member_id, delta, reason, task_id, evaluation_id)
-  values (p_member_id, v_points, 'task', p_task_id, v_evaluation_id);
+    (member_id, delta, reason, task_id, evaluation_id, created_at)
+  values (p_member_id, v_points, 'task', p_task_id, v_evaluation_id,
+          coalesce(p_awarded_at, now()));
 
   return v_points;
 end;
 $function$;
 
--- #586: transitional, rolled-back test fixture materializer. Historical
--- Task/Calendar suites call this explicitly after creating legacy fixtures.
--- No trigger or production-schema sync function is created.
-create or replace function pg_temp.materialize_legacy_groups() returns void
-language plpgsql security definer set search_path = '' as $function$
+-- test_reverse_award (#677): reverse one member's live Evaluation on a Task
+-- at p_reversed_at exactly the way reopen_task does -- the reversal trio on
+-- the Evaluation (the only update task_evaluations_guard_change permits) plus
+-- the offsetting `task_reversal` ledger row, whose own created_at is
+-- p_reversed_at. Paired with test_credit_task's p_awarded_at, this dates the
+-- two ledger rows apart while they share one Evaluation -- which is what lets
+-- a Work Filter test tell "the award instant" from "a ledger row's
+-- created_at".
+create or replace function pg_temp.test_reverse_award(
+  p_task_id     bigint,
+  p_member_id   uuid,
+  p_reversed_at timestamptz
+) returns void
+language plpgsql
+as $function$
+declare
+  v_evaluation public.task_evaluations;
 begin
-  insert into public.groups(name,category,competes_in_cup,application_level,
-                            manager_title,short,color,legacy_dept_id)
-  select d.name,'department',d.kind='department',0,'BCE',d.short,d.color,d.id
-    from public.departments d
-   where not exists(select 1 from public.groups g where g.legacy_dept_id=d.id)
-  on conflict (legacy_dept_id) do nothing;
+  select evaluation.* into strict v_evaluation
+    from public.task_evaluations as evaluation
+    join public.task_assignments as assignment on assignment.id = evaluation.assignment_id
+   where evaluation.task_id = p_task_id
+     and assignment.member_id = p_member_id
+     and evaluation.reversed_at is null;
 
-  insert into public.groups(name,category,parent_id,application_level,
-                            shared_work_visibility,manager_title,legacy_team_id)
-  select t.name,'team',parent.id,0,true,
-         case when t.dept_id is null then null else 'Coordonator' end,t.id
-    from public.teams t
-    left join public.groups parent on parent.legacy_dept_id=t.dept_id
-   where t.id not in ('t-app','t-recruti','t-logistica')
-     and not exists(select 1 from public.groups g where g.legacy_team_id=t.id)
-  on conflict (legacy_team_id) do nothing;
-
-  insert into public.groups(name,category,application_level,manager_title,
-                            status,legacy_project_id,created_by)
-  select p.name,'project',0,'Coordonator Principal',p.status,p.id,p.created_by
-    from public.projects p
-   where not exists(select 1 from public.profiles creator
-     where creator.id=p.created_by and creator.email like '%@demo.osubb')
-     and not exists(select 1 from public.groups g where g.legacy_project_id=p.id)
-  on conflict (legacy_project_id) do nothing;
-
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,md.member_id,
-         case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md
-    join public.groups g on g.legacy_dept_id=md.dept_id
-    join public.profiles p on p.id=md.member_id
-   where md.dept_id <> 'org'
-  on conflict (group_id,member_id) do nothing;
-
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,tm.member_id,
-         case when t.dept_id is null then 'responsible' else 'member' end
-    from public.team_members tm
-    join public.teams t on t.id=tm.team_id
-    join public.groups g on g.legacy_team_id=tm.team_id
-  on conflict (group_id,member_id) do nothing;
-
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,p.leader_id,'manager'
-    from public.projects p
-    join public.groups g on g.legacy_project_id=p.id
-  on conflict (group_id,member_id) do nothing;
-  insert into public.group_members(group_id,member_id,group_role)
-  select g.id,pm.member_id,pm.project_role
-    from public.project_members pm
-    join public.groups g on g.legacy_project_id=pm.project_id
-  on conflict (group_id,member_id) do nothing;
+  update public.task_evaluations
+     set reversed_at = p_reversed_at,
+         reversed_by = v_evaluation.evaluated_by,
+         reversal_reason = 'fixture dated reversal'
+   where id = v_evaluation.id;
+  insert into public.points_ledger
+    (member_id, delta, reason, task_id, evaluation_id, created_at)
+  values (p_member_id, -v_evaluation.points, 'task_reversal', p_task_id,
+          v_evaluation.id, p_reversed_at);
 end;
 $function$;
 
--- Fixture id lookups are read-only and owner-backed so denied personas can
--- name a Group without gaining any read privilege.
-create or replace function pg_temp.dept_group(p_dept_id text) returns bigint
-language sql stable security definer set search_path = '' as $function$
-  select id from public.groups where legacy_dept_id=p_dept_id
-$function$;
-create or replace function pg_temp.team_group(p_team_id text) returns bigint
-language sql stable security definer set search_path = '' as $function$
-  select g.id from public.groups g where g.legacy_team_id=p_team_id
-    union all select g.id from public.groups g
-      where g.created_by='d0000000-0000-0000-0000-000000000007'
-        and g.name=case p_team_id when 't-app' then 'Echipa Aplicație'
-          when 't-recruti' then 'Echipa Recruți'
-          when 't-logistica' then 'Echipa Logistică' end
-    limit 1
-$function$;
-create or replace function pg_temp.project_group(p_project_id bigint) returns bigint
-language sql stable security definer set search_path = '' as $function$
-  select g.id from public.groups g where g.legacy_project_id=p_project_id
-    union all select g.id from public.groups g
-      join public.projects p on p.name=g.name
-      where p.id=p_project_id
-        and g.created_by='d0000000-0000-0000-0000-000000000007'
-        and p.created_by=g.created_by
-    limit 1
-$function$;
+-- Native fixture materializer: aliases exist only in pg_temp descriptor rows.
+-- A descriptor without a group_id falls back to its name, scoped to the parent
+-- the materializer gives it (Group names are unique among siblings only):
+-- Departments and Projects are roots, a Team sits under its Department's
+-- Group (or at the root), and the seeded demo Teams under their seeded parents.
+create or replace function pg_temp.dept_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
+ select coalesce((select g.id from public.groups g where g.id=d.group_id),(select g.id from public.groups g where g.name=d.name and g.parent_id is null)) from pg_temp.fixture_departments d where d.id=p_key
+$$;
+create or replace function pg_temp.team_group(p_key text) returns bigint language sql stable security definer set search_path='' as $$
+ select coalesce((select coalesce((select g.id from public.groups g where g.id=t.group_id),(select g.id from public.groups g where g.name=t.name and g.parent_id is not distinct from pg_temp.dept_group(t.dept_id))) from pg_temp.fixture_teams t where t.id=p_key),
+ (select g.id from public.groups g where g.name=case p_key when 't-app' then 'Echipa Aplicație' when 't-recruti' then 'Echipa Recruți' when 't-logistica' then 'Echipa Logistică' end
+    and g.parent_id is not distinct from (select r.id from public.groups r where r.parent_id is null and r.name=case p_key when 't-app' then 'Diverse' when 't-recruti' then 'Educațional' end)))
+$$;
+create or replace function pg_temp.project_group(p_key bigint) returns bigint language sql stable security definer set search_path='' as $$
+ select coalesce((select g.id from public.groups g where g.id=p.group_id),(select g.id from public.groups g where g.name=p.name and g.parent_id is null)) from pg_temp.fixture_projects p where p.id=p_key
+$$;
+create or replace function pg_temp.materialize_legacy_groups() returns void language plpgsql security definer set search_path='' as $$
+declare fixture record; v_id bigint;
+begin
+ for fixture in select * from pg_temp.fixture_departments loop
+  v_id := pg_temp.dept_group(fixture.id);
+  if v_id is null then
+   insert into public.groups(name,category,competes_in_cup,application_level,manager_title,short,color)
+   values(fixture.name,'department',fixture.kind='department',0,'BCE',fixture.short,fixture.color) returning id into v_id;
+  end if;
+  update pg_temp.fixture_departments set group_id=v_id where id=fixture.id;
+ end loop;
+ for fixture in select * from pg_temp.fixture_teams loop
+  v_id := pg_temp.team_group(fixture.id);
+  if v_id is null then
+   insert into public.groups(name,category,parent_id,application_level,shared_work_visibility,manager_title)
+   values(fixture.name,'team',pg_temp.dept_group(fixture.dept_id),0,true,case when fixture.dept_id is null then null else 'Coordonator' end) returning id into v_id;
+  end if;
+  update pg_temp.fixture_teams set group_id=v_id where id=fixture.id;
+ end loop;
+ for fixture in select * from pg_temp.fixture_projects loop
+  v_id := pg_temp.project_group(fixture.id);
+  if v_id is null then
+   insert into public.groups(name,category,application_level,manager_title,status,created_by)
+   values(fixture.name,'project',0,'Coordonator Principal',fixture.status,fixture.created_by) returning id into v_id;
+  end if;
+  update pg_temp.fixture_projects set group_id=v_id where id=fixture.id;
+ end loop;
+ insert into public.group_members(group_id,member_id,group_role)
+ select d.group_id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+ from pg_temp.fixture_member_departments md join pg_temp.fixture_departments d on d.id=md.dept_id
+ join public.profiles p on p.id=md.member_id join public.groups g on g.id=d.group_id where not g.automatic_membership
+ on conflict(group_id,member_id) do nothing;
+ insert into public.group_members(group_id,member_id,group_role)
+ select t.group_id,tm.member_id,case when t.dept_id is null then 'responsible' else 'member' end
+ from pg_temp.fixture_team_members tm join pg_temp.fixture_teams t on t.id=tm.team_id
+ join public.profiles p on p.id=tm.member_id join public.groups g on g.id=t.group_id where not g.automatic_membership
+ on conflict(group_id,member_id) do nothing;
+ insert into public.group_members(group_id,member_id,group_role)
+ select p.group_id,p.leader_id,'manager' from pg_temp.fixture_projects p where p.leader_id is not null on conflict(group_id,member_id) do nothing;
+ insert into public.group_members(group_id,member_id,group_role)
+ select p.group_id,pm.member_id,pm.project_role from pg_temp.fixture_project_members pm join pg_temp.fixture_projects p on p.id=pm.project_id on conflict(group_id,member_id) do nothing;
+end;
+$$;
 
 \if :{?osubb_test_suite}
 \else
-select plan(24);
+select plan(26);
 
 insert into auth.users (id, email)
 values ('e3670000-0000-0000-0000-000000000001', 'helpers.bce@test.local');
 insert into public.profiles (id, full_name, email, role, status)
 values ('e3670000-0000-0000-0000-000000000001', 'Helpers BCE',
         'helpers.bce@test.local', 'bce', 'activ');
-insert into public.member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
 values ('e3670000-0000-0000-0000-000000000001', 'edu');
 select pg_temp.materialize_legacy_groups();
 
@@ -459,8 +466,7 @@ select lives_ok($$
 $$, 'test_login_leadership derives claims from fixtures');
 select is(auth.jwt() -> 'app_metadata', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5,
-  'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb,
-  'group_ids', (select jsonb_agg(grp.id) from public.groups grp where grp.legacy_dept_id = 'edu')),
+  'group_ids', (select jsonb_agg(grp.id) from public.groups grp where grp.name = 'Educațional')),
   'leadership login derives role, level, Departments, Teams and Groups');
 
 select throws_ok($call$
@@ -548,6 +554,38 @@ select is(
     where task.title = 'helpers-credit-fixture'),
   'command:6:e3670000-0000-0000-0000-000000000001',
   'the ledger row names a command Evaluation on that member''s own Assignment');
+
+-- test_credit_task's p_awarded_at and test_reverse_award: the award instant
+-- is set at insert, and the reversal row is dated apart from it.
+insert into public.tasks (title, difficulty, rating, status, completed_at, group_id)
+values ('helpers-dated-fixture', 2, 5, 'completed', now(), pg_temp.dept_group('edu'));
+select pg_temp.test_credit_task(
+  (select id from public.tasks where title = 'helpers-dated-fixture'),
+  'e3670000-0000-0000-0000-000000000001',
+  'e3670000-0000-0000-0000-000000000001',
+  p_awarded_at => '2001-03-10 10:00:00+00');
+select pg_temp.test_reverse_award(
+  (select id from public.tasks where title = 'helpers-dated-fixture'),
+  'e3670000-0000-0000-0000-000000000001', '2001-04-10 10:00:00+00');
+
+select is(
+  (select array_agg(format('%s:%s:%s', ledger.reason, ledger.delta,
+                           ledger.created_at = '2001-03-10 10:00:00+00')
+                    order by ledger.created_at)
+     from public.points_ledger ledger
+     join public.tasks task on task.id = ledger.task_id
+    where task.title = 'helpers-dated-fixture'),
+  array['task:6:t', 'task_reversal:-6:f'],
+  'p_awarded_at dates the credit row; test_reverse_award dates the reversal row apart from it');
+
+select is(
+  (select format('%s:%s', evaluation.evaluated_at = '2001-03-10 10:00:00+00',
+                 evaluation.reversed_at = '2001-04-10 10:00:00+00')
+     from public.task_evaluations evaluation
+     join public.tasks task on task.id = evaluation.task_id
+    where task.title = 'helpers-dated-fixture'),
+  't:t',
+  'and the one Evaluation both rows share carries both instants');
 
 select * from finish();
 rollback;

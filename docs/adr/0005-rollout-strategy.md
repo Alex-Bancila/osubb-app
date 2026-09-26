@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-07 (rewritten)
 - **Amended:** 2026-09-23 — ADR-0010 decides the Web Push comparison below: a Supabase Edge Function
+- **Amended:** 2026-09-25 — the launch-infrastructure grill (`docs/superpowers/plans/2026-09-25-launch-infrastructure-grill.md`, rulings L1–L20) fixes the hosting product, the release pipeline, the email provider, the sign-in link shape, the privacy notice and the go-live condition; see the notes below
 - **Deciders:** Alex Băncilă (IT Coordinator) + team
 - **Supersedes:** the dated BC/BCE-first rollout recorded in the earlier version of this file
 - **Superseded by:** —
@@ -19,6 +20,8 @@ OSUBB controls the `osubb.ro` domain and intends to host the finished browser ap
 ### Delivery shape
 
 Ship one responsive, installable **Progressive Web App**. The future production address is `app.osubb.ro`, hosted through Cloudflare. Native app-store packages are not part of this rollout.
+
+> **Amended 2026-09-25 (L1, L3, L10).** Hosting is **Cloudflare Pages**, two Direct Upload projects (`osubb-staging` with PR previews, `osubb-app` at `app.osubb.ro`), deployed **only from GitHub Actions**. Pages is chosen against Cloudflare's "start new projects with Workers" guidance because `osubb.ro`'s DNS stays at its registrar for launch and a Workers custom domain requires the zone on Cloudflare; `app.osubb.ro` is one CNAME added there. Migrate to Workers when the zone moves to Cloudflare, when Pages receives an end-of-life date, or when server code at the edge is ever needed. Cloudflare's Git integration is not used: it deploys production on every push and cannot be gated. The production deploy is a **Release** (glossary), a `workflow_dispatch` workflow behind a GitHub Environment with required reviewers; "promote" is never used for it.
 
 The implementation order is:
 
@@ -39,6 +42,8 @@ No delivery date is promised by this ADR. A milestone is ready only when its acc
 
 Preview deployments must not silently share production secrets or production member data. The Cloudflare Access policy for previews and production is a separate operational decision.
 
+> **Amended 2026-09-25 (L5, L7, L9, L11, L16).** Staging and previews stay public (demo data, invite-only auth). Secrets live in GitHub Environments `preview`, `staging` (`main` only) and `production` (`main` only, reviewers), never at repository level. Auth email is sent through **Resend** over custom SMTP as `noreply@app.osubb.ro` in both environments with separate keys. Emailed sign-in links open a click-to-confirm page (`/auth/confirm` with the token hash) so link scanners cannot spend the one-time token; the six-digit code remains. A versioned Privacy Notice is shown in the app and each Member records a Privacy Acknowledgement before use.
+
 ### Rollout gates
 
 Before expanding access, the team must prove:
@@ -49,6 +54,8 @@ Before expanding access, the team must prove:
 - safe PWA cache boundaries: application shell and brand assets only;
 - no secrets in Git, no high/critical dependency advisories, and no browser-console errors;
 - a teammate who did not build the feature can follow the runbook successfully.
+
+> **Amended 2026-09-25 (L15, L17).** The go-live condition "Wave 5 accepted on staging" is replaced: go-live is the acceptance run of ruling L17 passing on staging (the gates above that apply, plus PWA install and push on a real iPhone and Android, headers and manifest checks) **and** the IT Coordinator's explicit decision to open the doors. The launch scope is every open issue except those labelled `after-launch`; the target date is 2 October 2026; if items remain open on that day, the decision to launch or wait is taken that day with the open list in view.
 
 ### Push notifications
 

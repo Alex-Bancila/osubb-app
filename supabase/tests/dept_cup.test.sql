@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(13);
+select plan(16);
 
 
 -- Remove the demo members and every dependent row inside this rolled-back
@@ -27,7 +27,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('c2000000-0000-0000-0000-000000000002', 'Membru Inactiv', 'cup.inactive@test.local', 'voluntar', 'inactiv'),
   ('c3000000-0000-0000-0000-000000000003', 'Fost Membru',    'cup.alumni@test.local',   'voluntar', 'alumni');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('c1000000-0000-0000-0000-000000000001', 'edu'),
   ('c2000000-0000-0000-0000-000000000002', 'pr'),
   ('c3000000-0000-0000-0000-000000000003', 'hr');
@@ -109,5 +109,27 @@ reset role;
 select results_eq($$select column_name::text collate "C" from information_schema.columns where table_schema='public' and table_name='dept_cup' order by ordinal_position$$,
   $$select unnest(array['group_id','name','points','members']::text[]) collate "C"$$,
   'the Cup is keyed by Group alone -- the compatibility dept_id column went with the bridge (#579)');
+
+-- #677: the view is the unbounded read; the Work Filter's award date range
+-- narrows department_cup only. One more hr award (2 x 1 = 2), dated
+-- 2001-03-10 10:00Z by its Evaluation, far from the three awarded at now().
+insert into public.tasks (title, difficulty, group_id) values ('cup-dated', 2, pg_temp.dept_group('hr'));
+update public.tasks set status = 'completed', completed_at = now(), rating = 3
+ where title = 'cup-dated';
+select pg_temp.test_credit_task(task.id, 'c1000000-0000-0000-0000-000000000001',
+                                'c1000000-0000-0000-0000-000000000001',
+                                p_awarded_at => '2001-03-10 10:00:00+00')
+  from public.tasks task where task.title = 'cup-dated';
+
+select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
+select is((select points from public.dept_cup where group_id = pg_temp.dept_group('hr')), 17,
+  'the dept_cup view carries every award whenever it was made (15 + 2) -- it takes no range');
+select is((select points from public.department_cup(null, '2001-03-10 10:00:00+00', '2001-03-11 10:00:00+00')
+            where group_id = pg_temp.dept_group('hr')), 2,
+  'department_cup over [T1, T1 + 1 day) holds only the award evaluated at T1');
+select is((select points from public.department_cup(null, '2001-03-11 10:00:00+00', null)
+            where group_id = pg_temp.dept_group('hr')), 15,
+  'and from the day after it holds only the three awards made since');
+reset role;
 select * from finish();
 rollback;

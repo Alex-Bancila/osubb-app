@@ -43,7 +43,6 @@ function group(
     min_level: 0,
     status: 'active',
     is_organization: organization,
-    legacy_dept_id: null,
   };
 }
 function role(g: Group, groupRole: string): MyGroup {
@@ -182,10 +181,10 @@ describe('Announcement composer', () => {
     const title = within(dialog).getByRole('textbox', { name: 'Titlu' });
     const message = within(dialog).getByRole('textbox', { name: 'Mesaj' });
     const formName = within(dialog).getByRole('textbox', {
-      name: 'Nume formular',
+      name: 'Etichetă link',
     });
     const formUrl = within(dialog).getByRole('textbox', {
-      name: 'Adresă formular',
+      name: 'Adresă link',
     });
     const publish = within(dialog).getByRole('button', {
       name: 'Publică anunțul',
@@ -197,19 +196,20 @@ describe('Announcement composer', () => {
       '2',
     );
     await user.click(publish);
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      'Completează titlul',
-    );
+    expect(title).toHaveAccessibleDescription('Scrie titlul.');
+    expect(title).toHaveFocus();
     expect(mutateAsync).not.toHaveBeenCalled();
     await user.clear(title);
     await user.type(title, 'Anunț');
     await user.type(formName, 'Formular');
     await user.click(publish);
-    expect(within(dialog).getByRole('alert')).toHaveTextContent('atât numele');
+    expect(formUrl).toHaveAccessibleDescription(
+      'Scrie adresa linkului sau lasă linkul gol.',
+    );
     await user.type(formUrl, 'ftp://example.com');
     await user.click(publish);
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      'http sau https',
+    expect(formUrl).toHaveAccessibleDescription(
+      'Adresa trebuie să înceapă cu http:// sau https://.',
     );
     expect(mutateAsync).not.toHaveBeenCalled();
   });

@@ -24,3 +24,10 @@ e06dbb65641bbcf31c25cf883a3914517afeeea5:app/.env.example:jwt:15
 # #598: the same synthetic fixture ('x.eyJhcHBfbWV0YWRhdGEiOnt9fQ.y', explained
 # above) inside the new `sessionFor` test helper — moved, not new.
 39464332f458a9b5b12780b06a168177c9473605:app/src/lib/auth.test.tsx:generic-api-key:63
+
+# #704: the VAPID *public* key example from the web-push library's README,
+# pasted as a test fixture for `urlBase64ToUint8Array` against fully mocked
+# browser APIs. A VAPID public key is public by design (it ships in every
+# frontend bundle as VITE_VAPID_PUBLIC_KEY) and this one belongs to no
+# OSUBB environment. The next commit replaces it with a key built in the test.
+2caaae0af528059ca2a9977c2f17014126b9c636:app/src/queries/push-subscription.test.ts:generic-api-key:23

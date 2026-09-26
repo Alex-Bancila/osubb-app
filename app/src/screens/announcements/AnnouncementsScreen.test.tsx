@@ -21,6 +21,16 @@ vi.mock('../../lib/auth', () => ({
 vi.mock('../../queries/announcements', () => ({
   useAnnouncementsFeed: hooks.useAnnouncementsFeed,
   useMarkAnnouncementRead: hooks.useMarkAnnouncementRead,
+  useAnnouncementReaders: () => ({ data: undefined }),
+}));
+vi.mock('../../queries/member-identities', () => ({
+  useMemberIdentities: () => ({ data: undefined }),
+}));
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
+vi.mock('../../queries/my-groups', () => ({
+  useMyGroupRoles: () => ({ data: [] }),
 }));
 
 vi.mock('../../queries/reference', () => ({
@@ -41,7 +51,6 @@ const mockGroup: Group = {
   min_level: 1,
   status: 'active',
   is_organization: false,
-  legacy_dept_id: 'it',
 };
 
 const mockGroups = new Map<number, Group>([[10, mockGroup]]);
@@ -57,7 +66,6 @@ function createRow(
     category: 'general',
     pinned: false,
     author: 'Admin',
-    dept_id: 'it',
     group_id: 10,
     audience: 'local',
     published_at: '2026-09-18T10:00:00Z',

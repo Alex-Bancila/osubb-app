@@ -35,6 +35,9 @@ export type NavItem = {
  */
 export const NOTIFICATIONS_PATH = '/notificari';
 
+/** The Anunțuri page, named once for the same reason: it carries the unread-announcements badge. */
+export const ANNOUNCEMENTS_PATH = '/anunturi';
+
 /**
  * One list drives the sidebar, the mobile tab bar and the page title, so those
  * three can never disagree about what exists or what it is called.
@@ -66,7 +69,7 @@ export const NAV_ITEMS: NavItem[] = [
     onTabBar: true,
   },
   {
-    path: '/anunturi',
+    path: ANNOUNCEMENTS_PATH,
     label: 'Anunțuri',
     icon: Megaphone,
     onTabBar: true,
@@ -90,4 +93,10 @@ export const NAV_ITEMS: NavItem[] = [
 
 /* The mobile bar carries five, in a different order from the sidebar:
    the two things people open the app for come first. */
-export const TAB_ORDER = ['/', '/calendar', '/tracker', '/anunturi', '/profil'];
+export const TAB_ORDER = [
+  '/',
+  '/calendar',
+  '/tracker',
+  ANNOUNCEMENTS_PATH,
+  '/profil',
+];

@@ -14,7 +14,6 @@ select extensions.dblink_exec('events_248_setup',$setup$
  delete from public.notifications where member_id::text like '24800000-%';
  delete from public.events where title='Race #248';
  delete from public.groups where name='Race #248';
- delete from public.projects where name='Race #248';
  delete from auth.users where id in ('24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000091','24800000-0000-0000-0000-000000000092');
  insert into auth.users(id,email) values
  ('24800000-0000-0000-0000-000000000090','lead.race248@test.local'),
@@ -24,14 +23,8 @@ select extensions.dblink_exec('events_248_setup',$setup$
  ('24800000-0000-0000-0000-000000000090','Leader','lead.race248@test.local','voluntar','activ'),
  ('24800000-0000-0000-0000-000000000091','Responsible','resp.race248@test.local','voluntar','activ'),
  ('24800000-0000-0000-0000-000000000092','BC','bc.race248@test.local','bc','activ');
- insert into public.projects(name,leader_id,created_by) values
- ('Race #248','24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000092');
- insert into public.project_members(project_id,member_id,project_role)
- select id,'24800000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #248'
-  on conflict (project_id, member_id) do update set project_role = excluded.project_role;
- insert into public.groups(name,category,legacy_project_id)
- select name,'project',id from public.projects where name='Race #248';
- insert into public.group_members(group_id,member_id,group_role)
+ insert into public.groups(name,category) values ('Race #248','project');
+  insert into public.group_members(group_id,member_id,group_role)
  select id,'24800000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #248';
  insert into public.group_members(group_id,member_id,group_role)
  select id,'24800000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #248';
@@ -41,7 +34,7 @@ select extensions.dblink_exec('events_248_setup',$setup$
  declare e public.events%rowtype;
  begin
  select * into e from public.events where title='Race #248';
- return (public.update_event(e.id,e.title,e.type::text,e.group_id,e.starts_at,e.ends_at,e.location,30,e.description,e.min_level)).title;
+ return (public.update_event(e.id,e.title,e.type::text,e.group_id,e.starts_at,e.ends_at,e.location,30,e.description,e.min_level,e.campaign_id)).title;
  exception when sqlstate 'PT409' then return sqlstate || ':' || sqlerrm;
  end; $$;
  create or replace function public.test_248_cancel() returns text language sql security definer set search_path='' as $$
@@ -88,7 +81,6 @@ select extensions.dblink_exec('events_248_setup',$cleanup$
  delete from public.notifications where member_id::text like '24800000-%';
  delete from public.events where title='Race #248';
  delete from public.groups where name='Race #248';
- delete from public.projects where name='Race #248';
  delete from auth.users where id in ('24800000-0000-0000-0000-000000000090','24800000-0000-0000-0000-000000000091','24800000-0000-0000-0000-000000000092');
 $cleanup$);
 select extensions.dblink_disconnect('events_248_setup');

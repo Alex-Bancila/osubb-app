@@ -39,58 +39,56 @@ select pg_temp.u601(n), 'Audience #601 ' || n, 'audience.' || n || '.601@test.lo
        (case when n in (3, 5, 7, 10) then 'inactiv' else 'activ' end)::public.member_status
   from generate_series(1, 11) n;
 
-insert into public.departments(id, name, short, color, kind)
+insert into pg_temp.fixture_departments(id, name, short, color, kind)
 values ('d601', 'Department #601', 'D601', '#601601', 'department');
-insert into public.teams(id, name, dept_id) values ('dt601', 'Team #601', 'd601');
-insert into public.member_departments(member_id, dept_id)
+insert into pg_temp.fixture_teams(id, name, dept_id) values ('dt601', 'Team #601', 'd601');
+insert into pg_temp.fixture_member_departments(member_id, dept_id)
 values (pg_temp.u601(2), 'd601'), (pg_temp.u601(3), 'd601');
-insert into public.team_members(team_id, member_id)
+insert into pg_temp.fixture_team_members(team_id, member_id)
 values ('dt601', pg_temp.u601(4)), ('dt601', pg_temp.u601(5));
-insert into public.groups(name,category,legacy_dept_id)
-values ('Department #601','department','d601');
-insert into public.groups(name,category,parent_id,legacy_team_id)
-values ('Team #601','team',(select id from public.groups where legacy_dept_id='d601'),'dt601');
+insert into public.groups(name,category) values ('Department #601','department');
+insert into public.groups(name,category,parent_id) values ('Team #601','team',(select id from public.groups where id = pg_temp.dept_group('d601')));
 insert into public.group_members(group_id,member_id,group_role)
-select g.id,md.member_id,'member' from public.member_departments md
-  join public.groups g on g.legacy_dept_id=md.dept_id where md.dept_id='d601';
+select g.id,md.member_id,'member' from pg_temp.fixture_member_departments md
+  join public.groups g on g.id = pg_temp.dept_group(md.dept_id) where md.dept_id='d601';
 insert into public.group_members(group_id,member_id,group_role)
-select g.id,tm.member_id,'member' from public.team_members tm
-  join public.groups g on g.legacy_team_id=tm.team_id where tm.team_id='dt601';
+select g.id,tm.member_id,'member' from pg_temp.fixture_team_members tm
+  join public.groups g on g.id = pg_temp.team_group(tm.team_id) where tm.team_id='dt601';
 
 insert into public.groups(name, category, parent_id, application_level)
-values ('Sub #601', 'team', (select id from public.groups where legacy_team_id = 'dt601'), 0);
+values ('Sub #601', 'team', (select id from public.groups where id = pg_temp.team_group('dt601')), 0);
 insert into public.groups(name, category, min_level, automatic_membership)
 values ('Auto #601', 'team', 3, true);
 insert into public.group_members(group_id, member_id, group_role)
 select id, pg_temp.u601(n), 'member' from public.groups, unnest(array[4, 6, 7]) n
- where name = 'Sub #601' and legacy_team_id is null;
+ where name = 'Sub #601';
 -- Group Roles are still appointed on an Automatic Group: member 6 manages Auto #601
 -- AND belongs to it automatically (level 3), the roster/automatic overlap.
 insert into public.group_members(group_id, member_id, group_role)
 select id, pg_temp.u601(6), 'manager' from public.groups
- where name = 'Auto #601' and legacy_team_id is null;
+ where name = 'Auto #601';
 -- Fix round 1 (archived Groups): Arch #601 under Sub, archived, rostering member 9;
 -- Below Arch #601 under it, still active, rostering member 11. Neither Member is on
 -- any other roster, so each is reached only through an archived Group (or a Group
 -- below one) from the Department, the Team and the Sub.
 insert into public.groups(name, category, parent_id, application_level)
-values ('Arch #601', 'team', (select id from public.groups where name = 'Sub #601' and legacy_team_id is null), 0);
+values ('Arch #601', 'team', (select id from public.groups where name = 'Sub #601'), 0);
 insert into public.groups(name, category, parent_id, application_level)
-values ('Below Arch #601', 'team', (select id from public.groups where name = 'Arch #601' and legacy_team_id is null), 0);
+values ('Below Arch #601', 'team', (select id from public.groups where name = 'Arch #601'), 0);
 insert into public.group_members(group_id, member_id, group_role)
-select id, pg_temp.u601(9), 'member' from public.groups where name = 'Arch #601' and legacy_team_id is null
+select id, pg_temp.u601(9), 'member' from public.groups where name = 'Arch #601'
 union all
-select id, pg_temp.u601(11), 'member' from public.groups where name = 'Below Arch #601' and legacy_team_id is null;
-update public.groups set status = 'archived' where name = 'Arch #601' and legacy_team_id is null;
+select id, pg_temp.u601(11), 'member' from public.groups where name = 'Below Arch #601';
+update public.groups set status = 'archived' where name = 'Arch #601';
 
 create temp table g601 as
-select 'dept'::text as name, id from public.groups where legacy_dept_id = 'd601'
-union all select 'team', id from public.groups where legacy_team_id = 'dt601'
-union all select 'sub', id from public.groups where name = 'Sub #601' and legacy_team_id is null
-union all select 'auto', id from public.groups where name = 'Auto #601' and legacy_team_id is null
-union all select 'arch', id from public.groups where name = 'Arch #601' and legacy_team_id is null
+select 'dept'::text as name, id from public.groups where id = pg_temp.dept_group('d601')
+union all select 'team', id from public.groups where id = pg_temp.team_group('dt601')
+union all select 'sub', id from public.groups where name = 'Sub #601'
+union all select 'auto', id from public.groups where name = 'Auto #601'
+union all select 'arch', id from public.groups where name = 'Arch #601'
 union all select 'org', id from public.groups where is_organization
-union all select 'diverse', id from public.groups where legacy_dept_id = 'diverse';
+union all select 'diverse', id from public.groups where name = 'Diverse';
 grant select on g601 to authenticated, anon;
 
 -- ==================== the helper ====================
@@ -175,7 +173,7 @@ select set_eq(
 select pg_temp.test_login_leadership(pg_temp.u601(1));
 select lives_ok(
   $q$select public.update_event((select id from e601 where name = 'org'), 'Audience org #601', 'sedinta',
-       (select id from g601 where name = 'org'), '2026-10-01 12:00+00', null, 'Aula', null, null, 0)$q$,
+       (select id from g601 where name = 'org'), '2026-10-01 12:00+00', null, 'Aula', null, null, 0, null)$q$,
   'BC moves an Organization Group Event to a new location');
 reset role;
 select set_eq(
@@ -198,7 +196,7 @@ select set_eq(
 select pg_temp.test_login_leadership(pg_temp.u601(1));
 select lives_ok(
   $q$select public.update_event((select id from e601 where name = 'move'), 'Audience move #601', 'sedinta',
-       (select id from g601 where name = 'diverse'), '2026-10-01 12:00+00', null, null, null, null, 0)$q$,
+       (select id from g601 where name = 'diverse'), '2026-10-01 12:00+00', null, null, null, null, 0, null)$q$,
   'BC moves a Department Event to another Department');
 reset role;
 select set_eq(
