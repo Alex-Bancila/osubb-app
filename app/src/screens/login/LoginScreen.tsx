@@ -8,6 +8,17 @@ import { Button } from '../../components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '../../components/ui/field';
 import { SessionScreen } from '../../components/shell/SessionScreen';
 
+/* The Privacy Notice (#771) is readable before anyone signs in. A plain link,
+   not a router Link: this screen is also rendered on its own. */
+const privacyFooter = (
+  <a
+    href="/confidentialitate"
+    className="inline-flex min-h-11 items-center underline underline-offset-4"
+  >
+    Politica de confidențialitate
+  </a>
+);
+
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 type CodeStatus = 'idle' | 'verifying' | 'error';
 
@@ -137,7 +148,7 @@ export default function LoginScreen({
 
   if (status === 'sent') {
     return (
-      <SessionScreen>
+      <SessionScreen footer={privacyFooter}>
         <h1
           ref={sentHeadingRef}
           tabIndex={-1}
@@ -231,7 +242,7 @@ export default function LoginScreen({
   }
 
   return (
-    <SessionScreen>
+    <SessionScreen footer={privacyFooter}>
       <form className="flex flex-col gap-4" onSubmit={requestLink}>
         <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
           Aplicația OSUBB

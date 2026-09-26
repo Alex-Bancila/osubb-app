@@ -341,6 +341,8 @@ const REASON_COPY = new Map<string, string>([
   ['full_name_required', 'Scrie numele complet.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
   ['email_invalid', 'Scrie o adresă de email validă.'],
+  // #632: the new sign-in address is the one the Member already has.
+  ['email_unchanged', 'Noua adresă este identică cu cea actuală.'],
   // #773 (ruling L19): reinvite-member, the re-sent invitation.
   [
     'already_active',
@@ -368,6 +370,54 @@ const REASON_COPY = new Map<string, string>([
     'Invitația nu a putut fi trimisă. Încearcă din nou peste câteva minute.',
   ],
 
+  /* ---- Evaluation Periods and the Promotion Threshold (#701, #702) ---- */
+  [
+    'period_manage_forbidden',
+    'Doar BC și Moderatorul pot deschide sau închide o perioadă de evaluare.',
+  ],
+  ['invalid_period_name', 'Scrie numele perioadei.'],
+  [
+    'period_already_open',
+    'O perioadă de evaluare este deja deschisă. Pagina a fost actualizată.',
+  ],
+  [
+    'period_already_closed',
+    'Perioada a fost deja închisă. Pagina a fost actualizată.',
+  ],
+  ['period_not_found', 'Perioada nu mai este disponibilă. Reîncarcă pagina.'],
+  [
+    'promotion_rule_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba pragul de promovare.',
+  ],
+  [
+    'promotion_rule_not_found',
+    'Regula de promovare nu mai este disponibilă. Reîncarcă pagina.',
+  ],
+  [
+    'promotion_rule_not_top_percent',
+    'Această regulă de promovare nu are un prag de puncte.',
+  ],
+  [
+    'promotion_threshold_already_stamped',
+    'O perioadă s-a închis deja, așa că pragul vine acum din ultima închidere.',
+  ],
+  [
+    'invalid_initial_threshold',
+    'Pragul inițial este un număr întreg de cel puțin 1.',
+  ],
+
+  /* ---- Organization settings (#681, #512) ---- */
+  [
+    'org_settings_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba setările organizației.',
+  ],
+  [
+    'invalid_org_setting_value',
+    'Valoarea nu este acceptată: o adresă începe cu http:// sau https://, iar grupul ales trebuie să fie activ.',
+  ],
+  ['value_too_long', 'Valoarea are cel mult 2048 de caractere.'],
+  ['org_setting_not_found', 'Setarea nu mai există. Reîncarcă pagina.'],
+
   /* ---- Web Push on this device (#704) ---- */
   /* browser */
   [
@@ -383,6 +433,25 @@ const REASON_COPY = new Map<string, string>([
   [
     'push_preferences_unavailable',
     'Nu am putut încărca preferințele. Verifică internetul și reîncarcă pagina.',
+  ],
+
+  /* ---- The Privacy Notice (#771, ruling L16) ---- */
+  ['notice_version_required', 'Reîncarcă pagina și citește politica din nou.'],
+  [
+    'privacy_notice_version_stale',
+    'Politica de confidențialitate tocmai s-a actualizat. Citește versiunea nouă și confirm-o.',
+  ],
+  [
+    'privacy_notice_already_acknowledged',
+    'Ai confirmat deja această versiune a politicii.',
+  ],
+  [
+    'privacy_acknowledgement_forbidden',
+    'Contul tău nu este activ, așa că nu poți confirma politica.',
+  ],
+  [
+    'privacy_acknowledgements_forbidden',
+    'Doar BC și Moderatorul văd confirmările politicii de confidențialitate.',
   ],
 ]);
 

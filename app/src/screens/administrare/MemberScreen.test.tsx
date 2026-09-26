@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   groups: vi.fn(),
   mine: vi.fn(),
   mutate: vi.fn(),
+  privacy: vi.fn(),
 }));
 vi.mock('../../queries/admin-member', () => ({
   useAdminMember: state.member,
@@ -23,6 +24,11 @@ vi.mock('../../lib/capabilities', () => ({
 vi.mock('../../queries/groups-admin', () => ({
   useAdminGroups: state.groups,
   useMyGroupRoles: state.mine,
+}));
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock('../../queries/privacy', async (original) => ({
+  ...(await original<object>()),
+  useMemberAcknowledgement: state.privacy,
 }));
 vi.mock('./RolePanel', () => ({
   RolePanel: ({ selectedMemberId }: { selectedMemberId: string }) => (
@@ -107,6 +113,7 @@ beforeEach(() => {
     ],
   });
   state.mine.mockReturnValue({ ...ready, data: [] });
+  state.privacy.mockReturnValue({ ...ready, data: null });
   state.mutate.mockReset().mockResolvedValue(undefined);
 });
 
@@ -132,6 +139,28 @@ it('BC sees the Nickname over the full name, every Group Role and both editors',
   ).toEqual([]);
 });
 
+it('BC sees whether the Member acknowledged the Privacy Notice, and which version', () => {
+  const view = show();
+  expect(state.privacy).toHaveBeenLastCalledWith('target', true);
+  expect(
+    screen.getByText('Politica de confidențialitate').nextElementSibling,
+  ).toHaveTextContent('neconfirmată');
+  view.unmount();
+
+  state.privacy.mockReturnValue({
+    ...ready,
+    data: {
+      memberId: 'target',
+      noticeVersion: '1.0',
+      acknowledgedAt: '2026-09-26T08:30:00Z',
+    },
+  });
+  show();
+  expect(
+    screen.getByText('Politica de confidențialitate').nextElementSibling,
+  ).toHaveTextContent('v1.0 · 26 septembrie 2026');
+});
+
 it.each(['manager', 'responsible'])(
   'a Group %s sees only their subtree and no name or Role editor',
   (group_role) => {
@@ -149,6 +178,8 @@ it.each(['manager', 'responsible'])(
     expect(screen.queryByLabelText('Pseudonim')).toBeNull();
     expect(screen.queryByText('Editor rol target')).toBeNull();
     expect(screen.queryByText('Retrimitere target')).toBeNull();
+    expect(screen.queryByText('Politica de confidențialitate')).toBeNull();
+    expect(state.privacy).toHaveBeenLastCalledWith('target', false);
   },
 );
 

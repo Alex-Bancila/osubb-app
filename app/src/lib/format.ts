@@ -30,6 +30,14 @@ export function formatTaskCount(count: number): string {
   return `${new Intl.NumberFormat('ro-RO').format(count)} ${de ? 'de ' : ''}taskuri`;
 }
 
+/** A count of Members, same plural rule: "1 membru", "3 membri", "20 de membri". */
+export function formatMemberCount(count: number): string {
+  if (count === 1) return '1 membru';
+  const lastTwo = count % 100;
+  const de = count >= 20 && (lastTwo === 0 || lastTwo >= 20);
+  return `${new Intl.NumberFormat('ro-RO').format(count)} ${de ? 'de ' : ''}membri`;
+}
+
 /** Parse a PostgreSQL `date` as a local calendar date, never as a UTC instant. */
 export function parseLocalDate(value: string | null): Date | null {
   const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);

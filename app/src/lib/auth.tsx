@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
+import { keys } from '../queries/keys';
 import { forgetPushOn, unsubscribeDevice, withTimeout } from './push-device';
 import { supabase } from './supabase';
 
@@ -123,6 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // so the very first observed session (nobody signed in yet, or a returning
   // member's stored session loading in) never wipes a legitimately warm cache.
   const lastUserId = useRef<string | null>(null);
+  // The sign-in address the last event carried (#632): see the listener.
+  const lastEmail = useRef<string | null>(null);
 
   // Read by the focus/visibility refresh effect below, which registers its
   // listeners once (empty deps) and so cannot close over `session` directly.
@@ -147,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A and silently skip the clear.
       if (lastUserId.current === null) {
         lastUserId.current = data.session?.user.id ?? null;
+        lastEmail.current = data.session?.user.email ?? null;
       }
       setSession(data.session);
       setLoading(false);
@@ -157,16 +161,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // token expires; the refreshed one arrives without claims, and because we
     // re-decode on every session change, the app follows the database within
     // the hour rather than staying stale until a manual reload.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (!active) return;
       const nextUserId = next?.user.id ?? null;
+      const nextEmail = next?.user.email ?? null;
       if (lastUserId.current !== null && lastUserId.current !== nextUserId) {
         queryClient.clear();
         // #769: a session that ended any other way than signOut() below must
         // not leave the push self-repair trusting this Member on this device.
         forgetPushOn(lastUserId.current);
+      } else if (
+        nextUserId !== null &&
+        (event === 'USER_UPDATED' ||
+          (lastEmail.current !== null && nextEmail !== lastEmail.current))
+      ) {
+        // #632: the same Member, but Auth changed their account -- a change of
+        // sign-in address requested (USER_UPDATED) or confirmed (the session
+        // after the second link, or a refresh, carries the new address).
+        // `profiles.email` follows through the sync trigger, so re-read it.
+        void queryClient.invalidateQueries({ queryKey: keys.profile.all });
       }
       lastUserId.current = nextUserId;
+      lastEmail.current = nextEmail;
       setSession(next);
       setLoading(false);
     });

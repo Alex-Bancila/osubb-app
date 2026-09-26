@@ -40,9 +40,17 @@ export function loginDestination(value: string): string {
   return next === '/' ? '/login' : `/login?${new URLSearchParams({ next })}`;
 }
 
-export function authCallbackUrl(): string {
+/**
+ * The `redirect_to` an emailed link carries. `next` defaults to where the
+ * login screen was sent from; the email change on Profil passes `/profil`
+ * (#632), so both confirmation links bring the Member back there.
+ */
+export function authCallbackUrl(requested?: string): string {
   const url = new URL('/auth/callback', window.location.origin);
-  const next = authDestination();
+  const next =
+    requested === undefined
+      ? authDestination()
+      : safeAuthDestination(requested);
   if (next !== '/') url.searchParams.set('next', next);
   return url.href;
 }
