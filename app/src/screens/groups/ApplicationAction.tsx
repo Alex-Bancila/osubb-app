@@ -21,9 +21,16 @@ import {
 export function ApplicationAction({
   label,
   command,
+  onSuccess,
 }: {
   label: string;
   command: ApplicationCommand;
+  /**
+   * Called once the command has succeeded. The refetch it triggers may
+   * unmount this row (a withdrawn Application leaves the Profil list, #699),
+   * so a caller that must keep the confirmation on screen owns it here.
+   */
+  onSuccess?: () => void;
 }) {
   const mutation = useApplicationCommand();
   const submitting = useRef(false);
@@ -46,6 +53,7 @@ export function ApplicationAction({
       setOpen(false);
       setNote('');
       setSuccess(true);
+      onSuccess?.();
     } catch (failure) {
       setError(
         failure instanceof CommandError

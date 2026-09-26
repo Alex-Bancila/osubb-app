@@ -29,13 +29,6 @@ function grant(...names: string[]) {
   capabilities.granted = new Set(names);
 }
 vi.mock('./lib/auth', () => ({ useAuth: auth.useAuth }));
-vi.mock('@ionic/react', () => ({
-  IonContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  IonPage: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  IonSpinner: ({ 'aria-label': label }: { 'aria-label': string }) => (
-    <div role="status" aria-label={label} />
-  ),
-}));
 vi.mock('./components/shell/AppShell', async () => {
   const { Outlet } =
     await vi.importActual<typeof import('react-router')>('react-router');
