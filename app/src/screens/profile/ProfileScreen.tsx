@@ -210,32 +210,30 @@ export default function ProfileScreen() {
             </div>
           </section>
 
-          {/* Email Change — #632 */}
+          {/* Sign-in address and its change (#632) */}
           <ChangeEmailSection profile={profile} />
 
-          {/* Phone Card */}
+          {/* Phone */}
           <section className="card p-6">
-            <dl className="text-sm">
-              <div>
-                <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Phone className="size-3.5" aria-hidden="true" />
-                  <span>Număr de telefon</span>
-                </dt>
-                <dd className="mt-1 font-medium text-foreground">
-                  {profile.phone ? (
-                    profile.phone
-                  ) : (
-                    <span className="text-muted-foreground italic">
-                      Necompletat
-                    </span>
-                  )}
-                </dd>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Numărul de telefon este vizibil doar pentru tine și
-                  membrii cu nivel ≥5.
-                </p>
-              </div>
-            </dl>
+            <div className="card-head">
+              <h3 className="card-title flex items-center gap-2">
+                <Phone className="size-5 text-primary" aria-hidden="true" />
+                <span>Număr de telefon</span>
+              </h3>
+            </div>
+            <p className="text-sm font-medium text-foreground">
+              {profile.phone ? (
+                profile.phone
+              ) : (
+                <span className="text-muted-foreground italic">
+                  Necompletat
+                </span>
+              )}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Numărul de telefon este vizibil doar pentru tine și membrii cu
+              nivel ≥5.
+            </p>
           </section>
         </div>
 

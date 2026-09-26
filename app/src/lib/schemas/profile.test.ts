@@ -1,10 +1,15 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   expectMapComplete,
   expectRoutable,
   issues,
 } from '../../test/schema-issues';
-import { emailSchema, fieldForReason, profileSchema } from './profile';
+import {
+  emailChangeSchema,
+  emailSchema,
+  fieldForReason,
+  profileSchema,
+} from './profile';
 
 const valid = { nickname: '', phone: '', avatarColor: '#ED2025' };
 const check = (patch: object) => {
@@ -96,7 +101,38 @@ it('maps every profile reason to its field', () => {
       'nickname_too_long',
       'nickname_invalid',
       'nickname_taken',
+      // #632: Auth refuses an address another account signs in with.
+      'email_taken',
     ],
   );
   expect(fieldForReason.nickname_taken).toBe('nickname');
+});
+
+describe('emailChangeSchema (#632)', () => {
+  const change = (current: string | null, email: string) => {
+    const result = emailChangeSchema(current).safeParse({ email });
+    expectRoutable(result, fieldForReason);
+    return result;
+  };
+
+  it('sends the new address trimmed and lowercased', () => {
+    const result = change('maria@osubb.ro', '  ANA@Gmail.COM ');
+    expect(result.success && result.data.email).toBe('ana@gmail.com');
+  });
+
+  it('refuses an address the shared rule refuses', () => {
+    expect(issues(change('maria@osubb.ro', 'ana@'))).toEqual([
+      'email: email_invalid',
+    ]);
+    expect(issues(change('maria@osubb.ro', ''))).toEqual([
+      'email: email_invalid',
+    ]);
+  });
+
+  it('refuses the current address, compared normalised on both sides', () => {
+    expect(issues(change('Maria@OSUBB.ro', ' maria@osubb.RO '))).toEqual([
+      'email: email_unchanged',
+    ]);
+    expect(issues(change(null, 'maria@osubb.ro'))).toEqual([]);
+  });
 });

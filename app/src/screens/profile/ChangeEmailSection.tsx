@@ -1,69 +1,94 @@
-import { useState } from 'react';
-import { AlertCircle, CheckCircle, Mail } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertCircle, Mail, MailCheck } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
 } from '../../components/ui/field';
-import { cn } from '../../lib/utils';
-import { normalizeEmail, toEmailChangeError } from '../../lib/email-change';
+import { useAuth } from '../../lib/auth';
+import { authCallbackUrl } from '../../lib/auth-destination';
+import {
+  emailChangeReason,
+  toEmailChangeErrorMessage,
+} from '../../lib/auth-error-message';
+import { normalizeEmail } from '../../lib/normalize';
+import { emailChangeSchema, fieldForReason } from '../../lib/schemas/profile';
 import { supabase } from '../../lib/supabase';
+import { useFormValidation } from '../../lib/use-form-validation';
 import type { MyProfile } from '../../queries/profile';
 
+const INPUT_CLASS =
+  'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:focus-visible:border-destructive';
+
 /**
- * "Adresa de e-mail" section on the profile page (#632).
+ * "Adresa de e-mail" on Profil (#632, ruling R7): the address the Member signs
+ * in with, and the request to move it.
  *
- * Shows the current email and a form to request an email change via
- * `supabase.auth.updateUser({ email })`. Supabase Auth sends two
- * confirmation emails (one to the old address, one to the new);
- * the profile page shows a pending state until both are confirmed.
- *
- * The sync trigger (`private.sync_profile_email`) updates
- * `profiles.email` automatically after Auth confirms. The
- * `profile.me` query is invalidated on the next `USER_UPDATED` auth
- * event (handled by the AuthProvider in `auth.tsx`).
+ * The request is Supabase Auth's `updateUser({ email })`. With secure email
+ * change on, Auth mails a confirmation to the current AND the new address
+ * (`supabase/templates/email-change.html`, opened on `/auth/confirm`) and
+ * changes nothing until both are used. Then `private.sync_profile_email`
+ * copies the address into `profiles.email`, and the auth listener re-reads
+ * this profile when the session reports the new address. There is no client
+ * write to `profiles.email`: that column stays BC's.
  */
 export default function ChangeEmailSection({
   profile,
 }: {
   profile: MyProfile;
 }) {
-  const [newEmail, setNewEmail] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const { session } = useAuth();
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [requested, setRequested] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  const schema = useMemo(
+    () => emailChangeSchema(profile.email),
+    [profile.email],
+  );
+  const form = useFormValidation(schema, { email }, fieldForReason);
 
-    const normalized = normalizeEmail(newEmail);
-    if (!normalized) {
-      setError('Introdu noua adresă de email.');
-      return;
-    }
+  // A change Auth is still waiting on: the one just asked for, or one asked
+  // for earlier (Auth keeps it on the user as `new_email`). Once the profile
+  // shows that address, nothing is pending any more.
+  const candidate = requested ?? session?.user.new_email ?? null;
+  const pendingEmail =
+    candidate && normalizeEmail(candidate) !== normalizeEmail(profile.email)
+      ? candidate
+      : null;
 
-    if (normalized === profile.email) {
-      setError('Noua adresă este identică cu cea actuală.');
-      return;
-    }
+  function showFailure(failure: unknown) {
+    const reason = emailChangeReason(failure);
+    form.fail(
+      reason === undefined ? undefined : { message: reason },
+      toEmailChangeErrorMessage(failure),
+    );
+  }
 
-    setPending(true);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const values = form.validate();
+    if (!values) return;
+
+    setSending(true);
     try {
-      const { error: authError } = await supabase.auth.updateUser({
-        email: normalized,
-      });
-      if (authError) {
-        setError(toEmailChangeError(authError));
+      const { error } = await supabase.auth.updateUser(
+        { email: values.email },
+        { emailRedirectTo: authCallbackUrl('/profil') },
+      );
+      if (error) {
+        showFailure(error);
         return;
       }
-      setSuccess(true);
-      setNewEmail('');
-    } catch (err) {
-      setError(toEmailChangeError(err));
+      setRequested(values.email);
+      setEmail('');
+      form.reset();
+    } catch (failure) {
+      showFailure(failure);
     } finally {
-      setPending(false);
+      setSending(false);
     }
   };
 
@@ -76,81 +101,76 @@ export default function ChangeEmailSection({
         </h3>
       </div>
 
-      {/* Current address */}
-      <dl className="mb-4 text-sm">
-        <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Adresa curentă
-        </dt>
-        <dd className="mt-1 font-medium text-foreground break-all">
-          {profile.email ?? (
-            <span className="text-muted-foreground italic">Indisponibil</span>
-          )}
-        </dd>
-      </dl>
+      <p className="text-sm font-medium break-all text-foreground">
+        {profile.email ?? (
+          <span className="text-muted-foreground italic">Indisponibil</span>
+        )}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Autentificarea se face prin link sau cod trimis la această adresă.
+      </p>
 
-      {/* Success banner */}
-      {success && (
+      {pendingEmail && (
         <div
           role="status"
           data-testid="email-change-pending"
-          className="mb-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary"
+          className="mt-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"
         >
-          <CheckCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <MailCheck
+            className="mt-0.5 size-4 shrink-0 text-primary"
+            aria-hidden="true"
+          />
           <div>
-            <p className="font-medium">Confirmare trimisă</p>
-            <p className="mt-0.5 text-xs text-primary/80">
-              Am trimis un email de confirmare la adresa veche și la cea nouă.
-              Schimbarea se aplică doar după confirmarea ambelor.
+            <p className="font-medium text-foreground">Confirmare trimisă</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Am trimis câte un email de confirmare pe adresa actuală și pe{' '}
+              <strong className="break-all">{pendingEmail}</strong>. Adresa se
+              schimbă doar după ce confirmi de pe amândouă.
             </p>
           </div>
         </div>
       )}
 
-      {/* Change form */}
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      {form.formError && (
+        <FieldError className="mt-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+          <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+          <span>{form.formError}</span>
+        </FieldError>
+      )}
+
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="mt-4 flex flex-col gap-4 border-t border-border pt-4"
+      >
         <Field>
-          <FieldLabel htmlFor="change-email-input">Nouă adresă</FieldLabel>
+          <FieldLabel htmlFor="change-email-input">Adresa nouă</FieldLabel>
           <input
             id="change-email-input"
             type="email"
-            value={newEmail}
-            onChange={(e) => {
-              setNewEmail(e.target.value);
-              if (error) setError(null);
-              if (success) setSuccess(false);
-            }}
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             placeholder="ex: ana@gmail.com"
-            disabled={pending}
-            className={cn(
-              'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-              error &&
-                'border-destructive focus-visible:border-destructive',
-            )}
+            disabled={sending}
+            className={INPUT_CLASS}
+            {...form.field('email', 'change-email-hint')}
           />
-          <FieldDescription>
-            Vei primi un email de confirmare la adresa veche și la cea nouă.
-            Schimbarea se aplică doar după confirmarea ambelor.
+          <FieldError {...form.errorProps('email')} />
+          <FieldDescription id="change-email-hint">
+            Primești câte un email de confirmare pe adresa actuală și pe cea
+            nouă. Schimbarea se aplică doar după ce le confirmi pe amândouă.
           </FieldDescription>
         </Field>
-
-        {/* Error banner */}
-        {error && (
-          <div
-            role="alert"
-            className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
 
         <Button
           type="submit"
           variant="outline"
-          disabled={pending || !newEmail.trim()}
-          className="w-full gap-2"
+          disabled={sending}
+          className="w-full"
         >
-          {pending ? 'Se trimite…' : 'Schimbă adresa de email'}
+          {sending ? 'Se trimite…' : 'Schimbă adresa'}
         </Button>
       </form>
     </section>

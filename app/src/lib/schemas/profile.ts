@@ -23,7 +23,7 @@ export const phoneSchema = z
 export const emailSchema = z
   .string()
   .transform(normalizeEmail)
-  .pipe(z.string().email({ message: 'email_invalid' }));
+  .pipe(z.email({ error: 'email_invalid' }));
 
 /**
  * The fields a Member edits on their own profile: the Nickname, the phone and
@@ -35,9 +35,24 @@ export const profileSchema = z.object({
   phone: phoneSchema,
   avatarColor: z
     .string()
-    .regex(/^#[0-9A-Fa-f]{6}$/, { message: 'invalid_avatar_color' }),
+    .regex(/^#[0-9A-Fa-f]{6}$/, { error: 'invalid_avatar_color' }),
   email: emailSchema.optional(),
 });
+
+/**
+ * A new sign-in address (#632): valid, and not the one the Member already
+ * signs in with. Auth would take that as a silent no-op and send nothing, so
+ * the form says so instead. Compared normalised on both sides: an address
+ * provisioned before the sync trigger may still carry capitals.
+ */
+export function emailChangeSchema(currentEmail: string | null | undefined) {
+  const current = normalizeEmail(currentEmail);
+  return z.object({
+    email: emailSchema.refine((email) => email !== current, {
+      error: 'email_unchanged',
+    }),
+  });
+}
 
 /** Where each reason about a profile is shown. */
 export const fieldForReason: Readonly<Record<string, string>> = {
@@ -48,4 +63,7 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   phone_invalid: 'phone',
   invalid_avatar_color: 'avatarColor',
   email_invalid: 'email',
+  // #632: Auth refuses an address another account already signs in with.
+  email_taken: 'email',
+  email_unchanged: 'email',
 };

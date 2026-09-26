@@ -103,14 +103,14 @@ If (1) succeeds, the app is not invite-only. If (2) fails with _"Email logins ar
 
 ## Hosted projects
 
-`config.toml` never leaves your machine. On staging and production the same five things must be set by hand, in Authentication:
+`config.toml` never leaves your machine. On staging and production the same six things must be set by hand, in Authentication:
 
 1. **Email provider: enabled**
 2. **Allow new users to sign up: OFF**
 3. **Hooks → Customize Access Token (JWT) Claims: enabled**, pointing at `public.custom_access_token_hook`
 4. **URL Configuration**: Site URL = the deployed app origin; redirect URLs = `<origin>/auth/callback` **and** `<origin>/auth/confirm`. The templates build the link from the Site URL, so a wrong Site URL sends every Member to the wrong host.
 5. **Email Templates → Invite user, Magic Link and Change Email Address**: paste `supabase/templates/invite.html`, `supabase/templates/magic-link.html` and `supabase/templates/email-change.html`, with the Romanian subjects from `config.toml`. A dashboard still on the stock template links to `{{ .ConfirmationURL }}` without the code: a mail scanner spends the token before the Member sees it, and iPhone members cannot sign in to the installed app. Re-paste all three whenever they change.
-6. **Advanced → Secure email change**: Ensure "Double confirm email changes" is ON (`double_confirm_changes`).
+6. **Sign In / Providers → Email → Secure email change: ON** (`double_confirm_changes`). The self-service change on Profil (#632) relies on it: with it on, Auth asks for a confirmation from the current address as well as the new one, so a stolen session alone cannot move an account; with it off, the new address alone confirms. `private.sync_profile_email` then copies the confirmed address into `profiles.email`.
 
 One more, outside Authentication: **Project Settings → API Keys → _Secret keys_ must list at least one secret key** (`sb_secret_…`; create one if the list is empty). `invite-member` and `csv-import` build their admin client — the one that sends the invitation and provisions the Member — from it, reading `SUPABASE_SECRET_KEYS`, which the platform injects into every function; nothing is set by hand, and no function reads the legacy JWT `service_role` key, which Supabase retires by the end of 2026 (#796, ruling L8). Without a secret key both functions refuse to start and their logs name `SUPABASE_SECRET_KEYS`. See `docs/backend/inviting.md` → "Which key the functions use".
 

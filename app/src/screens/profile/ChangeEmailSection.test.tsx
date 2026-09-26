@@ -1,35 +1,40 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactNode } from 'react';
+import { reasonCopy } from '../../lib/command-reasons';
 import type { MyProfile } from '../../queries/profile';
 import ChangeEmailSection from './ChangeEmailSection';
 
-// -- Supabase mock --
-const updateUserMock = vi.fn();
-
+const updateUser = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/supabase', () => ({
-  supabase: {
-    auth: {
-      updateUser: (...args: unknown[]) => updateUserMock(...args),
-    },
-  },
+  supabase: { auth: { updateUser } },
 }));
 
+const authMock = vi.hoisted(() => ({
+  session: { user: { id: 'p1' } } as {
+    user: { id: string; new_email?: string };
+  },
+}));
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({
-    session: { user: { id: 'p1' } },
+    session: authMock.session,
     claims: null,
     loading: false,
     signOut: vi.fn(),
   }),
 }));
 
-const baseProfile: MyProfile = {
+/** The Romanian copy of a reason; a missing one fails the test. */
+function copy(reason: string): string {
+  const text = reasonCopy(reason);
+  if (text === undefined) throw new Error(`no copy for ${reason}`);
+  return text;
+}
+
+const profile: MyProfile = {
   id: 'p1',
   full_name: 'Maria Enache',
-  role: 'voluntar',
   nickname: null,
+  role: 'voluntar',
   status: 'activ',
   avatar_color: '#ED2025',
   joined_year: 2025,
@@ -38,107 +43,137 @@ const baseProfile: MyProfile = {
   phone: '0722334455',
 };
 
-function wrapper({ children }: { children: ReactNode }) {
-  const qc = new QueryClient();
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+function submit(value: string) {
+  fireEvent.change(screen.getByLabelText('Adresa nouă'), {
+    target: { value },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Schimbă adresa' }));
 }
 
-describe('ChangeEmailSection', () => {
+describe('ChangeEmailSection (#632)', () => {
   beforeEach(() => {
-    updateUserMock.mockReset();
+    updateUser.mockReset();
+    authMock.session = { user: { id: 'p1' } };
   });
 
-  it('shows the current email address', () => {
-    render(<ChangeEmailSection profile={baseProfile} />, { wrapper });
+  it('shows the address the Member signs in with', () => {
+    render(<ChangeEmailSection profile={profile} />);
     expect(screen.getByText('maria@osubb.ro')).toBeInTheDocument();
-  });
-
-  it('calls auth.updateUser with the normalized (trimmed, lowercased) email', async () => {
-    updateUserMock.mockResolvedValue({ data: {}, error: null });
-
-    render(<ChangeEmailSection profile={baseProfile} />, { wrapper });
-
-    const input = screen.getByLabelText('Nouă adresă');
-    fireEvent.change(input, { target: { value: '  ANA@Gmail.COM  ' } });
-
-    const button = screen.getByRole('button', {
-      name: 'Schimbă adresa de email',
-    });
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(updateUserMock).toHaveBeenCalledWith({
-        email: 'ana@gmail.com',
-      });
-    });
-  });
-
-  it('renders the pending (double-confirmation) copy on success', async () => {
-    updateUserMock.mockResolvedValue({ data: {}, error: null });
-
-    render(<ChangeEmailSection profile={baseProfile} />, { wrapper });
-
-    fireEvent.change(screen.getByLabelText('Nouă adresă'), {
-      target: { value: 'ana@gmail.com' },
-    });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Schimbă adresa de email' }),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('email-change-pending')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('Confirmare trimisă')).toBeInTheDocument();
     expect(
-      screen.getByText(/Am trimis un email de confirmare/),
+      screen.getByRole('heading', { name: 'Adresa de e-mail' }),
     ).toBeInTheDocument();
   });
 
-  it('maps "already in use" Auth error to Romanian', async () => {
-    updateUserMock.mockResolvedValue({
-      data: null,
-      error: { code: 'email_exists', message: 'User already registered', status: 422 },
-    });
+  it('asks Auth for the trimmed, lowercased address and brings the links back to Profil', async () => {
+    updateUser.mockResolvedValue({ data: {}, error: null });
+    render(<ChangeEmailSection profile={profile} />);
 
-    render(<ChangeEmailSection profile={baseProfile} />, { wrapper });
+    submit('  ANA@Gmail.COM  ');
 
-    fireEvent.change(screen.getByLabelText('Nouă adresă'), {
-      target: { value: 'taken@gmail.com' },
-    });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Schimbă adresa de email' }),
-    );
-
-    await waitFor(() => {
-      const errors = screen.getAllByText('Această adresă de email este deja folosită de un alt cont.');
-      expect(errors.length).toBeGreaterThan(0);
-    });
+    await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+    const [attributes, options] = updateUser.mock.calls[0] as [
+      { email: string },
+      { emailRedirectTo: string },
+    ];
+    expect(attributes).toEqual({ email: 'ana@gmail.com' });
+    const redirect = new URL(options.emailRedirectTo);
+    expect(redirect.pathname).toBe('/auth/callback');
+    expect(redirect.searchParams.get('next')).toBe('/profil');
   });
 
-  it('shows a client-side error when the address is the same as current', async () => {
-    render(<ChangeEmailSection profile={baseProfile} />, { wrapper });
+  it('shows the double-confirmation pending state once Auth accepts', async () => {
+    updateUser.mockResolvedValue({ data: {}, error: null });
+    render(<ChangeEmailSection profile={profile} />);
 
-    fireEvent.change(screen.getByLabelText('Nouă adresă'), {
-      target: { value: 'maria@osubb.ro' },
+    submit('ana@gmail.com');
+
+    const pending = await screen.findByTestId('email-change-pending');
+    expect(pending).toHaveTextContent('Confirmare trimisă');
+    expect(pending).toHaveTextContent(
+      /pe adresa actuală și pe ana@gmail.com\. Adresa se schimbă doar după ce confirmi de pe amândouă/,
+    );
+    expect(screen.getByLabelText('Adresa nouă')).toHaveValue('');
+  });
+
+  it('keeps showing a change Auth is still waiting on after a reload', () => {
+    authMock.session = { user: { id: 'p1', new_email: 'ana@gmail.com' } };
+    render(<ChangeEmailSection profile={profile} />);
+    expect(screen.getByTestId('email-change-pending')).toHaveTextContent(
+      'ana@gmail.com',
+    );
+  });
+
+  it('drops the pending state once the profile carries the new address', () => {
+    authMock.session = { user: { id: 'p1', new_email: 'ana@gmail.com' } };
+    render(
+      <ChangeEmailSection profile={{ ...profile, email: 'ana@gmail.com' }} />,
+    );
+    expect(
+      screen.queryByTestId('email-change-pending'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows an address already used by another account in Romanian, under the field', async () => {
+    updateUser.mockResolvedValue({
+      data: { user: null },
+      error: {
+        code: 'email_exists',
+        status: 422,
+        message: 'A user with this email address has already been registered',
+      },
     });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Schimbă adresa de email' }),
-    );
+    render(<ChangeEmailSection profile={profile} />);
 
-    // Client-side validation — no Auth call
-    expect(updateUserMock).not.toHaveBeenCalled();
-    const errors = screen.getAllByText('Noua adresă este identică cu cea actuală.');
-    expect(errors.length).toBeGreaterThan(0);
+    submit('activ@osubb.ro');
+
+    const input = screen.getByLabelText('Adresa nouă');
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+    expect(screen.getByText(copy('email_taken'))).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('email-change-pending'),
+    ).not.toBeInTheDocument();
   });
 
-  it('shows a client-side error when the input is empty', async () => {
-    render(<ChangeEmailSection profile={baseProfile} />, { wrapper });
+  it('shows a rate limit as a form-level message', async () => {
+    updateUser.mockResolvedValue({
+      data: { user: null },
+      error: {
+        code: 'over_email_send_rate_limit',
+        status: 429,
+        message: 'Email rate limit exceeded',
+      },
+    });
+    render(<ChangeEmailSection profile={profile} />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Schimbă adresa de email' }),
+    submit('ana@gmail.com');
+
+    expect(
+      await screen.findByText(
+        'Prea multe cereri într-un timp scurt. Încearcă din nou peste un minut.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('refuses the current address, compared normalised, without calling Auth', () => {
+    render(
+      <ChangeEmailSection profile={{ ...profile, email: 'Maria@OSUBB.ro' }} />,
     );
 
-    expect(updateUserMock).not.toHaveBeenCalled();
+    submit(' maria@osubb.ro ');
+
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(screen.getByText(copy('email_unchanged'))).toBeInTheDocument();
   });
+
+  it.each(['', 'ana@'])(
+    'refuses %j with the shared email rule, without calling Auth',
+    (value) => {
+      render(<ChangeEmailSection profile={profile} />);
+
+      submit(value);
+
+      expect(updateUser).not.toHaveBeenCalled();
+      expect(screen.getByText(copy('email_invalid'))).toBeInTheDocument();
+    },
+  );
 });

@@ -1,18 +1,45 @@
--- profile_email_sync.test.sql — #632: sync auth.users.email → profiles.email.
--- Runs in one transaction and rolls back — leaves no residue in the local db.
+-- profile_email_sync.test.sql -- #632: profiles.email follows auth.users.email.
+-- Runs in one transaction and rolls back -- leaves no residue in the local db.
+--
+-- GoTrue sets auth.users.email only once both addresses have confirmed the
+-- change (double_confirm_changes), as supabase_auth_admin. postgres may not
+-- SET ROLE to supabase_auth_admin locally, so the updates below run as
+-- postgres; what makes the Auth role's update work -- a security definer body
+-- owned by postgres, since supabase_auth_admin holds no UPDATE on profiles --
+-- is asserted structurally instead. The end-to-end path through GoTrue was
+-- checked by hand on the local stack for #632.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(7);
+select plan(11);
 
 -- ==================== Structure ====================
-select has_function('private', 'sync_profile_email',
-  'the sync function exists in the private schema');
 select has_trigger('auth', 'users', 'users_sync_profile_email',
-  'and it is wired to auth.users');
+  'auth.users carries the email sync trigger');
+
+select is(
+  (select p.prosecdef and pg_get_userbyid(p.proowner) = 'postgres'
+     from pg_proc p
+    where p.oid = 'private.sync_profile_email()'::regprocedure),
+  true,
+  'the sync body is security definer owned by postgres, so it can write profiles when GoTrue fires it');
+
+select is(
+  has_table_privilege('supabase_auth_admin', 'public.profiles', 'update'),
+  false,
+  'supabase_auth_admin holds no UPDATE on profiles -- the definer body is what writes');
+
+select is(
+  array(
+    select grantee
+      from unnest(array['public', 'anon', 'authenticated', 'service_role', 'supabase_auth_admin']) as grantee
+     where has_function_privilege(grantee, 'private.sync_profile_email()', 'execute')
+  ),
+  '{}'::text[],
+  'nobody but its owner may execute the trigger body (conventions §4: a trigger function gets no grant back)');
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -22,54 +49,58 @@ insert into profiles (id, full_name, email, role, status) values
   ('f6320000-0000-0000-0000-000000000001', 'Ana Test', 'ana.vechi@test.local', 'voluntar', 'activ'),
   ('f6320000-0000-0000-0000-000000000002', 'Bogdan Test', 'bogdan@test.local', 'voluntar', 'activ');
 
--- ==================== Sync on email update ====================
+-- ==================== The confirmed change syncs ====================
 update auth.users set email = 'ana.nou@test.local'
  where id = 'f6320000-0000-0000-0000-000000000001';
 select is(
   (select email from profiles where id = 'f6320000-0000-0000-0000-000000000001'),
   'ana.nou@test.local',
-  'updating auth.users.email syncs into profiles.email');
+  'a confirmed change of auth.users.email is written into profiles.email');
 
--- ==================== Lowercase and trim normalization ====================
-update auth.users set email = '  ANA.UPPER@Test.Local  '
+-- ==================== Normalization ====================
+update auth.users set email = '  ANA.Upper@Test.Local  '
  where id = 'f6320000-0000-0000-0000-000000000001';
 select is(
   (select email from profiles where id = 'f6320000-0000-0000-0000-000000000001'),
   'ana.upper@test.local',
-  'the sync lowercases and trims the email');
+  'the synced address is trimmed and lowercased');
 
--- ==================== No-op on unrelated column update ====================
--- Update a non-email column; profiles.email must stay as it was.
+-- ==================== Only an email change fires ====================
+-- A sentinel that differs from auth.users.email: if any other column's update
+-- reached the body, it would overwrite this.
+update profiles set email = 'sentinela@test.local'
+ where id = 'f6320000-0000-0000-0000-000000000001';
 update auth.users set raw_user_meta_data = '{"foo":"bar"}'::jsonb
  where id = 'f6320000-0000-0000-0000-000000000001';
 select is(
   (select email from profiles where id = 'f6320000-0000-0000-0000-000000000001'),
-  'ana.upper@test.local',
-  'updating a non-email auth.users column leaves profiles.email alone');
+  'sentinela@test.local',
+  'updating any other auth.users column leaves profiles.email alone');
 
--- Other member's profile is untouched by the first member's change.
 select is(
   (select email from profiles where id = 'f6320000-0000-0000-0000-000000000002'),
   'bogdan@test.local',
-  'another member''s profile.email is not affected');
+  'another Member''s profiles.email is untouched');
 
--- ==================== Mutation guard ====================
--- Dropping the trigger must make the sync stop working. This is the
--- "a test must fail if the feature is removed" house rule.
-drop trigger users_sync_profile_email on auth.users;
-
-update auth.users set email = 'ana.fara-trigger@test.local'
- where id = 'f6320000-0000-0000-0000-000000000001';
+-- ==================== A blank Auth address is skipped ====================
+select lives_ok(
+  $$ update auth.users set email = null
+      where id = 'f6320000-0000-0000-0000-000000000002' $$,
+  'an Auth update to no address does not fail on profiles.email not null');
 select is(
-  (select email from profiles where id = 'f6320000-0000-0000-0000-000000000001'),
-  'ana.upper@test.local',
-  'without the trigger, auth.users.email no longer syncs into profiles');
+  (select email from profiles where id = 'f6320000-0000-0000-0000-000000000002'),
+  'bogdan@test.local',
+  'and profiles.email keeps the last real address');
 
--- Restore the trigger so rollback leaves the database consistent.
-create trigger users_sync_profile_email
-  after update of email on auth.users
-  for each row
-  execute function private.sync_profile_email();
+-- ==================== Clients still cannot write the column ====================
+select pg_temp.test_login('f6320000-0000-0000-0000-000000000002',
+  jsonb_build_object('member_role', 'voluntar', 'member_level', 1, 'group_ids', '[]'::jsonb));
+select throws_ok(
+  $$ update profiles set email = 'altceva@test.local'
+      where id = 'f6320000-0000-0000-0000-000000000002' $$,
+  '42501', null,
+  'a Member below level 6 still cannot write profiles.email directly: the change goes through Auth');
+reset role;
 
 select * from finish();
 rollback;

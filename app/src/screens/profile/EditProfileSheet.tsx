@@ -137,7 +137,7 @@ function EditProfileForm({
             className={LOCKED_INPUT_CLASS}
           />
           <FieldDescription>
-            Adresa de email se schimbă din secțiunea „Adresa de e-mail" de pe
+            Adresa de email se schimbă din secțiunea „Adresa de e-mail” de pe
             pagina de profil.
           </FieldDescription>
         </Field>

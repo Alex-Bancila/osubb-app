@@ -341,6 +341,8 @@ const REASON_COPY = new Map<string, string>([
   ['full_name_required', 'Scrie numele complet.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
   ['email_invalid', 'Scrie o adresă de email validă.'],
+  // #632: the new sign-in address is the one the Member already has.
+  ['email_unchanged', 'Noua adresă este identică cu cea actuală.'],
   // #773 (ruling L19): reinvite-member, the re-sent invitation.
   [
     'already_active',
