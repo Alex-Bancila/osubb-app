@@ -156,8 +156,8 @@ describe('RoleTimeline', () => {
 
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(1);
-    // No "din" — just the role name
-    expect(items[0]?.textContent).toBe('Voluntar');
+    // Falls back to joined_year
+    expect(items[0]?.textContent).toBe('Voluntar din 2025');
   });
 
   it('resolves role display names from useRoles()', () => {

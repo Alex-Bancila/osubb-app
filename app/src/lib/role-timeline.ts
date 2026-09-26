@@ -118,6 +118,7 @@ export function formatRoleDuration(
 export function formatSegmentLabel(
   roleName: string,
   segment: RoleSegment,
+  fallbackYear: number | null = null,
 ): string {
   if (segment.endDate !== null) {
     // Closed segment
@@ -128,6 +129,10 @@ export function formatSegmentLabel(
   // Current (open) segment
   if (segment.startDate) {
     return `${roleName} din ${formatShortDate(segment.startDate)}`;
+  }
+
+  if (fallbackYear) {
+    return `${roleName} din ${fallbackYear}`;
   }
 
   return roleName;

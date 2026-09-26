@@ -54,7 +54,11 @@ export default function RoleTimeline({ profile }: { profile: MyProfile }) {
       >
         {segments.map((segment, i) => {
           const roleName = resolveRoleName(segment.role);
-          const label = formatSegmentLabel(roleName, segment);
+          const label = formatSegmentLabel(
+            roleName,
+            segment,
+            profile.joined_year,
+          );
           const isCurrent = i === segments.length - 1;
           const duration =
             !isCurrent && segment.startDate && segment.endDate
