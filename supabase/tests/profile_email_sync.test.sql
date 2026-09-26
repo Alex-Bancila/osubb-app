@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(8);
+select plan(7);
 
 -- ==================== Structure ====================
 select has_function('private', 'sync_profile_email',
