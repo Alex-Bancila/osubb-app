@@ -72,8 +72,16 @@ const ENV = {
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
 };
 
-/** An in-memory project: `profiles` existing rows, `authEmails` taken addresses, `fail` injects a refusal. */
-function fakeProject({ profiles = [], authEmails = [], fail = () => false } = {}) {
+/**
+ * An in-memory project: `profiles` existing rows, `authEmails` taken addresses,
+ * `fail` injects a refusal (an answer), `drop` a lost connection (no answer).
+ */
+function fakeProject({
+  profiles = [],
+  authEmails = [],
+  fail = () => false,
+  drop = () => false,
+} = {}) {
   const calls = [];
   let requestId = 100;
   const json = (status, body, headers = {}) =>
@@ -92,6 +100,7 @@ function fakeProject({ profiles = [], authEmails = [], fail = () => false } = {}
       headers: init.headers,
     };
     calls.push(call);
+    if (drop(call)) throw new TypeError('fetch failed');
     if (fail(call)) return json(400, { code: 'PT400', message: 'group_archived' });
     const route = `${init.method} ${pathname}`;
     switch (route) {
@@ -469,6 +478,43 @@ test('CSV parsing follows RFC 4180 and keeps spreadsheet row numbers', () => {
     () => readContractCsv('email,name\n', MEMBER_COLUMNS, 'members.csv'),
     /header must be exactly/,
   );
+});
+
+test('a Task call that gets no answer is reported as unknown, never as nothing written', async () => {
+  const project = fakeProject({
+    drop: (call) =>
+      call.path.endsWith('/create_completed_work_request') &&
+      call.body.p_description === 'Campania de recrutare Tineret',
+  });
+  const { code, output } = await run([...BOTH, '--execute'], project);
+  assert.equal(code, 1);
+  assert.doesNotMatch(output, /wrote nothing/);
+  assert.match(
+    output,
+    /tasks row 3: the server gave no answer \(fetch failed\), so the outcome is unknown/,
+  );
+  assert.match(output, /If it is not there, resume with: .*--resume-tasks-from 3$/m);
+  assert.match(output, /If it is there: .*--resume-tasks-from 4$/m);
+});
+
+test('the secret key is sent over https, or over http to a local stack only', async () => {
+  for (const [url, expected] of [
+    ['http://example-ref.supabase.co', 2],
+    ['not a url', 2],
+    ['http://127.0.0.1:54321', 0],
+    ['https://example-ref.supabase.co', 0],
+  ]) {
+    const project = fakeProject();
+    const code = await main([...BOTH, '--dry-run'], {
+      env: { ...ENV, SUPABASE_URL: url },
+      fetchImpl: project.fetchImpl,
+      log: () => {},
+      readFile: (path) => readFileSync(path, 'utf8'),
+      now: new Date('2026-10-02T06:00:00Z'),
+    });
+    assert.equal(code, expected, url);
+    if (expected === 2) assert.deepEqual(project.calls, [], `no request to ${url}`);
+  }
 });
 
 test('usage mistakes stop before any request', async () => {

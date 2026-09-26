@@ -697,8 +697,20 @@ export async function main(argv, { env, fetchImpl, log, readFile, now = new Date
   const url = env.SUPABASE_URL ?? '';
   const secretKey = env.SUPABASE_SECRET_KEY ?? '';
   const publishableKey = env.SUPABASE_PUBLISHABLE_KEY ?? '';
-  if (!/^https?:\/\/\S+$/.test(url)) {
-    log('SUPABASE_URL is not set to the project URL.');
+  // The secret key travels on every request, so plain http is for the local
+  // stack only.
+  let parsedUrl = null;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    parsedUrl = null;
+  }
+  const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(parsedUrl?.hostname ?? '');
+  if (
+    !parsedUrl ||
+    !(parsedUrl.protocol === 'https:' || (parsedUrl.protocol === 'http:' && loopback))
+  ) {
+    log('SUPABASE_URL must be the https:// project URL (http:// only for a local stack).');
     return 2;
   }
   if (!secretKey.startsWith('sb_secret_')) {
@@ -864,8 +876,17 @@ export async function main(argv, { env, fetchImpl, log, readFile, now = new Date
     return 0;
   }
 
+  // An ApiError is an answer: the call was refused and wrote nothing. Anything
+  // else (a reset connection, a timeout) leaves the last call's outcome unknown.
+  const noAnswer = !(failure instanceof ApiError);
+  if (noAnswer && failedAt.reversible) {
+    log(
+      'The last call got no answer, so it may have written. A new run refuses in its preflight ' +
+        'if it did; then delete that user in Authentication → Users.',
+    );
+  }
   if (failedAt.reversible && ctx.created.length === 0) {
-    log('Nothing was written.');
+    log(noAnswer ? 'Nothing else was written.' : 'Nothing was written.');
     return 1;
   }
   if (failedAt.reversible) {
@@ -895,20 +916,32 @@ export async function main(argv, { env, fetchImpl, log, readFile, now = new Date
     `Stopped in the Task import; Members and imported Tasks stay (Tasks, Evaluations and Points Ledger rows cannot be deleted).`,
   );
   log(`Tasks rows imported: ${done.length > 0 ? done.join(', ') : 'none'}.`);
-  if (ctx.pending?.request) {
+  const resume = (row) =>
+    `node scripts/bootstrap-production.mjs --members ${options.members} --tasks ${options.tasks} ` +
+    `--execute --resume-tasks-from ${row}`;
+  const pending = ctx.pending;
+  const following = pending ? nextRow(tasks, pending.row) : null;
+  const approveHint = "approve it if it is still pending, with the row's Difficulty and Rating";
+  if (pending && noAnswer) {
     log(
-      `tasks row ${ctx.pending.row} left Request ${ctx.pending.request} pending: approve it in the app ` +
+      `tasks row ${pending.row}: the server gave no answer (${failure.message}), so the outcome is ` +
+        `unknown. Check Administrare → Cereri for this row's Request before resuming.`,
+    );
+    log(`If it is not there, resume with: ${resume(pending.row)}`);
+    log(
+      following === null
+        ? `If it is there: ${approveHint}; that was the last row.`
+        : `If it is there: ${approveHint}, then resume with: ${resume(following)}`,
+    );
+  } else if (pending?.request) {
+    log(
+      `tasks row ${pending.row} left Request ${pending.request} pending: approve it in the app ` +
         `(Administrare → Cereri) with the row's Difficulty and Rating, then resume from the next row.`,
     );
-  } else if (ctx.pending) {
-    log(`tasks row ${ctx.pending.row} wrote nothing.`);
-  }
-  const next = ctx.pending?.request ? nextRow(tasks, ctx.pending.row) : ctx.pending?.row;
-  if (next !== undefined && next !== null) {
-    log(
-      `Resume with: node scripts/bootstrap-production.mjs --members ${options.members} --tasks ${options.tasks} ` +
-        `--execute --resume-tasks-from ${next}`,
-    );
+    if (following !== null) log(`Resume with: ${resume(following)}`);
+  } else if (pending) {
+    log(`tasks row ${pending.row} wrote nothing.`);
+    log(`Resume with: ${resume(pending.row)}`);
   }
   return 1;
 }

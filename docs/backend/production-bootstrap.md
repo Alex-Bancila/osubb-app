@@ -106,6 +106,8 @@ What this means, stated once so nobody is surprised on 2 October:
 
   `--resume-tasks-from` skips the Members (they must all exist already) and imports the Task rows from that row on. If the failing row had already filed its Request, the run says so and gives the Request's number: approve it in Administrare → Cereri with that row's Difficulty and Rating, and resume from the next row, which is the row the printed command names.
 
+- **When a call gets no answer at all** (a dropped connection or a timeout rather than a refusal), the run cannot know whether it wrote, and says so instead of guessing. Inside the history it prints two resume commands: one for when the row's Request is not in Administrare → Cereri, one for when it is. Before the history, the next run's preflight refuses if the lost call did create a user.
+
 ## Rehearsing the real run
 
 A dry run exercises the reads and the plan, not the writes. To see the writes work end to end before production, run the real thing against a local stack with no demo data, then put the demo data back:
