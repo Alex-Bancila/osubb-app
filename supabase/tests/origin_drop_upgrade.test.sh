@@ -31,6 +31,11 @@ psql_run() {
 # the legacy columns carry their real constraints, foreign keys and indexes.
 teardown() {
   cat <<'SQL'
+-- #591 retired backfill keys. These stand-ins live only in this rollback replay.
+alter table public.groups add column legacy_dept_id text, add column legacy_team_id text, add column legacy_project_id bigint;
+update public.groups set legacy_dept_id=case name when 'Educațional' then 'edu' when 'Imagine & PR' then 'pr' when 'Resurse Umane' then 'hr' when 'Financiar' then 'fin' when 'Tineret' then 'youth' when 'Diverse' then 'diverse' when 'Secretariat' then 'secretariat' when 'OSUBB' then 'org' end;
+update public.groups set legacy_team_id=case name when 'Echipa IT' then 'it' when 'Echipa Interne' then 'interne' end;
+
 -- The new arities are created with plain `create function` by the migration.
 -- #684 later widened create_task by the Attached Link pair; the live arity is
 -- the one to clear before the replay recreates #579's Group-only one.
@@ -82,6 +87,16 @@ returns bigint language sql stable security definer set search_path = '' as $$
            else false
          end;
 $$;
+
+-- #590 retired these tables. Recreate only their historical key shape inside
+-- this rollback-only replay, so the old foreign keys can still be exercised.
+create table public.departments (id text primary key);
+insert into public.departments select distinct legacy_dept_id from public.groups where legacy_dept_id is not null;
+create table public.teams (id text primary key, name text, dept_id text, is_interne boolean, unique(id,dept_id));
+insert into public.teams(id,name,dept_id,is_interne)
+select g.legacy_team_id,g.name,parent.legacy_dept_id,false from public.groups g
+left join public.groups parent on parent.id=g.parent_id where g.legacy_team_id is not null;
+create table public.projects (id bigint generated always as identity primary key, name text, status text, leader_id uuid, created_by uuid);
 
 -- The legacy columns, backfilled from each row's own Group as the bridge kept them.
 create type public.event_scope as enum ('team', 'dept', 'project', 'org');

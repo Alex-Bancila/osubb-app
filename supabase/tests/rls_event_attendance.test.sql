@@ -51,7 +51,7 @@ insert into profiles (id, full_name, email, role, status) values
   ('c3000000-0000-0000-0000-000000000063', 'Corina Responsabil', 'corina.manager@test.local', 'responsabil', 'activ'),
   ('d4000000-0000-0000-0000-000000000063', 'Dan Dezactivat', 'dan.deactivated@test.local', 'voluntar', 'inactiv');
 
-insert into member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('a1000000-0000-0000-0000-000000000063', 'edu'),
   ('b2000000-0000-0000-0000-000000000063', 'pr'),
   ('c3000000-0000-0000-0000-000000000063', 'edu'),

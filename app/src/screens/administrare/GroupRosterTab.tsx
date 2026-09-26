@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import {
   DataTable,
   type DataTableColumn,
@@ -215,7 +216,12 @@ function rosterColumns({
             name={row.original.name}
             avatarColor={row.original.avatarColor}
           />
-          <span className="truncate font-medium">{row.original.name}</span>
+          <Link
+            className="truncate font-medium underline"
+            to={`/administrare/membri/${row.original.memberId}`}
+          >
+            {row.original.name}
+          </Link>
         </span>
       ),
       sortFn: (left, right) =>

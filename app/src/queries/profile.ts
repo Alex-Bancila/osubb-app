@@ -12,6 +12,8 @@ import { keys } from './keys';
 export type MyProfile = {
   id: string;
   full_name: string;
+  /** The Nickname (#675, R5); `null` means the full name stands in. */
+  nickname: string | null;
   role: Database['public']['Enums']['member_role'];
   status: Database['public']['Enums']['member_status'];
   avatar_color: string | null;
@@ -21,8 +23,13 @@ export type MyProfile = {
   phone: string | null;
 };
 
+/**
+ * The columns a Member writes on their own row (#675, #699): the Nickname, the
+ * phone and the avatar colour. The full name is not one of them -- only BC and
+ * the Moderator change it, and never through the edit sheet.
+ */
 export type UpdateMyProfileInput = {
-  fullName?: string;
+  nickname?: string | null;
   phone?: string | null;
   avatarColor?: string | null;
 };
@@ -55,7 +62,7 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
     supabase
       .from('profiles')
       .select(
-        'id, full_name, role, status, avatar_color, joined_year, joined_at',
+        'id, full_name, nickname, role, status, avatar_color, joined_year, joined_at',
       )
       .eq('id', memberId)
       .single(),
@@ -77,15 +84,15 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
 }
 
 /**
- * Mutation to update own profile fields (phone, avatar_color; full_name only
- * when the caller passes it).
+ * Mutation to update own profile fields: nickname, phone, avatar_color.
  *
  * Database security boundary:
  * 1. RLS policy `profiles_update_self` allows updates where `id = auth.uid()`.
  * 2. Trigger `guard_profile_privileged_columns()` rejects changes to
  *    `full_name, role, status, email, tier, joined_year, joined_at` unless level >= 6
- *    (#675: the full name is BC/Moderator's). `full_name` is therefore sent only
- *    when `fullName` is given, which the edit sheet does only for BC/Moderator.
+ *    (#675: the full name is BC/Moderator's), so `full_name` is never sent here.
+ *    Trigger `profiles_guard_nickname` trims the Nickname, turns blank into null
+ *    and names the reason one is refused (`nickname_too_short` ... `nickname_taken`).
  * 3. Crucially, the update statement does NOT use `.select('phone')` because `phone` is revoked from
  *    `authenticated` on the table directly. We invalidate `keys.profile.all` to refetch via `profiles_contact`.
  */
@@ -99,8 +106,8 @@ export function useUpdateMyProfile() {
       if (!id) throw new Error('Not authenticated');
 
       const updates: Database['public']['Tables']['profiles']['Update'] = {};
-      if (input.fullName !== undefined)
-        updates.full_name = input.fullName.trim();
+      if (input.nickname !== undefined)
+        updates.nickname = input.nickname?.trim() || null;
       if (input.phone !== undefined)
         updates.phone = input.phone ? input.phone.trim() : null;
       if (input.avatarColor !== undefined)
@@ -115,6 +122,8 @@ export function useUpdateMyProfile() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.profile.all });
+      // Member Cards and lists name me by my Nickname (R5).
+      void queryClient.invalidateQueries({ queryKey: keys.members.all });
     },
   });
 }
