@@ -118,7 +118,10 @@ going "back".
    front of Members outweighs the review ritual for the minute it takes. It swaps static assets only — it
    never touches the database or Edge Functions — so use it only when the previous bundle is still
    compatible with whatever schema and functions are live right now.
-2. **Full — re-run the Release at the previous good commit.** When Edge Functions must roll back together
+2. **Full — re-run the Release at the previous good commit.** Use this only when the previous app and Edge
+   Functions are still compatible with the schema already live — the database only ever moves forward (the
+   rule above), so a migration that shipped since that commit may have changed something the old code
+   depends on; when it has, fix forward instead of reverting. When Edge Functions must roll back together
    with the web app (their contract changed in the same Release), Cloudflare's button alone leaves the
    functions on the new code. `release-production.yml` only ever runs from `refs/heads/main` — it refuses
    any other ref before the reviewer is even asked (ruling L10) — so "the previous `release/*` tag's commit"
@@ -193,9 +196,11 @@ Member's own inbox is at fault:
    spam next, and that the address really is the Member's. **Bounced** means Resend recorded a delivery
    rejection; inspect its details and distinguish temporary or undetermined bounces from permanent address
    or suppression failures. **Complained** means the recipient marked a delivered email as spam, so handle
-   it separately from address validity. **No entry at all** means the send never
-   happened — check `docs/backend/auth-config.md` § "Verifying the whole thing works" for the provider being
-   off or the rate limit being hit.
+   it separately from address validity. **No entry at all**, within Resend's 30-day retention window, means
+   the send never happened — check `docs/backend/auth-config.md` § "Verifying the whole thing works" for the
+   provider being off or the rate limit being hit. Past that window the dashboard has already dropped the
+   record, so absence there proves nothing — confirm with the Member directly (spam folder, and that the
+   address on file is correct) before assuming the send failed.
 3. **If the fix is a mistyped address:** there is no re-send path today. `invite-member` refuses on purpose
    when the profile already exists (`409`, `docs/backend/inviting.md` § "When something goes wrong") — that
    is what protects an existing Member from being silently overwritten. Correcting the address and
