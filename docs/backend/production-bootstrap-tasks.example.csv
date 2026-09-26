@@ -1,0 +1,5 @@
+executor_email,title,group_path,deadline,difficulty,rating,evaluated_at,points_note
+bce.edu@example.com,Sesiunea de informare EDU,EDU,2026-03-15,3,4,2026-03-20,
+bce.tineret@example.com,Campania de recrutare Tineret,Tineret,2026-04-01,4,5,2026-04-05,Nota din foaia BC: excepțional
+moderator@example.com,Migrarea site-ului OSUBB,Diverse / Echipa IT,2026-05-10,5,3,2026-05-12,
+presedinte@example.com,Raportul anual,Secretariat,,2,3,,
