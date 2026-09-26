@@ -65,6 +65,7 @@ insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33400000-0000-0000-0000-000000000002', 'edu'),
   ('33400000-0000-0000-0000-000000000003', 'edu'),
   ('33400000-0000-0000-0000-000000000005', 'edu');
+select pg_temp.materialize_legacy_groups();
 
 -- ---- T1: start_task happy path -- a todo Task, direct mode, one Executor.
 insert into public.tasks
