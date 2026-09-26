@@ -70,7 +70,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(50);
+select plan(51);
 
 -- ==================== 1. Grants and the cron entry ====================
 
@@ -259,8 +259,10 @@ select throws_ok(format('select * from private.apply_close_promotions(%s)', (sel
 
 -- ==================== 4. The close ====================
 
-create temp table close52 as
-  select * from private.apply_close_promotions((select closed from fx52));
+create temp table close52 (promotions integer, retention_signals integer);
+select lives_ok(
+  $$insert into close52 select * from private.apply_close_promotions((select closed from fx52))$$,
+  'the close-time run completes on a closed Period');
 
 select is((select promotions from close52), 3,
   'the close applies three promotions: C1 twice (tenure, then the top x%) and C2 once');
