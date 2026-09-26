@@ -25,6 +25,9 @@
 --     (level 5) cannot read the status" returns rows;
 --   * drop the privacy_notice_version rule from set_org_setting_impl -> the
 --     "cannot be cleared" and "must be dotted numbers" assertions turn into a
+--     raw 23514 or a stored value;
+--   * rebuild set_org_setting_impl from an older body that lacks #512's or
+--     #48's checks -> the four "after #771's rebuild" assertions turn into a
 --     raw 23514 or a stored value.
 -- The claimless sweep over this table lives in rls_deny_by_default.test.sql.
 --
@@ -37,7 +40,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(74);
+select plan(78);
 
 -- ==================== Fixtures ====================
 
@@ -387,6 +390,21 @@ select throws_ok($$ select public.set_org_setting('privacy_notice_version', null
   'PT400', 'invalid_org_setting_value', 'BC: the version cannot be cleared with null');
 select throws_ok($$ select public.set_org_setting('privacy_notice_version', 'v2') $$,
   'PT400', 'invalid_org_setting_value', 'BC: the version must be dotted numbers');
+-- This migration rebuilds set_org_setting_impl; the Wave 4 keys' rules it
+-- carries from main (#512's adunarea_generala_group_id, #48's
+-- vote_retention_percent) must survive the rebuild.
+select throws_ok($$ select public.set_org_setting('adunarea_generala_group_id', 'AG') $$,
+  'PT400', 'invalid_org_setting_value',
+  'BC: after #771''s rebuild, adunarea_generala_group_id must still be a Group id (#512 step 1)');
+select throws_ok($$ select public.set_org_setting('adunarea_generala_group_id', '999999999999') $$,
+  'PT400', 'invalid_org_setting_value',
+  'BC: after #771''s rebuild, adunarea_generala_group_id must still name an active Group (#512)');
+select throws_ok($$ select public.set_org_setting('vote_retention_percent', '0') $$,
+  'PT400', 'invalid_org_setting_value',
+  'BC: after #771''s rebuild, vote_retention_percent must still be a whole percentage 1-100 (#48)');
+select throws_ok($$ select public.set_org_setting('vote_retention_percent', '') $$,
+  'PT400', 'invalid_org_setting_value',
+  'BC: after #771''s rebuild, vote_retention_percent still cannot be cleared (#48)');
 select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.0') $$,
   'PT409', 'nothing_to_update', 'BC: re-sending the current version is nothing_to_update');
 select results_eq(

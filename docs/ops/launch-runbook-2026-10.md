@@ -237,9 +237,9 @@ what a missing value means. Commit it to `main` (docs-only commits are allowed).
    `docs/backend/push.md` in the SQL Editor and watch the phone.
 4. Merge the other green PRs as they come (Wave 3 tail, Wave 4, Wave 5 leftovers, N1, N3, N4, #78). Each
    merge redeploys staging; that is expected.
-5. Send the board the Privacy Notice text (`docs/legal/politica-de-confidentialitate.md`) after filling
-   the placeholders at its top; ask for approval by Wednesday. Their approval is recorded in the PR that
-   bumps the version to `1.0`.
+5. Open `/confidentialitate` on staging and confirm the notice text and version `1.0` are the approved
+   ones (`docs/legal/politica-de-confidentialitate.md`, approved in #802). Every Member acknowledges that
+   version at first sign-in, so it must be the final text before the first invitation.
 
 ## §10 Merge cut-off — Wednesday 30 Sep, end of day
 

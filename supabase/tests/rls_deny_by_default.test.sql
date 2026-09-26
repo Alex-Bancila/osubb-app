@@ -163,6 +163,10 @@ insert into notification_push_preferences (member_id, kind, push_enabled) values
 insert into privacy_notice_acknowledgements (member_id, notice_version) values
   ('ffffffff-0000-0000-0000-000000000006', '1.0'),
   ('eeeeeeee-0000-0000-0000-000000000156', '1.0');
+-- #47: no migration seeds a Period; the owner writes this fixture row as it
+-- writes every other one here (#701's open needs a BC session).
+insert into evaluation_periods (name, opened_by)
+  values ('rls-period', 'ffffffff-0000-0000-0000-000000000006');
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:

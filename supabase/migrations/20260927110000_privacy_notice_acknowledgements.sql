@@ -54,12 +54,14 @@ alter table public.org_settings
 insert into public.org_settings (key, value) values ('privacy_notice_version', '1.0');
 
 comment on table public.org_settings is
-  '#681 (ruling R20): organization-wide settings BC sets from the app instead of a migration. Every live active Member reads every row; the only write path is public.set_org_setting (BC/Moderator). Keys are reference data seeded by migrations. adherence_form_url: the adherence form link #52''s promotion notification carries (null until BC sets it). privacy_notice_version (#771, ruling L16): the current version of the Privacy Notice every Member acknowledges once (public.acknowledge_privacy_notice); dotted numbers such as 1.0 or 1.1, never null; bumping it re-asks everyone.';
+  '#681 (ruling R20): organization-wide settings BC sets from the app instead of a migration. Every live active Member reads every row; the only write path is public.set_org_setting (BC/Moderator). Keys are reference data seeded by migrations. adherence_form_url: the adherence form link #52''s promotion notification carries (null until BC sets it). adunarea_generala_group_id (#512): the id of the Group that is the Adunarea Generală -- its Group Managers and Group Responsibles, and those of its ancestors, read the full Evaluation Period ranking (private.can_read_evaluation_rankings); null until BC sets it. vote_retention_percent (#48): y, the Vote Retention Threshold -- the top share, a whole percentage 1-100, of the Voluntar cu Drept de Vot cohort a holder must reach in a closed Evaluation Period to stay inside it (public.retention_ranking); seeded 25 (R20''s placeholder BC ratifies), never null. privacy_notice_version (#771, ruling L16): the current version of the Privacy Notice every Member acknowledges once (public.acknowledge_privacy_notice); dotted numbers such as 1.0 or 1.1, never null; bumping it re-asks everyone.';
 
 -- ---------------------------------------------------------------------------
--- set_org_setting learns the new key. Rebuilt from #681's body
--- (20260924053559_org_settings.sql, the latest definition on main); what is
--- new is the privacy_notice_version shape in step 1.
+-- set_org_setting learns the new key. Rebuilt from #48's body
+-- (20260926180400_retention_ranking.sql, the latest definition on main, which
+-- carries #512's adunarea_generala_group_id checks and #48's
+-- vote_retention_percent check); what is new is the privacy_notice_version
+-- shape in step 1.
 -- ---------------------------------------------------------------------------
 create or replace function private.set_org_setting_impl(p_key text, p_value text)
 returns public.org_settings
@@ -80,6 +82,17 @@ begin
   if p_key = 'adherence_form_url'
      and v_value is not null
      and not private.is_http_url(v_value) then
+    raise sqlstate 'PT400' using message = 'invalid_org_setting_value';
+  end if;
+  -- #512: a Group id is a positive integer that fits a bigint.
+  if p_key = 'adunarea_generala_group_id'
+     and v_value is not null
+     and v_value !~ '^[1-9][0-9]{0,17}$' then
+    raise sqlstate 'PT400' using message = 'invalid_org_setting_value';
+  end if;
+  -- #48: y is a whole percentage 1-100 and is never cleared.
+  if p_key = 'vote_retention_percent'
+     and (v_value is null or v_value !~ '^([1-9][0-9]?|100)$') then
     raise sqlstate 'PT400' using message = 'invalid_org_setting_value';
   end if;
   -- #771: the Privacy Notice version is dotted numbers and is never cleared.
@@ -113,6 +126,19 @@ begin
   if not found then
     raise sqlstate 'PT404' using message = 'org_setting_not_found';
   end if;
+  -- #512: the Adunarea Generală is an existing, active Group. `for key share`
+  -- keeps the row from being deleted under the write without blocking the
+  -- `for no key update` every Group command takes on a Group row.
+  if p_key = 'adunarea_generala_group_id' and v_value is not null then
+    perform 1
+      from public.groups as grp
+     where grp.id = v_value::bigint
+       and grp.status = 'active'
+       for key share;
+    if not found then
+      raise sqlstate 'PT400' using message = 'invalid_org_setting_value';
+    end if;
+  end if;
 
   -- 4. State.
   if v_value is not distinct from v_setting.value then
@@ -131,10 +157,10 @@ end;
 $$;
 
 comment on function private.set_org_setting_impl(text, text) is
-  '#681, extended by #771: body of public.set_org_setting. Step 1 trims the value (blank -> null), PT400 value_too_long above 2048 characters, PT400 invalid_org_setting_value for an adherence_form_url that is not http(s) or a privacy_notice_version that is not dotted numbers (1.0, 1.1, 2.0.1; blank included: the version is never cleared); then 42501 org_settings_manage_forbidden unless the caller is a live active BC or Moderator (level >= 6, Profile held for share); PT404 org_setting_not_found for an unseeded key; PT409 nothing_to_update for an unchanged value.';
+  '#681, extended by #512, #48 and #771: body of public.set_org_setting. Step 1 trims the value (blank -> null), PT400 value_too_long above 2048 characters, PT400 invalid_org_setting_value for an adherence_form_url that is not http(s), an adunarea_generala_group_id that is not a positive integer, a vote_retention_percent that is not a whole number 1-100 (blank included: y is never cleared), or a privacy_notice_version that is not dotted numbers (1.0, 1.1, 2.0.1; blank included: the version is never cleared); then 42501 org_settings_manage_forbidden unless the caller is a live active BC or Moderator (level >= 6, Profile held for share); PT404 org_setting_not_found for an unseeded key; PT400 invalid_org_setting_value for an adunarea_generala_group_id naming no active Group (checked after the gate, so nobody below BC probes Group ids); PT409 nothing_to_update for an unchanged value.';
 
 comment on function public.set_org_setting(text, text) is
-  '#681 (ruling R20), extended by #771: BC or the Moderator sets one organization setting. The value is trimmed and a blank value clears it (null). adherence_form_url must be an http(s) address of at most 2048 characters; #52''s promotion notification reads it (select value from public.org_settings where key = ''adherence_form_url''). privacy_notice_version must be dotted numbers (1.0, 1.1) and cannot be cleared; raising it makes every Member acknowledge the Privacy Notice again (#771). Records updated_by; the trigger moves updated_at. Keys are seeded by migrations: an unknown key is PT404 org_setting_not_found.';
+  '#681 (ruling R20), extended by #512, #48 and #771: BC or the Moderator sets one organization setting. The value is trimmed and a blank value clears it (null). adherence_form_url must be an http(s) address of at most 2048 characters; #52''s promotion notification reads it. adunarea_generala_group_id must be the id of an active Group -- the Adunarea Generală, whose Group Managers and Group Responsibles (and those of its ancestors) then read the full Evaluation Period ranking. vote_retention_percent must be a whole percentage 1-100 and cannot be cleared -- y, the share of the Voluntar cu Drept de Vot cohort public.retention_ranking marks inside. privacy_notice_version must be dotted numbers (1.0, 1.1) and cannot be cleared; raising it makes every Member acknowledge the Privacy Notice again (#771). Records updated_by; the trigger moves updated_at. The Administrare "Perioade de evaluare" panel (#702) calls it. Keys are seeded by migrations: an unknown key is PT404 org_setting_not_found.';
 
 -- ---------------------------------------------------------------------------
 -- The Privacy Acknowledgement.

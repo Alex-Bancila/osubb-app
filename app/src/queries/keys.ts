@@ -46,6 +46,11 @@ export const keys = {
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
       ['points', 'standing', { memberId }] as const,
+    /* #634: the open Evaluation Period, the Promotion Rules' tenure, the
+       Promotion Threshold in force and my own row of the Period's ranking.
+       Under `points` so an Evaluation's invalidation moves the bar too. */
+    promotionProgress: (memberId: string | undefined) =>
+      ['points', 'promotion-progress', { memberId }] as const,
     leaderboard: (limit = 10) => ['points', 'leaderboard', { limit }] as const,
     deptCup: () => ['points', 'deptCup'] as const,
   },
@@ -55,6 +60,8 @@ export const keys = {
       ['profile', 'me', { memberId }] as const,
     groups: (memberId: string | undefined) =>
       ['profile', 'groups', { memberId }] as const,
+    roleHistory: (memberId: string | undefined) =>
+      ['profile', 'roleHistory', { memberId }] as const,
   },
   /* Other members as the viewer may see them. Keyed by viewer too: what a
      profile shows depends on who is looking (contact details, rosters). */
@@ -217,6 +224,25 @@ export const keys = {
       ['privacy', 'status', { viewerId }] as const,
     member: (memberId: string, viewerId: string | undefined) =>
       ['privacy', 'member', { memberId, viewerId }] as const,
+  },
+  /* Evaluation Periods and what their close fixes (#702): the Periods, the
+     Promotion Threshold in force and the last close's Retention Signals. One
+     `['evaluation']` prefix, so opening or closing a Period refreshes all three
+     from a single invalidation. */
+  evaluation: {
+    all: ['evaluation'] as const,
+    periods: (memberId: string | undefined) =>
+      ['evaluation', 'periods', { memberId }] as const,
+    threshold: (memberId: string | undefined) =>
+      ['evaluation', 'threshold', { memberId }] as const,
+    signals: (periodId: number | null, memberId: string | undefined) =>
+      ['evaluation', 'signals', { periodId, memberId }] as const,
+  },
+  /* The organization settings (#681): every row, read by every Member. */
+  orgSettings: {
+    all: ['org-settings'] as const,
+    list: (memberId: string | undefined) =>
+      ['org-settings', { memberId }] as const,
   },
   /* Whether this browser receives Web Push for the member (#704): its
      subscription and its `push_tokens` row. "Mine", so keyed by member. */

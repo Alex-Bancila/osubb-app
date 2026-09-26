@@ -12,6 +12,10 @@ import type { Group, MemberGroup } from '../../queries/reference';
 import ProfileScreen from './ProfileScreen';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// Promotion progress (#634) has its own suite; here it is only a slot.
+vi.mock('../../components/profile/PromotionProgress', () => ({
+  PromotionProgress: () => <div data-testid="promotion-progress-slot" />,
+}));
 
 const authMock = vi.hoisted(() => ({
   claims: null as MemberClaims | null,
@@ -122,6 +126,19 @@ const pointsQueryMock = vi.hoisted(() => ({
   isError: false,
   error: null as Error | null,
   refetch: vi.fn(),
+}));
+
+/* #633: the Role timeline is its own component with its own spec; here it
+   only has to be mounted. Pending by default so the other assertions see the
+   page without it. */
+const roleHistoryMock = vi.hoisted(() => ({
+  data: undefined as unknown[] | undefined,
+  isPending: true,
+  isError: false,
+}));
+
+vi.mock('../../queries/role-history', () => ({
+  useMyRoleHistory: () => roleHistoryMock,
 }));
 
 vi.mock('../../queries/points', () => ({
@@ -274,6 +291,9 @@ describe('ProfileScreen', () => {
     profileQueryMock.isError = false;
     profileQueryMock.error = null;
 
+    roleHistoryMock.data = undefined;
+    roleHistoryMock.isPending = true;
+
     pointsQueryMock.data = 42;
     pointsQueryMock.isPending = false;
     pointsQueryMock.isError = false;
@@ -341,6 +361,9 @@ describe('ProfileScreen', () => {
     expect(screen.getByTestId('personal-points-card')).toBeInTheDocument();
     expect(screen.getByText('Punctaj personal')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+
+    // Promotion progress (#634) is mounted; it decides its own states.
+    expect(screen.getByTestId('promotion-progress-slot')).toBeInTheDocument();
 
     // Theme toggle
     expect(
@@ -723,5 +746,22 @@ describe('ProfileScreen', () => {
     render(<ProfileScreen />, { wrapper: wrapper() });
 
     expect(screen.getByText('Necompletat')).toBeInTheDocument();
+  });
+
+  it('mounts the Role timeline once the history answers (#633)', () => {
+    roleHistoryMock.data = [];
+    roleHistoryMock.isPending = false;
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    const timeline = screen.getByTestId('role-timeline-card');
+    expect(
+      within(timeline).getByRole('heading', {
+        name: 'Parcursul organizațional',
+      }),
+    ).toBeInTheDocument();
+    expect(within(timeline).getByRole('listitem')).toHaveTextContent(
+      'din 1 oct. 2024',
+    );
   });
 });

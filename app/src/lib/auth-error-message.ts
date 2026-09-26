@@ -119,3 +119,53 @@ function kindFrom({
 export function toAuthErrorMessage(error: unknown): string {
   return MESSAGES[kindFrom(detailsFrom(error))];
 }
+
+/* ---- Changing the sign-in address from Profil (#632) ---- */
+
+/** GoTrue's `email_exists`: another account already signs in there. */
+const EMAIL_TAKEN_CODES = new Set(['email_exists']);
+/** The only field `updateUser({ email })` sends is the address. */
+const EMAIL_INVALID_CODES = new Set([
+  'email_address_invalid',
+  'validation_failed',
+]);
+
+const EMAIL_CHANGE_UNKNOWN =
+  'Nu am putut trimite cererea. Încearcă din nou; dacă problema persistă, anunță BC.';
+
+/**
+ * Why Auth refused an email change, as the reason the form shows under the
+ * address (`email_taken`, `email_invalid`); `undefined` when the refusal is not
+ * about the address itself. Matched on the code first, then on whole phrases,
+ * so a rate-limit or validation message that merely mentions "email" is never
+ * read as an address already in use.
+ */
+export function emailChangeReason(
+  error: unknown,
+): 'email_taken' | 'email_invalid' | undefined {
+  const { code, message } = detailsFrom(error);
+  if (
+    EMAIL_TAKEN_CODES.has(code) ||
+    /already (?:been )?registered|already exists|already in use/i.test(message)
+  )
+    return 'email_taken';
+  if (
+    EMAIL_INVALID_CODES.has(code) ||
+    /unable to validate email|email address .* is invalid|invalid email/i.test(
+      message,
+    )
+  )
+    return 'email_invalid';
+  return undefined;
+}
+
+/**
+ * A fixed, safe Romanian message for an email change Auth refused for a reason
+ * that is not about the address: rate limit, network, anything else.
+ */
+export function toEmailChangeErrorMessage(error: unknown): string {
+  const kind = kindFrom(detailsFrom(error));
+  return kind === 'rate-limit' || kind === 'network'
+    ? MESSAGES[kind]
+    : EMAIL_CHANGE_UNKNOWN;
+}
