@@ -75,7 +75,10 @@ jobs:
           # things release-production.yml checks after a deploy.
           check_web() {
             local host="$1" headers status problems=""
-            headers="$(curl -sSI --connect-timeout 5 --max-time 10 "$host/" 2>&1)"
+            # GET, not HEAD: some static hosts answer a HEAD differently
+            # (or not at all) from the GET a real visitor sends. -D - dumps
+            # the headers to stdout; -o /dev/null discards the body.
+            headers="$(curl -sS -D - -o /dev/null --connect-timeout 5 --max-time 10 "$host/" 2>&1)"
             status="$(printf '%s\n' "$headers" | head -1 | grep -oE '[0-9]{3}' | head -1)"
             if [ "$status" != 200 ]; then
               problems="$problems- GET $host/ -> ${status:-no response}\n"
@@ -84,17 +87,19 @@ jobs:
                 | grep -Eq '^content-security-policy(-report-only)?:'; then
               problems="$problems- $host/ sent no Content-Security-Policy header\n"
             fi
-            local manifest_type
-            manifest_type="$(curl -sS --connect-timeout 5 --max-time 10 -o /dev/null \
-              -w '%{content_type}' "$host/manifest.webmanifest" 2>&1)"
-            if [ "${manifest_type%%;*}" != application/manifest+json ]; then
-              problems="$problems- $host/manifest.webmanifest is '${manifest_type:-no response}', expected application/manifest+json\n"
+            local manifest_out manifest_status manifest_type
+            manifest_out="$(curl -sS --connect-timeout 5 --max-time 10 -o /dev/null \
+              -w '%{http_code}|%{content_type}' "$host/manifest.webmanifest" 2>&1)"
+            manifest_status="${manifest_out%%|*}"
+            manifest_type="${manifest_out#*|}"
+            if [ "$manifest_status" != 200 ] || [ "${manifest_type%%;*}" != application/manifest+json ]; then
+              problems="$problems- $host/manifest.webmanifest is '${manifest_status:-no response} ${manifest_type}', expected 200 application/manifest+json\n"
             fi
             if [ -z "$problems" ]; then
               DETAIL=""
               return 0
             fi
-            DETAIL="$(printf '%b\ncurl -sSI %s/:\n%s\n' "$problems" "$host" "$headers")"
+            DETAIL="$(printf '%b\ncurl -sSD - -o /dev/null %s/:\n%s\n' "$problems" "$host" "$headers")"
             return 1
           }
 
@@ -116,29 +121,40 @@ jobs:
           # carries the target so a later run finds it again; the timestamp
           # after "since" stays whatever it was when the issue was created.
           find_issue() {
-            gh issue list --label uptime --state open --json number,title \
+            gh issue list --label uptime --state open --json number,title --limit 200 \
               | jq -r --arg t "$1" '.[] | select(.title | startswith("Uptime: " + $t + " failing")) | .number' \
               | head -1
           }
 
+          # $overall is the caller's exit code: a target that is failing
+          # already sets it, and here a gh call that itself fails (a flaky
+          # API, a permission slip) sets it too — never let a target look
+          # recovered, or the run exit 0, just because updating its issue
+          # silently failed.
           report() {
             local target="$1" ok="$2" number
             number="$(find_issue "$target")"
             if [ "$ok" = 1 ]; then
               if [ -n "$number" ]; then
-                gh issue comment "$number" --body "Green again at $(now) UTC — closing. [Run]($RUN_URL)"
-                gh issue close "$number"
-                echo "recovered: $target (#$number)"
+                if gh issue comment "$number" --body "Green again at $(now) UTC — closing. [Run]($RUN_URL)" \
+                    && gh issue close "$number"; then
+                  echo "recovered: $target (#$number)"
+                else
+                  echo "::error::$target recovered, but updating issue #$number failed"
+                  overall=1
+                fi
               fi
             else
               echo "::error::$target failing"
               if [ -n "$number" ]; then
-                gh issue comment "$number" --body "$(printf 'Still failing at %s UTC:\n\n```\n%s\n```\n\n[Run](%s)' "$(now)" "$DETAIL" "$RUN_URL")"
+                gh issue comment "$number" --body "$(printf 'Still failing at %s UTC:\n\n```\n%s\n```\n\n[Run](%s)' "$(now)" "$DETAIL" "$RUN_URL")" \
+                  || { echo "::error::could not comment on issue #$number for $target"; overall=1; }
               else
                 ensure_label
                 gh issue create --label uptime \
                   --title "Uptime: $target failing since $(now)" \
-                  --body "$(printf '```\n%s\n```\n\n[Run](%s)' "$DETAIL" "$RUN_URL")"
+                  --body "$(printf '```\n%s\n```\n\n[Run](%s)' "$DETAIL" "$RUN_URL")" \
+                  || { echo "::error::could not create an issue for $target"; overall=1; }
               fi
             fi
           }
