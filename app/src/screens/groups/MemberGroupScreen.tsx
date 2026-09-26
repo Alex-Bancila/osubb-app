@@ -16,7 +16,8 @@ import {
 } from '../../queries/group-applications';
 import { categoryLabel } from '../administrare/group-tree';
 import { ApplicationAction } from './ApplicationAction';
-import { acceptsApplication } from './application-eligibility';
+import { ApplicationFormLink } from './ApplicationFormLink';
+import { acceptsApplication, applicationForm } from './application-eligibility';
 
 export default function MemberGroupScreen() {
   const id = Number(useParams().groupId);
@@ -42,6 +43,7 @@ export default function MemberGroupScreen() {
     );
   const role = mine.data.find((row) => row.id === id);
   const pending = applications.data.find((row) => row.group_id === id);
+  const form = applicationForm(group);
   const authority = groupAuthority(
     group,
     mine.data,
@@ -93,12 +95,15 @@ export default function MemberGroupScreen() {
       ) : (
         !role?.explicit &&
         !role?.automatic &&
-        acceptsApplication(group, level) && (
+        acceptsApplication(group, level) &&
+        (form ? (
+          <ApplicationFormLink label={form.label} url={form.url} />
+        ) : (
           <ApplicationAction
             label="Aplică"
             command={{ kind: 'apply', groupId: id, note: '' }}
           />
-        )
+        ))
       )}
       {authority.manageWork && (
         <Link

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
+import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
@@ -11,6 +12,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import {
+  applicationFormFailure,
   fieldForReason,
   groupSettingsSchema,
   groupStructureSchema,
@@ -247,6 +249,11 @@ export function GroupSettingsTab({
   const [applicationLevel, setApplicationLevel] = useState(
     group.application_level === null ? '' : String(group.application_level),
   );
+  // The application form link (#698): one pair, saved and cleared together.
+  const [applicationForm, setApplicationForm] = useState({
+    label: group.application_form_label ?? '',
+    url: group.application_form_url ?? '',
+  });
   const [shared, setShared] = useState(group.shared_work_visibility);
   const [minLevel, setMinLevel] = useState(String(group.min_level));
   const [confirmed, setConfirmed] = useState(false);
@@ -307,6 +314,7 @@ export function GroupSettingsTab({
         : null,
       sharedWorkVisibility: shared,
       minLevel: chosenMinLevel,
+      applicationForm,
     },
     fieldForReason,
   );
@@ -324,17 +332,19 @@ export function GroupSettingsTab({
       setConfirmed(true);
       return;
     }
+    const { applicationForm: form, ...settings } = values;
     const saved = await onRun(
       {
         kind: 'settings',
         groupId: group.id,
-        ...values,
-        // #697: no fields yet (#698 adds them) -- send the stored link back.
-        applicationFormLabel: group.application_form_label,
-        applicationFormUrl: group.application_form_url,
+        ...settings,
+        // Both or neither (the schema's pair rule): an emptied pair clears it.
+        applicationFormLabel: form.label,
+        applicationFormUrl: form.url,
         confirmRemovals: needsConfirmation,
       },
-      (failure) => settingsForm.fail(failure, SAVE_FAILED),
+      (failure) =>
+        settingsForm.fail(applicationFormFailure(failure), SAVE_FAILED),
     );
     if (saved) setConfirmed(false);
   }
@@ -452,6 +462,21 @@ export function GroupSettingsTab({
               <FieldError {...settingsForm.errorProps('applicationLevel')} />
             </div>
           )}
+
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium">
+              Formular de înscriere
+            </legend>
+            <AttachedLinkFields
+              value={applicationForm}
+              onChange={setApplicationForm}
+              form={settingsForm}
+              name="applicationForm"
+              labelText="Eticheta butonului"
+              urlText="Adresa formularului"
+              disabled={busy}
+            />
+          </fieldset>
 
           <Check
             label="Toți membrii văd taskurile grupului"

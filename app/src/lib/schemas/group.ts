@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { emptyToNull, trimText } from '../normalize';
+import { CommandError, commandReason } from '../command-reasons';
+import { charLength, emptyToNull, trimText } from '../normalize';
 import { requiredText } from './text';
 
 /**
@@ -44,6 +45,40 @@ export const groupCreateSchema = z.object({
   short: optional,
 });
 
+/**
+ * The Group's application form link (#697, #698, ruling R18): an Attached
+ * Link, "Formular de înscriere", judged as update_group judges it through
+ * #684's private.require_attached_link -- trimmed, blank as no value, both or
+ * neither, a label of at most 60 characters, an http(s) address of at most
+ * 2048. The copy names this form's own fields (Eticheta butonului, Adresa
+ * formularului), so the reasons are this form's, not the Task link's.
+ */
+const applicationForm = z
+  .object({
+    label: z.string().nullish(),
+    url: z.string().nullish(),
+  })
+  .transform((link) => ({
+    label: emptyToNull(trimText(link.label)),
+    url: emptyToNull(trimText(link.url)),
+  }))
+  .superRefine((link, ctx) => {
+    const issue = (path: 'label' | 'url', message: string) =>
+      ctx.addIssue({ code: 'custom', path: [path], message });
+    // Both or neither: the half left empty is the one to fill in.
+    if (link.label !== null && link.url === null)
+      issue('url', 'application_form_incomplete');
+    if (link.url !== null && link.label === null)
+      issue('label', 'application_form_incomplete');
+    if (link.label !== null && charLength(link.label) > 60)
+      issue('label', 'application_form_label_too_long');
+    if (link.url !== null) {
+      if (charLength(link.url) > 2048) issue('url', 'link_url_too_long');
+      else if (!/^https?:\/\//.test(link.url))
+        issue('url', 'application_form_url_invalid');
+    }
+  });
+
 export const groupSettingsSchema = z
   .object({
     name: groupName,
@@ -52,6 +87,7 @@ export const groupSettingsSchema = z
     applicationLevel: level('invalid_application_level').nullable(),
     sharedWorkVisibility: z.boolean(),
     minLevel: level('invalid_group_min_level'),
+    applicationForm,
   })
   .superRefine((settings, ctx) => {
     const issue = (message: string) =>
@@ -87,4 +123,37 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   group_min_level_above_children: 'minLevel',
   invalid_application_level: 'applicationLevel',
   application_level_below_min_level: 'applicationLevel',
+  // The application form link (#698): the browser's reasons, and the
+  // server's Attached Link reasons for the same rules. The server's pair rule
+  // cannot say which half is missing; the address is the one most often left.
+  application_form_incomplete: 'applicationForm.url',
+  application_form_label_too_long: 'applicationForm.label',
+  application_form_url_invalid: 'applicationForm.url',
+  link_incomplete: 'applicationForm.url',
+  link_label_too_long: 'applicationForm.label',
+  link_url_invalid: 'applicationForm.url',
+  link_url_too_long: 'applicationForm.url',
 };
+
+/**
+ * update_group refuses a bad form link with #684's Attached Link reasons,
+ * whose copy speaks of "numele linkului". The settings form shows the same
+ * rule in its own words, so a refusal reads like the browser's check would.
+ */
+const APPLICATION_FORM_REASON: Readonly<Record<string, string>> = {
+  link_incomplete: 'application_form_incomplete',
+  link_label_too_long: 'application_form_label_too_long',
+  link_url_invalid: 'application_form_url_invalid',
+};
+
+/** A failed settings save, with an Attached Link reason renamed for this form. */
+export function applicationFormFailure(failure: unknown): unknown {
+  const reason =
+    failure instanceof CommandError ? failure.reason : commandReason(failure);
+  const renamed =
+    reason === undefined ? undefined : APPLICATION_FORM_REASON[reason];
+  // A renamed reason always has copy, so the fallback is never shown.
+  return renamed === undefined
+    ? failure
+    : new CommandError({ message: renamed }, '');
+}
