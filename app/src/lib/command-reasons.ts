@@ -19,6 +19,18 @@
  * fit every command that raises it.
  */
 const REASON_COPY = new Map<string, string>([
+  /* ---- Group Applications (#584, #589); already_group_member is below (#583) ---- */
+  [
+    'group_not_accepting_applications',
+    'Acest grup nu primește cereri de înscriere.',
+  ],
+  ['application_pending', 'Ai deja o cerere în așteptare.'],
+  ['group_not_found', 'Grupul nu mai este disponibil.'],
+  ['group_apply_forbidden', 'Nu îndeplinești nivelul necesar pentru a aplica.'],
+  ['application_not_found', 'Cererea nu mai este disponibilă.'],
+  ['application_not_pending', 'Cererea a fost deja soluționată.'],
+  ['application_withdraw_forbidden', 'Poți retrage doar propria cerere.'],
+  ['invalid_application_decision', 'Alege dacă accepți sau respingi cererea.'],
   /* ---- Group structure and settings (#582) ---- */
   [
     'group_manage_forbidden',
@@ -95,6 +107,17 @@ const REASON_COPY = new Map<string, string>([
   ],
   ['group_has_open_work', 'Grupul are lucru neterminat.'],
   ['nothing_to_update', 'Nu ai schimbat nimic.'],
+  /* ---- The Group's application form link (#698, ruling R18) ---- */
+  /* browser: update_group judges the pair with #684's Attached Link reasons
+     (link_incomplete, link_label_too_long, link_url_invalid); the settings
+     form renames those to these (`applicationFormFailure` in
+     `lib/schemas/group.ts`), so the copy names the fields on screen. */
+  ['application_form_incomplete', 'Completează și eticheta, și adresa.'],
+  ['application_form_label_too_long', 'Eticheta are cel mult 60 de caractere.'],
+  [
+    'application_form_url_invalid',
+    'Adresa trebuie să înceapă cu http:// sau https://.',
+  ],
 
   /* ---- Group roster and Group Roles (#583) ---- */
   ['invalid_group_role', 'Alege o funcție validă.'],
@@ -303,10 +326,47 @@ const REASON_COPY = new Map<string, string>([
     'Nu mai ai permisiunea de a modifica acest membru. Reîncarcă pagina.',
   ],
   ['member_not_found', 'Membrul nu mai este disponibil. Reîncarcă pagina.'],
+  // #675 (ruling R5): the Nickname guard on `profiles`.
+  ['nickname_too_short', 'Pseudonimul are cel puțin 2 caractere.'],
+  ['nickname_too_long', 'Pseudonimul are cel mult 24 de caractere.'],
+  [
+    'nickname_invalid',
+    'Pseudonimul poate avea doar litere, cifre, spații, punct, cratimă sau underscore.',
+  ],
+  [
+    'nickname_taken',
+    'Pseudonimul este deja folosit de alt membru. Alege altul.',
+  ],
   /* browser */
   ['full_name_required', 'Scrie numele complet.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
   ['email_invalid', 'Scrie o adresă de email validă.'],
+  // #773 (ruling L19): reinvite-member, the re-sent invitation.
+  [
+    'already_active',
+    'Membrul s-a autentificat deja, deci invitația nu se mai retrimite.',
+  ],
+  [
+    'already_confirmed',
+    'Adresa membrului este deja confirmată. Poate cere un link de autentificare din ecranul de login.',
+  ],
+  [
+    'member_inactive',
+    'Membrul nu este activ. Reactivează-l înainte de a-i retrimite invitația.',
+  ],
+  ['email_taken', 'Adresa este folosită deja de alt cont. Verifică adresa.'],
+  [
+    'email_sync_failed',
+    'Nu am putut schimba adresa, așa că nu s-a modificat nimic. Încearcă din nou.',
+  ],
+  [
+    'email_out_of_sync',
+    'Adresa s-a schimbat doar pe jumătate. Anunță coordonatorul IT: trebuie corectată manual.',
+  ],
+  [
+    'invite_failed',
+    'Invitația nu a putut fi trimisă. Încearcă din nou peste câteva minute.',
+  ],
 
   /* ---- Web Push on this device (#704) ---- */
   /* browser */

@@ -15,7 +15,7 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
-import { useCapability } from '../../lib/capabilities';
+import { normalizePhone } from '../../lib/normalize';
 import { fieldForReason, profileSchema } from '../../lib/schemas/profile';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { cn } from '../../lib/utils';
@@ -31,6 +31,12 @@ const AVATAR_PALETTE = [
   { name: 'Negru', color: '#0B0B0C' },
 ];
 
+const INPUT_CLASS =
+  'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:focus-visible:border-destructive';
+
+const LOCKED_INPUT_CLASS =
+  'flex min-h-11 w-full cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-75 outline-none';
+
 export type EditProfileSheetProps = {
   open: boolean;
   onClose: () => void;
@@ -44,24 +50,21 @@ function EditProfileForm({
   profile: MyProfile;
   onClose: () => void;
 }) {
-  const [fullName, setFullName] = useState(profile.full_name);
+  const [nickname, setNickname] = useState(profile.nickname ?? '');
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [avatarColor, setAvatarColor] = useState(
     profile.avatar_color ?? '#ED2025',
   );
   const updateMutation = useUpdateMyProfile();
-  // #675 (R5): the full name is a privileged column -- only BC/Moderator
-  // (the same rank as `manageRoles`) may change it. Below that the field is
-  // read-only and never sent, so a save cannot trip the server's 42501.
-  const canEditFullName = useCapability('manageRoles').data === true;
-  // Ruling R8: the phone is normalised to E.164 before it is judged or sent;
-  // the server's `phone_invalid` lands under the same field.
+  // #675 (R5): the full name is a privileged column, changed only by BC or the
+  // Moderator, so this form shows it and never sends it. The Nickname, the
+  // phone (normalised to E.164, ruling R8) and the colour are the Member's.
   const form = useFormValidation(
     profileSchema,
-    { ...(canEditFullName ? { fullName } : {}), phone, avatarColor },
+    { nickname, phone, avatarColor },
     fieldForReason,
   );
-  const nameError = form.error('fullName');
+  const phoneField = form.field('phone', 'edit-profile-phone-hint');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +73,7 @@ function EditProfileForm({
 
     try {
       await updateMutation.mutateAsync({
-        ...(values.fullName === undefined ? {} : { fullName: values.fullName }),
+        nickname: values.nickname,
         phone: values.phone,
         avatarColor: values.avatarColor,
       });
@@ -91,35 +94,37 @@ function EditProfileForm({
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <Field>
+          <FieldLabel htmlFor="edit-profile-nickname">Pseudonim</FieldLabel>
+          <input
+            id="edit-profile-nickname"
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            autoComplete="nickname"
+            className={INPUT_CLASS}
+            {...form.field('nickname', 'edit-profile-nickname-hint')}
+          />
+          <FieldError {...form.errorProps('nickname')} />
+          <FieldDescription id="edit-profile-nickname-hint">
+            2–24 de caractere: litere, cifre, spații, punct, cratimă sau
+            underscore. Fără pseudonim, se afișează numele complet.
+          </FieldDescription>
+        </Field>
+
+        <Field>
           <FieldLabel htmlFor="edit-profile-name">Nume complet</FieldLabel>
-          {canEditFullName ? (
-            <input
-              id="edit-profile-name"
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              {...form.field('fullName')}
-              className={cn(
-                'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-                nameError &&
-                  'border-destructive focus-visible:border-destructive',
-              )}
-            />
-          ) : (
-            <>
-              <input
-                id="edit-profile-name"
-                type="text"
-                value={profile.full_name}
-                disabled
-                className="flex min-h-11 w-full cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-75 outline-none"
-              />
-              <FieldDescription>
-                Numele complet îl modifică Biroul de Conducere.
-              </FieldDescription>
-            </>
-          )}
-          <FieldError {...form.errorProps('fullName')} />
+          <input
+            id="edit-profile-name"
+            type="text"
+            value={profile.full_name}
+            readOnly
+            aria-readonly="true"
+            aria-describedby="edit-profile-name-hint"
+            className={LOCKED_INPUT_CLASS}
+          />
+          <FieldDescription id="edit-profile-name-hint">
+            Numele complet se schimbă doar de BC sau Moderator.
+          </FieldDescription>
         </Field>
 
         <Field>
@@ -129,7 +134,7 @@ function EditProfileForm({
             type="email"
             value={profile.email ?? ''}
             disabled
-            className="flex min-h-11 w-full cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-75 outline-none"
+            className={LOCKED_INPUT_CLASS}
           />
           <FieldDescription>
             Adresa de email este identificatorul contului tău. Pentru
@@ -145,8 +150,15 @@ function EditProfileForm({
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="ex: 0712345678"
-            className="flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            {...form.field('phone', 'edit-profile-phone-hint')}
+            autoComplete="tel"
+            className={INPUT_CLASS}
+            {...phoneField}
+            onBlur={() => {
+              phoneField.onBlur();
+              // R8: show back the number as it will be stored.
+              const normalised = normalizePhone(phone);
+              if (normalised !== null) setPhone(normalised);
+            }}
           />
           <FieldError {...form.errorProps('phone')} />
           <FieldDescription id="edit-profile-phone-hint">

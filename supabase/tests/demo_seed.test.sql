@@ -79,11 +79,11 @@ select is(
 -- Departments and Interne Team; no demo Team or Project legacy row is seeded.
 select is((select count(*) from (
   select p.email, p.role::text as member_role,
-    (select string_agg(g.legacy_dept_id,',' order by g.legacy_dept_id)
+    (select string_agg((select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=g.id),',' order by (select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=g.id))
        from group_members gm join groups g on g.id=gm.group_id
-      where gm.member_id=p.id and g.legacy_dept_id is not null) as depts,
-    (select string_agg(coalesce(g.legacy_team_id,g.name),','
-                       order by coalesce(g.legacy_team_id,g.name))
+      where gm.member_id=p.id and (select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=g.id) is not null) as depts,
+    (select string_agg(coalesce((select fixture.id from pg_temp.fixture_teams fixture where fixture.group_id=g.id),g.name),','
+                       order by coalesce((select fixture.id from pg_temp.fixture_teams fixture where fixture.group_id=g.id),g.name))
        from group_members gm join groups g on g.id=gm.group_id
       where gm.member_id=p.id and g.category='team'
         and g.name <> 'Adunarea Generală') as teams
@@ -101,15 +101,15 @@ select is((select count(*) from (
   ) expected(email,member_role,depts,teams)
 ) matched), 8::bigint,
   'all eight roles and Department/Team Group placements match the demo personas');
-select is((select count(distinct g.legacy_dept_id) from group_members gm
+select is((select count(distinct (select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=g.id)) from group_members gm
   join groups g on g.id=gm.group_id join profiles p on p.id=gm.member_id
-  where p.email like '%@demo.osubb' and g.legacy_dept_id in
-    (select id from departments where kind='department')), 5::bigint,
+  where p.email like '%@demo.osubb' and (select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=g.id) in
+    (select id from pg_temp.fixture_departments where kind='department')), 5::bigint,
   'all five delivery Departments have a demo member');
 select ok(exists (select 1 from group_members gm join groups g on g.id=gm.group_id
-  where g.legacy_dept_id='diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006')
+  where g.name = 'Diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006')
   and exists (select 1 from group_members gm join groups g on g.id=gm.group_id
-  where g.legacy_dept_id='secretariat' and gm.member_id='d0000000-0000-0000-0000-000000000004'),
+  where g.name = 'Secretariat' and gm.member_id='d0000000-0000-0000-0000-000000000004'),
   'both coordination Departments have a demo member');
 select is((select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'
   and category='team'), 4::bigint, 'BC creates three Teams and the General Assembly');
@@ -120,18 +120,14 @@ select is((select min_level from events where title='Training pentru recruți'),
   'recruit training remains visible at Minimum Level zero');
 select is((select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'),
   6::bigint, 'six native demo Groups exist');
-select is((select count(*) from teams where id in ('t-app','t-recruti','t-logistica')),
-  0::bigint, 'no demo legacy Team rows remain');
-select is((select count(*) from projects where created_by='d0000000-0000-0000-0000-000000000007'),
-  0::bigint, 'no demo legacy Project rows remain');
-select is((select count(*) from member_departments md join profiles p on p.id=md.member_id
-  where p.email like '%@demo.osubb'), 0::bigint,
-  'no demo legacy Department roster rows remain');
+select is(to_regclass('public.teams'), null::regclass, 'legacy Team storage is absent');
+select is(to_regclass('public.projects'), null::regclass, 'legacy Project storage is absent');
+select is(to_regclass('public.member_departments'), null::regclass, 'legacy Department roster storage is absent');
 select is((select gm.group_role from group_members gm join groups g on g.id=gm.group_id
-  where g.legacy_dept_id='diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006'),
+  where g.name = 'Diverse' and gm.member_id='d0000000-0000-0000-0000-000000000006'),
   'manager', 'BCE manages Diverse explicitly');
 select ok(exists (select 1 from group_members gm join groups g on g.id=gm.group_id
-  where g.legacy_dept_id='fin' and gm.member_id='d0000000-0000-0000-0000-000000000007'
+  where g.name = 'Financiar' and gm.member_id='d0000000-0000-0000-0000-000000000007'
     and gm.group_role='member')
   and not exists (select 1 from group_members gm join groups g on g.id=gm.group_id
     where g.category='organization' and gm.member_id='d0000000-0000-0000-0000-000000000007'),
@@ -285,7 +281,7 @@ select ok(
       join groups parent on parent.id = task_group.parent_id
      where task.title = 'Migrare bază de date'
        and task.status = 'completed'
-       and parent.legacy_dept_id is not null
+       and (select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=parent.id) is not null
        and task.completed_at <= task.deadline
        and exists (select 1 from task_evaluations e
                     where e.task_id = task.id and e.source = 'command'
@@ -415,11 +411,11 @@ select ok(
 -- One active Campaign per real Department, each carrying at least one Task.
 select ok(
   not exists (
-    select 1 from departments dept
+    select 1 from pg_temp.fixture_departments dept
      where dept.kind = 'department'
        and not exists (
          select 1 from campaigns campaign
-          where campaign.group_id = (select grp.id from groups grp where grp.legacy_dept_id = dept.id)
+          where campaign.group_id = (select grp.id from groups grp where grp.id = pg_temp.dept_group(dept.id))
             and campaign.is_active
             and exists (select 1 from tasks task where task.campaign_id = campaign.id))
   ),

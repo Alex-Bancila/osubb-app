@@ -107,7 +107,6 @@ function group(id: number, from: EventGroup): Group {
     min_level: 0,
     status: 'active',
     is_organization: from.is_organization,
-    legacy_dept_id: null,
   };
 }
 

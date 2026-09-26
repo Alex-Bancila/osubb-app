@@ -50,8 +50,6 @@ function memberAccessToken(): string {
     app_metadata: {
       member_role: 'voluntar',
       member_level: 1,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [],
     },
   };
