@@ -73,7 +73,7 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
       deadline: z.string().nullable(),
       groupId: z.number(),
       kind: z.enum(['task', 'umbrella', 'subtask'], {
-        error: 'invalid_task_kind',
+        required_error: 'invalid_task_kind', invalid_type_error: 'invalid_task_kind',
       }),
       parentTaskId: z.number().nullable(),
       audience: z.enum(['local', 'org']).nullable(),

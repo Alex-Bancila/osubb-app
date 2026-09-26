@@ -23,7 +23,7 @@ export const phoneSchema = z
 export const emailSchema = z
   .string()
   .transform(normalizeEmail)
-  .pipe(z.email({ error: 'email_invalid' }));
+  .pipe(z.string().email({ message: 'email_invalid' }));
 
 /**
  * The fields a Member edits on their own profile: the Nickname, the phone and
@@ -35,7 +35,7 @@ export const profileSchema = z.object({
   phone: phoneSchema,
   avatarColor: z
     .string()
-    .regex(/^#[0-9A-Fa-f]{6}$/, { error: 'invalid_avatar_color' }),
+    .regex(/^#[0-9A-Fa-f]{6}$/, { message: 'invalid_avatar_color' }),
   email: emailSchema.optional(),
 });
 
