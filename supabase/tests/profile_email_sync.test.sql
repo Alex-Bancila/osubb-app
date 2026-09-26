@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(13);
 
 -- ==================== Structure ====================
 select has_trigger('auth', 'users', 'users_sync_profile_email',
@@ -91,6 +91,14 @@ select is(
   (select email from profiles where id = 'f6320000-0000-0000-0000-000000000002'),
   'bogdan@test.local',
   'and profiles.email keeps the last real address');
+select lives_ok(
+  $$ update auth.users set email = '   '
+      where id = 'f6320000-0000-0000-0000-000000000002' $$,
+  'an Auth update to a whitespace-only address does not fail either');
+select is(
+  (select email from profiles where id = 'f6320000-0000-0000-0000-000000000002'),
+  'bogdan@test.local',
+  'a whitespace-only Auth address, blank once trimmed, does not replace the last real address');
 
 -- ==================== Clients still cannot write the column ====================
 select pg_temp.test_login('f6320000-0000-0000-0000-000000000002',
