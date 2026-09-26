@@ -48,7 +48,7 @@ insert into auth.users (id, email) values
 insert into public.profiles (id, full_name, email, role) values
   ('28900000-0000-0000-0000-000000000001', 'Executor One', 'executor-one-289@test.local', 'voluntar'),
   ('28900000-0000-0000-0000-000000000002', 'Executor Two', 'executor-two-289@test.local', 'voluntar'),
-  ('28900000-0000-0000-0000-000000000003', 'Assigner', 'assigner-289@test.local', 'responsabil');
+  ('28900000-0000-0000-0000-000000000003', 'Assigner', 'assigner-289@test.local', 'vot');
 insert into public.tasks (title, difficulty, group_id)
 values ('Assignment history fixture 289', 1, pg_temp.dept_group('edu'));
 

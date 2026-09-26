@@ -39,8 +39,8 @@ select ok(
   'every demo profile''s joined_at is January 1 of its joined_year');
 
 select is(
-  (select count(distinct role) from profiles where email like '%@demo.osubb'), 8::bigint,
-  'one per role — every rung of the ladder can be demoed');
+  (select count(distinct role) from profiles where email like '%@demo.osubb'), 7::bigint,
+  'all seven live ranks can be demoed');
 
 select is(
   (select count(*) from profiles p
@@ -94,13 +94,13 @@ select is((select count(*) from (
     ('voluntar@demo.osubb','voluntar','edu','Echipa Recruți'),
     ('activ@demo.osubb','activ','pr',null),
     ('vot@demo.osubb','vot','secretariat,youth','Echipa Logistică'),
-    ('responsabil@demo.osubb','responsabil','edu,hr','Echipa Recruți'),
+    ('responsabil@demo.osubb','vot','edu,hr','Echipa Recruți'),
     ('bce@demo.osubb','bce','diverse','Echipa Aplicație,it'),
     ('bc@demo.osubb','bc','fin','Echipa Logistică'),
     ('moderator@demo.osubb','moderator','diverse','Echipa Aplicație,it')
   ) expected(email,member_role,depts,teams)
 ) matched), 8::bigint,
-  'all eight roles and Department/Team Group placements match the demo personas');
+  'all eight personas and their Group placements match the demo personas');
 select is((select count(distinct (select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=g.id)) from group_members gm
   join groups g on g.id=gm.group_id join profiles p on p.id=gm.member_id
   where p.email like '%@demo.osubb' and (select fixture.id from pg_temp.fixture_departments fixture where fixture.group_id=g.id) in

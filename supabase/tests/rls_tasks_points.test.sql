@@ -36,7 +36,7 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role) values
   ('a0000000-0000-0000-0000-000000000011', 'Vlad Voluntar EDU',  'vlad.rls@test.local',      'voluntar'),
   ('b0000000-0000-0000-0000-000000000012', 'Bianca Voluntar PR', 'bianca.rls@test.local',    'voluntar'),
-  ('c0000000-0000-0000-0000-000000000013', 'Radu Responsabil',   'radu.rls@test.local',      'responsabil'),
+  ('c0000000-0000-0000-0000-000000000013', 'Radu Responsabil',   'radu.rls@test.local',      'vot'),
   ('d0000000-0000-0000-0000-000000000014', 'Bogdan BC',          'bogdan.bc.rls@test.local', 'bc');
 insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('a0000000-0000-0000-0000-000000000011', 'edu'),
@@ -107,7 +107,7 @@ reset role;
 
 -- ==================== Radu: responsabil (level 4), edu ====================
 select pg_temp.test_login('c0000000-0000-0000-0000-000000000013', jsonb_build_object(
-    'member_role', 'responsabil',
+    'member_role', 'vot',
     'member_level', 4,
     'dept_ids', '["edu"]'::jsonb,
     'team_ids', '[]'::jsonb

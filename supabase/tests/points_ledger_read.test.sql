@@ -51,7 +51,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('b5600000-0000-0000-0000-000000000001', 'Ledger Voluntar', 'ledger.voluntar@test.local', 'voluntar', 'activ'),
   ('b5600000-0000-0000-0000-000000000002', 'Ledger Activ', 'ledger.activ@test.local', 'activ', 'activ'),
   ('b5600000-0000-0000-0000-000000000003', 'Ledger Vot', 'ledger.vot@test.local', 'vot', 'activ'),
-  ('b5600000-0000-0000-0000-000000000004', 'Ledger Responsabil', 'ledger.responsabil@test.local', 'responsabil', 'activ'),
+  ('b5600000-0000-0000-0000-000000000004', 'Ledger Responsabil', 'ledger.responsabil@test.local', 'vot', 'activ'),
   ('b5600000-0000-0000-0000-000000000005', 'Ledger BCE', 'ledger.bce@test.local', 'bce', 'activ'),
   ('b5600000-0000-0000-0000-000000000006', 'Ledger BC', 'ledger.bc@test.local', 'bc', 'activ'),
   ('b5600000-0000-0000-0000-000000000009', 'Ledger Moderator', 'ledger.moderator@test.local', 'moderator', 'activ'),
@@ -124,7 +124,7 @@ select results_eq(
 reset role;
 
 select pg_temp.test_login('b5600000-0000-0000-0000-000000000004', jsonb_build_object(
-    'member_role', 'responsabil', 'member_level', 4,
+    'member_role', 'vot', 'member_level', 4,
     'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb
   ));
 select results_eq(

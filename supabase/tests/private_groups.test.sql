@@ -16,7 +16,7 @@
 --   3  bce          none (level 5: reads every Task and roster, but not these)
 --   4  vot          member of Private
 --   5  vot          none (the level-3 outsider)
---   6  responsabil  manager of Other (an unrelated Group Manager)
+--   6  vot          manager of Other (an unrelated Group Manager)
 --   7  vot          manager of Root (the ancestor Manager)
 --   8  vot          member of Child only
 --   9  vot          responsible of Private
@@ -57,7 +57,7 @@ select pg_temp.u756(n), 'private.' || n || '.756@test.local' from generate_serie
 insert into public.profiles (id, full_name, email, role, status)
 select pg_temp.u756(n), 'Private #756 ' || n, 'private.' || n || '.756@test.local',
        (case n when 1 then 'bc' when 2 then 'moderator' when 3 then 'bce'
-               when 6 then 'responsabil' when 12 then 'voluntar' else 'vot' end)::public.member_role,
+               when 12 then 'voluntar' else 'vot' end)::public.member_role,
        'activ'
   from generate_series(1, 12) n;
 

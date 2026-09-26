@@ -16,7 +16,7 @@ insert into auth.users (id, email) values
   ('31500000-0000-0000-0000-000000000001', 'umbrella-actor-315@test.local');
 insert into public.profiles (id, full_name, email, role, status) values
   ('31500000-0000-0000-0000-000000000001', 'Umbrella Actor 315',
-   'umbrella-actor-315@test.local', 'responsabil', 'activ');
+   'umbrella-actor-315@test.local', 'vot', 'activ');
 
 -- ==================== schema ====================
 select has_column('public', 'tasks', 'kind',

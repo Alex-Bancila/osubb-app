@@ -1569,36 +1569,36 @@ export type Database = {
           actor_kind: string
           changed_by: string | null
           created_at: string
-          from_role: Database["public"]["Enums"]["member_role"]
+          from_role: string
           from_status: Database["public"]["Enums"]["member_status"] | null
           id: number
           member_id: string
           reason: string
-          to_role: Database["public"]["Enums"]["member_role"]
+          to_role: string
           to_status: Database["public"]["Enums"]["member_status"] | null
         }
         Insert: {
           actor_kind: string
           changed_by?: string | null
           created_at?: string
-          from_role: Database["public"]["Enums"]["member_role"]
+          from_role: string
           from_status?: Database["public"]["Enums"]["member_status"] | null
           id?: never
           member_id: string
           reason: string
-          to_role: Database["public"]["Enums"]["member_role"]
+          to_role: string
           to_status?: Database["public"]["Enums"]["member_status"] | null
         }
         Update: {
           actor_kind?: string
           changed_by?: string | null
           created_at?: string
-          from_role?: Database["public"]["Enums"]["member_role"]
+          from_role?: string
           from_status?: Database["public"]["Enums"]["member_status"] | null
           id?: never
           member_id?: string
           reason?: string
-          to_role?: Database["public"]["Enums"]["member_role"]
+          to_role?: string
           to_status?: Database["public"]["Enums"]["member_status"] | null
         }
         Relationships: [
@@ -4448,7 +4448,6 @@ export type Database = {
         | "voluntar"
         | "activ"
         | "vot"
-        | "responsabil"
         | "bce"
         | "bc"
         | "moderator"
@@ -4605,7 +4604,6 @@ export const Constants = {
         "voluntar",
         "activ",
         "vot",
-        "responsabil",
         "bce",
         "bc",
         "moderator",

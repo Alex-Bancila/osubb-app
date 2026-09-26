@@ -33,7 +33,7 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'Ana Test',    'ana.points@test.local',    'voluntar'),
   ('bbbbbbbb-0000-0000-0000-000000000002', 'Bogdan Test', 'bogdan.points@test.local', 'voluntar'),
-  ('cccccccc-0000-0000-0000-000000000003', 'Carmen Test', 'carmen.points@test.local', 'responsabil');
+  ('cccccccc-0000-0000-0000-000000000003', 'Carmen Test', 'carmen.points@test.local', 'vot');
 
 -- Own throwaway department so dept_cup assertions stay exact even after
 -- Epic 5.2 seeds demo members into the real departments.

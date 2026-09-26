@@ -140,7 +140,7 @@ insert into fx_persona (code, id, role, status, dept_id) values
   ('voluntar_out',        '31800000-0000-0000-0000-000000000006', 'voluntar',    'activ',   'fin'),
   ('activ_out',           '31800000-0000-0000-0000-000000000007', 'activ',       'activ',   'fin'),
   ('vot_out',             '31800000-0000-0000-0000-000000000008', 'vot',         'activ',   'fin'),
-  ('responsabil',         '31800000-0000-0000-0000-000000000009', 'responsabil', 'activ',   'edu'),
+  ('vot',         '31800000-0000-0000-0000-000000000009', 'vot', 'activ',   'edu'),
   ('bce_local',           '31800000-0000-0000-0000-000000000010', 'bce',         'activ',   'edu'),
   ('bce_foreign',         '31800000-0000-0000-0000-000000000011', 'bce',         'activ',   'fin'),
   ('bc',                  '31800000-0000-0000-0000-000000000012', 'bc',          'activ',   null),
@@ -524,7 +524,7 @@ update public.tasks set queue_closed_at = null where id = pg_temp.task_id('G-org
 -- 0-3 in `edu`. Under the legacy task_write FOR ALL policy this JWT read
 -- every Task.
 reset role;
-select pg_temp.login_as('responsabil');
+select pg_temp.login_as('vot');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['D-loc-open'],
   'Responsabil (level 4) in the Department: reads like levels 0-3');

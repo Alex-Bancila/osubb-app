@@ -166,7 +166,7 @@ insert into auth.users (id, email) values
 insert into public.profiles (id, full_name, email, role) values
   ('31700000-0000-0000-0000-000000000001', 'Ledger One 317', 'ledger-one-317@test.local', 'voluntar'),
   ('31700000-0000-0000-0000-000000000002', 'Ledger Two 317', 'ledger-two-317@test.local', 'voluntar'),
-  ('31700000-0000-0000-0000-000000000003', 'Ledger Three 317', 'ledger-three-317@test.local', 'responsabil');
+  ('31700000-0000-0000-0000-000000000003', 'Ledger Three 317', 'ledger-three-317@test.local', 'vot');
 
 -- #317 must leave sanctions alone: they carry no task_id, so the backfill
 -- (which only ever touches `reason = 'task'` rows) has nothing to bind them

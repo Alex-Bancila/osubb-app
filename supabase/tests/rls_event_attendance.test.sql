@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(26);
 
 
 -- ==================== Structure and grants ====================
@@ -48,7 +48,7 @@ insert into auth.users (id, email) values
 insert into profiles (id, full_name, email, role, status) values
   ('a1000000-0000-0000-0000-000000000063', 'Ana Voluntar', 'ana.attendance@test.local', 'voluntar', 'activ'),
   ('b2000000-0000-0000-0000-000000000063', 'Bogdan Voluntar', 'bogdan.attendance@test.local', 'voluntar', 'activ'),
-  ('c3000000-0000-0000-0000-000000000063', 'Corina Responsabil', 'corina.manager@test.local', 'responsabil', 'activ'),
+  ('c3000000-0000-0000-0000-000000000063', 'Corina Responsabil', 'corina.manager@test.local', 'vot', 'activ'),
   ('d4000000-0000-0000-0000-000000000063', 'Dan Dezactivat', 'dan.deactivated@test.local', 'voluntar', 'inactiv');
 
 insert into pg_temp.fixture_member_departments (member_id, dept_id) values
@@ -62,8 +62,8 @@ insert into pg_temp.fixture_member_departments (member_id, dept_id) values
 -- 'RSVP imagine' carries min_level 3 (#519 retires min_level 4) specifically
 -- to stay the one Event hidden from a level-1 Voluntar below (the fixture
 -- this file needs for "a member cannot RSVP to an event hidden by event
--- RLS"); it is still level >= 4 (Corina, min_level 0/0/4) that reads every
--- attendance row.
+-- RLS"); since #593 it is level >= 5 (Corina with a level-5 token) that reads
+-- every attendance row, and a stale level-4 token reads only its own.
 insert into events (title, type, group_id, min_level, starts_at) values
   ('RSVP organizație', 'sedinta', pg_temp.dept_group('org'), 0, now() + interval '1 day'),
   ('RSVP educațional', 'sedinta', pg_temp.dept_group('edu'), 0, now() + interval '2 days'),
@@ -143,16 +143,12 @@ select throws_ok(
 
 reset role;
 
--- ==================== Manager: read all, never rewrite a colleague ====================
-select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', jsonb_build_object(
-    'member_role', 'responsabil',
-    'member_level', 4,
-    'dept_ids', '["edu"]'::jsonb,
-    'team_ids', '[]'::jsonb
-  ));
-
-select is((select count(*) from event_attendance), 4::bigint,
-  'level >= 4 reads attendance across all visible events');
+-- Level 4 no longer grants colleague attendance visibility, even in a stale token.
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":4}');
+select is((select count(*) from event_attendance),0::bigint,'level 4 cannot read colleague attendance');
+reset role;
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
+select is((select count(*) from event_attendance),4::bigint,'level 5 reads attendance across visible events');
 
 update event_attendance set status = 'going'
  where member_id = 'b2000000-0000-0000-0000-000000000063'

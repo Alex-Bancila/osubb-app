@@ -68,7 +68,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('26200000-0000-0000-0000-000000000001', 'Matrix Voluntar', 'matrix.voluntar@test.local', 'voluntar', 'activ'),
   ('26200000-0000-0000-0000-000000000002', 'Matrix Activ', 'matrix.activ@test.local', 'activ', 'activ'),
   ('26200000-0000-0000-0000-000000000003', 'Matrix Vot', 'matrix.vot@test.local', 'vot', 'activ'),
-  ('26200000-0000-0000-0000-000000000004', 'Matrix Responsabil', 'matrix.responsabil@test.local', 'responsabil', 'activ'),
+  ('26200000-0000-0000-0000-000000000004', 'Matrix Responsabil', 'matrix.responsabil@test.local', 'vot', 'activ'),
   ('26200000-0000-0000-0000-000000000005', 'Matrix BCE', 'matrix.bce@test.local', 'bce', 'activ'),
   ('26200000-0000-0000-0000-000000000006', 'Matrix BC', 'matrix.bc@test.local', 'bc', 'activ'),
   ('26200000-0000-0000-0000-000000000009', 'Matrix Moderator', 'matrix.moderator@test.local', 'moderator', 'activ'),
