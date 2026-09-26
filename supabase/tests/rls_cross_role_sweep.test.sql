@@ -5,7 +5,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(36);
 
 create function pg_temp.u67(n integer) returns uuid language sql immutable as $$
   select ('67000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -95,6 +95,8 @@ select throws_ok($$select public.mark_task_unfulfilled(pg_temp.t67('responsible'
 -- Positive controls ensure the same valid calls reach the authority boundary.
 select lives_ok($$select public.cancel_task(pg_temp.t67('private-peer'), 'Ordinary work')$$,
   'Responsible can manage ordinary Member work');
+select is((select status::text from tasks where id = pg_temp.t67('private-peer')),
+  'cancelled', 'the Responsible cancellation actually changes the Task');
 reset role;
 
 -- Two generations of inheritance, with no explicit descendant membership.
@@ -113,8 +115,12 @@ select is((select status::text from tasks where id = pg_temp.t67('descendant')),
   'unfulfilled', 'the inherited evaluation actually changes the Task');
 select lives_ok($$select public.cancel_task(pg_temp.t67('manager'), 'Manager decision')$$,
   'Group Manager may manage their own Task');
+select is((select status::text from tasks where id = pg_temp.t67('manager')),
+  'cancelled', 'the Manager cancellation actually changes the Task');
 select lives_ok($$select public.mark_task_unfulfilled(pg_temp.t67('responsible'), 3, 3, 'Manager review')$$,
   'Group Manager may evaluate the Responsible Task refused above');
+select is((select status::text from tasks where id = pg_temp.t67('responsible')),
+  'unfulfilled', 'the Manager evaluation actually changes the Task');
 reset role;
 
 -- Below Minimum Level: Group, Opportunity and Event must disappear together.
@@ -136,6 +142,12 @@ select is((select count(*) from tasks where id = pg_temp.t67('opportunity')),
   1::bigint, 'ordinary Member at Minimum Level sees the Group''s local Opportunity');
 select is((select count(*) from events where title = 'Event #67'),
   1::bigint, 'ordinary Member at Minimum Level sees the future Event');
+-- The command refused above by id succeeds for a caller at the Minimum Level.
+select lives_ok($$select public.express_task_interest(pg_temp.t67('opportunity'))$$,
+  'ordinary Member at Minimum Level may express interest in the local Opportunity');
+select is((select count(*) from task_candidates
+            where task_id = pg_temp.t67('opportunity') and member_id = pg_temp.u67(7)),
+  1::bigint, 'the expressed interest actually records the Candidate');
 reset role;
 -- R26 (#794): an organization-wide Opportunity leaves the Minimum Level gate.
 update tasks set audience = 'org' where id = pg_temp.t67('opportunity');
