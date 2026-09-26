@@ -21,7 +21,10 @@ function SessionScreen({
   return (
     <main className="h-dvh overflow-y-auto bg-background px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:pt-[min(12vh,6rem)]">
       <Card
-        className={cn('mx-auto shadow-md', wide ? 'max-w-3xl' : 'max-w-md')}
+        className={cn(
+          'mx-auto shadow-md',
+          wide ? 'max-w-[40rem] sm:[--card-spacing:--spacing(8)]' : 'max-w-md',
+        )}
       >
         <CardContent
           className={cn(
@@ -52,7 +55,7 @@ function SessionScreen({
         <footer
           className={cn(
             'mx-auto mt-4 text-center text-sm text-muted-foreground',
-            wide ? 'max-w-3xl' : 'max-w-md',
+            wide ? 'max-w-[40rem]' : 'max-w-md',
           )}
         >
           {footer}

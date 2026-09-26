@@ -85,9 +85,11 @@ it('shows the notice and nothing of the app to a Member who never acknowledged i
     }),
   ).toBeVisible();
   expect(screen.queryByRole('heading', { name: 'Acasă' })).toBeNull();
-  // One button, and no way around it.
+  // One button, and no way around it: the only links write to the notice's
+  // contact address; none leads into the app.
   expect(screen.getAllByRole('button')).toHaveLength(1);
-  expect(screen.queryAllByRole('link')).toHaveLength(0);
+  for (const link of screen.queryAllByRole('link'))
+    expect(link).toHaveAttribute('href', 'mailto:it@osubb.ro');
 });
 
 it('asks again when the Member acknowledged only an older version', async () => {
