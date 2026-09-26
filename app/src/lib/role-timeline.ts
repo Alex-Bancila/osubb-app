@@ -9,6 +9,9 @@
  *    current Role (`profiles.role` is the truth for "now").
  *  - A change dated before `joined_at` is clamped to it, so no segment ends
  *    before it starts.
+ *  - Every boundary is a calendar day: `created_at` (an instant) is read as
+ *    its day in Europe/Bucharest, like `joined_at`, so durations and dates do
+ *    not shift with the device's timezone.
  *  - A null `joined_at` degrades to the current Role only: no dates, no
  *    durations — the caller shows "Membru din <joined_year>" instead.
  *
@@ -17,6 +20,7 @@
  * both shapes render the same way.
  */
 
+import { bucharestDayKey } from './calendar-time';
 import { parseLocalDate } from './format';
 
 /** One `role_history` row as the timeline reads it. */
@@ -62,8 +66,11 @@ export function buildRoleSegments(
   const joinDate = parseLocalDate(joinedAt);
   const changes = rows
     .filter((row) => row.from_role !== row.to_role)
-    .map((row) => ({ row, at: new Date(row.created_at) }))
-    .sort((a, b) => a.at.getTime() - b.at.getTime());
+    .flatMap((row) => {
+      const at = parseLocalDate(bucharestDayKey(row.created_at));
+      return at ? [{ row, at, instant: Date.parse(row.created_at) }] : [];
+    })
+    .sort((a, b) => a.instant - b.instant);
 
   const first = changes[0];
   if (!joinDate || !first) {

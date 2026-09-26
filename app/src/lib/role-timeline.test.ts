@@ -44,12 +44,12 @@ describe('buildRoleSegments', () => {
       {
         role: 'recrut',
         startDate: new Date(2025, 9, 1),
-        endDate: new Date('2026-02-01T10:00:00Z'),
+        endDate: new Date(2026, 1, 1),
         openedBy: null,
       },
       {
         role: 'voluntar',
-        startDate: new Date('2026-02-01T10:00:00Z'),
+        startDate: new Date(2026, 1, 1),
         endDate: null,
         openedBy: { kind: 'human', memberId: 'bc-1' },
       },
@@ -68,10 +68,10 @@ describe('buildRoleSegments', () => {
       'activ',
     ]);
     expect(segments[0]?.startDate).toEqual(new Date(2025, 9, 1));
-    expect(segments[0]?.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[1]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[1]?.endDate).toEqual(new Date('2026-06-01T10:00:00Z'));
-    expect(segments[2]?.startDate).toEqual(new Date('2026-06-01T10:00:00Z'));
+    expect(segments[0]?.endDate).toEqual(new Date(2026, 1, 1));
+    expect(segments[1]?.startDate).toEqual(new Date(2026, 1, 1));
+    expect(segments[1]?.endDate).toEqual(new Date(2026, 5, 1));
+    expect(segments[2]?.startDate).toEqual(new Date(2026, 5, 1));
     expect(segments[2]?.endDate).toBeNull();
     expect(segments[2]?.openedBy).toEqual({
       kind: 'automatic',
@@ -80,6 +80,22 @@ describe('buildRoleSegments', () => {
     expect(
       segments.map((s) => formatRoleDuration(s.startDate, s.endDate)),
     ).toEqual(['4 luni', '4 luni', null]);
+  });
+
+  it('reads created_at as its calendar day in Bucharest', () => {
+    // 22:30 UTC on 31 January is 00:30 on 1 February in Romania.
+    const segments = buildRoleSegments('2025-10-01', 'voluntar', [
+      change('recrut', 'voluntar', '2026-01-31T22:30:00Z'),
+    ]);
+
+    expect(segments[0]?.endDate).toEqual(new Date(2026, 1, 1));
+    expect(segments[1]?.startDate).toEqual(new Date(2026, 1, 1));
+    expect(
+      formatRoleDuration(
+        segments[0]?.startDate ?? null,
+        segments[0]?.endDate ?? null,
+      ),
+    ).toBe('4 luni');
   });
 
   it('orders rows by created_at whatever order they arrive in', () => {
@@ -139,7 +155,7 @@ describe('buildRoleSegments', () => {
     expect(segments[0]?.startDate).toEqual(joined);
     expect(segments[0]?.endDate).toEqual(joined);
     expect(segments[1]?.startDate).toEqual(joined);
-    expect(segments[1]?.endDate).toEqual(new Date('2026-03-01T10:00:00Z'));
+    expect(segments[1]?.endDate).toEqual(new Date(2026, 2, 1));
     for (const s of segments) {
       if (s.startDate && s.endDate) {
         expect(s.endDate.getTime()).toBeGreaterThanOrEqual(
