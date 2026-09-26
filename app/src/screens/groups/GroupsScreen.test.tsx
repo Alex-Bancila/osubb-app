@@ -133,6 +133,16 @@ it('lists only eligible active Groups and searches by name, with their first anc
   await userEvent.type(screen.getByRole('searchbox'), 'inexistent');
   expect(screen.getByRole('status')).toHaveTextContent('Nu sunt grupuri');
 });
+it('names the topmost ancestor the Member can read when the root is hidden', () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(2, 'Echipa Evenimente', { parent_id: 1, path: [1, 2] }),
+      group(7, 'Subechipa', { parent_id: 2, path: [1, 2, 7] }),
+    ]),
+  );
+  list();
+  expect(screen.getByText(/Echipă · Echipa Evenimente/)).toBeInTheDocument();
+});
 it('applies in a dialog and renders the pending server state with withdrawal', async () => {
   const view = list();
   const user = userEvent.setup();

@@ -155,7 +155,7 @@ export async function fetchGroupRoster(
     readAllRows((from, to) =>
       supabase
         .from('profiles_directory')
-        .select('id, full_name, nickname, status, avatar_color, role')
+        .select('id, full_name, status, avatar_color, role')
         .order('id')
         .range(from, to),
     ),
@@ -175,7 +175,7 @@ export async function fetchGroupRoster(
       const role = profile?.role ? roleById.get(profile.role) : undefined;
       return {
         memberId: row.member_id,
-        name: profile?.nickname ?? profile?.full_name ?? 'Membru',
+        name: profile?.full_name ?? 'Membru',
         avatarColor: profile?.avatar_color ?? null,
         groupRole: asGroupRole(row.group_role),
         positionTitle: row.position_title,
@@ -214,7 +214,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
     readAllRows((from, to) =>
       supabase
         .from('profiles_directory')
-        .select('id, full_name, nickname, status, avatar_color, role')
+        .select('id, full_name, status, avatar_color, role')
         .order('id')
         .range(from, to),
     ),
@@ -234,7 +234,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
       return [
         {
           memberId: profile.id,
-          name: profile.nickname ?? profile.full_name ?? 'Membru',
+          name: profile.full_name ?? 'Membru',
           avatarColor: profile.avatar_color,
           status: profile.status ?? '—',
           roleId: profile.role,
