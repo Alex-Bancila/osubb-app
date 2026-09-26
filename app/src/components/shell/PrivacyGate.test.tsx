@@ -1,5 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+  focusManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 
@@ -9,6 +13,7 @@ const db = vi.hoisted(() => ({
   version: '1.0' as string | null,
   acknowledged: [] as string[],
   settingsError: null as Error | null,
+  settingsReads: 0,
   rpc: vi.fn(),
 }));
 vi.mock('../../lib/supabase', () => {
@@ -21,6 +26,7 @@ vi.mock('../../lib/supabase', () => {
         return chain;
       },
       maybeSingle: async () => {
+        if (table === 'org_settings') db.settingsReads += 1;
         if (table === 'org_settings')
           return db.settingsError
             ? { data: null, error: db.settingsError }
@@ -65,6 +71,7 @@ beforeEach(() => {
   db.version = '1.0';
   db.acknowledged = [];
   db.settingsError = null;
+  db.settingsReads = 0;
   db.rpc.mockReset();
 });
 
@@ -175,4 +182,35 @@ it('does not let the Member past when the check cannot be read', async () => {
   db.acknowledged = ['1.0'];
   await user.click(screen.getByRole('button', { name: 'Încearcă din nou' }));
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
+});
+
+it('asks again, without a new sign-in, when BC raises the version while the app is open', async () => {
+  db.acknowledged = ['1.0'];
+  show();
+  expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
+
+  db.version = '1.1';
+  act(() => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  expect(await screen.findByRole('button', BUTTON)).toBeVisible();
+  expect(screen.queryByRole('heading', { name: 'Acasă' })).toBeNull();
+  focusManager.setFocused(undefined);
+});
+
+it('keeps the app open when a background re-read fails', async () => {
+  db.acknowledged = ['1.0'];
+  show();
+  expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
+
+  db.settingsError = new Error('offline');
+  act(() => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  await waitFor(() => expect(db.settingsReads).toBeGreaterThan(1));
+  expect(screen.getByRole('heading', { name: 'Acasă' })).toBeVisible();
+  expect(screen.queryByRole('alert')).toBeNull();
+  focusManager.setFocused(undefined);
 });

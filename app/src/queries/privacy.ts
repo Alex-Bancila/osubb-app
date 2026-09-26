@@ -57,9 +57,12 @@ export function usePrivacyGate() {
   return useQuery({
     queryKey: keys.privacy.gate(memberId),
     queryFn: memberId ? () => fetchPrivacyGate(memberId) : skipToken,
-    // Fresh for five minutes, then re-read when the Member comes back to the
-    // tab: a bump by BC asks again without waiting for the next sign-in.
+    // A bump by BC must reach a Member who never signs out and never leaves
+    // the tab: re-read on every return to the tab and every fifteen minutes
+    // while it stays open (one small read; the gate itself never remounts).
     staleTime: 5 * 60_000,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 15 * 60_000,
   });
 }
 
@@ -166,6 +169,8 @@ export async function fetchMemberAcknowledgement(
     .select('notice_version, acknowledged_at')
     .eq('member_id', memberId)
     .order('acknowledged_at', { ascending: false })
+    // Same tie-break as privacy_acknowledgement_status().
+    .order('notice_version', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;

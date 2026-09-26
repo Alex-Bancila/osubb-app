@@ -34,7 +34,9 @@ export function PrivacyGate({ children }: { children: ReactElement }) {
       </SessionScreen>
     );
 
-  if (gate.isError)
+  // A failed background re-read keeps the last answer: a dropped connection
+  // must not throw a Member who already acknowledged out of the app.
+  if (gate.data === undefined)
     return (
       <SessionScreen>
         <h1 className="text-2xl leading-tight font-extrabold tracking-tight">

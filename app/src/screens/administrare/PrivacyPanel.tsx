@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
+import { MemberName } from '../../components/member/MemberName';
+import { memberDisplayName } from '../../components/member/member-identity';
 import { Button } from '../../components/ui/button';
 import { formatMemberCount } from '../../lib/format';
-import { useAppointableMembers } from '../../queries/groups-admin';
+import { useMemberIdentities } from '../../queries/member-identities';
 import {
   acknowledgementLabel,
   missingAcknowledgements,
@@ -17,24 +19,28 @@ import {
  */
 export function PrivacyPanel() {
   const status = usePrivacyStatus();
-  const members = useAppointableMembers();
-  const names = useMemo(
-    () => new Map((members.data ?? []).map((row) => [row.memberId, row.name])),
-    [members.data],
+  const unacknowledged = useMemo(
+    () => (status.data ? missingAcknowledgements(status.data) : []),
+    [status.data],
   );
-  const missing = useMemo(
-    () =>
-      status.data
-        ? missingAcknowledgements(status.data).sort((left, right) =>
-            (names.get(left.memberId) ?? '').localeCompare(
-              names.get(right.memberId) ?? '',
-              'ro',
-            ),
-          )
-        : [],
-    [status.data, names],
+  // Names as Member Card buttons (Nickname first, R5): one directory read.
+  const members = useMemberIdentities(
+    unacknowledged.map((row) => row.memberId),
   );
+  const missing = useMemo(() => {
+    const name = (memberId: string) => {
+      const identity = members.data?.get(memberId);
+      return identity
+        ? memberDisplayName(identity.nickname, identity.fullName)
+        : '';
+    };
+    return [...unacknowledged].sort((left, right) =>
+      name(left.memberId).localeCompare(name(right.memberId), 'ro'),
+    );
+  }, [unacknowledged, members.data]);
   const version = status.data?.currentVersion;
+  // No ids means no directory read at all (the query is skipped, not loading).
+  const namesPending = unacknowledged.length > 0 && members.isPending;
 
   return (
     <section
@@ -54,7 +60,7 @@ export function PrivacyPanel() {
           consimțământ: arată doar că au fost informați.
         </p>
       </div>
-      {status.isPending || members.isPending ? (
+      {status.isPending || namesPending ? (
         <p role="status">Se încarcă confirmările…</p>
       ) : status.isError || members.isError ? (
         <div role="alert" className="space-y-3">
@@ -63,7 +69,7 @@ export function PrivacyPanel() {
             variant="outline"
             onClick={() => {
               void status.refetch();
-              void members.refetch();
+              if (members.isError) void members.refetch();
             }}
           >
             Încearcă din nou
@@ -83,16 +89,26 @@ export function PrivacyPanel() {
                 key={row.memberId}
                 className="flex flex-wrap items-center justify-between gap-2 py-2"
               >
-                <Link
-                  className="font-medium underline-offset-4 hover:underline"
-                  to={`/administrare/membri/${row.memberId}`}
-                >
-                  {names.get(row.memberId) ?? 'Membru'}
-                </Link>
-                <span className="text-sm text-muted-foreground">
-                  {row.noticeVersion
-                    ? `ultima confirmare: ${acknowledgementLabel(row)}`
-                    : 'neconfirmată'}
+                <MemberName
+                  {...(members.data?.get(row.memberId) ?? {
+                    memberId: row.memberId,
+                    fullName: 'Membru OSUBB',
+                  })}
+                  showFullName
+                  size="sm"
+                />
+                <span className="flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
+                  <span>
+                    {row.noticeVersion
+                      ? `ultima confirmare: ${acknowledgementLabel(row)}`
+                      : 'neconfirmată'}
+                  </span>
+                  <Link
+                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4"
+                    to={`/administrare/membri/${row.memberId}`}
+                  >
+                    Pagina membrului
+                  </Link>
                 </span>
               </li>
             ))}

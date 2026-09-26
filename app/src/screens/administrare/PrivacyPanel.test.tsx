@@ -24,17 +24,14 @@ vi.mock('../../lib/supabase', () => {
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: 'bc-1' } } }),
 }));
-vi.mock('../../queries/groups-admin', () => ({
-  useAppointableMembers: () => ({
-    isPending: false,
-    isError: false,
-    data: [
-      { memberId: 'ana', name: 'Ana Pop' },
-      { memberId: 'bogdan', name: 'Bogdan Ionescu' },
-      { memberId: 'carmen', name: 'Carmen Dan' },
-    ],
-  }),
+const identities = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/member-identities', () => ({
+  useMemberIdentities: identities,
 }));
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
 import { formatMemberCount } from '../../lib/format';
 import { PrivacyPanel } from './PrivacyPanel';
 
@@ -67,6 +64,20 @@ beforeEach(() => {
     },
   ];
   api.rpc.mockImplementation(async () => ({ data: api.rows, error: null }));
+  identities.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: new Map([
+      [
+        'bogdan',
+        { memberId: 'bogdan', nickname: null, fullName: 'Bogdan Ionescu' },
+      ],
+      [
+        'carmen',
+        { memberId: 'carmen', nickname: 'Ada', fullName: 'Carmen Dan' },
+      ],
+    ]),
+  });
 });
 
 it('lists the Members without the current version, with a count', async () => {
@@ -77,14 +88,23 @@ it('lists the Members without the current version, with a count', async () => {
   expect(api.rpc).toHaveBeenCalledWith('privacy_acknowledgement_status');
 
   const items = within(screen.getByRole('list')).getAllByRole('listitem');
+  const bogdan = items[1] as HTMLElement;
+  // Sorted by the name shown: Carmen's Nickname "Ada" comes before Bogdan
+  // (each row starts with the avatar's initials).
   expect(items.map((item) => item.textContent)).toEqual([
-    'Bogdan Ionescuneconfirmată',
-    'Carmen Danultima confirmare: v1.0 · 20 septembrie 2026',
+    'CDAdaCarmen Danultima confirmare: v1.0 · 20 septembrie 2026Pagina membrului',
+    'BIBogdan IonescuneconfirmatăPagina membrului',
   ]);
-  expect(screen.getByRole('link', { name: 'Bogdan Ionescu' })).toHaveAttribute(
-    'href',
-    '/administrare/membri/bogdan',
-  );
+  // The name opens the Member Card; the page link sits beside it.
+  expect(
+    within(bogdan).getByRole('button', {
+      name: 'Profilul membrului Bogdan Ionescu',
+    }),
+  ).toBeVisible();
+  expect(
+    within(bogdan).getByRole('link', { name: 'Pagina membrului' }),
+  ).toHaveAttribute('href', '/administrare/membri/bogdan');
+  expect(identities).toHaveBeenLastCalledWith(['bogdan', 'carmen']);
   // Ana acknowledged 1.1, the current version: not on the list.
   expect(screen.queryByText('Ana Pop')).toBeNull();
   expect(screen.getByText(/\(v1\.1\)/)).toBeVisible();
