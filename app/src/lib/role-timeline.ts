@@ -51,7 +51,7 @@ export function buildRoleSegments(
   const segments: RoleSegment[] = [];
 
   // First segment: role is the earliest row's from_role, starts at joined_at
-  const firstRow = rows[0]!;
+  const firstRow = rows[0]; if (!firstRow) return [];
   const firstRowDate = new Date(firstRow.created_at);
   const firstStart =
     joinDate && joinDate < firstRowDate ? joinDate : joinDate ?? firstRowDate;
@@ -64,7 +64,7 @@ export function buildRoleSegments(
 
   // Middle segments: each row starts a new segment
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!;
+    const row = rows[i]; if (!row) continue;
     const rowDate = new Date(row.created_at);
     const nextRow = rows[i + 1];
     const nextDate = nextRow ? new Date(nextRow.created_at) : null;

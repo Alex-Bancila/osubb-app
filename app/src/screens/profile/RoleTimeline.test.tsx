@@ -110,7 +110,7 @@ describe('RoleTimeline', () => {
     // Should show "Voluntar din ..." (the current role with a start date)
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(1);
-    expect(items[0]!.textContent).toMatch(/Voluntar din/);
+    expect(items[0]?.textContent).toMatch(/Voluntar din/);
   });
 
   it('a Member with two changes sees three segments with Romanian durations', () => {
@@ -136,13 +136,13 @@ describe('RoleTimeline', () => {
     expect(items).toHaveLength(3);
 
     // First segment: Recrut with duration
-    expect(items[0]!.textContent).toMatch(/Recrut timp de/);
+    expect(items[0]?.textContent).toMatch(/Recrut timp de/);
 
     // Second segment: Voluntar with duration
-    expect(items[1]!.textContent).toMatch(/Voluntar timp de/);
+    expect(items[1]?.textContent).toMatch(/Voluntar timp de/);
 
     // Third segment: Voluntar Activ din ...
-    expect(items[2]!.textContent).toMatch(/Voluntar Activ din/);
+    expect(items[2]?.textContent).toMatch(/Voluntar Activ din/);
   });
 
   it('a null joined_at degrades to the current Role only, no dates', () => {
@@ -156,7 +156,7 @@ describe('RoleTimeline', () => {
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(1);
     // No "din" — just the role name
-    expect(items[0]!.textContent).toBe('Voluntar');
+    expect(items[0]?.textContent).toBe('Voluntar');
   });
 
   it('resolves role display names from useRoles()', () => {
@@ -175,7 +175,7 @@ describe('RoleTimeline', () => {
 
     const items = screen.getAllByRole('listitem');
     // Should use "Recrut" and "Voluntar Activ" — the display names, not the enum values
-    expect(items[0]!.textContent).toMatch(/Recrut/);
-    expect(items[1]!.textContent).toMatch(/Voluntar Activ/);
+    expect(items[0]?.textContent).toMatch(/Recrut/);
+    expect(items[1]?.textContent).toMatch(/Voluntar Activ/);
   });
 });

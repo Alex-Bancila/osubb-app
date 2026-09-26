@@ -16,9 +16,9 @@ describe('buildRoleSegments', () => {
     const segments = buildRoleSegments('2025-10-01', 'voluntar', []);
 
     expect(segments).toHaveLength(1);
-    expect(segments[0]!.role).toBe('voluntar');
-    expect(segments[0]!.startDate).toEqual(new Date(2025, 9, 1));
-    expect(segments[0]!.endDate).toBeNull();
+    expect(segments[0]?.role).toBe('voluntar');
+    expect(segments[0]?.startDate).toEqual(new Date(2025, 9, 1));
+    expect(segments[0]?.endDate).toBeNull();
   });
 
   it('one row → two segments with correct boundaries', () => {
@@ -35,14 +35,14 @@ describe('buildRoleSegments', () => {
     expect(segments).toHaveLength(2);
 
     // First segment: Recrut from joined_at to the row date
-    expect(segments[0]!.role).toBe('recrut');
-    expect(segments[0]!.startDate).toEqual(new Date(2025, 9, 1));
-    expect(segments[0]!.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
+    expect(segments[0]?.role).toBe('recrut');
+    expect(segments[0]?.startDate).toEqual(new Date(2025, 9, 1));
+    expect(segments[0]?.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
 
     // Second segment: Voluntar from the row date, open
-    expect(segments[1]!.role).toBe('voluntar');
-    expect(segments[1]!.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[1]!.endDate).toBeNull();
+    expect(segments[1]?.role).toBe('voluntar');
+    expect(segments[1]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
+    expect(segments[1]?.endDate).toBeNull();
   });
 
   it('two rows → three segments with correct boundaries and durations', () => {
@@ -63,26 +63,26 @@ describe('buildRoleSegments', () => {
 
     expect(segments).toHaveLength(3);
 
-    expect(segments[0]!.role).toBe('recrut');
-    expect(segments[0]!.startDate).toEqual(new Date(2025, 9, 1));
-    expect(segments[0]!.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
+    expect(segments[0]?.role).toBe('recrut');
+    expect(segments[0]?.startDate).toEqual(new Date(2025, 9, 1));
+    expect(segments[0]?.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
 
-    expect(segments[1]!.role).toBe('voluntar');
-    expect(segments[1]!.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[1]!.endDate).toEqual(new Date('2026-06-01T10:00:00Z'));
+    expect(segments[1]?.role).toBe('voluntar');
+    expect(segments[1]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
+    expect(segments[1]?.endDate).toEqual(new Date('2026-06-01T10:00:00Z'));
 
-    expect(segments[2]!.role).toBe('activ');
-    expect(segments[2]!.startDate).toEqual(new Date('2026-06-01T10:00:00Z'));
-    expect(segments[2]!.endDate).toBeNull();
+    expect(segments[2]?.role).toBe('activ');
+    expect(segments[2]?.startDate).toEqual(new Date('2026-06-01T10:00:00Z'));
+    expect(segments[2]?.endDate).toBeNull();
   });
 
   it('null joined_at and no rows → current Role only, no dates', () => {
     const segments = buildRoleSegments(null, 'voluntar', []);
 
     expect(segments).toHaveLength(1);
-    expect(segments[0]!.role).toBe('voluntar');
-    expect(segments[0]!.startDate).toBeNull();
-    expect(segments[0]!.endDate).toBeNull();
+    expect(segments[0]?.role).toBe('voluntar');
+    expect(segments[0]?.startDate).toBeNull();
+    expect(segments[0]?.endDate).toBeNull();
   });
 
   it('null joined_at with rows → first segment starts at first row date', () => {
@@ -98,13 +98,13 @@ describe('buildRoleSegments', () => {
 
     expect(segments).toHaveLength(2);
     // Without joined_at, the first segment starts at the first row date
-    expect(segments[0]!.role).toBe('recrut');
-    expect(segments[0]!.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[0]!.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
+    expect(segments[0]?.role).toBe('recrut');
+    expect(segments[0]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
+    expect(segments[0]?.endDate).toEqual(new Date('2026-02-01T10:00:00Z'));
 
-    expect(segments[1]!.role).toBe('voluntar');
-    expect(segments[1]!.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
-    expect(segments[1]!.endDate).toBeNull();
+    expect(segments[1]?.role).toBe('voluntar');
+    expect(segments[1]?.startDate).toEqual(new Date('2026-02-01T10:00:00Z'));
+    expect(segments[1]?.endDate).toBeNull();
   });
 
   it('row dated before joined_at → first segment clamped to joined_at', () => {
@@ -120,8 +120,8 @@ describe('buildRoleSegments', () => {
 
     expect(segments).toHaveLength(2);
     // First segment starts at joined_at (clamped), not the row date
-    expect(segments[0]!.startDate).toEqual(new Date(2026, 0, 1));
-    expect(segments[0]!.endDate).toEqual(new Date('2025-12-01T10:00:00Z'));
+    expect(segments[0]?.startDate).toEqual(new Date(2026, 0, 1));
+    expect(segments[0]?.endDate).toEqual(new Date('2025-12-01T10:00:00Z'));
   });
 });
 

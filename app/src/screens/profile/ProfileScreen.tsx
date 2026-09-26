@@ -21,6 +21,7 @@ import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useMyGroups, useRoles } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
+import RoleTimeline from './RoleTimeline';
 import { JoiningSection } from './JoiningSection';
 import { PushDeviceCard } from './PushDeviceCard';
 
