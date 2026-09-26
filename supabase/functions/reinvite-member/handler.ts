@@ -18,7 +18,9 @@
 //   409 email_taken        another account already uses the new address
 //   409 already_confirmed  the address is confirmed without a sign-in (seed
 //                          data): the Member signs in from the login screen
-//   500 email_sync_failed  the two addresses could not be kept equal
+//   500 email_sync_failed  the new address was refused; nothing changed
+//   500 email_out_of_sync  the profile refused AND Auth could not be put
+//                          back: the two addresses differ until fixed by hand
 //   502 invite_failed      Auth could not send the email
 //
 // `invite-member` refuses an existing profile on purpose — that is what keeps
@@ -244,6 +246,14 @@ export async function handleReinvite(
               "ROLLBACK FAILED: auth.users.email and profiles.email differ",
               { memberId, auth: email, profile: profile.email },
               rollback.error,
+            );
+            // Not "nothing changed": the caller must know the two sides
+            // differ, or a retry would start from a state nobody expects.
+            return refusal(
+              "email_out_of_sync",
+              "Adresa s-a schimbat în Auth, dar nu și în profil. Trebuie corectată manual (docs/backend/inviting.md).",
+              500,
+              origin,
             );
           }
         }

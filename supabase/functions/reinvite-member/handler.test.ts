@@ -207,6 +207,23 @@ Deno.test("a profile that refuses the new address puts Auth back and sends nothi
   ]);
 });
 
+Deno.test("a failed rollback is reported as a divergence, never as nothing changed", async () => {
+  const { deps, calls } = fakeDeps({
+    profileEmailError: { code: "XX000", message: "boom" },
+    rollbackError: { message: "auth down", status: 500 },
+  });
+
+  const res = await handleReinvite(
+    request({ member_id: MEMBER, email: "corect@osubb.local" }),
+    deps,
+  );
+  const payload = await res.json();
+
+  assertEquals(res.status, 500);
+  assertEquals(payload.code, "email_out_of_sync");
+  assertEquals(calls.some((call) => call.startsWith("inviteByEmail")), false);
+});
+
 Deno.test("an address another profile holds is refused before Auth is touched", async () => {
   const { deps, calls } = fakeDeps({ emailTaken: true });
 

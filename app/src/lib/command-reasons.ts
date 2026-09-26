@@ -337,6 +337,10 @@ const REASON_COPY = new Map<string, string>([
     'Nu am putut schimba adresa, așa că nu s-a modificat nimic. Încearcă din nou.',
   ],
   [
+    'email_out_of_sync',
+    'Adresa s-a schimbat doar pe jumătate. Anunță coordonatorul IT: trebuie corectată manual.',
+  ],
+  [
     'invite_failed',
     'Invitația nu a putut fi trimisă. Încearcă din nou peste câteva minute.',
   ],
