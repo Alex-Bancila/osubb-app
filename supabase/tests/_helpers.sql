@@ -9,6 +9,10 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 \endif
 
+-- #590: historical fixture descriptions are transaction-local data only.
+-- Work and authority assertions always target the real native Group tables.
+\ir _group_fixture_data.psql
+
 create or replace function pg_temp.test_login(
   p_uid uuid,
   p_app_metadata jsonb
@@ -41,14 +45,14 @@ begin
            'member_role', profile.role,
            'member_level', role.level,
            'dept_ids', coalesce((
-             select jsonb_agg(membership.dept_id order by membership.dept_id)
-               from public.member_departments as membership
-              where membership.member_id = profile.id
+             select jsonb_agg(g.legacy_dept_id order by g.legacy_dept_id)
+               from public.group_members membership join public.groups g on g.id=membership.group_id
+              where membership.member_id=profile.id and g.legacy_dept_id is not null
            ), '[]'::jsonb),
            'team_ids', coalesce((
-             select jsonb_agg(membership.team_id order by membership.team_id)
-               from public.team_members as membership
-              where membership.member_id = profile.id
+             select jsonb_agg(g.legacy_team_id order by g.legacy_team_id)
+               from public.group_members membership join public.groups g on g.id=membership.group_id
+              where membership.member_id=profile.id and g.legacy_team_id is not null
            ), '[]'::jsonb),
            'group_ids', coalesce((
              select jsonb_agg(membership.group_id order by membership.group_id)
@@ -375,7 +379,7 @@ begin
   insert into public.groups(name,category,competes_in_cup,application_level,
                             manager_title,short,color,legacy_dept_id)
   select d.name,'department',d.kind='department',0,'BCE',d.short,d.color,d.id
-    from public.departments d
+    from pg_temp.fixture_departments d
    where not exists(select 1 from public.groups g where g.legacy_dept_id=d.id)
   on conflict (legacy_dept_id) do nothing;
 
@@ -383,7 +387,7 @@ begin
                             shared_work_visibility,manager_title,legacy_team_id)
   select t.name,'team',parent.id,0,true,
          case when t.dept_id is null then null else 'Coordonator' end,t.id
-    from public.teams t
+    from pg_temp.fixture_teams t
     left join public.groups parent on parent.legacy_dept_id=t.dept_id
    where t.id not in ('t-app','t-recruti','t-logistica')
      and not exists(select 1 from public.groups g where g.legacy_team_id=t.id)
@@ -392,7 +396,7 @@ begin
   insert into public.groups(name,category,application_level,manager_title,
                             status,legacy_project_id,created_by)
   select p.name,'project',0,'Coordonator Principal',p.status,p.id,p.created_by
-    from public.projects p
+    from pg_temp.fixture_projects p
    where not exists(select 1 from public.profiles creator
      where creator.id=p.created_by and creator.email like '%@demo.osubb')
      and not exists(select 1 from public.groups g where g.legacy_project_id=p.id)
@@ -401,7 +405,7 @@ begin
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,
          case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md
+    from pg_temp.fixture_member_departments md
     join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.dept_id <> 'org'
@@ -410,19 +414,19 @@ begin
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,tm.member_id,
          case when t.dept_id is null then 'responsible' else 'member' end
-    from public.team_members tm
-    join public.teams t on t.id=tm.team_id
+    from pg_temp.fixture_team_members tm
+    join pg_temp.fixture_teams t on t.id=tm.team_id
     join public.groups g on g.legacy_team_id=tm.team_id
   on conflict (group_id,member_id) do nothing;
 
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,p.leader_id,'manager'
-    from public.projects p
+    from pg_temp.fixture_projects p
     join public.groups g on g.legacy_project_id=p.id
   on conflict (group_id,member_id) do nothing;
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,pm.member_id,pm.project_role
-    from public.project_members pm
+    from pg_temp.fixture_project_members pm
     join public.groups g on g.legacy_project_id=pm.project_id
   on conflict (group_id,member_id) do nothing;
 end;
@@ -448,7 +452,7 @@ create or replace function pg_temp.project_group(p_project_id bigint) returns bi
 language sql stable security definer set search_path = '' as $function$
   select g.id from public.groups g where g.legacy_project_id=p_project_id
     union all select g.id from public.groups g
-      join public.projects p on p.name=g.name
+      join pg_temp.fixture_projects p on p.name=g.name
       where p.id=p_project_id
         and g.created_by='d0000000-0000-0000-0000-000000000007'
         and p.created_by=g.created_by
@@ -464,7 +468,7 @@ values ('e3670000-0000-0000-0000-000000000001', 'helpers.bce@test.local');
 insert into public.profiles (id, full_name, email, role, status)
 values ('e3670000-0000-0000-0000-000000000001', 'Helpers BCE',
         'helpers.bce@test.local', 'bce', 'activ');
-insert into public.member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
 values ('e3670000-0000-0000-0000-000000000001', 'edu');
 select pg_temp.materialize_legacy_groups();
 

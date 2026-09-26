@@ -12,9 +12,9 @@ select id,email,email,'voluntar'::public.member_role,'activ'::public.member_stat
 update public.profiles set role='bce' where id='16800000-0000-0000-0000-000000000001';
 update public.profiles set role='bc',status='inactiv' where id='16800000-0000-0000-0000-000000000004';
 update public.profiles set role='bc' where id='16800000-0000-0000-0000-000000000006';
-insert into public.member_departments(member_id,dept_id) values('16800000-0000-0000-0000-000000000001','edu');
-insert into public.teams(id,name,dept_id) values('m168-independent','M168 Independent',null);
-insert into public.team_members(team_id,member_id) values('m168-independent','16800000-0000-0000-0000-000000000002');
+insert into pg_temp.fixture_member_departments(member_id,dept_id) values('16800000-0000-0000-0000-000000000001','edu');
+insert into pg_temp.fixture_teams(id,name,dept_id) values('m168-independent','M168 Independent',null);
+insert into pg_temp.fixture_team_members(team_id,member_id) values('m168-independent','16800000-0000-0000-0000-000000000002');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
 

@@ -83,6 +83,16 @@ returns bigint language sql stable security definer set search_path = '' as $$
          end;
 $$;
 
+-- #590 retired these tables. Recreate only their historical key shape inside
+-- this rollback-only replay, so the old foreign keys can still be exercised.
+create table public.departments (id text primary key);
+insert into public.departments select distinct legacy_dept_id from public.groups where legacy_dept_id is not null;
+create table public.teams (id text primary key, name text, dept_id text, is_interne boolean, unique(id,dept_id));
+insert into public.teams(id,name,dept_id,is_interne)
+select g.legacy_team_id,g.name,parent.legacy_dept_id,false from public.groups g
+left join public.groups parent on parent.id=g.parent_id where g.legacy_team_id is not null;
+create table public.projects (id bigint generated always as identity primary key, name text, status text, leader_id uuid, created_by uuid);
+
 -- The legacy columns, backfilled from each row's own Group as the bridge kept them.
 create type public.event_scope as enum ('team', 'dept', 'project', 'org');
 

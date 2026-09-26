@@ -13,9 +13,9 @@ select col_not_null('public', 'announcements', 'group_id', 'Origin Group is requ
 select col_not_null('public', 'announcements', 'audience', 'Audience is required');
 select has_index('public', 'announcements', 'announcements_group_idx', 'Origin lookup is indexed');
 truncate announcements, announcement_reads cascade;
-insert into announcements(title,body,dept_id,group_id,audience) values
-('Organization #581','Org.',null,(select id from groups where is_organization),'org'),
-('EDU #581','EDU.','edu',(select id from groups where legacy_dept_id='edu'),'local');
+insert into announcements(title,body,group_id,audience) values
+('Organization #581','Org.',(select id from groups where is_organization),'org'),
+('EDU #581','EDU.',(select id from groups where legacy_dept_id='edu'),'local');
 insert into announcements(title,body,group_id,audience)
 select 'Wide EDU #581','All.',id,'org' from groups where legacy_dept_id='edu';
 select is((select count(*) from announcements),3::bigint,'three announcements can be created');

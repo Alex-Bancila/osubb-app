@@ -110,11 +110,11 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('62500000-0000-0000-0000-000000000013', 'Ionela ReassignedA 625', 'reassigneda625@example.test', 'activ', 'activ'),
   ('62500000-0000-0000-0000-000000000014', 'Radu ReassignedB 625', 'reassignedb625@example.test', 'activ', 'activ');
 
-insert into public.departments (id, name, short, color) values
+insert into pg_temp.fixture_departments (id, name, short, color) values
   ('625-dept', 'Departament 625', 'D625', '#654321'),
   ('625-other', 'Alt Departament 625', 'A625', '#123987');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('62500000-0000-0000-0000-000000000001', '625-dept'),
   ('62500000-0000-0000-0000-000000000003', '625-other');
 -- Historical Department fixtures have no production mirror after #586.

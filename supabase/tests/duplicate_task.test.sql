@@ -71,25 +71,25 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('34100000-0000-0000-0000-000000000011', 'Executor Istoric 341', 'exec.history.341@test.local', 'voluntar', 'activ'),
   ('34100000-0000-0000-0000-000000000012', 'Candidat Istoric 341', 'candidate.history.341@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('34100000-0000-0000-0000-000000000002', 'edu'),
   ('34100000-0000-0000-0000-000000000003', 'pr'),
   ('34100000-0000-0000-0000-000000000004', 'edu'),
   ('34100000-0000-0000-0000-000000000011', 'edu'),
   ('34100000-0000-0000-0000-000000000012', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-341-ind', 'Echipa Independenta 341', null);
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-341-ind', '34100000-0000-0000-0000-000000000005');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Proiect #341', 'active',
    '34100000-0000-0000-0000-000000000006', '34100000-0000-0000-0000-000000000001');
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #341'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #341'),
    '34100000-0000-0000-0000-000000000007', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #341'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #341'),
    '34100000-0000-0000-0000-000000000008', 'member');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -191,13 +191,13 @@ insert into public.tasks
 select 'Proiect responsabil #341', 'Task de proiect', now() + interval '10 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '5 days', '34100000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #341';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #341';
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 select 'Proiect membru #341', 'Munca unui membru', now() + interval '10 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '5 days', '34100000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #341';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #341';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '34100000-0000-0000-0000-000000000008', '34100000-0000-0000-0000-000000000001',
        now() - interval '4 days'
@@ -650,18 +650,15 @@ select extensions.dblink_exec('dt_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('dt_setup', $$
   delete from public.tasks where title like '%#341 committed%';
   delete from public.campaigns where name = 'Campanie blocaj #341 committed';
-  delete from public.member_departments where member_id = '34100000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34100000-0000-0000-0000-000000000051';
   insert into auth.users (id, email) values
     ('34100000-0000-0000-0000-000000000051', 'probe.manager.341@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('34100000-0000-0000-0000-000000000051', 'Probe Manager 341', 'probe.manager.341@test.local', 'bce', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('34100000-0000-0000-0000-000000000051', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('34100000-0000-0000-0000-000000000051'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '34100000-%'
   on conflict (group_id,member_id) do nothing;
@@ -739,7 +736,6 @@ select extensions.dblink_exec('dt_setup', $$
    where duplicated_from_task_id in (select id from public.tasks where title like '%#341 committed%');
   delete from public.tasks where title like '%#341 committed%';
   delete from public.campaigns where name = 'Campanie blocaj #341 committed';
-  delete from public.member_departments where member_id = '34100000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34100000-0000-0000-0000-000000000051';
 $$);
 select extensions.dblink_disconnect('dt_setup');

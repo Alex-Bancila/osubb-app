@@ -198,7 +198,7 @@ select results_eq(
 -- assertion above reads the same whether `group_name` is wired to
 -- `origin_group.name` or to `coalesce(origin_department.name, …)`. Renaming the
 -- Group alone -- inside this rolled-back transaction, leaving
--- `public.departments` untouched -- is what separates the two columns.
+-- `pg_temp.fixture_departments` untouched -- is what separates the two columns.
 reset role;
 update public.groups set name = 'Grup Redenumit 523' where legacy_dept_id = 'edu';
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');

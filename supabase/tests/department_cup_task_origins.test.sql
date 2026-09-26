@@ -80,7 +80,7 @@ insert into public.profiles (id, full_name, email, role, status) values
 
 -- The Executor belongs to no Department at all: every point below has to reach
 -- a Department through its Task's Origin or not at all.
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('259-dept-team', 'Department Team 259', 'edu'),
   ('259-independent', 'Independent Team 259', null);
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
@@ -95,7 +95,7 @@ overriding system value values
   (2590001, pg_temp.dept_group('edu'), 'Campania A 259', '25900000-0000-0000-0000-000000000001'),
   (2590002, pg_temp.dept_group('edu'), 'Campania B 259', '25900000-0000-0000-0000-000000000001');
 
-insert into public.projects (id, name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (id, name, status, leader_id, created_by)
 overriding system value values
   (2590003, 'Project 259', 'active', '25900000-0000-0000-0000-000000000001',
    '25900000-0000-0000-0000-000000000001');

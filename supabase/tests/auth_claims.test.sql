@@ -22,18 +22,18 @@ insert into profiles (id, full_name, email, role, status) values
   ('cccccccc-0000-0000-0000-000000000003', 'Carmen Test', 'carmen.claims@test.local', 'bce', 'activ'),
   ('dddddddd-0000-0000-0000-000000000004', 'Dan Test',    'dan.claims@test.local',    'voluntar', 'inactiv');
 
-insert into member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
   values ('cccccccc-0000-0000-0000-000000000003', 'edu');
 
 -- Carmen also holds the Organization Department. Automatic Membership means
 -- #509's mirror deliberately never rosters her into the OSUBB Group, so a hook
--- that derived group_ids from member_departments instead of group_members
+-- that derived group_ids from pg_temp.fixture_member_departments instead of group_members
 -- would wrongly claim it -- this fixture is what assertion (3) below catches.
-insert into member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
   values ('cccccccc-0000-0000-0000-000000000003', 'org');
 
-insert into teams (id, name, dept_id) values ('t-test', 'Test Team', 'edu');
-insert into team_members (team_id, member_id)
+insert into pg_temp.fixture_teams (id, name, dept_id) values ('t-test', 'Test Team', 'edu');
+insert into pg_temp.fixture_team_members (team_id, member_id)
   values ('t-test', 'cccccccc-0000-0000-0000-000000000003');
 select pg_temp.materialize_legacy_groups();
 

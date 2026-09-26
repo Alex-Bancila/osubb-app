@@ -90,7 +90,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33900000-0000-0000-0000-000000000021', 'Executor Redeschidere 339', 'exec.reopen.339@test.local', 'voluntar', 'activ'),
   ('33900000-0000-0000-0000-000000000022', 'Executor Redeschidere Vie 339', 'exec.reopen.live.339@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33900000-0000-0000-0000-000000000002', 'edu'),
   ('33900000-0000-0000-0000-000000000003', 'pr'),
   ('33900000-0000-0000-0000-000000000004', 'edu'),
@@ -108,18 +108,18 @@ insert into public.member_departments (member_id, dept_id) values
   ('33900000-0000-0000-0000-000000000021', 'edu'),
   ('33900000-0000-0000-0000-000000000022', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-339-ind', 'Echipa Independenta 339', null);
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-339-ind', '33900000-0000-0000-0000-000000000009');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Proiect #339', 'active',
    '33900000-0000-0000-0000-000000000006', '33900000-0000-0000-0000-000000000001');
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #339'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #339'),
    '33900000-0000-0000-0000-000000000007', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #339'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #339'),
    '33900000-0000-0000-0000-000000000008', 'member');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
@@ -265,7 +265,7 @@ select 'Proiect membru #339', 'Munca unui membru', now() + interval '10 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'in_progress'::public.task_status,
        now() - interval '10 days', now() - interval '9 days',
        '33900000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #339';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #339';
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status,
    created_at, created_by)
@@ -273,7 +273,7 @@ select 'Proiect responsabil #339', 'Anulat de responsabil', now() + interval '10
        pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '10 days',
        '33900000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #339';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #339';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '33900000-0000-0000-0000-000000000008', '33900000-0000-0000-0000-000000000001',
        now() - interval '9 days'
@@ -890,9 +890,6 @@ select extensions.dblink_exec('ct_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#339 committed%');
   delete from public.tasks where title like '%#339 committed%';
-  delete from public.member_departments where member_id in (
-    '33900000-0000-0000-0000-000000000051', '33900000-0000-0000-0000-000000000052',
-    '33900000-0000-0000-0000-000000000053');
   delete from auth.users where id in (
     '33900000-0000-0000-0000-000000000051', '33900000-0000-0000-0000-000000000052',
     '33900000-0000-0000-0000-000000000053');
@@ -907,14 +904,12 @@ select extensions.dblink_exec('ct_setup', $$
     ('33900000-0000-0000-0000-000000000051', 'Probe Manager 339', 'probe.manager.339@test.local', 'bce', 'activ'),
     ('33900000-0000-0000-0000-000000000052', 'Probe Executor 339', 'probe.executor.339@test.local', 'voluntar', 'activ'),
     ('33900000-0000-0000-0000-000000000053', 'Race Executor 339', 'race.executor.339@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33900000-0000-0000-0000-000000000051', 'edu'),
-    ('33900000-0000-0000-0000-000000000052', 'edu'),
-    ('33900000-0000-0000-0000-000000000053', 'edu');
   -- #586: committed race fixtures require native Group roster rows.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('33900000-0000-0000-0000-000000000051'::uuid, 'edu'),
+    ('33900000-0000-0000-0000-000000000052'::uuid, 'edu'),
+    ('33900000-0000-0000-0000-000000000053'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33900000-%'
   on conflict (group_id,member_id) do nothing;
@@ -1157,9 +1152,6 @@ select extensions.dblink_exec('ct_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#339 committed%');
   delete from public.tasks where title like '%#339 committed%';
-  delete from public.member_departments where member_id in (
-    '33900000-0000-0000-0000-000000000051', '33900000-0000-0000-0000-000000000052',
-    '33900000-0000-0000-0000-000000000053');
   delete from auth.users where id in (
     '33900000-0000-0000-0000-000000000051', '33900000-0000-0000-0000-000000000052',
     '33900000-0000-0000-0000-000000000053');

@@ -51,7 +51,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33100000-0000-0000-0000-000000000008', 'BC Inactiv 331', 'inactive.bc.331@test.local', 'bc', 'inactiv'),
   ('33100000-0000-0000-0000-000000000009', 'Fara Claimuri 331', 'claimless.331@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33100000-0000-0000-0000-000000000001', 'edu'),
   ('33100000-0000-0000-0000-000000000002', 'edu'),
   ('33100000-0000-0000-0000-000000000003', 'edu'),
@@ -414,13 +414,11 @@ select extensions.dblink_exec('stq_setup', $$
   insert into public.profiles (id, full_name, email, role, status) values
     ('33100000-0000-0000-0000-000000000021', 'Lock Manager 331', 'lock.manager.331@test.local', 'bce', 'activ'),
     ('33100000-0000-0000-0000-000000000022', 'Lock Candidate 331', 'lock.candidate.331@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33100000-0000-0000-0000-000000000021', 'edu'),
-    ('33100000-0000-0000-0000-000000000022', 'edu');
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
   select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from public.member_departments md join public.groups g on g.legacy_dept_id=md.dept_id
+    from (values ('33100000-0000-0000-0000-000000000021'::uuid, 'edu'),
+    ('33100000-0000-0000-0000-000000000022'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.legacy_dept_id=md.dept_id
     join public.profiles p on p.id=md.member_id
    where md.member_id::text like '33100000-%'
   on conflict (group_id,member_id) do nothing;
@@ -497,8 +495,6 @@ select extensions.dblink_exec('stq_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#331 committed%');
   delete from public.tasks where title like '%#331 committed%';
-  delete from public.member_departments where member_id in (
-    '33100000-0000-0000-0000-000000000021', '33100000-0000-0000-0000-000000000022');
   delete from auth.users where id in (
     '33100000-0000-0000-0000-000000000021', '33100000-0000-0000-0000-000000000022');
 $$);

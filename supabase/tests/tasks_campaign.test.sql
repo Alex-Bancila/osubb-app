@@ -18,7 +18,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('31400000-0000-0000-0000-000000000001', 'Campaign Actor 314',
    'campaign-actor-314@test.local', 'responsabil', 'activ');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Origin Project 314', 'active',
    '31400000-0000-0000-0000-000000000001',
    '31400000-0000-0000-0000-000000000001');
@@ -66,7 +66,7 @@ select throws_ok(
 select throws_ok(
   format($$ insert into public.tasks (title, difficulty, group_id, campaign_id)
             select 'Project campaign task 314', 1, pg_temp.project_group(id), %L
-              from public.projects where name = 'Origin Project 314' $$,
+              from pg_temp.fixture_projects where name = 'Origin Project 314' $$,
     (select id from public.campaigns where name = 'Campaign Edu 314')),
   '23514', 'task_campaign_origin_mismatch',
   'a Project Task rejects an unrelated Department Campaign');

@@ -67,7 +67,6 @@ function createRow(
     category: 'general',
     pinned: false,
     author: 'Admin',
-    dept_id: 'it',
     group_id: 10,
     audience: 'local',
     published_at: '2026-09-18T10:00:00Z',

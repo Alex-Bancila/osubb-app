@@ -50,48 +50,48 @@ insert into auth.users(id,email)
 select ('52000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid, name || '.520@test.local' from people;
 insert into public.profiles(id,full_name,email,role,status)
 select ('52000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,name,name || '.520@test.local',role,status from people;
-insert into public.member_departments(member_id,dept_id)
+insert into pg_temp.fixture_member_departments(member_id,dept_id)
 select ('52000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,
 case when n=3 then 'pr' else 'edu' end from people where n in (2,3,4,6,12,13);
-insert into public.teams(id,name,dept_id) values ('t-520-dt','Child #520','edu'),('t-520-ind','Independent #520',null);
-insert into public.team_members(team_id,member_id) values
+insert into pg_temp.fixture_teams(id,name,dept_id) values ('t-520-dt','Child #520','edu'),('t-520-ind','Independent #520',null);
+insert into pg_temp.fixture_team_members(team_id,member_id) values
 ('t-520-dt','52000000-0000-0000-0000-000000000010'),
 ('t-520-ind','52000000-0000-0000-0000-000000000008'),
 ('t-520-ind','52000000-0000-0000-0000-000000000009');
-insert into public.projects(name,leader_id,created_by) values
+insert into pg_temp.fixture_projects(name,leader_id,created_by) values
 ('Project #520','52000000-0000-0000-0000-000000000004','52000000-0000-0000-0000-000000000001'),
 ('Archived #520','52000000-0000-0000-0000-000000000004','52000000-0000-0000-0000-000000000001');
-insert into public.project_members(project_id,member_id,project_role)
-select id,'52000000-0000-0000-0000-000000000005','responsible' from public.projects where name='Project #520';
-insert into public.project_members(project_id,member_id,project_role)
-select id,'52000000-0000-0000-0000-000000000007','member' from public.projects where name='Project #520';
-update public.projects set status='archived' where name='Archived #520';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'52000000-0000-0000-0000-000000000005','responsible' from pg_temp.fixture_projects where name='Project #520';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'52000000-0000-0000-0000-000000000007','member' from pg_temp.fixture_projects where name='Project #520';
+update pg_temp.fixture_projects set status='archived' where name='Archived #520';
 -- The retired mirror no longer creates these rows: build the Group tree and
 -- roster explicitly so this suite exercises native authority.
 insert into public.groups(name,category,parent_id,min_level,application_level,legacy_team_id)
 values ('Child #520','team',(select id from public.groups where legacy_dept_id='edu'),3,3,'t-520-dt'),
        ('Independent #520','team',null,0,0,'t-520-ind');
 insert into public.groups(name,category,status,legacy_project_id)
-select p.name,'project',p.status,p.id from public.projects p
+select p.name,'project',p.status,p.id from pg_temp.fixture_projects p
  where p.name in ('Project #520','Archived #520');
 insert into public.group_members(group_id,member_id,group_role)
 select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-  from public.member_departments md
+  from pg_temp.fixture_member_departments md
   join public.groups g on g.legacy_dept_id=md.dept_id
   join public.profiles p on p.id=md.member_id
  where md.member_id::text like '52000000-%';
 insert into public.group_members(group_id,member_id,group_role)
 select g.id,tm.member_id,case when tm.team_id='t-520-ind' then 'responsible' else 'member' end
-  from public.team_members tm join public.groups g on g.legacy_team_id=tm.team_id
+  from pg_temp.fixture_team_members tm join public.groups g on g.legacy_team_id=tm.team_id
  where tm.team_id in ('t-520-dt','t-520-ind');
 insert into public.group_members(group_id,member_id,group_role)
-select g.id,p.leader_id,'manager' from public.projects p
+select g.id,p.leader_id,'manager' from pg_temp.fixture_projects p
   join public.groups g on g.legacy_project_id=p.id
  where p.name in ('Project #520','Archived #520');
 insert into public.group_members(group_id,member_id,group_role)
-select g.id,pm.member_id,pm.project_role from public.project_members pm
+select g.id,pm.member_id,pm.project_role from pg_temp.fixture_project_members pm
   join public.groups g on g.legacy_project_id=pm.project_id
-  join public.projects p on p.id=pm.project_id where p.name='Project #520';
+  join pg_temp.fixture_projects p on p.id=pm.project_id where p.name='Project #520';
 insert into public.groups(name,category,min_level,automatic_membership) values ('AG #520','team',3,true);
 create temp table fx as
 select id, case when legacy_dept_id='edu' then 'edu' when legacy_dept_id='org' then 'org'
@@ -262,7 +262,6 @@ select extensions.dblink_exec('group_520_setup', $setup$
   drop function if exists public.test_520_require();
   drop function if exists public.test_520_revoke();
   delete from public.groups where name = 'Race #520';
-  delete from public.projects where name = 'Race #520';
   delete from auth.users where id in ('52000000-0000-0000-0000-000000000090',
     '52000000-0000-0000-0000-000000000091','52000000-0000-0000-0000-000000000092');
   insert into auth.users(id,email) values
@@ -273,12 +272,7 @@ select extensions.dblink_exec('group_520_setup', $setup$
     ('52000000-0000-0000-0000-000000000090','Race coord','coord.race.520@test.local','voluntar','activ'),
     ('52000000-0000-0000-0000-000000000091','Race resp','resp.race.520@test.local','voluntar','activ'),
     ('52000000-0000-0000-0000-000000000092','Race BC','bc.race.520@test.local','bc','activ');
-  insert into public.projects(name,leader_id,created_by) values
-    ('Race #520','52000000-0000-0000-0000-000000000090','52000000-0000-0000-0000-000000000092');
-  insert into public.project_members(project_id,member_id,project_role)
-    select id,'52000000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #520';
-  insert into public.groups(name,category,legacy_project_id)
-    select name,'project',id from public.projects where name='Race #520';
+  insert into public.groups(name,category) values ('Race #520','project');
   insert into public.group_members(group_id,member_id,group_role)
     select id,'52000000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #520';
   insert into public.group_members(group_id,member_id,group_role)
@@ -335,7 +329,7 @@ select throws_ok($$select private.require_group_work_manager((select id from pub
 select extensions.dblink_exec('group_520_setup', $$
   drop function public.test_520_require();
   drop function public.test_520_revoke();
-  delete from public.projects where name='Race #520';
+  delete from public.groups where name = 'Race #520';
   delete from auth.users where id in ('52000000-0000-0000-0000-000000000090',
     '52000000-0000-0000-0000-000000000091','52000000-0000-0000-0000-000000000092');
 $$);

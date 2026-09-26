@@ -55,7 +55,6 @@ function rawRow(
     id: 1,
     title: 'Ședință extraordinară BC',
     body: 'Vineri la ora 18:00 în Aula Magna.',
-    dept_id: null,
     group_id: 1,
     audience: 'org',
     author: 'BC',
@@ -87,9 +86,9 @@ describe('announcements-presentation', () => {
       expect(item.isRead).toBe(false);
     });
 
-    it('uses group_id even when the historical dept_id is null', () => {
+    it('uses group_id for the announcement origin', () => {
       const item = toAnnouncementPresentation(
-        rawRow({ group_id: 2, dept_id: null, audience: 'local' }),
+        rawRow({ group_id: 2, audience: 'local' }),
         groupsById,
       );
       expect(item.group.name).toBe('Imagine & PR');
