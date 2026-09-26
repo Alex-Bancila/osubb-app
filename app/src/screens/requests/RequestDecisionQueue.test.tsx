@@ -26,6 +26,13 @@ vi.mock('../../queries/reference', () => ({
   useEvaluationScale: () => state.scale,
 }));
 import { RequestDecisionQueue } from './RequestDecisionQueue';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 const request = {
   id: 7,
   requester_id: 'ana',
@@ -52,14 +59,8 @@ it('shares evaluation fields and retains success after the queue refetches empty
   await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
   await user.click(screen.getByRole('button', { name: 'Aprobă cererea' }));
   expect(state.mutate).not.toHaveBeenCalled();
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '5',
-  );
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
   await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bine făcut');
   await user.dblClick(screen.getByRole('button', { name: 'Aprobă cererea' }));
   expect(state.mutate).toHaveBeenCalledTimes(1);
@@ -82,9 +83,12 @@ it('requires a rejection note, calls rejection only, and has no axe violations',
   const user = userEvent.setup();
   const { container } = render(<RequestDecisionQueue />);
   await user.click(screen.getByRole('button', { name: 'Respinge' }));
+  // Nothing is disabled before the first try; the rule shows under the field.
+  await user.click(screen.getByRole('button', { name: 'Respinge cererea' }));
   expect(
-    screen.getByRole('button', { name: 'Respinge cererea' }),
-  ).toBeDisabled();
+    screen.getByLabelText('Motivul respingerii (obligatoriu)'),
+  ).toHaveAccessibleDescription('Scrie o notă.');
+  expect(state.mutate).not.toHaveBeenCalled();
   await user.type(
     screen.getByLabelText('Motivul respingerii (obligatoriu)'),
     'Mai sunt necesare detalii',
@@ -140,4 +144,15 @@ it('keeps the request and note on unexpected failure without leaking details', a
   expect(
     screen.getByLabelText('Motivul respingerii (obligatoriu)'),
   ).toHaveValue('Notă');
+});
+it('names the Requester by Nickname as a button that opens their Member Card', async () => {
+  state.queue.mockReturnValue({
+    data: [{ ...request, requester_nickname: 'Ani' }],
+  });
+  render(<RequestDecisionQueue />);
+  const name = screen.getByRole('button', { name: 'Profilul membrului Ani' });
+  expect(name.closest('p')).toHaveTextContent(/Ani\s*·\s*Ateliere$/);
+  expect(name).not.toHaveTextContent('Ana Pop');
+  await userEvent.click(name);
+  expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
 });

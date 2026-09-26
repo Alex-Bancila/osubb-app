@@ -16,7 +16,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(63);
+select plan(66);
 
 -- ==================== 1. Shape ====================
 
@@ -111,10 +111,7 @@ select throws_ok($$ insert into public.groups (name, category, status)
   '23514', 'new row for relation "groups" violates check constraint "groups_status_ck"',
   'the lifecycle vocabulary is active/archived — archiving keeps history, nothing else exists');
 
-select throws_ok($$ insert into public.groups (name, category, legacy_dept_id, legacy_team_id)
-    values ('Doua Origini #507', 'team', 'edu-507', 't-507') $$,
-  '23514', 'new row for relation "groups" violates check constraint "groups_legacy_one_ck"',
-  'a shadow row names at most one legacy table as its write master');
+select ok(not exists(select 1 from information_schema.columns where table_schema='public' and table_name='groups' and column_name like 'legacy_%'), 'Group backfill keys are absent');
 
 select throws_ok($$ insert into public.group_members (group_id, member_id, group_role)
     values ((select grp.id from public.groups as grp where grp.name = 'Constrangeri #507'),
@@ -128,13 +125,11 @@ select throws_ok($$ insert into public.groups (name, category)
   '23505', 'duplicate key value violates unique constraint "groups_parent_name_uidx"',
   'two native sibling Groups cannot share a name, case-insensitively');
 
--- Deviation 1 (plan): the sibling-name index is PARTIAL — native Groups only —
--- because the legacy Departments, Teams and Projects it will shadow are not
--- yet deduplicated. Delete this assertion when Wave 3 makes the index total.
-select lives_ok($$ insert into public.groups (name, category, legacy_team_id) values
-    ('Echipa Y #507', 'team', 't-507-a'),
-    ('echipa y #507', 'team', 't-507-b') $$,
-  'the sibling-name rule binds native Groups only: two mirrored rows may still share a legacy name');
+select ok((select indpred is null from pg_index where indexrelid='public.groups_parent_name_uidx'::regclass), 'sibling name uniqueness covers every Group');
+-- #591: the Wave 1 backfill keys are gone from the live schema.
+select hasnt_column('public', 'groups', 'legacy_dept_id', 'groups.legacy_dept_id is dropped (#591)');
+select hasnt_column('public', 'groups', 'legacy_team_id', 'groups.legacy_team_id is dropped (#591)');
+select hasnt_column('public', 'groups', 'legacy_project_id', 'groups.legacy_project_id is dropped (#591)');
 
 -- The Organization marker (Wave 3 T1, ADR-0009 R1). The reference Organization
 -- Group — the one the backfill marked — is already in this database, so the row
@@ -276,6 +271,7 @@ insert into public.groups (name, category, parent_id, min_level)
           (select grp.id from public.groups as grp where grp.name = 'Grup A #507p'), 3);
 insert into public.groups (name, category, status) values ('Grup C #507p', 'project', 'archived');
 insert into public.groups (name, category, min_level) values ('Grup D #507p', 'team', 9);
+insert into public.groups (name, category, min_level) values ('Unrelated #507r', 'team', 0);
 
 insert into public.group_members (group_id, member_id, group_role)
 select grp.id, roster.member_id, roster.group_role
@@ -285,7 +281,7 @@ select grp.id, roster.member_id, roster.group_role
     ('Grup A #507p', '50700000-0000-0000-0000-000000000010'::uuid, 'manager'),
     ('Grup A #507p', '50700000-0000-0000-0000-000000000011'::uuid, 'member'),
     ('Grup B #507p', '50700000-0000-0000-0000-000000000006'::uuid, 'member'),
-    ('Grup D #507p', '50700000-0000-0000-0000-000000000009'::uuid, 'manager')
+    ('Unrelated #507r', '50700000-0000-0000-0000-000000000009'::uuid, 'manager')
   ) as roster(group_name, member_id, group_role)
   join public.groups as grp on grp.name = roster.group_name;
 
@@ -362,7 +358,7 @@ select is(
 select is(
   (select count(*) from public.group_members as membership
     where membership.group_id in (select unnest(fx.policy_groups) from pg_temp.fx507 as fx)),
-  6::bigint,
+  5::bigint,
   'and every roster row of those Groups');
 reset role;
 
@@ -455,8 +451,8 @@ select is(
 reset role;
 
 -- ==================== 6. Grants ====================
--- Both tables are read-only for every client role: #509's mirror triggers run
--- as the table owner, and there is no Group command in Wave 1 at all.
+-- Both tables are read-only for every client role: native Group commands
+-- mediate writes through their owner-only implementations.
 
 select pg_temp.test_login('50700000-0000-0000-0000-000000000004', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));

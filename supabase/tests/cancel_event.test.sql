@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(23);
 insert into auth.users(id,email)
 select ('24800000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid, 'event248-'||n||'@test.local'
 from generate_series(1,9) n;
@@ -12,15 +12,16 @@ select id, 'Event fixture '||split_part(email,'@',1), email,
 case right(id::text,1) when '1' then 'bc' when '8' then 'moderator' else 'voluntar' end::public.member_role,
 case right(id::text,1) when '9' then 'inactiv' else 'activ' end::public.member_status
 from auth.users where id::text like '24800000-%';
-insert into public.projects(name,leader_id,created_by) values
+insert into pg_temp.fixture_projects(name,leader_id,created_by) values
 ('Events A #248','24800000-0000-0000-0000-000000000002','24800000-0000-0000-0000-000000000001'),
 ('Events B #248','24800000-0000-0000-0000-000000000005','24800000-0000-0000-0000-000000000001');
-insert into public.project_members(project_id,member_id,project_role)
-select id,'24800000-0000-0000-0000-000000000003','responsible' from public.projects where name='Events A #248';
-insert into public.project_members(project_id,member_id,project_role)
-select id,'24800000-0000-0000-0000-000000000004','member' from public.projects where name='Events A #248';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'24800000-0000-0000-0000-000000000003','responsible' from pg_temp.fixture_projects where name='Events A #248';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'24800000-0000-0000-0000-000000000004','member' from pg_temp.fixture_projects where name='Events A #248';
+select pg_temp.materialize_legacy_groups();
 create temp table gx as select id, case when name='Events A #248' then 'a' when name='Events B #248' then 'b' else 'org' end name
-from public.groups where name in ('Events A #248','Events B #248') or legacy_dept_id='org';
+from public.groups where name in ('Events A #248','Events B #248') or name = 'OSUBB';
 grant select on gx to authenticated,anon;
 insert into public.events(title,type,group_id,starts_at,created_by,min_level)
 select 'Event '||name||' #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000002',0 from gx;
@@ -66,7 +67,7 @@ select ok((select bool_and(title='Eveniment anulat: Event a #248') from public.n
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000003');
 select throws_ok($q$select public.cancel_event((select id from ex where title='Event a #248'),'Anulat')$q$,'PT409','event_cancelled','double cancellation rejected');
-select throws_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='a'),'2026-10-01 12:00+00',null,null,null,null,0)$q$,'PT409','event_cancelled','cancelled Event cannot be edited');
+select throws_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='a'),'2026-10-01 12:00+00',null,null,null,null,0,null)$q$,'PT409','event_cancelled','cancelled Event cannot be edited');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000004');
 select is((select count(*) from public.events where id=(select id from ex where title='Event a #248')),1::bigint,'cancelled Event remains readable');
@@ -96,12 +97,13 @@ insert into auth.users(id,email) values
 insert into public.profiles(id,full_name,email,role,status) values
   ('24800000-0000-0000-0000-000000000011','Diverse lead #248','diverse248@test.local','bce','activ'),
   ('24800000-0000-0000-0000-000000000012','Edu lead #248','edu248@test.local','bce','activ');
-insert into public.member_departments(member_id,dept_id) values
+insert into pg_temp.fixture_member_departments(member_id,dept_id) values
   ('24800000-0000-0000-0000-000000000011','diverse'),
   ('24800000-0000-0000-0000-000000000012','edu');
+select pg_temp.materialize_legacy_groups();
 insert into public.events(title,type,group_id,starts_at,created_by,min_level)
 select 'Team ancestor #248','sedinta',id,'2026-10-01 12:00+00','24800000-0000-0000-0000-000000000001',0
-  from public.groups where legacy_team_id='it';
+  from public.groups where name = 'Echipa IT';
 create temp table ex2 as select id,title from public.events where title='Team ancestor #248';
 grant select on ex2 to authenticated,anon;
 reset role;
@@ -111,5 +113,13 @@ reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000011');
 select lives_ok($q$select public.cancel_event((select id from ex2 where title='Team ancestor #248'),'Anulat')$q$,'a Department lead cancels a Team Event through the Group path');
 reset role;
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.cancel_event(0, repeat('r', 1001)) $$,
+  'PT400', 'reason_too_long', 'an Event cancellation reason over 1000 characters is refused before the gate');
+reset role;
+
 select * from finish();
 rollback;

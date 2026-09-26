@@ -27,10 +27,13 @@ it('sends approval scoring and mandatory note only through commands', async () =
     p_note: 'Lipsesc dovezi',
   });
 });
-it('rejects blank notes and invalid scoring before a request', async () => {
+it('rejects blank or long notes and invalid scoring before a request', async () => {
   await expect(
     decideRequest({ kind: 'reject', requestId: 8, note: ' ' }),
-  ).rejects.toThrow('notă');
+  ).rejects.toMatchObject({ reason: 'note_required' });
+  await expect(
+    decideRequest({ kind: 'reject', requestId: 8, note: 'x'.repeat(1001) }),
+  ).rejects.toMatchObject({ reason: 'note_too_long' });
   await expect(
     decideRequest({
       kind: 'approve',
@@ -39,7 +42,7 @@ it('rejects blank notes and invalid scoring before a request', async () => {
       rating: 5,
       note: 'N',
     }),
-  ).rejects.toThrow('Dificultatea');
+  ).rejects.toThrow('Dificultate între 1 și 5');
   expect(api.rpc).not.toHaveBeenCalled();
 });
 it('maps already-decided errors safely', async () => {

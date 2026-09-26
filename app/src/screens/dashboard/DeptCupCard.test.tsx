@@ -10,15 +10,6 @@ const hooks = vi.hoisted(() => ({
 
 vi.mock('../../queries/points', () => ({ useDeptCup: hooks.useDeptCup }));
 vi.mock('../../queries/reference', () => ({ useGroups: hooks.useGroups }));
-// `components/states`' `Loading`/`ErrorState` reach into `@ionic/react` too
-// (`IonSpinner`, `IonButton`), so the mock has to cover them, not only the
-// `IonIcon` this card imports directly — otherwise the #200 loading-state
-// test below would blow up on an undefined component the moment it renders.
-vi.mock('@ionic/react', () => ({
-  IonIcon: () => null,
-  IonSpinner: () => null,
-  IonButton: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
 
 import DeptCupCard from './DeptCupCard';
 
@@ -39,7 +30,6 @@ const eduGroup: Group = {
   status: 'active',
   is_organization: false,
   // No bridge: the Cup row reaches its Group by `group_id` alone.
-  legacy_dept_id: null,
 };
 
 function setCup(rows: unknown[]) {

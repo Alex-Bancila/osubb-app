@@ -21,7 +21,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# The sentinel auth user/profile/Project and the demo lead it borrows are
+# The sentinel auth user/profile/Group and the demo Member it borrows are
 # CI's own fixture UUIDs, not generated data — they stay hardcoded on
 # purpose (see the inserts below).
 
@@ -125,7 +125,7 @@ delete from task_assignments
                     where created_by = 'e2750000-0000-0000-0000-000000000001');
 delete from tasks
  where created_by = 'e2750000-0000-0000-0000-000000000001';
-delete from projects
+delete from groups
  where created_by = 'e2750000-0000-0000-0000-000000000001';
 delete from auth.users
  where id = 'e2750000-0000-0000-0000-000000000001';
@@ -135,7 +135,7 @@ trap cleanup EXIT
 
 demo_before=$(run_sql -c "select count(*) from auth.users where email like '%@demo.osubb'")
 
-# A same-name Project owned by a non-demo account is a sentinel for
+# A Group owned by a non-demo account is a sentinel for
 # the most dangerous seed regression: deleting real staging data.
 # Use a complete auth/profile pair so the invariant triggers exercise
 # the same foreign keys as an invited tester.
@@ -158,16 +158,17 @@ insert into auth.users (
 insert into profiles (id, full_name, email, role, joined_year, avatar_color)
 values ('e2750000-0000-0000-0000-000000000001', 'Seed Preservation',
         'seed-preservation@test.local', 'responsabil', 2026, '#000000');
-insert into projects (name, status, leader_id, created_by)
-values ('Cross-owned seed guard', 'active',
-        'd0000000-0000-0000-0000-000000000005',
-        'e2750000-0000-0000-0000-000000000001');
+insert into groups (name, category, created_by)
+values ('Cross-owned seed guard', 'project', 'e2750000-0000-0000-0000-000000000001');
+insert into group_members(group_id,member_id,group_role)
+select id,'d0000000-0000-0000-0000-000000000005','manager'
+from groups where name='Cross-owned seed guard';
 insert into tasks (
   title, difficulty, status, audience, assignment_mode, created_by, group_id
 )
 values ('Non-demo local opportunity', 1, 'todo', 'local', 'direct',
         'e2750000-0000-0000-0000-000000000001',
-        (select id from groups where legacy_dept_id = 'edu'));
+        (select id from groups where name = 'Educațional'));
 insert into task_assignments (task_id, member_id, assigned_by)
 select id,
        'e2750000-0000-0000-0000-000000000001',
@@ -179,27 +180,25 @@ SQL
 history_before=$(run_sql -c "select to_jsonb(assignment)::text from task_assignments assignment join tasks task on task.id = assignment.task_id where task.created_by = 'e2750000-0000-0000-0000-000000000001'")
 
 # Re-seeding must abort before changing anything when a real-owned
-# Project still points at a demo lead. Silently deleting that Project
-# would be data loss; deleting the demo user would violate its FK.
+# Group still points at a demo Member. Silently deleting that Group
+# would be data loss; deleting the demo user would violate its membership.
 if run_sql -1 -f supabase/seed.sql; then
-  echo "::error::seed.sql accepted a non-demo-owned Project with a demo lead."
+  echo "::error::seed.sql accepted a non-demo-owned Group with a demo Member."
   exit 1
 fi
 
-guarded=$(run_sql -c "select format('%s:%s', (select count(*) from projects where name = 'Cross-owned seed guard' and created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from auth.users where email like '%@demo.osubb'))")
+guarded=$(run_sql -c "select format('%s:%s', (select count(*) from groups where name = 'Cross-owned seed guard' and created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from auth.users where email like '%@demo.osubb'))")
 if [ "$guarded" != "1:${demo_before}" ]; then
-  echo "::error::The cross-owned Project guard did not roll back cleanly ($guarded, expected 1:${demo_before})."
+  echo "::error::The cross-owned Group guard did not roll back cleanly ($guarded, expected 1:${demo_before})."
   exit 1
 fi
 
 run_sql -q <<'SQL'
-delete from projects
+delete from groups
  where name = 'Cross-owned seed guard'
    and created_by = 'e2750000-0000-0000-0000-000000000001';
-insert into projects (name, status, leader_id, created_by)
-values ('Festivalul Studențesc 2026', 'active',
-        'e2750000-0000-0000-0000-000000000001',
-        'e2750000-0000-0000-0000-000000000001');
+insert into groups (name, category, created_by)
+values ('Preserved real Group', 'project', 'e2750000-0000-0000-0000-000000000001');
 SQL
 
 broadcasts_before=$(run_sql -c "select count(*) from notifications where member_id='e2750000-0000-0000-0000-000000000001' and title like 'Anunț nou:%'")
@@ -219,6 +218,21 @@ if [ "$before" != "$after" ]; then
   exit 1
 fi
 
+# The fingerprint compares stable content. Check the migration-specific
+# absence/presence facts explicitly so an old legacy fixture cannot hide in it.
+native_shape=$(run_sql -c "select format('%s:%s:%s:%s',
+  (select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'),
+  (select count(*) from groups where name='Adunarea Generală'
+    and created_by='d0000000-0000-0000-0000-000000000007'
+    and automatic_membership and min_level=3 and not competes_in_cup
+    and not accepts_applications),
+  (select count(*) from information_schema.tables where table_schema='public' and table_name='teams'),
+  (select count(*) from information_schema.tables where table_schema='public' and table_name='projects'))")
+if [ "$native_shape" != "6:1:0:0" ]; then
+  echo "::error::The native demo Group shape changed ($native_shape, expected 6:1:0:0)."
+  exit 1
+fi
+
 history_after=$(run_sql -c "select to_jsonb(assignment)::text from task_assignments assignment join tasks task on task.id = assignment.task_id where task.created_by = 'e2750000-0000-0000-0000-000000000001'")
 if [ "$history_before" != "$history_after" ]; then
   echo "::error::Re-seeding changed the non-demo Assignment sentinel."
@@ -227,9 +241,9 @@ if [ "$history_before" != "$history_after" ]; then
   exit 1
 fi
 
-preserved=$(run_sql -c "select format('%s:%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from projects where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'todo' and audience = 'local' and assignment_mode = 'direct'), (select count(*) from task_assignments assignment join tasks task on task.id = assignment.task_id where task.created_by = 'e2750000-0000-0000-0000-000000000001' and assignment.member_id = 'e2750000-0000-0000-0000-000000000001' and assignment.ended_at is null))")
+preserved=$(run_sql -c "select format('%s:%s:%s:%s:%s', (select count(*) from auth.users where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from profiles where id = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from groups where created_by = 'e2750000-0000-0000-0000-000000000001'), (select count(*) from tasks where created_by = 'e2750000-0000-0000-0000-000000000001' and status = 'todo' and audience = 'local' and assignment_mode = 'direct'), (select count(*) from task_assignments assignment join tasks task on task.id = assignment.task_id where task.created_by = 'e2750000-0000-0000-0000-000000000001' and assignment.member_id = 'e2750000-0000-0000-0000-000000000001' and assignment.ended_at is null))")
 if [ "$preserved" != "1:1:1:1:1" ]; then
-  echo "::error::Re-seeding did not preserve the non-demo auth/profile/Project/local-Task/Assignment sentinels ($preserved)."
+  echo "::error::Re-seeding did not preserve the non-demo auth/profile/Group/local-Task/Assignment sentinels ($preserved)."
   exit 1
 fi
 

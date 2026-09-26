@@ -152,3 +152,7 @@ export function membersBelowLevel<T extends { level: number }>(
 ): T[] {
   return roster.filter((entry) => entry.level < minLevel);
 }
+
+/** The one line the Grup privat setting carries (ruling R25). */
+export const PRIVATE_GROUP_HINT =
+  'Vizibil doar membrilor, coordonatorilor de pe traseu și BC. Fără cereri de înscriere; intrarea se face prin adăugare directă.';

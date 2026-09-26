@@ -46,7 +46,7 @@ select throws_ok($q$select public.create_campaign(pg_temp.g522_group('Archived #
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select throws_ok($q$select public.create_task('bad',null,now(),'local','direct',p_group_id=>-1)$q$,'42501','task_manage_forbidden','unknown Group is nondisclosing for BC too');
-select lives_ok($q$select public.create_campaign((select id from public.groups where legacy_dept_id='org'),'Organization 522')$q$,'BC manages Organization Campaign');
+select lives_ok($q$select public.create_campaign((select id from public.groups where name = 'OSUBB'),'Organization 522')$q$,'BC manages Organization Campaign');
 reset role;
 select throws_ok($q$update public.tasks set group_id=pg_temp.g522_group('Department #521') where id=(select id from g522_ids where name='child')$q$,'23514','subtask_origin_immutable','Group-only Subtask edit reaches hierarchy trigger');
 select lives_ok($q$update public.tasks set campaign_id=(select id from g522_ids where name='campaign') where id=(select id from g522_ids where name='task')$q$,'Project Campaign tags Project Task');
@@ -179,7 +179,7 @@ reset role;
 -- ruling OD8: the Organization Group may own a Campaign, and only level >= 6 manages it.
 -- A Department BCE is Automatic-Membership `member` there, never a manager.
 select pg_temp.test_login_leadership(pg_temp.g521_uid(9));
-select throws_ok($q$select public.create_campaign((select grp.id from public.groups as grp where grp.legacy_dept_id='org'),'BCE org 522')$q$,
+select throws_ok($q$select public.create_campaign((select grp.id from public.groups as grp where grp.name = 'OSUBB'),'BCE org 522')$q$,
   '42501','campaign_manage_forbidden','a Department BCE cannot own an Organization Campaign -- only level >= 6 manages the Organization Group');
 reset role;
 
@@ -226,7 +226,11 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select throws_ok($q$select public.reject_completed_work_request((select id from public.completed_work_requests where description='No other decider #522'),'Self')$q$,'42501','request_decide_forbidden','no fallback grants BC self-decision');
 reset role;
 update public.profiles set role='voluntar' where id=pg_temp.g521_uid(9);
-insert into public.member_departments(member_id,dept_id) values(pg_temp.g521_uid(1),'d521');
+update public.group_members set group_role='member'
+ where group_id=pg_temp.dept_group('d521') and member_id=pg_temp.g521_uid(9);
+insert into pg_temp.fixture_member_departments(member_id,dept_id) values(pg_temp.g521_uid(1),'d521');
+insert into public.group_members(group_id,member_id,group_role)
+values(pg_temp.dept_group('d521'),pg_temp.g521_uid(1),'member');
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select lives_ok($q$insert into g522_ids select 'no-decider',(public.create_completed_work_request('No eligible other decider', pg_temp.dept_group('d521'))).id$q$,'BC requester can file work even when no eligible other decider remains');
 reset role;

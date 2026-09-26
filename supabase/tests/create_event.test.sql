@@ -4,41 +4,43 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(59);
+select plan(74);
 truncate public.events, public.event_attendance cascade;
 create temp table people (n integer, name text, role public.member_role, status public.member_status);
 insert into people values
 (1,'bc','bc','activ'),(2,'bce_edu','bce','activ'),(3,'bce_foreign','bce','activ'),
 (4,'coord','voluntar','activ'),(5,'resp','voluntar','activ'),(6,'ordinary_edu','voluntar','activ'),
 (7,'ordinary_proj','voluntar','activ'),(8,'ind_a','voluntar','activ'),(9,'ind_b','voluntar','activ'),
-(10,'dt_member','voluntar','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
+(10,'dt_member','vot','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
 (13,'claimless','voluntar','activ'),(14,'moderator','moderator','activ');
 insert into auth.users(id,email)
 select ('37000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid, name || '.370@test.local' from people;
 insert into public.profiles(id,full_name,email,role,status)
 select ('37000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,name,name || '.370@test.local',role,status from people;
-insert into public.member_departments(member_id,dept_id)
+insert into pg_temp.fixture_member_departments(member_id,dept_id)
 select ('37000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,
 case when n=3 then 'pr' else 'edu' end from people where n in (2,3,4,6,12,13);
-insert into public.teams(id,name,dept_id) values ('t-370-dt','Child #370','edu'),('t-370-ind','Independent #370',null);
-insert into public.team_members(team_id,member_id) values
+insert into pg_temp.fixture_teams(id,name,dept_id) values ('t-370-dt','Child #370','edu'),('t-370-ind','Independent #370',null);
+insert into pg_temp.fixture_team_members(team_id,member_id) values
 ('t-370-dt','37000000-0000-0000-0000-000000000010'),
 ('t-370-ind','37000000-0000-0000-0000-000000000008'),
 ('t-370-ind','37000000-0000-0000-0000-000000000009');
-insert into public.projects(name,leader_id,created_by) values
+insert into pg_temp.fixture_projects(name,leader_id,created_by) values
 ('Project #370','37000000-0000-0000-0000-000000000004','37000000-0000-0000-0000-000000000001'),
 ('Archived #370','37000000-0000-0000-0000-000000000004','37000000-0000-0000-0000-000000000001');
-insert into public.project_members(project_id,member_id,project_role)
-select id,'37000000-0000-0000-0000-000000000005','responsible' from public.projects where name='Project #370';
-insert into public.project_members(project_id,member_id,project_role)
-select id,'37000000-0000-0000-0000-000000000007','member' from public.projects where name='Project #370';
-update public.projects set status='archived' where name='Archived #370';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'37000000-0000-0000-0000-000000000005','responsible' from pg_temp.fixture_projects where name='Project #370';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'37000000-0000-0000-0000-000000000007','member' from pg_temp.fixture_projects where name='Project #370';
+update pg_temp.fixture_projects set status='archived' where name='Archived #370';
+select pg_temp.materialize_legacy_groups();
+update public.groups set status='archived' where name='Archived #370';
 -- Wave 2 OD9 exception: gated/native fixtures only, rolled back with this suite.
 
 insert into public.groups(name,category,min_level,automatic_membership) values ('AG #370','team',3,true);
 create temp table fx as
-select id, case when legacy_dept_id='edu' then 'edu' when legacy_dept_id='org' then 'org'
-when legacy_team_id='t-370-dt' then 'dt' when legacy_team_id='t-370-ind' then 'ind'
+select id, case when name = 'Educațional' then 'edu' when name = 'OSUBB' then 'org'
+when id = pg_temp.team_group('t-370-dt') then 'dt' when id = pg_temp.team_group('t-370-ind') then 'ind'
 when name='Project #370' then 'project' when name='Archived #370' then 'archived'
 when name='AG #370' then 'ag' end as name from public.groups;
 grant select on fx to authenticated,anon;
@@ -49,8 +51,12 @@ begin
  '{"member_role":"bc","member_level":6}'::jsonb);
 end; $$;
 select hasnt_function('public','create_event',array['text','text','text','timestamp with time zone','timestamp with time zone','text','integer','text','text','text'],'legacy overload is removed');
-select ok(not (select prosecdef from pg_proc where oid='public.create_event(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer)'::regprocedure),'wrapper is invoker');
-select ok((select prosecdef from pg_proc where oid='private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer)'::regprocedure),'implementation is definer');
+select ok(not (select prosecdef from pg_proc where oid='public.create_event(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint)'::regprocedure),'wrapper is invoker');
+select ok((select prosecdef from pg_proc where oid='private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint)'::regprocedure),'implementation is definer');
+-- #691: one signature per name -- PostgREST cannot choose between overloads.
+select is((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+           where (n.nspname,p.proname) in (('public','create_event'),('private','create_event_impl'))),
+          2::bigint,'create_event and create_event_impl each exist under exactly one signature');
 select ok(not has_table_privilege('authenticated','public.events','insert'),'direct insert denied');
 select ok(not has_table_privilege('authenticated','public.events','update'),'direct update denied');
 select ok(not has_table_privilege('authenticated','public.events','delete'),'direct delete denied');
@@ -149,22 +155,22 @@ select pg_temp.test_login('37000000-0000-0000-0000-000000000004','{"provider":"e
 select throws_ok($$select public.create_event('claimless','sedinta',(select id from fx where name='org'),now())$$,'42501','calendar_manage_forbidden','claimless denied');
 select throws_ok($$select public.create_event(null,'sedinta',null,now())$$,'PT400','invalid_event_title','malformed title precedes claimless gate');
 select throws_ok($$select public.create_event(E'\t\n','sedinta',null,now())$$,'PT400','invalid_event_title','malformed title precedes claimless gate');
-select throws_ok($$select public.create_event('x','wrong',null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
-select throws_ok($$select public.create_event('x',null,null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,null)$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),now())$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),p_capacity:=0)$$,'PT400','invalid_event_capacity','malformed capacity precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),p_min_level:=4)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
-select throws_ok($$select public.create_event('x','sedinta',null,now(),p_min_level:=null)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','wrong',null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
+select throws_ok($$select public.create_event('xyz',null,null,now())$$,'PT400','invalid_event_type','malformed type precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,null)$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),now())$$,'PT400','invalid_event_interval','malformed interval precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),p_capacity:=0)$$,'PT400','invalid_event_capacity','malformed capacity precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),p_min_level:=4)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now(),p_min_level:=null)$$,'PT400','invalid_event_min_level','malformed min_level precedes claimless gate');
 -- #370 delta: a call that names no Group is malformed, not forbidden -- the claimless caller is
 -- told what is missing instead of being refused. Same reason string the #519 trigger uses for an
 -- Event that names no Group; PT400 here because a rejected argument is not a trigger invariant.
-select throws_ok($$select public.create_event('x','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed and precedes the claimless gate');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed and precedes the claimless gate');
 reset role;
 select pg_temp.login(1);
-select throws_ok($$select public.create_event('x','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed for an authorized caller too, never calendar_manage_forbidden');
+select throws_ok($$select public.create_event('xyz','sedinta',null,now())$$,'PT400','event_group_required','a null Group is malformed for an authorized caller too, never calendar_manage_forbidden');
 reset role;
-update public.groups set min_level=3,application_level=3 where legacy_team_id='t-370-dt';
+update public.groups set min_level=3,application_level=3 where id = pg_temp.team_group('t-370-dt');
 select pg_temp.login(2);
 select throws_ok($$select public.create_event('below','sedinta',(select id from fx where name='dt'),now())$$,'PT400','event_min_level_below_group','Event cannot lower Group minimum');
 select lives_ok($$select public.create_event('matching','sedinta',(select id from fx where name='dt'),now(),p_min_level:=3)$$,'Event matches Group minimum');
@@ -202,5 +208,41 @@ select throws_ok($$select public.create_event('anon','sedinta',null,now())$$,'42
 -- Pin the message so the revoke on the WRAPPER is what this suite is testing.
 select throws_ok($$select public.create_event('anon','sedinta',null,now())$$,'42501','permission denied for function create_event','anon is stopped at the wrapper, not at the private schema behind it');
 reset role;
+-- ==================== #691: a Campaign on an Event ====================
+-- Persona 2 manages edu. The events_validate_campaign trigger decides; the command
+-- answers its two reasons (and an unknown id) as create_task's PT400 invalid_campaign.
+insert into public.campaigns(group_id,name,is_active,created_by) values
+((select id from fx where name='edu'),'Edu campaign #691',true,'37000000-0000-0000-0000-000000000001'),
+(pg_temp.dept_group('pr'),'Pr campaign #691',true,'37000000-0000-0000-0000-000000000001'),
+((select id from fx where name='edu'),'Edu inactive #691',false,'37000000-0000-0000-0000-000000000001');
+create temp table cx as select id,name from public.campaigns where name like '%#691';
+grant select on cx to authenticated;
+select pg_temp.login(2);
+select lives_ok($$select public.create_event('campaign own 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=(select id from cx where name='Edu campaign #691'))$$,'create_event accepts a Campaign of the Event''s own Group');
+select lives_ok($$select public.create_event('campaign ancestor 691','sedinta',(select id from fx where name='dt'),now()+interval '1 day',p_min_level:=3,p_campaign_id:=(select id from cx where name='Edu campaign #691'))$$,'create_event accepts a Campaign of a Group above the Event''s Group');
+select throws_ok($$select public.create_event('campaign foreign 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=(select id from cx where name='Pr campaign #691'))$$,'PT400','invalid_campaign','a Campaign of another Department is PT400 invalid_campaign, not a raw 23514');
+select throws_ok($$select public.create_event('campaign inactive 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=(select id from cx where name='Edu inactive #691'))$$,'PT400','invalid_campaign','an inactive Campaign is PT400 invalid_campaign');
+select throws_ok($$select public.create_event('campaign unknown 691','sedinta',(select id from fx where name='edu'),now()+interval '1 day',p_campaign_id:=-1)$$,'PT400','invalid_campaign','an unknown Campaign id is PT400 invalid_campaign');
+reset role;
+select is((select campaign_id from public.events where title='campaign own 691'),(select id from cx where name='Edu campaign #691'),'the Campaign is stored on the Event');
+select is((select campaign_id from public.events where title='campaign ancestor 691'),(select id from cx where name='Edu campaign #691'),'an ancestor''s Campaign is stored on a child Group''s Event');
+select is((select campaign_id from public.events where title='case-2-edu'),null::bigint,'a call naming no Campaign stores none');
+select is((select count(*) from public.events where title like 'campaign % 691' and title not in ('campaign own 691','campaign ancestor 691')),0::bigint,'no refused Campaign call left a row behind');
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.create_event(repeat('t', 121), 'sedinta', 0, now() + interval '1 day') $$,
+  'PT400', 'title_too_long', 'an Event title over 120 characters is refused before the gate');
+select throws_ok($$ select public.create_event('  ab  ', 'sedinta', 0, now() + interval '1 day') $$,
+  'PT400', 'title_too_short', 'an Event title is measured trimmed');
+select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() + interval '1 day', p_description => repeat('d', 2001)) $$,
+  'PT400', 'description_too_long', 'an Event description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() - interval '1 hour') $$,
+  'PT400', 'starts_at_in_past', 'an Event cannot be created starting in the past');
+select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() + interval '1 day', p_capacity => 1001) $$,
+  'PT400', 'invalid_event_capacity', 'a capacity above 1000 is invalid_event_capacity');
+reset role;
+
 select * from finish();
 rollback;

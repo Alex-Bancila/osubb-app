@@ -12,9 +12,11 @@ import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import type {
   EventDraft,
+  EventFormCampaign,
   EventFormGroup,
   EventFormOptions,
 } from '../screens/calendar/event-form-model';
+import { fetchCampaigns } from './campaigns';
 import { keys } from './keys';
 import { fetchMyGroups, type MyGroup } from './my-groups';
 
@@ -53,6 +55,7 @@ export function buildEventFormOptions(
   capabilities: Capabilities,
   mine: readonly MyGroup[],
   readable: readonly GroupRow[],
+  campaigns: readonly EventFormCampaign[] = [],
 ): EventFormOptions {
   const active = readable
     .filter((group) => group.status === 'active')
@@ -78,22 +81,31 @@ export function buildEventFormOptions(
   return {
     groups: groups.map(toFormGroup),
     groupNames: active.map((group) => ({ id: group.id, name: group.name })),
+    campaigns: [...campaigns],
   };
 }
 
 export async function fetchEventFormOptions(): Promise<EventFormOptions> {
-  const [capabilities, mine, groupsResult] = await Promise.all([
+  const [capabilities, mine, groupsResult, campaigns] = await Promise.all([
     fetchCapabilities(),
     fetchMyGroups(),
     supabase
       .from('groups')
       .select('id,name,path,min_level,status,is_organization'),
+    // Only an active Campaign may be attached (#691); the Group rule is
+    // eventCampaignsFor's, applied once a Group is chosen.
+    fetchCampaigns().then((rows) =>
+      rows
+        .filter((campaign) => campaign.is_active)
+        .map(({ id, name, group_id }) => ({ id, name, group_id })),
+    ),
   ]);
   if (groupsResult.error) throw groupsResult.error;
   return buildEventFormOptions(
     capabilities,
     mine,
     (groupsResult.data ?? []) as GroupRow[],
+    campaigns,
   );
 }
 
@@ -116,6 +128,7 @@ export async function createEvent(draft: EventDraft) {
     p_capacity: draft.capacity,
     p_description: draft.description,
     p_min_level: draft.minLevel,
+    p_campaign_id: draft.campaignId,
   };
   // PostgreSQL accepts NULL for optional values while generated optional RPC
   // properties omit nullability. Keep that generated-type mismatch local.
@@ -125,42 +138,6 @@ export async function createEvent(draft: EventDraft) {
   );
   if (error) throw error;
   return data;
-}
-
-const commandMessages = new Map<string, string>([
-  ['invalid_event_title', 'Scrie titlul evenimentului.'],
-  ['invalid_event_type', 'Alege un tip de eveniment valid.'],
-  [
-    'invalid_event_interval',
-    'Verifică orele: încheierea trebuie să fie după început.',
-  ],
-  [
-    'invalid_event_capacity',
-    'Capacitatea trebuie să fie un număr întreg pozitiv.',
-  ],
-  ['invalid_event_min_level', 'Alege un nivel minim valid.'],
-  ['event_group_required', 'Alege grupul evenimentului.'],
-  [
-    'calendar_manage_forbidden',
-    'Nu mai ai permisiunea să creezi evenimente în acest grup. Reîncarcă pagina și încearcă din nou.',
-  ],
-  [
-    'event_min_level_below_group',
-    'Nivelul ales este sub nivelul minim al grupului.',
-  ],
-  [
-    'event_min_level_above_actor',
-    'Nu poți alege un nivel minim peste nivelul tău.',
-  ],
-]);
-
-export function eventCreationErrorMessage(error: unknown): string {
-  const fallback = 'Nu am putut crea evenimentul. Reîncearcă.';
-  const reason =
-    typeof error === 'object' && error !== null && 'message' in error
-      ? String(error.message)
-      : '';
-  return commandMessages.get(reason) ?? fallback;
 }
 
 export function createEventMutationOptions(client: QueryClient) {

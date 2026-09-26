@@ -1,5 +1,5 @@
-import { validateTaskDraft } from './task-draft-validation';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
+import type { TaskDraftInput } from '../../lib/schemas/task';
 
 export type ManagedWorkGroup = {
   id: number;
@@ -11,8 +11,11 @@ export type TaskFormOptions = {
   groups: ManagedWorkGroup[];
   campaigns: { id: number; name: string; group_id: number }[];
   umbrellas: { id: number; title: string; group_id: number }[];
-  /** Names of readable Groups, so a Child Group can be shown with its parent. */
-  groupNames?: { id: number; name: string }[];
+  /**
+   * Names of readable Groups, so a Child Group can be shown with its parent,
+   * and whether each is a Private Group (#757).
+   */
+  groupNames?: { id: number; name: string; is_private?: boolean }[];
 };
 export type TaskDraft = {
   title: string;
@@ -25,6 +28,8 @@ export type TaskDraft = {
   assignmentMode: 'direct' | 'public' | null;
   executorId: string | null;
   campaignId: number | null;
+  /** The Attached Link (#684): both set, or both null for none. */
+  link: { label: string | null; url: string | null };
 };
 export type TaskFormValues = {
   title: string;
@@ -37,7 +42,36 @@ export type TaskFormValues = {
   assignmentMode: 'direct' | 'public';
   executorId: string | null;
   campaignId: number | null;
+  link: { label: string; url: string };
 };
+
+/**
+ * The first level of the Origin cascade (ruling R3): the managed Groups with
+ * no managed ancestor in the same list. A Responsible of one Team sees that
+ * Team here; a Department Manager sees the Department, not its Teams.
+ */
+export function rootGroups(groups: ManagedWorkGroup[]) {
+  const managed = new Set(groups.map((group) => group.id));
+  return groupOptions(groups).filter(
+    (group) => !group.path.some((id) => id !== group.id && managed.has(id)),
+  );
+}
+
+/** The second level: every managed Group below `rootId`, at any depth. */
+export function groupsBelow(rootId: number, groups: ManagedWorkGroup[]) {
+  return groupOptions(groups).filter(
+    (group) => group.id !== rootId && group.path.includes(rootId),
+  );
+}
+
+/** The root a chosen Origin sits under — itself when it is one. */
+export function rootOf(groupId: number | null, groups: ManagedWorkGroup[]) {
+  const group = groups.find((candidate) => candidate.id === groupId);
+  if (!group) return undefined;
+  const roots = new Set(rootGroups(groups).map((root) => root.id));
+  const rootId = group.path.find((id) => roots.has(id));
+  return groups.find((candidate) => candidate.id === rootId);
+}
 
 /** Managed Groups in tree order: parents first, siblings alphabetically. */
 export function groupOptions(groups: ManagedWorkGroup[]) {
@@ -61,6 +95,39 @@ export function groupLookup(options: TaskFormOptions) {
   for (const group of options.groupNames ?? []) names.set(group.id, group);
   for (const group of options.groups) names.set(group.id, group);
   return names;
+}
+
+/**
+ * The Task Audience's options (ruling R26): `org` opens a public Task to every
+ * Member, with no Minimum Level gate, so the word "eligibili" is gone.
+ */
+export const AUDIENCE_LABELS = {
+  local: 'Membrii grupului',
+  org: 'Toți membrii OSUBB',
+} as const;
+
+/** The Audiență field's helper text; shown only while the mode is Public. */
+export const AUDIENCE_HINT = 'Cine vede taskul și se poate înscrie.';
+
+/** Why the organization-wide Audience is not offered for a Private Group. */
+export const PRIVATE_GROUP_AUDIENCE_HINT =
+  'Grupul este privat: taskurile lui sunt doar pentru membrii grupului.';
+
+/**
+ * A Private Group's Tasks are for its members only (ruling R25): the
+ * organization-wide Audience is refused (`private_group_local_only`), so the
+ * form does not offer it.
+ */
+export function isPrivateGroup(
+  groupId: number | null | undefined,
+  options: TaskFormOptions,
+) {
+  return (
+    groupId != null &&
+    options.groupNames?.some(
+      (group) => group.id === groupId && group.is_private === true,
+    ) === true
+  );
 }
 
 /** Umbrellas a Subtask may join: only those whose Origin is the chosen Group. */
@@ -91,21 +158,17 @@ export function campaignsFor(
     : [];
 }
 
-export function taskDraft(
+/**
+ * What the form's values say, in the shape `taskDraftSchema` checks: the
+ * Origin a Subtask inherits, the deadline read in Romania (`''` when that
+ * wall-clock time does not exist), and no assignment fields on an Umbrella.
+ * Nothing is judged here; the schema does that.
+ */
+export function taskDraftInput(
   values: TaskFormValues,
   options: TaskFormOptions,
-): TaskDraft | string {
-  if (
-    values.kind === 'subtask' &&
-    !options.umbrellas.some((parent) => parent.id === values.parentTaskId)
-  )
-    return 'Alege un task-umbrelă disponibil.';
+): TaskDraftInput {
   const origin = originFor(values, options);
-  const deadline = values.deadline
-    ? bucharestWallTimeToIso(values.deadline)
-    : null;
-  if (values.deadline && !deadline)
-    return 'Alege un termen valid, în ora României.';
   const umbrella = values.kind === 'umbrella';
   // Send what the form shows: a Campaign that is no longer offered for this
   // Origin (the options were refreshed) is displayed as none, so it is none.
@@ -114,20 +177,31 @@ export function taskDraft(
   )
     ? values.campaignId
     : null;
-  const draft: TaskDraft = {
-    title: values.title.trim(),
-    description: values.description.trim() || null,
-    deadline,
-    groupId: origin?.id ?? 0,
-    kind: umbrella ? 'umbrella' : 'task',
+  return {
+    title: values.title,
+    description: values.description,
+    deadline: values.deadline
+      ? (bucharestWallTimeToIso(values.deadline) ?? '')
+      : null,
+    groupId: origin?.id ?? values.groupId ?? 0,
+    kind: values.kind,
     parentTaskId: values.kind === 'subtask' ? values.parentTaskId : null,
-    audience: umbrella ? null : values.audience,
+    // A Private Group's Task is local whatever was picked before the Group
+    // was (#757), and so is a direct Task, whose Audience means nothing
+    // (R26); the form shows the same. `values.audience` keeps the choice, so
+    // switching back to Public restores it.
+    audience: umbrella
+      ? null
+      : values.assignmentMode === 'direct' ||
+          isPrivateGroup(origin?.id, options)
+        ? 'local'
+        : values.audience,
     assignmentMode: umbrella ? null : values.assignmentMode,
     executorId:
       !umbrella && values.assignmentMode === 'direct'
         ? values.executorId
         : null,
     campaignId: umbrella ? null : campaignId,
+    link: values.link,
   };
-  return validateTaskDraft(draft, options) ?? draft;
 }

@@ -44,34 +44,55 @@ insert into people values
 (1,'bc','bc','activ'),(2,'bce_edu','bce','activ'),(3,'bce_foreign','bce','activ'),
 (4,'coord','voluntar','activ'),(5,'resp','voluntar','activ'),(6,'ordinary_edu','voluntar','activ'),
 (7,'ordinary_proj','voluntar','activ'),(8,'ind_a','voluntar','activ'),(9,'ind_b','voluntar','activ'),
-(10,'dt_member','voluntar','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
+(10,'dt_member','vot','activ'),(11,'vot','vot','activ'),(12,'inactive_bce','bce','inactiv'),
 (13,'claimless','voluntar','activ'),(14,'moderator','moderator','activ');
 insert into auth.users(id,email)
 select ('52000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid, name || '.520@test.local' from people;
 insert into public.profiles(id,full_name,email,role,status)
 select ('52000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,name,name || '.520@test.local',role,status from people;
-insert into public.member_departments(member_id,dept_id)
+insert into pg_temp.fixture_member_departments(member_id,dept_id)
 select ('52000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid,
 case when n=3 then 'pr' else 'edu' end from people where n in (2,3,4,6,12,13);
-insert into public.teams(id,name,dept_id) values ('t-520-dt','Child #520','edu'),('t-520-ind','Independent #520',null);
-insert into public.team_members(team_id,member_id) values
+insert into pg_temp.fixture_teams(id,name,dept_id) values ('t-520-dt','Child #520','edu'),('t-520-ind','Independent #520',null);
+insert into pg_temp.fixture_team_members(team_id,member_id) values
 ('t-520-dt','52000000-0000-0000-0000-000000000010'),
 ('t-520-ind','52000000-0000-0000-0000-000000000008'),
 ('t-520-ind','52000000-0000-0000-0000-000000000009');
-insert into public.projects(name,leader_id,created_by) values
+insert into pg_temp.fixture_projects(name,leader_id,created_by) values
 ('Project #520','52000000-0000-0000-0000-000000000004','52000000-0000-0000-0000-000000000001'),
 ('Archived #520','52000000-0000-0000-0000-000000000004','52000000-0000-0000-0000-000000000001');
-insert into public.project_members(project_id,member_id,project_role)
-select id,'52000000-0000-0000-0000-000000000005','responsible' from public.projects where name='Project #520';
-insert into public.project_members(project_id,member_id,project_role)
-select id,'52000000-0000-0000-0000-000000000007','member' from public.projects where name='Project #520';
-update public.projects set status='archived' where name='Archived #520';
--- Wave 2 OD9 exception: gated/native fixtures only, rolled back with this suite.
-update public.groups set min_level=3, application_level=3 where legacy_team_id='t-520-dt';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'52000000-0000-0000-0000-000000000005','responsible' from pg_temp.fixture_projects where name='Project #520';
+insert into pg_temp.fixture_project_members(project_id,member_id,project_role)
+select id,'52000000-0000-0000-0000-000000000007','member' from pg_temp.fixture_projects where name='Project #520';
+update pg_temp.fixture_projects set status='archived' where name='Archived #520';
+-- The retired mirror no longer creates these rows: build the Group tree and
+-- roster explicitly so this suite exercises native authority.
+insert into public.groups(name,category,parent_id,min_level,application_level) values ('Child #520','team',(select id from public.groups where name = 'Educațional'),3,3),('Independent #520','team',null,0,0);
+insert into public.groups(name,category,status) select p.name,'project',p.status from pg_temp.fixture_projects p
+ where p.name in ('Project #520','Archived #520');
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+  from pg_temp.fixture_member_departments md
+  join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
+  join public.profiles p on p.id=md.member_id
+ where md.member_id::text like '52000000-%';
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,tm.member_id,case when tm.team_id='t-520-ind' then 'responsible' else 'member' end
+  from pg_temp.fixture_team_members tm join public.groups g on g.id = pg_temp.team_group(tm.team_id)
+ where tm.team_id in ('t-520-dt','t-520-ind');
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,p.leader_id,'manager' from pg_temp.fixture_projects p
+  join public.groups g on g.id = pg_temp.project_group(p.id)
+ where p.name in ('Project #520','Archived #520');
+insert into public.group_members(group_id,member_id,group_role)
+select g.id,pm.member_id,pm.project_role from pg_temp.fixture_project_members pm
+  join public.groups g on g.id = pg_temp.project_group(pm.project_id)
+  join pg_temp.fixture_projects p on p.id=pm.project_id where p.name='Project #520';
 insert into public.groups(name,category,min_level,automatic_membership) values ('AG #520','team',3,true);
 create temp table fx as
-select id, case when legacy_dept_id='edu' then 'edu' when legacy_dept_id='org' then 'org'
-when legacy_team_id='t-520-dt' then 'dt' when legacy_team_id='t-520-ind' then 'ind'
+select id, case when name = 'Educațional' then 'edu' when name = 'OSUBB' then 'org'
+when id = pg_temp.team_group('t-520-dt') then 'dt' when id = pg_temp.team_group('t-520-ind') then 'ind'
 when name='Project #520' then 'project' when name='Archived #520' then 'archived'
 when name='AG #520' then 'ag' end as name from public.groups;
 grant select on fx to authenticated,anon;
@@ -237,7 +258,7 @@ select extensions.dblink_exec('group_520_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('group_520_setup', $setup$
   drop function if exists public.test_520_require();
   drop function if exists public.test_520_revoke();
-  delete from public.projects where name = 'Race #520';
+  delete from public.groups where name = 'Race #520';
   delete from auth.users where id in ('52000000-0000-0000-0000-000000000090',
     '52000000-0000-0000-0000-000000000091','52000000-0000-0000-0000-000000000092');
   insert into auth.users(id,email) values
@@ -248,10 +269,11 @@ select extensions.dblink_exec('group_520_setup', $setup$
     ('52000000-0000-0000-0000-000000000090','Race coord','coord.race.520@test.local','voluntar','activ'),
     ('52000000-0000-0000-0000-000000000091','Race resp','resp.race.520@test.local','voluntar','activ'),
     ('52000000-0000-0000-0000-000000000092','Race BC','bc.race.520@test.local','bc','activ');
-  insert into public.projects(name,leader_id,created_by) values
-    ('Race #520','52000000-0000-0000-0000-000000000090','52000000-0000-0000-0000-000000000092');
-  insert into public.project_members(project_id,member_id,project_role)
-    select id,'52000000-0000-0000-0000-000000000091','responsible' from public.projects where name='Race #520';
+  insert into public.groups(name,category) values ('Race #520','project');
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52000000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #520';
+  insert into public.group_members(group_id,member_id,group_role)
+    select id,'52000000-0000-0000-0000-000000000091','responsible' from public.groups where name='Race #520';
   -- Test-only callable bridge to the owner-only gate, never a production grant.
   create function public.test_520_require() returns text
   language sql security definer set search_path = '' as $$
@@ -304,7 +326,7 @@ select throws_ok($$select private.require_group_work_manager((select id from pub
 select extensions.dblink_exec('group_520_setup', $$
   drop function public.test_520_require();
   drop function public.test_520_revoke();
-  delete from public.projects where name='Race #520';
+  delete from public.groups where name = 'Race #520';
   delete from auth.users where id in ('52000000-0000-0000-0000-000000000090',
     '52000000-0000-0000-0000-000000000091','52000000-0000-0000-0000-000000000092');
 $$);

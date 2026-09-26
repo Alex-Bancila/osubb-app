@@ -16,6 +16,7 @@ function presentation(
     audience: 'org',
     audienceLabel: 'Toată organizația',
     author: 'BC',
+    authorMember: null,
     priority: 'critical',
     category: 'organizatoric',
     pinned: true,

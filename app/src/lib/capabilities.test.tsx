@@ -13,11 +13,13 @@ vi.mock('./auth', () => ({ useAuth: mocks.useAuth }));
 
 import {
   fetchCapabilities,
+  submitsWorkRequests,
   useCapabilities,
   useCapability,
   type Capabilities,
 } from './capabilities';
 import { keys } from '../queries/keys';
+import type { MemberClaims } from './auth';
 
 const serverRow = {
   manages_any_group: true,
@@ -113,5 +115,30 @@ describe('useCapabilities', () => {
     });
     expect(view.result.current.data).toBeUndefined();
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('submitsWorkRequests', () => {
+  function claims(level: number): MemberClaims {
+    return {
+      member_role: 'voluntar',
+      member_level: level,
+      group_ids: [],
+    };
+  }
+
+  it('is true below level 5 (#631, ruling R14)', () => {
+    expect(submitsWorkRequests(claims(1))).toBe(true);
+    expect(submitsWorkRequests(claims(4))).toBe(true);
+  });
+
+  it('is false at level 5 and above', () => {
+    expect(submitsWorkRequests(claims(5))).toBe(false);
+    expect(submitsWorkRequests(claims(6))).toBe(false);
+    expect(submitsWorkRequests(claims(9))).toBe(false);
+  });
+
+  it('treats no claims as level 0', () => {
+    expect(submitsWorkRequests(null)).toBe(true);
   });
 });

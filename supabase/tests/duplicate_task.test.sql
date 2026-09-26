@@ -40,7 +40,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(75);
+select plan(81);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -71,26 +71,29 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('34100000-0000-0000-0000-000000000011', 'Executor Istoric 341', 'exec.history.341@test.local', 'voluntar', 'activ'),
   ('34100000-0000-0000-0000-000000000012', 'Candidat Istoric 341', 'candidate.history.341@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('34100000-0000-0000-0000-000000000002', 'edu'),
   ('34100000-0000-0000-0000-000000000003', 'pr'),
   ('34100000-0000-0000-0000-000000000004', 'edu'),
   ('34100000-0000-0000-0000-000000000011', 'edu'),
   ('34100000-0000-0000-0000-000000000012', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-341-ind', 'Echipa Independenta 341', null);
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-341-ind', '34100000-0000-0000-0000-000000000005');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Proiect #341', 'active',
    '34100000-0000-0000-0000-000000000006', '34100000-0000-0000-0000-000000000001');
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #341'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #341'),
    '34100000-0000-0000-0000-000000000007', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #341'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #341'),
    '34100000-0000-0000-0000-000000000008', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.campaigns (group_id, name, is_active, created_by) values
   (pg_temp.dept_group('edu'), 'Campanie Activa #341', true, '34100000-0000-0000-0000-000000000002'),
@@ -188,13 +191,13 @@ insert into public.tasks
 select 'Proiect responsabil #341', 'Task de proiect', now() + interval '10 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '5 days', '34100000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #341';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #341';
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
 select 'Proiect membru #341', 'Munca unui membru', now() + interval '10 days',
        pg_temp.project_group(project.id), 'local', 'direct', 'todo'::public.task_status,
        now() - interval '5 days', '34100000-0000-0000-0000-000000000001'::uuid
-  from public.projects as project where project.name = 'Proiect #341';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #341';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select id, '34100000-0000-0000-0000-000000000008', '34100000-0000-0000-0000-000000000001',
        now() - interval '4 days'
@@ -206,6 +209,10 @@ insert into public.tasks
 values
   ('Scriere directa #341', 'Tinta', now() + interval '10 days', pg_temp.dept_group('edu'), 'local', 'direct', 'todo',
    now() - interval '5 days', '34100000-0000-0000-0000-000000000002');
+
+-- #684: the happy source carries an Attached Link the clone must copy.
+update public.tasks set link_label = 'Brief #684', link_url = 'https://example.org/brief-684'
+ where title = 'Sursa fericita #341';
 
 -- ==================== Ids, resolved as the owner ====================
 create temp table f341 as
@@ -300,7 +307,7 @@ select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-01 09:00:00+
 reset role;
 
 select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s',
-                         clone.title, clone.description, (select legacy_dept_id from public.groups where id = clone.group_id), clone.audience,
+                         clone.title, clone.description, (select id from pg_temp.fixture_departments where group_id = clone.group_id), clone.audience,
                          clone.assignment_mode, clone.campaign_id::text, clone.kind, clone.status::text,
                          clone.deadline::text, clone.created_by::text,
                          (clone.parent_task_id is null)::text,
@@ -313,6 +320,11 @@ select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s',
          '34100000-0000-0000-0000-000000000002',
          (select happy_source_id from f341)),
   'the clone shares title/description/Origin/audience/assignment_mode/the active Campaign, is kind=task, status=todo, carries the CALLER''s own deadline, created_by=the actor, no parent, an opened queue (public) and duplicated_from_task_id = the source');
+select is((select format('%s|%s', clone.link_label, clone.link_url)
+             from public.tasks as clone
+            where clone.duplicated_from_task_id = (select happy_source_id from f341)),
+  'Brief #684|https://example.org/brief-684',
+  '#684: the clone copies the source''s Attached Link');
 select is((select format('%s|%s', (clone.difficulty is null)::text, (clone.rating is null)::text)
              from public.tasks as clone
             where clone.duplicated_from_task_id = (select happy_source_id from f341)),
@@ -396,7 +408,7 @@ select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-02 09:00:00+
 reset role;
 
 select is((select format('%s|%s|%s',
-                         (clone.parent_task_id is null)::text, (select legacy_dept_id from public.groups where id = clone.group_id),
+                         (clone.parent_task_id is null)::text, (select id from pg_temp.fixture_departments where group_id = clone.group_id),
                          clone.duplicated_from_task_id::text)
              from public.tasks as clone
             where clone.duplicated_from_task_id = (select sub_source_id from f341)),
@@ -638,19 +650,23 @@ select extensions.dblink_exec('dt_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('dt_setup', $$
   delete from public.tasks where title like '%#341 committed%';
   delete from public.campaigns where name = 'Campanie blocaj #341 committed';
-  delete from public.member_departments where member_id = '34100000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34100000-0000-0000-0000-000000000051';
   insert into auth.users (id, email) values
     ('34100000-0000-0000-0000-000000000051', 'probe.manager.341@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('34100000-0000-0000-0000-000000000051', 'Probe Manager 341', 'probe.manager.341@test.local', 'bce', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('34100000-0000-0000-0000-000000000051', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from (values ('34100000-0000-0000-0000-000000000051'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '34100000-%'
+  on conflict (group_id,member_id) do nothing;
   insert into public.campaigns (group_id, name, is_active, created_by) values
-    ((select id from public.groups where legacy_dept_id = 'edu'), 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
+    ((select id from public.groups where name = 'Educațional'), 'Campanie blocaj #341 committed', true, '34100000-0000-0000-0000-000000000051');
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, campaign_id, created_at, created_by)
-  select 'Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'todo',
+  select 'Sonda blocaj #341 committed', 'Sonda', now() + interval '10 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'todo',
          campaign.id, now() - interval '3 days', '34100000-0000-0000-0000-000000000051'
     from public.campaigns as campaign
    where campaign.name = 'Campanie blocaj #341 committed';
@@ -705,7 +721,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '34100000-0000-0000-0000-000000000051'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'and the Group roster row its authority rests on FOR SHARE too, since a BCE (unlike BC/Moderator) reaches that branch');
 
 select extensions.dblink_exec('dt_lock', 'rollback');
@@ -720,7 +736,6 @@ select extensions.dblink_exec('dt_setup', $$
    where duplicated_from_task_id in (select id from public.tasks where title like '%#341 committed%');
   delete from public.tasks where title like '%#341 committed%';
   delete from public.campaigns where name = 'Campanie blocaj #341 committed';
-  delete from public.member_departments where member_id = '34100000-0000-0000-0000-000000000051';
   delete from auth.users where id = '34100000-0000-0000-0000-000000000051';
 $$);
 select extensions.dblink_disconnect('dt_setup');
@@ -757,5 +772,72 @@ select throws_ok($$select public.duplicate_task((select id from g521_tasks where
 reset role;
 
 select ok(not exists(select 1 from public.tasks clone join public.tasks source on source.id=clone.duplicated_from_task_id where clone.group_id is distinct from source.group_id),'every clone preserves the source Group');
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.duplicate_task(0, now() - interval '1 day') $$,
+  'PT400', 'deadline_in_past', 'a duplicate is a creation: a deadline in the past is refused before the gate');
+reset role;
+
+
+-- ==================== 6b. #673: a source stored before the kit was validated ====================
+-- The only text a duplicate writes is its source's. Plant a source the two
+-- length constraints would refuse (as a staging row could be between the
+-- kit's two migrations), then restore both constraints as they were.
+create temp table c673 as
+  select conname, pg_get_constraintdef(oid) as def from pg_constraint
+   where conrelid = 'public.tasks'::regclass
+     and conname in ('tasks_title_length_ck', 'tasks_description_length_ck');
+create temp table s673 as
+  select id, title, description from public.tasks where id = (select completed_source_id from f341);
+alter table public.tasks drop constraint tasks_title_length_ck, drop constraint tasks_description_length_ck;
+update public.tasks set title = 'ab' where id = (select id from s673);
+select pg_temp.test_login('34100000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok(format($$ select public.duplicate_task(%s, '2027-06-05 09:00:00+00') $$,
+  (select completed_source_id from f341)),
+  'PT400', 'title_too_short', '#673: a source title under 3 characters is answered title_too_short, not a raw constraint name');
+reset role;
+update public.tasks set title = (select title from s673), description = repeat('d', 2001)
+ where id = (select id from s673);
+select pg_temp.test_login('34100000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select throws_ok(format($$ select public.duplicate_task(%s, '2027-06-05 09:00:00+00') $$,
+  (select completed_source_id from f341)),
+  'PT400', 'description_too_long', '#673: a source description over 2000 characters is answered description_too_long');
+reset role;
+update public.tasks set description = (select description from s673) where id = (select id from s673);
+do $$
+declare r record;
+begin
+  for r in select conname, def from c673 loop
+    execute format('alter table public.tasks add constraint %I %s', r.conname, r.def);
+  end loop;
+end $$;
+
+
+-- ==================== #794: a direct copy carries the local Audience ====================
+-- A legacy direct + org source (the #794 migration corrects every such row;
+-- no command writes one any more) is copied as direct + local, the way a
+-- Private Group's copy is coerced (#756): the copy never re-creates the
+-- combination R26 forbids.
+insert into public.tasks
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_at, created_by)
+values
+  ('Sursa directa org #794', 'Rand vechi direct + org', now() + interval '10 days', pg_temp.dept_group('edu'), 'org', 'direct', 'todo',
+   now() - interval '5 days', '34100000-0000-0000-0000-000000000002');
+select pg_temp.test_login('34100000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.duplicate_task(%s, '2027-06-06 09:00:00+00') $$,
+  (select id from public.tasks where title = 'Sursa directa org #794')),
+  '#794: the local BCE duplicates a legacy direct + org Task');
+reset role;
+select is((select format('%s|%s|%s', clone.audience, clone.assignment_mode, clone.queue_opened_at is null)
+             from public.tasks as clone
+            where clone.duplicated_from_task_id = (select id from public.tasks
+                                                    where title = 'Sursa directa org #794' and duplicated_from_task_id is null)),
+  'local|direct|t',
+  '#794: the copy of a direct Task is direct + local, never direct + org');
 select * from finish();
 rollback;

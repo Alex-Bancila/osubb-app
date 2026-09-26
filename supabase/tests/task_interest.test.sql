@@ -1,13 +1,13 @@
 -- #330: public.express_task_interest / public.withdraw_task_interest -- the
 -- only way a Member joins or leaves a public Task's Candidate Queue.
 --
--- The safety property this suite exists for: the FIRST eligible Member to
--- express interest becomes the Executor; every later one enters the ordered
--- Queue. Two sessions expressing interest at the same instant must not both
--- open an Assignment, and the loser must never see the raw
--- task_assignments_one_active_per_task_uidx unique_violation -- it must block
--- on the tasks row lock, wake, see the Assignment, and queue behind it.
--- Section 9's pg_temp.test_race asserts exactly that, b_waited included.
+-- The safety property this suite exists for (#682, ruling R9): expressing
+-- interest ALWAYS queues -- nobody becomes the Executor by arriving first, and
+-- no Assignment is ever opened by this command; the Task Manager selects with
+-- select_task_candidate. Two sessions expressing interest at the same instant
+-- must serialize on the tasks row lock and both end as pending Candidates in
+-- arrival order. Section 9's pg_temp.test_race asserts exactly that,
+-- b_waited included.
 --
 -- Queue order is derived, never stored: task_candidates has no position
 -- column, order is (joined_at, id), and private.queue_position answers it.
@@ -26,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(97);
+select plan(104);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -49,18 +49,21 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33000000-0000-0000-0000-000000000007', 'BC Inactiv 330', 'inactive.bc.330@test.local', 'bc', 'inactiv'),
   ('33000000-0000-0000-0000-000000000008', 'Fara Claimuri 330', 'claimless.330@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33000000-0000-0000-0000-000000000001', 'edu'),
   ('33000000-0000-0000-0000-000000000002', 'edu'),
   ('33000000-0000-0000-0000-000000000003', 'edu'),
   ('33000000-0000-0000-0000-000000000004', 'edu'),
   ('33000000-0000-0000-0000-000000000006', 'pr');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- Public, org-audience Opportunities: readable by every live Member (R6).
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
-  ('Org first come #330', 'Primul venit', '2027-03-01 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
+  ('Org always queues #330', 'Mereu coada', '2027-03-01 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001'),
   ('Queue order #330', 'Coada ordonata', '2027-03-02 09:00:00+00', pg_temp.dept_group('edu'), 'org', 'public', 'todo',
    '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000001'),
@@ -76,9 +79,9 @@ values
 update public.tasks set queue_closed_at = '2027-01-02 00:00:00+00'
  where title = 'Queue closed #330';
 
--- Public, LOCAL Opportunity in 'edu': an outsider cannot even read it (R6
--- local needs Origin membership), while a BCE of another Department reads it
--- through R1 and is still not eligible to join its queue.
+-- Public, LOCAL Opportunity in 'edu': a BCE of another Department reads it
+-- through R1 yet may not join its queue (42501); an outsider does not even
+-- read it (#794, ruling R26), so to them it is not found (PT404).
 insert into public.tasks
   (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
 values
@@ -117,7 +120,7 @@ values
 create temp table f330 as
 select
   9223372036854775807::bigint as missing_id,
-  (select id from public.tasks where title = 'Org first come #330') as first_come_task_id,
+  (select id from public.tasks where title = 'Org always queues #330') as queues_task_id,
   (select id from public.tasks where title = 'Queue order #330') as queue_task_id,
   (select id from public.tasks where title = 'Withdraw none #330') as withdraw_none_task_id,
   (select id from public.tasks where title = 'Gate denial #330') as gate_task_id,
@@ -201,51 +204,90 @@ select ok(has_function_privilege('authenticated',
   'private.withdraw_task_interest_impl(bigint)'::regprocedure, 'execute'),
   'authenticated can execute private.withdraw_task_interest_impl');
 
--- ==================== 2. First come, first served ====================
--- An org-audience Opportunity is open to every live Member, Origin or not:
--- the outsider (no Department at all) takes it and becomes the Executor.
+-- #682: the two arrival-based Assignment paths are retired from the kit's
+-- allow-list, and no function body anywhere still names them.
+select throws_ok(format($$ select private.open_task_assignment(%s, '33000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000002', 'first_come') $$,
+  (select gate_task_id from f330)), 'PT400', 'invalid_assignment_via',
+  'open_task_assignment refuses via = first_come -- nobody becomes Executor by arriving first (#682)');
+select throws_ok(format($$ select private.open_task_assignment(%s, '33000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000001', 'queue_promotion') $$,
+  (select gate_task_id from f330)), 'PT400', 'invalid_assignment_via',
+  'open_task_assignment refuses via = queue_promotion -- no Candidate is ever promoted (#682)');
+select is(array(
+    select procedure.oid::regprocedure::text
+      from pg_proc as procedure
+      join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+     where namespace.nspname in ('public', 'private')
+       and procedure.prokind = 'f'
+       and pg_get_functiondef(procedure.oid) ~ '(first_come|queue_promotion)'
+     order by 1),
+  '{}'::text[],
+  'no function body in public or private names first_come or queue_promotion');
+
+-- ==================== 2. Interest always queues ====================
+-- #682 (ruling R9): an org-audience Opportunity with no Executor is open to
+-- every live Member, Origin or not -- and the first to arrive joins the
+-- Candidate Queue at position 1 like everybody else. The Task Manager selects.
 
 select pg_temp.test_login('33000000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.express_task_interest(%s) $$,
-  (select first_come_task_id from f330)),
+  (select queues_task_id from f330)),
   'the first eligible Member to express interest on an org Opportunity is accepted');
+select is((select private.queue_position((select queues_task_id from f330),
+            '33000000-0000-0000-0000-000000000005')), 1,
+  'the first Member is a pending Candidate at queue position 1');
 reset role;
 
-select is((select format('%s|%s|%s', assignment.member_id, assignment.assigned_by,
-                         (assignment.ended_at is null)::text)
-             from public.task_assignments as assignment
-            where assignment.task_id = (select first_come_task_id from f330)),
-  '33000000-0000-0000-0000-000000000005|33000000-0000-0000-0000-000000000005|true',
-  'first come opens exactly one active Assignment, self-assigned');
-select is((select count(*) from public.task_candidates
-            where task_id = (select first_come_task_id from f330)), 0::bigint,
-  'the first Member becomes the Executor, not a Candidate -- no queue row is written');
-select is((select format('%s|%s|%s|%s', activity.kind, activity.actor_id,
-                         (activity.assignment_id is not null)::text, activity.details ->> 'via')
+select is((select count(*) from public.task_assignments
+            where task_id = (select queues_task_id from f330)), 0::bigint,
+  'no Assignment is opened -- the Task has no Executor until the manager selects one');
+select is((select format('%s|%s|%s', count(*), min(candidate.member_id::text), min(candidate.status))
+             from public.task_candidates as candidate
+            where candidate.task_id = (select queues_task_id from f330)),
+  '1|33000000-0000-0000-0000-000000000005|pending',
+  'exactly one pending Candidature is written, for the Member who arrived');
+select is((select string_agg(format('%s|%s|%s|%s', activity.kind, activity.actor_id,
+                                    (activity.assignment_id is null)::text, activity.details ->> 'position'), ',')
              from public.task_activity as activity
-            where activity.task_id = (select first_come_task_id from f330)),
-  'executor_assigned|33000000-0000-0000-0000-000000000005|true|first_come',
-  'the kit writes one executor_assigned row carrying the Assignment id and details.via = first_come');
+            where activity.task_id = (select queues_task_id from f330)),
+  'interest_expressed|33000000-0000-0000-0000-000000000005|true|1',
+  'the only activity row is interest_expressed at position 1 -- no executor_assigned row is written');
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
-             where notification.task_id = %s $$, (select first_come_task_id from f330)),
+             where notification.task_id = %s $$, (select queues_task_id from f330)),
   $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
-  'only the Task manager is notified -- private.notify drops the actor, so the self-assigning Member gets no "Task nou" row');
-select is((select format('%s|%s|%s', notification.title, notification.body,
-                         (notification.dedupe_key is null)::text)
+  'only the Task manager (private.task_managers) is notified');
+select is((select string_agg(format('%s|%s|%s', notification.title, notification.body, notification.dedupe_key), ',')
              from public.notifications as notification
-            where notification.task_id = (select first_come_task_id from f330)),
-  'Executor nou: Org first come #330|Din Afara 330 a preluat taskul.|true',
-  'the manager notification uses the pinned Romanian first-come copy and is never coalesced');
+            where notification.task_id = (select queues_task_id from f330)),
+  format('Coadă: Org always queues #330|1 candidat în așteptare.|task:%s:queue',
+         (select queues_task_id from f330)),
+  'the manager gets exactly one coalesced "Coadă" notification and no "Executor nou"');
 
 -- ==================== 3. The ordered Candidate Queue ====================
+-- The first Member queues too; the manager selects them, keeping the rest of
+-- the queue open, so the later Members queue behind an Executor.
 
 select pg_temp.test_login('33000000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select lives_ok(format($$ select public.express_task_interest(%s) $$,
   (select queue_task_id from f330)),
-  'the first Member on the queue Task becomes its Executor');
+  'the first Member on the queue Task joins its queue');
+reset role;
+
+-- Resolved as the owner (the #328 trap).
+create temp table sel330 as
+select candidate.id as candidate_id
+  from public.task_candidates as candidate
+ where candidate.task_id = (select queue_task_id from f330)
+   and candidate.member_id = '33000000-0000-0000-0000-000000000002';
+grant select on sel330 to authenticated;
+
+select pg_temp.test_login('33000000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select lives_ok(format($$ select public.select_task_candidate(%s, %s, false) $$,
+  (select queue_task_id from f330), (select candidate_id from sel330)),
+  'the manager selects that Candidate as Executor -- select_task_candidate is the only way in');
 reset role;
 
 select pg_temp.test_login('33000000-0000-0000-0000-000000000003', jsonb_build_object(
@@ -262,7 +304,8 @@ select is((select format('%s|%s|%s|%s', activity.kind, activity.actor_id,
                          (activity.assignment_id is null)::text, activity.details ->> 'position')
              from public.task_activity as activity
             where activity.task_id = (select queue_task_id from f330)
-              and activity.kind = 'interest_expressed'),
+              and activity.kind = 'interest_expressed'
+              and activity.actor_id = '33000000-0000-0000-0000-000000000003'),
   'interest_expressed|33000000-0000-0000-0000-000000000003|true|1',
   'interest_expressed names the Candidate, carries NO assignment_id (candidate privacy) and records details.position');
 select is((select format('%s|%s|%s', notification.title, notification.body, notification.dedupe_key)
@@ -447,18 +490,24 @@ select throws_ok(format($$ select public.express_task_interest(%s) $$,
   'a local Opportunity admits only Members of its own Origin, global read access notwithstanding');
 reset role;
 
--- The outsider has no Department at all, so the same local Task is invisible:
--- visibility is the OUTER gate and answers first, with PT404.
+-- The outsider has no Department at all. Since #794 (ruling R26) a local
+-- Opportunity of a Group they are not in is invisible to them again, so
+-- interest in it is refused as not found -- PT404, never a disclosure.
 select pg_temp.test_login('33000000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.express_task_interest(%s) $$,
   (select local_task_id from f330)), 'PT404', 'task_not_found',
-  'a local Opportunity the caller cannot read is not found -- never a hint that it exists');
+  'a local Opportunity of a Group the caller is not in is not found, not forbidden (#794)');
 select throws_ok(format($$ select public.withdraw_task_interest(%s) $$,
   (select withdraw_none_task_id from f330)), 'PT409', 'not_a_candidate',
   'withdrawing without a live pending Candidature is rejected');
+reset role;
+
+-- Member 2 is the selected Executor of the queue Task (section 3).
+select pg_temp.test_login('33000000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.withdraw_task_interest(%s) $$,
-  (select first_come_task_id from f330)), 'PT409', 'not_a_candidate',
+  (select queue_task_id from f330)), 'PT409', 'not_a_candidate',
   'the Executor is not a Candidate -- leaving a Task one already holds is a different command (#331)');
 reset role;
 
@@ -570,10 +619,6 @@ select extensions.dblink_exec('ti_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.tasks where title like '%#330 committed%';
-  delete from public.member_departments where member_id in (
-    '33000000-0000-0000-0000-000000000021',
-    '33000000-0000-0000-0000-000000000022',
-    '33000000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '33000000-0000-0000-0000-000000000021',
     '33000000-0000-0000-0000-000000000022',
@@ -587,21 +632,26 @@ select extensions.dblink_exec('ti_setup', $$
     ('33000000-0000-0000-0000-000000000021', 'Race Manager 330', 'race.manager.330@test.local', 'bce', 'activ'),
     ('33000000-0000-0000-0000-000000000022', 'Race A 330', 'race.a.330@test.local', 'voluntar', 'activ'),
     ('33000000-0000-0000-0000-000000000023', 'Race B 330', 'race.b.330@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33000000-0000-0000-0000-000000000021', 'edu'),
-    ('33000000-0000-0000-0000-000000000022', 'edu'),
-    ('33000000-0000-0000-0000-000000000023', 'edu');
+  -- #586: committed race fixtures require native Group roster rows.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from (values ('33000000-0000-0000-0000-000000000021'::uuid, 'edu'),
+    ('33000000-0000-0000-0000-000000000022'::uuid, 'edu'),
+    ('33000000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33000000-%'
+  on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status, queue_opened_at, created_by)
   values
-    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Lock probe #330 committed', 'Sonda', '2027-04-01 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
-    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo',
+    ('Race target #330 committed', 'Cursa', '2027-04-02 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo',
      '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Local audience lock probe #330 committed', 'Sonda audienta locala', '2027-04-03 09:00:00+00',
-     (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
+     (select id from public.groups where name = 'Educațional'), 'local', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021'),
     ('Withdraw lock probe #330 committed', 'Sonda retragere', '2027-04-04 09:00:00+00',
-     (select id from public.groups where legacy_dept_id = 'edu'), 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
+     (select id from public.groups where name = 'Educațional'), 'org', 'public', 'todo', '2027-01-01 00:00:00+00', '33000000-0000-0000-0000-000000000021');
 
   -- Directly fixtured (never through the command) so the held withdraw call
   -- below has a real live pending Candidature to resolve: withdraw's only
@@ -680,7 +730,7 @@ select ok(coalesce((
     from extensions.pgrowlocks('public.group_members') as row_lock
     join public.group_members as membership on membership.ctid = row_lock.locked_row
    where membership.member_id = '33000000-0000-0000-0000-000000000022'
-     and membership.group_id = (select id from public.groups where legacy_dept_id = 'edu')
+     and membership.group_id = (select id from public.groups where name = 'Educațional')
 ), false), 'a local-Audience express_task_interest holds the actor''s Group roster row FOR SHARE too');
 
 select extensions.dblink_exec('ti_lock', 'rollback');
@@ -726,12 +776,11 @@ select extensions.dblink_exec('ti_lock', 'rollback');
 select extensions.dblink_disconnect('ti_lock');
 
 -- ==================== 9. The two-session race ====================
--- THE point of #330. Two Members express interest on the same fresh
--- Opportunity at the same instant. The second must BLOCK on the tasks row
--- lock (b_waited), wake up after the first commits, SEE the Assignment and
--- queue behind it. If it ever reached
--- task_assignments_one_active_per_task_uidx it would surface a raw 23505 to
--- the caller instead -- which is the failure this asserts against.
+-- Two Members express interest on the same fresh Opportunity at the same
+-- instant. The second must BLOCK on the tasks row lock (b_waited), wake up
+-- after the first commits and queue behind it. Since #682 neither of them
+-- becomes the Executor: the race ends with two pending Candidates in arrival
+-- order and no Assignment at all -- the manager selects.
 --
 -- pg_temp.test_race copies THIS session's claims into both of its dblink
 -- sessions, so session B re-stamps its own claims first, inside the same
@@ -756,39 +805,36 @@ reset role;
 select ok((select b_waited from race330),
   'the second session BLOCKS before the first commits -- serialization happened; pairs with the '
   || 'pgrowlocks probe in section 8 and the assignment/candidate counts below to show it is the '
-  || 'Task row FOR UPDATE lock, not the assignment unique index, that catches the second caller');
+  || 'Task row FOR UPDATE lock that catches the second caller');
 select is((select result_a from race330), (select race_task_id::text from r330),
   'the first session succeeds and returns the Task row');
 select is((select result_b from race330), (select race_task_id::text from r330),
-  'the second session also succeeds -- it queues, and never sees a unique_violation');
-select is((select format('%s|%s', count(*), min(assignment.member_id::text))
-             from public.task_assignments as assignment
-            where assignment.task_id = (select race_task_id from r330)
-              and assignment.ended_at is null),
-  '1|33000000-0000-0000-0000-000000000022',
-  'exactly one active Assignment survives the race, held by the session that won the lock');
-select is((select format('%s|%s', count(*), min(candidate.member_id::text))
+  'the second session also succeeds -- it queues behind the first');
+select is((select count(*) from public.task_assignments as assignment
+            where assignment.task_id = (select race_task_id from r330)), 0::bigint,
+  'the race opens no Assignment at all -- neither session becomes the Executor (#682)');
+select is((select string_agg(candidate.member_id::text, ',' order by candidate.joined_at, candidate.id)
              from public.task_candidates as candidate
             where candidate.task_id = (select race_task_id from r330)
               and candidate.status = 'pending'),
-  '1|33000000-0000-0000-0000-000000000023',
-  'the loser of the race is the one pending Candidate');
+  '33000000-0000-0000-0000-000000000022,33000000-0000-0000-0000-000000000023',
+  'both sessions end as pending Candidates, the lock winner first');
 
 select pg_temp.test_login('33000000-0000-0000-0000-000000000023', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select is((select private.queue_position((select race_task_id from r330),
-            '33000000-0000-0000-0000-000000000023')), 1,
-  'the queued loser sits at position 1, ready for selection or promotion');
+            '33000000-0000-0000-0000-000000000023')), 2,
+  'the second session sits at position 2, behind the first, ready for the manager''s selection');
 reset role;
 
 select is((select count(*) from public.task_activity as activity
             where activity.task_id = (select race_task_id from r330)
-              and activity.kind = 'executor_assigned'), 1::bigint,
-  'the race wrote exactly one executor_assigned row');
+              and activity.kind = 'executor_assigned'), 0::bigint,
+  'the race wrote no executor_assigned row');
 select is((select count(*) from public.task_activity as activity
             where activity.task_id = (select race_task_id from r330)
-              and activity.kind = 'interest_expressed'), 1::bigint,
-  'the race wrote exactly one interest_expressed row');
+              and activity.kind = 'interest_expressed'), 2::bigint,
+  'the race wrote exactly two interest_expressed rows, one per session');
 
 -- ---- clean up everything the committed sessions left behind ----
 -- task_activity is append-only by trigger, including for its owner, so the
@@ -814,10 +860,6 @@ select extensions.dblink_exec('ti_setup', $$
   delete from public.task_assignments
    where task_id in (select id from public.tasks where title like '%#330 committed%');
   delete from public.tasks where title like '%#330 committed%';
-  delete from public.member_departments where member_id in (
-    '33000000-0000-0000-0000-000000000021',
-    '33000000-0000-0000-0000-000000000022',
-    '33000000-0000-0000-0000-000000000023');
   delete from auth.users where id in (
     '33000000-0000-0000-0000-000000000021',
     '33000000-0000-0000-0000-000000000022',
@@ -882,6 +924,17 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select lives_ok($$select public.express_task_interest((select id from g521_tasks where name='executor3'))$$,'task_interest: Executor persona 8 remains authorized');
 reset role;
+
+-- #682: in the Group fixture too, the first interested Member only queues --
+-- the Group Manager hears "Coadă", never the retired "Executor nou".
+update public.profiles set nickname='Primul 675' where id=pg_temp.g521_uid(4);
+select pg_temp.g521_task('executor675','project',null,'todo','public');
+update public.tasks set created_by=pg_temp.g521_uid(4) where id=(select id from g521_tasks where name='executor675');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(4));
+select lives_ok($$select public.express_task_interest((select id from g521_tasks where name='executor675'))$$,'task_interest: a Nicknamed Member joins the queue of a Task with no Executor');
+reset role;
+select is((select string_agg(title || '|' || body, ',') from public.notifications where task_id=(select id from g521_tasks where name='executor675') and member_id=pg_temp.g521_uid(2)),'Coadă: Group #521 executor675|1 candidat în așteptare.','the Group Manager gets the coalesced "Coadă" notification and no "Executor nou" (#682)');
 
 select * from finish();
 rollback;

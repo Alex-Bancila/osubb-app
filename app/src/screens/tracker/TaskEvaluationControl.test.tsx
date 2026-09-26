@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
+import { CommandError } from '../../lib/command-reasons';
 const state = vi.hoisted(() => ({
   capability: true,
   mutation: { isPending: false, mutateAsync: vi.fn() },
@@ -59,13 +60,9 @@ it('requires all fields, previews live guide values and submits one Executor eva
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '1',
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(
+    screen.getByRole('radio', { name: '1 — Nelivrat / inacceptabil' }),
   );
   expect(screen.getByRole('status')).toHaveTextContent('−4 puncte');
   await user.type(
@@ -82,19 +79,13 @@ it('requires all fields, previews live guide values and submits one Executor eva
 }, 15_000);
 it('retains entered values on conflict and is accessible', async () => {
   state.mutation.mutateAsync.mockRejectedValue(
-    new Error('Taskul s-a schimbat.'),
+    new CommandError(null, 'Taskul s-a schimbat.'),
   );
   const user = userEvent.setup();
   const { container } = render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '5',
-  );
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
   await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -108,14 +99,8 @@ it('prevents repeated submits while the first command is unresolved', async () =
   const user = userEvent.setup();
   render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '5',
-  );
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
   await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
   await user.dblClick(
     screen.getByRole('button', { name: 'Confirmă evaluarea' }),
@@ -157,13 +142,9 @@ it('submits the unfulfilled outcome through the shared evaluation form', async (
   expect(
     screen.getByText(/păstrează încercarea în istoric/),
   ).toBeInTheDocument();
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '1',
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(
+    screen.getByRole('radio', { name: '1 — Nelivrat / inacceptabil' }),
   );
   await user.type(
     screen.getByLabelText('Notă (obligatoriu)'),
@@ -189,14 +170,8 @@ it('announces and focuses success after the refetch changes status before mutati
   const user = userEvent.setup();
   const view = render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '5',
-  );
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
   await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   view.rerender(<TaskEvaluationControl {...props} status="completed" />);
@@ -227,14 +202,8 @@ it('announces and focuses success for unfulfilled after the refetch changes stat
   await user.click(
     screen.getByRole('button', { name: 'Marchează nerealizat' }),
   );
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '5',
-  );
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
   await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   view.rerender(
@@ -258,14 +227,8 @@ it('preserves success when mutation resolves before the refetch changes status b
   const user = userEvent.setup();
   const view = render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.selectOptions(
-    screen.getByLabelText('Dificultate (obligatoriu)'),
-    '2',
-  );
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '5',
-  );
+  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
   await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bravo');
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   await act(async () => finish());
@@ -286,10 +249,7 @@ it('opens the rating guide beside the rating controls without losing the entered
   const user = userEvent.setup();
   render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.selectOptions(
-    screen.getByLabelText('Calificativ (obligatoriu)'),
-    '5',
-  );
+  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
   const trigger = screen.getByRole('button', { name: 'Ghid de evaluare' });
   await user.click(trigger);
   expect(
@@ -298,7 +258,7 @@ it('opens the rating guide beside the rating controls without losing the entered
   await user.keyboard('{Escape}');
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(trigger).toHaveFocus();
-  expect(screen.getByLabelText('Calificativ (obligatoriu)')).toHaveValue('5');
+  expect(screen.getByRole('radio', { name: '5 — Excepțional' })).toBeChecked();
 });
 
 it('offers a retry when the rating scale cannot be read', async () => {

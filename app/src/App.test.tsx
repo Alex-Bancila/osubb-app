@@ -30,7 +30,6 @@ function grant(...names: string[]) {
 }
 vi.mock('./lib/auth', () => ({ useAuth: auth.useAuth }));
 vi.mock('@ionic/react', () => ({
-  IonApp: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   IonContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   IonPage: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   IonSpinner: ({ 'aria-label': label }: { 'aria-label': string }) => (
@@ -43,10 +42,18 @@ vi.mock('./components/shell/AppShell', async () => {
   return { default: () => <Outlet /> };
 });
 vi.mock('./screens/login/LoginScreen', () => ({
-  default: () => <h1>Login screen</h1>,
+  default: ({ initialEmail }: { initialEmail?: string }) => (
+    <>
+      <h1>Login screen</h1>
+      <p>Prefilled: {initialEmail || '(none)'}</p>
+    </>
+  ),
 }));
 vi.mock('./screens/login/AuthCallback', () => ({
   default: () => <h1>Auth callback</h1>,
+}));
+vi.mock('./screens/login/AuthConfirm', () => ({
+  default: () => <h1>Auth confirm</h1>,
 }));
 vi.mock('./screens/no-profile/NoProfileScreen', () => ({
   default: () => <h1>No profile screen</h1>,
@@ -56,6 +63,15 @@ vi.mock('./screens/volunteers/VolunteersScreen', () => ({
 }));
 vi.mock('./screens/administrare/AdministrareScreen', () => ({
   default: () => <h1>Administrare</h1>,
+}));
+vi.mock('./screens/groups/GroupsScreen', () => ({
+  default: () => <h1>Grupuri screen</h1>,
+}));
+vi.mock('./screens/groups/MemberGroupScreen', () => ({
+  default: () => <h1>Member Group screen</h1>,
+}));
+vi.mock('./screens/administrare/MemberScreen', () => ({
+  default: () => <h1>Membru screen</h1>,
 }));
 vi.mock('./screens/administrare/GroupScreen', () => ({
   default: () => <h1>Grup screen</h1>,
@@ -115,8 +131,6 @@ const member = {
   claims: {
     member_role: 'bc',
     member_level: 6,
-    dept_ids: [],
-    team_ids: [],
     group_ids: [],
   },
   loading: false,
@@ -197,6 +211,25 @@ describe('route guards', () => {
     render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
     expect(screen.queryByRole('heading', { name: 'Grup screen' })).toBeNull();
+  });
+
+  it('opens a Member screen behind the same capability as the panel', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    // A Group Manager reaches their own Group's screen …
+    grant('administer');
+    window.history.pushState({}, '', '/administrare/membri/target');
+    const view = render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Membru screen' }),
+    ).toBeVisible();
+    view.unmount();
+
+    // … and a member with no Group Role anywhere never does.
+    grant('seeDirectory', 'seeLeadership');
+    window.history.pushState({}, '', '/administrare/membri/target');
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(screen.queryByRole('heading', { name: 'Membru screen' })).toBeNull();
   });
 
   it('decides nothing while the capability row is still loading', () => {
@@ -375,6 +408,32 @@ describe('route guards', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps the click-to-confirm route available without a session', () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState({}, '', '/auth/confirm?token_hash=h&type=invite');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Auth confirm' }),
+    ).toBeInTheDocument();
+  });
+
+  it('prefills the login screen with the address handed over in router state', () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState(
+      { usr: { email: 'membru@exemplu.ro' }, key: 'retry', idx: 0 },
+      '',
+      '/login',
+    );
+
+    render(<App />);
+
+    expect(
+      screen.getByText('Prefilled: membru@exemplu.ro'),
+    ).toBeInTheDocument();
+  });
+
   it('sends an unknown path through the member guard to the dashboard', async () => {
     auth.useAuth.mockReturnValue(member);
     window.history.pushState({}, '', '/necunoscut');
@@ -404,6 +463,18 @@ describe('route guards', () => {
 
     expect(
       screen.getByRole('heading', { name: 'Anunțuri screen' }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['/grupuri', 'Grupuri screen'],
+    ['/grupuri/2', 'Member Group screen'],
+  ])('opens member Group route %s', async (path, title) => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', path);
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: title }),
     ).toBeInTheDocument();
   });
 

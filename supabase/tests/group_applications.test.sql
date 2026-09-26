@@ -24,13 +24,15 @@
 -- written as the owner (conventions OD9: rolled back, no client write path
 -- implied). They are native Groups — no legacy_* — so the partial sibling-name
 -- index behaves as it will after #591.
+--
+-- #724 adds section 14: ruling R8's 1000-character limit on both notes.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(77);
+select plan(87);
 
 -- ==================== Fixtures ====================
 
@@ -41,14 +43,16 @@ $$;
 insert into auth.users (id, email)
 select pg_temp.g584_uid(n), 'member.' || n || '.584@test.local' from generate_series(1, 10) n;
 
--- 1 BC, 2 Group Manager of the open root, 3 its Group Responsible, 4 the
--- applicant, 5 a Recrut (level 0 — below the open Group's Application Level),
--- 6 Drept de Vot (level 3), 7 inactive, 8 Group Manager of the Child Group,
--- 9 already a member of the open root, 10 a Member with no relationship
--- anywhere.
+-- 1 BC, 2 Group Manager of the open root (and of 'Înalt #584', min_level 3 --
+-- #586's validate_group_member enforces the Minimum Level on every roster
+-- row, so its Manager needs Drept de Vot or above), 3 its Group Responsible,
+-- 4 the applicant, 5 a Recrut (level 0 — below the open Group's Application
+-- Level), 6 Drept de Vot (level 3), 7 inactive, 8 Group Manager of the Child
+-- Group, 9 already a member of the open root, 10 a Member with no
+-- relationship anywhere.
 insert into public.profiles (id, full_name, email, role, status)
 select pg_temp.g584_uid(n), 'Membru #584 ' || n, 'member.' || n || '.584@test.local',
-  (case n when 1 then 'bc' when 5 then 'recrut' when 6 then 'vot' else 'voluntar' end)::public.member_role,
+  (case n when 1 then 'bc' when 2 then 'vot' when 5 then 'recrut' when 6 then 'vot' else 'voluntar' end)::public.member_role,
   (case n when 7 then 'inactiv' else 'activ' end)::public.member_status
 from generate_series(1, 10) n;
 
@@ -223,6 +227,9 @@ select is(
 
 -- The union earns its keep here: private.group_managers stops at the Child
 -- Group's own Manager and never reaches the parent's Responsible.
+-- #675: member 10 carries a Nickname; member 4 (above) does not.
+update public.profiles set nickname = 'Aplicant 584'
+ where id = pg_temp.g584_uid(10);
 select pg_temp.g584_as(10);
 create temp table fx584_child as
   select pg_temp.g584_apply(pg_temp.g584_group('Copil #584')) as child_id;
@@ -250,6 +257,18 @@ select is(
     where member_id = pg_temp.g584_uid(4)
       and dedupe_key = 'application:' || (select first_id from fx584)::text),
   0::bigint, 'the applicant is never told about their own Application (ruling R25)');
+select is(
+  (select body from public.notifications
+    where member_id = pg_temp.g584_uid(2)
+      and dedupe_key = 'application:' || (select first_id from fx584)::text),
+  'Membru #584 4 vrea să intre în grupul Deschis #584. „Vreau să ajut”',
+  'the "Cerere de înscriere" body names an applicant with no Nickname by their full name (#675)');
+select is(
+  (select body from public.notifications
+    where member_id = pg_temp.g584_uid(8)
+      and dedupe_key = 'application:' || (select child_id from fx584_child)::text),
+  'Aplicant 584 vrea să intre în grupul Copil #584.',
+  'and an applicant with a Nickname by the Nickname, read at write time (#675)');
 
 -- ==================== 6 · ruling R17: the groups_read pending limb ====================
 -- The Minimum Level is raised underneath the applicant as an owner fixture
@@ -590,7 +609,7 @@ values (pg_temp.g584_group('Prag #584'), pg_temp.g584_uid(5), 'Cerere veche');
 
 select pg_temp.g584_bc();
 select lives_ok(
-  format($$select public.update_group(%s, 'Prag #584', null, true, 1, false, 1, true)$$,
+  format($$select public.update_group(%s, 'Prag #584', null, true, 1, false, 1, null, null, true)$$,
          pg_temp.g584_group('Prag #584')),
   'update_group: BC raises the Minimum Level above a Member with p_confirm_removals');
 reset role;
@@ -627,6 +646,73 @@ select is(
       and dedupe_key = 'application:' || (select arch_id from fx584_arch)::text),
   '/grupuri/' || pg_temp.g584_group('Arhivabil #584')::text,
   'ruling R30: the applicant is told, and the link is the member-facing Group page');
+
+-- ==================== 14 · #724 (ruling R8): notes at most 1000 characters ====================
+-- Both notes are measured as they are stored -- trimmed -- at step 1, so a
+-- 1001-character note is PT400 note_too_long for every caller, a claimless
+-- session and a Member with no authority included. Removing either check
+-- turns its 1001-character assertion into a success (the table has no length
+-- constraint underneath), and moving it below the gate turns the claimless /
+-- no-authority assertion into a 42501.
+
+insert into public.groups (name, category, min_level, accepts_applications, application_level, created_by)
+values ('Limite #724', 'department', 0, true, 1, pg_temp.g584_uid(1));
+insert into public.group_members (group_id, member_id, group_role, position_title)
+values (pg_temp.g584_group('Limite #724'), pg_temp.g584_uid(2), 'manager', null);
+
+select pg_temp.test_clear_jwt();
+set local role authenticated;
+select throws_ok(
+  format($$select public.apply_to_group(%s, %L)$$, pg_temp.g584_group('Limite #724'), repeat('n', 1001)),
+  'PT400', 'note_too_long',
+  'apply_to_group: a 1001-character note is refused before the gate, even for a claimless session');
+reset role;
+
+select pg_temp.g584_as(10);
+select throws_ok(
+  format($$select public.apply_to_group(%s, %L)$$, pg_temp.g584_group('Limite #724'), repeat('n', 1001)),
+  'PT400', 'note_too_long',
+  'apply_to_group: a 1001-character note is note_too_long');
+select lives_ok(
+  format($$select public.apply_to_group(%s, %L)$$, pg_temp.g584_group('Limite #724'), '  ' || repeat('n', 1000) || '  '),
+  'apply_to_group: a 1000-character note is accepted, measured after trimming');
+reset role;
+select is(
+  (select char_length(note) from public.group_applications
+    where group_id = pg_temp.g584_group('Limite #724') and member_id = pg_temp.g584_uid(10)),
+  1000, 'apply_to_group: the 1000-character note is stored trimmed and whole');
+create temp table fx724 as
+  select id as app_id from public.group_applications
+   where group_id = pg_temp.g584_group('Limite #724') and member_id = pg_temp.g584_uid(10);
+grant select on fx724 to authenticated;
+
+select pg_temp.g584_as(9);
+select throws_ok(
+  format($$select public.decide_group_application(%s, false, %L)$$,
+    (select app_id from fx724),
+    repeat('d', 1001)),
+  'PT400', 'note_too_long',
+  'decide_group_application: a 1001-character decision note is refused before the gate, even without authority');
+reset role;
+
+select pg_temp.g584_as(2);
+select throws_ok(
+  format($$select public.decide_group_application(%s, false, %L)$$,
+    (select app_id from fx724),
+    repeat('d', 1001)),
+  'PT400', 'note_too_long',
+  'decide_group_application: a 1001-character decision note is note_too_long');
+select lives_ok(
+  format($$select public.decide_group_application(%s, false, %L)$$,
+    (select app_id from fx724),
+    '  ' || repeat('d', 1000) || '  '),
+  'decide_group_application: a 1000-character decision note is accepted, measured after trimming');
+reset role;
+select ok(
+  (select status = 'declined' and char_length(decision_note) = 1000
+     from public.group_applications
+    where group_id = pg_temp.g584_group('Limite #724') and member_id = pg_temp.g584_uid(10)),
+  'decide_group_application: the decline landed with its 1000-character note stored trimmed');
 
 -- ==================== 13 · grants ====================
 

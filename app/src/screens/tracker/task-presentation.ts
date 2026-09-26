@@ -26,12 +26,28 @@ export type TaskPresentationRow = Pick<
   | 'campaign_id'
   | 'duplicated_from_task_id'
   | 'queue_closed_at'
+  | 'link_label'
+  | 'link_url'
 > & {
   /** The Task's Origin Group; null when RLS withholds it. */
-  group?: Pick<
-    Tables['groups']['Row'],
-    'name' | 'short' | 'color' | 'category' | 'path'
-  > | null;
+  group?:
+    | (Pick<
+        Tables['groups']['Row'],
+        'name' | 'short' | 'color' | 'category' | 'path' | 'is_organization'
+      > & {
+        /** A Private Group (#757); absent from reads that do not embed it. */
+        is_private?: boolean;
+      })
+    | null;
+  /**
+   * The latest `submitted` history row (#685), embedded through
+   * `task_activity`'s own RLS: at most one row, empty when the Task was never
+   * submitted or the reader may not see its history.
+   */
+  submission?: Pick<
+    Tables['task_activity']['Row'],
+    'id' | 'kind' | 'note' | 'details' | 'occurred_at'
+  >[];
   campaign?: Pick<Tables['campaigns']['Row'], 'name'> | null;
   parent?: Pick<Task, 'title'> | null;
   assignments?: Pick<
@@ -42,6 +58,7 @@ export type TaskPresentationRow = Pick<
   visibleExecutor?: {
     memberId: string;
     fullName: string | null;
+    nickname?: string | null;
   } | null;
   evaluations?: Pick<
     Tables['task_evaluations']['Row'],
@@ -61,6 +78,8 @@ export type TaskPresentation = {
     id: number;
     label: string;
     color: string | null;
+    /** A Private Group: its chip carries the lock (#757, ruling R25). */
+    isPrivate: boolean;
   };
   audience: 'local' | 'org' | null;
   audienceLabel: string;
@@ -69,6 +88,7 @@ export type TaskPresentation = {
     memberId: string;
     assignmentId: number | null;
     name: string | null;
+    nickname: string | null;
   } | null;
   candidature: {
     status: 'pending' | 'selected' | 'withdrawn' | 'closed';
@@ -90,6 +110,18 @@ export type TaskPresentation = {
   parent: { id: number; title: string } | null;
   campaign: { id: number; name: string } | null;
   duplicatedFromTaskId: number | null;
+  /** The Task's one Attached Link (#684), or null. */
+  link: { label: string; url: string } | null;
+  /**
+   * The latest Submission Note (CONTEXT.md, ruling R7): what the Executor
+   * wrote and linked when they last submitted. Null when there is none, or
+   * the last submission carried neither a note nor a link.
+   */
+  submission: {
+    note: string | null;
+    link: { label: string; url: string } | null;
+    submittedAt: string;
+  } | null;
 };
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -100,6 +132,11 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   unfulfilled: 'Nerealizat',
   cancelled: 'Anulat',
 };
+
+/** A Task status in the words the Tracker uses (the Calendar's rows share it). */
+export function taskStatusLabel(status: TaskStatus): string {
+  return STATUS_LABELS[status];
+}
 
 export function isTerminalTask(status: TaskStatus): boolean {
   return ['completed', 'unfulfilled', 'cancelled'].includes(status);
@@ -127,13 +164,49 @@ export function taskOrigin(
   const name = group?.name?.trim();
   // No embed means RLS withheld the Group; never show an id in its place.
   if (!group || !name)
-    return { id: row.group_id, label: 'Origine indisponibilă', color: null };
+    return {
+      id: row.group_id,
+      label: 'Origine indisponibilă',
+      color: null,
+      isPrivate: false,
+    };
   const noun = GROUP_CATEGORY_NOUNS[group.category];
   return {
     id: row.group_id,
     label: noun ? `${noun} · ${name}` : name,
-    color: group.color ?? null,
+    // The Organization Group is always OSUBB red (ruling R10), whatever its
+    // row stores; `is_organization` says which Group that is.
+    color: group.is_organization ? 'var(--scope-org)' : (group.color ?? null),
+    isPrivate: group.is_private === true,
   };
+}
+
+function linkPair(label: unknown, url: unknown) {
+  const text = typeof label === 'string' ? label.trim() : '';
+  const address = typeof url === 'string' ? url.trim() : '';
+  return text && address ? { label: text, url: address } : null;
+}
+
+/** The newest `submitted` row, as the Submission Note it carries. */
+function latestSubmission(
+  rows: TaskPresentationRow['submission'],
+): TaskPresentation['submission'] {
+  const latest = rows
+    ?.filter((row) => row.kind === 'submitted')
+    .reduce<NonNullable<typeof rows>[number] | null>(
+      (newest, row) => (!newest || row.id > newest.id ? row : newest),
+      null,
+    );
+  if (!latest) return null;
+  const details =
+    latest.details &&
+    typeof latest.details === 'object' &&
+    !Array.isArray(latest.details)
+      ? latest.details
+      : {};
+  const note = latest.note?.trim() || null;
+  const link = linkPair(details.link_label, details.link_url);
+  return note || link ? { note, link, submittedAt: latest.occurred_at } : null;
 }
 
 /** Pure mapping: the caller supplies the clock and their own queue state. */
@@ -195,6 +268,7 @@ export function toTaskPresentation(
                 ? activeAssignment.id
                 : null,
             name: visibleExecutor.fullName?.trim() || null,
+            nickname: visibleExecutor.nickname?.trim() || null,
           }
         : null,
     candidature: kind === 'task' ? candidature : null,
@@ -241,5 +315,7 @@ export function toTaskPresentation(
             name: row.campaign?.name?.trim() || 'Campanie',
           },
     duplicatedFromTaskId: row.duplicated_from_task_id,
+    link: linkPair(row.link_label, row.link_url),
+    submission: kind === 'task' ? latestSubmission(row.submission) : null,
   };
 }

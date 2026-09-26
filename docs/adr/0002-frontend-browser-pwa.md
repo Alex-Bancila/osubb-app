@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-07 (rewritten)
+- **Amended:** 2026-09-23 — ADR-0010 records the Web Push service-worker design and the `injectManifest` migration reserved below
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** the earlier Capacitor + Ionic + AG Grid decision recorded in this file
 - **Superseded by:** —
@@ -43,6 +44,8 @@ The finished architecture does **not** include React Native, Expo, Capacitor, AG
 The service worker may precache only hashed application-shell and brand assets. Supabase Auth, REST, and Realtime traffic is network-only. Member/API responses are never persisted in an offline cache, and offline writes or background synchronization are not queued.
 
 Start with `vite-plugin-pwa` in `generateSW` mode and prompt-based updates. If Web Push later requires a custom service-worker handler, record that design and migrate to `injectManifest` deliberately.
+
+> **Amended 2026-09-23 by [ADR-0010](0010-web-push-edge-function.md).** Web Push needs that handler, so the design is recorded: the worker moves to `injectManifest` with a `src/pwa/sw.ts` that keeps the precache, navigation fallback, denylist and network-only rules above and adds the `push` and `notificationclick` handlers (#704).
 
 ## Consequences
 

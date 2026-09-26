@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   options: vi.fn(),
   campaigns: vi.fn(),
   mutate: vi.fn(),
+  report: vi.fn(),
 }));
 vi.mock('../../queries/task-form-options', () => ({
   useTaskFormOptions: api.options,
@@ -16,8 +17,16 @@ vi.mock('../../queries/campaigns', async (original) => ({
   ...(await original<object>()),
   useCampaigns: api.campaigns,
   useCampaignChange: () => ({ mutateAsync: api.mutate, isPending: false }),
+  useCampaignReport: api.report,
 }));
 import CampaignsScreen from './CampaignsScreen';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 // The first case walks two pop-ups and an axe run end to end; on a loaded
 // machine that can pass the 5 s default without anything being wrong.
 vi.setConfig({ testTimeout: 15_000 });
@@ -26,8 +35,10 @@ beforeEach(() => {
   api.options.mockReturnValue({
     isSuccess: true,
     data: {
+      // A Manager of Echipa (below the unmanaged Educațional) and Tineret.
       groups: [
         { id: 2, name: 'Echipa', path: [1, 2], min_level: 1 },
+        { id: 3, name: 'Subechipa', path: [1, 2, 3], min_level: 1 },
         { id: 4, name: 'Tineret', path: [4], min_level: 0 },
       ],
       groupNames: [{ id: 1, name: 'Educațional' }],
@@ -37,23 +48,31 @@ beforeEach(() => {
   });
   api.campaigns.mockReturnValue({ data: [campaign] });
   api.mutate.mockResolvedValue(campaign);
+  api.report.mockReturnValue({ isPending: true });
 });
+function Where() {
+  const { pathname, search } = useLocation();
+  return <div data-testid="where">{pathname + search}</div>;
+}
+const page = (
+  <>
+    <CampaignsScreen />
+    <Where />
+  </>
+);
 function show(path = '/administrare/grupuri/2/campanii') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route
-          path="/administrare/grupuri/:groupId/campanii"
-          element={<CampaignsScreen />}
-        />
-        <Route
-          path="/administrare/grupuri/4/campanii"
-          element={<h1>Grupul Tineret</h1>}
-        />
+        <Route path="/administrare/campanii" element={page} />
+        <Route path="/administrare/grupuri/:groupId/campanii" element={page} />
       </Routes>
     </MemoryRouter>,
   );
 }
+const where = () => screen.getByTestId('where').textContent;
+const optionTexts = async () =>
+  (await screen.findAllByRole('option')).map((option) => option.textContent);
 it('creates and renames in small pop-ups, and toggles, using the owning Group and command IDs', async () => {
   const user = userEvent.setup();
   const { container } = show();
@@ -67,7 +86,8 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'create',
     groupId: 2,
-    name: '  Iarnă  ',
+    // Trimmed before it is measured or sent (ruling R6).
+    name: 'Iarnă',
   });
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await user.click(screen.getByRole('button', { name: 'Redenumește' }));
@@ -105,16 +125,71 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
     ).violations,
   ).toEqual([]);
 });
-it('explains that a Campaign is a reporting label and picks the Group from a searchable list', async () => {
-  const user = userEvent.setup();
-  show();
+it('explains that a Campaign is a reporting label and asks for a Group first', () => {
+  show('/administrare/campanii');
   expect(screen.getByText(/etichetă pentru taskurile unui grup/)).toBeVisible();
-  const box = screen.getByRole('combobox', { name: 'Grup' });
-  expect(box).toHaveTextContent('Echipa');
-  expect(box).toHaveTextContent('Educațional');
-  await user.click(box);
-  await user.click(await screen.findByRole('option', { name: /^Tineret/ }));
-  expect(await screen.findByText('Grupul Tineret')).toBeVisible();
+  expect(
+    screen.getByText('Alege un grup ca să-i vezi campaniile.'),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Campanie nouă' }),
+  ).not.toBeInTheDocument();
+  // No Campaign level: the rows are the Campaigns.
+  expect(
+    screen.queryByRole('combobox', { name: 'Campanie' }),
+  ).not.toBeInTheDocument();
+});
+it('cascades root → Group below over managed Groups only, carrying the Group in the route', async () => {
+  const user = userEvent.setup();
+  show('/administrare/campanii?stare=inactive');
+  const root = screen.getByRole('combobox', { name: 'Grup principal' });
+  expect(screen.getByRole('combobox', { name: 'Subgrup' })).toBeDisabled();
+  await user.click(root);
+  // The topmost managed Groups; the unmanaged Educațional names Echipa's parent only.
+  expect(await optionTexts()).toEqual(['Echipa· Educațional', 'Tineret']);
+  await user.click(screen.getByRole('option', { name: /^Echipa/ }));
+  expect(where()).toBe('/administrare/grupuri/2/campanii?stare=inactive');
+  await user.click(screen.getByRole('combobox', { name: 'Subgrup' }));
+  expect(await optionTexts()).toEqual(['Subechipa· Echipa']);
+  await user.click(screen.getByRole('option', { name: /^Subechipa/ }));
+  expect(where()).toBe('/administrare/grupuri/3/campanii?stare=inactive');
+  expect(
+    await screen.findByRole('heading', { name: 'Subechipa · Echipa' }),
+  ).toBeVisible();
+});
+it('restores the cascade and the dates from the URL, and clearing the root leaves the Group', async () => {
+  const user = userEvent.setup();
+  show('/administrare/grupuri/3/campanii?de_la=2026-09-01');
+  expect(
+    screen.getByRole('combobox', { name: 'Grup principal' }),
+  ).toHaveTextContent('Echipa');
+  expect(screen.getByRole('combobox', { name: 'Subgrup' })).toHaveTextContent(
+    'Subechipa',
+  );
+  expect(screen.getByLabelText('De la')).toHaveValue('2026-09-01');
+  await user.click(
+    screen.getByRole('button', {
+      name: 'Elimină filtrul Grup principal: Echipa',
+    }),
+  );
+  expect(where()).toBe('/administrare/campanii?de_la=2026-09-01');
+  expect(
+    screen.getByText('Alege un grup ca să-i vezi campaniile.'),
+  ).toBeVisible();
+});
+it('dates the report with the range, and reads nothing while it is inverted', async () => {
+  const user = userEvent.setup();
+  show('/administrare/grupuri/2/campanii?de_la=2026-09-01&pana_la=2026-09-30');
+  await user.click(screen.getByRole('button', { name: 'Vezi raportul' }));
+  expect(api.report).toHaveBeenLastCalledWith(10, {
+    p_from: '2026-08-31T21:00:00.000Z',
+    p_to: '2026-09-30T21:00:00.000Z',
+  });
+  const from = screen.getByLabelText('De la');
+  await user.clear(from);
+  await user.type(from, '2026-10-05');
+  expect(api.report).toHaveBeenLastCalledWith(10, null);
+  expect(screen.getByText(/Corectează perioada/)).toBeVisible();
 });
 it('denies a typed URL outside live managed Groups and offers no mutation', () => {
   show('/administrare/grupuri/9/campanii');
@@ -126,7 +201,7 @@ it('denies a typed URL outside live managed Groups and offers no mutation', () =
 });
 it('offers activation for inactive Campaigns', async () => {
   api.campaigns.mockReturnValue({ data: [{ ...campaign, is_active: false }] });
-  show();
+  show('/administrare/grupuri/2/campanii?stare=inactive');
   await userEvent.click(screen.getByRole('button', { name: 'Activează' }));
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'active',
@@ -149,4 +224,32 @@ it('keeps the pop-up and its input for retry and hides unexpected server details
   expect(within(create).getByLabelText('Numele campaniei')).toHaveValue(
     'Iarnă',
   );
+});
+it('names each contributor in the report as a button that opens their Member Card', async () => {
+  const user = userEvent.setup();
+  api.report.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: {
+      totals: { points: 12, tasksCompleted: 2, tasksTotal: 3 },
+      members: [
+        {
+          memberId: 'ana',
+          name: 'Ana Pop',
+          nickname: 'Ani',
+          points: 12,
+          tasksCompleted: 2,
+        },
+      ],
+    },
+  });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Vezi raportul' }));
+  const list = screen.getByRole('list', { name: 'Voluntari cu puncte' });
+  await user.click(
+    within(list).getByRole('button', { name: 'Profilul membrului Ani' }),
+  );
+  const card = await screen.findByRole('dialog', { name: 'Ani' });
+  // The report row shows points; the Member Card never does.
+  expect(card).not.toHaveTextContent('12');
 });

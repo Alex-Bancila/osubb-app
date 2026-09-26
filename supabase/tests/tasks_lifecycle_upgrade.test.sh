@@ -8,6 +8,10 @@ migration="supabase/migrations/20260911102000_tasks_six_state_lifecycle.sql"
   cat <<'SQL'
 begin;
 set local client_min_messages = warning;
+-- #591 retired the helpers referenced by the historical read policy below.
+-- Restore them only in this rollback-only replay.
+create function public.auth_in_dept(d text) returns boolean language sql stable as $$select coalesce(auth.jwt()->'app_metadata'->'dept_ids' ? d,false)$$;
+create function public.auth_in_team(t text) returns boolean language sql stable as $$select coalesce(auth.jwt()->'app_metadata'->'team_ids' ? t,false)$$;
 
 drop view public.tasks_with_overdue;
 alter table public.tasks
@@ -75,8 +79,8 @@ drop function private.log_task_activity(bigint, text, uuid, bigint, public.task_
 -- log_task_activity's parameters do. This is the "any later task_status-typed
 -- object" the note above warned about; same treatment, same reasoning -- the
 -- scratch transaction rolls back, so they are never recreated here.
-drop function public.leadership_member_tasks(uuid);
-drop function private.leadership_member_tasks_impl(uuid);
+drop function public.leadership_member_tasks(uuid, timestamptz, timestamptz);
+drop function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz);
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks
@@ -114,12 +118,12 @@ insert into public.profiles (id, full_name, email, role) values
 insert into public.tasks
   (title, difficulty, rating, group_id, status, audience, assignment_mode)
 values
-  ('Legacy todo 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'todo', 'local', 'direct'),
-  ('Legacy progress 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'progress', 'local', 'direct'),
-  ('Legacy done 287', 3, 4, (select id from public.groups where legacy_dept_id = 'edu'), 'done', 'local', 'direct'),
-  ('Legacy overdue unassigned 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'overdue', 'local', 'direct'),
-  ('Legacy overdue assigned 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'overdue', 'local', 'direct'),
-  ('Legacy open 287', 1, null, (select id from public.groups where legacy_dept_id = 'edu'), 'open', 'org', 'public');
+  ('Legacy todo 287', 1, null, (select id from public.groups where name = 'Educațional'), 'todo', 'local', 'direct'),
+  ('Legacy progress 287', 1, null, (select id from public.groups where name = 'Educațional'), 'progress', 'local', 'direct'),
+  ('Legacy done 287', 3, 4, (select id from public.groups where name = 'Educațional'), 'done', 'local', 'direct'),
+  ('Legacy overdue unassigned 287', 1, null, (select id from public.groups where name = 'Educațional'), 'overdue', 'local', 'direct'),
+  ('Legacy overdue assigned 287', 1, null, (select id from public.groups where name = 'Educațional'), 'overdue', 'local', 'direct'),
+  ('Legacy open 287', 1, null, (select id from public.groups where name = 'Educațional'), 'open', 'org', 'public');
 
 insert into public.task_assignees (task_id, member_id)
 select id, '28700000-0000-0000-0000-000000000001'::uuid

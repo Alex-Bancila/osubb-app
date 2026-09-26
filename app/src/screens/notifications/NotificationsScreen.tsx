@@ -5,7 +5,6 @@ import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { cn } from '../../lib/utils';
 import {
-  useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
   useUnreadNotificationCount,
@@ -89,7 +88,6 @@ export default function NotificationsScreen() {
   const feed = useNotifications(memberId);
   const unread = useUnreadNotificationCount(memberId);
   const markRead = useMarkNotificationRead(memberId);
-  const markAll = useMarkAllNotificationsRead(memberId);
 
   const notifications = (feed.data?.pages ?? [])
     .flatMap((page) => page.rows)
@@ -123,21 +121,7 @@ export default function NotificationsScreen() {
             Necitite: {unreadCount}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={unreadCount === 0 || markAll.isPending}
-          onClick={() => markAll.mutate()}
-        >
-          Marchează tot ca citit
-        </Button>
       </header>
-
-      {markAll.isError && (
-        <p className="text-sm text-destructive" role="alert">
-          Nu am putut marca notificările ca citite. Încearcă din nou.
-        </p>
-      )}
 
       {feed.isPending ? (
         <Loading label="Se încarcă notificările…" />

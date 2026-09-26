@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(41);
 
 -- ==================== Structure ====================
 select has_function('public', 'guard_profile_privileged_columns',
@@ -20,14 +20,20 @@ select policies_are('public', 'profiles',
   array['profiles_read', 'profiles_update_self', 'profiles_read_auth_admin'],
   'profiles carries the read policy, the self-update policy, and the hook''s');
 
--- The two columns no client writes, ever — not even BC (they are not a level
+-- Identity columns no client writes, ever — not even BC (they are not a level
 -- question, they are "never edited from the app").
 select ok(not has_column_privilege('authenticated', 'profiles', 'id', 'update'),
   'no member may write profiles.id — it IS the auth user');
 select ok(not has_column_privilege('authenticated', 'profiles', 'created_at', 'update'),
   'no member may write profiles.created_at');
 select ok(has_column_privilege('authenticated', 'profiles', 'full_name', 'update'),
-  'full_name stays writable at the column level (the trigger is not involved)');
+  'full_name stays writable at the column level -- since #675 the guard trigger, not the grant, keeps it BC-only');
+
+-- #610: these grants must stay closed even for a BC session.
+select ok(not has_column_privilege('authenticated', 'profiles', 'role', 'update'),
+  'direct Role writes are revoked for every client');
+select ok(not has_column_privilege('authenticated', 'profiles', 'status', 'update'),
+  'direct Membership Status writes are revoked for every client');
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -52,21 +58,65 @@ select pg_temp.test_login('e1000000-0000-0000-0000-0000000000e1', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-update profiles set full_name = 'Emil Mureșan'
- where id = 'e1000000-0000-0000-0000-0000000000e1';
-select is(
-  (select full_name from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
-  'Emil Mureșan', 'SELF renames themselves');
+-- #675 (R5): full_name is a privileged column. The row is the caller's own,
+-- so the statement reaches the guard and raises rather than affecting zero rows.
+select throws_ok(
+  $$ update profiles set full_name = 'Emil Mureșan'
+      where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '42501', null, 'SELF cannot rename themselves -- the full name is BC/Moderator''s (#675)');
 
-update profiles set phone = '0711999888', avatar_color = '#284C93'
+update profiles set nickname = 'Emi', phone = '0711999888', avatar_color = '#284C93'
  where id = 'e1000000-0000-0000-0000-0000000000e1';
 select is(
-  (select avatar_color from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
-  '#284C93', 'SELF updates their own contact fields and avatar');
+  (select format('%s|%s', nickname, avatar_color) from profiles
+    where id = 'e1000000-0000-0000-0000-0000000000e1'),
+  'Emi|#284C93', 'SELF updates their own Nickname, contact fields and avatar in one statement (#675)');
+
+select throws_ok(
+  $$ update profiles set nickname = 'Emi 2', phone = '0711999000', full_name = 'Emil Nou'
+      where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '42501', null, 'the same self-update carrying a new full_name is refused whole (#675)');
+
+-- The existing profile sheet resends the stored full name with every save; an
+-- unchanged value is not a change, so a level-1 Member still saves (#675).
+select lives_ok(
+  $$ update profiles set full_name = 'Emil Voluntar', phone = '0711999777', avatar_color = '#ED2025'
+      where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  'a self-update resending the unchanged full_name still saves');
+
+-- #673 (R8): the phone is normalised to E.164 on the way in, or refused.
+-- Read back as the owner: authenticated reads contact fields through
+-- profiles_contact, not the table.
+reset role;
+select is(
+  (select phone from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
+  '+40711999777', 'SELF''s phone 0711999777 is stored as +40711999777 (#673)');
+select pg_temp.test_login('e1000000-0000-0000-0000-0000000000e1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
+select throws_ok(
+  $$ update profiles set phone = '+40 123456789'
+      where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '23514', 'phone_invalid', 'a Romanian number that is not a mobile is refused as phone_invalid (#673)');
+update profiles set phone = '   ' where id = 'e1000000-0000-0000-0000-0000000000e1';
+reset role;
+select is(
+  (select phone from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
+  null, 'a blank phone clears the field (#673)');
+select pg_temp.test_login('e1000000-0000-0000-0000-0000000000e1', jsonb_build_object(
+    'member_role', 'voluntar',
+    'member_level', 1,
+    'dept_ids', '["edu"]'::jsonb,
+    'team_ids', '[]'::jsonb
+  ));
+
 
 -- ==================== …but never promotes themselves (AC) ====================
 -- These raise rather than silently affecting zero rows: the row IS visible to
--- the policy (it is their own), so the statement reaches the trigger.
+-- the policy (it is their own); Role/Status now fail at the column grant.
 select throws_ok(
   $$ update profiles set role = 'bc' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
   '42501', null, 'SELF cannot promote themselves');
@@ -110,19 +160,21 @@ select pg_temp.test_login('e3000000-0000-0000-0000-0000000000e3', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-update profiles set full_name = 'Elena R.' where id = 'e3000000-0000-0000-0000-0000000000e3';
-select is(
-  (select full_name from profiles where id = 'e3000000-0000-0000-0000-0000000000e3'),
-  'Elena R.', 'a responsabil still edits their own name');
+select throws_ok(
+  $$ update profiles set full_name = 'Elena R.' where id = 'e3000000-0000-0000-0000-0000000000e3' $$,
+  '42501', null, 'a responsabil (level 4) cannot rename themselves either (#675)');
 
 select throws_ok(
   $$ update profiles set role = 'bce' where id = 'e3000000-0000-0000-0000-0000000000e3' $$,
   '42501', null, 'a responsabil (level 4) cannot promote themselves either');
 
-update profiles set role = 'recrut' where id = 'e1000000-0000-0000-0000-0000000000e1';
+select throws_ok(
+  $$ update profiles set role = 'recrut' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '42501', 'permission denied for table profiles',
+  'a client cannot directly demote another member');
 select is(
   (select role::text from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
-  'voluntar', 'a responsabil cannot demote someone else (denied silently)');
+  'voluntar', 'the refused demotion leaves the Role unchanged');
 
 reset role;
 
@@ -134,12 +186,34 @@ select pg_temp.test_login('e4000000-0000-0000-0000-0000000000e4', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-update profiles set role = 'activ' where id = 'e1000000-0000-0000-0000-0000000000e1';
+select throws_ok(
+  $$ update profiles set role = 'activ' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
+  '42501', 'permission denied for table profiles', 'BC cannot bypass the Role command');
+select public.set_member_role('e1000000-0000-0000-0000-0000000000e1', 'activ');
+select is(
+  (select count(*) from role_history
+    where member_id = 'e1000000-0000-0000-0000-0000000000e1'
+      and changed_by = 'e4000000-0000-0000-0000-0000000000e4'
+      and from_role = 'voluntar' and to_role = 'activ'),
+  1::bigint, 'BC promotion through the command records exactly one attributed audit row');
 select is(
   (select role::text from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
   'activ', 'BC promotes a member');
 
-update profiles set status = 'alumni' where id = 'e2000000-0000-0000-0000-0000000000e2';
+select throws_ok(
+  $$ update profiles set status = 'alumni' where id = 'e2000000-0000-0000-0000-0000000000e2' $$,
+  '42501', 'permission denied for table profiles', 'BC cannot bypass the Membership Status command');
+select public.set_member_status('e2000000-0000-0000-0000-0000000000e2', 'alumni');
+update profiles set full_name = 'Eva Corectată' where id = 'e2000000-0000-0000-0000-0000000000e2';
+select is(
+  (select full_name from profiles where id = 'e2000000-0000-0000-0000-0000000000e2'),
+  'Eva Corectată', 'BC changes another Member''s full name (#675, R5)');
+
+update profiles set nickname = 'Evi' where id = 'e2000000-0000-0000-0000-0000000000e2';
+select is(
+  (select nickname from profiles where id = 'e2000000-0000-0000-0000-0000000000e2'),
+  'Evi', 'BC changes another Member''s Nickname (#675, R5)');
+
 select is(
   (select status::text from profiles where id = 'e2000000-0000-0000-0000-0000000000e2'),
   'alumni', 'BC changes a member''s status');
@@ -168,11 +242,12 @@ reset role;
 select pg_temp.test_clear_jwt();
 set local role authenticated;
 
--- Both are denied silently: the policy hides the row, so zero rows are updated.
+-- The name edit is hidden by RLS; Status is refused at the column privilege.
 update profiles set full_name = 'Ela Revenită'
  where id = 'e5000000-0000-0000-0000-0000000000e5';
-update profiles set status = 'activ'
- where id = 'e5000000-0000-0000-0000-0000000000e5';
+select throws_ok(
+  $$ update profiles set status = 'activ' where id = 'e5000000-0000-0000-0000-0000000000e5' $$,
+  '42501', 'permission denied for table profiles', 'a claimless session cannot write Membership Status');
 
 -- The assertions come *after* reset role on purpose: this session cannot read
 -- the row either, so checking from inside it would compare NULL to NULL and

@@ -1,5 +1,6 @@
 import { queryErrorMessage } from '../../lib/query-error';
-import { IonButton, IonSpinner } from '@ionic/react';
+import { LoaderCircle } from 'lucide-react';
+import { Button } from '../ui/button';
 
 /**
  * The three states every query renders (mini-spec §5). They live together
@@ -11,7 +12,10 @@ import { IonButton, IonSpinner } from '@ionic/react';
 export function Loading({ label = 'Se încarcă…' }: { label?: string }) {
   return (
     <div className="state" role="status">
-      <IonSpinner aria-hidden="true" />
+      <LoaderCircle
+        className="size-5 animate-spin motion-reduce:animate-none"
+        aria-hidden="true"
+      />
       <p className="state-text">{label}</p>
     </div>
   );
@@ -50,9 +54,9 @@ export function ErrorState({
     <div className="state" role="alert">
       <p className="state-text">{text ?? queryErrorMessage(error)}</p>
       {onRetry && (
-        <IonButton size="small" fill="outline" onClick={onRetry}>
+        <Button variant="outline" size="sm" onClick={onRetry}>
           Încearcă din nou
-        </IonButton>
+        </Button>
       )}
     </div>
   );

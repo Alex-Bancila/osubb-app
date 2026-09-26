@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Listener = (event: string, session: unknown) => void;
@@ -45,6 +51,15 @@ vi.mock('./supabase', () => ({
       refreshSession: auth.refreshSession,
     },
   },
+}));
+
+// The Web Push device (#704): sign-out removes this device's row first.
+const pushDevice = vi.hoisted(() => ({
+  unsubscribeDevice: vi.fn(async (_memberId: string) => undefined),
+}));
+vi.mock('./push-device', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./push-device')>()),
+  unsubscribeDevice: pushDevice.unsubscribeDevice,
 }));
 
 import { AuthProvider, useAuth } from './auth';
@@ -147,6 +162,26 @@ describe('AuthProvider cache hygiene', () => {
 
     await waitFor(() =>
       expect(client.getQueryCache().getAll()).toHaveLength(0),
+    );
+  });
+
+  it('forgets that push is on here for a member whose session ends (#769)', async () => {
+    localStorage.setItem('osubb.push-on.a', '1');
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <div />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    notifyListener()('SIGNED_IN', sessionFor('a'));
+    expect(localStorage.getItem('osubb.push-on.a')).toBe('1');
+    notifyListener()('SIGNED_OUT', null);
+
+    await waitFor(() =>
+      expect(localStorage.getItem('osubb.push-on.a')).toBeNull(),
     );
   });
 
@@ -281,6 +316,49 @@ describe('AuthProvider cache hygiene', () => {
   });
 });
 
+describe('sign-out and this device’s Web Push (#704)', () => {
+  function renderSignedIn() {
+    auth.getSession.mockResolvedValueOnce({
+      data: { session: sessionFor('member-a') },
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <SessionProbe />
+          <SignOutButton />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('removes this device’s push row before signing out', async () => {
+    renderSignedIn();
+    await waitFor(() =>
+      expect(screen.getByTestId('session-user')).toHaveTextContent('member-a'),
+    );
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
+    expect(pushDevice.unsubscribeDevice).toHaveBeenCalledWith('member-a');
+    const [removeOrder] = pushDevice.unsubscribeDevice.mock.invocationCallOrder;
+    const [signOutOrder] = auth.signOut.mock.invocationCallOrder;
+    expect(removeOrder).toBeLessThan(signOutOrder ?? 0);
+  });
+
+  it('still signs out when removing the push row fails', async () => {
+    pushDevice.unsubscribeDevice.mockRejectedValueOnce(new Error('offline'));
+    renderSignedIn();
+    await waitFor(() =>
+      expect(screen.getByTestId('session-user')).toHaveTextContent('member-a'),
+    );
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
+  });
+});
+
 describe('decodeClaims', () => {
   it('decodes group_ids from the access token (#510, ADR-0009 Wave 1)', async () => {
     const client = new QueryClient();
@@ -298,8 +376,6 @@ describe('decodeClaims', () => {
       access_token: tokenWithAppMetadata({
         member_role: 'bc',
         member_level: 6,
-        dept_ids: [],
-        team_ids: [],
         group_ids: [3, 9],
       }),
     });
@@ -334,7 +410,11 @@ describe('refresh a stale session on window focus (#598)', () => {
     );
     await waitFor(() => expect(auth.listener()).not.toBeNull());
 
-    notifyListener()('SIGNED_IN', sessionFor('a', { issuedAtMs }));
+    // Flush the session update and the provider's sessionRef effect before
+    // simulating focus, which reads that ref synchronously.
+    await act(async () => {
+      notifyListener()('SIGNED_IN', sessionFor('a', { issuedAtMs }));
+    });
     await waitFor(() =>
       expect(screen.getByTestId('session-user').textContent).toBe('a'),
     );

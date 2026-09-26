@@ -9,11 +9,15 @@ const fixtures: Record<string, unknown[]> = {
     { id: 'b', full_name: 'Bogdan', role: 'bc', status: 'alumni' },
   ],
   profiles_contact: [{ id: 'a', email: 'ana@example.test', phone: null }],
+  // Ana's earliest membership overall is the child Logistică, but a child
+  // never becomes the chip (R17): the earliest TOP-LEVEL one does. Arhivă
+  // (archived) and OSUBB (the Organization Group) never count.
   group_members: [
-    { member_id: 'a', group_id: 2 },
-    { member_id: 'a', group_id: 1 },
-    { member_id: 'a', group_id: 3 },
-    { member_id: 'a', group_id: 9 },
+    { member_id: 'a', group_id: 2, created_at: '2026-01-01T00:00:00Z' },
+    { member_id: 'a', group_id: 1, created_at: '2026-02-01T00:00:00Z' },
+    { member_id: 'a', group_id: 4, created_at: '2026-03-01T00:00:00Z' },
+    { member_id: 'a', group_id: 3, created_at: '2026-01-15T00:00:00Z' },
+    { member_id: 'a', group_id: 9, created_at: '2026-01-10T00:00:00Z' },
   ],
   groups: [
     {
@@ -23,6 +27,8 @@ const fixtures: Record<string, unknown[]> = {
       path: [1],
       status: 'active',
       is_organization: false,
+      parent_id: null,
+      color: '#111111',
     },
     {
       id: 2,
@@ -31,6 +37,8 @@ const fixtures: Record<string, unknown[]> = {
       path: [1, 2],
       status: 'active',
       is_organization: false,
+      parent_id: 1,
+      color: '#222222',
     },
     {
       id: 3,
@@ -39,6 +47,18 @@ const fixtures: Record<string, unknown[]> = {
       path: [1, 3],
       status: 'archived',
       is_organization: false,
+      parent_id: 1,
+      color: '#333333',
+    },
+    {
+      id: 4,
+      name: 'Imagine & PR',
+      category: 'department',
+      path: [4],
+      status: 'active',
+      is_organization: false,
+      parent_id: null,
+      color: '#444444',
     },
     {
       id: 9,
@@ -47,6 +67,8 @@ const fixtures: Record<string, unknown[]> = {
       path: [9],
       status: 'active',
       is_organization: true,
+      parent_id: null,
+      color: null,
     },
   ],
   roles: [
@@ -84,12 +106,24 @@ describe('directory reads', () => {
       // Department comes before its team, which carries its parent's name.
       groups: [
         { id: 1, label: 'Educațional', path: [1] },
+        { id: 4, label: 'Imagine & PR', path: [4] },
         { id: 2, label: 'Logistică · Educațional', path: [1, 2] },
       ],
+      // The chip (R17): the earliest-joined TOP-LEVEL Group. Logistică joined
+      // first of all three but is a child, so it never becomes the chip;
+      // Educațional (top-level, joined next) does, ahead of the
+      // later-joined Imagine & PR, which folds into "+n" alongside Logistică.
+      primaryGroup: { id: 1, name: 'Educațional', color: '#111111' },
+      otherMemberships: 2,
       points: -3,
       contact: { email: 'ana@example.test' },
     });
-    expect(members[1]).toMatchObject({ points: 0, contact: undefined });
+    expect(members[1]).toMatchObject({
+      points: 0,
+      contact: undefined,
+      primaryGroup: null,
+      otherMemberships: 0,
+    });
     expect(mocks.from).not.toHaveBeenCalledWith('profiles');
     expect(mocks.rpc).toHaveBeenCalledWith('leadership_leaderboard', {});
   });
@@ -102,8 +136,12 @@ describe('directory reads', () => {
     const memberships = Array.from({ length: 500 }, (_, index) => ({
       member_id: `other-${index}`,
       group_id: 1,
+      created_at: '2026-01-01T00:00:00Z',
     }));
-    const pages = query([...memberships, { member_id: 'b', group_id: 2 }]);
+    const pages = query([
+      ...memberships,
+      { member_id: 'b', group_id: 2, created_at: '2026-01-01T00:00:00Z' },
+    ]);
     mocks.from.mockImplementation((name: string) =>
       name === 'group_members' ? pages : query(fixtures[name] ?? []),
     );

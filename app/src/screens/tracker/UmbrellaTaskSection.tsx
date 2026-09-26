@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import { commandErrorMessage } from '../../lib/command-reasons';
 import {
   useCompleteUmbrella,
-  umbrellaCompletionErrorMessage,
   useCreateTask,
 } from '../../queries/task-umbrella';
 import type { TaskDetailsData } from '../../queries/task-details';
@@ -87,7 +87,12 @@ function UmbrellaActions({
                   await complete.mutateAsync(taskId);
                   setDone(true);
                 } catch (failure) {
-                  setError(umbrellaCompletionErrorMessage(failure));
+                  setError(
+                    commandErrorMessage(
+                      failure,
+                      'Nu am putut finaliza taskul-umbrelă. Reîncearcă.',
+                    ),
+                  );
                 } finally {
                   saving.current = false;
                   setPending(false);

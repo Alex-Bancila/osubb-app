@@ -1,26 +1,19 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+// TODO(#699): goes with setupIonicReact() below.
 import { setupIonicReact } from '@ionic/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 
-/* Ionic's own stylesheets, imported once here and never in a screen.
-   `core` is required; the next three are the base layer its components assume
-   (resets, layout structure, type scale). */
+/* TODO(#699): Ionic's four base stylesheets stay only because the Profil
+   screen (#699) still renders `IonPage`/`IonContent`, which need them (the
+   Calendar dropped Ionic in #692, Acasă in #700). The Profil rebuild deletes
+   these four imports, `setupIonicReact()` below, the `--ion-*` mapping in
+   theme/global.css, and the `@ionic/react` and `ionicons` dependencies in
+   package.json. */
 import '@ionic/react/css/core.css';
 import '@ionic/react/css/normalize.css';
 import '@ionic/react/css/structure.css';
 import '@ionic/react/css/typography.css';
-
-/* The utility classes every Ionic example uses — `ion-padding`, `ion-text-center`,
-   `ion-hide` and friends. They are a couple of KB in total, and leaving them out
-   makes those classes silently do nothing, which is a nasty first hour for
-   someone following the Ionic docs. Same set `ionic start` generates. */
-import '@ionic/react/css/padding.css';
-import '@ionic/react/css/float-elements.css';
-import '@ionic/react/css/text-alignment.css';
-import '@ionic/react/css/text-transformation.css';
-import '@ionic/react/css/flex-utils.css';
-import '@ionic/react/css/display.css';
 
 /* Bundled official typeface (Montserrat variable) */
 import '@fontsource-variable/montserrat';
@@ -38,6 +31,8 @@ import { AuthProvider } from './lib/auth';
 import App from './App';
 import { PwaUpdatePrompt } from './pwa/PwaUpdatePrompt';
 
+/* TODO(#699): remove with the four base stylesheets above, when the Profil
+   rebuild merges. */
 setupIonicReact();
 
 const queryClient = createQueryClient();

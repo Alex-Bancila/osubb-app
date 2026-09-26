@@ -15,6 +15,14 @@ const authMock = vi.hoisted(() => ({
   session: { user: { id: 'p1' } },
 }));
 
+// The edit sheet asks whether the viewer may change a full name (#675, R5):
+// only BC/Moderator (`manageRoles`). Tests that rename set it.
+const capabilityMock = vi.hoisted(() => ({ manageRoles: false }));
+
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: (name: 'manageRoles') => ({ data: capabilityMock[name] }),
+}));
+
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({
     claims: authMock.claims,
@@ -213,13 +221,12 @@ describe('ProfileScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    capabilityMock.manageRoles = false;
     document.documentElement.removeAttribute('data-theme');
 
     authMock.claims = {
       member_role: 'voluntar',
       member_level: 1,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10, 20, 30],
     };
 
@@ -325,8 +332,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'vot',
       member_level: 3,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -346,8 +351,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'bce',
       member_level: 5,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -372,8 +375,6 @@ describe('ProfileScreen', () => {
     authMock.claims = {
       member_role: 'bce',
       member_level: 5,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [10],
     };
     setTestProfile({
@@ -405,6 +406,7 @@ describe('ProfileScreen', () => {
   });
 
   it('opens EditProfileSheet when clicking "Editează profil" and saves updated fields', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
     render(<ProfileScreen />, { wrapper: wrapper() });
 
@@ -424,12 +426,13 @@ describe('ProfileScreen', () => {
 
     expect(updateProfileMock.mutateAsync).toHaveBeenCalledWith({
       fullName: 'Maria Ionescu',
-      phone: '0722334455',
+      phone: '+40722334455',
       avatarColor: '#ED2025',
     });
   });
 
   it('after saving a profile edit, the header re-renders with the updated name', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
     render(<ProfileScreen />, { wrapper: wrapper() });
 

@@ -183,33 +183,36 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('32000000-0000-0000-0000-000000000502', 'TM Moderator',           'tm.moderator@test.local',         'moderator', 'activ'),
   ('32000000-0000-0000-0000-000000000503', 'TM Plain Member',        'tm.plain-member@test.local',      'voluntar',  'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('32000000-0000-0000-0000-000000000103', 'edu'),
   ('32000000-0000-0000-0000-000000000104', 'pr'),
   ('32000000-0000-0000-0000-000000000202', 'fin');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('tm320-deptteam', 'TM320 Department Team', 'fin'),
   ('tm320-indepteam', 'TM320 Independent Team', null),
   ('tm320-emptyteam', 'TM320 Empty Independent Team', null);
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('tm320-indepteam', '32000000-0000-0000-0000-000000000301'),
   ('tm320-indepteam', '32000000-0000-0000-0000-000000000302');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('TM320 Helper Project', 'active',
    '32000000-0000-0000-0000-000000000401',
    '32000000-0000-0000-0000-000000000404');
 
-insert into public.project_members (project_id, member_id, project_role)
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role)
 select project.id, '32000000-0000-0000-0000-000000000402', 'responsible'
-  from public.projects as project
+  from pg_temp.fixture_projects as project
  where project.name = 'TM320 Helper Project';
-insert into public.project_members (project_id, member_id, project_role)
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role)
 select project.id, '32000000-0000-0000-0000-000000000403', 'member'
-  from public.projects as project
+  from pg_temp.fixture_projects as project
  where project.name = 'TM320 Helper Project';
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.tasks (title, group_id, created_by) values
   ('TM320 dept task A', pg_temp.dept_group('edu'), '32000000-0000-0000-0000-000000000101');
@@ -219,7 +222,7 @@ insert into public.tasks (title, group_id) values
   ('TM320 indepteam task C', pg_temp.team_group('tm320-indepteam'));
 insert into public.tasks (title, group_id)
 select 'TM320 project task D', pg_temp.project_group(project.id)
-  from public.projects as project
+  from pg_temp.fixture_projects as project
  where project.name = 'TM320 Helper Project';
 insert into public.tasks (title, group_id) values
   ('TM320 emptyteam task E', pg_temp.team_group('tm320-emptyteam'));
@@ -229,14 +232,16 @@ insert into auth.users (id, email) values
   ('32000000-0000-0000-0000-000000000701', 'tm.nodeptbce-creator@test.local');
 insert into public.profiles (id, full_name, email, role, status) values
   ('32000000-0000-0000-0000-000000000701', 'TM No Dept BCE Creator', 'tm.nodeptbce-creator@test.local', 'voluntar', 'activ');
-insert into public.departments (id, name, short, color, kind) values
+insert into pg_temp.fixture_departments (id, name, short, color, kind) values
   ('zz320dept', 'Test No BCE Dept', 'ZZ', '#000000', 'coordination');
+select pg_temp.materialize_legacy_groups();
 insert into public.tasks (title, group_id, created_by) values
   ('TM320 dept-no-bce task', pg_temp.dept_group('zz320dept'), '32000000-0000-0000-0000-000000000701');
 
 -- Department Team with no BCE parent: fallback test fixture
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('tm320-deptteam-nobce', 'TM320 DeptTeam with No BCE Parent', 'zz320dept');
+select pg_temp.materialize_legacy_groups();
 insert into public.tasks (title, group_id, created_by) values
   ('TM320 deptteam-no-bce task', pg_temp.team_group('tm320-deptteam-nobce'), '32000000-0000-0000-0000-000000000701');
 

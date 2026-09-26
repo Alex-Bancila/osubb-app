@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(14);
+select plan(17);
 
 -- ==================== for_recruits / team_admits_recruits are gone ========
 select hasnt_function('public', 'team_admits_recruits', array['text'],
@@ -36,19 +36,21 @@ insert into profiles (id, full_name, email, role, status) values
   -- A former BC, deactivated. Kept at the 'bc' role row so the fixture proves
   -- the denial comes from `status`, not from downgrading the role too.
   ('06000000-0000-0000-0000-000000000006', 'Dorin Dezactivat',  'dorin.dezactivat@test.local', 'bc',      'inactiv');
-insert into member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('01000000-0000-0000-0000-000000000001', 'edu'),
   ('02000000-0000-0000-0000-000000000002', 'pr'),
   ('03000000-0000-0000-0000-000000000003', 'edu');
 
+insert into pg_temp.fixture_teams (id, name, dept_id) values
+  ('t-pr', 'Echipa PR', 'pr');
+insert into pg_temp.fixture_team_members (team_id, member_id)
+  values ('t-pr', '02000000-0000-0000-0000-000000000002');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
 update public.group_members set group_role = 'responsible'
 where member_id = '03000000-0000-0000-0000-000000000003'
-  and group_id = (select id from public.groups where legacy_dept_id = 'edu');
+  and group_id = (select id from public.groups where name = 'Educațional');
 
-insert into teams (id, name, dept_id) values
-  ('t-pr', 'Echipa PR', 'pr');
-insert into team_members (team_id, member_id)
-  values ('t-pr', '02000000-0000-0000-0000-000000000002');
 
 -- One event per (scope, Minimum Level) combination that matters: 0 spread
 -- across all three scopes (proving scope is no longer a visibility gate —
@@ -65,7 +67,12 @@ insert into events (title, type, group_id, min_level, starts_at) values
   ('Dept gated 5',        'sedinta',   pg_temp.dept_group('edu'),    5, now() + interval '5 days'),
   ('Recrutare grea',      'recrutare', pg_temp.dept_group('hr'),     5, now() + interval '6 days'),
   ('Team gated 5',        'sedinta',   pg_temp.team_group('t-pr'),   5, now() + interval '7 days'),
-  ('Org gated 6',         'sedinta',   pg_temp.dept_group('org'),    6, now() + interval '8 days');
+  ('Org gated 6',         'sedinta',   pg_temp.dept_group('org'),    6, now() + interval '8 days'),
+  -- #691 (ADR-0008 amended 2026-09-23): past Events are readable under the same
+  -- Minimum Level rule. There is no starts_at clause in events_read; these two
+  -- rows make adding one turn every set_eq below red.
+  ('Past open',           'sedinta',   pg_temp.dept_group('org'),    0, now() - interval '30 days'),
+  ('Past gated 5',        'sedinta',   pg_temp.dept_group('edu'),    5, now() - interval '30 days');
 
 -- ==================== Recrut: level 0, dept EDU, no team ====================
 select pg_temp.test_login('01000000-0000-0000-0000-000000000001', jsonb_build_object(
@@ -77,8 +84,12 @@ select pg_temp.test_login('01000000-0000-0000-0000-000000000001', jsonb_build_ob
 
 select set_eq(
   $$ select title from events $$,
-  array['Everyone org', 'Foreign dept open', 'Foreign team open'],
+  array['Everyone org', 'Foreign dept open', 'Foreign team open', 'Past open'],
   'a Recrut sees exactly the min_level = 0 rows, regardless of scope, including a foreign department and a team they are not in');
+select is((select count(*) from events where title = 'Past open'), 1::bigint,
+  'a past Event is readable by a Member at its Minimum Level (#691)');
+select is((select count(*) from events where title = 'Past gated 5'), 0::bigint,
+  'a past Event stays hidden below its Minimum Level (#691)');
 
 reset role;
 
@@ -92,7 +103,7 @@ select pg_temp.test_login('02000000-0000-0000-0000-000000000002', jsonb_build_ob
 
 select set_eq(
   $$ select title from events $$,
-  array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated'],
+  array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated', 'Past open'],
   'level 3 adds the min_level = 3 row on top of everything level 0 already saw');
 
 select throws_ok(
@@ -116,14 +127,14 @@ select pg_temp.test_login('03000000-0000-0000-0000-000000000003', jsonb_build_ob
 
 select set_eq(
   $$ select title from events $$,
-  array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated'],
+  array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated', 'Past open'],
   'level 4 (Responsabil) adds nothing new -- level 4 is retired (#519/ADR-0009 Ranks), so the min_level = 5 rows stay hidden');
 
 select lives_ok(
   $$ select public.create_event(
        p_title := 'Workshop CV',
        p_type := 'activitate',
-       p_group_id := (select id from public.groups where legacy_dept_id = 'edu'),
+       p_group_id := (select id from public.groups where name = 'Educațional'),
        p_starts_at := now()) $$,
   'a Group Responsible creates Events through the validated command');
 select throws_ok(
@@ -149,8 +160,10 @@ select pg_temp.test_login('04000000-0000-0000-0000-000000000004', jsonb_build_ob
 select set_eq(
   $$ select title from events $$,
   array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated',
-        'Dept gated 5', 'Recrutare grea', 'Team gated 5'],
+        'Dept gated 5', 'Recrutare grea', 'Team gated 5', 'Past open', 'Past gated 5'],
   'level 5 adds every min_level = 5 row — still missing the min_level = 6 one');
+select is((select count(*) from events where title = 'Past gated 5'), 1::bigint,
+  'a past level-5 Event is readable once the Member reaches level 5 (#691)');
 
 reset role;
 
@@ -165,7 +178,8 @@ select pg_temp.test_login('05000000-0000-0000-0000-000000000005', jsonb_build_ob
 select set_eq(
   $$ select title from events $$,
   array['Everyone org', 'Foreign dept open', 'Foreign team open', 'AG gated',
-        'Dept gated 5', 'Recrutare grea', 'Team gated 5', 'Org gated 6'],
+        'Dept gated 5', 'Recrutare grea', 'Team gated 5', 'Org gated 6',
+        'Past open', 'Past gated 5'],
   'level 6 sees every Event, including min_level = 6');
 
 reset role;

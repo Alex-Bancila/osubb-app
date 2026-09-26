@@ -18,7 +18,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(126);
+select plan(127);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -69,7 +69,7 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('33600000-0000-0000-0000-000000000021', 'Executor Negativ 336', 'exec.negative.336@test.local', 'voluntar', 'activ'),
   ('33600000-0000-0000-0000-000000000022', 'Executor Un Punct 336', 'exec.singular.336@test.local', 'voluntar', 'activ');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('33600000-0000-0000-0000-000000000002', 'edu'),
   ('33600000-0000-0000-0000-000000000003', 'pr'),
   ('33600000-0000-0000-0000-000000000004', 'edu'),
@@ -87,22 +87,25 @@ insert into public.member_departments (member_id, dept_id) values
   ('33600000-0000-0000-0000-000000000021', 'edu'),
   ('33600000-0000-0000-0000-000000000022', 'edu');
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('t-336-ind', 'Echipa Independenta 336', null),
   ('t-336-dt', 'Echipa Departamentala 336', 'edu');
 
-insert into public.team_members (team_id, member_id) values
+insert into pg_temp.fixture_team_members (team_id, member_id) values
   ('t-336-ind', '33600000-0000-0000-0000-000000000009');
 
-insert into public.projects (name, status, leader_id, created_by) values
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by) values
   ('Proiect #336', 'active',
    '33600000-0000-0000-0000-000000000006', '33600000-0000-0000-0000-000000000001');
 
-insert into public.project_members (project_id, member_id, project_role) values
-  ((select id from public.projects where name = 'Proiect #336'),
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role) values
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #336'),
    '33600000-0000-0000-0000-000000000007', 'responsible'),
-  ((select id from public.projects where name = 'Proiect #336'),
+  ((select id from pg_temp.fixture_projects where name = 'Proiect #336'),
    '33600000-0000-0000-0000-000000000008', 'member');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ---- T1: the happy path. A PUBLIC Department Task in_review, with a live
 -- Executor, a PAST Executor whose Assignment the owner already ended
@@ -277,7 +280,7 @@ select 'Proiect lead executant #336', 'Lead isi evalueaza munca', '2027-12-13 09
        pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
        '33600000-0000-0000-0000-000000000001'
-  from public.projects as project where project.name = 'Proiect #336';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #336';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select task.id, '33600000-0000-0000-0000-000000000006', '33600000-0000-0000-0000-000000000001', now() - interval '4 days'
   from public.tasks as task where task.title = 'Proiect lead executant #336';
@@ -289,7 +292,7 @@ select 'Proiect responsabil executant #336', 'Responsabilul isi evalueaza munca'
        pg_temp.project_group(project.id), 'local', 'direct', 'in_review',
        now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
        '33600000-0000-0000-0000-000000000001'
-  from public.projects as project where project.name = 'Proiect #336';
+  from pg_temp.fixture_projects as project where project.name = 'Proiect #336';
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
 select task.id, '33600000-0000-0000-0000-000000000007', '33600000-0000-0000-0000-000000000001', now() - interval '4 days'
   from public.tasks as task where task.title = 'Proiect responsabil executant #336';
@@ -993,10 +996,6 @@ select extensions.dblink_exec('ctr_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#336 committed%');
   delete from public.tasks where title like '%#336 committed%';
-  delete from public.member_departments where member_id in (
-    '33600000-0000-0000-0000-000000000051', '33600000-0000-0000-0000-000000000052',
-    '33600000-0000-0000-0000-000000000053', '33600000-0000-0000-0000-000000000054',
-    '33600000-0000-0000-0000-000000000055');
   delete from auth.users where id in (
     '33600000-0000-0000-0000-000000000051', '33600000-0000-0000-0000-000000000052',
     '33600000-0000-0000-0000-000000000053', '33600000-0000-0000-0000-000000000054',
@@ -1014,18 +1013,23 @@ select extensions.dblink_exec('ctr_setup', $$
     ('33600000-0000-0000-0000-000000000053', 'Probe Executor 336', 'probe.executor.336@test.local', 'voluntar', 'activ'),
     ('33600000-0000-0000-0000-000000000054', 'Cursa Subtask Unu 336', 'race.sub1.336@test.local', 'voluntar', 'activ'),
     ('33600000-0000-0000-0000-000000000055', 'Cursa Subtask Doi 336', 'race.sub2.336@test.local', 'voluntar', 'activ');
-  insert into public.member_departments (member_id, dept_id) values
-    ('33600000-0000-0000-0000-000000000051', 'edu'),
-    ('33600000-0000-0000-0000-000000000052', 'edu'),
-    ('33600000-0000-0000-0000-000000000053', 'edu'),
-    ('33600000-0000-0000-0000-000000000054', 'edu'),
-    ('33600000-0000-0000-0000-000000000055', 'edu');
+  -- #586: committed race fixtures need an explicit native Group roster.
+  insert into public.group_members(group_id,member_id,group_role)
+  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
+    from (values ('33600000-0000-0000-0000-000000000051'::uuid, 'edu'),
+    ('33600000-0000-0000-0000-000000000052'::uuid, 'edu'),
+    ('33600000-0000-0000-0000-000000000053'::uuid, 'edu'),
+    ('33600000-0000-0000-0000-000000000054'::uuid, 'edu'),
+    ('33600000-0000-0000-0000-000000000055'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
+    join public.profiles p on p.id=md.member_id
+   where md.member_id::text like '33600000-%'
+  on conflict (group_id,member_id) do nothing;
 
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, submitted_at, created_by)
   values
-    ('Cursa dubla evaluare #336 committed', 'Doi evaluatori, un task', '2027-12-21 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
+    ('Cursa dubla evaluare #336 committed', 'Doi evaluatori, un task', '2027-12-21 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review',
      now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
      '33600000-0000-0000-0000-000000000052');
 
@@ -1033,10 +1037,10 @@ select extensions.dblink_exec('ctr_setup', $$
     (title, description, deadline, group_id, audience, assignment_mode,
      difficulty, rating, kind, status, created_at, created_by)
   values
-    ('Umbrela sonda #336 committed', 'Umbrela pentru sonda de blocaj', null, (select id from public.groups where legacy_dept_id = 'edu'), null, null,
+    ('Umbrela sonda #336 committed', 'Umbrela pentru sonda de blocaj', null, (select id from public.groups where name = 'Educațional'), null, null,
      null, null, 'umbrella', 'todo', now() - interval '6 days',
      '33600000-0000-0000-0000-000000000052'),
-    ('Umbrela cursa #336 committed', 'Umbrela pentru cursa fratilor', null, (select id from public.groups where legacy_dept_id = 'edu'), null, null,
+    ('Umbrela cursa #336 committed', 'Umbrela pentru cursa fratilor', null, (select id from public.groups where name = 'Educațional'), null, null,
      null, null, 'umbrella', 'todo', now() - interval '6 days',
      '33600000-0000-0000-0000-000000000052');
 
@@ -1048,7 +1052,7 @@ select extensions.dblink_exec('ctr_setup', $$
   insert into public.tasks
     (title, description, deadline, group_id, audience, assignment_mode, status,
      parent_task_id, created_at, started_at, submitted_at, created_by)
-  select 'Sonda blocaj evaluare #336 committed', 'Sonda', '2027-12-20 09:00:00+00', (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review',
+  select 'Sonda blocaj evaluare #336 committed', 'Sonda', '2027-12-20 09:00:00+00', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review',
          umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          '33600000-0000-0000-0000-000000000052'
     from public.tasks as umbrella where umbrella.title = 'Umbrela sonda #336 committed';
@@ -1057,13 +1061,13 @@ select extensions.dblink_exec('ctr_setup', $$
     (title, description, deadline, group_id, audience, assignment_mode, status,
      parent_task_id, created_at, started_at, submitted_at, created_by)
   select 'Subtask cursa unu #336 committed', 'Frate 1', '2027-12-22 09:00:00+00'::timestamptz,
-         (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review'::public.task_status,
+         (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review'::public.task_status,
          umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          '33600000-0000-0000-0000-000000000052'::uuid
     from public.tasks as umbrella where umbrella.title = 'Umbrela cursa #336 committed'
   union all
   select 'Subtask cursa doi #336 committed', 'Frate 2', '2027-12-23 09:00:00+00'::timestamptz,
-         (select id from public.groups where legacy_dept_id = 'edu'), 'local', 'direct', 'in_review'::public.task_status,
+         (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review'::public.task_status,
          umbrella.id, now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          '33600000-0000-0000-0000-000000000052'::uuid
     from public.tasks as umbrella where umbrella.title = 'Umbrela cursa #336 committed';
@@ -1142,7 +1146,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '33600000-0000-0000-0000-000000000051'
-     and authority_group.legacy_dept_id = 'edu'
+     and authority_group.name = 'Educațional'
 ), false), 'and the Group roster row their evaluator authority rests on FOR SHARE too, since a BCE reaches that branch');
 select ok(coalesce((
   select bool_or(row_lock.modes && array['For Update', 'Update', 'No Key Update'])
@@ -1279,10 +1283,6 @@ select extensions.dblink_exec('ctr_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title like '%#336 committed%');
   delete from public.tasks where title like '%#336 committed%';
-  delete from public.member_departments where member_id in (
-    '33600000-0000-0000-0000-000000000051', '33600000-0000-0000-0000-000000000052',
-    '33600000-0000-0000-0000-000000000053', '33600000-0000-0000-0000-000000000054',
-    '33600000-0000-0000-0000-000000000055');
   delete from auth.users where id in (
     '33600000-0000-0000-0000-000000000051', '33600000-0000-0000-0000-000000000052',
     '33600000-0000-0000-0000-000000000053', '33600000-0000-0000-0000-000000000054',
@@ -1346,6 +1346,14 @@ select pg_temp.g521_task('command8','ind',7,'in_review','direct');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select lives_ok($$select public.complete_task_review((select id from g521_tasks where name='command8'),3,3,'Evaluation #521')$$,'complete_task_review: Group persona 1 on executor 7 in ind');
+reset role;
+
+-- ==================== #673: constraints kit (R8) ====================
+-- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
+reset role;
+select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
+select throws_ok($$ select public.complete_task_review(0, 3, 3, repeat('n', 1001)) $$,
+  'PT400', 'note_too_long', 'an Evaluation note over 1000 characters is refused before the gate');
 reset role;
 
 select * from finish();

@@ -3,7 +3,7 @@ vi.mock('../../queries/task-umbrella', () => ({
   useCompleteUmbrella: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('./TaskEditControl', () => ({ TaskEditControl: () => null }));
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -70,6 +70,13 @@ vi.mock('./TaskHistory', () => ({
 }));
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { taskRow } from '../../test/task-fixtures';
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: () => ({ data: false }),
+}));
 
 describe('Task details sheet', () => {
   it('shows authorized fields, hides unknown Executor identity and closes with Escape', async () => {
@@ -88,7 +95,9 @@ describe('Task details sheet', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Detalii task' }),
     ).toBeVisible();
-    expect(screen.getByText('În cadrul originii')).toBeVisible();
+    // A direct Task is local only (R26): no Audiență row.
+    expect(screen.queryByText('Audiență')).toBeNull();
+    expect(screen.queryByText('În cadrul originii')).toBeNull();
     expect(screen.getByText('Indisponibil')).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Duplicat din #7' }),
@@ -102,6 +111,46 @@ describe('Task details sheet', () => {
     ).toEqual([]);
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledOnce();
+  });
+  it('shows the Audiență row on a public Task (R26)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ assignment_mode: 'public', audience: 'org' }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    const row = screen.getByText('Audiență').closest('div') as HTMLElement;
+    expect(within(row).getByText('În tot OSUBB')).toBeVisible();
+  });
+  it('names the Executor as a button that opens their Member Card', async () => {
+    const user = userEvent.setup();
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          visibleExecutor: {
+            memberId: 'member',
+            fullName: 'Ioana Pop',
+            nickname: null,
+          },
+        }),
+        executorName: 'Ioana Pop',
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    const executor = screen.getByText('Executor').closest('div') as HTMLElement;
+    await user.click(
+      within(executor).getByRole('button', {
+        name: 'Profilul membrului Ioana Pop',
+      }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Ioana Pop' }),
+    ).toBeVisible();
   });
   it('does not distinguish a hidden Task from a missing Task', async () => {
     useTaskDetails.mockReturnValue({ data: null });
@@ -238,12 +287,12 @@ describe('Task details sheet', () => {
     await user.click(await screen.findByRole('button', { name: 'Duplică' }));
     await user.type(
       screen.getByLabelText('Termen nou (ora Bucureștiului)'),
-      '2026-10-20T12:30',
+      '2030-10-20T12:30',
     );
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));
     expect(duplicate).toHaveBeenCalledWith({
       taskId: 1,
-      deadline: '2026-10-20T09:30:00.000Z',
+      deadline: '2030-10-20T09:30:00.000Z',
     });
     expect(await screen.findByText('Copia nouă')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Duplicat din #1' }));
@@ -267,6 +316,59 @@ describe('Task details sheet', () => {
     expect(await screen.findByText('Subtaskuri vizibile')).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Duplică' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the latest Submission Note with its link whenever one exists', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'in_progress',
+          review_round: 1,
+          submission: [
+            {
+              id: 12,
+              kind: 'submitted',
+              note: 'Am pus prezentarea în folder.',
+              details: {
+                link_label: 'Prezentare',
+                link_url: 'https://drive.example/prezentare',
+              },
+              occurred_at: '2026-09-15T09:30:00Z',
+            },
+          ],
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    // Once, on the sheet itself: the card copy inside it does not repeat it.
+    const notes = screen.getAllByRole('region', { name: 'Notă la trimitere' });
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent('Am pus prezentarea în folder.');
+    expect(notes[0]).toHaveTextContent('15 septembrie 2026, 12:30');
+    expect(
+      within(notes[0] as HTMLElement).getByRole('link', {
+        name: 'Prezentare (se deschide într-o filă nouă)',
+      }),
+    ).toHaveAttribute('target', '_blank');
+    // The sheet's card is not the deep-link anchor.
+    expect(document.getElementById('task-1')).toBeNull();
+  });
+  it('shows no Submission Note for a Task never submitted', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ submission: [] }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(
+      screen.queryByRole('region', { name: 'Notă la trimitere' }),
     ).not.toBeInTheDocument();
   });
 });

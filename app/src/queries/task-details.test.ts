@@ -2,12 +2,12 @@ import { expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: api }));
 import { fetchTaskDetails } from './task-details';
-import { taskRow } from '../test/task-fixtures';
+import { afterSubmissionFilter, taskRow } from '../test/task-fixtures';
 it('stops on a hidden or missing Task before asking for its relations', async () => {
   const eq = vi.fn(() => ({
     maybeSingle: () => Promise.resolve({ data: null, error: null }),
   }));
-  api.from.mockReturnValue({ select: () => ({ eq }) });
+  api.from.mockReturnValue({ select: () => afterSubmissionFilter({ eq }) });
   await expect(fetchTaskDetails(77)).resolves.toBeNull();
   expect(eq).toHaveBeenCalledWith('id', 77);
   expect(api.from).toHaveBeenCalledOnce();
@@ -19,11 +19,12 @@ it('uses the safe Executor endpoint instead of querying a profile per Task', asy
   api.from.mockImplementation((table: string) => {
     if (table === 'tasks')
       return {
-        select: () => ({
-          eq: () => ({
-            maybeSingle: () => Promise.resolve({ data: task, error: null }),
+        select: () =>
+          afterSubmissionFilter({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: task, error: null }),
+            }),
           }),
-        }),
       };
     if (table === 'profiles_directory')
       return {
@@ -69,15 +70,16 @@ it('reads every child page with status, deadline and safely enriched Executor', 
     error: null,
   }));
   api.from.mockReturnValue({
-    select: () => ({
-      eq: (_field: string, id: number) => ({
-        maybeSingle: async () => ({
-          data: taskRow({ id, kind: 'umbrella' }),
-          error: null,
+    select: () =>
+      afterSubmissionFilter({
+        eq: (_field: string, id: number) => ({
+          maybeSingle: async () => ({
+            data: taskRow({ id, kind: 'umbrella' }),
+            error: null,
+          }),
+          order: () => ({ range }),
         }),
-        order: () => ({ range }),
       }),
-    }),
   });
   api.rpc.mockImplementation(
     async (_name: string, args: { p_task_ids: number[] }) => ({

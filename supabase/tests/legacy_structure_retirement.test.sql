@@ -41,22 +41,11 @@ select ok((select count(*)=4 and bool_and(has_function_privilege('authenticated'
     ('create_group','set_group_role','add_group_member','remove_group_member')),
   'the replacement Group commands remain callable');
 
-insert into auth.users(id,email)
-values ('58500000-0000-0000-0000-000000000001','member.585@test.local');
-insert into public.profiles(id,full_name,email,role,status)
-values ('58500000-0000-0000-0000-000000000001','Member 585','member.585@test.local','voluntar','activ');
-insert into public.teams(id,name,dept_id) values ('team-585','Team 585','edu');
-insert into public.team_members(team_id,member_id)
-values ('team-585','58500000-0000-0000-0000-000000000001');
-select pg_temp.test_login_leadership('58500000-0000-0000-0000-000000000001');
-select is((select count(*) from public.teams where id='team-585'),
-  1::bigint, 'a live Group member reads the transitional legacy Team');
-reset role;
-update public.profiles set status='inactiv'
-where id='58500000-0000-0000-0000-000000000001';
-select pg_temp.test_login_leadership('58500000-0000-0000-0000-000000000001');
-select is((select count(*) from public.teams where id='team-585'),
-  0::bigint, 'an inactive Member with stale claims cannot read the Team');
-reset role;
+select is((select count(*) from information_schema.tables where table_schema='public'
+  and table_name in ('departments','teams','projects','member_departments','team_members','project_members')),
+  0::bigint, 'all six legacy structure tables are absent');
+select is((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='private' and p.proname in ('can_read_team','is_active_project_member','can_manage_department_memberships')),
+  0::bigint, 'the three remaining compatibility predicates are absent');
 select * from finish();
 rollback;

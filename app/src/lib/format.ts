@@ -18,6 +18,18 @@ export function formatPoints(points: number): string {
   return points < 0 ? `−${formatted}` : formatted;
 }
 
+/**
+ * A count of Tasks with the Romanian plural: "1 task", "3 taskuri",
+ * "20 de taskuri" — the "de" appears when the last two digits are 0 or 20+,
+ * for any count above 19.
+ */
+export function formatTaskCount(count: number): string {
+  if (count === 1) return '1 task';
+  const lastTwo = count % 100;
+  const de = count >= 20 && (lastTwo === 0 || lastTwo >= 20);
+  return `${new Intl.NumberFormat('ro-RO').format(count)} ${de ? 'de ' : ''}taskuri`;
+}
+
 /** Parse a PostgreSQL `date` as a local calendar date, never as a UTC instant. */
 export function parseLocalDate(value: string | null): Date | null {
   const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -78,4 +90,15 @@ export function initials(nameOrEmail: string | undefined | null): string {
     return (first + second).toUpperCase();
   }
   return nameOrEmail.slice(0, 2).toUpperCase();
+}
+
+/** `12 martie 2024` — day, month and year, for a date that is a milestone. */
+export function formatDayMonthYear(iso: string | null): string | null {
+  const date = parseLocalDate(iso);
+  if (!date) return null;
+  return new Intl.DateTimeFormat('ro-RO', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
 }

@@ -34,7 +34,7 @@ select ok(
 truncate public.profiles cascade;
 -- TRUNCATE also empties the Group mirror; restore every reference competitor,
 -- including Groups with no fixture memberships.
-select private.sync_department_groups();
+select pg_temp.materialize_legacy_groups();
 
 insert into auth.users (id, email) values
   ('f1000000-0000-0000-0000-0000000000f1', 'flor.vol@test.local'),
@@ -50,12 +50,15 @@ insert into public.profiles (id, full_name, email, role) values
   ('f4000000-0000-0000-0000-0000000000f4', 'Frida BC',        'frida.bc@test.local',   'bc'),
   ('f5000000-0000-0000-0000-0000000000f5', 'Fane Moderator',  'fane.mod@test.local',   'moderator');
 
-insert into public.member_departments (member_id, dept_id) values
+insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('f1000000-0000-0000-0000-0000000000f1', 'edu'),
   ('f2000000-0000-0000-0000-0000000000f2', 'edu'),
   ('f3000000-0000-0000-0000-0000000000f3', 'pr'),
   ('f4000000-0000-0000-0000-0000000000f4', 'fin'),
   ('f5000000-0000-0000-0000-0000000000f5', 'hr');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 insert into public.tasks (title, difficulty, group_id) values
   ('pv-flor', 1, pg_temp.dept_group('edu')), ('pv-felix', 2, pg_temp.dept_group('edu')), ('pv-fiona', 3, pg_temp.dept_group('edu')),

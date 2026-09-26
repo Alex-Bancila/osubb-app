@@ -3,6 +3,7 @@
 -- #579: the Group is an Event's only Origin. scope / dept_id / team_id / project_id,
 -- events_scope_fields_ck, events_team_department_fkey and the event_scope type are gone;
 -- group_id NOT NULL plus events_group_id_fkey are the whole invariant.
+-- #724: events_cancel_reason_length_ck (ruling R8, at most 1000 characters).
 -- Runs in one transaction and rolls back, leaving the local demo untouched.
 begin;
 \set osubb_test_suite true
@@ -10,13 +11,13 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(37);
 
 -- The demo seed fills the calendar. This suite owns its rows and rolls the
 -- truncation back after the assertions.
 truncate events, event_attendance cascade;
 
-insert into teams (id, name, dept_id)
+insert into pg_temp.fixture_teams (id, name, dept_id)
 values ('t-event-integrity', 'Event integrity team', 'edu');
 
 -- A Profile and a Project whose Group owns an Event below.
@@ -26,10 +27,13 @@ values ('36900000-0000-0000-0000-000000000001',
 insert into public.profiles (id, full_name, email, role, status)
 values ('36900000-0000-0000-0000-000000000001', 'Event Integrity Lead',
         'event-integrity-lead-369@test.local', 'responsabil', 'activ');
-insert into public.projects (name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by)
 values ('Event Integrity Project 369', 'active',
         '36900000-0000-0000-0000-000000000001',
         '36900000-0000-0000-0000-000000000001');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- ==================== Any Group owns an Event ====================
 select lives_ok(
@@ -56,7 +60,7 @@ select throws_ok(
 select lives_ok(
   $$ insert into events (title, type, group_id, starts_at)
      select 'Proiect real', 'activitate', pg_temp.project_group(project.id), now()
-       from public.projects project
+       from pg_temp.fixture_projects project
       where project.name = 'Event Integrity Project 369' $$,
   'a Project Group owns a project event');
 
@@ -106,21 +110,55 @@ select lives_ok(
      values ('Anulare validă', 'sedinta', pg_temp.dept_group('org'), now(), now(), 'Sală indisponibilă') $$,
   'a nonblank cancellation reason is accepted');
 
+-- #724 (ruling R8): at most 1000 characters, total for every writer --
+-- cancel_event measures its reason at step 1, archive_group's
+-- cancel_event_effect and a direct write meet only this constraint.
+select lives_ok(
+  $$ insert into events (title, type, group_id, starts_at, cancelled_at, cancel_reason)
+     values ('Anulare 1000', 'sedinta', pg_temp.dept_group('org'), now(), now(), repeat('r', 1000)) $$,
+  'a 1000-character cancellation reason is accepted');
+
+select throws_ok(
+  $$ insert into events (title, type, group_id, starts_at, cancelled_at, cancel_reason)
+     values ('Anulare 1001', 'sedinta', pg_temp.dept_group('org'), now(), now(), repeat('r', 1001)) $$,
+  '23514', 'new row for relation "events" violates check constraint "events_cancel_reason_length_ck"',
+  'a 1001-character cancellation reason is refused by events_cancel_reason_length_ck');
+
+select is(
+  (select convalidated from pg_constraint
+    where conrelid = 'public.events'::regclass and conname = 'events_cancel_reason_length_ck'),
+  true, 'events_cancel_reason_length_ck is validated (note_reason_limits_validate ran)');
+
+-- The state between the two migrations: NOT VALID still refuses every new
+-- write, so a staging deploy that stops after the first one is not a hole.
+alter table public.events drop constraint events_cancel_reason_length_ck;
+alter table public.events add constraint events_cancel_reason_length_ck
+  check (cancel_reason is null or char_length(cancel_reason) <= 1000) not valid;
+select throws_ok(
+  $$ update events set cancel_reason = repeat('r', 1001) where title = 'Anulare 1000' $$,
+  '23514', 'new row for relation "events" violates check constraint "events_cancel_reason_length_ck"',
+  'while NOT VALID, events_cancel_reason_length_ck still refuses a 1001-character reason');
+
 -- ==================== Required and bounded values ====================
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at)
      values ('', 'sedinta', pg_temp.dept_group('org'), now()) $$,
-  '23514', null, 'an event title cannot be empty');
+  '23514', 'new row for relation "events" violates check constraint "events_title_length_ck"',
+  'an event title cannot be empty (#673: the length rule sorts before the blank rule)');
 
+-- #673: three characters each, so the length rule passes and only the blank
+-- rule can refuse them.
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at)
      values ('   ', 'sedinta', pg_temp.dept_group('org'), now()) $$,
-  '23514', null, 'an event title cannot contain only whitespace');
+  '23514', 'new row for relation "events" violates check constraint "events_title_not_blank_ck"',
+  'an event title cannot contain only whitespace');
 
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at)
-     values (E'\t\n', 'sedinta', pg_temp.dept_group('org'), now()) $$,
-  '23514', null, 'tabs and line breaks do not make a valid event title');
+     values (E'\t\n\t', 'sedinta', pg_temp.dept_group('org'), now()) $$,
+  '23514', 'new row for relation "events" violates check constraint "events_title_not_blank_ck"',
+  'tabs and line breaks do not make a valid event title');
 
 select throws_ok(
   $$ insert into events (title, type, group_id)
@@ -135,12 +173,26 @@ select throws_ok(
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at, capacity)
      values ('Capacitate zero', 'sedinta', pg_temp.dept_group('org'), now(), 0) $$,
-  '23514', null, 'capacity cannot be zero');
+  '23514', 'new row for relation "events" violates check constraint "events_capacity_range_ck"',
+  'capacity cannot be zero');
 
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at, capacity)
      values ('Capacitate negativă', 'sedinta', pg_temp.dept_group('org'), now(), -1) $$,
-  '23514', null, 'capacity cannot be negative');
+  '23514', 'new row for relation "events" violates check constraint "events_capacity_range_ck"',
+  'capacity cannot be negative');
+
+-- #673 (R8): the ceiling events_capacity_range_ck adds to the old floor.
+select throws_ok(
+  $$ insert into events (title, type, group_id, starts_at, capacity)
+     values ('Capacitate prea mare', 'sedinta', pg_temp.dept_group('org'), now(), 1001) $$,
+  '23514', 'new row for relation "events" violates check constraint "events_capacity_range_ck"',
+  'capacity cannot exceed 1000');
+
+select lives_ok(
+  $$ insert into events (title, type, group_id, starts_at, capacity)
+     values ('Capacitate maximă', 'sedinta', pg_temp.dept_group('org'), now(), 1000) $$,
+  'a capacity of exactly 1000 is accepted');
 
 -- ==================== The Group is the whole Origin invariant (#579) ====================
 select throws_ok(

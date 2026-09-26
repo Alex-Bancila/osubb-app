@@ -9,6 +9,13 @@ import EditProfileSheet from './EditProfileSheet';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 
 const updateProfileMock = vi.fn();
+// `manageRoles` is the BC/Moderator rank: the only one allowed to change a
+// full name (#675, R5). Each test sets it; the default is an ordinary Member.
+const capabilityMock = vi.hoisted(() => ({ manageRoles: false }));
+
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: (name: 'manageRoles') => ({ data: capabilityMock[name] }),
+}));
 
 vi.mock('../../queries/profile', () => ({
   useUpdateMyProfile: () => ({
@@ -42,6 +49,7 @@ describe('EditProfileSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     updateProfileMock.mockResolvedValue(undefined);
+    capabilityMock.manageRoles = false;
   });
 
   it('renders existing profile fields with email disabled', () => {
@@ -73,7 +81,41 @@ describe('EditProfileSheet', () => {
     ).toBeInTheDocument();
   });
 
-  it('submits updated name, phone, and avatar color', async () => {
+  it('shows the full name read-only below BC and saves without sending it (#675)', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+
+    render(
+      <EditProfileSheet
+        open={true}
+        onClose={onClose}
+        profile={sampleProfile}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    const nameInput = screen.getByLabelText(/nume complet/i);
+    expect(nameInput).toHaveValue('Ana Popescu');
+    expect(nameInput).toBeDisabled();
+    expect(
+      screen.getByText(/numele complet îl modifică biroul de conducere/i),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: /salvează modificările/i }),
+    );
+
+    // The phone is sent in E.164 (ruling R8), as the server stores it.
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      phone: '+40711223344',
+      avatarColor: '#284C93',
+    });
+    expect(updateProfileMock.mock.calls[0]?.[0]).not.toHaveProperty('fullName');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('lets BC submit an updated name, phone, and avatar color', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
     const onClose = vi.fn();
 
@@ -105,13 +147,14 @@ describe('EditProfileSheet', () => {
 
     expect(updateProfileMock).toHaveBeenCalledWith({
       fullName: 'Ana Ionescu',
-      phone: '0799001122',
+      phone: '+40799001122',
       avatarColor: '#ED2025',
     });
     expect(onClose).toHaveBeenCalled();
   });
 
   it('validates that full name cannot be blank', async () => {
+    capabilityMock.manageRoles = true;
     const user = userEvent.setup();
 
     render(
@@ -132,9 +175,8 @@ describe('EditProfileSheet', () => {
     await user.click(saveButton);
 
     expect(updateProfileMock).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/numele complet este obligatoriu/i),
-    ).toBeInTheDocument();
+    expect(nameInput).toHaveAccessibleDescription('Scrie numele complet.');
+    expect(nameInput).toHaveFocus();
   });
 
   it('submits null phone when phone input is cleared', async () => {
@@ -159,16 +201,58 @@ describe('EditProfileSheet', () => {
     await user.click(saveButton);
 
     expect(updateProfileMock).toHaveBeenCalledWith({
-      fullName: 'Ana Popescu',
       phone: null,
       avatarColor: '#284C93',
     });
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('checks the phone before sending it and puts the server phone_invalid under it', async () => {
+    const user = userEvent.setup();
+    updateProfileMock.mockRejectedValueOnce({
+      code: '23514',
+      message: 'phone_invalid',
+    });
+
+    render(
+      <EditProfileSheet
+        open={true}
+        onClose={vi.fn()}
+        profile={sampleProfile}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    const phoneInput = screen.getByLabelText(/număr de telefon/i);
+    await user.clear(phoneInput);
+    await user.type(phoneInput, '0630 655 145');
+    await user.tab();
+    expect(phoneInput).toHaveAccessibleDescription(
+      /Scrie un număr de telefon valid \(de exemplu 0730 655 145\)\./,
+    );
+
+    await user.clear(phoneInput);
+    await user.type(phoneInput, '+40 0730 655 145');
+    const saveButton = screen.getByRole('button', {
+      name: /salvează modificările/i,
+    });
+    await user.click(saveButton);
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      phone: '+40730655145',
+      avatarColor: '#284C93',
+    });
+    expect(phoneInput).toHaveAccessibleDescription(
+      /Scrie un număr de telefon valid/,
+    );
+    expect(phoneInput).toHaveFocus();
+  });
+
   it('renders an error alert when the profile update fails', async () => {
     const user = userEvent.setup();
-    updateProfileMock.mockRejectedValueOnce(new Error('Eroare la conexiune'));
+    updateProfileMock.mockRejectedValueOnce({
+      code: 'XX000',
+      message: 'connection reset by peer',
+    });
 
     render(
       <EditProfileSheet
@@ -184,7 +268,10 @@ describe('EditProfileSheet', () => {
     });
     await user.click(saveButton);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Eroare la conexiune');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Nu am putut salva modificările.',
+    );
+    expect(screen.queryByText(/connection reset/)).not.toBeInTheDocument();
   });
 
   it('calls onClose when close button is clicked', async () => {

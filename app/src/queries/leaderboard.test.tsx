@@ -21,9 +21,9 @@ beforeEach(() => {
   rpc.mockReturnValue({ order });
 });
 const board = [
-  { member_id: 'a', full_name: 'Ana', points: 20, rank: 1 },
-  { member_id: 'b', full_name: 'Bianca', points: 20, rank: 1 },
-  { member_id: 'me', full_name: 'Eu', points: 15, rank: 3 },
+  { member_id: 'a', full_name: 'Ana', nickname: 'Ani', points: 20, rank: 1 },
+  { member_id: 'b', full_name: 'Bianca', nickname: 'Bia', points: 20, rank: 1 },
+  { member_id: 'me', full_name: 'Eu', nickname: 'Eu', points: 15, rank: 3 },
 ];
 it('shares one server request between board and standing observers', async () => {
   range.mockResolvedValue({ data: board, error: null });

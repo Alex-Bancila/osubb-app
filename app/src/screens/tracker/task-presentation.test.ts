@@ -121,6 +121,7 @@ describe('TaskPresentation', () => {
       id: 1,
       label: 'Departament · Educațional',
       color: 'var(--dept-edu)',
+      isPrivate: false,
     });
     expect(
       taskOrigin({
@@ -131,9 +132,25 @@ describe('TaskPresentation', () => {
           color: null,
           category: 'team',
           path: [4, 21],
+          is_organization: false,
         },
       }),
-    ).toEqual({ id: 21, label: 'Echipă · IT', color: null });
+    ).toEqual({ id: 21, label: 'Echipă · IT', color: null, isPrivate: false });
+    // A Private Group's chip carries the lock (#757).
+    expect(
+      taskOrigin({
+        group_id: 22,
+        group: {
+          name: 'Audit',
+          short: null,
+          color: null,
+          category: 'team',
+          path: [4, 22],
+          is_organization: false,
+          is_private: true,
+        },
+      }).isPrivate,
+    ).toBe(true);
     expect(
       taskOrigin({
         group_id: 30,
@@ -143,10 +160,12 @@ describe('TaskPresentation', () => {
           color: null,
           category: 'project',
           path: [30],
+          is_organization: false,
         },
       }).label,
     ).toBe('Proiect · Gala');
-    // A category the app has no noun for shows the Group's own name.
+    // A category the app has no noun for shows the Group's own name, and the
+    // Organization Group is OSUBB red whatever colour its row stores (R10).
     expect(
       taskOrigin({
         group_id: 5,
@@ -156,9 +175,15 @@ describe('TaskPresentation', () => {
           color: '#c8102e',
           category: 'organization',
           path: [5],
+          is_organization: true,
         },
       }),
-    ).toEqual({ id: 5, label: 'OSUBB', color: '#c8102e' });
+    ).toEqual({
+      id: 5,
+      label: 'OSUBB',
+      color: 'var(--scope-org)',
+      isPrivate: false,
+    });
   });
 
   it('never leaks an id when RLS withholds the Origin Group', () => {
@@ -166,6 +191,7 @@ describe('TaskPresentation', () => {
       id: 1,
       label: 'Origine indisponibilă',
       color: null,
+      isPrivate: false,
     });
     expect(
       taskOrigin({
@@ -176,6 +202,7 @@ describe('TaskPresentation', () => {
           color: '#000000',
           category: 'team',
           path: [9],
+          is_organization: false,
         },
       }).label,
     ).toBe('Origine indisponibilă');
@@ -189,7 +216,11 @@ describe('TaskPresentation', () => {
           { id: 1, member_id: 'former', ended_at: '2026-09-14T00:00:00Z' },
           { id: 2, member_id: 'current', ended_at: null },
         ],
-        visibleExecutor: { memberId: 'current', fullName: 'Ioana Pop' },
+        visibleExecutor: {
+          memberId: 'current',
+          fullName: 'Ioana Pop',
+          nickname: ' Ioana ',
+        },
       }),
       now,
       candidature,
@@ -198,6 +229,7 @@ describe('TaskPresentation', () => {
       assignmentId: 2,
       memberId: 'current',
       name: 'Ioana Pop',
+      nickname: 'Ioana',
     });
     expect(model.candidature).toEqual(candidature);
     expect(
@@ -217,7 +249,12 @@ describe('TaskPresentation', () => {
         }),
         now,
       ).executor,
-    ).toEqual({ assignmentId: null, memberId: 'current', name: null });
+    ).toEqual({
+      assignmentId: null,
+      memberId: 'current',
+      name: null,
+      nickname: null,
+    });
   });
 
   it('uses only the current evaluation points, including zero and negative values', () => {
@@ -320,5 +357,66 @@ describe('TaskPresentation', () => {
       toTaskPresentation(taskRow({ kind: 'umbrella', subtasks: [] }), now)
         .subtaskProgress,
     ).toEqual({ terminal: 0, total: 0 });
+  });
+
+  it('carries the Attached Link and the latest Submission Note', () => {
+    const row = taskRow({
+      link_label: '  Brief ',
+      link_url: 'https://drive.example/brief',
+      submission: [
+        {
+          id: 4,
+          kind: 'submitted',
+          note: 'Veche',
+          details: {},
+          occurred_at: '2026-09-14T10:00:00Z',
+        },
+        {
+          id: 8,
+          kind: 'submitted',
+          note: '  ',
+          details: { link_label: 'Surse', link_url: 'https://x.example' },
+          occurred_at: '2026-09-15T10:00:00Z',
+        },
+      ],
+    });
+    const task = toTaskPresentation(row, now);
+    expect(task.link).toEqual({
+      label: 'Brief',
+      url: 'https://drive.example/brief',
+    });
+    expect(task.submission).toEqual({
+      note: null,
+      link: { label: 'Surse', url: 'https://x.example' },
+      submittedAt: '2026-09-15T10:00:00Z',
+    });
+  });
+
+  it('shows no Submission Note when none exists or the last one is empty', () => {
+    expect(toTaskPresentation(taskRow(), now).submission).toBeNull();
+    expect(
+      toTaskPresentation(taskRow({ submission: [] }), now).submission,
+    ).toBeNull();
+    expect(
+      toTaskPresentation(
+        taskRow({
+          submission: [
+            {
+              id: 1,
+              kind: 'submitted',
+              note: null,
+              details: {},
+              occurred_at: '2026-09-15T10:00:00Z',
+            },
+          ],
+        }),
+        now,
+      ).submission,
+    ).toBeNull();
+    // A half link is no link.
+    expect(
+      toTaskPresentation(taskRow({ link_label: 'Brief', link_url: null }), now)
+        .link,
+    ).toBeNull();
   });
 });

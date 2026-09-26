@@ -8,9 +8,14 @@
 --   R2 own work: any Assignment (current or ended) or Candidature (any status)
 --   R3 Group Managers and Responsibles on the ancestor path (archived history too)
 --   R4 Shared Work Visibility of any Group on the path the caller belongs to
---   R6 eligible Opportunities: ordinary, public, queue open, unfinished;
---      Audience org -> Members meeting the Group Minimum Level, local -> own Group members
---      R3 authority overrides Minimum Level; ordinary R4/R6 reads must meet it
+--   R6 open Opportunities: ordinary, public, queue open, unfinished (#794,
+--      ruling R26 -- visibility follows the Task Audience):
+--      R6-org  Audience org, of any Group: every active Member, NO Minimum
+--              Level gate
+--      R6-own  any Audience, of a Group the Member is a member of
+--              (private.is_group_member), at the Group's Minimum Level
+--      a local Opportunity of a Group the Member is not in is invisible
+--      R3 authority overrides Minimum Level; ordinary R4/R6-own reads must meet it
 --   R7 a Subtask whenever its Umbrella is readable by the same caller
 -- and nothing else: plain Department and Project members read only R2 + R6.
 begin;
@@ -19,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(71);
+select plan(84);
 
 -- ==================== Shape of the read surface ====================
 select policies_are('public', 'tasks',
@@ -151,7 +156,10 @@ insert into fx_persona (code, id, role, status, dept_id) values
   ('umbrella_candidate',  '31800000-0000-0000-0000-000000000022', 'voluntar',    'activ',   null),
   ('deactivated',         '31800000-0000-0000-0000-000000000023', 'bce',         'inactiv', 'edu'),
   ('claimless',           '31800000-0000-0000-0000-000000000024', 'voluntar',    'activ',   'edu'),
-  ('filler',              '31800000-0000-0000-0000-000000000025', 'voluntar',    'activ',   null);
+  ('filler',              '31800000-0000-0000-0000-000000000025', 'voluntar',    'activ',   null),
+  -- #683: a level-1 Member of another Department, below the gated Group's
+  -- Minimum Level 2 -- the persona that pins the gate R10 keeps.
+  ('outsider_below_min',  '31800000-0000-0000-0000-000000000026', 'voluntar',    'activ',   'fin');
 
 insert into auth.users (id, email)
 select persona.id, 'm318.' || persona.code || '@test.local' from fx_persona as persona;
@@ -159,13 +167,13 @@ insert into public.profiles (id, full_name, email, role, status)
 select persona.id, 'M318 ' || persona.code, 'm318.' || persona.code || '@test.local',
        persona.role, persona.status
   from fx_persona as persona;
-insert into public.member_departments (member_id, dept_id)
+insert into pg_temp.fixture_member_departments (member_id, dept_id)
 select persona.id, persona.dept_id from fx_persona as persona where persona.dept_id is not null;
 
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('m318-dt', 'M318 Department Team', 'edu'),
   ('m318-it', 'M318 Independent Team', null);
-insert into public.team_members (team_id, member_id)
+insert into pg_temp.fixture_team_members (team_id, member_id)
 select membership.team_id, persona.id
   from (values ('m318-dt', 'dept_team_member'), ('m318-it', 'indep_team_member'))
          as membership (team_id, code)
@@ -173,19 +181,22 @@ select membership.team_id, persona.id
 
 -- Same lead, Responsible and plain member in an active and an archived
 -- Project. The leader's own membership comes from projects_sync_leader_membership.
-insert into public.projects (name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by)
 select project.name, project.status, lead.id, bc.id
   from (values ('M318 Project', 'active'), ('M318 Archived Project', 'archived'))
          as project (name, status)
  cross join (select id from fx_persona where code = 'project_lead') as lead
  cross join (select id from fx_persona where code = 'bc') as bc;
-insert into public.project_members (project_id, member_id, project_role)
+insert into pg_temp.fixture_project_members (project_id, member_id, project_role)
 select project.id, persona.id, membership.project_role
-  from public.projects as project
+  from pg_temp.fixture_projects as project
  cross join (values ('project_responsible', 'responsible'), ('project_member', 'member'))
          as membership (code, project_role)
   join fx_persona as persona on persona.code = membership.code
  where project.name in ('M318 Project', 'M318 Archived Project');
+-- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
+select pg_temp.materialize_legacy_groups();
+
 
 -- The 24-row core: every Origin kind x Audience x (direct | public with an
 -- open queue | public with a closed queue). Titles carry an `m318:` prefix
@@ -203,7 +214,7 @@ select 'm318:' || origin.code || '-' || shape.code,
           ('D',  'edu',      null::text, null::bigint),
           ('DT', null,       'm318-dt',  null),
           ('IT', null,       'm318-it',  null),
-          ('P',  null,       null,       (select id from public.projects where name = 'M318 Project'))
+          ('P',  null,       null,       (select id from pg_temp.fixture_projects where name = 'M318 Project'))
        ) as origin (code, dept_id, team_id, project_id)
  cross join (values
           ('loc-dir',    'local', 'direct', false),
@@ -213,6 +224,23 @@ select 'm318:' || origin.code || '-' || shape.code,
           ('org-open',   'org',   'public', false),
           ('org-closed', 'org',   'public', true)
        ) as shape (code, audience, assignment_mode, queue_closed);
+
+-- #683: a Group whose Minimum Level (2) sits above levels 0-1, under `pr`
+-- (no persona belongs to it). Since #794 (ruling R26) its open org
+-- Opportunity is readable -- and joinable -- by every active Member at any
+-- level; its open local Opportunity and its direct Task by nobody outside R1.
+-- OD9: a rolled-back Group fixture.
+insert into public.groups (name, category, parent_id, min_level, application_level)
+values ('M683 Gated Team', 'team', pg_temp.dept_group('pr'), 2, 2);
+insert into public.tasks
+  (title, group_id, audience, assignment_mode, queue_opened_at)
+select 'm318:' || shape.code, grp.id, shape.audience, shape.assignment_mode,
+       case when shape.assignment_mode = 'public' then now() end
+  from public.groups as grp
+ cross join (values ('G-loc-open', 'local', 'public'),
+                    ('G-org-open', 'org',   'public'),
+                    ('G-loc-dir',  'local', 'direct')) as shape (code, audience, assignment_mode)
+ where grp.name = 'M683 Gated Team';
 
 -- An Umbrella of the Department Team with a direct Subtask (the executor
 -- persona's) and an org-wide public Subtask. An Umbrella carries no
@@ -245,7 +273,7 @@ select 'm318:X-umb-sub', umbrella.id, pg_temp.dept_group('pr')
 -- off. Nothing else about the fixture changes.
 insert into public.tasks (title, group_id, status, cancelled_at, cancel_reason)
 select 'm318:PA-dir', pg_temp.project_group(project.id), 'cancelled', now(), 'Proiect arhivat #318'
-  from public.projects as project where project.name = 'M318 Archived Project';
+  from pg_temp.fixture_projects as project where project.name = 'M318 Archived Project';
 
 -- Participation Tasks in `pr`, where no persona except R1 is a member.
 -- X-busy is an org-wide Opportunity that already has an Executor and is in
@@ -309,16 +337,19 @@ as $$
   select substr(task.title, 6) from public.tasks as task where task.title like 'm318:%'
 $$;
 
--- The Opportunities every active Member reads (R6, Audience org, queue open,
--- unfinished): one per Origin kind, the org-wide Subtask, X-busy
--- (in_progress) and X-review (in_review, round 1).
+-- The Opportunities every active Member reads (R6-org, Audience org, queue
+-- open, unfinished), at every level (#794, ruling R26: no Minimum Level gate):
+-- one per Origin kind, the org-wide Subtask, X-busy (in_progress), X-review
+-- (in_review, round 1) and the gated Group's G-org-open (Minimum Level 2).
+-- The local ones -- D/DT/IT/P-loc-open, X-cand-withdrawn, G-loc-open -- are
+-- read only by the members of their Group (R6-own) and by R1-R4.
 create function pg_temp.org_open()
 returns text[]
 language sql
 immutable
 as $$
   select array['D-org-open', 'DT-org-open', 'IT-org-open', 'P-org-open',
-               'DT-umb-sub-open', 'X-busy', 'X-review']
+               'DT-umb-sub-open', 'X-busy', 'X-review', 'G-org-open']
 $$;
 
 create function pg_temp.every_task()
@@ -348,43 +379,54 @@ end;
 $$;
 
 -- ==================== The matrix ====================
+-- #794 (ruling R26): every active persona reads org_open() -- the open org
+-- Opportunities of every Group, the gated one's included, at any level --
+-- plus the open Opportunities (any Audience) of the Groups it is a member
+-- of. No persona reads a local Opportunity of a Group it is not in, unless
+-- R1-R4 admit it. Nobody below R1 reads a direct Task, a closed queue, or
+-- anything terminal of a Group they have no other rule for. Role level
+-- changes nothing else (ADR-0007: "regardless of role level").
+
 -- Levels 0-3 inside the Department Origin (`edu` members, no Team or
--- Project): R6 only — the org-wide Opportunities plus the one local
--- Opportunity of their own Department (D-loc-open). Not D-loc-closed (a
--- closed queue hides the Opportunity from nonparticipants), not the direct
--- D Tasks (not theirs), not DT-loc-open (the Department Team is its own
--- Origin — decision (a)). Role level changes nothing (ADR-0007: "regardless
--- of role level").
+-- Project): R6 only -- every org Opportunity plus `edu`'s own local one. Not
+-- D-loc-closed (a closed queue hides the Opportunity from nonparticipants),
+-- not the direct D Tasks (not theirs), not the Child Team's DT-loc-open and
+-- not the gated Group's G-loc-open (not their Groups).
 reset role;
 select pg_temp.login_as('recrut_in');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['D-loc-open'],
-  'Recrut in the Department: org-wide Opportunities + the Department''s own local Opportunity');
+  'Recrut in the Department: every org Opportunity and its own Department''s local one, no other Group''s local Opportunity (#794)');
+-- #794 AC, named: membership is of THIS Group only -- a Department member
+-- does not read its Child Team's local Opportunity (it could not join it).
+select ok(exists (select 1 from public.tasks where title = 'm318:D-loc-open')
+          and not exists (select 1 from public.tasks where title = 'm318:DT-loc-open'),
+  '#794: a Department member reads its own local Opportunity but not its Child Team''s');
 
 reset role;
 select pg_temp.login_as('voluntar_in');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['D-loc-open'],
-  'Voluntar in the Department: org-wide Opportunities + the Department''s own local Opportunity');
+  'Voluntar in the Department: every org Opportunity and its own Department''s local one');
 
 reset role;
 select pg_temp.login_as('activ_in');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['D-loc-open'],
-  'Membru Activ in the Department: org-wide Opportunities + the Department''s own local Opportunity');
+  'Membru Activ (level 2) in the Department: the same set -- the gated Group''s org Opportunity, never its local one or its direct Task');
 
 reset role;
 select pg_temp.login_as('vot_in');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['D-loc-open'],
-  'Vot in the Department: org-wide Opportunities + the Department''s own local Opportunity');
+  'Vot (level 3) in the Department: the same set as levels 0-2');
 
 -- Levels 0-3 outside every fixture Origin (`fin` members; also the
--- non-member of the Project and of both Teams): R6 with Audience org only.
+-- non-member of the Project and of both Teams): org Opportunities only.
 reset role;
 select pg_temp.login_as('recrut_out');
 select set_eq('select * from pg_temp.visible_titles()', pg_temp.org_open(),
-  'Recrut outside the Origin: org-wide Opportunities only');
+  'Recrut outside the Origin: every open org Opportunity and no local one (#794)');
 -- Round 1: pin the in_review Opportunity explicitly (X-busy already pins
 -- in_progress the same way); a mutant narrowing R6 to todo/in_progress
 -- must fail here even if it left org_open() itself unedited.
@@ -395,7 +437,7 @@ select ok(
 reset role;
 select pg_temp.login_as('voluntar_out');
 select set_eq('select * from pg_temp.visible_titles()', pg_temp.org_open(),
-  'Voluntar outside the Origin (also a Project and Team non-member): org-wide Opportunities only');
+  'Voluntar outside the Origin (also a Project and Team non-member): every open org Opportunity, no local one (#794)');
 -- Issue #318 AC, named: nine closed-queue public Tasks exist across the
 -- four Origin kinds and `pr`; a nonparticipant outside their Origins reads
 -- none of them, org-wide Audience included.
@@ -403,15 +445,31 @@ select is(
   (select count(*) from public.tasks where title like 'm318:%-closed'),
   0::bigint,
   'AC: a closed-queue public Task is invisible to non-participants outside its Origin');
+-- #794 AC, named (the #683 one flipped): the level-1 outsider reads no local
+-- Opportunity of another Department (D-loc-open) or of that Department's
+-- Child Team (DT-loc-open), and none of their direct Tasks -- the org-Audience
+-- direct rows D-org-dir / DT-org-dir included.
+select ok(
+  not exists (select 1 from public.tasks
+               where title in ('m318:D-loc-open', 'm318:DT-loc-open',
+                               'm318:D-loc-dir', 'm318:D-org-dir', 'm318:DT-loc-dir', 'm318:DT-org-dir')),
+  '#794: an outsider never reads another Department''s or its Child Team''s local Opportunities, nor their direct Tasks');
+-- Candidate privacy: X-cand-withdrawn is a local `pr` Opportunity with two
+-- Candidatures; the outsider reads neither the Task nor its Candidatures.
+select ok(
+  not exists (select 1 from public.tasks where title = 'm318:X-cand-withdrawn')
+  and not exists (select 1 from public.task_candidates as candidate
+                   where candidate.task_id = pg_temp.task_id('X-cand-withdrawn')),
+  '#794: the outsider reads neither another Group''s local Opportunity nor any of its Candidatures');
 
 reset role;
 select pg_temp.login_as('activ_out');
 select set_eq('select * from pg_temp.visible_titles()', pg_temp.org_open(),
-  'Membru Activ outside the Origin: org-wide Opportunities only');
+  'Membru Activ (level 2) outside the Origin: every open org Opportunity and no local one, the gated Group''s included');
 
 -- A Vot demoted from BC whose unexpired token still says BC level 6 and
 -- lists `edu`, `pr` and both Teams: authority and memberships are read live,
--- never from the JWT, so this is still a plain Vot in `fin`.
+-- never from the JWT, so this is still a plain Vot (level 3) in `fin`.
 reset role;
 select pg_temp.test_login(
   (select id from pg_temp.fx_persona where code = 'vot_out'),
@@ -419,7 +477,47 @@ select pg_temp.test_login(
                      'dept_ids', '["edu", "pr"]'::jsonb,
                      'team_ids', '["m318-dt", "m318-it"]'::jsonb));
 select set_eq('select * from pg_temp.visible_titles()', pg_temp.org_open(),
-  'Vot outside the Origin with stale BC claims and forged memberships: org-wide Opportunities only');
+  'Vot outside the Origin with stale BC claims and forged memberships: org Opportunities by live membership only');
+
+-- #794 (ruling R26): the outsider below the Minimum Level. A level-1 Member
+-- below the gated Group's Minimum Level 2 still reads its open org
+-- Opportunity -- the org arm has no Minimum Level gate -- and joins it; the
+-- Group's local Opportunity stays hidden, and interest in it is refused as
+-- not found, never as a denial.
+reset role;
+select pg_temp.login_as('outsider_below_min');
+select set_eq('select * from pg_temp.visible_titles()', pg_temp.org_open(),
+  '#794: the outsider below the gated Group''s Minimum Level reads its org Opportunity like every other one');
+-- The card's Group embed: groups_read admits the gated Group through
+-- private.has_open_org_opportunity, so the Opportunity names its Group.
+select is(
+  (select grp.name from public.tasks as task
+     join public.groups as grp on grp.id = task.group_id
+    where task.title = 'm318:G-org-open'),
+  'M683 Gated Team',
+  '#794: the org Opportunity''s Group reads for the outsider below its Minimum Level (the card is not "Origine indisponibilă")');
+select lives_ok(format('select public.express_task_interest(%s)', pg_temp.task_id('G-org-open')),
+  '#794: below the Minimum Level an org-Audience Opportunity is joinable -- no Minimum Level gate');
+select is(
+  (select candidate.status from public.task_candidates as candidate
+    where candidate.task_id = pg_temp.task_id('G-org-open')
+      and candidate.member_id = auth.uid()),
+  'pending',
+  '#794: the join queued the outsider as a pending Candidate');
+select throws_ok(format('select public.express_task_interest(%s)', pg_temp.task_id('G-loc-open')),
+  'PT404', 'task_not_found',
+  '#794: a local Opportunity of a Group the caller is not in is not found, not forbidden');
+-- The limb follows the open state: with G-org-open's queue closed the gated
+-- Group owns no open org Opportunity and reads for the outsider no more
+-- (their own Candidature still shows them the Task, R2).
+reset role;
+update public.tasks set queue_closed_at = now() where id = pg_temp.task_id('G-org-open');
+select pg_temp.login_as('outsider_below_min');
+select ok(
+  not exists (select 1 from public.groups where name = 'M683 Gated Team'),
+  '#794: groups_read hides the gated Group again once it owns no open org Opportunity');
+reset role;
+update public.tasks set queue_closed_at = null where id = pg_temp.task_id('G-org-open');
 
 -- The organisation role Responsabil (level 4, JWT level 4) is not a
 -- Project role and not a global reader (decision (c)): same set as levels
@@ -442,6 +540,11 @@ reset role;
 select pg_temp.login_as('bce_foreign');
 select set_eq('select * from pg_temp.visible_titles()', pg_temp.every_task(),
   'foreign BCE reads every Task too (BCE reads all Tasks globally)');
+-- #794 AC: reading is not joining. The foreign BCE reads `edu`'s local
+-- Opportunity through R1 but is not a member of `edu`: 42501, not PT404.
+select throws_ok(format('select public.express_task_interest(%s)', pg_temp.task_id('D-loc-open')),
+  '42501', 'task_audience_forbidden',
+  '#794: a BCE reads another Department''s local Opportunity but may not join it');
 
 reset role;
 select pg_temp.login_as('bc');
@@ -454,7 +557,7 @@ select set_eq('select * from pg_temp.visible_titles()', pg_temp.every_task(),
   'Moderator reads every Task');
 
 -- R5 over both Projects: all six P Tasks (the closed queues included) and
--- the archived Project's history PA-dir; plus R6 org-wide elsewhere.
+-- the archived Project's history PA-dir; plus the org Opportunities elsewhere.
 reset role;
 select pg_temp.login_as('project_lead');
 select set_eq('select * from pg_temp.visible_titles()',
@@ -469,22 +572,22 @@ select set_eq('select * from pg_temp.visible_titles()',
                               'P-org-open', 'P-org-closed', 'PA-dir'],
   'Project Responsible reads every Task of the Project, archived Project history included');
 
--- A plain Project member: own work (none) and eligible Opportunities —
--- the Project's local open queue (P-loc-open) plus org-wide. Not the
--- Project's direct Tasks, not its closed queues, not PA-dir.
+-- A plain Project member: own work (none), the org Opportunities and the
+-- Project's own local one. Not the Project's direct Tasks, not its closed
+-- queues, not PA-dir.
 reset role;
 select pg_temp.login_as('project_member');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['P-loc-open'],
-  'plain Project member: the Project''s local Opportunity + org-wide Opportunities only');
+  'plain Project member: open Opportunities only, never the Project''s direct Tasks or closed queues');
 select set_eq(
   $$ select substr(title, 6) from public.tasks_with_overdue where title like 'm318:%' $$,
   pg_temp.org_open() || array['P-loc-open'],
   'tasks_with_overdue is security_invoker: a plain Project member reads the same set through it');
 
 -- R4 over the Department Team: all six DT Tasks, the Umbrella and both
--- Subtasks. Not D-loc-open: a Department Team member is not thereby a
--- member of the parent Department (decision (a)).
+-- Subtasks. Not D-loc-dir and, since #794, not D-loc-open: a Department Team
+-- member is not thereby a member of the parent Department (decision (a)).
 reset role;
 select pg_temp.login_as('dept_team_member');
 select set_eq('select * from pg_temp.visible_titles()',
@@ -506,7 +609,7 @@ reset role;
 select pg_temp.login_as('executor');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['X-exec', 'DT-umb-sub'],
-  'current Executor reads their Tasks (a Subtask included, not its Umbrella) + org-wide Opportunities');
+  'current Executor reads their Tasks (a Subtask included, not its Umbrella) + open org Opportunities');
 select set_eq(
   $$ select substr(title, 6) from public.tasks_with_overdue where title like 'm318:%' $$,
   pg_temp.org_open() || array['X-exec', 'DT-umb-sub'],
@@ -517,17 +620,17 @@ reset role;
 select pg_temp.login_as('past_executor');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['X-past'],
-  'past Executor (gave up) still reads that Task + org-wide Opportunities');
+  'past Executor (gave up) still reads that Task + open org Opportunities');
 
 -- R2 with Candidatures in any status: X-cand-closed's queue is closed and
 -- the Candidature was closed with it — "existing participants retain their
--- own state"; X-cand-withdrawn was left voluntarily. Both are local `pr`
--- queues the persona is not otherwise eligible for.
+-- own state". X-cand-withdrawn is a local `pr` Opportunity: since #794 only
+-- R2 (the withdrawn Candidature) admits it.
 reset role;
 select pg_temp.login_as('candidate');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['X-cand-closed', 'X-cand-withdrawn'],
-  'Candidate reads the Tasks they queued for, closed queue and withdrawn Candidature included');
+  'Candidate reads the Tasks they queued for, the closed queue and the withdrawn Candidature included');
 
 -- R7 in isolation: R2 admits the Umbrella X-umb, and R7 admits its Subtask
 -- X-umb-sub because the Umbrella is readable by the same caller.
@@ -712,16 +815,19 @@ $$;
 
 select is(pg_temp.helper_triples(false), '{}'::text[],
   'no persona manages, executes or queues for a Task it cannot read');
--- Non-vacuity: BC and Moderator manage all 36 Tasks (72, round 1's X-review
+-- Non-vacuity (+6 since #683: BC and Moderator also manage the gated Group's
+-- three Tasks): BC and Moderator manage all 36 Tasks (72, round 1's X-review
 -- included -- BC/Moderator's global override reaches it as a `pr` Task,
 -- same as any other), local BCE the 15 D/DT Tasks, the lead and the
 -- Responsible the 6 active-Project Tasks each, the Independent-Team member
 -- the 6 IT Tasks (105 manage); executor 2, filler 1 and past_executor 1
 -- Assignments (4; the deactivated one's is refused); candidate 2,
 -- umbrella_candidate 1 and the member behind the claimless persona 1
--- Candidatures, here logged in with real claims (4).
-select is(cardinality(pg_temp.helper_triples(true)), 113,
-  'the sweep is not vacuous: 113 persona/Task/helper triples hold, all readable');
+-- Candidatures, here logged in with real claims (4); and, since #794,
+-- outsider_below_min's own Candidature on G-org-open, the org Opportunity it
+-- joined below the Minimum Level (+1).
+select is(cardinality(pg_temp.helper_triples(true)), 120,
+  'the sweep is not vacuous: 120 persona/Task/helper triples hold, all readable');
 
 reset role;
 
@@ -736,16 +842,21 @@ update public.tasks set audience='local' where id=(select id from g521_tasks whe
 select pg_temp.g521_task('dtown','dt',8);
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
-select is(private.can_read_task((select id from g521_tasks where name='dtlocal')),false,'plain Department membership cannot read a Child local Opportunity');
+-- #794 (ruling R26): membership is of THIS Group only (private.is_group_member)
+-- -- the Department member does not read the Child Team's local Opportunity
+-- (Minimum Level 0), which it could not join either.
+select is(private.can_read_task((select id from g521_tasks where name='dtlocal')),false,'#794: a plain Department member does not read a Child Team''s local Opportunity it is not a member of');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
 select ok(private.can_read_task((select id from g521_tasks where name='private')) and private.can_read_task((select id from g521_tasks where name='archived')),'low-rank Group Manager reads active work and archived history');
 reset role;
 -- OD9 rolled-back settings fixture; no production Group write.
-update public.groups set min_level=3,application_level=3 where legacy_team_id='dt521';
+update public.groups set min_level=3,application_level=3 where id = pg_temp.team_group('dt521');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
-select results_eq($$select t.name from g521_tasks t where t.name like 'dt%' and private.can_read_task(t.id) order by 1$$,$$values ('dtown'::text)$$,'below-Minimum-Level Member reads only their Assignment, not shared or org Opportunities');
+-- #794 (ruling R26): the org Opportunity reads at any level; the Group's own
+-- local one and its Shared Work Visibility still wait for the Minimum Level.
+select results_eq($$select t.name from g521_tasks t where t.name like 'dt%' and private.can_read_task(t.id) order by 1$$,$$values ('dtorg'::text), ('dtown'::text)$$,'below-Minimum-Level Member reads their Assignment and the org Opportunity, not shared work or the local Opportunity (#794)');
 reset role;
 update public.groups set min_level=3,application_level=3 where name='Project #521';
 reset role;
@@ -756,10 +867,14 @@ update public.groups set min_level=0,application_level=0 where name='Project #52
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
 reset role;
-delete from public.project_members where project_id=(select id from public.projects where name='Project #521') and member_id=pg_temp.g521_uid(3);
+delete from pg_temp.fixture_project_members where project_id=(select id from pg_temp.fixture_projects where name='Project #521') and member_id=pg_temp.g521_uid(3);
+delete from public.group_members where group_id=(select id from public.groups where name='Project #521')
+  and member_id=pg_temp.g521_uid(3);
 set local role authenticated;
 select is(private.can_read_task((select id from g521_tasks where name='private')),false,'removed Group role loses private reads despite stale token');
-select is(private.can_read_task((select id from g521_tasks where name='dtorg')),false,'stale Group role does not bypass another Group Minimum Level');
+-- #794: dtorg now reads for every Member, so the stale-role guard is pinned on
+-- the Child Team's local Opportunity instead.
+select is(private.can_read_task((select id from g521_tasks where name='dtlocal')),false,'stale Group role does not reach another Group''s local Opportunity');
 reset role;
 -- #521 (delta): the brief's stale_role persona "reads only R6". The two negatives above pin
 -- the "only"; this pins the "R6" -- losing the Group Role must not cost them the org-audience
@@ -769,6 +884,29 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
 select is(private.can_read_task((select id from g521_tasks where name='projorg')),true,
   'a removed Group Role still reads that Group''s open org-audience Opportunity: R6 survives R3''s loss');
+reset role;
+
+-- #794 AC: a Group Manager on the path reads a Child Group's local Opportunity
+-- (R3) but, not being a member of that Child Group, may not join it -- 42501,
+-- since they already know it exists; a plain member of the parent Group
+-- neither reads nor joins it -- PT404. OD9: rolled-back fixtures.
+insert into public.groups (name, category, parent_id, application_level)
+values ('Project child #794', 'team', (select id from public.groups where name = 'Project #521'), 0);
+insert into public.tasks (title, group_id, created_by, deadline, audience, assignment_mode, queue_opened_at)
+select 'Group #794 childlocal', grp.id, pg_temp.g521_uid(1), now() + interval '7 days', 'local', 'public', now()
+  from public.groups as grp where grp.name = 'Project child #794';
+insert into g521_tasks select 'childlocal', id from public.tasks where title = 'Group #794 childlocal';
+select pg_temp.test_login_leadership(pg_temp.g521_uid(2));
+select is(private.can_read_task((select id from g521_tasks where name='childlocal')), true,
+  '#794: a low-rank Group Manager on the path reads a Child Group''s local Opportunity');
+select throws_ok(format('select public.express_task_interest(%s)', (select id from g521_tasks where name='childlocal')),
+  '42501', 'task_audience_forbidden',
+  '#794: but may not join it -- the Audience admits only the Child Group''s members');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select throws_ok(format('select public.express_task_interest(%s)', (select id from g521_tasks where name='childlocal')),
+  'PT404', 'task_not_found',
+  '#794: a plain member of the parent Group neither reads nor joins the Child Group''s local Opportunity');
 reset role;
 
 select * from finish();

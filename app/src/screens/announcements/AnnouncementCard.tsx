@@ -1,11 +1,12 @@
 import {
   AlertTriangle,
   ChevronRight,
-  ExternalLink,
   Pin,
   Star,
   UserRound,
 } from 'lucide-react';
+import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
+import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -111,28 +112,31 @@ export default function AnnouncementCard({
 
         {announcement.formLabel && announcement.formUrl && (
           <div className="pt-1">
-            <a
-              href={announcement.formUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:text-sm"
-            >
-              <span>Deschide formular: {announcement.formLabel}</span>
-              <ExternalLink className="size-3.5" aria-hidden="true" />
-            </a>
+            <AttachedLinkButton
+              label={announcement.formLabel}
+              url={announcement.formUrl}
+            />
           </div>
         )}
       </CardContent>
 
       <CardFooter className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-2">
-          {announcement.author && (
-            <span className="inline-flex items-center gap-1 font-medium text-foreground">
-              <UserRound className="size-3.5" aria-hidden="true" />
-              {announcement.author}
-            </span>
+          {announcement.authorMember ? (
+            <MemberName
+              {...announcement.authorMember}
+              size="sm"
+              className="text-xs text-foreground"
+            />
+          ) : (
+            announcement.author && (
+              <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                <UserRound className="size-3.5" aria-hidden="true" />
+                {announcement.author}
+              </span>
+            )
           )}
-          <span>·</span>
+          <span aria-hidden="true">·</span>
           <time dateTime={announcement.publishedAt}>
             {announcement.publishedLabel}
           </time>

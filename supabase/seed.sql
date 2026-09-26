@@ -42,7 +42,7 @@
 -- `from_member` and
 -- `decided_by` are plain references with no `on delete` clause, so Postgres
 -- refuses to remove a member while any of them still points at that member:
--- the children go first. Everything else — memberships, team memberships,
+-- the children go first. Everything else — Group memberships,
 -- RSVPs, announcement reads, notifications, push tokens — cascades
 -- from `profiles`, which itself cascades from the single `auth.users` delete
 -- at the end.
@@ -57,24 +57,20 @@
 -- requests → tasks → campaigns → events → announcements → projects → teams →
 -- auth.users.
 
--- A real tester may create a Project and temporarily choose a demo account as
--- its lead. That Project is not demo-owned, so deleting it would be data loss;
--- preserving it while deleting its lead would violate the foreign key. Abort
--- the transaction with a precise message and let a human reassign the lead.
+-- Do not silently remove demo-held positions in a real Member's Group.
 do $$
 begin
   if exists (
-    select 1
-      from projects project
-      join profiles leader on leader.id = project.leader_id
-      join profiles creator on creator.id = project.created_by
-     where leader.email like '%@demo.osubb'
-       and creator.email not like '%@demo.osubb'
+    select 1 from groups g
+    join profiles creator on creator.id=g.created_by
+    join group_members gm on gm.group_id=g.id
+    join profiles member on member.id=gm.member_id
+    where creator.email not like '%@demo.osubb'
+      and member.email like '%@demo.osubb'
   ) then
-    raise exception using
-      errcode = 'P0001',
-      message = 'seed_refuses_cross_owned_demo_project',
-      detail = 'Reassign every non-demo-owned Project away from demo leads before re-seeding.';
+    raise exception using errcode='P0001',
+      message='seed_refuses_cross_owned_demo_group',
+      detail='Remove demo memberships from non-demo-owned Groups before re-seeding.';
   end if;
 end;
 $$;
@@ -178,18 +174,11 @@ delete from events e
 delete from announcements a
  using profiles p where a.created_by = p.id and p.email like '%@demo.osubb';
 
--- Project memberships cascade from their Project. A Project is demo-owned
--- only when its creator belongs to the demo cohort; names are not ownership.
-delete from projects project
- where exists (
-   select 1 from profiles creator
-    where creator.id = project.created_by
-      and creator.email like '%@demo.osubb'
- );
-
--- Teams after tasks and events, which reference them.
-delete from teams t
- where t.id in ('t-app', 't-recruti', 't-logistica');
+-- #586: Group commands now master these demo Groups. Remove only Groups
+-- created by the demo cohort after their work and Events have gone.
+delete from groups g
+ using profiles creator
+ where g.created_by = creator.id and creator.email like '%@demo.osubb';
 
 delete from auth.users where email like '%@demo.osubb';
 
@@ -236,100 +225,111 @@ insert into profiles (id, full_name, email, role, joined_year, joined_at, avatar
   ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          2023, '2023-01-01', '#FF3B3B'),
   ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   2023, '2023-01-01', '#241F1E');
 
--- Departments: spread across the five real ones so the department cup has
--- something to compare, and two members sit in two (that combination is what
--- the visibility rules are hardest on).
---
--- #296 remap: `bce@` and `moderator@` belong to the coordination structure
--- **Diverse** (and Team `it` below), not to a delivery Department. That is
--- the AC, and it has a visible consequence the demo is meant to show:
--- private.can_manage_origin gives Department authority to BC/Moderator
--- (level ≥ 6) and to a **local BCE of that Department** only, so with no BCE
--- inside edu/pr/youth/fin/hr, every Department Task below is created and
--- evaluated by `bc@` or `moderator@`. The other three authority branches are
--- each demonstrated by exactly one Origin: the Department Team `it` (its
--- parent Department is Diverse, so `bce@` manages it), the Independent Team
--- `t-logistica` (every active member manages it), and the active Project
--- (its lead and its Responsible).
-insert into member_departments (member_id, dept_id) values
-  ('d0000000-0000-0000-0000-000000000001', 'edu'),
-  ('d0000000-0000-0000-0000-000000000002', 'edu'),
-  ('d0000000-0000-0000-0000-000000000003', 'pr'),
-  ('d0000000-0000-0000-0000-000000000004', 'youth'),
-  ('d0000000-0000-0000-0000-000000000005', 'edu'),
-  ('d0000000-0000-0000-0000-000000000006', 'diverse'),
-  ('d0000000-0000-0000-0000-000000000007', 'org'),
-  ('d0000000-0000-0000-0000-000000000008', 'diverse'),
-  -- Financiar and Resurse Umane get a member each so all five real
-  -- departments show a member in the directory and the Department picker.
-  -- Since #259, `dept_cup`'s standings follow each Task's Origin, not
-  -- `member_departments` -- every `kind = 'department'` row is a Cup row even
-  -- on zero members -- so this membership fixture is for the `members`
-  -- column and the picker, not for a department's presence in the cup
-  -- (issue #134, closed by #259).
-  ('d0000000-0000-0000-0000-000000000007', 'fin'),
-  ('d0000000-0000-0000-0000-000000000005', 'hr'),
-  -- Secretariat is the other coordination structure #310 created. It carries
-  -- no Tasks of its own; it exists here so the directory and the Department
-  -- picker show both coordination structures populated.
-  ('d0000000-0000-0000-0000-000000000004', 'secretariat');
+-- Group commands own the demo directory and rosters. Claims are set only for
+-- this transaction; the command implementations still verify the live BC role.
+create or replace function pg_temp.seed_bc_claims()
+returns void language sql as $$
+  select set_config('request.jwt.claims',
+    jsonb_build_object('sub','d0000000-0000-0000-0000-000000000007',
+      'role','authenticated',
+      'app_metadata',jsonb_build_object('member_role','bc','member_level',6))::text,
+    true)::void
+$$;
+create or replace function pg_temp.seed_group_id(p_name text)
+returns bigint language sql stable as $$
+  select id from public.groups
+   where name = p_name
+     and created_by = 'd0000000-0000-0000-0000-000000000007'
+$$;
+select pg_temp.seed_bc_claims();
 
--- Representative Team kinds: two Department Teams and one Independent Team.
--- t-recruti keeps existing as a plain Department Team — demo accounts
--- reference it — even though #372 retired the recruits flag it used to
--- carry; Calendar visibility for recruits is Minimum Level now (ADR-0008),
--- demonstrated below by the events that stay at min_level 0.
-insert into teams (id, name, dept_id, is_interne) values
-  ('t-app',     'Echipa Aplicație', 'diverse', false),
-  ('t-recruti', 'Echipa Recruți',   'edu',     false),
-  ('t-logistica','Echipa Logistică', null,     false);
+-- The five established Department Groups are reference data. BCE manages
+-- Diverse; everyone else is an ordinary Department member.
+select public.set_group_role(
+  (select id from groups where name='Diverse'),
+  'd0000000-0000-0000-0000-000000000006','manager');
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select grp.id as group_id, fixture.member_id
+      from (values
+        ('edu', 'd0000000-0000-0000-0000-000000000001'::uuid),
+        ('edu', 'd0000000-0000-0000-0000-000000000002'::uuid),
+        ('pr', 'd0000000-0000-0000-0000-000000000003'::uuid),
+        ('youth', 'd0000000-0000-0000-0000-000000000004'::uuid),
+        ('edu', 'd0000000-0000-0000-0000-000000000005'::uuid),
+        ('fin', 'd0000000-0000-0000-0000-000000000007'::uuid),
+        ('hr', 'd0000000-0000-0000-0000-000000000005'::uuid),
+        ('secretariat', 'd0000000-0000-0000-0000-000000000004'::uuid),
+        ('diverse', 'd0000000-0000-0000-0000-000000000008'::uuid)
+      ) as fixture(dept_id, member_id)
+      join groups grp on grp.name = case fixture.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
+  loop
+    perform public.add_group_member(v_row.group_id, v_row.member_id);
+  end loop;
+end;
+$$;
 
--- `it` is reference data from #310 (a Department Team under Diverse), not a
--- demo Team, so it is never deleted above — only these memberships are, and
--- they cascade from `profiles`. It is where the #296 remap puts `bce@` and
--- `moderator@`, and it is the Origin of the "completed on time" Task below.
-insert into team_members (team_id, member_id) values
-  ('t-app',     'd0000000-0000-0000-0000-000000000006'),
-  ('t-app',     'd0000000-0000-0000-0000-000000000008'),
-  ('t-recruti', 'd0000000-0000-0000-0000-000000000002'),
-  ('t-recruti', 'd0000000-0000-0000-0000-000000000005'),
-  ('t-logistica','d0000000-0000-0000-0000-000000000004'),
-  ('t-logistica','d0000000-0000-0000-0000-000000000007'),
-  ('it',        'd0000000-0000-0000-0000-000000000006'),
-  ('it',        'd0000000-0000-0000-0000-000000000008');
+-- Three Teams and two Projects, created by BC. Group names are scoped to
+-- the demo creator for every later lookup so another BC's same-name Group is
+-- never changed by a staging rerun.
+select public.create_group('Echipa Aplicație','team',
+  (select id from groups where name='Diverse'));
+select public.create_group('Echipa Recruți','team',
+  (select id from groups where name='Educațional'));
+select public.create_group('Echipa Logistică','team');
+select public.create_group('Festivalul Studențesc 2026','project',
+  p_manager_id => 'd0000000-0000-0000-0000-000000000005');
+select public.create_group('Gala Voluntarilor 2025','project',
+  p_manager_id => 'd0000000-0000-0000-0000-000000000004');
 
--- ==================== Representative Projects ====================
--- Projects are independent from departments. These two fixtures cover the
--- active and archived lifecycles as well as lead, Responsible, ordinary
--- member, and outsider authorization scenarios. The database assigns their
--- ids; tests and dependent seed rows locate them by stable content instead.
-insert into projects (name, status, leader_id, created_by) values
-  ('Festivalul Studențesc 2026', 'active',
-   'd0000000-0000-0000-0000-000000000005',
-   'd0000000-0000-0000-0000-000000000007'),
-  ('Gala Voluntarilor 2025', 'archived',
-   'd0000000-0000-0000-0000-000000000004',
-   'd0000000-0000-0000-0000-000000000007');
+-- `it` (Echipa Interne) is a reference Team beneath Diverse.
+do $$
+declare v_row record;
+begin
+  for v_row in
+    select ids.group_id, fixture.member_id, fixture.group_role, fixture.title
+      from (values
+        ('Echipa Aplicație', 'd0000000-0000-0000-0000-000000000006'::uuid, 'member', null::text),
+        ('Echipa Aplicație', 'd0000000-0000-0000-0000-000000000008'::uuid, 'member', null),
+        ('Echipa Recruți', 'd0000000-0000-0000-0000-000000000002'::uuid, 'member', null),
+        ('Echipa Recruți', 'd0000000-0000-0000-0000-000000000005'::uuid, 'member', null),
+        ('Echipa Logistică', 'd0000000-0000-0000-0000-000000000004'::uuid, 'responsible', 'Membru Logistică'),
+        ('Echipa Logistică', 'd0000000-0000-0000-0000-000000000007'::uuid, 'responsible', 'Membru Logistică'),
+        ('Festivalul Studențesc 2026', 'd0000000-0000-0000-0000-000000000003'::uuid, 'responsible', 'Responsabil proiect'),
+        ('Festivalul Studențesc 2026', 'd0000000-0000-0000-0000-000000000002'::uuid, 'member', null),
+        ('Gala Voluntarilor 2025', 'd0000000-0000-0000-0000-000000000006'::uuid, 'responsible', 'Responsabil proiect'),
+        ('Gala Voluntarilor 2025', 'd0000000-0000-0000-0000-000000000001'::uuid, 'member', null)
+      ) as fixture(group_name, member_id, group_role, title)
+      cross join lateral (select pg_temp.seed_group_id(fixture.group_name) as group_id) as ids
+  loop
+    if v_row.group_role = 'responsible' then
+      perform public.set_group_role(v_row.group_id, v_row.member_id, 'responsible', v_row.title);
+    else
+      perform public.add_group_member(v_row.group_id, v_row.member_id);
+    end if;
+  end loop;
+  perform public.add_group_member(
+    (select id from groups where name='Echipa IT'),
+    'd0000000-0000-0000-0000-000000000006');
+  perform public.add_group_member(
+    (select id from groups where name='Echipa IT'),
+    'd0000000-0000-0000-0000-000000000008');
+end;
+$$;
 
--- The leader membership is inserted automatically by the Project invariant
--- trigger. Add only the non-leader roles here. Vlad deliberately has the
--- ordinary OSUBB role `activ` while being a Project Responsible: Project
--- authority is independent from the organization-wide `responsabil` role.
-insert into project_members (project_id, member_id, project_role)
-select project.id, fixture.member_id, fixture.project_role
-  from (values
-    ('Festivalul Studențesc 2026',
-     'd0000000-0000-0000-0000-000000000003'::uuid, 'responsible'),
-    ('Festivalul Studențesc 2026',
-     'd0000000-0000-0000-0000-000000000002'::uuid, 'member'),
-    ('Gala Voluntarilor 2025',
-     'd0000000-0000-0000-0000-000000000006'::uuid, 'responsible'),
-    ('Gala Voluntarilor 2025',
-     'd0000000-0000-0000-0000-000000000001'::uuid, 'member')
-  ) as fixture (project_name, member_id, project_role)
-  join projects project
-    on project.name = fixture.project_name
-   and project.created_by = 'd0000000-0000-0000-0000-000000000007';
+-- The General Assembly follows Level 3 automatically, with the Interne
+-- roster appointed as its Responsibles. It accepts no applications or Cup.
+select public.create_group('Adunarea Generală','team');
+select public.update_group_structure(pg_temp.seed_group_id('Adunarea Generală'),
+  'team', false, false, true, 3, null, null, false, false);
+select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
+  'd0000000-0000-0000-0000-000000000006','responsible','Responsabil Adunarea Generală');
+select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
+  'd0000000-0000-0000-0000-000000000008','responsible','Responsabil Adunarea Generală');
+select public.archive_group(pg_temp.seed_group_id('Gala Voluntarilor 2025'));
+select set_config('request.jwt.claims','',true);
 
 -- ==================== Demo work: campaigns, Tasks, evaluations, points ====================
 -- #296 rebuilds this section on the normalized Tracker model (ADR-0007).
@@ -376,9 +376,8 @@ $$;
 
 -- Since #579 the Group is the only Origin a work row carries. The fixtures below
 -- still NAME their Origin the way a reader recognises it (a Department id, a Team
--- id, or a demo Project's name); this resolves that name to the Group the forward
--- mirror derived for it, through groups.legacy_* (kept until #591). Exactly one
--- argument is non-null per call.
+-- id, or a demo Project's name); this resolves that name to its native Group
+-- (or a reference Department Group). Exactly one argument is non-null per call.
 create or replace function pg_temp.demo_group_id(p_dept text, p_team text, p_project_name text)
 returns bigint
 language sql
@@ -386,12 +385,17 @@ stable
 as $$
   select grp.id
     from public.groups as grp
-   where (p_dept is not null and grp.legacy_dept_id = p_dept)
-      or (p_team is not null and grp.legacy_team_id = p_team)
-      or (p_project_name is not null and grp.legacy_project_id = (
-            select project.id from public.projects as project
-             where project.name = p_project_name
-               and project.created_by = 'd0000000-0000-0000-0000-000000000007'))
+   where (p_dept is not null and grp.name = case p_dept when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end)
+      or (p_team is not null and
+        (grp.name = case p_team when 'it' then 'Echipa IT' when 'interne' then 'Echipa Interne' end or
+         (grp.created_by = 'd0000000-0000-0000-0000-000000000007'
+          and grp.name = case p_team
+            when 't-app' then 'Echipa Aplicație'
+            when 't-recruti' then 'Echipa Recruți'
+            when 't-logistica' then 'Echipa Logistică' end)))
+      or (p_project_name is not null and grp.name = p_project_name
+        and grp.category = 'project'
+        and grp.created_by = 'd0000000-0000-0000-0000-000000000007')
 $$;
 
 -- ---------------- Campaigns ----------------
@@ -492,15 +496,15 @@ insert into demo_task_seed values
    pg_temp.demo_deadline(3), 'd0000000-0000-0000-0000-000000000007', now() - interval '2 days'),
 
   -- Public, open queue, nobody in it either: a second empty queue in a
-  -- different Department. No command leaves a `pending` Candidate with no
-  -- Executor (express_task_interest takes the first-come branch when there
-  -- is none), so this mirrors pr-open-queue rather than pairing with it.
+  -- different Department, mirroring pr-open-queue. Since #682 interest only
+  -- queues and the manager selects, so a pending Candidate with no Executor
+  -- is an ordinary state -- edu-public-queue's history passes through it.
   ('hr-open-queue', 'Voluntari pentru standul de recrutare',
    'Două ore la stand, în campus.', 'logistic', 'hr', null, null,
    'task', 'org', 'public', null, null,
    pg_temp.demo_deadline(11), 'd0000000-0000-0000-0000-000000000008', now() - interval '4 days'),
 
-  -- Public with a first-come Executor and two Members queued behind them.
+  -- Public with a manager-selected Executor and two Members queued behind them.
   ('edu-public-queue', 'Ajutor la standul Educațional',
    'Program de tutoriat pentru boboci, două ture.', 'logistic', 'edu', null, null,
    'task', 'local', 'public', null, null,
@@ -817,13 +821,13 @@ select fixture.key, fixture.task_key, fixture.member_id, fixture.assigned_at,
      now() - interval '9 days', 'd0000000-0000-0000-0000-000000000007'::uuid,
      null::timestamptz, null::text, null::text),
     ('edu-public-queue', 'edu-public-queue', 'd0000000-0000-0000-0000-000000000002',
-     now() - interval '5 days', 'd0000000-0000-0000-0000-000000000002', null, null, null),
+     now() - interval '5 days', 'd0000000-0000-0000-0000-000000000007', null, null, null),
     ('project-in-review', 'project-in-review', 'd0000000-0000-0000-0000-000000000002',
      now() - interval '14 days', 'd0000000-0000-0000-0000-000000000005', null, null, null),
     ('it-completed', 'it-completed', 'd0000000-0000-0000-0000-000000000008',
      now() - interval '20 days', 'd0000000-0000-0000-0000-000000000006', null, 'completed', null),
     ('edu-completed-late', 'edu-completed-late', 'd0000000-0000-0000-0000-000000000001',
-     now() - interval '28 days', 'd0000000-0000-0000-0000-000000000001', null, 'completed', null),
+     now() - interval '28 days', 'd0000000-0000-0000-0000-000000000007', null, 'completed', null),
     ('pr-unfulfilled', 'pr-unfulfilled', 'd0000000-0000-0000-0000-000000000003',
      now() - interval '25 days', 'd0000000-0000-0000-0000-000000000007', null, 'failed', null),
     ('edu-reopened-1', 'edu-reopened', 'd0000000-0000-0000-0000-000000000002',
@@ -888,16 +892,24 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.member_id, fixture.status
        case when fixture.assignment_key is null
             then null else pg_temp.demo_assignment_id(fixture.assignment_key) end
   from (values
-    -- Two Members queued behind a first-come Executor.
-    ('edu-public-queue', 'd0000000-0000-0000-0000-000000000001'::uuid, 'pending',
+    -- #682: nobody becomes Executor by arriving first. The first Member
+    -- queued and the manager selected them, leaving the queue open…
+    ('edu-public-queue', 'd0000000-0000-0000-0000-000000000002'::uuid, 'selected',
+     now() - interval '5 days 6 hours', now() - interval '5 days',
+     'd0000000-0000-0000-0000-000000000007'::uuid, 'edu-public-queue'::text),
+    -- …and two Members queued behind the selected Executor.
+    ('edu-public-queue', 'd0000000-0000-0000-0000-000000000001', 'pending',
      now() - interval '4 days', null::timestamptz, null::uuid, null::text),
     ('edu-public-queue', 'd0000000-0000-0000-0000-000000000005', 'pending',
      now() - interval '3 days', null, null, null),
-    -- hr-open-queue carries no Candidate at all (#296 fix round 1): no
-    -- command leaves a pending Candidature with no Executor, so it stays a
-    -- second empty queue rather than "one step on" from pr-open-queue.
-    -- Closed automatically when the Evaluation made the Task terminal:
-    -- decided_at, no decider.
+    -- hr-open-queue carries no Candidate at all (#296 fix round 1): it stays
+    -- a second empty queue, mirroring pr-open-queue.
+    -- edu-completed-late: the manager selected the first Member to queue…
+    ('edu-completed-late', 'd0000000-0000-0000-0000-000000000001', 'selected',
+     now() - interval '28 days 6 hours', now() - interval '28 days',
+     'd0000000-0000-0000-0000-000000000007', 'edu-completed-late'),
+    -- …and the later one was closed automatically when the Evaluation made the
+    -- Task terminal: decided_at, no decider.
     ('edu-completed-late', 'd0000000-0000-0000-0000-000000000002', 'closed',
      now() - interval '26 days', now() - interval '8 days', null, null),
     -- Chosen by the manager, who left the rest of the queue open…
@@ -1076,16 +1088,31 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '4 days'),
 
-    -- ---- edu-public-queue: first-come Executor, two Members queued behind
+    -- ---- edu-public-queue: the manager selected the first Candidate, two Members queued behind
     ('edu-public-queue', 'created', 'd0000000-0000-0000-0000-000000000007', null,
      null, 'todo', null,
      jsonb_build_object('kind', 'task', 'audience', 'local', 'assignment_mode', 'public',
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '6 days'),
-    ('edu-public-queue', 'executor_assigned', 'd0000000-0000-0000-0000-000000000002', 'edu-public-queue',
+    ('edu-public-queue', 'interest_expressed', 'd0000000-0000-0000-0000-000000000002', null,
      null, null, null,
-     jsonb_build_object('via', 'first_come', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
+     jsonb_build_object('position', 1,
+                        'candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-public-queue')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000002')),
+     interval '5 days 6 hours'),
+    ('edu-public-queue', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-public-queue',
+     null, null, null,
+     jsonb_build_object('via', 'select', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
      interval '5 days'),
+    ('edu-public-queue', 'candidate_selected', 'd0000000-0000-0000-0000-000000000007', 'edu-public-queue',
+     null, null, null,
+     jsonb_build_object('candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-public-queue')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000002'),
+                        'replaced_assignment_id', null, 'closed_remaining', false,
+                        'closed_candidates', 0),
+     interval '5 days' - interval '1 second'),
     ('edu-public-queue', 'started', 'd0000000-0000-0000-0000-000000000002', 'edu-public-queue',
      'todo', 'in_progress', null, '{}'::jsonb, interval '5 days' - interval '2 seconds'),
     ('edu-public-queue', 'interest_expressed', 'd0000000-0000-0000-0000-000000000001', null,
@@ -1145,16 +1172,31 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
                         'difficulty', 5, 'rating', 4, 'points', 5 * rating_mult(4)),
      interval '4 days'),
 
-    -- ---- edu-completed-late: first-come Executor, one Candidate closed with the Evaluation
+    -- ---- edu-completed-late: manager-selected Executor, one Candidate closed with the Evaluation
     ('edu-completed-late', 'created', 'd0000000-0000-0000-0000-000000000007', null,
      null, 'todo', null,
      jsonb_build_object('kind', 'task', 'audience', 'local', 'assignment_mode', 'public',
                         'campaign_id', null, 'parent_task_id', null, 'executor_id', null),
      interval '30 days'),
-    ('edu-completed-late', 'executor_assigned', 'd0000000-0000-0000-0000-000000000001', 'edu-completed-late',
+    ('edu-completed-late', 'interest_expressed', 'd0000000-0000-0000-0000-000000000001', null,
      null, null, null,
-     jsonb_build_object('via', 'first_come', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
+     jsonb_build_object('position', 1,
+                        'candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-completed-late')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000001')),
+     interval '28 days 6 hours'),
+    ('edu-completed-late', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-completed-late',
+     null, null, null,
+     jsonb_build_object('via', 'select', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
      interval '28 days'),
+    ('edu-completed-late', 'candidate_selected', 'd0000000-0000-0000-0000-000000000007', 'edu-completed-late',
+     null, null, null,
+     jsonb_build_object('candidate_id', (select candidate.id from task_candidates candidate
+                                          where candidate.task_id = pg_temp.demo_task_id('edu-completed-late')
+                                            and candidate.member_id = 'd0000000-0000-0000-0000-000000000001'),
+                        'replaced_assignment_id', null, 'closed_remaining', false,
+                        'closed_candidates', 0),
+     interval '28 days' - interval '1 second'),
     ('edu-completed-late', 'interest_expressed', 'd0000000-0000-0000-0000-000000000002', null,
      null, null, null,
      jsonb_build_object('position', 1,
@@ -1482,27 +1524,27 @@ select e.id, a.member_id, a.status
 -- The documented seed entrypoints run as postgres in one transaction, so an
 -- error rolls the trigger state back with the inserts.
 alter table announcements disable trigger announcements_fan_out;
-insert into announcements (title, body, dept_id, author, priority, category, pinned, form_label, form_url, published_at, created_by, group_id, audience) values
+insert into announcements (title, body, author, priority, category, pinned, form_label, form_url, published_at, created_by, group_id, audience) values
   ('Ședință extraordinară BC — vineri',
    'Vineri, ora 18:00, Aula Magna. Prezența tuturor coordonatorilor este obligatorie.',
-   null, 'BC', 'critical', 'organizatoric', true, null, null,
+   'BC', 'critical', 'organizatoric', true, null, null,
    now() - interval '1 day',  'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org'),
   ('Feedback eveniment de deschidere',
    'Spune-ne cum ți s-a părut. Durează două minute și chiar ne ajută.',
-   null, 'Imagine & PR', 'important', 'feedback', false,
+   'Imagine & PR', 'important', 'feedback', false,
    'Completează formularul', 'https://forms.gle/exemplu-osubb',
    now() - interval '3 days', 'd0000000-0000-0000-0000-000000000006', (select id from groups where is_organization), 'org'),
   ('Materiale de la cursul de Excel',
    'Slide-urile și exercițiile sunt în drive-ul departamentului.',
-   'edu', 'Educational', 'normal', 'resurse', false, null, null,
-   now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where legacy_dept_id='edu'), 'local'),
+   'Educational', 'normal', 'resurse', false, null, null,
+   now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where name='Educațional'), 'local'),
   ('Recrutarea de toamnă începe luni',
    'Standul din campus are nevoie de voluntari pentru două ture pe zi.',
-   null, 'Resurse Umane', 'important', 'recrutare', true, null, null,
+   'Resurse Umane', 'important', 'recrutare', true, null, null,
    now() - interval '2 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where is_organization), 'org'),
   ('Noul ghid de punctaj',
    'Dificultatea și nota se înmulțesc — detaliile sunt în aplicație, la Ghid.',
-   null, 'BC', 'normal', 'organizatoric', false, null, null,
+   'BC', 'normal', 'organizatoric', false, null, null,
    now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org');
 alter table announcements enable trigger announcements_fan_out;
 

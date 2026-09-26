@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import * as axe from 'axe-core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -17,9 +16,6 @@ vi.mock('../../lib/supabase', () => ({ supabase: { auth } }));
    the front-door guard — not a stand-in — decides where a fresh session lands.
    Everything the guard may route to is stubbed; the login screen itself is
    deliberately NOT stubbed, because it is what is under test. */
-vi.mock('@ionic/react', () => ({
-  IonApp: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
 vi.mock('../../components/shell/AppShell', async () => {
   const { Outlet } =
     await vi.importActual<typeof import('react-router')>('react-router');
@@ -54,8 +50,6 @@ function memberAccessToken(): string {
     app_metadata: {
       member_role: 'voluntar',
       member_level: 1,
-      dept_ids: ['edu'],
-      team_ids: [],
       group_ids: [],
     },
   };
@@ -83,6 +77,19 @@ describe('LoginScreen', () => {
   beforeEach(() => {
     auth.signInWithOtp.mockResolvedValue({ error: null });
     auth.verifyOtp.mockResolvedValue({ error: null });
+  });
+
+  it('starts from the address a failed emailed link handed over (#768)', async () => {
+    render(<LoginScreen initialEmail="membru@exemplu.ro" />);
+
+    expect(screen.getByLabelText('Email')).toHaveValue('membru@exemplu.ro');
+    fireEvent.click(screen.getByRole('button', { name: 'Trimite linkul' }));
+
+    await waitFor(() =>
+      expect(auth.signInWithOtp).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'membru@exemplu.ro' }),
+      ),
+    );
   });
 
   it('moves focus to the confirmation heading after sending a magic link', async () => {

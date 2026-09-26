@@ -1,33 +1,34 @@
 import { useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-  ComboboxValue,
-  GroupOption,
-  groupOptionLabel,
-} from '../../components/ui/combobox';
+import { groupOptionLabel } from '../../components/ui/combobox';
+import { WorkFilter } from '../../components/work-filter/WorkFilter';
+import type { WorkFilterGroup } from '../../lib/work-filter';
 import { useTaskFormOptions } from '../../queries/task-form-options';
-import {
-  groupLookup,
-  groupOptions,
-  type ManagedWorkGroup,
-} from '../tracker/task-form-model';
+import { groupLookup, groupOptions } from '../tracker/task-form-model';
 import { CampaignsPanel } from './CampaignsPanel';
+import {
+  CAMPAIGNS_FILTER_LEVELS,
+  useCampaignsFilter,
+} from './use-campaigns-filter';
 
+/**
+ * Campanii (ruling R13): the Work Filter without its Campaign level, over the
+ * Groups the caller manages (`managed_work_groups()`), then the Campaigns of
+ * the chosen Group and every Group below it. The route carries the chosen
+ * Group; the date range dates each Campaign's report. The page's gate
+ * (`manageTasks`) lives in `App.tsx`.
+ */
 export default function CampaignsScreen() {
-  const { groupId: routeGroupId } = useParams();
-  const navigate = useNavigate();
   const options = useTaskFormOptions();
-  const groups = useMemo(
+  const managed = useMemo(
     () => groupOptions(options.data?.groups ?? []),
     [options.data],
+  );
+  // `managed_work_groups()` returns only Groups the caller may manage now
+  // (active ones, or every Group for BC/Moderator), so each is offered.
+  const groups = useMemo<WorkFilterGroup[]>(
+    () => managed.map((group) => ({ ...group, status: 'active' })),
+    [managed],
   );
   const groupsById = useMemo(
     () =>
@@ -36,7 +37,8 @@ export default function CampaignsScreen() {
         : new Map<number, { name: string }>(),
     [options.data],
   );
-  const group = groups.find((row) => String(row.id) === routeGroupId);
+  const filter = useCampaignsFilter(groups);
+  const group = managed.find((row) => row.id === filter.routeGroupId);
   return (
     <section className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
       <header className="space-y-2">
@@ -60,58 +62,40 @@ export default function CampaignsScreen() {
       ) : !groups.length ? (
         <p>Nu ai grupuri pentru care poți gestiona campanii.</p>
       ) : (
-        <div className="grid gap-1.5">
-          <span id="campaign-group" className="text-sm font-medium">
-            Grup
-          </span>
-          <Combobox<ManagedWorkGroup>
-            items={groups}
-            value={group ?? null}
-            onValueChange={(next) => {
-              if (next)
-                void navigate(`/administrare/grupuri/${next.id}/campanii`);
-            }}
-            itemToStringLabel={(item) => groupOptionLabel(item, groupsById)}
-            isItemEqualToValue={(a, b) => a.id === b.id}
-          >
-            <ComboboxTrigger aria-labelledby="campaign-group">
-              <ComboboxValue placeholder="Alege un grup">
-                {(item: ManagedWorkGroup | null) =>
-                  item ? (
-                    <GroupOption group={item} groupsById={groupsById} />
-                  ) : (
-                    'Alege un grup'
-                  )
-                }
-              </ComboboxValue>
-            </ComboboxTrigger>
-            <ComboboxContent>
-              <ComboboxInput
-                aria-label="Caută un grup"
-                placeholder="Caută un grup"
-              />
-              <ComboboxEmpty />
-              <ComboboxList>
-                {(item: ManagedWorkGroup) => (
-                  <ComboboxItem key={item.id} value={item}>
-                    <GroupOption group={item} groupsById={groupsById} />
-                  </ComboboxItem>
-                )}
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
-        </div>
+        <section
+          aria-label="Filtre campanii"
+          className="rounded-xl border border-border bg-card p-4"
+        >
+          <WorkFilter
+            groups={groups}
+            groupNames={options.data?.groupNames}
+            campaigns={[]}
+            levels={CAMPAIGNS_FILTER_LEVELS}
+            roots="topmost"
+            state={filter}
+            hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
+          />
+        </section>
       )}
-      {routeGroupId && options.isSuccess && !group && (
+      {filter.routeGroupId !== undefined && options.isSuccess && !group && (
         <p role="alert">
           Nu ai permisiunea de a gestiona campaniile acestui grup.
         </p>
       )}
-      {group && (
+      {group ? (
         <CampaignsPanel
           group={group}
           label={groupOptionLabel(group, groupsById)}
+          groups={managed}
+          range={filter.params}
         />
+      ) : (
+        filter.routeGroupId === undefined &&
+        groups.length > 0 && (
+          <p className="text-muted-foreground">
+            Alege un grup ca să-i vezi campaniile.
+          </p>
+        )
       )}
     </section>
   );

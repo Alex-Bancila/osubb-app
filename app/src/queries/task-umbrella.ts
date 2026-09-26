@@ -27,6 +27,9 @@ export async function createTask(draft: TaskDraft) {
     p_title: draft.title,
     p_description: draft.description,
     p_deadline: draft.deadline,
+    // #684: the Attached Link, both or neither (null for none).
+    p_link_label: draft.link.label,
+    p_link_url: draft.link.url,
   };
   // PostgreSQL accepts NULL for the optional values (an Umbrella has no mode,
   // audience, Executor or Campaign). Generated RPC argument types omit
@@ -47,27 +50,6 @@ export async function completeUmbrella(taskId: number) {
   return data;
 }
 
-const completionReasons: Record<string, string> = {
-  task_command_forbidden: 'Nu ai permisiunea să finalizezi acest task-umbrelă.',
-  task_manage_forbidden: 'Nu ai permisiunea să finalizezi acest task-umbrelă.',
-  task_not_found: 'Taskul-umbrelă nu mai este disponibil.',
-  task_not_umbrella: 'Taskul ales nu este un task-umbrelă.',
-  task_terminal: 'Taskul-umbrelă este deja finalizat sau anulat.',
-  umbrella_has_no_subtasks:
-    'Adaugă cel puțin un subtask înainte de finalizare.',
-  subtasks_not_terminal:
-    'Starea subtaskurilor s-a schimbat. Verifică lista actualizată.',
-};
-export function umbrellaCompletionErrorMessage(error: unknown): string {
-  const fallback = 'Nu am putut finaliza taskul-umbrelă. Reîncearcă.';
-  const reason =
-    typeof error === 'object' && error !== null && 'message' in error
-      ? error.message
-      : undefined;
-  return typeof reason === 'string' && Object.hasOwn(completionReasons, reason)
-    ? (completionReasons[reason] ?? fallback)
-    : fallback;
-}
 export function createTaskMutationOptions(client: QueryClient) {
   return {
     mutationFn: createTask,

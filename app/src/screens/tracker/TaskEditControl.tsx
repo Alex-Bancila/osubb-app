@@ -1,5 +1,14 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
+import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +22,12 @@ import {
   isoToBucharestWallTime,
 } from '../../lib/calendar-time';
 import {
-  TaskEditError,
+  fieldForReason,
+  taskUpdateSchema,
+  type TaskUpdateValues,
+} from '../../lib/schemas/task';
+import { useFormValidation } from '../../lib/use-form-validation';
+import {
   TaskEditNeedsConfirmation,
   previewTaskUpdate,
   useTaskEdit,
@@ -22,10 +36,21 @@ import {
 } from '../../queries/task-edit';
 import { useTaskFormOptions } from '../../queries/task-form-options';
 import type { TaskPresentationRow } from './task-presentation';
-import { campaignsFor } from './task-form-model';
+import { TaskGroupCascade } from './TaskGroupCascade';
+import {
+  AUDIENCE_HINT,
+  AUDIENCE_LABELS,
+  campaignsFor,
+  groupLookup,
+  isPrivateGroup,
+  PRIVATE_GROUP_AUDIENCE_HINT,
+  type ManagedWorkGroup,
+  type TaskFormOptions,
+} from './task-form-model';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
+const SAVE_FAILED = 'Nu am putut salva modificările. Reîncearcă.';
 
 /** ADR-0007 (amended 2026-09-21): every field is editable until review. */
 function isEditable(status: TaskPresentationRow['status']) {
@@ -78,17 +103,49 @@ export function TaskEditControl({
   );
 }
 
+/**
+ * One line per consequence `preview_task_update` lists (#627), naming the
+ * member. A kind this screen does not know is still listed, in words that
+ * make the manager check before confirming, so nothing is accepted unseen.
+ */
 function consequenceText(consequence: TaskUpdateConsequence) {
+  const name = consequence.memberName;
   switch (consequence.kind) {
+    case 'executor_added_to_group':
+      return `${name} devine membru al grupului nou.`;
     case 'executor_removed':
-      return `${consequence.memberName} nu mai este executor: nu face parte din grupul de origine. Taskul revine la „De făcut”.`;
+      return `${name} nu mai este executor. Taskul revine la „De făcut”.`;
     case 'candidate_removed':
-      return `${consequence.memberName} iese din lista de candidați.`;
-    case 'candidate_promoted':
-      return `${consequence.memberName} devine executor, ca primul candidat din listă.`;
+      return `${name} iese din lista de candidați.`;
+    case 'campaign_cleared':
+      return 'Campania se șterge: nu poate eticheta taskuri în grupul nou.';
     default:
-      return `Participarea lui ${consequence.memberName} la task se schimbă.`;
+      return consequence.memberId === null
+        ? 'Salvarea mai are o consecință pe care aplicația nu o poate descrie încă.'
+        : `Participarea lui ${name} la task se schimbă.`;
   }
+}
+
+/** Why the Group cannot change here, or null when it can (#627). */
+function groupLock(task: TaskPresentationRow) {
+  if (task.parent_task_id !== null)
+    return 'Un subtask rămâne în grupul taskului-umbrelă.';
+  if (task.kind === 'umbrella' && (task.subtasks?.length ?? 0) > 0)
+    return 'Un task-umbrelă cu subtaskuri nu își poate schimba grupul.';
+  return null;
+}
+
+/** The Campaigns the chosen Group may carry, plus the Task's own. */
+function campaignIdsFor(
+  groupId: number,
+  task: TaskPresentationRow,
+  options: TaskFormOptions | undefined,
+) {
+  const group = options?.groups.find((row) => row.id === groupId);
+  return [
+    ...(options ? campaignsFor(group, options) : []).map((row) => row.id),
+    ...(task.campaign_id === null ? [] : [task.campaign_id]),
+  ];
 }
 
 function TaskEditForm({
@@ -117,7 +174,12 @@ function TaskEditForm({
   const [audience, setAudience] = useState(
     task.audience === 'org' ? 'org' : 'local',
   );
-  const [error, setError] = useState<string | null>(null);
+  const [groupId, setGroupId] = useState(task.group_id);
+  const [link, setLink] = useState({
+    label: task.link_label ?? '',
+    url: task.link_url ?? '',
+  });
+  const locked = groupLock(task);
   const [checking, setChecking] = useState(false);
   // The values waiting for the manager to accept their consequences.
   const [confirming, setConfirming] = useState<{
@@ -125,94 +187,144 @@ function TaskEditForm({
     consequences: TaskUpdateConsequence[];
   } | null>(null);
   const submitting = useRef(false);
-  const group = options.data?.groups.find((row) => row.id === task.group_id);
+  const group = options.data?.groups.find((row) => row.id === groupId);
   const campaigns = options.data ? campaignsFor(group, options.data) : [];
+  // A Private Group's Tasks are local only (#757): the form shows and sends
+  // that, whatever the Task carried before.
+  const localOnly = options.data
+    ? isPrivateGroup(groupId, options.data)
+    : false;
+  const groupsById = useMemo(
+    () => (options.data ? groupLookup(options.data) : new Map()),
+    [options.data],
+  );
   const pending = checking || mutation.isPending;
 
   function instantFor(value: string) {
-    // An untouched deadline keeps its exact stored instant, seconds included.
+    // An untouched deadline keeps its exact stored instant, seconds included;
+    // a wall-clock time that does not exist in Romania is '' (the schema's
+    // deadline_invalid).
     return value === initialDeadline
       ? task.deadline
       : value
-        ? bucharestWallTimeToIso(value)
+        ? (bucharestWallTimeToIso(value) ?? '')
         : null;
   }
-  const input: TaskUpdateInput = {
-    taskId: task.id,
+  const values: TaskUpdateValues = {
+    groupId,
     title,
-    description: description || null,
+    description,
     deadline: instantFor(deadline),
     campaignId: umbrella ? null : campaignId,
     assignmentMode: umbrella
       ? null
-      : (assignmentMode as TaskUpdateInput['assignmentMode']),
-    audience: umbrella ? null : (audience as TaskUpdateInput['audience']),
+      : (assignmentMode as TaskUpdateValues['assignmentMode']),
+    // A direct Task is local only (R26), like a Private Group's; `audience`
+    // keeps the choice for when the mode goes back to Public.
+    audience: umbrella
+      ? null
+      : assignmentMode === 'direct' || localOnly
+        ? 'local'
+        : (audience as TaskUpdateValues['audience']),
+    link,
   };
+  const form = useFormValidation(
+    taskUpdateSchema({
+      umbrella,
+      campaignIds: campaignIdsFor(groupId, task, options.data),
+    }),
+    values,
+    fieldForReason,
+  );
   const changed =
+    groupId !== task.group_id ||
+    (link.label.trim() || null) !== task.link_label ||
+    (link.url.trim() || null) !== task.link_url ||
     title.trim() !== task.title ||
     (description.trim() || null) !== (task.description ?? null) ||
     deadline !== initialDeadline ||
     (!umbrella &&
       (campaignId !== task.campaign_id ||
-        input.assignmentMode !== task.assignment_mode ||
-        input.audience !== task.audience));
+        values.assignmentMode !== task.assignment_mode ||
+        values.audience !== task.audience));
 
-  async function save(values: TaskUpdateInput, acceptConsequences: boolean) {
+  async function save(update: TaskUpdateInput, acceptConsequences: boolean) {
     try {
-      await mutation.mutateAsync({ ...values, acceptConsequences });
+      await mutation.mutateAsync({ ...update, acceptConsequences });
       setConfirming(null);
       onSaved();
     } catch (failure) {
       if (failure instanceof TaskEditNeedsConfirmation) {
         // The Task changed since the preview: show the current consequences.
-        const consequences = await previewTaskUpdate(values);
+        const consequences = await previewTaskUpdate(update);
         setConfirming(
-          consequences.length ? { input: values, consequences } : null,
+          consequences.length ? { input: update, consequences } : null,
         );
-        setError(
-          consequences.length
-            ? null
-            : 'Taskul s-a schimbat între timp. Verifică și salvează din nou.',
-        );
+        if (!consequences.length)
+          form.fail(
+            null,
+            'Taskul s-a schimbat între timp. Verifică și salvează din nou.',
+          );
         return;
       }
       throw failure;
     }
   }
 
+  function chooseGroup(next: ManagedWorkGroup) {
+    setGroupId(next.id);
+    // A Campaign picked here that cannot tag the new Group goes. The Task's
+    // own Campaign stays selected: if it cannot follow, the server clears it
+    // and the confirmation says so (campaign_cleared).
+    if (
+      campaignId !== null &&
+      campaignId !== task.campaign_id &&
+      options.data &&
+      !campaignsFor(next, options.data).some((row) => row.id === campaignId)
+    )
+      setCampaignId(null);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (submitting.current) return;
-    setError(null);
-    if (!title.trim()) {
-      setError('Scrie titlul taskului.');
-      return;
-    }
-    if ((!umbrella && !input.deadline) || (deadline && !input.deadline)) {
-      setError('Alege un termen valid, în ora României.');
-      return;
-    }
+    const parsed = form.validate();
+    if (!parsed) return;
+    const { link: parsedLink, ...fields } = parsed;
+    const input: TaskUpdateInput = {
+      taskId: task.id,
+      ...fields,
+      // update_task is a full-state replace: the link as the form shows it.
+      linkLabel: parsedLink.label,
+      linkUrl: parsedLink.url,
+    };
     submitting.current = true;
     setChecking(true);
     try {
       const fresh = await options.refetch();
-      if (fresh.isError || !fresh.data)
-        throw new TaskEditError(
+      if (fresh.isError || !fresh.data) {
+        form.fail(
+          null,
           'Nu am putut verifica grupul și campaniile. Reîncearcă.',
         );
+        return;
+      }
       const origin = fresh.data.groups.find((row) => row.id === task.group_id);
-      if (!origin)
-        throw new TaskEditError('Nu mai ai permisiunea de a edita acest task.');
-      if (
-        input.campaignId !== null &&
-        input.campaignId !== task.campaign_id &&
-        !campaignsFor(origin, fresh.data).some(
-          (row) => row.id === input.campaignId,
-        )
-      )
-        throw new TaskEditError(
-          'Alege o campanie activă a grupului sau a unui grup părinte.',
-        );
+      if (!origin) {
+        form.fail({ message: 'task_manage_forbidden' }, SAVE_FAILED);
+        return;
+      }
+      // The same rules against the fresh read: a Campaign or the chosen
+      // Group may have gone.
+      const recheck = taskUpdateSchema({
+        umbrella,
+        campaignIds: campaignIdsFor(groupId, task, fresh.data),
+        groupIds: fresh.data.groups.map((row) => row.id),
+      }).safeParse(values);
+      if (!recheck.success) {
+        form.fail({ message: recheck.error.issues[0]?.message }, SAVE_FAILED);
+        return;
+      }
       const consequences = await previewTaskUpdate(input);
       if (consequences.length) {
         setConfirming({ input, consequences });
@@ -220,11 +332,7 @@ function TaskEditForm({
       }
       await save(input, false);
     } catch (failure) {
-      setError(
-        failure instanceof TaskEditError
-          ? failure.message
-          : 'Nu am putut salva modificările. Reîncearcă.',
-      );
+      form.fail(failure, SAVE_FAILED);
     } finally {
       submitting.current = false;
       setChecking(false);
@@ -234,16 +342,11 @@ function TaskEditForm({
   async function confirm() {
     if (!confirming || submitting.current) return;
     submitting.current = true;
-    setError(null);
     try {
       await save(confirming.input, true);
     } catch (failure) {
       setConfirming(null);
-      setError(
-        failure instanceof TaskEditError
-          ? failure.message
-          : 'Nu am putut salva modificările. Reîncearcă.',
-      );
+      form.fail(failure, SAVE_FAILED);
     } finally {
       submitting.current = false;
     }
@@ -254,75 +357,144 @@ function TaskEditForm({
       onSubmit={submit}
       className="space-y-3 rounded-lg border p-4"
       aria-label="Editează taskul"
+      noValidate
     >
-      <fieldset disabled={pending} className="space-y-3">
+      <fieldset disabled={pending} className="min-w-0 space-y-3">
         <legend className="sr-only">Câmpurile taskului</legend>
-        <label className="block space-y-1">
-          <span>Titlu</span>
-          <input
-            className={control}
-            required
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </label>
-        <label className="block space-y-1">
-          <span>Descriere</span>
-          <textarea
-            className={control}
-            rows={3}
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </label>
-        <label className="block space-y-1">
-          <span>Termen{umbrella ? ' (opțional)' : ''} — ora României</span>
-          <input
-            className={control}
-            type="datetime-local"
-            required={!umbrella}
-            value={deadline}
-            onChange={(event) => setDeadline(event.target.value)}
-          />
-        </label>
+        {options.data && (
+          <div className="space-y-1" {...form.slot('groupId')}>
+            <TaskGroupCascade
+              groups={options.data.groups}
+              groupsById={groupsById}
+              value={groupId}
+              onChange={chooseGroup}
+              disabled={locked !== null}
+              describedBy={
+                [
+                  locked ? `${id}-group-lock` : undefined,
+                  form.error('groupId') ? form.errorId('groupId') : undefined,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
+              invalid={form.error('groupId') !== undefined}
+            />
+            <FieldError {...form.errorProps('groupId')} />
+            {locked ? (
+              <p
+                id={`${id}-group-lock`}
+                className="text-sm text-muted-foreground"
+              >
+                {locked}
+              </p>
+            ) : (
+              groupId !== task.group_id && (
+                <p className="text-sm text-muted-foreground">
+                  Înainte de salvare vezi ce se schimbă pentru executor,
+                  candidați și campanie.
+                </p>
+              )
+            )}
+          </div>
+        )}
+        <div className="space-y-1">
+          <label className="block space-y-1">
+            <span>Titlu</span>
+            <input
+              className={control}
+              required
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              {...form.field('title')}
+            />
+          </label>
+          <FieldError {...form.errorProps('title')} />
+        </div>
+        <div className="space-y-1">
+          <label className="block space-y-1">
+            <span>Descriere</span>
+            <textarea
+              className={control}
+              rows={3}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              {...form.field('description')}
+            />
+          </label>
+          <FieldError {...form.errorProps('description')} />
+        </div>
+        <div className="space-y-1">
+          <label className="block space-y-1">
+            <span>Termen{umbrella ? ' (opțional)' : ''} — ora României</span>
+            <input
+              className={control}
+              type="datetime-local"
+              required={!umbrella}
+              value={deadline}
+              onChange={(event) => setDeadline(event.target.value)}
+              {...form.field('deadline')}
+            />
+          </label>
+          <FieldError {...form.errorProps('deadline')} />
+        </div>
         {!umbrella && (
           <>
-            <label className="block space-y-1">
-              <span>Mod de atribuire</span>
-              <select
-                className={control}
-                value={assignmentMode}
-                onChange={(event) => setAssignmentMode(event.target.value)}
-              >
-                <option value="direct">Direct</option>
-                <option value="public">
-                  Public — înscriere prin lista de candidați
-                </option>
-              </select>
-            </label>
-            <label className="block space-y-1">
-              <span>Audiență</span>
-              <select
-                className={control}
-                value={audience}
-                onChange={(event) => setAudience(event.target.value)}
-              >
-                <option value="local">Membrii grupului de origine</option>
-                <option value="org">Toți membrii eligibili OSUBB</option>
-              </select>
-            </label>
+            <div className="space-y-1">
+              <label className="block space-y-1">
+                <span>Mod de atribuire</span>
+                <select
+                  className={control}
+                  value={assignmentMode}
+                  onChange={(event) => setAssignmentMode(event.target.value)}
+                  {...form.field('assignmentMode')}
+                >
+                  <option value="direct">Direct</option>
+                  <option value="public">
+                    Public — înscriere prin lista de candidați
+                  </option>
+                </select>
+              </label>
+              <FieldError {...form.errorProps('assignmentMode')} />
+            </div>
+            {/* Hidden while Direct (R26): switching to Public is how a
+                direct Task is opened, starting from its stored Audience. */}
+            {assignmentMode === 'public' && (
+              <div className="space-y-1">
+                <label className="block space-y-1">
+                  <span>Audiență</span>
+                  <select
+                    className={control}
+                    value={localOnly ? 'local' : audience}
+                    onChange={(event) => setAudience(event.target.value)}
+                    {...form.field('audience', `${id}-audience-hint`)}
+                  >
+                    <option value="local">{AUDIENCE_LABELS.local}</option>
+                    <option value="org" disabled={localOnly}>
+                      {AUDIENCE_LABELS.org}
+                    </option>
+                  </select>
+                </label>
+                <FieldError {...form.errorProps('audience')} />
+                <p
+                  id={`${id}-audience-hint`}
+                  className="text-sm text-muted-foreground"
+                >
+                  {localOnly ? PRIVATE_GROUP_AUDIENCE_HINT : AUDIENCE_HINT}
+                </p>
+              </div>
+            )}
             <div className="space-y-1">
               <label htmlFor={`${id}-campaign`}>Campanie (opțional)</label>
               <select
                 id={`${id}-campaign`}
                 className={control}
                 value={campaignId ?? ''}
-                aria-describedby={`${id}-campaign-hint`}
                 onChange={(event) =>
                   setCampaignId(
                     event.target.value ? Number(event.target.value) : null,
                   )
                 }
+                {...form.field('campaignId', `${id}-campaign-hint`)}
               >
                 <option value="">Fără campanie</option>
                 {task.campaign_id !== null &&
@@ -337,6 +509,7 @@ function TaskEditForm({
                   </option>
                 ))}
               </select>
+              <FieldError {...form.errorProps('campaignId')} />
               <p
                 id={`${id}-campaign-hint`}
                 className="text-sm text-muted-foreground"
@@ -346,6 +519,15 @@ function TaskEditForm({
             </div>
           </>
         )}
+        <fieldset className="min-w-0 space-y-3 border-t border-border pt-3">
+          <legend className="font-medium">Link atașat (opțional)</legend>
+          <AttachedLinkFields
+            value={link}
+            onChange={setLink}
+            form={form}
+            name="link"
+          />
+        </fieldset>
       </fieldset>
       {options.isPending && (
         <p role="status">Se verifică grupul și campaniile…</p>
@@ -358,11 +540,7 @@ function TaskEditForm({
           </Button>
         </div>
       )}
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError>{form.formError}</FieldError>
       <div className="flex flex-wrap gap-2">
         <Button
           type="submit"
@@ -384,8 +562,7 @@ function TaskEditForm({
           <DialogHeader>
             <DialogTitle>Confirmă modificarea</DialogTitle>
             <DialogDescription>
-              Salvarea îi afectează pe acești membri. Fiecare primește o
-              notificare.
+              Salvarea are următoarele consecințe:
             </DialogDescription>
           </DialogHeader>
           <ul className="list-disc space-y-1 pl-5">
