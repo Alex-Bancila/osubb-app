@@ -366,3 +366,10 @@ Four of the seven new issues are outside the Group model and are **not** childre
 - Every migration per conventions: `security definer` only in `private` with `set search_path = ''`, four-role revoke + explicit grant, every `to authenticated` policy unsatisfiable without org claims, the lock rules above, ancestry `path @> array[id]`, ~~one re-parent per statement~~ **— struck (R20): `groups.parent_id` is immutable and no function may update it** — error vocabulary `42501 <scope>_forbidden` / `PT400` / `PT404` / `PT409` / `23514`; no rule branches on `groups.category`; forward-only drop migrations carry their guards.
 - Acceptance by mutation; every new `private` function is a categorised roster row; `dblink` assertions proved on committed state or by reading; mutation harness validated on a known-failing mutant, psql `-q -t -A`.
 - Bounded commands in every dispatch; never `python`; `psql` via `docker exec -i supabase_db_osubb-app psql -U postgres -d postgres`; never stage the untracked files under `docs/superpowers/plans/`; one implementer and one database pass at a time; reviewers read-only.
+
+## Execution rulings (2026-09-24)
+
+- #590 derives transitional roster claims from Groups before dropping the old tables; #591 then removes those claims and the backfill keys. This keeps sign-in valid at each stack boundary.
+- #591 rebuilds Group command sibling-name checks against the total index, retaining `group_name_taken` for clients. Historical upgrade harnesses restore their old input shape only in rollback transactions.
+- #593 preserves historical Role History names as validated text while recasting the live rank enum. It never assigns a replacement rank to a real Member; #592 is the human prerequisite.
+- The closeout smoke uses the public Group settings command for Minimum-Level changes, including confirmed roster cleanup, and adds the complete native Group/Application/Task path.
