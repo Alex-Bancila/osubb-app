@@ -1380,6 +1380,67 @@ export type Database = {
           },
         ]
       }
+      privacy_notice_acknowledgements: {
+        Row: {
+          acknowledged_at: string
+          member_id: string
+          notice_version: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          member_id: string
+          notice_version: string
+        }
+        Update: {
+          acknowledged_at?: string
+          member_id?: string
+          notice_version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_color: string | null
@@ -2773,6 +2834,20 @@ export type Database = {
       }
     }
     Functions: {
+      acknowledge_privacy_notice: {
+        Args: { p_version: string }
+        Returns: {
+          acknowledged_at: string
+          member_id: string
+          notice_version: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "privacy_notice_acknowledgements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       add_group_member: {
         Args: { p_group_id: number; p_member_id: string }
         Returns: {
@@ -3684,6 +3759,14 @@ export type Database = {
         Returns: {
           consequence: string
           member_id: string
+        }[]
+      }
+      privacy_acknowledgement_status: {
+        Args: never
+        Returns: {
+          acknowledged_at: string
+          member_id: string
+          notice_version: string
         }[]
       }
       provision_profile: {

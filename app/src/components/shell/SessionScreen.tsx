@@ -8,13 +8,21 @@ import { Card, CardContent } from '../ui/card';
 function SessionScreen({
   children,
   centered = false,
+  wide = false,
+  footer,
 }: {
   children: ReactNode;
   centered?: boolean;
+  /** A reading width for long text — the Privacy Notice (#771). */
+  wide?: boolean;
+  /** Small print under the card, such as the Privacy Notice link. */
+  footer?: ReactNode;
 }) {
   return (
     <main className="h-dvh overflow-y-auto bg-background px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:pt-[min(12vh,6rem)]">
-      <Card className="mx-auto max-w-md shadow-md">
+      <Card
+        className={cn('mx-auto shadow-md', wide ? 'max-w-3xl' : 'max-w-md')}
+      >
         <CardContent
           className={cn(
             'flex flex-col gap-4',
@@ -40,6 +48,16 @@ function SessionScreen({
           {children}
         </CardContent>
       </Card>
+      {footer && (
+        <footer
+          className={cn(
+            'mx-auto mt-4 text-center text-sm text-muted-foreground',
+            wide ? 'max-w-3xl' : 'max-w-md',
+          )}
+        >
+          {footer}
+        </footer>
+      )}
     </main>
   );
 }

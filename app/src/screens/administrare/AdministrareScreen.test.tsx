@@ -36,6 +36,9 @@ vi.mock('../../queries/groups-admin', async (original) => ({
 vi.mock('./RolePanel', () => ({
   RolePanel: () => <section aria-label="Role panel" />,
 }));
+vi.mock('./PrivacyPanel', () => ({
+  PrivacyPanel: () => <section aria-label="Privacy panel" />,
+}));
 import AdministrareScreen from './AdministrareScreen';
 
 vi.setConfig({ testTimeout: 15_000 });
@@ -111,10 +114,11 @@ beforeEach(() => {
   capabilities({ createTopLevelGroups: true });
 });
 
-it('mounts the Role panel only from the live server capability', () => {
+it('mounts the Role and Confidențialitate panels only from the live server capability', () => {
   capabilities({ manageRoles: false });
   const view = show();
   expect(screen.queryByRole('region', { name: 'Role panel' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Privacy panel' })).toBeNull();
   capabilities({ manageRoles: true });
   view.rerender(
     <MemoryRouter>
@@ -122,6 +126,7 @@ it('mounts the Role panel only from the live server capability', () => {
     </MemoryRouter>,
   );
   expect(screen.getByRole('region', { name: 'Role panel' })).toBeVisible();
+  expect(screen.getByRole('region', { name: 'Privacy panel' })).toBeVisible();
 });
 
 function show() {

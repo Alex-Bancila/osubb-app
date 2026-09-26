@@ -1,6 +1,7 @@
 import * as axe from 'axe-core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({
@@ -21,6 +22,10 @@ vi.mock('../../components/shell/AppShell', async () => {
     await vi.importActual<typeof import('react-router')>('react-router');
   return { default: () => <Outlet /> };
 });
+// The Privacy Acknowledgement step (#771) has its own tests.
+vi.mock('../../components/shell/PrivacyGate', () => ({
+  PrivacyGate: ({ children }: { children: ReactElement }) => children,
+}));
 vi.mock('../dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
 }));
@@ -90,6 +95,19 @@ describe('LoginScreen', () => {
         expect.objectContaining({ email: 'membru@exemplu.ro' }),
       ),
     );
+  });
+
+  it('links the Privacy Notice from the footer, before and after sending (#771)', async () => {
+    render(<LoginScreen />);
+    expect(
+      screen.getByRole('link', { name: 'Politica de confidențialitate' }),
+    ).toHaveAttribute('href', '/confidentialitate');
+
+    askForTheEmail();
+    await screen.findByRole('heading', { name: 'Verifică-ți emailul' });
+    expect(
+      screen.getByRole('link', { name: 'Politica de confidențialitate' }),
+    ).toHaveAttribute('href', '/confidentialitate');
   });
 
   it('moves focus to the confirmation heading after sending a magic link', async () => {

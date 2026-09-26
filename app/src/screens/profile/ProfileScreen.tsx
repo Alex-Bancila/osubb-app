@@ -6,10 +6,12 @@ import {
   Moon,
   Pencil,
   Phone,
+  ShieldCheck,
   Sparkles,
   Sun,
   Users,
 } from 'lucide-react';
+import { Link } from 'react-router';
 import { memberDisplayName } from '../../components/member/member-identity';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
@@ -411,6 +413,31 @@ export default function ProfileScreen() {
           </section>
 
           <PushDeviceCard />
+
+          {/* The Privacy Notice (#771): always one tap away. */}
+          <section className="card p-6" aria-labelledby="privacy-card-title">
+            <div className="card-head">
+              <h3
+                id="privacy-card-title"
+                className="card-title flex items-center gap-2"
+              >
+                <ShieldCheck
+                  className="size-5 text-primary"
+                  aria-hidden="true"
+                />
+                <span>Confidențialitate</span>
+              </h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Ce date folosește aplicația, cine le vede și ce drepturi ai.
+            </p>
+            <Link
+              to="/confidentialitate"
+              className="mt-3 inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4"
+            >
+              Politica de confidențialitate
+            </Link>
+          </section>
         </div>
       </div>
 

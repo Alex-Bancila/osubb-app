@@ -205,6 +205,19 @@ export const keys = {
     unread: (memberId?: string) =>
       ['notifications', 'unread', { memberId }] as const,
   },
+  /* The Privacy Notice (#771): whether the member still has to acknowledge
+     the current version ("mine"), BC's list of every active Member's latest
+     acknowledgement, and one Member's for their Administrare page. One
+     `['privacy']` prefix, so an acknowledgement refreshes all three. */
+  privacy: {
+    all: ['privacy'] as const,
+    gate: (memberId: string | undefined) =>
+      ['privacy', 'gate', { memberId }] as const,
+    status: (viewerId: string | undefined) =>
+      ['privacy', 'status', { viewerId }] as const,
+    member: (memberId: string, viewerId: string | undefined) =>
+      ['privacy', 'member', { memberId, viewerId }] as const,
+  },
   /* Whether this browser receives Web Push for the member (#704): its
      subscription and its `push_tokens` row. "Mine", so keyed by member. */
   push: {

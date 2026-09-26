@@ -346,6 +346,11 @@ describe('ProfileScreen', () => {
     expect(
       screen.getByRole('button', { name: /temă întunecată/i }),
     ).toBeInTheDocument();
+
+    // The Privacy Notice, always one tap away (#771)
+    expect(
+      screen.getByRole('link', { name: 'Politica de confidențialitate' }),
+    ).toHaveAttribute('href', '/confidentialitate');
   });
 
   it('A Member in a Department, a Team of it, and a Project sees three groups under three headings with the right Group Role labels', () => {
