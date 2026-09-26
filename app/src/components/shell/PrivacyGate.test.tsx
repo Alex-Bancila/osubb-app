@@ -142,33 +142,26 @@ it('treats an acknowledgement made in another tab as done', async () => {
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
-it('explains a version that changed under the Member and asks for the new one', async () => {
+it('records the version on screen, never a newer one the page does not show', async () => {
   const user = userEvent.setup();
-  db.rpc.mockImplementation(async () => {
-    db.version = '1.1';
-    return {
-      data: null,
-      error: { code: 'PT409', message: 'privacy_notice_version_stale' },
-    };
-  });
+  // BC raised the version, but this build still carries the 1.0 text.
+  db.version = '1.1';
+  db.rpc.mockImplementation(async () => ({
+    data: null,
+    error: { code: 'PT409', message: 'privacy_notice_version_stale' },
+  }));
   show();
   await user.click(await screen.findByRole('button', BUTTON));
+  expect(db.rpc).toHaveBeenCalledWith('acknowledge_privacy_notice', {
+    p_version: '1.0',
+  });
+  expect(db.rpc).not.toHaveBeenCalledWith('acknowledge_privacy_notice', {
+    p_version: '1.1',
+  });
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Politica de confidențialitate tocmai s-a actualizat.',
   );
   expect(screen.queryByRole('heading', { name: 'Acasă' })).toBeNull();
-
-  db.rpc.mockImplementation(async () => {
-    db.acknowledged = ['1.1'];
-    return { data: {}, error: null };
-  });
-  await user.click(screen.getByRole('button', BUTTON));
-  await waitFor(() =>
-    expect(db.rpc).toHaveBeenLastCalledWith('acknowledge_privacy_notice', {
-      p_version: '1.1',
-    }),
-  );
-  expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 });
 
 it('does not let the Member past when the check cannot be read', async () => {

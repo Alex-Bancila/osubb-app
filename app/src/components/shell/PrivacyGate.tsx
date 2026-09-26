@@ -6,7 +6,10 @@ import {
   useAcknowledgePrivacyNotice,
   usePrivacyGate,
 } from '../../queries/privacy';
-import { PrivacyNoticeContent } from '../../screens/privacy/PrivacyNoticeContent';
+import {
+  PRIVACY_NOTICE_VERSION,
+  PrivacyNoticeContent,
+} from '../../screens/privacy/PrivacyNoticeContent';
 import { Button } from '../ui/button';
 import { SessionLoader, SessionScreen } from './SessionScreen';
 
@@ -75,7 +78,10 @@ export function PrivacyGate({ children }: { children: ReactElement }) {
           aria-describedby={
             acknowledge.isError ? 'privacy-gate-error' : undefined
           }
-          onClick={() => acknowledge.mutate(currentVersion)}
+          // The version of the text on screen, not the one just read: a build
+          // older than the current version shows older text, and the server
+          // answers it stale instead of recording what was never displayed.
+          onClick={() => acknowledge.mutate(PRIVACY_NOTICE_VERSION)}
         >
           {acknowledge.isPending && (
             <LoaderCircle
