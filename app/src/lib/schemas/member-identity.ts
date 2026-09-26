@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { charLength, trimText } from '../normalize';
+import { emailSchema } from './profile';
 import { requiredText } from './text';
 
 /**
@@ -54,4 +55,16 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   nickname_invalid: 'nickname',
   nickname_taken: 'nickname',
   full_name_required: 'fullName',
+};
+
+/**
+ * The address a re-sent invitation goes to (#773): trimmed and lowercased, as
+ * `reinvite-member` stores it in both `auth.users` and `profiles`.
+ */
+export const memberInvitationSchema = z.object({ email: emailSchema });
+
+/** Where each reason about a re-sent invitation is shown. */
+export const invitationFieldForReason: Readonly<Record<string, string>> = {
+  email_invalid: 'email',
+  email_taken: 'email',
 };

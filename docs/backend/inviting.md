@@ -167,18 +167,52 @@ Tell them to check spam on first contact, that the link signs them in on the dev
 
 ## When something goes wrong
 
-| Response                                        | What it means                                                                                                        | What to do                                                                                                  |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `401`                                           | Your session expired                                                                                                 | Sign in again and retry                                                                                     |
-| `403 Doar BC poate invita membri`               | You are below level 6, or your profile is not `activ`                                                                | Ask BC to invite, or check your own status                                                                  |
-| `409 … are deja cont`                           | That address already has an account                                                                                  | Nothing to do. **Re-inviting is refused on purpose** — it must never overwrite or delete an existing member |
-| `400 Grup inexistent: 12`                       | A `group_ids` entry doesn't name a Group                                                                             | Fix the id. Nothing was sent — no email went out                                                            |
-| `400 Câmpurile dept_ids și team_ids …`          | The old field names were sent                                                                                        | Send `group_ids` instead                                                                                    |
-| `400 Datele membrului nu sunt valide …`         | A Group refused the Appointment: archived, Automatic-Membership, or its Minimum Level is above the new member's role | Pick a different Group, or invite at a higher role. The invitation was rolled back and the account deleted  |
-| `400 Email invalid` / `Numele este obligatoriu` | Missing or malformed input                                                                                           | Fix and retry                                                                                               |
-| `502`                                           | Supabase couldn't send the email                                                                                     | Check the email provider is enabled (below), then retry                                                     |
+| Response                                        | What it means                                                                                                        | What to do                                                                                                                                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401`                                           | Your session expired                                                                                                 | Sign in again and retry                                                                                                                                                                  |
+| `403 Doar BC poate invita membri`               | You are below level 6, or your profile is not `activ`                                                                | Ask BC to invite, or check your own status                                                                                                                                               |
+| `409 … are deja cont`                           | That address already has an account                                                                                  | Nothing to do here. **Re-inviting is refused on purpose** — it must never overwrite or delete an existing member. A never-used invitation is re-sent from "The invitation never arrived" |
+| `400 Grup inexistent: 12`                       | A `group_ids` entry doesn't name a Group                                                                             | Fix the id. Nothing was sent — no email went out                                                                                                                                         |
+| `400 Câmpurile dept_ids și team_ids …`          | The old field names were sent                                                                                        | Send `group_ids` instead                                                                                                                                                                 |
+| `400 Datele membrului nu sunt valide …`         | A Group refused the Appointment: archived, Automatic-Membership, or its Minimum Level is above the new member's role | Pick a different Group, or invite at a higher role. The invitation was rolled back and the account deleted                                                                               |
+| `400 Email invalid` / `Numele este obligatoriu` | Missing or malformed input                                                                                           | Fix and retry                                                                                                                                                                            |
+| `502`                                           | Supabase couldn't send the email                                                                                     | Check the email provider is enabled (below), then retry                                                                                                                                  |
 
-**No email arrived?** Locally, mail never leaves your machine — open **Mailpit** at http://127.0.0.1:54324. On a hosted project, check Authentication → Logs, and confirm the **email provider is enabled** (see below).
+**No email arrived?** Locally, mail never leaves your machine — open **Mailpit** at http://127.0.0.1:54324. On a hosted project, follow "The invitation never arrived" below.
+
+## The invitation never arrived
+
+`invite-member` refuses an address that already has a profile, and that stays true — it is what keeps a real Member from being overwritten or deleted. The recovery path for a bounced or mistyped invitation is a separate function, `reinvite-member` (#773, ruling L19): it corrects the address of a Member who has **never signed in** and sends the invitation again to the same account. Nothing is deleted or re-provisioned; the profile id, its Groups and its history stay as they are.
+
+1. **Find out what happened to the email.** Resend dashboard → **Emails**, search by the address on file. _Why first:_ it separates "never sent" from "bounced" from "delivered but unseen", which have different fixes. Delivered → ask the Member to check spam and to confirm the address is really theirs. Bounced → the address is wrong or the mailbox refuses mail; get the right address from the Member. No entry within Resend's retention window → the send never happened: check Authentication → Logs and that the email provider is on (below). The full triage lives in `docs/ops/release.md`.
+2. **Correct and re-send.** Administrare → the Member's page → **Retrimite invitația**. The panel shows only while the Member has never signed in and their address is not yet confirmed. Change the address if it was wrong (or leave it as it is to re-send to the same one) and press **Retrimite invitația**. You receive a `system` Notification recording the re-send and, when the address changed, the old one — that is the audit line, since profiles have no history table.
+3. **Confirm it left.** Resend (or Mailpit locally) shows a new **"Ai fost invitat în aplicația OSUBB"** to the corrected address. The old invitation link is dead: the new email carries a new token.
+
+From a terminal, the same call is:
+
+```bash
+curl -X POST "$SUPABASE_URL/functions/v1/reinvite-member" \
+  -H "Authorization: Bearer $YOUR_ACCESS_TOKEN" \
+  -H "apikey: $ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "member_id": "caa02729-…", "email": "ioana.popescu@gmail.com" }'
+```
+
+Omit `email` to re-send to the address on file. `{ "member_id": "…", "action": "status" }` answers `last_sign_in_at` and `email_confirmed` without changing anything — the page uses it to decide whether to show the panel.
+
+| Response                      | What it means                                                                                                | What to do                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `200`                         | The invitation left; `email_changed` says whether the address was corrected                                  | Check Resend for the new email                              |
+| `403 member_manage_forbidden` | You are below level 6                                                                                        | Ask BC or the Moderator                                     |
+| `409 already_active`          | The Member has signed in: the invitation did its job                                                         | Nothing to re-send                                          |
+| `409 already_confirmed`       | The address is confirmed but was never used (seed data, a hand-made account); Auth sends no invitation to it | The Member asks for a link on the login screen              |
+| `409 member_inactive`         | The profile is not `activ`; an invitation would open nothing                                                 | Reactivate the Member first, if that is what you mean to do |
+| `409 email_taken`             | Another account already uses the new address                                                                 | Check the address; one person has one account               |
+| `500 email_sync_failed`       | Auth or the profile refused the new address; Auth was put back, nothing changed                              | Retry; if it repeats, read the function's logs              |
+| `500 email_out_of_sync`       | The profile refused **and** putting Auth back failed: the two addresses now differ                           | Fix it by hand as described below, then retry               |
+| `502 invite_failed`           | The address was corrected (when you changed it) but the email did not leave                                  | Retry — a re-send to the same address changes nothing else  |
+
+**Why the address changes in two places, in this order.** The sign-in address lives in `auth.users.email`, the one the app shows in `profiles.email`, and no transaction spans Auth and Postgres. The function moves Auth first, then the profile, and moves Auth back if the profile refuses — so each side ends where it started or both hold the new address, and the invitation only ever goes to an address both hold. If the rollback itself fails, the function answers `500 email_out_of_sync` and its log says `ROLLBACK FAILED: auth.users.email and profiles.email differ` with both addresses; put the Auth address back in the dashboard (Authentication → Users → the user → email) to the one in `profiles.email`.
 
 ## The setting that silently breaks everything
 
@@ -198,7 +232,7 @@ Hosted projects don't read `config.toml`: the same two settings live in the dash
 
 ## Which key the functions use
 
-`invite-member` and `csv-import` run two clients. The **caller** client carries your access token and only asks Auth who you are. The **admin** client — the one that reads your level, checks the Groups and the address, sends the invitation, calls `provision_profile()` and rolls back a failed invitation — is built from the project's **secret key** (`sb_secret_…`), which the gateway maps to `service_role`. The functions read it from `SUPABASE_SECRET_KEYS`, the JSON map of the project's secret keys that the platform injects into every function (the `default` key first), exactly as `send-push` does (#769, #796). They never read the legacy JWT `service_role` key, which Supabase retires by the end of 2026 (ruling L8).
+`invite-member`, `csv-import` and `reinvite-member` run two clients. The **caller** client carries your access token and only asks Auth who you are. The **admin** client — the one that reads your level, checks the Groups and the address, sends the invitation, calls `provision_profile()` and rolls back a failed invitation — is built from the project's **secret key** (`sb_secret_…`), which the gateway maps to `service_role`. The functions read it from `SUPABASE_SECRET_KEYS`, the JSON map of the project's secret keys that the platform injects into every function (the `default` key first), exactly as `send-push` does (#769, #796). They never read the legacy JWT `service_role` key, which Supabase retires by the end of 2026 (ruling L8).
 
 There is nothing to set by hand: the CLI refuses any function secret whose name starts with `SUPABASE_`, and `npx supabase functions serve` injects the local secret key too. A hosted project must **have** a secret key — Project Settings → API Keys → _Secret keys_; create one if the list is empty. Without one both functions refuse to start: the boot error in the function's logs says `invite-member cannot start: SUPABASE_SECRET_KEYS holds no secret key` (or `csv-import …`) and names the dashboard page. The key is read once, when a function boots, so to rotate it: create a new secret key, delete the old one, then redeploy the functions so no warm worker keeps the deleted key.
 
@@ -248,4 +282,5 @@ CSV import last verified end to end on 2026-09-15 from a fresh local database: t
 
 - `docs/adr/0003-invite-only-auth.md` — why invite-only, and what deactivation means
 - `supabase/functions/invite-member/` — the function, its port, and its tests
+- `supabase/functions/reinvite-member/` — correcting and re-sending a never-used invitation (#773)
 - Issues: #54 (hosted auth checklist) · #107 (BC panel invite UI) · #71–#73 (CSV import)
