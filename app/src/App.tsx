@@ -29,11 +29,16 @@ import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import ProfileScreen from './screens/profile/ProfileScreen';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
+const GroupsScreen = lazy(() => import('./screens/groups/GroupsScreen'));
+const MemberGroupScreen = lazy(
+  () => import('./screens/groups/MemberGroupScreen'),
+);
 const TrackerScreen = lazy(() => import('./screens/tracker/TrackerScreen'));
 const CalendarScreen = lazy(() => import('./screens/calendar/CalendarScreen'));
 const AdministrareScreen = lazy(
   () => import('./screens/administrare/AdministrareScreen'),
 );
+const MemberScreen = lazy(() => import('./screens/administrare/MemberScreen'));
 const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
 const PeriodsScreen = lazy(
   () => import('./screens/administrare/PeriodsScreen'),
@@ -253,6 +258,22 @@ export default function App() {
               </DeferredRoute>
             }
           />
+          <Route
+            path="/grupuri"
+            element={
+              <DeferredRoute>
+                <GroupsScreen />
+              </DeferredRoute>
+            }
+          />
+          <Route
+            path="/grupuri/:groupId"
+            element={
+              <DeferredRoute>
+                <MemberGroupScreen />
+              </DeferredRoute>
+            }
+          />
           <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
           <Route path="/anunturi" element={<AnnouncementsScreen />} />
           <Route path="/notificari" element={<NotificationsScreen />} />
@@ -281,6 +302,16 @@ export default function App() {
               <RequireCapability capability="manageRoles">
                 <DeferredRoute>
                   <PeriodsScreen />
+                </DeferredRoute>
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/administrare/membri/:memberId"
+            element={
+              <RequireCapability capability="administer">
+                <DeferredRoute>
+                  <MemberScreen />
                 </DeferredRoute>
               </RequireCapability>
             }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { commandErrorMessage } from '../../lib/command-reasons';
@@ -38,9 +38,12 @@ export const ROLE_PANEL_MEMBER_PARAM = 'membru';
  * The Role and Status management surface; the server capability gates mount.
  * `?membru=<id>` pre-selects a Member — the Perioade de evaluare panel's
  * **Editează rolul** links here from a Retention Signal — and scrolls the
- * panel into view.
+ * panel into view. On a Member's own page (#103) `selectedMemberId` fixes the
+ * Member and the picker is not shown.
  */
-export function RolePanel() {
+export function RolePanel({
+  selectedMemberId,
+}: { selectedMemberId?: string } = {}) {
   const { session } = useAuth();
   const members = useAppointableMembers();
   const roles = useRoles();
@@ -48,7 +51,7 @@ export function RolePanel() {
   const change = useMemberChange();
   const [searchParams] = useSearchParams();
   const requested = searchParams.get(ROLE_PANEL_MEMBER_PARAM) ?? '';
-  const [memberId, setMemberId] = useState(requested);
+  const [memberId, setMemberId] = useState(selectedMemberId ?? requested);
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (requested) panel.current?.scrollIntoView?.({ block: 'start' });
@@ -153,29 +156,39 @@ export function RolePanel() {
         <p role="alert">Nu am putut încărca membrii și rolurile.</p>
       ) : (
         <>
-          <label className="block max-w-xl space-y-1">
-            <span>Membru</span>
-            <select
-              className={control}
-              value={memberId}
-              disabled={change.isPending}
-              onChange={(event) => {
-                setMemberId(event.target.value);
-                setRoleDraft('');
-                setStatusDraft('');
-                setReason('');
-                setError(null);
-                setMessage(null);
-              }}
+          {!selectedMemberId && (
+            <label className="block max-w-xl space-y-1">
+              <span>Membru</span>
+              <select
+                className={control}
+                value={memberId}
+                disabled={change.isPending}
+                onChange={(event) => {
+                  setMemberId(event.target.value);
+                  setRoleDraft('');
+                  setStatusDraft('');
+                  setReason('');
+                  setError(null);
+                  setMessage(null);
+                }}
+              >
+                <option value="">Alege un membru</option>
+                {members.data?.map((row) => (
+                  <option key={row.memberId} value={row.memberId}>
+                    {row.name} · {row.roleLabel}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {member && !selectedMemberId && (
+            <Link
+              className="inline-flex min-h-11 items-center underline"
+              to={`/administrare/membri/${member.memberId}`}
             >
-              <option value="">Alege un membru</option>
-              {members.data?.map((row) => (
-                <option key={row.memberId} value={row.memberId}>
-                  {row.name} · {row.roleLabel}
-                </option>
-              ))}
-            </select>
-          </label>
+              Vezi detaliile membrului
+            </Link>
+          )}
           {member && (
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-3 rounded-lg border p-4">

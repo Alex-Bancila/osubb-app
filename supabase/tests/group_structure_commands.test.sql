@@ -21,7 +21,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(85);
+select plan(87);
 
 -- ==================== Fixtures ====================
 
@@ -141,6 +141,9 @@ select throws_ok(
 select throws_ok($$select public.create_group('Rădăcină #582', 'department')$$,
   'PT409', 'group_name_taken',
   'create_group: a sibling name already taken is refused (groups_parent_name_uidx)');
+select throws_ok($$select public.create_group('educațional', 'department')$$,
+  'PT409', 'group_name_taken',
+  'create_group: a reference Group''s name is taken too, case-insensitively -- the sibling-name rule is total since #591');
 
 -- ==================== 3 · a raised Minimum Level, confirmed (tree B) ====================
 
@@ -308,6 +311,11 @@ select throws_ok(
   format($$select public.update_group(%s, 'Altă rădăcină #582', null, false, null, false, 0, null, null)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT409', 'group_name_taken', 'update_group: a rename onto a sibling''s name is refused');
+select throws_ok(
+  format($$select public.update_group(%s, 'DIVERSE', null, false, null, false, 0, null, null)$$,
+         pg_temp.g582_group('Rădăcină #582')),
+  'PT409', 'group_name_taken',
+  'update_group: a rename onto a reference Group''s name is refused too -- no legacy exemption since #591');
 select throws_ok(
   format($$select public.update_group(%s, 'Oricum #582', null, false, null, false, 0, null, null)$$,
          pg_temp.g582_group('Arhivată #582')),
@@ -530,9 +538,9 @@ select ok(
 select is((select status from public.groups where name = 'Părinte viu #582'), 'active',
   'and archiving a child leaves its parent active');
 
--- ==================== 9 · the Organization marker replaces legacy_dept_id = 'org' ====================
+-- ==================== 9 · the Organization marker replaces name = 'OSUBB' ====================
 -- The marker moves off the mirrored OSUBB row onto a native Group. That row
--- keeps legacy_dept_id = 'org', so every assertion below inverts if a reader
+-- keeps name = 'OSUBB', so every assertion below inverts if a reader
 -- still asks for the legacy id instead of groups.is_organization.
 
 create function pg_temp.g582_clear_org() returns void language plpgsql as $$

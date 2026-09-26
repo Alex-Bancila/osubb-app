@@ -17,7 +17,7 @@ create extension if not exists pgtap with schema extensions;
 select plan(70);
 create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
 returns bigint language sql stable as $$
-  select coalesce((select id from public.groups where legacy_dept_id=p_dept or legacy_team_id=p_team or legacy_project_id=p_project),-1)
+  select coalesce((select id from public.groups where id = pg_temp.dept_group(p_dept) or id = pg_temp.team_group(p_team) or id = pg_temp.project_group(p_project)),-1)
 $$;
 
 -- ==================== 1. Surface, shape and grants ====================
@@ -121,13 +121,13 @@ insert into public.profiles (id, full_name, email, role, status) values
 -- exactly these fixtures and never a seeded Task on `edu`. `departments.kind`
 -- defaults to 'department', so 258-dept competes in the Department Cup too --
 -- which is what lets the cross-check in section 9 see these fixtures.
-insert into public.departments (id, name, short, color) values
+insert into pg_temp.fixture_departments (id, name, short, color) values
   ('258-dept', 'Departament 258', 'D258', '#123456');
 -- Two Teams: one with a parent Department and one **Independent**
 -- (`dept_id is null`). ADR-0007 and `private.department_cup_rows` both treat
 -- the Independent Team as its own case, and `origin_team.dept_id =
 -- p_department_id` is only correct because `null = 'x'` is `null`.
-insert into public.teams (id, name, dept_id) values
+insert into pg_temp.fixture_teams (id, name, dept_id) values
   ('258-dept-team', 'Department Team 258', '258-dept'),
   ('258-indep-team', 'Independent Team 258', null);
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
@@ -142,7 +142,7 @@ overriding system value values
   (2580001, pg_temp.dept_group('258-dept'), 'Campania A 258', '25800000-0000-0000-0000-000000000001'),
   (2580002, pg_temp.dept_group('258-dept'), 'Campania B 258', '25800000-0000-0000-0000-000000000001');
 
-insert into public.projects (id, name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (id, name, status, leader_id, created_by)
 overriding system value values
   (2580003, 'Project 258', 'active', '25800000-0000-0000-0000-000000000001',
    '25800000-0000-0000-0000-000000000001'),
@@ -294,7 +294,7 @@ select is((select points from public.leadership_leaderboard(pg_temp.g523_group(p
             where member_id = '25800000-0000-0000-0000-000000000010'), 6,
   'and returns that Team''s award');
 select is((select count(*)
-             from public.departments as department
+             from pg_temp.fixture_departments as department
              left join lateral public.leadership_leaderboard(pg_temp.g523_group(department.id)) as board on true
             where board.member_id = '25800000-0000-0000-0000-000000000010'), 0::bigint,
   'no Department filter at all reaches an Independent Team''s work -- not one of them, not just 258-dept');
@@ -437,7 +437,7 @@ insert into auth.users (id, email) values
 insert into public.profiles (id, full_name, email, role, status) values
   ('25800000-0000-0000-0000-000000000013', 'Irina Interval 258', 'interval258@example.test', 'activ', 'activ'),
   ('25800000-0000-0000-0000-000000000014', 'Radu Reversat 258', 'reversat258@example.test', 'activ', 'activ');
-insert into public.projects (id, name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (id, name, status, leader_id, created_by)
 overriding system value values
   (2580005, 'Project Interval 258', 'active', '25800000-0000-0000-0000-000000000001',
    '25800000-0000-0000-0000-000000000001');

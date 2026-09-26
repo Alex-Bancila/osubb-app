@@ -17,7 +17,7 @@ select plan(37);
 -- truncation back after the assertions.
 truncate events, event_attendance cascade;
 
-insert into teams (id, name, dept_id)
+insert into pg_temp.fixture_teams (id, name, dept_id)
 values ('t-event-integrity', 'Event integrity team', 'edu');
 
 -- A Profile and a Project whose Group owns an Event below.
@@ -27,7 +27,7 @@ values ('36900000-0000-0000-0000-000000000001',
 insert into public.profiles (id, full_name, email, role, status)
 values ('36900000-0000-0000-0000-000000000001', 'Event Integrity Lead',
         'event-integrity-lead-369@test.local', 'responsabil', 'activ');
-insert into public.projects (name, status, leader_id, created_by)
+insert into pg_temp.fixture_projects (name, status, leader_id, created_by)
 values ('Event Integrity Project 369', 'active',
         '36900000-0000-0000-0000-000000000001',
         '36900000-0000-0000-0000-000000000001');
@@ -60,7 +60,7 @@ select throws_ok(
 select lives_ok(
   $$ insert into events (title, type, group_id, starts_at)
      select 'Proiect real', 'activitate', pg_temp.project_group(project.id), now()
-       from public.projects project
+       from pg_temp.fixture_projects project
       where project.name = 'Event Integrity Project 369' $$,
   'a Project Group owns a project event');
 

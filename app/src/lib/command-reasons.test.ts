@@ -160,6 +160,19 @@ it.each([
   expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
 });
 
+/* Every reason #675's `private.guard_profile_nickname` raises (23514). */
+it.each([
+  'nickname_too_short',
+  'nickname_too_long',
+  'nickname_invalid',
+  'nickname_taken',
+])('has Romanian copy for the Nickname reason %s', (reason) => {
+  const copy = reasonCopy(reason);
+  expect(copy).toBeDefined();
+  expect(copy).toMatch(/^Pseudonimul /);
+  expect(commandReason({ code: '23514', message: reason })).toBe(reason);
+});
+
 it('describes a failure for a form: the reason and the copy', () => {
   expect(
     describeFailure({ code: 'PT400', message: 'title_too_long' }, 'fallback'),
@@ -207,4 +220,18 @@ it.each([
   expect(copy).toBeDefined();
   expect(copy).not.toMatch(/_/);
   expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
+});
+
+/* #698: the application form link's own words (the settings form renames
+   update_group's Attached Link reasons to these). */
+it.each([
+  ['application_form_incomplete', 'Completează și eticheta, și adresa.'],
+  ['application_form_label_too_long', 'Eticheta are cel mult 60 de caractere.'],
+  [
+    'application_form_url_invalid',
+    'Adresa trebuie să înceapă cu http:// sau https://.',
+  ],
+])('has Romanian copy for the application form reason %s', (reason, copy) => {
+  expect(reasonCopy(reason)).toBe(copy);
+  expect(commandReason({ code: 'PT400', message: reason })).toBe(reason);
 });

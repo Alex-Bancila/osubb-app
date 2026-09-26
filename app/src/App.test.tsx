@@ -29,13 +29,6 @@ function grant(...names: string[]) {
   capabilities.granted = new Set(names);
 }
 vi.mock('./lib/auth', () => ({ useAuth: auth.useAuth }));
-vi.mock('@ionic/react', () => ({
-  IonContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  IonPage: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  IonSpinner: ({ 'aria-label': label }: { 'aria-label': string }) => (
-    <div role="status" aria-label={label} />
-  ),
-}));
 vi.mock('./components/shell/AppShell', async () => {
   const { Outlet } =
     await vi.importActual<typeof import('react-router')>('react-router');
@@ -63,6 +56,15 @@ vi.mock('./screens/volunteers/VolunteersScreen', () => ({
 }));
 vi.mock('./screens/administrare/AdministrareScreen', () => ({
   default: () => <h1>Administrare</h1>,
+}));
+vi.mock('./screens/groups/GroupsScreen', () => ({
+  default: () => <h1>Grupuri screen</h1>,
+}));
+vi.mock('./screens/groups/MemberGroupScreen', () => ({
+  default: () => <h1>Member Group screen</h1>,
+}));
+vi.mock('./screens/administrare/MemberScreen', () => ({
+  default: () => <h1>Membru screen</h1>,
 }));
 vi.mock('./screens/administrare/GroupScreen', () => ({
   default: () => <h1>Grup screen</h1>,
@@ -125,8 +127,6 @@ const member = {
   claims: {
     member_role: 'bc',
     member_level: 6,
-    dept_ids: [],
-    team_ids: [],
     group_ids: [],
   },
   loading: false,
@@ -227,6 +227,25 @@ describe('route guards', () => {
     expect(
       await screen.findByRole('heading', { name: 'Perioade screen' }),
     ).toBeVisible();
+  });
+
+  it('opens a Member screen behind the same capability as the panel', async () => {
+    auth.useAuth.mockReturnValue(ordinaryMember);
+    // A Group Manager reaches their own Group's screen …
+    grant('administer');
+    window.history.pushState({}, '', '/administrare/membri/target');
+    const view = render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Membru screen' }),
+    ).toBeVisible();
+    view.unmount();
+
+    // … and a member with no Group Role anywhere never does.
+    grant('seeDirectory', 'seeLeadership');
+    window.history.pushState({}, '', '/administrare/membri/target');
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(screen.queryByRole('heading', { name: 'Membru screen' })).toBeNull();
   });
 
   it('decides nothing while the capability row is still loading', () => {
@@ -460,6 +479,18 @@ describe('route guards', () => {
 
     expect(
       screen.getByRole('heading', { name: 'Anunțuri screen' }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['/grupuri', 'Grupuri screen'],
+    ['/grupuri/2', 'Member Group screen'],
+  ])('opens member Group route %s', async (path, title) => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', path);
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: title }),
     ).toBeInTheDocument();
   });
 

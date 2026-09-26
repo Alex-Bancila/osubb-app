@@ -346,3 +346,25 @@ it('opens on the Member a Retention Signal links to (?membru=, #702)', () => {
   expect(screen.getByLabelText('Membru')).toHaveValue('target');
   expect(screen.getByText('Rol actual: BCE')).toBeVisible();
 });
+
+it('links the chosen Member to their Administrare page (#103)', async () => {
+  const user = userEvent.setup();
+  renderPanel();
+  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  expect(
+    screen.getByRole('link', { name: 'Vezi detaliile membrului' }),
+  ).toHaveAttribute('href', '/administrare/membri/target');
+});
+
+it('edits only the given Member on their own page, without the picker (#103)', () => {
+  render(
+    <MemoryRouter>
+      <RolePanel selectedMemberId="target" />
+    </MemoryRouter>,
+  );
+  expect(screen.queryByLabelText('Membru')).toBeNull();
+  expect(
+    screen.queryByRole('link', { name: 'Vezi detaliile membrului' }),
+  ).toBeNull();
+  expect(screen.getByText('Rol actual: BCE')).toBeVisible();
+});
