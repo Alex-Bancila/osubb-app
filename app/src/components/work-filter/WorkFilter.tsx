@@ -81,6 +81,7 @@ export function WorkFilter({
   /** A sentence under the fields saying what this page's filter narrows. */
   hint?: ReactNode;
 }) {
+  const showGroup = levels.group ?? true;
   const showCampaign = levels.campaign ?? true;
   const showDates = levels.dates ?? true;
   const own = useWorkFilter(levels);
@@ -131,14 +132,14 @@ export function WorkFilter({
   const groupText = (groupId: number) =>
     groupsById.get(groupId)?.name ?? `#${groupId}`;
   const chips: Chip[] = [];
-  if (value.rootGroupId !== undefined)
+  if (showGroup && value.rootGroupId !== undefined)
     chips.push({
       level: 'rootGroupId',
       label: 'Grup principal',
       text: groupText(value.rootGroupId),
       cascade: true,
     });
-  if (value.groupId !== undefined)
+  if (showGroup && value.groupId !== undefined)
     chips.push({
       level: 'groupId',
       label: 'Subgrup',
@@ -192,15 +193,19 @@ export function WorkFilter({
     const buttons = [
       ...(chipRow.current?.querySelectorAll<HTMLElement>('button') ?? []),
     ];
+    const controls = [
+      ...(container.current?.querySelectorAll<HTMLElement>(
+        '[aria-labelledby], input',
+      ) ?? []),
+    ];
+    // The first control is Grup principal; a page hiding the Group levels
+    // (the Cupa view) starts at its first shown field instead.
     const target =
       buttons[Math.min(index, buttons.length - 1)] ??
-      [
-        ...(container.current?.querySelectorAll<HTMLElement>(
-          '[aria-labelledby]',
-        ) ?? []),
-      ].find(
+      controls.find(
         (element) => element.getAttribute('aria-labelledby') === rootLabel,
-      );
+      ) ??
+      controls[0];
     target?.focus();
   });
 
@@ -219,33 +224,37 @@ export function WorkFilter({
   return (
     <div ref={container} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="grid content-start gap-1.5">
-          <span id={rootLabel} className="text-sm font-medium">
-            Grup principal
-          </span>
-          <GroupFilterCombobox
-            ariaLabelledBy={rootLabel}
-            groups={rootOptions}
-            groupsById={groupsById}
-            value={root}
-            onValueChange={(group) => set('rootGroupId', group?.id)}
-            placeholder="Toate grupurile"
-          />
-        </div>
-        <div className="grid content-start gap-1.5">
-          <span id={subLabel} className="text-sm font-medium">
-            Subgrup
-          </span>
-          <GroupFilterCombobox
-            ariaLabelledBy={subLabel}
-            groups={below}
-            groupsById={groupsById}
-            value={sub}
-            onValueChange={(group) => set('groupId', group?.id)}
-            placeholder="Toate subgrupurile"
-            disabled={!below.length}
-          />
-        </div>
+        {showGroup && (
+          <>
+            <div className="grid content-start gap-1.5">
+              <span id={rootLabel} className="text-sm font-medium">
+                Grup principal
+              </span>
+              <GroupFilterCombobox
+                ariaLabelledBy={rootLabel}
+                groups={rootOptions}
+                groupsById={groupsById}
+                value={root}
+                onValueChange={(group) => set('rootGroupId', group?.id)}
+                placeholder="Toate grupurile"
+              />
+            </div>
+            <div className="grid content-start gap-1.5">
+              <span id={subLabel} className="text-sm font-medium">
+                Subgrup
+              </span>
+              <GroupFilterCombobox
+                ariaLabelledBy={subLabel}
+                groups={below}
+                groupsById={groupsById}
+                value={sub}
+                onValueChange={(group) => set('groupId', group?.id)}
+                placeholder="Toate subgrupurile"
+                disabled={!below.length}
+              />
+            </div>
+          </>
+        )}
         {showCampaign && (
           <div className="grid content-start gap-1.5">
             <span id={campaignLabel} className="text-sm font-medium">

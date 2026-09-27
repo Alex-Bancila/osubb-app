@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ListFilter } from 'lucide-react';
+import { EmptyState, Page, PageHeader, Panel } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
-import { Button } from '../../components/ui/button';
+import { ErrorState, Loading } from '../../components/states';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { formatBucharestDay } from '../../lib/calendar-time';
 import { formatPoints } from '../../lib/format';
@@ -142,19 +143,12 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
 /** The Member Card's summary (#676): Nickname, full name, Role and Groups. */
 function MemberSummary({ memberId }: { memberId: string }) {
   const card = useMemberCard(memberId);
-  if (card.isPending)
-    return (
-      <p role="status" className="text-muted-foreground">
-        Se încarcă profilul…
-      </p>
-    );
+  if (card.isPending) return <Loading label="Se încarcă profilul…" />;
   if (card.isError || !card.data)
-    return (
-      <p className="text-muted-foreground">Profilul nu este disponibil.</p>
-    );
+    return <EmptyState>Profilul nu este disponibil.</EmptyState>;
   const member = card.data;
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <MemberName
           memberId={member.memberId}
@@ -217,43 +211,33 @@ function MemberHistory({ memberId }: { memberId: string }) {
   const groupsReady =
     chosenGroupId(value) === undefined || options.data !== undefined;
 
+  const count = query.data?.length
+    ? rows.length === query.data.length
+      ? `${rows.length} ${rows.length === 1 ? 'atribuire' : 'atribuiri'}`
+      : `${rows.length} din ${query.data.length} atribuiri`
+    : null;
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <Link
-        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline"
-        to="/clasament"
-      >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        Înapoi la clasament
-      </Link>
-      <header className="space-y-4">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-muted-foreground">
-            OSUBB · Conducere
-          </p>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Trackerul membrului
-          </h1>
-          <p className="text-muted-foreground">
-            Toate atribuirile membrului, inclusiv cele încheiate și evaluările
-            anulate.
-          </p>
-        </div>
+    <Page>
+      <BackToClasament />
+      <PageHeader
+        eyebrow="OSUBB · Conducere"
+        title="Trackerul membrului"
+        description="Toate atribuirile membrului, inclusiv cele încheiate și evaluările anulate."
+      />
+      <Panel aria-label="Membru">
         <MemberSummary memberId={memberId} />
-      </header>
-      <section
-        aria-label="Filtre tracker"
-        className="rounded-xl border border-border bg-card p-4"
-      >
+      </Panel>
+      <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre tracker">
         {options.isPending ? (
-          <p role="status">Se încarcă filtrele…</p>
+          <Loading label="Se încarcă filtrele…" />
         ) : options.isError ? (
-          <div role="alert">
-            <p>Nu am putut încărca filtrele.</p>
-            <Button variant="outline" onClick={() => options.refetch()}>
-              Reîncarcă filtrele
-            </Button>
-          </div>
+          <ErrorState
+            error={options.error}
+            text="Nu am putut încărca filtrele."
+            retryLabel="Reîncarcă filtrele"
+            onRetry={() => void options.refetch()}
+          />
         ) : (
           <WorkFilter
             groups={options.data.groups}
@@ -261,44 +245,45 @@ function MemberHistory({ memberId }: { memberId: string }) {
             hint="Grupul include toate subgrupurile sale. Perioada citește termenul taskului, așa că un task fără termen apare doar când perioada e goală."
           />
         )}
-      </section>
-      <section aria-labelledby="assignments-title" className="space-y-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="assignments-title" className="text-xl font-semibold">
-            Atribuiri
-          </h2>
-          {query.data && query.data.length > 0 && (
-            <p className="text-sm text-muted-foreground tabular-nums">
-              {rows.length === query.data.length
-                ? `${rows.length} ${rows.length === 1 ? 'atribuire' : 'atribuiri'}`
-                : `${rows.length} din ${query.data.length} atribuiri`}
-            </p>
-          )}
-        </div>
+      </Panel>
+      <Panel
+        eyebrow="Taskuri"
+        title="Atribuiri"
+        description={count && <span className="tabular-nums">{count}</span>}
+        bare
+      >
         {!params ? (
-          <p>Corectează perioada din filtre ca să vezi atribuirile.</p>
+          <EmptyState bare>
+            Corectează perioada din filtre ca să vezi atribuirile.
+          </EmptyState>
         ) : query.isPending ? (
-          <p role="status">Se încarcă istoricul…</p>
+          <Loading label="Se încarcă istoricul…" />
         ) : query.isError ? (
-          <div role="alert">
-            <p>Nu am putut încărca istoricul.</p>
-            <Button onClick={() => query.refetch()}>Reîncarcă istoricul</Button>
-          </div>
+          <ErrorState
+            error={query.error}
+            text="Nu am putut încărca istoricul."
+            retryLabel="Reîncarcă istoricul"
+            onRetry={() => void query.refetch()}
+          />
         ) : !groupsReady ? (
-          <p role="status">
-            {options.isError
-              ? 'Filtrul de grup se aplică după ce se încarcă filtrele.'
-              : 'Se încarcă filtrele…'}
-          </p>
+          options.isError ? (
+            <EmptyState bare role="status">
+              Filtrul de grup se aplică după ce se încarcă filtrele.
+            </EmptyState>
+          ) : (
+            <Loading label="Se încarcă filtrele…" />
+          )
         ) : !query.data.length && !ranged ? (
-          <p>Nu există atribuiri disponibile pentru acest membru.</p>
+          <EmptyState bare>
+            Nu există atribuiri disponibile pentru acest membru.
+          </EmptyState>
         ) : !rows.length ? (
-          <p>
+          <EmptyState bare>
             Nicio atribuire pentru filtrele alese. Schimbă grupul, campania sau
             perioada.
-          </p>
+          </EmptyState>
         ) : (
-          <ul className="space-y-4">
+          <ul className="m-0 list-none space-y-4 p-0">
             {rows.map((task) => (
               <li key={task.assignment_id}>
                 <TaskCard
@@ -310,8 +295,20 @@ function MemberHistory({ memberId }: { memberId: string }) {
             ))}
           </ul>
         )}
-      </section>
-    </div>
+      </Panel>
+    </Page>
+  );
+}
+
+function BackToClasament() {
+  return (
+    <Link
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-sm text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      to="/clasament"
+    >
+      <ArrowLeft aria-hidden="true" className="size-4" />
+      Înapoi la clasament
+    </Link>
   );
 }
 
@@ -322,10 +319,10 @@ export default function MemberTrackerScreen() {
       {isUuid(id) ? (
         <MemberHistory memberId={id} />
       ) : (
-        <div className="p-6">
-          <h1>Membru indisponibil</h1>
-          <Link to="/clasament">Înapoi la clasament</Link>
-        </div>
+        <Page>
+          <PageHeader eyebrow="OSUBB · Conducere" title="Membru indisponibil" />
+          <BackToClasament />
+        </Page>
       )}
     </LeadershipAccess>
   );

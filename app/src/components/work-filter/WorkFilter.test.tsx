@@ -171,6 +171,22 @@ describe('WorkFilter', () => {
     expect(screen.queryByRole('group', { name: 'Filtre active' })).toBeNull();
   });
 
+  it('hides both Group levels when the page does not filter by Group, and clearing keeps them in the URL', async () => {
+    const user = userEvent.setup();
+    renderFilter('?grup=1&subgrup=2&campanie=10', { group: false });
+    expect(
+      screen.queryByRole('combobox', { name: 'Grup principal' }),
+    ).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Subgrup' })).toBeNull();
+    const chips = screen.getByRole('group', { name: 'Filtre active' });
+    expect(within(chips).getAllByRole('button')).toHaveLength(2);
+    expect(chips).not.toHaveTextContent('Grup principal');
+    await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
+    expect(search()).toBe('?grup=1&subgrup=2');
+    // With no chip left, focus returns to the first field the page shows.
+    expect(screen.getByRole('combobox', { name: 'Campanie' })).toHaveFocus();
+  });
+
   it('labels every control, with no axe violations', async () => {
     const { container } = renderFilter(
       '?grup=1&subgrup=2&campanie=11&de_la=2026-09-15&pana_la=2026-09-01',
