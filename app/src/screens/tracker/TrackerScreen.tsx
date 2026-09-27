@@ -121,6 +121,7 @@ export default function TrackerScreen() {
   // failed Taskurile mele read never routes a Task of mine to De gestionat).
   const managedLanding =
     linkedId !== null &&
+    management.data === true &&
     mine.isSuccess &&
     !mine.data.some((task) => task.id === linkedId) &&
     managed.data?.some((task) => task.id === linkedId)
