@@ -461,6 +461,14 @@ export function GroupSettingsTab({
                         {minimumLevelText(level)}
                       </option>
                     ))}
+                  {group.application_level !== null &&
+                    !isMinimumLevel(group.application_level) && (
+                      // The stored off-ladder level (the Moderator's 9) stays
+                      // readable as the current value, never a choice (R29b).
+                      <option value={group.application_level} disabled>
+                        {minimumLevelText(group.application_level)}
+                      </option>
+                    )}
                 </select>
               </label>
               <FieldError {...settingsForm.errorProps('applicationLevel')} />

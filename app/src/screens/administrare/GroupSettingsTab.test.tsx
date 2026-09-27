@@ -359,3 +359,26 @@ it('keeps a stored Moderator level readable but never offers it as a choice (R29
     ]);
   }
 });
+
+it('keeps a stored Moderator Application Level readable but never offers it (R29b)', () => {
+  show({ application_level: 9 });
+  const select = screen.getByLabelText(
+    'Nivelul de la care se poate cere înscrierea',
+  ) as HTMLSelectElement;
+  expect(select.value).toBe('9');
+  const stored = Array.from(select.options).find((o) => o.value === '9');
+  expect(stored?.text).toBe('Moderator');
+  expect(stored?.disabled).toBe(true);
+  expect(
+    Array.from(select.options)
+      .filter((o) => !o.disabled)
+      .map((o) => o.text),
+  ).toEqual([
+    'Ca nivelul minim al grupului',
+    'Voluntar',
+    'Voluntar Activ',
+    'Voluntar cu Drept de Vot',
+    'BCE',
+    'BC',
+  ]);
+});
