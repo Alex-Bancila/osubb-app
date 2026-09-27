@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(27);
 
 
 -- ==================== Structure and grants ====================
@@ -147,6 +147,12 @@ reset role;
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":4}');
 select is((select count(*) from event_attendance),0::bigint,'level 4 cannot read colleague attendance');
 reset role;
+-- M4: the level is read from the live Profile, so a level-5 token over a vot
+-- Profile reads nothing; once the Profile really is BCE the same token reads all.
+select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
+select is((select count(*) from event_attendance),0::bigint,'a stale level-5 token over a vot Profile reads no colleague attendance');
+reset role;
+update profiles set role = 'bce' where id = 'c3000000-0000-0000-0000-000000000063';
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
 select is((select count(*) from event_attendance),4::bigint,'level 5 reads attendance across visible events');
 

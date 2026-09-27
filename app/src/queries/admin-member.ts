@@ -85,8 +85,9 @@ export function useAdminMember(memberId: string | undefined) {
 }
 
 /**
- * #675's write path for names: `profiles_update_self` lets BC and the
- * Moderator update any row, `guard_profile_privileged_columns` refuses a
+ * #675's write path for names: `profiles_update_self` lets the Moderator
+ * update any row and a BC any row below level 6 (never the Moderator's or
+ * another BC's; security pass M4), `guard_profile_privileged_columns` refuses a
  * changed full name below level 6, and `guard_profile_nickname` names the
  * reason a Nickname is refused. `.single()` requires the row back, so an RLS
  * refusal (zero rows) fails instead of looking like a save.
