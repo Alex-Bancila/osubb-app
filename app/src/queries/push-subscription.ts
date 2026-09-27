@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { reasonCopy } from '../lib/command-reasons';
+import { commandReason, reasonCopy } from '../lib/command-reasons';
 import {
   isDeviceSubscribed,
   pushSupported,
@@ -75,6 +75,9 @@ export function usePushSubscription() {
   });
 
   const failed = enableMutation.isError || disableMutation.isError;
+  // A refusal the server names -- the five-device cap, a push service it does
+  // not accept (security pass M2) -- is said as such; anything else is generic.
+  const refusal = reasonCopy(commandReason(enableMutation.error));
 
   return {
     supported,
@@ -85,7 +88,9 @@ export function usePushSubscription() {
     loading: device.isLoading,
     /** A switch change is in flight. */
     pending: enableMutation.isPending || disableMutation.isPending,
-    error: failed ? (reasonCopy('push_subscribe_failed') ?? null) : null,
+    error: failed
+      ? (refusal ?? reasonCopy('push_subscribe_failed') ?? null)
+      : null,
     enable: () => {
       disableMutation.reset();
       enableMutation.mutate();

@@ -16,7 +16,13 @@
 //                           rows cascade
 //   429 / 5xx / network  -> retry after 1, 2, 4, 8 minutes, then failed
 //   any other status     -> failed at once (400/401/403 is a VAPID or payload
-//                           fault), with the response body as last_error
+//                           fault), with the response body (its first 1 KB)
+//                           as last_error
+//
+// An endpoint off the browser vendors' push services is never fetched
+// (security pass M2): it fails as endpoint_not_allowed. push_tokens_guard
+// refuses such a registration since 20260927170000; this covers any row
+// stored before it.
 
 import { isSecretKey } from "../_shared/secret-keys.ts";
 import { InvalidSubscriptionError } from "./deps.ts";
@@ -56,6 +62,35 @@ export function classify(status: number): Outcome {
   return "failed";
 }
 
+/**
+ * The browser vendors' push services, as push_tokens_guard lists them
+ * (migration 20260927170000_push_token_limits.sql): FCM for Chrome and the
+ * Chromium browsers, Mozilla autopush, Apple, and WNS for Edge on Windows.
+ */
+const PUSH_SERVICE_HOSTS: readonly RegExp[] = [
+  /^fcm\.googleapis\.com$/,
+  /^[a-z0-9-]+(\.[a-z0-9-]+)*\.push\.services\.mozilla\.com$/,
+  /^[a-z0-9-]+(\.[a-z0-9-]+)*\.push\.apple\.com$/,
+  /^[a-z0-9-]+(\.[a-z0-9-]+)*\.notify\.windows\.com$/,
+];
+
+/**
+ * Whether send-push may POST to this endpoint: https on the default port, no
+ * user info, and a host on {@link PUSH_SERVICE_HOSTS}. Anything else would
+ * let a Member aim Supabase's egress at a host of their choosing.
+ */
+export function isPushServiceEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  return url.protocol === "https:" && url.port === "" &&
+    url.username === "" && url.password === "" &&
+    PUSH_SERVICE_HOSTS.some((host) => host.test(url.hostname));
+}
+
 function parseSubscription(token: string): PushSubscriptionJson | null {
   try {
     const value = JSON.parse(token);
@@ -89,6 +124,9 @@ async function deliver(
   if (!subscription) {
     // Never delete a Member's device over a shape this function cannot read.
     error = "invalid_subscription";
+  } else if (!isPushServiceEndpoint(subscription.endpoint)) {
+    // Never fetched: the host is not a push service (security pass M2).
+    error = "endpoint_not_allowed";
   } else {
     // The Notification's own row and nothing else (ADR-0010), in the service
     // worker's shape and, given an https app origin, the declarative one too

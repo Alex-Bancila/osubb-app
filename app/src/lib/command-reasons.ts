@@ -430,6 +430,15 @@ const REASON_COPY = new Map<string, string>([
     'push_subscribe_failed',
     'Nu am putut schimba notificările pe acest dispozitiv. Verifică internetul și încearcă din nou.',
   ],
+  /* push_tokens_guard (security pass M2) */
+  [
+    'push_devices_limit',
+    'Notificările sunt deja pornite pe 5 dispozitive, limita unui cont. Oprește-le pe un dispozitiv pe care nu îl mai folosești, apoi încearcă din nou.',
+  ],
+  [
+    'push_endpoint_unsupported',
+    'Browserul acesta folosește un serviciu de notificări pe care aplicația nu îl acceptă. Încearcă din Chrome, Firefox, Safari sau Edge.',
+  ],
   /* ---- Push preferences (#635) ---- */
   /* browser */
   [

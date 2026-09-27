@@ -287,6 +287,31 @@ describe('usePushSubscription', () => {
     expect(result.current.subscribed).toBe(false);
   });
 
+  it.each([
+    [
+      'push_devices_limit',
+      'Notificările sunt deja pornite pe 5 dispozitive, limita unui cont. Oprește-le pe un dispozitiv pe care nu îl mai folosești, apoi încearcă din nou.',
+    ],
+    [
+      'push_endpoint_unsupported',
+      'Browserul acesta folosește un serviciu de notificări pe care aplicația nu îl acceptă. Încearcă din Chrome, Firefox, Safari sau Edge.',
+    ],
+  ])(
+    'says the %s refusal in Romanian (security pass M2)',
+    async (reason, copy) => {
+      supabaseMock.insert.mockResolvedValue({
+        error: { code: '23514', message: reason },
+      });
+      const { result } = renderHook(() => usePushSubscription(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      act(() => result.current.enable());
+
+      await waitFor(() => expect(result.current.error).toBe(copy));
+      expect(result.current.subscribed).toBe(false);
+    },
+  );
+
   it('disable unsubscribes and deletes this device row', async () => {
     browser.current = browser.subscription;
     rowPresent(true);
