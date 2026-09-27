@@ -317,8 +317,23 @@ Deno.test("classify", () => {
     outcome: "deferred",
     stop: "provider_auth",
   });
-  assertEquals(classify({ status: 409, body: "" }).outcome, "failed");
+  assertEquals(classify({ status: 422, body: "" }).outcome, "failed");
   assertEquals(classify({ status: 500, body: "" }).outcome, "retry");
+});
+
+Deno.test("Resend's idempotency 409 settles sent without an id, so the slot stays spent", async () => {
+  const { deps, settled } = fakeDeps({
+    queue: [row(1)],
+    answer: () => ({
+      status: 409,
+      body: '{"name":"invalid_idempotent_request"}',
+    }),
+  });
+  const response = await handleSendDigest(post(), deps);
+  assertEquals(response.status, 200);
+  assertEquals(settled.map((s) => [s.outcome, s.providerId]), [
+    ["sent", null],
+  ]);
 });
 
 Deno.test("a claim failure is a 500 without the database's message", async () => {

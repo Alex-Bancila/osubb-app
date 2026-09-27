@@ -76,13 +76,14 @@ A Member who turns on **Rezumat zilnic pe email** in Profil gets, at most once a
 5. **The email.** Romanian, plain text plus HTML: "Ai N notificări necitite", then one line per Notification (title, Bucharest time, the start of its text, its link; at most the 20 newest, with "Și încă M în aplicație" for the rest), a button to `/notificari` and the opt-out line. Every title, text and Nickname is HTML-escaped, and a stored link that would leave the app opens `/notificari` instead. It is sent through the Resend API (`POST https://api.resend.com/emails`) from `EMAIL_FROM`, with the `Idempotency-Key` `osubb-digest-<id>`, so Resend never accepts the same digest twice.
 6. **The outcome**, recorded with `public.settle_email_digest`:
 
-| Resend answer                                                 | Outcome                                                                                            |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `2xx`                                                         | `sent`; Resend's email id kept as `provider_id`                                                    |
-| `429` `daily_quota_exceeded` / `monthly_quota_exceeded`       | back to `pending` for 07:00 the next day, the attempt not counted; the rest of the run is deferred |
-| `401`, `403` (a wrong key, or a sender domain not verified)   | the same, and the function answers `502`                                                           |
-| `429` rate limit, `5xx`, network error                        | retried one hour, then two hours later; the third failure is `failed`                              |
-| anything else (`400`, `409` idempotency, `422` a bad address) | `failed` at once, Resend's answer kept in `last_error`                                             |
+| Resend answer                                               | Outcome                                                                                            |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `2xx`                                                       | `sent`; Resend's email id kept as `provider_id`                                                    |
+| `429` `daily_quota_exceeded` / `monthly_quota_exceeded`     | back to `pending` for 07:00 the next day, the attempt not counted; the rest of the run is deferred |
+| `401`, `403` (a wrong key, or a sender domain not verified) | the same, and the function answers `502`                                                           |
+| `429` rate limit, `5xx`, network error                      | retried one hour, then two hours later; the third failure is `failed`                              |
+| `409` (Resend's idempotency guard)                          | `sent` without a `provider_id`: an earlier attempt already reached Resend, so the slot stays spent |
+| anything else (`400`, `422` a bad address)                  | `failed` at once, Resend's answer kept in `last_error`                                             |
 
 The 07:00 run deletes finished digests (`sent`, `failed`, `skipped`) older than 30 days.
 

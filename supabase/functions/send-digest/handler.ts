@@ -26,10 +26,11 @@
 //   429 rate limit / 5xx /
 //   network                 -> retry one, then two hours later; the third
 //                              failure is failed
-//   anything else (400/409/
-//   422)                    -> failed at once; 409 is Resend's idempotency
-//                              guard (an earlier attempt of this digest
-//                              reached it), so there is never a second email
+//   409                     -> sent, without an id: Resend's idempotency guard
+//                              says an earlier attempt of this digest already
+//                              reached it, so the email exists and keeps
+//                              counting against the quota; never a second one
+//   anything else (400/422) -> failed at once
 
 import { isSecretKey } from "../_shared/secret-keys.ts";
 import type {
@@ -95,6 +96,10 @@ export function classify(response: ProviderResponse): Classified {
     return { outcome: "deferred", stop: "provider_auth" };
   }
   if (status >= 500) return { outcome: "retry", stop: null };
+  // Resend already holds an email under this digest's idempotency key (an
+  // attempt that timed out after Resend accepted it, retried with a body
+  // changed since). Settled sent, so its quota slot is not handed out again.
+  if (status === 409) return { outcome: "sent", stop: null };
   return { outcome: "failed", stop: null };
 }
 
