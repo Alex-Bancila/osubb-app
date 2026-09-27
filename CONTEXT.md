@@ -342,35 +342,35 @@ _Avoid_: Promote to production, deploy (in the sense of production), push to pro
 
 Where a term above is not spelled the same way in the schema. Use the Term in prose and Romanian copy; use the identifier in code, migrations, issues, and tests. Read from `supabase/migrations/0001_core_schema.sql` unless noted otherwise.
 
-**Department id → name**:
-`edu` → Educațional (the identifier never carries the diacritic; only the display name does — corrected in `supabase/migrations/20260911004317_educational_display_name.sql`) · `pr` → Imagine & PR · `youth` → Tineret · `fin` → Financiar · `hr` → Resurse Umane · `diverse` → Diverse · `secretariat` → Secretariat. `it` is retired (`supabase/migrations/20260910173341_departments_diverse_secretariat.sql` folds it into `diverse`) — don't reuse it for a new Department Team.
-
 **`activ` as a Role vs. `activ` as a Status**:
 Two different columns share this identifier. `profiles.role = 'activ'` is the Role Voluntar Activ (`member_role` enum, level 2); `profiles.status = 'activ'` is the Membership Status active (`member_status` enum). A row can be `role = 'activ', status = 'inactiv'` — a Membru Activ who is not currently active — so never assume one from the other.
 
 **`profiles` rows are Members**:
-`public.profiles` is the Member table; there is no separate `members` table. Every `member_id` column elsewhere is a foreign key to `profiles (id)`, not to an identity table of its own — see `points_ledger.member_id`, `notifications.member_id`, `project_members.member_id`, and the rest.
-
-**`event_scope` ↔ Event Origin**:
-The legacy enum backing an Event's Origin: `org`, `dept`, `team`, or `project`. The Group model replaces the four values with the owning Group, the Organization Group standing in for `org`. From Wave 2 the enum is derived by trigger from `events.group_id` — no command writes `scope` any more — and it is dropped, with the enum itself, in Wave 3.
+`public.profiles` is the Member table; there is no separate `members` table. Every `member_id` column elsewhere is a foreign key to `profiles (id)`, not to an identity table of its own — see `points_ledger.member_id`, `notifications.member_id`, `group_members.member_id`, and the rest.
 
 **`noti_kind` ↔ Notification kind**:
 The enum distinguishing what a Notification is about: `announce`, `deadline`, `event`, `task`, or `system`.
 
 **`roles.id` → Role display name**:
-`recrut` → Recrut · `voluntar` → Voluntar · `activ` → Voluntar Activ · `vot` → Voluntar cu Drept de Vot · `responsabil` → retired: level 4 is no longer a rank, and Responsabil de Proiect is a Group Role · `bce` → BCE · `bc` → BC · `moderator` → Moderator.
+`recrut` → Recrut · `voluntar` → Voluntar · `activ` → Voluntar Activ · `vot` → Voluntar cu Drept de Vot · `bce` → BCE · `bc` → BC · `moderator` → Moderator.
 
 **Group → `groups`; Group Role → `group_members.group_role`**:
-`group_members.group_role` spells the three Group Roles as `manager` → Group Manager, `responsible` → Group Responsible, and `member` → ordinary membership. `groups.category` is the Group Category (Department, Project, Team, or the one Organization root); `groups.path` is the root-first ancestor chain, ending in the row's own id. The Wave 1 backfill keys (`legacy_dept_id` / `legacy_team_id` / `legacy_project_id`) were dropped in Wave 3 (#591); a Group is identified by its id, and sibling names are unique across every Group.
+`group_members.group_role` spells the three Group Roles as `manager` → Group Manager, `responsible` → Group Responsible, and `member` → ordinary membership. `groups.category` is the Group Category (Department, Project, Team, or the one Organization root); `groups.path` is the root-first ancestor chain, ending in the row's own id. The Wave 1 backfill keys (`legacy_dept_id` / `legacy_team_id` / `legacy_project_id`) were dropped in Wave 3 (#591); a Group is identified by its id, and sibling names are unique across every Group. The `departments`/`teams`/`projects` tables themselves, and their roster tables, were dropped in #590 — there is no legacy row left for a Group to mirror.
 
-**Organization Group → the `groups` row with `is_organization = true`**:
-The root Group named OSUBB, with `automatic_membership = true` so every active Member belongs to it. Never the `departments` row itself, which is the legacy row this Group mirrors, not the Group. It is also `create_event`'s organization rule: an organization-wide Event is one created with this row's id as `p_group_id`, which any holder of a Group Role anywhere may do, and which only its creator or BC/Moderator may then `update_event` or `cancel_event`.
+**Organization Group → `groups.is_organization`**:
+Exactly one active root Group carries this marker. Its Automatic Membership and Minimum Level zero make every active Member part of its audience. Calendar commands use the marker, never the Group's name or category: any holder of a Group Role may create its Events, while only the creator or BC/Moderator may edit or cancel them.
+
+**Application → `group_applications`**:
+A pending request to join a Group, resolved through `apply_to_group`, `withdraw_group_application`, and `decide_group_application`. Acceptance uses the shared Appointment core.
+
+**Role and Membership Status History → `role_history`**:
+An audit row for each organizational Role or Membership Status change, with the actor and optional reason. Historical rank names are retained even when a rank is retired; new Role commands accept only the seven live ranks.
 
 **Group settings → `groups` columns**:
-Minimum Level → `groups.min_level` · Application Level → `groups.application_level` · Shared Work Visibility → `groups.shared_work_visibility` · Automatic Membership → `groups.automatic_membership` · the Group Manager's display name → `groups.manager_title` · the two Department Cup settings → `groups.competes_in_cup` and `groups.counts_toward_parent_cup`. Wave 2 reads all of them; until Wave 3 ships the Group commands, only a migration, a mirror, or a rolled-back test fixture writes one.
+Minimum Level → `groups.min_level` · Application Level → `groups.application_level` · Shared Work Visibility → `groups.shared_work_visibility` · Automatic Membership → `groups.automatic_membership` · the Group Manager's display name → `groups.manager_title` · the two Department Cup settings → `groups.competes_in_cup` and `groups.counts_toward_parent_cup`. The Group structure and settings commands own these writes; the browser never updates the table directly.
 
 **`group_ids` claim**:
 The organization claim listing the Groups a Member explicitly belongs to, via `group_members` rows only, memberships of archived Groups included — Automatic Membership is derived from Role and Minimum Level and is never in the token. It is the only roster claim: the `dept_ids`/`team_ids` claims were removed in #591.
 
 **Work ownership → `group_id`**:
-`tasks.group_id`, `events.group_id`, `campaigns.group_id`, and `completed_work_requests.group_id` name one owning Group. Wave 2's two-way Origin triggers keep the legacy columns consistent until Wave 3 removes them. Organization-wide Events belong to the Organization Group (`groups.is_organization = true`); an organization-wide Task Audience opens an Opportunity beyond its owning Group and does not move its Origin.
+`tasks.group_id`, `events.group_id`, `campaigns.group_id`, `completed_work_requests.group_id`, and `announcements.group_id` name one owning Group. Organization-wide Events use the Organization Group marker; an organization-wide Task or Announcement Audience opens visibility beyond its owning Group without changing its Origin.

@@ -23,7 +23,7 @@
 
 Before this decision, the completed Tracker backend repeated authority rules across three structures. Departments, Teams, and Projects are three tables with three roster tables, and the `private` helpers deciding who may read, manage, or evaluate a Task carried a `dept_id / team_id / project_id` branch; migrations and pgTAP suites repeated the shape. Adding the Adunarea Generală, Project teams, or any body OSUBB invents next means new tables and new branches in every helper.
 
-The vocabulary is also split. `responsabil` is a global rank at level 4 in `member_role`, and `responsible` is a per-Project role in `project_members`; Events gate "Responsible+" on the rank while the Tracker gates on the Project role. The Department Cup depends on `departments.kind`, Campaigns are Department-only, and organization-wide Events hang off an `org` pseudo-department row.
+Before Groups, a global rank and a per-Project position used similar names but granted different powers. Calendar and Tracker authority therefore disagreed, Cup participation depended on a Department classification, and Campaigns were Department-only. The decisions below replace those separate rules with Group settings and Group Roles.
 
 Alex asked for a generalization: everything in OSUBB works under the umbrella of a Group, created and constrained by BC, with one set of rules.
 
@@ -110,9 +110,9 @@ One "Administrare" area, scoped by authority. BC and Moderator see the whole Gro
 
 ### Other rulings
 
-- Interne's duty of tracking AG eligibility is expressed by appointing its members Group Responsibles of the Adunarea Generală; the `is_interne` flag is retired. Interne itself stays a Department Team of Diverse.
-- Diverse and Secretariat are Departments whose Cup setting is off; `departments.kind` has no successor.
-- A Member with the retired `responsabil` rank is re-ranked by BC before the value is dropped; the migration refuses to run while a holder remains.
+- Interne's duty of tracking AG eligibility is expressed by appointing its members Group Responsibles of the Adunarea Generală; the dedicated team flag is retired. Interne itself stays a Department Team of Diverse.
+- Diverse and Secretariat are Departments whose Cup setting is off; no separate Department classification remains.
+- A Member with the retired level-4 rank is re-ranked by BC before the value is dropped; the migration refuses to run while a holder remains.
 
 ### Migration
 
@@ -120,18 +120,18 @@ A strangler in three waves, every PR merged green, each wave its own plan:
 
 1. **Wave 1 — schema.** Add `groups`, `group_members` with the Group Role, the settings above, and the Organization Group; backfill from `departments`, `teams`, `projects`, `member_departments`, `team_members`, and `project_members`; keep those tables as the write master, mirrored one way into `groups`/`group_members` by triggers (no compatibility views); add `group_ids` to the organization claims. Wave 1's `groups_read` publishes every active Group to every Member at or above its Minimum Level, which for the backfilled rows is 0 — so Team and Project names become organization-visible before Wave 2 re-expresses `teams_read`/`projects_read`, and Team/Project rosters become visible to rank BCE. Accepted: it is ADR-0009's end state and the shadow carries no personal data beyond membership.
 2. **Wave 2 — authority and commands (implemented by #519–#524, #370, and #248).** Tracker authority and command decisions read Group Roles, paths, and settings; legacy Origin signatures remain compatibility inputs. `tasks`, `events`, `campaigns`, and `completed_work_requests` carry `group_id` with two-way Origin-sync triggers. Campaigns are owned by any Group, leadership filters include descendants, Department Cup follows settings at every ancestor link, and Calendar creation/update/cancellation use Group authority. `conventions.test.sql` enforces the category-word boundary; the 23-step smoke test exercises allowed and refused Group behavior. This closeout branch contains the implementation; consult the PR graph before treating the entire stack as merged to `main`.
-3. **Wave 3 — Group administration and cleanup (next).** Ship Group settings/roster/appointment/application commands and the Administrare surface, finish moving frontend consumers to Groups, then remove compatibility signatures, legacy structure/Origin columns and tables, mirror and bridge triggers, `groups.legacy_*`, the `event_scope` enum, and the retired level-4 rank. Regenerate database types from the resulting schema.
+3. **Wave 3 — Group administration and cleanup.** Group settings, roster, Appointment and Application commands replace the former structure writes. The cleanup stack removes compatibility storage, bridge and mirror code, and the retired rank, and regenerates types.
 
 ## Consequences
 
 - One roster and one authority helper family replace three; a new kind of body is a row, not a migration.
 - Groups nest to any depth, so authority, visibility, Campaign tagging, and Cup attribution walk the ancestor chain. Wave 1 stores each Group's ancestor path and forbids cycles; the helpers read that path rather than recursing per row.
-- Until Wave 3 dedupes legacy names, the sibling-name rule binds native Groups only.
+- Every sibling name is unique case-insensitively; the cleanup preflight refuses collisions rather than silently renaming Groups.
 - ADR-0007, ADR-0008, and ADR-0004 are amended by reference in their headers; `CONTEXT.md` is updated in the same change; house rule 13 in `CLAUDE.md` names this ADR.
 - The pinned `private` roster, the claimless sweep, the points authorization matrix (#262), and the actor-helper suites now prove the Wave 2 matrix; the Tracker smoke script exercises four additional Group scenarios.
 - `capabilities.ts` loses `manageTasks: 4`; management controls render from server capability rows, as the 2026-09-18 Tracker plan already requires.
 - Issues to reframe: #47, #48, #49–#52 on Evaluation Periods; #66 on the Adunarea Generală roster; #103, #105, #107 into Administrare; #354 filters by Group; #248 and #370 by Group Role; #160 becomes a Wave 1 prerequisite. New issues are filed per wave.
-- Until Wave 3 lands, code still speaks `dept_id / team_id / project_id`; new authority written in the meantime must read Groups, never add a fourth branch.
+- All authority reads Group settings and Group Roles. No additional Origin branch is permitted.
 
 ## Amendment (2026-09-20) — rulings from the Wave 3 grilling
 
@@ -154,3 +154,11 @@ Each ruling below closes a gap the Wave 3 issue graph exposed. None changes the 
 **`my_groups()` reports effective Group Roles.** Because authority flows down, a Member's Groups include every Group below one they manage, with the Group Role they effectively hold there and a flag saying whether it comes from their own roster row. It lists only Groups the Member may read, so no picker ever offers a Group the Member is below.
 
 **Provisioning and the first accounts.** Provisioning appoints a new Member's initial Groups through the same Appointment core the roster commands use, attributed to the inviting BC or Moderator; the CSV names a Group by its short name or its display name. The first accounts on a fresh production database, the Moderator's among them, are created once by a service-role bootstrap script; every later account comes through Administrare.
+
+## Amendment (2026-09-24) — Wave 3 implementation
+
+The Organization Group is the one row marked `groups.is_organization` (R1). Colour and short name were existing columns and are structural settings, not new identity keys (R2). Decision 5 separates BC/Moderator's structural settings from the Group Managers' operational settings; `private.require_group_manager` gates structure and never grants a Group Responsible structural power.
+
+`archive_group` refuses an open Task or pending Request anywhere below the Group, then archives the whole subtree and cancels its future Events through the shared cancellation effect. The parent is immutable. Parent/Umbrella locks are `FOR NO KEY UPDATE`: upgrading a share lock to an update lock can deadlock against a command that already holds the parent and needs the roster row.
+
+The mirror is gone, so rank and Group Role are independent (R15). Human re-ranking is #592; #593 refuses any remaining holder before retiring the live rank. Historical Role History retains old labels without keeping the retired value in the live enum. The public command smoke now creates a native root, appoints its Manager, creates a child, accepts an Application, and creates a Task.

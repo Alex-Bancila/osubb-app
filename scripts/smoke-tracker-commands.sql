@@ -23,7 +23,7 @@
 --
 -- The whole script runs inside ONE transaction and ends in ROLLBACK, so it
 -- leaves the seeded database byte-identical. Work changes use public wrappers;
--- step 23 alone prepares a rolled-back Group setting fixture under OD9.
+-- every successful structure, roster and work change uses a public command.
 --
 -- It is deliberately NOT a pgTAP suite: every check is a `raise exception` via
 -- pg_temp.smoke_assert, so the FIRST wrong step aborts with a named message
@@ -45,8 +45,9 @@
 -- Manager (Coordonator) runs a Project Task end to end and creates one by
 -- Group id alone; a Group Responsible is refused on the Manager's Task and
 -- allowed on an ordinary member's; Independent-Team peers manage each other's
--- Tasks while only BC evaluates them; and a Group's Minimum Level hides an
--- organization-wide Opportunity from a member of that very Group. The
+-- Tasks while only BC evaluates them; and, since #794 (ruling R26), an
+-- organization-wide Opportunity reaches Members below its Group's Minimum
+-- Level while a local one stays with the Group's members. The
 -- refusals in those steps pin the reason string, not just 42501 -- see
 -- pg_temp.smoke_refused.
 --
@@ -67,7 +68,7 @@
 --                          account is the only manager an `edu` Task has.
 --   d0000000-...-0002  voluntar@demo.osubb   Ioana Popescu     voluntar, edu
 --                       -> the Candidate the manager selects as Executor.
---   d0000000-...-0005  responsabil@demo.osubb Raluca Ionescu   responsabil, edu
+--   d0000000-...-0005  responsabil@demo.osubb Raluca Ionescu   Voluntar cu Drept de Vot, edu
 --                       -> the second interested member (queue), and the
 --                          Executor of the Subtask that gets cancelled.
 --
@@ -986,76 +987,84 @@ select pg_temp.smoke_assert(
      from public.tasks where id = :pair_task),
   'step 22: the peer manages a non-BC teammate on a Group-side Independent-Team Task');
 
--- ==================== step 23: Group Minimum Level hides and closes an org Opportunity ====================
+-- ==================== step 23: Task visibility follows the Audience, not the Minimum Level ====================
+-- #794 (ruling R26, ADR-0007 amended 2026-09-25): an open public Opportunity
+-- whose Audience is `org` is visible to, and joinable by, every active Member
+-- whatever its Group's Minimum Level; a `local` one stays with the Group's
+-- members. BC raises the Group's Minimum Level first, so both halves are
+-- proved on a Group the outsiders are below.
 select id as gated_group from public.groups
 where name = 'Festivalul Studențesc 2026'
   and created_by = 'd0000000-0000-0000-0000-000000000007' \gset
 select id as coordinator from public.profiles where email = 'responsabil@demo.osubb' \gset
 select id as below_minimum from public.profiles where email = 'voluntar@demo.osubb' \gset
 select id as eligible from public.profiles where email = 'vot@demo.osubb' \gset
--- OD9: only fixture setup changes a Group setting directly, as owner, inside this rollback.
--- Wave 3 owns the public Group settings commands; all work below uses existing public commands.
-update public.groups set min_level = 3, application_level = 3 where id = :gated_group;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select public.update_group(id,name,manager_title,accepts_applications,3,shared_work_visibility,3,
+  application_form_label,application_form_url,p_confirm_removals => true)
+from public.groups where id=:gated_group;
+reset role;
 select pg_temp.test_login_leadership(:'coordinator');
-select public.create_task('SMOKE Gated org Opportunity', 'Minimum Level proof', now() + interval '5 days',
+select public.create_task('SMOKE Gated org Opportunity', 'Audience proof', now() + interval '5 days',
   'org', 'public', p_group_id => :gated_group);
+select public.create_task('SMOKE Gated local Opportunity', 'Audience proof', now() + interval '5 days',
+  'local', 'public', p_group_id => :gated_group);
 reset role;
 select id as gated_task from public.tasks where title = 'SMOKE Gated org Opportunity' \gset
+select id as local_task from public.tasks where title = 'SMOKE Gated local Opportunity' \gset
 create function pg_temp.smoke_hidden_interest(p_task bigint) returns void language plpgsql as $$
 begin
   begin
     perform public.express_task_interest(p_task);
   exception when sqlstate 'PT404' then
     if sqlerrm <> 'task_not_found' then raise; end if;
-    raise notice 'ok: step 23: below-Minimum-Level interest refused as task_not_found';
+    raise notice 'ok: step 23: interest in another Group''s local Opportunity refused as task_not_found';
     return;
   end;
-  raise exception 'SMOKE FAILED: step 23 below-Minimum-Level interest succeeded';
+  raise exception 'SMOKE FAILED: step 23 interest in another Group''s local Opportunity succeeded';
 end;
 $$;
 select pg_temp.test_login_leadership(:'below_minimum');
-select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 0,
-  'step 23: below-Minimum-Level member cannot discover the org Opportunity');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 1,
+  'step 23: a Member below the Group''s Minimum Level still discovers its org Opportunity (R26)');
+select public.express_task_interest(:gated_task);
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :local_task), 0,
+  'step 23: a non-member cannot discover the Group''s local Opportunity');
 -- A hidden Task must answer the same as an unknown Task, rather than leak its audience.
-select pg_temp.smoke_hidden_interest(:gated_task);
+select pg_temp.smoke_hidden_interest(:local_task);
 reset role;
 select pg_temp.smoke_assert(
-  not exists (select 1 from public.task_assignments where task_id = :gated_task)
-  and not exists (select 1 from public.task_candidates where task_id = :gated_task),
+  not exists (select 1 from public.task_assignments where task_id = :local_task)
+  and not exists (select 1 from public.task_candidates where task_id = :local_task),
   'step 23: refused interest writes neither Assignment nor Candidature');
 select pg_temp.test_login_leadership(:'eligible');
 select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 1,
-  'step 23: eligible outsider can discover the org Opportunity');
+  'step 23: an eligible outsider discovers the org Opportunity');
 select public.express_task_interest(:gated_task);
 reset role;
 select pg_temp.smoke_assert(
-  (select count(*) = 1 from public.task_candidates
-   where task_id = :gated_task and member_id = :'eligible' and status = 'pending')
+  (select count(*) = 2 from public.task_candidates
+   where task_id = :gated_task and member_id in (:'below_minimum', :'eligible') and status = 'pending')
   and not exists (select 1 from public.task_assignments where task_id = :gated_task),
-  'step 23: eligible outsider joins the Candidate Queue through the public command (#682: no Executor by arrival)');
+  'step 23: both outsiders join the Candidate Queue through the public command (#682: no Executor by arrival)');
 
--- ---- step 23, continued: it really is the Minimum Level doing the hiding ----
--- Two facts turn "one member saw nothing" into a proof about the setting:
--- the member who sees nothing is an explicit member of the owning Group (so
--- membership is not what is missing), and the member who sees it is NOT
--- (so it is the org Audience, at or above the Minimum Level, that opens it).
+-- ---- step 23, continued: the Minimum Level still governs the roster ----
 select pg_temp.smoke_assert(
-  exists (select 1 from public.group_members
+  not exists (select 1 from public.group_members
            where group_id = :gated_group and member_id = :'below_minimum'),
-  'step 23: the member who cannot see the Opportunity belongs to the owning Group');
+  'step 23: confirmed Minimum-Level raise removed the ineligible membership');
 select pg_temp.smoke_assert(
   not exists (select 1 from public.group_members
                where group_id = :gated_group and member_id = :'eligible'),
-  'step 23: the member who can see it belongs to the Group only through the org Audience');
--- The brief's own persona: a Recrut, level 0, four levels under the fixture.
+  'step 23: the eligible Member sees the Opportunity only through its org Audience');
 select id as recruit from public.profiles where email = 'recrut@demo.osubb' \gset
 select pg_temp.test_login_leadership(:'recruit');
-select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 0,
-  'step 23: a Recrut cannot discover the gated org Opportunity either');
+select pg_temp.smoke_eq((select count(*)::int from public.tasks where id = :gated_task), 1,
+  'step 23: a Recrut discovers the org Opportunity too');
 select pg_temp.smoke_refused(
-  format('select public.express_task_interest(%s)', :gated_task),
+  format('select public.express_task_interest(%s)', :local_task),
   'PT404', 'task_not_found',
-  'step 23: a Recrut''s interest is refused as task_not_found, not as a denial');
+  'step 23: a Recrut''s interest in the local Opportunity is refused as task_not_found, not as a denial');
 reset role;
 
 -- ==================== step 24: a Private Group hides its work until Appointment ====================
@@ -1109,15 +1118,57 @@ select pg_temp.smoke_assert(
            where task_id = :private_task and member_id = :'eligible' and status = 'pending'),
   'step 24: the appointed Member queues for the Private Group''s Opportunity');
 
+-- ==================== step 25: a native Group end to end ====================
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select (public.create_group('SMOKE native root','department')).id as native_root \gset
+select public.set_group_role(:native_root,'d0000000-0000-0000-0000-000000000005','manager');
+reset role;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
+select (public.create_group('SMOKE native child','team',:native_root,1)).id as native_child \gset
+select public.update_group(:native_child,'SMOKE native child','Coordonator',true,1,true,1,null,null);
+reset role;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
+select (public.apply_to_group(:native_child,'SMOKE application')).id as native_application \gset
+reset role;
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
+select public.decide_group_application(:native_application,true,'SMOKE accepted');
+select (public.create_task('SMOKE native Group Task','Created through native wrappers',now()+interval '7 days',
+ 'local','direct',p_executor_id=>'d0000000-0000-0000-0000-000000000002',p_group_id=>:native_child)).id as native_task \gset
+reset role;
+select pg_temp.smoke_assert(
+ exists(select 1 from public.group_members where group_id=:native_root and member_id='d0000000-0000-0000-0000-000000000005' and group_role='manager')
+ and exists(select 1 from public.groups where id=:native_child and parent_id=:native_root)
+ and exists(select 1 from public.group_applications where id=:native_application and status='accepted')
+ and exists(select 1 from public.group_members where group_id=:native_child and member_id='d0000000-0000-0000-0000-000000000002')
+ and exists(select 1 from public.tasks where id=:native_task and group_id=:native_child),
+ 'step 25: native Group, Manager, Child Group, accepted Application and Task all use public wrappers');
+
+select pg_temp.smoke_eq((select count(*)::int from public.groups where is_organization),1,
+ 'Wave 3: exactly one Organization marker');
+select pg_temp.smoke_assert(not exists(select 1 from information_schema.tables
+ where table_schema='public' and table_name in ('departments','teams','projects','member_departments','team_members','project_members')),
+ 'Wave 3: former structure and roster storage is absent');
+select pg_temp.smoke_assert(not exists(select 1 from information_schema.columns
+ where table_schema='public' and table_name='groups' and column_name like 'legacy_%'),
+ 'Wave 3: Group backfill keys are absent');
+-- Only the SET list counts: each UPDATE of public.groups up to its `;`, cut
+-- at its WHERE, so a filter on parent_id is not read as an assignment.
+select pg_temp.smoke_assert(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+ cross join lateral regexp_matches(p.prosrc,
+   'update[[:space:]]+public[.]groups[[:space:]]+((as[[:space:]]+)?[a-z_][a-z0-9_$]*[[:space:]]+)?set([^;]*)', 'gi') as m
+ where n.nspname in ('public','private')
+   and split_part(lower(m[3]), 'where', 1) ~ '(^|[^a-z_.])parent_id[[:space:]]*='),
+ 'Wave 3: no live function reparents a Group');
+
 -- ==================== done ====================
 
 do $$
 begin
   raise notice '';
   raise notice '================ SMOKE TEST PASSED ================';
-  raise notice 'All 24 work scenarios ran through public wrappers;';
+  raise notice 'All 25 work scenarios ran through public wrappers;';
   raise notice 'authenticated could not write Task or Group tables directly.';
-  raise notice 'Only the step 23 OD9 fixture used an owner-written Group setting.';
+  raise notice 'All successful Group, roster, Application and work writes used public wrappers.';
   raise notice 'Rolling back -- the database is unchanged.';
 end;
 $$;

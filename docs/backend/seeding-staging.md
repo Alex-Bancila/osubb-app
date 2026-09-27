@@ -79,20 +79,20 @@ The demo dataset is built on the normalized Tracker model (ADR-0007) and carries
 - **Lifecycle** — `todo`, `in_progress`, `in_review` after one round of feedback (`review_round = 1`), `completed` on time, `completed` late, `unfulfilled` at Rating 1 (a **negative** ledger row), and `cancelled` with a reason.
 - **The awkward ones** — a Task evaluated, reopened and evaluated again (a reversed Evaluation, a `task_reversal` ledger row and a second Evaluation on a second Assignment); an Umbrella whose three Subtasks are completed, in progress and cancelled; a Task duplicated from the unfulfilled one (same title, `duplicated_from_task_id` set); and completed-work requests in all three states, the approved one naming the Task its approval created.
 
-Because the seed runs as the table owner with no `auth.uid()`, it cannot call the commands — it writes every row by hand. `supabase/tests/demo_seed.test.sql` is what proves the commands _could_ have produced the result: it checks the Evaluation/ledger/Assignment triple on every completed Task, the Queue-closed-before-terminal rule, the `assignment_id` stamping rule on activity rows, and that every Task's creator is somebody `private.require_origin_manager` would have accepted.
+The seed builds Group structure and rosters through the public commands. Its owner-run work-history fixtures are checked against the same invariants as command-produced data. `supabase/tests/demo_seed.test.sql` is what proves the commands _could_ have produced the result: it checks the Evaluation/ledger/Assignment triple on every completed Task, the Queue-closed-before-terminal rule, the `assignment_id` stamping rule on activity rows, and that every Task's creator is somebody `private.require_group_work_manager` would have accepted.
 
 Then sign in to the app as two different demo accounts and confirm the screens differ. All eight use the password `parola123`:
 
-| Email                    | Role                     | Level | Good for showing                                         |
-| ------------------------ | ------------------------ | ----- | -------------------------------------------------------- |
-| `recrut@demo.osubb`      | Recrut                   | 0     | the smallest view: 6 events, 6 tasks                     |
-| `voluntar@demo.osubb`    | Voluntar                 | 1     | a normal member with points, a team and 8 visible tasks  |
-| `activ@demo.osubb`       | Voluntar Activ           | 2     | a sanction on the ledger, and a Project Responsible      |
-| `vot@demo.osubb`         | Voluntar cu Drept de Vot | 3     | top of the leaderboard; Tineret + Secretariat            |
-| `responsabil@demo.osubb` | Responsabil de proiect   | 4     | Project lead authority — Department Tasks are not theirs |
-| `bce@demo.osubb`         | BCE                      | 5     | Diverse + Team `it`: the one BCE-managed Origin          |
-| `bc@demo.osubb`          | BC                       | 6     | everything: 7 events, 19 tasks, the BC panel             |
-| `moderator@demo.osubb`   | Moderator                | 9     | the moderation view                                      |
+| Email                    | Role                     | Level | Good for showing                                                     |
+| ------------------------ | ------------------------ | ----- | -------------------------------------------------------------------- |
+| `recrut@demo.osubb`      | Recrut                   | 0     | the smallest member view                                             |
+| `voluntar@demo.osubb`    | Voluntar                 | 1     | a normal member with points and Group memberships                    |
+| `activ@demo.osubb`       | Voluntar Activ           | 2     | a sanction on the ledger, and a Project Responsible                  |
+| `vot@demo.osubb`         | Voluntar cu Drept de Vot | 3     | Tineret + Secretariat                                                |
+| `responsabil@demo.osubb` | Voluntar cu Drept de Vot | 3     | An explicitly appointed Group Manager; the login address is retained |
+| `bce@demo.osubb`         | BCE                      | 5     | Diverse + Team `it`: the one BCE-managed Origin                      |
+| `bc@demo.osubb`          | BC                       | 6     | organization administration                                          |
+| `moderator@demo.osubb`   | Moderator                | 9     | the moderation view                                                  |
 
 ⚠️ `bce@` and `moderator@` belong to **Diverse** and Team **`it`** (issue #296), not to a delivery Department. That is deliberate and visible: `private.can_manage_origin` gives Department authority to BC/Moderator and to a **local BCE of that Department** only, so with no BCE inside `edu`/`pr`/`youth`/`fin`/`hr`, every Department Task in the demo is created and evaluated by `bc@` or `moderator@`. The other three authority branches each have exactly one demo Origin: the Department Team `it` (BCE of its parent Department), the Independent Team `t-logistica` (any active member), and the active Project (its lead and its Responsible).
 

@@ -65,10 +65,15 @@ CONTAINER="supabase_db_$(sed -n 's/^project_id = "\(.*\)"/\1/p' supabase/config.
 # shells goes through enough quoting layers that an escaped backslash is not
 # reliably still a backslash by the time the pattern is compiled.
 inlined_sql() {
-  awk -v helpers="$HELPERS" '
+  awk -v helpers="$HELPERS" -v fixtures="supabase/tests/_group_fixture_data.psql" '
     index($0, sprintf("%cir ", 92)) == 1 {
       printf "-- >>> inlined %s (psql in the container cannot see the repo)\n", helpers
-      while ((getline line < helpers) > 0) print line
+      while ((getline line < helpers) > 0) {
+        if (line == sprintf("%cir _group_fixture_data.psql", 92)) {
+          while ((getline fixture < fixtures) > 0) print fixture
+          close(fixtures)
+        } else print line
+      }
       close(helpers)
       next
     }
