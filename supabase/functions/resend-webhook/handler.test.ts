@@ -3,6 +3,7 @@
 // the one below is built at run time from a made-up string.
 
 import { assert, assertEquals } from "@std/assert";
+import { capturingErrors } from "../_shared/test-logs.ts";
 import type { HandledEvent, ResendWebhookDeps } from "./deps.ts";
 import {
   handleResendWebhook,
@@ -358,22 +359,32 @@ Deno.test("anything but POST is a 405", async () => {
   assertEquals(response.status, 405);
 });
 
-Deno.test("a missing signing secret is a 500 naming it, before any check", async () => {
+Deno.test("a missing signing secret is a 500 named in the log only, before any check", async () => {
   const deps = fakeDeps({ secret: "" });
-  const response = await handleResendWebhook(await signed(BOUNCED), deps);
+  const { result: response, logged } = await capturingErrors(async () =>
+    handleResendWebhook(await signed(BOUNCED), deps)
+  );
   assertEquals(response.status, 500);
+  // The answer reaches anyone, unauthenticated (security pass L4).
   assertEquals(await response.json(), {
-    error: "configuration",
-    problems: ["RESEND_WEBHOOK_SECRET"],
+    code: "configuration",
+    error: "The function is not configured. See its logs.",
   });
+  assertEquals(logged.includes("RESEND_WEBHOOK_SECRET"), true);
   assertEquals(deps.calls, []);
 });
 
-Deno.test("a missing project secret key is a 500 naming it", async () => {
+Deno.test("a missing project secret key is a 500 named in the log only", async () => {
   const deps = fakeDeps({ hasSecretKey: false });
-  const response = await handleResendWebhook(await signed(BOUNCED), deps);
+  const { result: response, logged } = await capturingErrors(async () =>
+    handleResendWebhook(await signed(BOUNCED), deps)
+  );
   assertEquals(response.status, 500);
-  assertEquals((await response.json()).problems, ["SUPABASE_SECRET_KEYS"]);
+  assertEquals(await response.json(), {
+    code: "configuration",
+    error: "The function is not configured. See its logs.",
+  });
+  assertEquals(logged.includes("SUPABASE_SECRET_KEYS"), true);
 });
 
 // ==================== Helpers ====================

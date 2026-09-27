@@ -2,7 +2,12 @@ import type {
   InviteMemberInput,
   InviteMemberResult,
 } from "../_shared/member-invite.ts";
-import { corsHeaders, isAllowedOrigin, json } from "../_shared/cors.ts";
+import {
+  corsHeaders,
+  isAllowedOrigin,
+  json,
+  refusal,
+} from "../_shared/cors.ts";
 import {
   parseRecruitsCsv,
   ParseRecruitsCsvError,
@@ -42,22 +47,24 @@ export async function handleCsvImport(
     return new Response("ok", { headers: corsHeaders(origin) });
   }
   if (request.method !== "POST") {
-    return json({ error: "Use POST." }, 405, origin);
+    return refusal("method_not_allowed", "Use POST.", 405, origin);
   }
   if (
     !(request.headers.get("Content-Type") ?? "").toLowerCase().startsWith(
       "application/json",
     )
   ) {
-    return json(
-      { error: "Folosește Content-Type: application/json." },
+    return refusal(
+      "unsupported_media_type",
+      "Folosește Content-Type: application/json.",
       415,
       origin,
     );
   }
   if (!(request.headers.get("Authorization") ?? "").startsWith("Bearer ")) {
-    return json(
-      { error: "Autentifică-te pentru a importa membri." },
+    return refusal(
+      "not_signed_in",
+      "Autentifică-te pentru a importa membri.",
       401,
       origin,
     );
@@ -66,10 +73,20 @@ export async function handleCsvImport(
   try {
     callerId = await deps.callerId();
   } catch {
-    return json({ error: "Sesiune invalidă sau expirată." }, 401, origin);
+    return refusal(
+      "session_invalid",
+      "Sesiune invalidă sau expirată.",
+      401,
+      origin,
+    );
   }
   if (!callerId) {
-    return json({ error: "Sesiune invalidă sau expirată." }, 401, origin);
+    return refusal(
+      "session_invalid",
+      "Sesiune invalidă sau expirată.",
+      401,
+      origin,
+    );
   }
   let callerLevel: number;
   try {
@@ -78,27 +95,43 @@ export async function handleCsvImport(
     console.error("csv-import authorization lookup failed", {
       errorType: error instanceof Error ? error.name : typeof error,
     });
-    return json({ error: "Nu am putut verifica permisiunile." }, 500, origin);
+    return refusal(
+      "permission_check_failed",
+      "Nu am putut verifica permisiunile.",
+      500,
+      origin,
+    );
   }
   if (callerLevel < 6) {
-    return json({ error: "Doar BC poate importa membri." }, 403, origin);
+    return refusal(
+      "member_manage_forbidden",
+      "Doar BC poate importa membri.",
+      403,
+      origin,
+    );
   }
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: "Corp de cerere invalid (JSON)." }, 400, origin);
+    return refusal(
+      "invalid_json",
+      "Corp de cerere invalid (JSON).",
+      400,
+      origin,
+    );
   }
   if (
     typeof body !== "object" || body === null || !("csv" in body) ||
     typeof body.csv !== "string"
   ) {
-    return json({ error: "Câmpul csv este obligatoriu." }, 400, origin);
+    return refusal("csv_required", "Câmpul csv este obligatoriu.", 400, origin);
   }
   const csv = body.csv;
   if (new TextEncoder().encode(csv).byteLength > 256 * 1024) {
-    return json(
-      { error: "Fișierul CSV depășește limita de 256 KB." },
+    return refusal(
+      "csv_too_large",
+      "Fișierul CSV depășește limita de 256 KB.",
       413,
       origin,
     );
@@ -110,7 +143,12 @@ export async function handleCsvImport(
     console.error("csv-import reference load failed", {
       errorType: error instanceof Error ? error.name : typeof error,
     });
-    return json({ error: "Nu am putut încărca grupurile." }, 500, origin);
+    return refusal(
+      "groups_load_failed",
+      "Nu am putut încărca grupurile.",
+      500,
+      origin,
+    );
   }
   const references: RecruitCsvReferences = buildGroupLookup(groups);
   let parsed: RecruitCsvResult;
@@ -118,17 +156,25 @@ export async function handleCsvImport(
     parsed = parseRecruitsCsv(csv, references);
   } catch (error) {
     if (error instanceof ParseRecruitsCsvError) {
-      return json({ error: error.message, code: error.code }, 400, origin);
+      return refusal(error.code, error.message, 400, origin);
     }
-    throw error;
+    // Anything else is a bug in the parser: logged, never echoed (L4).
+    console.error("csv-import parse failed", error);
+    return refusal(
+      "unexpected_error",
+      "Ceva n-a mers. Încearcă din nou.",
+      500,
+      origin,
+    );
   }
   const recordCount = new Set([
     ...parsed.valid.map((row) => row.row),
     ...parsed.errors.map((error) => error.row),
   ]).size;
   if (recordCount > 100) {
-    return json(
-      { error: "Un import poate conține cel mult 100 de membri." },
+    return refusal(
+      "too_many_rows",
+      "Un import poate conține cel mult 100 de membri.",
       413,
       origin,
     );

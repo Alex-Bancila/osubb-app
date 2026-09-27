@@ -31,7 +31,12 @@
 // the recovery path that refusal left missing, and it never creates or
 // deletes an account (its port has no `deleteUser` at all).
 
-import { corsHeaders, isAllowedOrigin, json } from "../_shared/cors.ts";
+import {
+  corsHeaders,
+  isAllowedOrigin,
+  json,
+  refusal,
+} from "../_shared/cors.ts";
 import { mayHandleRole } from "../_shared/member-invite.ts";
 import type { ReinviteDeps } from "./deps.ts";
 
@@ -43,15 +48,6 @@ interface ReinviteRequest {
   member_id?: unknown;
   email?: unknown;
   action?: unknown;
-}
-
-function refusal(
-  code: string,
-  error: string,
-  status: number,
-  origin: string | null,
-): Response {
-  return json({ error, code }, status, origin);
 }
 
 /** Auth's answer when an address already belongs to a confirmed account. */
@@ -72,11 +68,14 @@ export async function handleReinvite(
     }
     return new Response("ok", { headers: corsHeaders(origin) });
   }
-  if (req.method !== "POST") return json({ error: "Use POST." }, 405, origin);
+  if (req.method !== "POST") {
+    return refusal("method_not_allowed", "Use POST.", 405, origin);
+  }
 
   if (!(req.headers.get("Authorization") ?? "").startsWith("Bearer ")) {
-    return json(
-      { error: "Autentifică-te pentru a retrimite invitații." },
+    return refusal(
+      "not_signed_in",
+      "Autentifică-te pentru a retrimite invitații.",
       401,
       origin,
     );
@@ -84,7 +83,12 @@ export async function handleReinvite(
 
   const callerId = await deps.callerId();
   if (!callerId) {
-    return json({ error: "Sesiune invalidă sau expirată." }, 401, origin);
+    return refusal(
+      "session_invalid",
+      "Sesiune invalidă sau expirată.",
+      401,
+      origin,
+    );
   }
 
   // The level comes from the DATABASE, as in invite-member: a token issued
@@ -94,7 +98,12 @@ export async function handleReinvite(
     callerLevel = await deps.memberLevel(callerId);
   } catch (error) {
     console.error("caller lookup failed", error);
-    return json({ error: "Nu am putut verifica permisiunile." }, 500, origin);
+    return refusal(
+      "permission_check_failed",
+      "Nu am putut verifica permisiunile.",
+      500,
+      origin,
+    );
   }
   if (callerLevel < REINVITE_LEVEL) {
     return refusal(
@@ -109,11 +118,17 @@ export async function handleReinvite(
   try {
     parsed = await req.json();
   } catch {
-    return json({ error: "Corp de cerere invalid (JSON)." }, 400, origin);
+    return refusal(
+      "invalid_json",
+      "Corp de cerere invalid (JSON).",
+      400,
+      origin,
+    );
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return json(
-      { error: "Corpul cererii trebuie să fie un obiect." },
+    return refusal(
+      "invalid_body",
+      "Corpul cererii trebuie să fie un obiect.",
       400,
       origin,
     );
@@ -122,17 +137,23 @@ export async function handleReinvite(
   const body = parsed as ReinviteRequest;
   const action = body.action ?? "reinvite";
   if (action !== "status" && action !== "reinvite") {
-    return json(
-      { error: "action trebuie să fie „status” sau „reinvite”." },
+    return refusal(
+      "invalid_action",
+      "action trebuie să fie „status” sau „reinvite”.",
       400,
       origin,
     );
   }
   if (typeof body.member_id !== "string" || !UUID.test(body.member_id)) {
-    return json({ error: "member_id invalid." }, 400, origin);
+    return refusal("member_id_invalid", "member_id invalid.", 400, origin);
   }
   if (body.email !== undefined && typeof body.email !== "string") {
-    return json({ error: "Câmpul email trebuie să fie text." }, 400, origin);
+    return refusal(
+      "email_invalid",
+      "Câmpul email trebuie să fie text.",
+      400,
+      origin,
+    );
   }
   const memberId = body.member_id.toLowerCase();
 
@@ -353,6 +374,11 @@ export async function handleReinvite(
     );
   } catch (error) {
     console.error("reinvite-member failed", error);
-    return json({ error: "Ceva n-a mers. Încearcă din nou." }, 500, origin);
+    return refusal(
+      "unexpected_error",
+      "Ceva n-a mers. Încearcă din nou.",
+      500,
+      origin,
+    );
   }
 }

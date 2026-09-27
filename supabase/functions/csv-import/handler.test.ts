@@ -202,7 +202,10 @@ Deno.test("returns an invalid-session response when authentication lookup fails"
   const payload = await response.json().catch(() => ({}));
 
   assertEquals(response.status, 401);
-  assertEquals(payload, { error: "Sesiune invalidă sau expirată." });
+  assertEquals(payload, {
+    code: "session_invalid",
+    error: "Sesiune invalidă sau expirată.",
+  });
   assertEquals(referenceLoads, []);
 });
 
@@ -240,7 +243,10 @@ Deno.test("does not expose an authorization lookup failure", async () => {
   const payload = await response.json().catch(() => ({}));
 
   assertEquals(response.status, 500);
-  assertEquals(payload, { error: "Nu am putut verifica permisiunile." });
+  assertEquals(payload, {
+    code: "permission_check_failed",
+    error: "Nu am putut verifica permisiunile.",
+  });
 });
 
 Deno.test("accepts only POST requests", async () => {
@@ -395,7 +401,10 @@ Deno.test("stops the whole import safely when reference data cannot load", async
   const payload = await response.json().catch(() => ({}));
 
   assertEquals(response.status, 500);
-  assertEquals(payload, { error: "Nu am putut încărca grupurile." });
+  assertEquals(payload, {
+    code: "groups_load_failed",
+    error: "Nu am putut încărca grupurile.",
+  });
   assertEquals(invited, []);
 });
 

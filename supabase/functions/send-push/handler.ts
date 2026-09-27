@@ -10,6 +10,9 @@
 //   405  not POST
 //   500  a required secret is missing or malformed, or a claim failed
 //
+// Every error body is { code, error } (_shared/errors.ts). Which secret is
+// missing, and why a claim failed, is in the function log only.
+//
 // Outcomes per push service answer (ADR-0010):
 //   2xx                  -> sent
 //   404 / 410            -> dead: the push_tokens row is deleted, its outbox
@@ -24,6 +27,7 @@
 // refuses such a registration since 20260927170000; this covers any row
 // stored before it.
 
+import { errorBody } from "../_shared/errors.ts";
 import { isSecretKey } from "../_shared/secret-keys.ts";
 import { InvalidSubscriptionError } from "./deps.ts";
 import { buildPushPayload } from "./payload.ts";
@@ -47,6 +51,12 @@ export interface SendPushSummary {
   dead: number;
   failed: number;
 }
+
+/** The answer to a missing or malformed setting; the log names which. */
+const CONFIGURATION_ERROR = errorBody(
+  "configuration",
+  "The function is not configured. See its logs.",
+);
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -172,30 +182,34 @@ export async function handleSendPush(
   req: Request,
   deps: SendPushDeps,
 ): Promise<Response> {
-  if (req.method !== "POST") return json({ error: "Use POST." }, 405);
+  if (req.method !== "POST") {
+    return json(errorBody("method_not_allowed", "Use POST."), 405);
+  }
 
   const keys = deps.secretKeys();
   if (keys.length === 0) {
     // Without a key to compare with, nobody could ever be let in; say so
-    // rather than answer 401 to the right caller.
+    // rather than answer 401 to the right caller. The setting's name goes to
+    // the function log only: this answer reaches anyone, unauthenticated
+    // (security pass L4).
     console.error("send-push configuration", ["SUPABASE_SECRET_KEYS"]);
-    return json(
-      { error: "configuration", problems: ["SUPABASE_SECRET_KEYS"] },
-      500,
-    );
+    return json(CONFIGURATION_ERROR, 500);
   }
   // verify_jwt = false in config.toml, so the gateway checks nothing and this
   // constant-time comparison is the whole authentication (#769, ruling L8).
   if (!isSecretKey(req.headers.get("apikey"), keys)) {
-    return json({ error: "secret key only" }, 401);
+    return json(
+      errorBody("secret_key_required", "Secret key only."),
+      401,
+    );
   }
 
   const problems = deps.configProblems();
   if (problems.length > 0) {
     // Checked before claiming, so a missing or malformed secret burns no
-    // attempts.
+    // attempts. The names go to the function log, never into the answer.
     console.error("send-push configuration", problems);
-    return json({ error: "configuration", problems }, 500);
+    return json(CONFIGURATION_ERROR, 500);
   }
 
   const summary: SendPushSummary = {
@@ -218,8 +232,8 @@ export async function handleSendPush(
       if (rows.length < BATCH_SIZE) break;
     }
   } catch (cause) {
-    console.error("claim failed", cause);
-    return json({ error: "claim failed", ...summary }, 500);
+    console.error("claim failed", summary, cause);
+    return json(errorBody("claim_failed", "Claiming deliveries failed."), 500);
   }
 
   console.log("send-push", summary);
