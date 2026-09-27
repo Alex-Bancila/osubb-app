@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(31);
 
 truncate public.profiles cascade;
 
@@ -187,6 +187,11 @@ select is((select count(*) from public.member_points), 0::bigint,
 select is((select count(*) from public.leaderboard), 0::bigint,
   'a live BC Profile without organisation claims reads no leaderboard');
 reset role;
+-- member_points already answers nothing without claims, so the leaderboard's
+-- own guards are pinned in the catalog.
+select ok(
+  position('auth_is_member() AND (( SELECT private.caller_level()' in pg_get_viewdef('public.leaderboard'::regclass, true)) > 0,
+  'leaderboard keeps its own claims guard beside the live level');
 
 select * from finish();
 rollback;
