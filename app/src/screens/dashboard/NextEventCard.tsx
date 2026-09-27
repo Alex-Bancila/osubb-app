@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { CalendarDays } from 'lucide-react';
-import { Empty, ErrorState, Loading } from '../../components/states';
+import { EmptyState, Panel } from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { useEventsInRange } from '../../queries/events';
 import { useMyGroupRoles } from '../../queries/my-groups';
@@ -12,7 +13,6 @@ import {
   relevantGroupIds,
 } from '../calendar/calendar-presentation';
 import { nextRelevantEvent } from './next-items';
-import { NextPlaceholder, NextSlot } from './NextSlot';
 
 /**
  * **Următorul eveniment** (#700, ruling R4): the soonest Relevant Event that
@@ -27,7 +27,13 @@ import { NextPlaceholder, NextSlot } from './NextSlot';
  * The Calendar's card shows only the time (the Agendă prints the day above
  * it), so the day is printed here too.
  */
-export default function NextEventCard({ now }: { now: Date }) {
+export default function NextEventCard({
+  now,
+  className,
+}: {
+  now: Date;
+  className?: string;
+}) {
   const todayKey = bucharestDayKey(now) ?? undefined;
   const range = useMemo(() => eventRangeForDays(todayKey), [todayKey]);
   const events = useEventsInRange(todayKey ? range : null);
@@ -47,42 +53,42 @@ export default function NextEventCard({ now }: { now: Date }) {
   // worth an error, but waiting for it keeps a label from changing under you.
   const isPending = events.isPending || mine.isPending || groups.isPending;
   const failed = events.isError ? events : mine.isError ? mine : null;
+  const shown = !failed && !isPending ? next : null;
 
   return (
-    <NextSlot
-      title="Următorul eveniment"
+    <Panel
+      eyebrow="Calendar"
       icon={CalendarDays}
-      link={
-        next && { to: `/calendar?event=${next.id}`, label: 'Vezi în Calendar' }
+      title="Următorul eveniment"
+      className={className}
+      action={
+        shown
+          ? { to: `/calendar?event=${shown.id}`, label: 'Vezi în Calendar' }
+          : undefined
       }
+      bare={Boolean(shown)}
     >
       {failed ? (
-        <NextPlaceholder>
-          <ErrorState
-            error={failed.error}
-            onRetry={() => void failed.refetch()}
-          />
-        </NextPlaceholder>
+        <ErrorState
+          error={failed.error}
+          onRetry={() => void failed.refetch()}
+        />
       ) : isPending ? (
-        <NextPlaceholder>
-          <Loading />
-        </NextPlaceholder>
-      ) : next ? (
-        <div className="next-event">
-          <p className="next-when">
-            <time dateTime={next.startsAt}>{next.dayLabel}</time>
+        <Loading />
+      ) : shown ? (
+        <div className="flex min-w-0 flex-1 flex-col gap-2 *:last:flex-1">
+          <p className="m-0 text-sm font-semibold text-muted-foreground first-letter:uppercase">
+            <time dateTime={shown.startsAt}>{shown.dayLabel}</time>
           </p>
           <EventCard
-            event={next}
+            event={shown}
             groups={groups.data}
-            relevance={eventRelevance(next, relevant, new Set())}
+            relevance={eventRelevance(shown, relevant, new Set())}
           />
         </div>
       ) : (
-        <NextPlaceholder>
-          <Empty text="Niciun eveniment viitor pentru tine." />
-        </NextPlaceholder>
+        <EmptyState>Niciun eveniment viitor pentru tine.</EmptyState>
       )}
-    </NextSlot>
+    </Panel>
   );
 }

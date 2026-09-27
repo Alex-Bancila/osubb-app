@@ -1,121 +1,66 @@
+import { Award } from 'lucide-react';
+import { Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
-import { useMyPoints, useMyStanding } from '../../queries/points';
+import { formatPoints } from '../../lib/format';
+import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
-import { formatPoints } from '../../lib/format';
 
 /**
- * #93 — the one card a member opens the app to see: their total, their role,
- * and where that puts them.
- *
- * The rank line is the point of it. A total on its own ("12 puncte") means
- * nothing to someone who does not know what 12 buys; "#4 din 8 · 3 puncte până
- * la locul 3" is the same number turned into something a person can act on
- * this week, and every part of it is read from the database rather than
- * estimated here.
- *
- * The spec also asks for the next automatic promotion threshold. There is no
- * `promotion_rules` table yet (#51/#52), and the issue says to hide the line
- * until there is — so it is absent rather than faked.
- *
- * `showStanding` mirrors the database's `seeLeadership` gate (level >= 5,
- * `20260907204817_leadership_only_global_points.sql`): below it, `leaderboard`
- * never returns this member's row, so `useMyStanding` is called with
- * `enabled: false` and its query stays disabled — `pending` forever rather
- * than resolving. The loading/error branches below must not wait on it in
- * that case, or an ordinary member would see a permanent spinner.
+ * **Punctajul meu** (#93, #822): a Member's total and their Role. Shown below
+ * BCE only — the page decides — and without a rank: the ranking is a
+ * leadership view that lives on Clasament (ADR-0007).
  */
-export default function MyPointsCard({
-  showStanding,
-}: {
-  showStanding: boolean;
-}) {
+export default function MyPointsCard({ className }: { className?: string }) {
   const points = useMyPoints();
-  const standing = useMyStanding({ enabled: showStanding });
   const profile = useMyProfile();
   const roles = useRoles();
 
-  if (points.isError || (showStanding && standing.isError)) {
-    return (
-      <section className="card hero">
-        <ErrorState
-          error={points.error ?? standing.error}
-          onRetry={() => {
-            void points.refetch();
-            if (showStanding) void standing.refetch();
-          }}
-        />
-      </section>
-    );
-  }
-
-  if (points.isPending || (showStanding && standing.isPending)) {
-    return (
-      <section className="card hero">
-        <Loading />
-      </section>
-    );
-  }
-
-  /* The role label comes from the `roles` table ("Membru cu Drept de Vot"),
+  /* The Role label comes from the `roles` table ("Membru cu Drept de Vot"),
      with the enum value as the fallback while it loads — never a blank chip. */
   const role = profile.data?.role;
   const roleLabel = (role && roles.data?.get(role)?.name) ?? role ?? '';
 
   return (
-    <section className="card hero">
-      <div className="hero-main">
-        <span className="hero-label">Punctajul meu</span>
-        <p className="hero-value">
-          {formatPoints(points.data)}
-          <span className="hero-unit">puncte</span>
-        </p>
-        <div className="hero-badges">
-          {roleLabel && (
-            <span className="role-badge">
-              <span className="role-dot" aria-hidden="true" />
-              {roleLabel}
+    <Panel
+      eyebrow="Punctaj"
+      icon={Award}
+      title="Punctajul meu"
+      className={className}
+    >
+      {points.isError ? (
+        <ErrorState
+          error={points.error}
+          onRetry={() => void points.refetch()}
+        />
+      ) : points.isPending ? (
+        <Loading />
+      ) : (
+        <div className="flex h-full flex-col justify-center gap-4 py-2">
+          <p className="m-0 flex items-baseline gap-2 leading-none">
+            <span
+              data-slot="points-value"
+              className="text-[length:var(--fs-3xl)] font-extrabold tracking-[-0.03em] tabular-nums"
+            >
+              {formatPoints(points.data)}
             </span>
+            <span className="text-[length:var(--fs-md)] font-semibold text-muted-foreground">
+              puncte
+            </span>
+          </p>
+          {roleLabel && (
+            <p className="m-0">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-(--ink-900) py-1 pr-3 pl-2.5 text-[length:var(--fs-xs)] font-bold text-(--white)">
+                <span
+                  aria-hidden="true"
+                  className="size-[7px] rounded-full bg-(--red)"
+                />
+                {roleLabel}
+              </span>
+            </p>
           )}
         </div>
-      </div>
-
-      {/* Below level 5, `leaderboard` never carries this member's row at all
-          (ADR-0007's leadership-only ranking), so there is no "no rank" case
-          to render here — only the fact that ranking is a leadership view,
-          stated plainly rather than apologised for or promised later. */}
-      {!showStanding ? (
-        <div className="hero-rank">
-          <p className="hero-rank-note">
-            Clasamentul și Cupa Departamentelor sunt vizibile pentru BCE și BC.
-          </p>
-        </div>
-      ) : standing.data?.rank == null ? (
-        /* No rank at all. This is the deactivation window from ADR-0003 made
-           visible: `leaderboard` filters on `profiles.status`, which is live,
-           while the claims that got this page open are up to an hour old — so
-           for that hour a member deactivated mid-session still reads their
-           own total and is correctly absent from the ranking. Verified by
-           deactivating a seeded member with their session open. */
-        <div className="hero-rank">
-          <p className="hero-rank-note">Nu ești în clasament.</p>
-        </div>
-      ) : (
-        <div className="hero-rank">
-          <span className="hero-rank-value">
-            <span className="hero-rank-hash">#</span>
-            {standing.data.rank}
-          </span>
-          <span className="hero-rank-total">
-            din {standing.data.total} membri
-          </span>
-          <p className="hero-rank-note">
-            {standing.data.next
-              ? `${formatPoints(standing.data.next.gap)} p până la locul ${standing.data.next.rank}`
-              : 'Locul 1 🏆'}
-          </p>
-        </div>
       )}
-    </section>
+    </Panel>
   );
 }

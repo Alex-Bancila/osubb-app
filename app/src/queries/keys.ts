@@ -40,8 +40,6 @@ export const keys = {
         p_to?: string;
       } | null,
     ) => ['points', 'leadership-cup', memberId, filters] as const,
-    board: (memberId: string | undefined) =>
-      ['points', 'board', { memberId }] as const,
     me: (memberId: string | undefined) =>
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
@@ -51,8 +49,6 @@ export const keys = {
        Under `points` so an Evaluation's invalidation moves the bar too. */
     promotionProgress: (memberId: string | undefined) =>
       ['points', 'promotion-progress', { memberId }] as const,
-    leaderboard: (limit = 10) => ['points', 'leaderboard', { limit }] as const,
-    deptCup: () => ['points', 'deptCup'] as const,
   },
   profile: {
     all: ['profile'] as const,

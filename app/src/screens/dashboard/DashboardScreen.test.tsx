@@ -9,24 +9,38 @@ import type { TaskPresentationRow } from '../tracker/task-presentation';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
-/* `see_leadership` from the server capability row (`my_capabilities()`). */
-const leadership = vi.hoisted(() => ({
-  capability: vi.fn(),
-  result: { data: false } as { data?: boolean; isPending?: boolean },
+/* The server capability row (`my_capabilities()`): which panels exist. */
+const capabilities = vi.hoisted(() => ({
+  result: {
+    data: { seeLeadership: false, manageTasks: false },
+    isPending: false,
+    isError: false,
+  } as {
+    data?: { seeLeadership: boolean; manageTasks: boolean };
+    isPending: boolean;
+    isError: boolean;
+    error?: unknown;
+    refetch?: () => void;
+  },
 }));
 vi.mock('../../lib/capabilities', () => ({
-  useCapability: (name: string) => {
-    leadership.capability(name);
-    return leadership.result;
-  },
+  useCapabilities: () => capabilities.result,
 }));
 const hooks = vi.hoisted(() => ({
   useMyTasks: vi.fn(),
   useEventsInRange: vi.fn(),
   useMyGroupRoles: vi.fn(),
+  useAwaitingMyReview: vi.fn(),
+  useMyPoints: vi.fn(),
+  profile: { full_name: 'Ioana Popescu', nickname: null, role: 'voluntar' } as {
+    full_name: string;
+    nickname: string | null;
+    role: string;
+  },
 }));
 // No request is made; the modules the cards import only load the client.
-vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+const supabase = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
+vi.mock('../../lib/supabase', () => ({ supabase }));
 vi.mock('../../queries/tasks', () => ({ useMyTasks: hooks.useMyTasks }));
 vi.mock('../../queries/events', () => ({
   useEventsInRange: hooks.useEventsInRange,
@@ -41,23 +55,16 @@ vi.mock('../../queries/event-rsvp', () => ({
   useSetEventRsvp: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 vi.mock('../../queries/profile', () => ({
-  useMyProfile: () => ({
-    data: { full_name: 'Ioana Popescu', role: 'voluntar' },
-  }),
+  useMyProfile: () => ({ data: hooks.profile }),
 }));
 vi.mock('../../queries/reference', () => ({
   useRoles: () => ({ data: new Map() }),
   useGroups: () => ({ data: new Map(), isPending: false }),
 }));
-vi.mock('../../queries/points', () => ({
-  useMyPoints: () => ({ isPending: false, isError: false, data: 12 }),
-  useMyStanding: () => ({
-    isPending: false,
-    isError: false,
-    data: { rank: 4, total: 8, next: { rank: 3, gap: 3 } },
-  }),
-  useLeaderboard: () => ({ isPending: false, isError: false, data: [] }),
-  useDeptCup: () => ({ isPending: false, isError: false, data: [] }),
+vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
+vi.mock('../../queries/task-review', async (importActual) => ({
+  ...(await importActual<typeof import('../../queries/task-review')>()),
+  useAwaitingMyReview: hooks.useAwaitingMyReview,
 }));
 
 import DashboardScreen from './DashboardScreen';
@@ -177,14 +184,21 @@ function slot(name: string) {
 }
 
 beforeEach(() => {
-  // DashboardScreen renders the date under the greeting. On the 12th of any
+  // DashboardScreen renders the date above the greeting. On the 12th of any
   // month that is a Romanian date like "joi, 12 septembrie 2026", which also
   // matches a loose /12/ points assertion; freeze the clock on a date with no
   // "12" in it so no outcome depends on today's date.
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-01-15T10:00:00Z'));
   auth.useAuth.mockReturnValue(claims(1));
-  leadership.result = { data: false };
+  viewer({ seeLeadership: false, manageTasks: false });
+  hooks.profile = {
+    full_name: 'Ioana Popescu',
+    nickname: null,
+    role: 'voluntar',
+  };
+  hooks.useMyPoints.mockReturnValue(query(12));
+  hooks.useAwaitingMyReview.mockReturnValue(query({ task: null, count: 0 }));
   hooks.useMyTasks.mockReturnValue(query([]));
   hooks.useEventsInRange.mockReturnValue(query([]));
   hooks.useMyGroupRoles.mockReturnValue(query(teamMember));
@@ -192,61 +206,197 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.clearAllMocks();
 });
 
-// The "12 puncte" hero figure: the number is a direct text node of
-// .hero-value, "puncte" is a nested <span>. Reading it this way scopes the
-// assertion to the hero card and to the number alone, so it can never
-// collide with the page date rendered elsewhere on the screen.
-function heroPointsValue(container: HTMLElement): string {
-  const el = container.querySelector('.hero-value');
-  if (!el) throw new Error('.hero-value not found');
-  const digits = Array.from(el.childNodes)
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.textContent ?? '')
-    .join('')
-    .trim();
-  return digits;
+function viewer(data: { seeLeadership: boolean; manageTasks: boolean }) {
+  capabilities.result = { data, isPending: false, isError: false };
 }
 
-describe('DashboardScreen leadership gate', () => {
-  it('hides leaderboard, cup and rank without the see_leadership capability', () => {
-    const { container } = renderDashboard();
-    expect(heroPointsValue(container)).toMatch(/^12$/);
-    expect(screen.queryByRole('heading', { name: /clasament/i })).toBeNull();
-    expect(screen.queryByText(/din 8 membri/)).toBeNull();
-    expect(
-      screen.getByText(/Cupa Departamentelor sunt vizibile pentru BCE și BC/i),
-    ).toBeInTheDocument();
-    expect(leadership.capability).toHaveBeenCalledWith('seeLeadership');
-  });
+/** The panels' titles, in the grid's order. */
+function panels(): string[] {
+  const grid = document.querySelector('[data-slot="page-grid"]');
+  if (!grid) return [];
+  return Array.from(grid.children).map(
+    (panel) => panel.querySelector('h2')?.textContent ?? '',
+  );
+}
 
-  it('hides leaderboard, cup and rank while the capability row is loading', () => {
-    // The threshold lives on the server (see_leadership = level >= 5, pinned
-    // by my_capabilities.test.sql); the screen must not guess from the
-    // token's level while the row is on its way.
-    auth.useAuth.mockReturnValue(claims(5));
-    leadership.result = { isPending: true, data: undefined };
-    const { container } = renderDashboard();
-    expect(heroPointsValue(container)).toMatch(/^12$/);
-    expect(screen.queryByRole('heading', { name: /clasament/i })).toBeNull();
-    expect(screen.queryByText(/din 8 membri/)).toBeNull();
-  });
+function gridColumns() {
+  return document
+    .querySelector('[data-slot="page-grid"]')
+    ?.getAttribute('data-columns');
+}
 
-  it('shows everything with the see_leadership capability', () => {
-    auth.useAuth.mockReturnValue(claims(5));
-    leadership.result = { data: true };
+/** Nothing of the leadership boards or the rank is left on Acasă. */
+function expectNoBoards() {
+  expect(screen.queryByRole('heading', { name: /clasament/i })).toBeNull();
+  expect(screen.queryByRole('heading', { name: /cupa/i })).toBeNull();
+  expect(screen.queryByText(/din \d+ membri/)).toBeNull();
+  expect(screen.queryByText(/vizibile pentru BCE/i)).toBeNull();
+  expect(supabase.rpc).not.toHaveBeenCalled();
+  expect(supabase.from).not.toHaveBeenCalled();
+}
+
+describe('the greeting', () => {
+  it('greets by first name without a Nickname, under the capitalised date', () => {
     renderDashboard();
-    expect(screen.getByText(/din 8 membri/)).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /clasament/i }),
+      screen.getByRole('heading', { level: 1, name: 'Salut, Ioana 👋' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Joi, 15 ianuarie 2026')).toBeInTheDocument();
+  });
+
+  it('greets by Nickname when one is set', () => {
+    hooks.profile = { ...hooks.profile, nickname: '  Ioni  ' };
+    renderDashboard();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Salut, Ioni 👋' }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('the panels each viewer sees', () => {
+  it('a Voluntar: Punctajul meu, Următorul task, Următorul eveniment in three columns', () => {
+    renderDashboard();
+    expect(panels()).toEqual([
+      'Punctajul meu',
+      'Următorul task',
+      'Următorul eveniment',
+    ]);
+    expect(gridColumns()).toBe('3');
+    const points = slot('Punctajul meu');
+    expect(
+      points.querySelector('[data-slot="points-value"]'),
+    ).toHaveTextContent(/^12$/);
+    expect(within(points).getByText('puncte')).toBeInTheDocument();
+    expect(within(points).getByText('voluntar')).toBeInTheDocument();
+    expect(hooks.useAwaitingMyReview).not.toHaveBeenCalled();
+    expectNoBoards();
+  });
+
+  it('a Responsabil below BCE: all four in a 2 × 2', () => {
+    auth.useAuth.mockReturnValue(claims(2));
+    viewer({ seeLeadership: false, manageTasks: true });
+    renderDashboard();
+    expect(panels()).toEqual([
+      'Punctajul meu',
+      'De evaluat',
+      'Următorul task',
+      'Următorul eveniment',
+    ]);
+    expect(gridColumns()).toBe('2');
+    expectNoBoards();
+  });
+
+  it('a BC member: De evaluat and Următorul eveniment only, no score', () => {
+    auth.useAuth.mockReturnValue(claims(6));
+    viewer({ seeLeadership: true, manageTasks: true });
+    renderDashboard();
+    expect(panels()).toEqual(['De evaluat', 'Următorul eveniment']);
+    expect(gridColumns()).toBe('2');
+    expect(screen.queryByText('Punctajul meu')).toBeNull();
+    expect(hooks.useMyPoints).not.toHaveBeenCalled();
+    expect(hooks.useMyTasks).not.toHaveBeenCalled();
+    expectNoBoards();
+  });
+
+  it('leadership without manageTasks keeps Următorul task in the work slot', () => {
+    auth.useAuth.mockReturnValue(claims(5));
+    viewer({ seeLeadership: true, manageTasks: false });
+    renderDashboard();
+    expect(panels()).toEqual(['Următorul task', 'Următorul eveniment']);
+  });
+
+  it('renders no panel until the capability row decides, then retries its error', () => {
+    capabilities.result = { isPending: true, isError: false };
+    const { unmount } = renderDashboard();
+    expect(panels()).toEqual([]);
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    unmount();
+
+    const refetch = vi.fn();
+    capabilities.result = {
+      isPending: false,
+      isError: true,
+      error: new Error('boom'),
+      refetch,
+    };
+    renderDashboard();
+    expect(panels()).toEqual([]);
+    within(screen.getByRole('alert')).getByRole('button').click();
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('De evaluat', () => {
+  beforeEach(() => {
+    auth.useAuth.mockReturnValue(claims(6));
+    viewer({ seeLeadership: true, manageTasks: true });
+  });
+
+  it('shows the oldest Task awaiting my Evaluation, the count and Evaluează', () => {
+    hooks.useAwaitingMyReview.mockReturnValue(
+      query({
+        task: taskRow({
+          id: 31,
+          title: 'Raport cheltuieli',
+          status: 'in_review',
+          assignments: [{ id: 5, member_id: 'other', ended_at: null }],
+        }),
+        count: 3,
+      }),
+    );
+    renderDashboard();
+    const review = slot('De evaluat');
+    expect(
+      within(review).getByText('3 taskuri așteaptă evaluarea ta'),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /cupa departamentelor/i }),
+      within(review).getByRole('heading', {
+        level: 3,
+        name: 'Raport cheltuieli',
+      }),
     ).toBeInTheDocument();
-    // The next-item slots are for everyone, leadership included.
-    expect(slot('Următorul task')).toBeInTheDocument();
-    expect(slot('Următorul eveniment')).toBeInTheDocument();
+    expect(
+      within(review).getByRole('link', { name: 'Evaluează' }),
+    ).toHaveAttribute('href', '/tracker?task=31');
+    expect(hooks.useAwaitingMyReview).toHaveBeenCalledWith(true);
+  });
+
+  it('says one Task in the singular', () => {
+    hooks.useAwaitingMyReview.mockReturnValue(
+      query({ task: taskRow({ id: 31, status: 'in_review' }), count: 1 }),
+    );
+    renderDashboard();
+    expect(
+      within(slot('De evaluat')).getByText('1 task așteaptă evaluarea ta'),
+    ).toBeInTheDocument();
+  });
+
+  it('says so when nothing awaits, with no link', () => {
+    renderDashboard();
+    const review = slot('De evaluat');
+    expect(
+      within(review).getByText('Niciun task nu așteaptă evaluarea ta.'),
+    ).toBeInTheDocument();
+    expect(within(review).queryByRole('link')).toBeNull();
+  });
+
+  it('keeps its own loading and error states', () => {
+    hooks.useAwaitingMyReview.mockReturnValue(
+      query(undefined, { isPending: true }),
+    );
+    const { unmount } = renderDashboard();
+    expect(within(slot('De evaluat')).getByRole('status')).toBeInTheDocument();
+    unmount();
+
+    hooks.useAwaitingMyReview.mockReturnValue(
+      query(undefined, { isError: true, error: new Error('boom') }),
+    );
+    renderDashboard();
+    expect(within(slot('De evaluat')).getByRole('alert')).toBeInTheDocument();
+    expect(within(slot('Următorul eveniment')).queryByRole('alert')).toBeNull();
   });
 });
 
