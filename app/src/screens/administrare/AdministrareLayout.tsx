@@ -24,6 +24,8 @@ export default function AdministrareLayout() {
   const [actionSlot, setActionSlot] = useState<HTMLDivElement | null>(null);
   const tabs = allowedTabs(capabilities.data);
 
+  // No capability row yet: decide nothing (the route guard waits the same way).
+  if (capabilities.data === undefined) return null;
   if (pathname.replace(/\/+$/, '') === ADMINISTRARE_PATH)
     return <Navigate to={tabs[0]?.path ?? '/'} replace />;
 
