@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(26);
 
 -- ==================== Structure and grants ====================
 select ok(
@@ -44,14 +44,18 @@ insert into auth.users (id, email) values
   ('f7760000-0000-0000-0000-000000000003', 'moderator@test.local'),
   ('f7760000-0000-0000-0000-000000000004', 'bce@test.local'),
   ('f7760000-0000-0000-0000-000000000005', 'bc.inactiv@test.local'),
-  ('f7760000-0000-0000-0000-000000000006', 'dan.other@test.local');
+  ('f7760000-0000-0000-0000-000000000006', 'dan.other@test.local'),
+  -- A legacy case variant of Ana's address, with a LOWER id: the lookup must
+  -- still pick the exact lowercase row, not the first by id.
+  ('f7760000-0000-0000-0000-000000000000', 'Ana.Bounce@Test.Local');
 insert into profiles (id, full_name, email, role, status) values
   ('f7760000-0000-0000-0000-000000000001', 'Ana Bounce', 'ana.bounce@test.local', 'voluntar', 'activ'),
   ('f7760000-0000-0000-0000-000000000002', 'Bianca BC', 'bc.activ@test.local', 'bc', 'activ'),
   ('f7760000-0000-0000-0000-000000000003', 'Mihai Moderator', 'moderator@test.local', 'moderator', 'activ'),
   ('f7760000-0000-0000-0000-000000000004', 'Elena BCE', 'bce@test.local', 'bce', 'activ'),
   ('f7760000-0000-0000-0000-000000000005', 'Radu Inactiv', 'bc.inactiv@test.local', 'bc', 'inactiv'),
-  ('f7760000-0000-0000-0000-000000000006', 'Dan Other', 'dan.other@test.local', 'voluntar', 'activ');
+  ('f7760000-0000-0000-0000-000000000006', 'Dan Other', 'dan.other@test.local', 'voluntar', 'activ'),
+  ('f7760000-0000-0000-0000-000000000000', 'Ana Legacy', 'Ana.Bounce@Test.Local', 'voluntar', 'activ');
 
 create temporary table expected_recipients as
   select count(*)::int as n
@@ -116,6 +120,11 @@ select is(
       and link = '/administrare/membri/f7760000-0000-0000-0000-000000000001'),
   0,
   'BCE (level 5), an inactive BC and the Member themselves get nothing');
+
+select is(
+  pg_temp.about('f7760000-0000-0000-0000-000000000000')::int,
+  0,
+  'a legacy case variant of the address (lower id) is not picked: the exact lowercase row wins, deterministically');
 
 select is(
   (select title from notifications

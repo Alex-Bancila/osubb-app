@@ -48,13 +48,20 @@ begin
 
   -- 2. The Member behind the address. profiles.email is stored lowercased
   --    (invite-member, #632's sync); lower() on both sides keeps an older
-  --    mixed-case row matching too. An address no profile carries -- a
-  --    Resend test address, a Member since deleted -- is not an error:
-  --    Resend would only retry it.
+  --    mixed-case row matching too. The unique constraint on profiles.email
+  --    is case-sensitive, so two such rows could both match: the pick is
+  --    deterministic -- the exact lowercase row first, then an activ one,
+  --    then the lowest id. An address no profile carries -- a Resend test
+  --    address, a Member since deleted -- is not an error: Resend would only
+  --    retry it.
   select profile.id, profile.full_name
     into v_member_id, v_name
     from public.profiles as profile
-   where lower(profile.email) = v_email;
+   where lower(profile.email) = v_email
+   order by (profile.email = v_email) desc,
+            (profile.status = 'activ') desc,
+            profile.id
+   limit 1;
   if v_member_id is null then
     return 0;
   end if;
@@ -85,8 +92,8 @@ begin
 
   if p_event = 'email.bounced' then
     v_title := format('Email respins: %s', v_name);
-    v_body  := format('Serverul de email al adresei %s a respins definitiv un email trimis de aplicație. '
-                      'Verifică adresa cu membrul; dacă nu s-a conectat niciodată, corecteaz-o și retrimite invitația din pagina lui.',
+    v_body  := format('Serverul de email al adresei %s a respins un email trimis de aplicație. '
+                      'Dacă respingerea e permanentă (vezi detaliile Resend), verifică adresa cu membrul; dacă nu s-a conectat niciodată, corecteaz-o și retrimite invitația din pagina lui.',
                       v_email);
   elsif p_event = 'email.complained' then
     v_title := format('Email marcat ca spam: %s', v_name);
@@ -111,7 +118,7 @@ end;
 $$;
 
 comment on function private.notify_email_delivery_problem_impl(text, text, text) is
-  '#776: body of public.notify_email_delivery_problem. PT400 email_required (null or blank p_email) and PT400 invalid_email_event (anything but email.bounced, email.complained, email.suppressed). Maps the trimmed, lowercased address to a profiles row case-insensitively and returns 0 -- no error -- when none carries it. Otherwise writes one system Notification through private.notify to every live active Member at level >= 6 (BC, Moderator), titled by the event and naming the Member (full name, as Administrare lists it) and the address, with Resend''s reason appended (cut to 300 characters) and a link to /administrare/membri/<member id>. Dedupe key email_delivery:<lower address>:<Europe/Bucharest yyyy-mm-dd>; a recipient who already holds it, read or not, is skipped, so a second event for the address the same day writes nothing. Returns the number of Notifications written. Granted to nobody: only the security-definer wrapper calls it.';
+  '#776: body of public.notify_email_delivery_problem. PT400 email_required (null or blank p_email) and PT400 invalid_email_event (anything but email.bounced, email.complained, email.suppressed). Maps the trimmed, lowercased address to a profiles row case-insensitively (two case-variant rows: the exact lowercase one first, then an activ one, then the lowest id) and returns 0 -- no error -- when none carries it. Otherwise writes one system Notification through private.notify to every live active Member at level >= 6 (BC, Moderator), titled by the event and naming the Member (full name, as Administrare lists it) and the address, with Resend''s reason appended (cut to 300 characters) and a link to /administrare/membri/<member id>. Dedupe key email_delivery:<lower address>:<Europe/Bucharest yyyy-mm-dd>; a recipient who already holds it, read or not, is skipped, so a second event for the address the same day writes nothing. Returns the number of Notifications written. Granted to nobody: only the security-definer wrapper calls it.';
 
 revoke execute on function private.notify_email_delivery_problem_impl(text, text, text)
   from public, anon, authenticated, service_role;

@@ -18,7 +18,8 @@
 //   500  RESEND_WEBHOOK_SECRET or the project's secret key is missing, or the
 //        database call failed (Resend retries; the dedupe makes that safe)
 //
-// Handled: email.bounced (the receiving server refused the address for good),
+// Handled: email.bounced (the receiving server rejected the email; Resend's
+// bounce.type says whether for good -- Permanent -- or not),
 // email.complained (the recipient marked a delivered email as spam),
 // email.suppressed (Resend did not send because the address is on its
 // suppression list). email.failed, email.delivery_delayed and the rest are

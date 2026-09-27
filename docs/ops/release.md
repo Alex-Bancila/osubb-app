@@ -236,7 +236,7 @@ Member's own inbox is at fault:
    delete and re-invite:_ that re-provisions the Member and loses their Groups and history; `invite-member`
    refuses an existing profile on purpose (`409`) so it can never overwrite one.
 
-Once the Resend webhook is set up for an environment (#776, `docs/backend/email.md`), a hard bounce, a spam
+Once the Resend webhook is set up for an environment (#776, `docs/backend/email.md`), a bounce, a spam
 complaint or a suppression of a Member's address also shows up unasked: BC and the Moderator get a `system`
 Notification (**Email respins**, **Email marcat ca spam** or **Email blocat**, naming the Member) linking to
 the Member's Administrare page, at most one per address per day. The lookup above stays the full picture: a
