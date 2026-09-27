@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
  * new `target="_blank"` anywhere in the app is held to the same rule.
  */
 
-const SRC = path.resolve('src');
+// `app/src`, from this file's own location rather than the working directory.
+const SRC = path.resolve(import.meta.dirname, '..');
 
 const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' })
   .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))

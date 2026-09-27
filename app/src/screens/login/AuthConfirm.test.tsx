@@ -15,6 +15,10 @@ vi.mock('../../lib/supabase', () => ({
 }));
 
 import { loginEmailFrom } from '../../lib/auth-destination';
+import {
+  rememberSignInRequest,
+  requestedSignInFor,
+} from '../../lib/sign-in-request';
 import AuthConfirm from './AuthConfirm';
 
 function LoginProbe() {
@@ -53,6 +57,9 @@ const SESSION = {
 
 describe('AuthConfirm', () => {
   beforeEach(() => {
+    // The login screen on this browser asked for this address's link.
+    localStorage.clear();
+    rememberSignInRequest('membru+osubb@exemplu.ro');
     mocks.useAuth.mockReturnValue({ loading: false, session: null });
     mocks.verifyOtp.mockReset();
     mocks.verifyOtp.mockResolvedValue({
@@ -302,6 +309,86 @@ describe('AuthConfirm', () => {
 
       await screen.findByRole('heading', { name: 'Aplicație' });
       expect(mocks.signOut).not.toHaveBeenCalled();
+    });
+
+    /** verifyOtp signs `email` in, and the auth listener publishes it. */
+    function signsIn(email: string) {
+      mocks.verifyOtp.mockImplementation(async () => {
+        mocks.useAuth.mockReturnValue({
+          loading: false,
+          session: { access_token: 'token' },
+        });
+        return {
+          data: { session: { access_token: 'token', user: { email } } },
+          error: null,
+        };
+      });
+    }
+
+    it('asks before letting in an account this browser did not ask a link for', async () => {
+      localStorage.clear();
+      signsIn('membru+osubb@exemplu.ro');
+      renderConfirm('?token_hash=hash-123&type=invite');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      // The verified address, never the URL's, and no way in until confirmed.
+      await screen.findByRole('heading', { name: 'Confirmă contul' });
+      expect(screen.getByText('membru+osubb@exemplu.ro')).toBeVisible();
+      expect(screen.queryByRole('heading', { name: 'Aplicație' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Continuă' }));
+      await screen.findByRole('heading', { name: 'Aplicație' });
+      expect(mocks.signOut).not.toHaveBeenCalled();
+    });
+
+    it("catches a link to the sender's own account even when it names that account", async () => {
+      // The attacker writes their own address into the link, or none at all.
+      signsIn('attacker@exemplu.ro');
+      renderConfirm(
+        '?token_hash=hash-123&type=email&email=attacker%40exemplu.ro',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      await screen.findByRole('heading', { name: 'Confirmă contul' });
+      expect(screen.getByText('attacker@exemplu.ro')).toBeVisible();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Nu este adresa mea' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Linkul nu corespunde adresei tale.',
+      );
+      expect(mocks.signOut).toHaveBeenCalledWith({ scope: 'local' });
+      expect(screen.queryByRole('heading', { name: 'Aplicație' })).toBeNull();
+    });
+
+    it('forgets the request once the matching account is in', async () => {
+      signsIn('membru+osubb@exemplu.ro');
+      renderConfirm('?token_hash=hash-123&type=email');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      await screen.findByRole('heading', { name: 'Aplicație' });
+      expect(requestedSignInFor('membru+osubb@exemplu.ro')).toBe(false);
+    });
+
+    it('does not report the refusal as done while the session could not be dropped', async () => {
+      mocks.signOut.mockResolvedValue({
+        error: {
+          name: 'AuthSessionMissingError',
+          message: 'Auth session missing!',
+        },
+      });
+      signsIn('attacker@exemplu.ro');
+      renderConfirm(inviteLink);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).not.toHaveTextContent('Linkul nu corespunde adresei tale.');
+      expect(screen.queryByRole('heading', { name: 'Aplicație' })).toBeNull();
     });
   });
 });

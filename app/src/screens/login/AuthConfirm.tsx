@@ -10,6 +10,10 @@ import {
   type LoginHandoff,
 } from '../../lib/auth-destination';
 import { useAuth } from '../../lib/auth';
+import {
+  forgetSignInRequest,
+  requestedSignInFor,
+} from '../../lib/sign-in-request';
 import { Button, buttonVariants } from '../../components/ui/button';
 import {
   SessionLoader,
@@ -36,14 +40,25 @@ const MISMATCH_MESSAGE = 'Linkul nu corespunde adresei tale.';
 const normalize = (email: string) => email.trim().toLowerCase();
 
 /**
- * Whether the account a link signed in is the one the link names. Only a
- * sign-in link is compared, and only when it names an address: an email
- * change's link carries the old address while the session ends on the new
- * one.
+ * What a verified session means for a link, before the Member is let in.
+ *
+ *   'mismatch' — the link names an address and signed in another one.
+ *   'ask'      — nothing ties the account to this browser: no request for it
+ *                was made here (an invitation, another device, or a link
+ *                someone else sent). The verified address is shown first.
+ *   'ok'       — this browser asked for exactly that address.
+ *
+ * An email change is not compared: its link carries the old address while the
+ * session ends on the new one, and only a signed-in Member can start one.
  */
-function sameAccount(link: ConfirmLink, verified: string | undefined) {
-  if (link.type === 'email_change' || !link.email) return true;
-  return normalize(verified ?? '') === normalize(link.email);
+function checkAccount(
+  link: ConfirmLink,
+  verified: string,
+): 'ok' | 'ask' | 'mismatch' {
+  if (link.type === 'email_change') return 'ok';
+  if (link.email && normalize(verified) !== normalize(link.email))
+    return 'mismatch';
+  return requestedSignInFor(verified) ? 'ok' : 'ask';
 }
 
 /** Reads the emailed link. `null` when it is not one we can verify. */
@@ -62,6 +77,9 @@ type Status =
   /* An email change confirmed at one address of two (`double_confirm_changes`):
      GoTrue accepts the link but returns no session until the other one is used. */
   | { kind: 'half-confirmed' }
+  /* Signed in, but not by a request from this browser: the verified address
+     is shown and the Member confirms it is theirs before going in. */
+  | { kind: 'confirm-account'; email: string }
   | { kind: 'signed-in' };
 
 /**
@@ -75,9 +93,11 @@ type Status =
  * through Supabase's own verify endpoint.
  *
  * The address in the link is never shown: it is text anyone can put in a URL.
- * After `verifyOtp`, a sign-in link must have signed in that same address;
- * otherwise someone sent the Member a link for another account (login CSRF),
- * so the session is dropped on this device and the page says so.
+ * After `verifyOtp`, a link that names another address than the one it signed
+ * in is refused, and a link this browser did not ask for shows the verified
+ * address and waits for the Member to confirm it (`checkAccount`). Someone
+ * sending a Member a link to their own account (login CSRF) is caught either
+ * way: the session is dropped on this device and the page says so.
  */
 export default function AuthConfirm() {
   const { session, loading } = useAuth();
@@ -91,6 +111,26 @@ export default function AuthConfirm() {
           message: toAuthErrorMessage({ code: 'invalid_link' }),
         },
   );
+
+  function enter() {
+    forgetSignInRequest();
+    setStatus({ kind: 'signed-in' });
+  }
+
+  /** Drops the session on this device, and says so only once it is gone. */
+  async function refuse() {
+    let failure: unknown = null;
+    try {
+      ({ error: failure } = await supabase.auth.signOut({ scope: 'local' }));
+    } catch (thrown) {
+      failure = thrown;
+    }
+    setStatus({
+      kind: 'error',
+      message: failure ? toAuthErrorMessage(failure) : MISMATCH_MESSAGE,
+      mismatch: true,
+    });
+  }
 
   async function confirm() {
     if (!link) return;
@@ -107,14 +147,15 @@ export default function AuthConfirm() {
         setStatus({ kind: 'error', message: toAuthErrorMessage(error) });
         return;
       }
-      if (data.session && !sameAccount(link, data.session.user.email)) {
-        await supabase.auth.signOut({ scope: 'local' });
-        setStatus({ kind: 'error', message: MISMATCH_MESSAGE, mismatch: true });
+      if (!data.session) {
+        setStatus({ kind: 'half-confirmed' });
         return;
       }
-      setStatus(
-        data.session ? { kind: 'signed-in' } : { kind: 'half-confirmed' },
-      );
+      const email = data.session.user.email ?? '';
+      const check = checkAccount(link, email);
+      if (check === 'mismatch') await refuse();
+      else if (check === 'ask') setStatus({ kind: 'confirm-account', email });
+      else enter();
     } catch (failure) {
       if (import.meta.env.DEV) {
         console.error('Supabase Auth link confirmation failed', failure);
@@ -131,6 +172,33 @@ export default function AuthConfirm() {
     return (
       <SessionScreen centered>
         <SessionLoader label="Te conectăm…" />
+      </SessionScreen>
+    );
+  }
+
+  if (status.kind === 'confirm-account') {
+    return (
+      <SessionScreen>
+        <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
+          Confirmă contul
+        </h1>
+        <p className="leading-relaxed">
+          Linkul te-a conectat ca <strong>{status.email}</strong>.
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Continuă doar dacă aceasta este adresa ta.
+        </p>
+        <Button type="button" className="w-full" onClick={enter}>
+          Continuă
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => void refuse()}
+        >
+          Nu este adresa mea
+        </Button>
       </SessionScreen>
     );
   }

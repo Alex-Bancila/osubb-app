@@ -67,7 +67,13 @@ Because the link and the code are the same token, whoever spends the link first 
 
 `/auth/confirm` (`app/src/screens/login/AuthConfirm.tsx`) does nothing on load: it shows one button, **Conectează-mă**, and only the tap calls `verifyOtp({ token_hash, type })`. It then follows the `next` inside `redirect_to` (member routes only, as on `/auth/callback`). An expired or used link shows the Romanian message and **Trimite alt link**, which opens the login screen with the address already filled in. The service worker never serves the page from cache. `/auth/callback` still handles `?code=` for any link that goes through Supabase's verify endpoint. `scripts/check-auth-templates.sh` (in `npm run check:root`) fails if a template goes back to `{{ .ConfirmationURL }}` or drops the code.
 
-The page never shows the link's `email=` as the Member's address: anyone can put any address in a URL. After `verifyOtp`, a sign-in link (`invite`, `email`, `magiclink`, `recovery`) that names an address must have signed in that same address, compared trimmed and case-insensitively. Otherwise someone sent the Member a link for another account — a login CSRF: the victim would then type into the attacker's account — so the page signs out on this device only (`signOut({ scope: 'local' })`) and says **Linkul nu corespunde adresei tale.**, and the retry does not pre-fill that address. An `email_change` link is not compared: it carries the old address while the session ends on the new one.
+The page never shows the link's `email=` as the Member's address: anyone can put any address in a URL, or leave it out. A Member who opens a link someone else requested for **their own** account would otherwise be signed into that account and type into it — a login CSRF. So after `verifyOtp`, for every sign-in link (`invite`, `email`, `magiclink`, `recovery`):
+
+- a link that names an address other than the one it signed in (compared trimmed and case-insensitively) is refused;
+- a link for the address the login screen on **this browser** asked for within the last hour (`lib/sign-in-request.ts`, a `localStorage` entry holding the address and a time) signs in straight away;
+- anything else — an invitation, a link opened on another device, a link someone sent — shows **Confirmă contul** with the _verified_ address, and waits for **Continuă** or **Nu este adresa mea**.
+
+A refusal signs out on this device only (`signOut({ scope: 'local' })`) and says **Linkul nu corespunde adresei tale.** only once the session is gone; the retry does not pre-fill the refused address. An `email_change` link is not compared: it carries the old address while the session ends on the new one, and only a signed-in Member can start one.
 
 ### The client runs the PKCE flow
 
