@@ -39,9 +39,11 @@
 -- command bodies only; push_tokens.token is text and is finding M2's), so no
 -- pg_column_size cap is added here.
 --
--- Every constraint is added NOT VALID and validated at once, in this same
--- migration: an existing row that breaks one fails the deploy loudly, naming
--- the table and constraint, rather than being trimmed (house rule 1).
+-- Two migrations, as #673 did: this one adds every constraint NOT VALID
+-- (enforced on every new write from now on) and raises a NOTICE counting the
+-- existing rows that break it; 20260927150100_column_limits_validate.sql
+-- validates them, and fails loudly -- naming table and constraint -- if a row
+-- still breaks one. No row is trimmed to fit (house rule 1).
 --
 -- Every function below is rebuilt from main's latest body (pg_get_functiondef
 -- of the database main builds); the only changes are the lines marked
@@ -79,66 +81,105 @@ create trigger profiles_guard_text
 alter table public.profiles
   add constraint profiles_avatar_color_ck
   check (avatar_color is null or avatar_color ~ '^#[0-9A-Fa-f]{6}$') not valid;
-alter table public.profiles validate constraint profiles_avatar_color_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'profiles_avatar_color_ck',
+    (select count(*) from public.profiles where not (avatar_color is null or avatar_color ~ '^#[0-9A-Fa-f]{6}$'));
+end $$;
 
 alter table public.profiles
   add constraint profiles_full_name_length_ck check (char_length(full_name) <= 120) not valid;
-alter table public.profiles validate constraint profiles_full_name_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'profiles_full_name_length_ck',
+    (select count(*) from public.profiles where not (char_length(full_name) <= 120));
+end $$;
 
 alter table public.profiles
   add constraint profiles_email_length_ck check (char_length(email) <= 254) not valid;
-alter table public.profiles validate constraint profiles_email_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'profiles_email_length_ck',
+    (select count(*) from public.profiles where not (char_length(email) <= 254));
+end $$;
 
 -- ==================== 2. events, groups, group_members ====================
 alter table public.events
   add constraint events_location_length_ck
   check (location is null or char_length(location) <= 200) not valid;
-alter table public.events validate constraint events_location_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'events_location_length_ck',
+    (select count(*) from public.events where not (location is null or char_length(location) <= 200));
+end $$;
 
 alter table public.group_members
   add constraint group_members_position_title_length_ck
   check (position_title is null or char_length(position_title) <= 80) not valid;
-alter table public.group_members validate constraint group_members_position_title_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'group_members_position_title_length_ck',
+    (select count(*) from public.group_members where not (position_title is null or char_length(position_title) <= 80));
+end $$;
 
 alter table public.groups
   add constraint groups_manager_title_length_ck
   check (manager_title is null or char_length(manager_title) <= 80) not valid;
-alter table public.groups validate constraint groups_manager_title_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'groups_manager_title_length_ck',
+    (select count(*) from public.groups where not (manager_title is null or char_length(manager_title) <= 80));
+end $$;
 
 alter table public.groups
   add constraint groups_short_length_ck
   check (short is null or char_length(short) <= 16) not valid;
-alter table public.groups validate constraint groups_short_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'groups_short_length_ck',
+    (select count(*) from public.groups where not (short is null or char_length(short) <= 16));
+end $$;
 
 -- ==================== 3. ledger, guides, notifications ====================
 alter table public.points_ledger
   add constraint points_ledger_note_length_ck
   check (note is null or char_length(note) <= 1000) not valid;
-alter table public.points_ledger validate constraint points_ledger_note_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'points_ledger_note_length_ck',
+    (select count(*) from public.points_ledger where not (note is null or char_length(note) <= 1000));
+end $$;
 
 alter table public.rating_guide
   add constraint rating_guide_label_length_ck
   check (char_length(label) <= 60) not valid;
-alter table public.rating_guide validate constraint rating_guide_label_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'rating_guide_label_length_ck',
+    (select count(*) from public.rating_guide where not (char_length(label) <= 60));
+end $$;
 
 alter table public.rating_guide
   add constraint rating_guide_note_length_ck
   check (note is null or char_length(note) <= 1000) not valid;
-alter table public.rating_guide validate constraint rating_guide_note_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'rating_guide_note_length_ck',
+    (select count(*) from public.rating_guide where not (note is null or char_length(note) <= 1000));
+end $$;
 
 alter table public.difficulty_guide
   add constraint difficulty_guide_note_length_ck
   check (note is null or char_length(note) <= 1000) not valid;
-alter table public.difficulty_guide validate constraint difficulty_guide_note_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'difficulty_guide_note_length_ck',
+    (select count(*) from public.difficulty_guide where not (note is null or char_length(note) <= 1000));
+end $$;
 
 alter table public.notifications
   add constraint notifications_title_length_ck check (char_length(title) <= 200) not valid;
-alter table public.notifications validate constraint notifications_title_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'notifications_title_length_ck',
+    (select count(*) from public.notifications where not (char_length(title) <= 200));
+end $$;
 
 alter table public.notifications
   add constraint notifications_body_length_ck
   check (body is null or char_length(body) <= 2000) not valid;
-alter table public.notifications validate constraint notifications_body_length_ck;
+do $$ begin
+  raise notice '%: % existing row(s) break it', 'notifications_body_length_ck',
+    (select count(*) from public.notifications where not (body is null or char_length(body) <= 2000));
+end $$;
 
 -- ==================== 4. The commands, rebuilt from main ====================
 CREATE OR REPLACE FUNCTION private.create_event_impl(p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_location text DEFAULT NULL::text, p_capacity integer DEFAULT NULL::integer, p_description text DEFAULT NULL::text, p_min_level integer DEFAULT 0, p_campaign_id bigint DEFAULT NULL::bigint)
