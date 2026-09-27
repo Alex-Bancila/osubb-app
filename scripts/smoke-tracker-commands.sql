@@ -1155,7 +1155,7 @@ select pg_temp.smoke_assert(not exists(select 1 from information_schema.columns
 -- at its WHERE, so a filter on parent_id is not read as an assignment.
 select pg_temp.smoke_assert(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
  cross join lateral regexp_matches(p.prosrc,
-   'update[[:space:]]+public[.]groups[[:space:]]+((as[[:space:]]+)?[a-z_]+[[:space:]]+)?set([^;]*)', 'gi') as m
+   'update[[:space:]]+public[.]groups[[:space:]]+((as[[:space:]]+)?[a-z_][a-z0-9_$]*[[:space:]]+)?set([^;]*)', 'gi') as m
  where n.nspname in ('public','private')
    and split_part(lower(m[3]), 'where', 1) ~ '(^|[^a-z_.])parent_id[[:space:]]*='),
  'Wave 3: no live function reparents a Group');
