@@ -1,13 +1,20 @@
 import { useMemo, useRef, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { Link, useParams } from 'react-router';
-import { cn } from 'cn';
+import {
+  Page,
+  PageHeader,
+  panelBoxClass,
+  tabClass,
+  tabListClass,
+} from '../../components/layout';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
 import { parsePositiveInt } from '../../lib/ids';
+import { Loading } from '../../components/states';
 import { useRoles } from '../../queries/reference';
 import {
   groupAuthority,
@@ -76,6 +83,21 @@ function Breadcrumb({
     </nav>
   );
 }
+
+/** Back to the Grupuri tab this page sits under (#825). */
+function BackLink() {
+  return (
+    <Link
+      to="/administrare/grupuri"
+      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+    >
+      <ArrowLeft aria-hidden="true" className="size-4" />
+      Înapoi la Administrare
+    </Link>
+  );
+}
+
+const EYEBROW = 'OSUBB · Administrare · Grup';
 
 /**
  * One Group, with everything its Managers decide about it: settings, roster,
@@ -171,57 +193,61 @@ export default function GroupScreen() {
 
   if (parsedId !== null && groupsQuery.isPending)
     return (
-      <section className="p-4 md:p-6">
-        <p role="status">Se încarcă grupul…</p>
-      </section>
+      <Page aria-label="Grup">
+        <Loading label="Se încarcă grupul…" />
+      </Page>
     );
 
   if (!group)
     return (
-      <section className="space-y-3 p-4 md:p-6">
-        <h1 className="text-2xl font-bold">Grup</h1>
+      <Page>
+        <BackLink />
+        <PageHeader eyebrow={EYEBROW} title="Grup" />
         <p role="alert">Nu ai acces la acest grup sau grupul nu există.</p>
-        <Link
-          to="/administrare"
-          className="inline-flex min-h-11 items-center underline"
-        >
-          Înapoi la Administrare
-        </Link>
-      </section>
+      </Page>
     );
 
   const busy = command.isPending;
   const roster = rosterQuery.data ?? [];
 
   return (
-    <section
-      className="min-w-0 space-y-5 p-4 md:p-6"
-      aria-labelledby="group-title"
-    >
-      <header className="space-y-2">
+    <Page>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <BackLink />
         <Breadcrumb group={group} byId={byId} />
-        <div className="flex flex-wrap items-center gap-3">
-          <span
-            aria-hidden="true"
-            className="size-4 shrink-0 rounded-full"
-            style={{ backgroundColor: group.color ?? 'var(--brand-red)' }}
-          />
-          <h1 id="group-title" className="text-2xl font-bold">
-            {group.name}
-          </h1>
-          <Badge variant="outline">{categoryLabel(group.category)}</Badge>
-          <PrivateGroupBadge isPrivate={group.is_private} />
-          {group.status !== 'active' && (
-            <Badge variant="secondary">{groupStatusLabel(group.status)}</Badge>
-          )}
-        </div>
-        <p className="text-muted-foreground">
-          Nivel minim {group.min_level}
-          {group.automatic_membership
-            ? ' · membri adăugați automat'
-            : ` · ${group.memberCount} membri`}
-        </p>
-      </header>
+      </div>
+      <PageHeader
+        eyebrow={EYEBROW}
+        title={
+          <span className="inline-flex max-w-full min-w-0 items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="size-4 shrink-0 rounded-full"
+              style={{ backgroundColor: group.color ?? 'var(--brand-red)' }}
+            />
+            <span className="min-w-0">{group.name}</span>
+          </span>
+        }
+        badge={
+          <>
+            <Badge variant="outline">{categoryLabel(group.category)}</Badge>
+            <PrivateGroupBadge isPrivate={group.is_private} />
+            {group.status !== 'active' && (
+              <Badge variant="secondary">
+                {groupStatusLabel(group.status)}
+              </Badge>
+            )}
+          </>
+        }
+        description={
+          <>
+            Nivel minim {group.min_level}
+            {group.automatic_membership
+              ? ' · membri adăugați automat'
+              : ` · ${group.memberCount} membri`}
+          </>
+        }
+      />
 
       {message && <p role="status">{message}</p>}
       {error && (
@@ -233,7 +259,7 @@ export default function GroupScreen() {
       <div
         role="tablist"
         aria-label="Secțiunile grupului"
-        className="flex flex-wrap gap-1 border-b"
+        className={tabListClass}
       >
         {TABS.map((item) => (
           <button
@@ -244,12 +270,7 @@ export default function GroupScreen() {
             aria-selected={tab === item.id}
             aria-controls={`panel-${item.id}`}
             tabIndex={tab === item.id ? 0 : -1}
-            className={cn(
-              'min-h-11 rounded-t-md px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring',
-              tab === item.id
-                ? 'border-b-2 border-primary text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
+            className={tabClass}
             onClick={() => setTab(item.id)}
           >
             {item.label}
@@ -262,6 +283,8 @@ export default function GroupScreen() {
         id={`panel-${tab}`}
         aria-labelledby={`tab-${tab}`}
         tabIndex={0}
+        // Campanii is itself a Panel; every other tab sits in the one box.
+        className={tab === 'campanii' ? undefined : panelBoxClass}
       >
         {tab === 'setari' && (
           <GroupSettingsTab
@@ -358,11 +381,6 @@ export default function GroupScreen() {
           Vezi grupul, dar schimbările îi revin coordonatorului lui.
         </p>
       )}
-
-      <Button
-        variant="outline"
-        render={<Link to="/administrare">Înapoi la Administrare</Link>}
-      />
-    </section>
+    </Page>
   );
 }

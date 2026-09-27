@@ -1,5 +1,14 @@
 import { useState, type FormEvent } from 'react';
+import { ArrowLeft, History, Pencil, Users } from 'lucide-react';
 import { Link, useParams } from 'react-router';
+import {
+  ListRow,
+  Page,
+  PageHeader,
+  Panel,
+  panelBoxClass,
+  rowListClass,
+} from '../../components/layout';
 import { memberDisplayName } from '../../components/member/member-identity';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
@@ -68,48 +77,48 @@ function IdentityEditor({ member }: { member: AdminMember }) {
   }
 
   return (
-    <form
-      noValidate
-      onSubmit={save}
-      className="grid gap-3 rounded-xl border p-5"
-    >
-      <h2 className="text-lg font-semibold">Nume și pseudonim</h2>
-      <div className="grid gap-1.5">
-        <label className="grid gap-1">
-          Pseudonim
-          <input
-            className={control}
-            value={nickname}
-            disabled={change.isPending}
-            onChange={(event) => setNickname(event.target.value)}
-            {...form.field('nickname', 'member-nickname-hint')}
-          />
-        </label>
-        <p id="member-nickname-hint" className="text-sm text-muted-foreground">
-          Dacă îl lași gol, se afișează numele complet.
-        </p>
-        <FieldError {...form.errorProps('nickname')} />
-      </div>
-      <div className="grid gap-1.5">
-        <label className="grid gap-1">
-          Nume complet
-          <input
-            className={control}
-            value={fullName}
-            required
-            disabled={change.isPending}
-            onChange={(event) => setFullName(event.target.value)}
-            {...form.field('fullName')}
-          />
-        </label>
-        <FieldError {...form.errorProps('fullName')} />
-      </div>
-      <Button type="submit" disabled={change.isPending}>
-        {change.isPending ? 'Se salvează…' : 'Salvează numele'}
-      </Button>
-      <FieldError>{form.formError}</FieldError>
-      {message && <p role="status">{message}</p>}
-    </form>
+    <Panel eyebrow="Cont" icon={Pencil} title="Nume și pseudonim">
+      <form noValidate onSubmit={save} className="grid gap-3">
+        <div className="grid gap-1.5">
+          <label className="grid gap-1">
+            Pseudonim
+            <input
+              className={control}
+              value={nickname}
+              disabled={change.isPending}
+              onChange={(event) => setNickname(event.target.value)}
+              {...form.field('nickname', 'member-nickname-hint')}
+            />
+          </label>
+          <p
+            id="member-nickname-hint"
+            className="text-sm text-muted-foreground"
+          >
+            Dacă îl lași gol, se afișează numele complet.
+          </p>
+          <FieldError {...form.errorProps('nickname')} />
+        </div>
+        <div className="grid gap-1.5">
+          <label className="grid gap-1">
+            Nume complet
+            <input
+              className={control}
+              value={fullName}
+              required
+              disabled={change.isPending}
+              onChange={(event) => setFullName(event.target.value)}
+              {...form.field('fullName')}
+            />
+          </label>
+          <FieldError {...form.errorProps('fullName')} />
+        </div>
+        <Button type="submit" disabled={change.isPending}>
+          {change.isPending ? 'Se salvează…' : 'Salvează numele'}
+        </Button>
+        <FieldError>{form.formError}</FieldError>
+        {message && <p role="status">{message}</p>}
+      </form>
+    </Panel>
   );
 }
 
@@ -123,23 +132,64 @@ function LedgerSource({ row }: { row: LedgerRow }) {
   return <>{row.reason === 'sanction' ? 'Sancțiune' : 'Ajustare'}</>;
 }
 
+/** Back to the Membri tab this page sits under (#825). */
+function BackLink() {
+  return (
+    <Link
+      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      to="/administrare/membri"
+    >
+      <ArrowLeft aria-hidden="true" className="size-4" />
+      Înapoi la Administrare
+    </Link>
+  );
+}
+
+const EYEBROW = 'OSUBB · Administrare · Membru';
+
+function MemberUnavailable() {
+  return (
+    <Page>
+      <BackLink />
+      <PageHeader eyebrow={EYEBROW} title="Membru indisponibil" />
+    </Page>
+  );
+}
+
+function PointsPanel({ points }: { points: readonly LedgerRow[] }) {
+  return (
+    <Panel eyebrow="Puncte" icon={History} title="Istoric puncte">
+      {!points.length ? (
+        <Empty text="Nu există înregistrări pe care le poți vedea." />
+      ) : (
+        <ul className={rowListClass}>
+          {points.map((row) => (
+            <ListRow
+              key={row.id}
+              value={
+                <strong>
+                  {row.delta > 0 ? '+' : ''}
+                  {formatPoints(row.delta)} puncte
+                </strong>
+              }
+            >
+              {new Date(row.created_at).toLocaleDateString('ro-RO')} ·{' '}
+              <LedgerSource row={row} />
+            </ListRow>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
 /**
  * One Member's page in Administrare (#103; ADR-0009 §Management surface).
  * Everything on it is what the server returned for this viewer: the Member
  * Card's Groups (Private Groups already filtered), contact details only when
  * `profiles_contact` answers, and only the ledger rows RLS lets them read.
+ * A sub-page of the Membri tab: back link, no tab bar (#825).
  */
-function MemberUnavailable() {
-  return (
-    <section className="page space-y-4">
-      <h1 className="text-2xl font-semibold">Membru indisponibil</h1>
-      <Link className="underline" to="/administrare">
-        Înapoi la Administrare
-      </Link>
-    </section>
-  );
-}
-
 export default function MemberScreen() {
   const { memberId: raw } = useParams();
   // A malformed id is no Member: nothing is queried and the page says so.
@@ -160,9 +210,18 @@ export default function MemberScreen() {
     groups.isPending ||
     mine.isPending
   )
-    return <Loading label="Se încarcă membrul…" />;
+    return (
+      <Page aria-label="Membru">
+        <Loading label="Se încarcă membrul…" />
+      </Page>
+    );
   if (member.isError || capabilities.isError || groups.isError || mine.isError)
-    return <ErrorState text="Nu am putut încărca membrul. Reîncarcă pagina." />;
+    return (
+      <Page aria-label="Membru">
+        <BackLink />
+        <ErrorState text="Nu am putut încărca membrul. Reîncarcă pagina." />
+      </Page>
+    );
   const data = member.data;
   if (!data) return <MemberUnavailable />;
 
@@ -184,25 +243,23 @@ export default function MemberScreen() {
   const name = memberDisplayName(data.nickname, data.fullName);
 
   return (
-    <section className="page space-y-6">
-      <Link className="underline" to="/administrare">
-        Înapoi la Administrare
-      </Link>
-      <header className="flex items-center gap-3">
-        <MemberAvatar
-          name={data.fullName}
-          avatarColor={data.avatarColor}
-          className="size-12 text-base"
-        />
-        <div className="min-w-0">
-          <p className="text-sm text-muted-foreground">Administrare · Membru</p>
-          <h1 className="text-2xl font-semibold break-words">{name}</h1>
-          {name !== data.fullName && (
-            <p className="text-muted-foreground">{data.fullName}</p>
-          )}
-        </div>
-      </header>
-      <dl className="grid gap-3 rounded-xl border p-5 sm:grid-cols-2">
+    <Page>
+      <BackLink />
+      <PageHeader
+        eyebrow={EYEBROW}
+        title={
+          <span className="inline-flex max-w-full min-w-0 items-center gap-3">
+            <MemberAvatar
+              name={data.fullName}
+              avatarColor={data.avatarColor}
+              className="size-10 text-sm"
+            />
+            <span className="min-w-0">{name}</span>
+          </span>
+        }
+        description={name !== data.fullName ? data.fullName : undefined}
+      />
+      <dl className={`${panelBoxClass} m-0 grid gap-3 sm:grid-cols-2`}>
         <div>
           <dt>Rol organizațional</dt>
           <dd className="font-medium">{data.roleLabel ?? '—'}</dd>
@@ -244,55 +301,31 @@ export default function MemberScreen() {
       {canEdit && (
         <ReinvitePanel key={data.memberId} memberId={data.memberId} />
       )}
-      <section className="space-y-3 rounded-xl border p-5">
-        <h2 className="text-lg font-semibold">Grupuri</h2>
+      <Panel eyebrow="Grupuri" icon={Users} title="Grupuri">
         {!visibleGroups.length ? (
           <Empty text="Nu există grupuri în aria ta de administrare." />
         ) : (
-          <ul className="space-y-3">
+          <ul className={rowListClass}>
             {visibleGroups.map((group) => (
-              <li key={group.id}>
+              <ListRow key={group.id}>
                 <Link
                   className="font-medium underline"
                   to={`/administrare/grupuri/${group.id}`}
                 >
                   {group.label}
                 </Link>
-                <p className="text-sm text-muted-foreground">
+                <p className="m-0 text-sm text-muted-foreground">
                   Rol în grup: {group.roleLabel}
                 </p>
-              </li>
+              </ListRow>
             ))}
           </ul>
         )}
-      </section>
+      </Panel>
       {canEdit && (
         <RolePanel key={data.memberId} selectedMemberId={data.memberId} />
       )}
-      <section className="space-y-3 rounded-xl border p-5">
-        <h2 className="text-lg font-semibold">Istoric puncte</h2>
-        {!data.points.length ? (
-          <Empty text="Nu există înregistrări pe care le poți vedea." />
-        ) : (
-          <ul className="divide-y">
-            {data.points.map((row) => (
-              <li
-                key={row.id}
-                className="flex flex-wrap justify-between gap-2 py-3"
-              >
-                <span>
-                  {new Date(row.created_at).toLocaleDateString('ro-RO')} ·{' '}
-                  <LedgerSource row={row} />
-                </span>
-                <strong>
-                  {row.delta > 0 ? '+' : ''}
-                  {formatPoints(row.delta)} puncte
-                </strong>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </section>
+      <PointsPanel points={data.points} />
+    </Page>
   );
 }

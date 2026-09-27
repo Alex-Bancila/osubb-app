@@ -158,39 +158,16 @@ export function useRetentionSignals(periodId: number | null) {
   });
 }
 
-/** The organization settings (#681), by key. */
-export async function fetchOrgSettings(): Promise<Map<string, string | null>> {
-  const { data, error } = await supabase
-    .from('org_settings')
-    .select('key, value');
-  if (error) throw error;
-  return new Map((data ?? []).map((row) => [row.key, row.value]));
-}
-
-export function useOrgSettings() {
-  const memberId = useAuth().session?.user.id;
-  return useQuery({
-    queryKey: keys.orgSettings.list(memberId),
-    queryFn: memberId ? fetchOrgSettings : skipToken,
-  });
-}
-
 /** What the panel asks the server to do. */
 export type PeriodCommand =
   | { kind: 'open'; name: string }
   | { kind: 'close'; periodId: number }
-  | { kind: 'initialThreshold'; ruleId: number; threshold: number }
-  | {
-      kind: 'orgSetting';
-      key: 'adherence_form_url' | 'adunarea_generala_group_id';
-      value: string | null;
-    };
+  | { kind: 'initialThreshold'; ruleId: number; threshold: number };
 
 const FAILED: Record<PeriodCommand['kind'], string> = {
   open: 'Nu am putut deschide perioada. Reîncearcă.',
   close: 'Nu am putut închide perioada. Reîncearcă.',
   initialThreshold: 'Nu am putut salva pragul inițial. Reîncearcă.',
-  orgSetting: 'Nu am putut salva setarea. Reîncearcă.',
 };
 
 export async function runPeriodCommand(command: PeriodCommand) {
@@ -201,16 +178,10 @@ export async function runPeriodCommand(command: PeriodCommand) {
         ? await supabase.rpc('close_evaluation_period', {
             p_period_id: command.periodId,
           })
-        : command.kind === 'initialThreshold'
-          ? await supabase.rpc('set_promotion_rule', {
-              p_rule_id: command.ruleId,
-              p_initial_threshold: command.threshold,
-            })
-          : await supabase.rpc('set_org_setting', {
-              p_key: command.key,
-              // A blank value clears the setting on the server too.
-              p_value: command.value ?? '',
-            });
+        : await supabase.rpc('set_promotion_rule', {
+            p_rule_id: command.ruleId,
+            p_initial_threshold: command.threshold,
+          });
   if (result.error) throw new CommandError(result.error, FAILED[command.kind]);
 }
 
@@ -218,25 +189,21 @@ export async function runPeriodCommand(command: PeriodCommand) {
  * One mutation for the panel. Opening, closing and seeding refresh the Period,
  * threshold and signal reads together (`['evaluation']`); a close also
  * promotes Members, so the rosters and Roles Administrare shows are refreshed
- * with it. A setting refreshes the settings.
+ * with it.
  */
 export function usePeriodCommand() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: runPeriodCommand,
     onSettled: (_data, _error, command) =>
-      Promise.all(
-        command.kind === 'orgSetting'
-          ? [client.invalidateQueries({ queryKey: keys.orgSettings.all })]
-          : [
-              client.invalidateQueries({ queryKey: keys.evaluation.all }),
-              ...(command.kind === 'close'
-                ? [
-                    client.invalidateQueries({ queryKey: keys.groups.all }),
-                    client.invalidateQueries({ queryKey: keys.members.all }),
-                  ]
-                : []),
-            ],
-      ),
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.evaluation.all }),
+        ...(command.kind === 'close'
+          ? [
+              client.invalidateQueries({ queryKey: keys.groups.all }),
+              client.invalidateQueries({ queryKey: keys.members.all }),
+            ]
+          : []),
+      ]),
   });
 }

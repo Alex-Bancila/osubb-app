@@ -12,6 +12,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
+import { matchPath } from 'react-router';
 import type { Capability } from '../../lib/capabilities';
 
 export type NavItem = {
@@ -22,8 +23,13 @@ export type NavItem = {
   /** Shown to everyone when absent; otherwise gated on this server
    *  capability (`my_capabilities()`, live rank and Group Roles). */
   capability?: Capability;
-  /** Active only on this exact path, not on the routes nested below it. */
-  exact?: boolean;
+  /**
+   * The routes the item is active on, as whole React Router patterns, when
+   * its path and everything below it is too wide: Administrare and Campanii
+   * share `/administrare/…`, so each names its own pages and the sidebar never
+   * marks both (#825).
+   */
+  activeOn?: readonly string[];
   /** Mobile shows five of these; the rest live in the drawer. */
   onTabBar?: boolean;
 };
@@ -61,6 +67,10 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Campanii',
     icon: Tag,
     capability: 'manageTasks',
+    activeOn: [
+      '/administrare/campanii/*',
+      '/administrare/grupuri/:groupId/campanii/*',
+    ],
   },
   {
     path: '/calendar',
@@ -87,9 +97,37 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Administrare',
     icon: ShieldCheck,
     capability: 'administer',
-    exact: true,
+    // The area's tabs and the Group and Member pages below them — never the
+    // Campaign pages, which are Campanii's.
+    activeOn: [
+      '/administrare',
+      '/administrare/membri/*',
+      '/administrare/grupuri',
+      '/administrare/grupuri/:groupId',
+      '/administrare/roluri',
+      '/administrare/cereri',
+      '/administrare/evaluari',
+      '/administrare/perioade',
+      '/administrare/confidentialitate',
+      '/administrare/setari',
+    ],
   },
 ];
+
+/**
+ * Whether the item is the current page's: one of its `activeOn` patterns
+ * matches the whole path, or — without them — the path is the item's own or
+ * below it (`/` only on itself). The sidebar, the tab bar and the page title
+ * all ask here.
+ */
+export function isNavItemActive(item: NavItem, pathname: string): boolean {
+  if (item.activeOn)
+    return item.activeOn.some(
+      (pattern) => matchPath({ path: pattern, end: true }, pathname) !== null,
+    );
+  if (item.path === '/') return pathname === '/';
+  return pathname === item.path || pathname.startsWith(`${item.path}/`);
+}
 
 /* The mobile bar carries five, in a different order from the sidebar:
    the two things people open the app for come first. */

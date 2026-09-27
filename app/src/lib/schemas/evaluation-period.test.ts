@@ -1,9 +1,5 @@
 import { expect, it } from 'vitest';
-import {
-  adherenceFormSchema,
-  initialThresholdSchema,
-  periodNameSchema,
-} from './evaluation-period';
+import { initialThresholdSchema, periodNameSchema } from './evaluation-period';
 
 const issue = (result: {
   success: boolean;
@@ -33,20 +29,5 @@ it('takes a whole initial threshold of at least 1', () => {
     ).toBe('invalid_initial_threshold');
   expect(initialThresholdSchema.parse({ threshold: ' 40 ' })).toEqual({
     threshold: 40,
-  });
-});
-
-it('takes an http(s) adherence-form address of at most 2048 characters, or clears it', () => {
-  expect(adherenceFormSchema.parse({ url: '   ' })).toEqual({ url: null });
-  expect(issue(adherenceFormSchema.safeParse({ url: 'ftp://x.ro' }))).toBe(
-    'link_url_invalid',
-  );
-  expect(
-    issue(
-      adherenceFormSchema.safeParse({ url: `https://${'a'.repeat(2041)}` }),
-    ),
-  ).toBe('link_url_too_long');
-  expect(adherenceFormSchema.parse({ url: ' https://forms.ro/a ' })).toEqual({
-    url: 'https://forms.ro/a',
   });
 });

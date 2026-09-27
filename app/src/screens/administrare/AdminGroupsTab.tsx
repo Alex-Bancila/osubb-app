@@ -1,10 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, ChevronRight, Network } from 'lucide-react';
 import { Link } from 'react-router';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
+import { Panel } from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useCapabilities } from '../../lib/capabilities';
@@ -22,9 +25,7 @@ import {
 } from '../../queries/groups-admin';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { GroupCreateDialog } from './GroupCreateDialog';
-import { RolePanel } from './RolePanel';
-import { PrivacyPanel } from './PrivacyPanel';
-import { CsvImportPanel } from './CsvImportPanel';
+import { useAdministrareActionSlot } from './administrare-tabs';
 import {
   buildTree,
   categoryLabel,
@@ -218,24 +219,31 @@ function GroupTree({ groups }: { groups: AdminGroup[] }) {
   const columns = treeColumns(expanded, toggle);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p role="status" className="text-sm text-muted-foreground">
-          {groups.length === 1 ? '1 grup' : `${groups.length} grupuri`}
-        </p>
-        {expandable.length > 0 && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setExpanded(allOpen ? new Set<number>() : new Set(expandable))
-            }
-          >
-            {allOpen ? 'Restrânge tot' : 'Extinde tot'}
-          </Button>
-        )}
-      </div>
+    <Panel
+      eyebrow="Grupuri"
+      icon={Network}
+      title="Structura grupurilor"
+      control={
+        <>
+          <p role="status" className="m-0 text-sm text-muted-foreground">
+            {groups.length === 1 ? '1 grup' : `${groups.length} grupuri`}
+          </p>
+          {expandable.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11"
+              onClick={() =>
+                setExpanded(allOpen ? new Set<number>() : new Set(expandable))
+              }
+            >
+              {allOpen ? 'Restrânge tot' : 'Extinde tot'}
+            </Button>
+          )}
+        </>
+      }
+    >
       <DataTable
         columns={columns}
         data={shown}
@@ -244,7 +252,7 @@ function GroupTree({ groups }: { groups: AdminGroup[] }) {
           row.group.status === 'active' ? '' : 'text-muted-foreground'
         }
       />
-    </div>
+    </Panel>
   );
 }
 
@@ -268,14 +276,14 @@ function MyGroupsTable({
 }
 
 /**
- * Administrare, scoped by authority (ADR-0009 §Management surface).
- *
- * BC and Moderator see the whole Group tree; a Group Manager or Responsible
- * sees the Groups they hold a position in — including the Child Groups they
- * reach only through an ancestor (ruling R14). The same Group screen opens
- * from either list, so there is one flow and one command set.
+ * Administrare → Grupuri, scoped by authority (ADR-0009 §Management surface;
+ * #825). BC and Moderator see the whole Group tree and create a top-level
+ * Group from the page header; a Group Manager or Responsible sees the Groups
+ * they hold a position in — including the Child Groups they reach only
+ * through an ancestor (ruling R14). The same Group screen opens from either
+ * list, so there is one flow and one command set.
  */
-export default function AdministrareScreen() {
+export default function AdminGroupsTab() {
   const capabilities = useCapabilities();
   const createTopLevel = capabilities.data?.createTopLevelGroups === true;
   const groupsQuery = useAdminGroups();
@@ -338,24 +346,16 @@ export default function AdministrareScreen() {
     ? groupsQuery.isPending
     : myGroupsQuery.isPending;
   const failed = createTopLevel ? groupsQuery.isError : myGroupsQuery.isError;
+  const actionSlot = useAdministrareActionSlot();
+  const title = createTopLevel ? 'Structura grupurilor' : 'Grupurile mele';
+  const retry = () =>
+    void (createTopLevel ? groupsQuery.refetch() : myGroupsQuery.refetch());
 
   return (
-    <section
-      className="min-w-0 space-y-5 p-4 md:p-6"
-      aria-labelledby="admin-title"
-    >
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 id="admin-title" className="text-2xl font-bold">
-            Administrare
-          </h1>
-          <p className="text-muted-foreground">
-            {createTopLevel
-              ? 'Grupurile OSUBB, cu setările, membrii și subgrupurile lor.'
-              : 'Grupurile pe care le coordonezi.'}
-          </p>
-        </div>
-        {createTopLevel && (
+    <>
+      {createTopLevel &&
+        actionSlot &&
+        createPortal(
           <GroupCreateDialog
             trigger="Creează Grup"
             title="Grup nou"
@@ -368,9 +368,9 @@ export default function AdministrareScreen() {
             disabled={command.isPending}
             choosePrivate={createTopLevel}
             onCreate={run}
-          />
+          />,
+          actionSlot,
         )}
-      </header>
 
       {message && <p role="status">{message}</p>}
       {error && (
@@ -379,48 +379,24 @@ export default function AdministrareScreen() {
         </p>
       )}
 
-      {capabilities.data?.manageRoles === true && (
-        <nav aria-label="Panouri BC">
-          <Link
-            to="/administrare/perioade"
-            className="inline-flex min-h-11 items-center font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            Perioade de evaluare
-          </Link>
-        </nav>
-      )}
-
-      {capabilities.data?.manageRoles === true && <RolePanel />}
-      {capabilities.data?.manageRoles === true && <PrivacyPanel />}
-
       {pending ? (
-        <p role="status">Se încarcă grupurile…</p>
+        <Panel eyebrow="Grupuri" icon={Network} title={title}>
+          <Loading label="Se încarcă grupurile…" />
+        </Panel>
       ) : failed ? (
-        <div role="alert" className="space-y-3">
-          <p>Nu am putut încărca grupurile.</p>
-          <Button
-            variant="outline"
-            onClick={() =>
-              void (createTopLevel
-                ? groupsQuery.refetch()
-                : myGroupsQuery.refetch())
-            }
-          >
-            Încearcă din nou
-          </Button>
-        </div>
+        <Panel eyebrow="Grupuri" icon={Network} title={title}>
+          <ErrorState text="Nu am putut încărca grupurile." onRetry={retry} />
+        </Panel>
       ) : createTopLevel ? (
         <GroupTree groups={groups} />
       ) : (
-        <>
-          <h2 className="text-xl font-semibold">Grupurile mele</h2>
+        <Panel eyebrow="Grupuri" icon={Network} title={title}>
           <MyGroupsTable
             groups={myGroupsQuery.data ?? []}
             privateIds={privateIds}
           />
-        </>
+        </Panel>
       )}
-      {capabilities.data?.provisionMembers === true && <CsvImportPanel />}
-    </section>
+    </>
   );
 }

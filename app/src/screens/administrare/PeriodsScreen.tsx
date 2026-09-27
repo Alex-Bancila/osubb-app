@@ -16,28 +16,23 @@ import { BUCHAREST_TIME_ZONE } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
 import { formatPoints } from '../../lib/format';
 import {
-  adherenceFormFieldForReason,
-  adherenceFormSchema,
   initialThresholdFieldForReason,
   initialThresholdSchema,
   periodNameFieldForReason,
   periodNameSchema,
 } from '../../lib/schemas/evaluation-period';
-import { safeHttpUrl } from '../../lib/links';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
   lastClosedPeriod,
   openPeriod,
   thresholdSource,
   useEvaluationPeriods,
-  useOrgSettings,
   usePeriodCommand,
   usePromotionThreshold,
   useRetentionSignals,
   type EvaluationPeriod,
   type PeriodCommand,
 } from '../../queries/evaluation-periods';
-import { useAdminGroups } from '../../queries/groups-admin';
 import { useMemberIdentities } from '../../queries/member-identities';
 
 const control =
@@ -468,7 +463,7 @@ function RetentionSignalsCard({
                   </span>
                 </span>
                 <Link
-                  to={`/administrare?membru=${encodeURIComponent(signal.memberId)}`}
+                  to={`/administrare/roluri?membru=${encodeURIComponent(signal.memberId)}`}
                   aria-label={`Editează rolul: ${shown}`}
                   className={cn(buttonVariants({ variant: 'outline' }))}
                 >
@@ -484,243 +479,19 @@ function RetentionSignalsCard({
 }
 
 /* ------------------------------------------------------------------------ */
-/* Formular de adeziune                                                      */
-/* ------------------------------------------------------------------------ */
-
-function AdherenceFormCard({
-  current,
-  disabled,
-  onRun,
-}: {
-  current: string | null;
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const inputId = useId();
-  const hintId = useId();
-  const currentUrl = safeHttpUrl(current);
-  const [url, setUrl] = useState(current ?? '');
-  const [message, setMessage] = useState<string | null>(null);
-  const form = useFormValidation(
-    adherenceFormSchema,
-    { url },
-    adherenceFormFieldForReason,
-  );
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    const values = form.validate();
-    if (!values) return;
-    try {
-      await onRun({
-        kind: 'orgSetting',
-        key: 'adherence_form_url',
-        value: values.url,
-      });
-      setMessage(
-        values.url === null
-          ? 'Adresa formularului a fost ștearsă.'
-          : 'Adresa formularului a fost salvată.',
-      );
-    } catch (failure) {
-      form.fail(failure, 'Nu am putut salva setarea. Reîncearcă.');
-    }
-  }
-
-  return (
-    <section aria-labelledby="period-form-title" className={card}>
-      <div>
-        <h2 id="period-form-title" className="text-xl font-semibold">
-          Formular de adeziune
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Linkul pe care îl primește un membru promovat Voluntar Activ.
-        </p>
-      </div>
-      <p className="break-all">
-        {currentUrl ? (
-          <a
-            href={currentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-4"
-          >
-            {current}
-          </a>
-        ) : current ? (
-          // Not http(s): shown as text so BC can see and replace it, never as a link.
-          <span>{current}</span>
-        ) : (
-          <span className="text-muted-foreground">Niciun formular setat</span>
-        )}
-      </p>
-      <form onSubmit={submit} noValidate className="grid max-w-xl gap-1.5">
-        <label htmlFor={inputId} className="text-sm font-medium">
-          Adresa formularului
-        </label>
-        <p id={hintId} className="text-sm text-muted-foreground">
-          Începe cu http:// sau https://. Lasă gol ca să ștergi adresa.
-        </p>
-        <div className="flex gap-2">
-          <input
-            id={inputId}
-            type="url"
-            inputMode="url"
-            className={control}
-            value={url}
-            disabled={disabled}
-            onChange={(event) => setUrl(event.target.value)}
-            {...form.field('url', hintId)}
-          />
-          <Button type="submit" disabled={disabled}>
-            Salvează
-          </Button>
-        </div>
-        <FieldError {...form.errorProps('url')} />
-        <FieldError>{form.formError}</FieldError>
-        {message && <p role="status">{message}</p>}
-      </form>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
-/* Adunarea Generală (#512)                                                  */
-/* ------------------------------------------------------------------------ */
-
-function AdunareaGeneralaCard({
-  current,
-  disabled,
-  onRun,
-}: {
-  current: string | null;
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const selectId = useId();
-  const groups = useAdminGroups();
-  const [draft, setDraft] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const currentGroup = groups.data?.find(
-    (group) => String(group.id) === current,
-  );
-  const choices = useMemo(
-    () =>
-      (groups.data ?? [])
-        .filter((group) => group.status === 'active' && !group.is_private)
-        .sort((a, b) => a.name.localeCompare(b.name, 'ro')),
-    [groups.data],
-  );
-  const chosen = draft || current || '';
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    setError(null);
-    try {
-      await onRun({
-        kind: 'orgSetting',
-        key: 'adunarea_generala_group_id',
-        value: chosen,
-      });
-      setMessage('Grupul Adunării Generale a fost salvat.');
-    } catch (failure) {
-      setError(
-        describeFailure(failure, 'Nu am putut salva setarea. Reîncearcă.')
-          .message,
-      );
-    }
-  }
-
-  return (
-    <section aria-labelledby="period-ag-title" className={card}>
-      <div>
-        <h2 id="period-ag-title" className="text-xl font-semibold">
-          Adunarea Generală
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Managerii și responsabilii acestui grup văd clasamentele complete ale
-          perioadelor și semnalele de retenție.
-        </p>
-      </div>
-      <p>
-        {current === null ? (
-          <span className="text-muted-foreground">Niciun grup setat</span>
-        ) : (
-          <span className="font-semibold">
-            {currentGroup?.name ?? `Grupul #${current}`}
-          </span>
-        )}
-      </p>
-      {groups.isPending ? (
-        <Loading label="Se încarcă grupurile…" />
-      ) : groups.isError ? (
-        <p role="alert">Nu am putut încărca grupurile.</p>
-      ) : (
-        <form onSubmit={submit} className="grid max-w-xl gap-1.5">
-          <label htmlFor={selectId} className="text-sm font-medium">
-            Grupul Adunării Generale
-          </label>
-          <div className="flex gap-2">
-            <select
-              id={selectId}
-              className={control}
-              value={chosen}
-              disabled={disabled}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                setMessage(null);
-                setError(null);
-              }}
-            >
-              {!choices.some((group) => String(group.id) === chosen) && (
-                <option value={chosen}>
-                  {chosen === ''
-                    ? 'Alege un grup'
-                    : (currentGroup?.name ?? 'Grupul actual')}
-                </option>
-              )}
-              {choices.map((group) => (
-                <option key={group.id} value={String(group.id)}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-            <Button
-              type="submit"
-              disabled={disabled || chosen === '' || chosen === current}
-            >
-              Salvează
-            </Button>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          {message && <p role="status">{message}</p>}
-        </form>
-      )}
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
 /* The panel                                                                 */
 /* ------------------------------------------------------------------------ */
 
 /**
- * Perioade de evaluare (#702, ruling R20): where BC and the Moderator open
- * and close the Evaluation Period, seed the Promotion Threshold before the
- * first close, read the last close's Retention Signals and set the two
- * organization settings the close depends on. Mounted behind
- * `manageRoles`; every command decides again on the server.
+ * Perioade de evaluare (#702, ruling R20), the Administrare tab **Evaluări de
+ * rol** (#825; #826/#827 rebuild it as Role Evaluations): where BC and the
+ * Moderator open and close the Evaluation Period, seed the Promotion
+ * Threshold before the first close and read the last close's Retention
+ * Signals. The two organization settings moved to the Setări tab. Mounted
+ * behind `manageRoles`; every command decides again on the server.
  */
 export default function PeriodsScreen() {
   const periods = useEvaluationPeriods();
-  const settings = useOrgSettings();
   const command = usePeriodCommand();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -737,26 +508,7 @@ export default function PeriodsScreen() {
   };
 
   return (
-    <section
-      className="min-w-0 space-y-5 p-4 md:p-6"
-      aria-labelledby="periods-title"
-    >
-      <header className="space-y-1">
-        <Link
-          to="/administrare"
-          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-        >
-          Înapoi la Administrare
-        </Link>
-        <h1 id="periods-title" className="text-2xl font-bold">
-          Perioade de evaluare
-        </h1>
-        <p className="text-muted-foreground">
-          Deschiderea și închiderea perioadei, pragul de promovare și ce a
-          rezultat din ultima închidere.
-        </p>
-      </header>
-
+    <>
       {message && <p role="status">{message}</p>}
 
       {periods.isPending ? (
@@ -785,25 +537,6 @@ export default function PeriodsScreen() {
           </div>
         </div>
       )}
-
-      {settings.isPending ? (
-        <Loading label="Se încarcă setările…" />
-      ) : settings.isError ? (
-        <p role="alert">Nu am putut încărca setările organizației.</p>
-      ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <AdherenceFormCard
-            current={settings.data.get('adherence_form_url') ?? null}
-            disabled={command.isPending}
-            onRun={run}
-          />
-          <AdunareaGeneralaCard
-            current={settings.data.get('adunarea_generala_group_id') ?? null}
-            disabled={command.isPending}
-            onRun={run}
-          />
-        </div>
-      )}
-    </section>
+    </>
   );
 }

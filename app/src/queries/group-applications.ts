@@ -59,6 +59,92 @@ export async function fetchGroupApplications(
     };
   });
 }
+/** A pending Application in the Cereri queue, with its Group's name. */
+export type ManagedGroupApplication = GroupApplication & {
+  group: { id: number; name: string };
+};
+
+/**
+ * Every pending Group Application the viewer may decide on, across all the
+ * Groups they manage (Administrare → Cereri, #825, decision D3). No Group
+ * filter: `group_applications_read` already returns exactly the Groups the
+ * viewer manages work in, plus their own Applications — which are dropped
+ * here, because nobody decides their own.
+ */
+export async function fetchManagedGroupApplications(
+  memberId: string,
+): Promise<ManagedGroupApplication[]> {
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('group_applications')
+      .select('*')
+      .eq('status', 'pending')
+      .neq('member_id', memberId)
+      .order('created_at')
+      .order('id')
+      .range(from, to),
+  );
+  // The filter above is the server's; this one keeps the rule if it is lost.
+  const theirs = rows.filter((row) => row.member_id !== memberId);
+  const memberIds = [...new Set(theirs.map((row) => row.member_id))];
+  const groupIds = [...new Set(theirs.map((row) => row.group_id))];
+  const [profiles, groups] = await Promise.all([
+    memberIds.length
+      ? readAllRows((from, to) =>
+          supabase
+            .from('profiles_directory')
+            .select('id, full_name, nickname, avatar_color')
+            .in('id', memberIds)
+            .order('id')
+            .range(from, to),
+        )
+      : Promise.resolve([]),
+    groupIds.length
+      ? readAllRows((from, to) =>
+          supabase
+            .from('groups')
+            .select('id, name')
+            .in('id', groupIds)
+            .order('id')
+            .range(from, to),
+        )
+      : Promise.resolve([]),
+  ]);
+  const profileById = new Map(profiles.map((row) => [row.id, row]));
+  const groupById = new Map(groups.map((row) => [row.id, row]));
+  return theirs.map((row) => {
+    const profile = profileById.get(row.member_id);
+    return {
+      ...row,
+      member: {
+        memberId: row.member_id,
+        fullName: profile?.full_name ?? 'Membru',
+        nickname: profile?.nickname ?? null,
+        avatarColor: profile?.avatar_color ?? null,
+      },
+      group: {
+        id: row.group_id,
+        name: groupById.get(row.group_id)?.name ?? `Grupul #${row.group_id}`,
+      },
+    };
+  });
+}
+
+/**
+ * The Cereri queue. Under `['groups', 'applications']`, so a decision
+ * (`useApplicationCommand`) refreshes it and each Group page's Cereri tab
+ * together.
+ */
+export function useManagedGroupApplications() {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: ['groups', 'applications', 'managed', { memberId }],
+    queryFn: memberId
+      ? () => fetchManagedGroupApplications(memberId)
+      : skipToken,
+  });
+}
+
 export function useGroupApplications(groupId?: number) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
