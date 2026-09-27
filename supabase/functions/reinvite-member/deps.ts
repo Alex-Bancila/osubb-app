@@ -30,6 +30,8 @@ export interface MemberProfile {
   email: string;
   fullName: string;
   status: string;
+  /** `profiles.role`: a BC or Moderator target is the Moderator's to re-invite. */
+  role: string;
 }
 
 export type AuthError = DbError & { status?: number };
@@ -112,12 +114,17 @@ export function realDeps(
 
     async profile(memberId) {
       const { data, error } = await admin.from("profiles")
-        .select("email, full_name, status")
+        .select("email, full_name, status, role")
         .eq("id", memberId)
         .maybeSingle();
       if (error) throw error;
       return data
-        ? { email: data.email, fullName: data.full_name, status: data.status }
+        ? {
+          email: data.email,
+          fullName: data.full_name,
+          status: data.status,
+          role: data.role,
+        }
         : null;
     },
 

@@ -65,6 +65,7 @@ function fakeDeps(options: FakeOptions = {}) {
           email: "gresit@osubb.local",
           fullName: "Ioana Popescu",
           status: "activ",
+          role: "voluntar",
           ...options.profile,
         },
       );
@@ -431,5 +432,72 @@ Deno.test("a malformed new address is refused before anything changes", async ()
   const payload = await res.json();
   assertEquals(res.status, 400);
   assertEquals(payload.code, "email_invalid");
+  assertEquals(mutations(calls), []);
+});
+
+// ==================== the rank ceiling (H2) ====================
+// A pending BC or Moderator account is the Moderator's to re-invite. Without
+// this a BC could move it to an address they control and sign in as that
+// person — exactly the state of every leadership account during the bootstrap.
+
+Deno.test("a BC cannot re-invite a pending BC or Moderator, and nothing changes", async () => {
+  for (const role of ["bc", "moderator"]) {
+    const { deps, calls } = fakeDeps({ level: 6, profile: { role } });
+
+    const res = await handleReinvite(
+      request({ member_id: MEMBER, email: "preluat@osubb.local" }),
+      deps,
+    );
+    const payload = await res.json();
+
+    assertEquals(res.status, 403);
+    assertEquals(payload.code, "member_manage_forbidden");
+    assertEquals(mutations(calls), []);
+    assertEquals(calls.includes("emailTaken"), false);
+  }
+});
+
+Deno.test("the rank refusal comes before the target's sign-in state is disclosed", async () => {
+  const { deps } = fakeDeps({
+    level: 6,
+    profile: { role: "moderator" },
+    account: { lastSignInAt: "2026-09-20T10:00:00Z" },
+  });
+  const res = await handleReinvite(request({ member_id: MEMBER }), deps);
+  assertEquals(res.status, 403);
+  assertEquals((await res.json()).code, "member_manage_forbidden");
+});
+
+Deno.test("a BC still re-invites ranks below BC, BCE included", async () => {
+  for (const role of ["bce", "recrut"]) {
+    const { deps, calls } = fakeDeps({ level: 6, profile: { role } });
+    const res = await handleReinvite(
+      request({ member_id: MEMBER, email: "corect@osubb.local" }),
+      deps,
+    );
+    assertEquals(res.status, 200);
+    assertEquals(calls.includes("inviteByEmail:corect@osubb.local"), true);
+  }
+});
+
+Deno.test("the Moderator re-invites a pending BC or Moderator", async () => {
+  for (const role of ["bc", "moderator"]) {
+    const { deps, calls } = fakeDeps({ level: 9, profile: { role } });
+    const res = await handleReinvite(
+      request({ member_id: MEMBER, email: "corect@osubb.local" }),
+      deps,
+    );
+    assertEquals(res.status, 200);
+    assertEquals(calls.includes("inviteByEmail:corect@osubb.local"), true);
+  }
+});
+
+Deno.test("the status read stays open to BC for a leadership target: it changes nothing", async () => {
+  const { deps, calls } = fakeDeps({ level: 6, profile: { role: "bc" } });
+  const res = await handleReinvite(
+    request({ member_id: MEMBER, action: "status" }),
+    deps,
+  );
+  assertEquals(res.status, 200);
   assertEquals(mutations(calls), []);
 });

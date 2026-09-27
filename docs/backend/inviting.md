@@ -13,6 +13,8 @@ How an OSUBB account comes into existence. There is no other way — public sign
 
 The member appears in the app immediately; the invitation stays valid until they click it.
 
+**Who may invite whom.** BC invites and re-invites every rank up to `bce`. A `bc` or `moderator` account is the Moderator's alone to create or re-invite — the same reservation `set_member_role` applies to appointing leadership, because a BC who could create a Moderator (or move a pending BC's invitation to their own address) could then re-rank or lock out everyone else. `invite-member` and `reinvite-member` answer anyone else `403 member_manage_forbidden` before any Auth user is created or moved, and `provision_profile()` refuses the same call with `42501 member_manage_forbidden` whichever function calls it, so no future path can skip the rule. The one exception is the bootstrap: with no active Moderator yet, the service key creates the first Moderator with no appointer ([production-bootstrap.md](production-bootstrap.md)).
+
 ## Inviting one member
 
 The BC panel UI is issue #107. Until it exists, invite from a terminal — you need your own access token (sign in to the app, or use the snippet below locally).
@@ -203,7 +205,7 @@ Omit `email` to re-send to the address on file. `{ "member_id": "…", "action":
 | Response                      | What it means                                                                                                | What to do                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
 | `200`                         | The invitation left; `email_changed` says whether the address was corrected                                  | Check Resend for the new email                              |
-| `403 member_manage_forbidden` | You are below level 6                                                                                        | Ask BC or the Moderator                                     |
+| `403 member_manage_forbidden` | You are below level 6, or the Member is BC or the Moderator and you are not the Moderator                    | Ask BC or the Moderator                                     |
 | `409 already_active`          | The Member has signed in: the invitation did its job                                                         | Nothing to re-send                                          |
 | `409 already_confirmed`       | The address is confirmed but was never used (seed data, a hand-made account); Auth sends no invitation to it | The Member asks for a link on the login screen              |
 | `409 member_inactive`         | The profile is not `activ`; an invitation would open nothing                                                 | Reactivate the Member first, if that is what you mean to do |

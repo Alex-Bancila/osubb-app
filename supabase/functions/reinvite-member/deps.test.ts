@@ -19,6 +19,10 @@ type Result = { data: unknown; error: unknown };
 
 interface World {
   lastSignInAt: string | null;
+  /** The target profile's Role; an ordinary rank unless a test says so. */
+  role?: string;
+  /** What `member_level` answers for the caller; BC (6) unless a test says so. */
+  callerLevel?: number;
   profileUpdateError?: { code: string; message: string };
 }
 
@@ -85,6 +89,7 @@ function fakeClients(world: World) {
             email: "gresit@osubb.local",
             full_name: "Ioana Popescu",
             status: "activ",
+            role: world.role ?? "voluntar",
           },
           error: null,
         });
@@ -108,7 +113,7 @@ function fakeClients(world: World) {
   const admin = {
     rpc: (name: string) => {
       log.push(`rpc.${name}`);
-      return Promise.resolve({ data: 6, error: null });
+      return Promise.resolve({ data: world.callerLevel ?? 6, error: null });
     },
     from: (table: string) => query(table),
     auth: {
@@ -221,4 +226,39 @@ Deno.test("a signed-in Member reaches no Auth write at all", async () => {
   assertEquals(res.status, 409);
   assertEquals(authAdminWrites(log), []);
   assertEquals(log.some((line) => line.includes(".update(")), false);
+});
+
+Deno.test("the real wiring reads the target's Role: a BC cannot move a pending BC's address (H2)", async () => {
+  const { create, log } = fakeClients({ lastSignInAt: null, role: "bc" });
+  const req = request({ member_id: MEMBER, email: "preluat@osubb.local" });
+
+  const res = await handleReinvite(req, realDeps(req, ENV, create));
+
+  assertEquals(res.status, 403);
+  assertEquals((await res.json()).code, "member_manage_forbidden");
+  assertEquals(
+    log.includes(
+      `profiles.select(email, full_name, status, role).eq(id,${MEMBER})`,
+    ),
+    true,
+  );
+  assertEquals(authAdminWrites(log), []);
+  assertEquals(log.some((line) => line.startsWith("profiles.update")), false);
+});
+
+Deno.test("the real wiring lets the Moderator re-invite a pending BC", async () => {
+  const { create, log } = fakeClients({
+    lastSignInAt: null,
+    role: "bc",
+    callerLevel: 9,
+  });
+  const req = request({ member_id: MEMBER, email: "corect@osubb.local" });
+
+  const res = await handleReinvite(req, realDeps(req, ENV, create));
+
+  assertEquals(res.status, 200);
+  assertEquals(authAdminWrites(log), [
+    `auth.admin.updateUserById("${MEMBER}",{"email":"corect@osubb.local"})`,
+    `auth.admin.inviteUserByEmail("corect@osubb.local")`,
+  ]);
 });
