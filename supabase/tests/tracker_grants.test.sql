@@ -757,7 +757,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- public.notify_email_delivery_problem. Its wrapper is security definer
   -- and granted to service_role alone (the resend-webhook function), so the
   -- body runs as the wrapper's owner and is granted to nobody.
-  ('notify_email_delivery_problem_impl', 'p_email text, p_event text, p_reason text', 'none');
+  ('notify_email_delivery_problem_impl', 'p_delivery_id text, p_email text, p_event text, p_reason text', 'none');
 
 select is(
   (select count(*) from pinned_private_functions)::int, 150,

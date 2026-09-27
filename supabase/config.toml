@@ -154,7 +154,8 @@ entrypoint = "./functions/send-push/index.ts"
 # (svix-id / svix-timestamp / svix-signature), and the handler verifies that
 # HMAC in constant time against the function secret RESEND_WEBHOOK_SECRET,
 # refusing anything unsigned, forged or older than five minutes with 401
-# before it reads the body. docs/backend/email.md.
+# before it parses the body (and a body over 64 KB with 413 before that).
+# docs/backend/email.md.
 [functions.resend-webhook]
 enabled = true
 verify_jwt = false

@@ -11,19 +11,19 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(32);
 
 -- ==================== Structure and grants ====================
 select ok(
   (select prosecdef from pg_proc
-    where oid = 'public.notify_email_delivery_problem(text, text, text)'::regprocedure),
+    where oid = 'public.notify_email_delivery_problem(text, text, text, text)'::regprocedure),
   'the wrapper is security definer: service_role has no usage on private, so an invoker wrapper could never reach the body');
 
 select is(
   array(
     select grantee
       from unnest(array['public', 'anon', 'authenticated', 'service_role']) as grantee
-     where has_function_privilege(grantee, 'public.notify_email_delivery_problem(text, text, text)', 'execute')
+     where has_function_privilege(grantee, 'public.notify_email_delivery_problem(text, text, text, text)', 'execute')
   ),
   array['service_role'],
   'only service_role (the resend-webhook function''s secret-key client) may execute the wrapper');
@@ -32,7 +32,7 @@ select is(
   array(
     select grantee
       from unnest(array['public', 'anon', 'authenticated', 'service_role']) as grantee
-     where has_function_privilege(grantee, 'private.notify_email_delivery_problem_impl(text, text, text)', 'execute')
+     where has_function_privilege(grantee, 'private.notify_email_delivery_problem_impl(text, text, text, text)', 'execute')
   ),
   '{}'::text[],
   'nobody may execute the body directly -- only the wrapper, as its owner');
@@ -80,7 +80,7 @@ $$;
 select pg_temp.test_login('f7760000-0000-0000-0000-000000000001',
   '{"role": "voluntar", "level": 1, "groups": []}'::jsonb);
 select throws_ok(
-  $$select public.notify_email_delivery_problem('ana.bounce@test.local', 'email.bounced', 'x')$$,
+  $$select public.notify_email_delivery_problem('msg_83', 'ana.bounce@test.local', 'email.bounced', 'x')$$,
   '42501', null,
   'an ordinary Member cannot execute the wrapper');
 select pg_temp.test_clear_jwt();
@@ -90,7 +90,7 @@ reset role;
 set local role service_role;
 select is(
   public.notify_email_delivery_problem(
-    '  ANA.Bounce@Test.Local ', 'email.bounced',
+    'msg_93', '  ANA.Bounce@Test.Local ', 'email.bounced',
     'The recipient''s email address is on the suppression list.'),
   (select n from expected_recipients),
   'a bounce notifies every live active level >= 6 Member and returns how many -- the address matched case-insensitively and trimmed');
@@ -144,7 +144,7 @@ select ok(
 -- ==================== Dedupe per address per day ====================
 set local role service_role;
 select is(
-  public.notify_email_delivery_problem('ana.bounce@test.local', 'email.suppressed', 'suppressed'),
+  public.notify_email_delivery_problem('msg_147', 'ana.bounce@test.local', 'email.suppressed', 'suppressed'),
   0,
   'a second event for the same address the same day writes nothing');
 reset role;
@@ -158,7 +158,7 @@ update notifications set read = true
  where dedupe_key = pg_temp.today_key('ana.bounce@test.local');
 set local role service_role;
 select is(
-  public.notify_email_delivery_problem('ana.bounce@test.local', 'email.complained', null),
+  public.notify_email_delivery_problem('msg_161', 'ana.bounce@test.local', 'email.complained', null),
   0,
   'a Notification already read still counts: the day''s key is never written twice');
 reset role;
@@ -169,7 +169,7 @@ update notifications set dedupe_key = 'email_delivery:ana.bounce@test.local:2026
  where dedupe_key = pg_temp.today_key('ana.bounce@test.local');
 set local role service_role;
 select is(
-  public.notify_email_delivery_problem('ana.bounce@test.local', 'email.complained', null),
+  public.notify_email_delivery_problem('msg_172', 'ana.bounce@test.local', 'email.complained', null),
   (select n from expected_recipients),
   'yesterday''s key does not stop today''s Notification');
 reset role;
@@ -188,10 +188,60 @@ select ok(
       and dedupe_key = pg_temp.today_key('ana.bounce@test.local')),
   'no reason, no "Detalii Resend" line');
 
+-- ==================== Once per Resend delivery (svix-id) ====================
+-- A replay of msg_172 once today's key is out of the way -- a retry landing
+-- the next Bucharest day -- must still write nothing: the delivery record,
+-- not the per-day key, is what stops it. (Dropping the delivery record turns
+-- this red.)
+update notifications set dedupe_key = 'email_delivery:ana.bounce@test.local:2026-01-02'
+ where dedupe_key = pg_temp.today_key('ana.bounce@test.local');
+set local role service_role;
+select is(
+  public.notify_email_delivery_problem('msg_172', 'ana.bounce@test.local', 'email.complained', null),
+  0,
+  'the same svix-id for the same address twice notifies once, even where the per-day key would let it through');
+reset role;
+update notifications set dedupe_key = pg_temp.today_key('ana.bounce@test.local')
+ where dedupe_key = 'email_delivery:ana.bounce@test.local:2026-01-02';
+
+-- One event can name several recipients: the handler calls once per address
+-- with the same svix-id, and each address is its own record.
+set local role service_role;
+do $do$ begin perform public.notify_email_delivery_problem('msg_multi', 'first@resend.dev', 'email.bounced', null); end $do$;
+do $do$ begin perform public.notify_email_delivery_problem('msg_multi', 'second@resend.dev', 'email.bounced', null); end $do$;
+reset role;
+select is(
+  (select count(*)::int from private.resend_webhook_deliveries where delivery_id = 'msg_multi'),
+  2,
+  'one delivery id is recorded once per recipient address, so a multi-recipient event reports every address');
+
+insert into private.resend_webhook_deliveries (delivery_id, email, received_at)
+values ('msg_old', 'old@resend.dev', now() - interval '8 days');
+set local role service_role;
+do $do$ begin perform public.notify_email_delivery_problem('msg_purge', 'purge@resend.dev', 'email.bounced', null); end $do$;
+reset role;
+select is(
+  (select count(*)::int from private.resend_webhook_deliveries where delivery_id = 'msg_old'),
+  0,
+  'delivery records older than seven days are purged on the way in');
+
+select is(
+  array(
+    select grantee
+      from unnest(array['public', 'anon', 'authenticated', 'service_role']) as grantee
+     where has_table_privilege(grantee, 'private.resend_webhook_deliveries', 'select, insert, update, delete')
+  ),
+  '{}'::text[],
+  'nobody but the definer body reads or writes the delivery records');
+
+select ok(
+  (select relrowsecurity from pg_class where oid = 'private.resend_webhook_deliveries'::regclass),
+  'the delivery records table has RLS enabled (house rule 2)');
+
 -- The key carries the address: another Member's bounce the same day is new.
 set local role service_role;
 select is(
-  public.notify_email_delivery_problem('dan.other@test.local', 'email.suppressed', 'OnAccountSuppressionList'),
+  public.notify_email_delivery_problem('msg_194', 'dan.other@test.local', 'email.suppressed', 'OnAccountSuppressionList'),
   (select n from expected_recipients),
   'another address the same day is its own Notification');
 reset role;
@@ -209,7 +259,7 @@ grant select on notifications_before to service_role;
 
 set local role service_role;
 select is(
-  public.notify_email_delivery_problem('bounced@resend.dev', 'email.bounced', 'test'),
+  public.notify_email_delivery_problem('msg_212', 'bounced@resend.dev', 'email.bounced', 'test'),
   0,
   'an address no profile carries returns 0 and raises nothing');
 reset role;
@@ -221,24 +271,28 @@ select is(
 
 set local role service_role;
 select throws_ok(
-  $$select public.notify_email_delivery_problem('ana.bounce@test.local', 'email.delivered', null)$$,
+  $$select public.notify_email_delivery_problem('msg_224', 'ana.bounce@test.local', 'email.delivered', null)$$,
   'PT400', 'invalid_email_event',
   'an event outside bounced/complained/suppressed is refused');
 select throws_ok(
-  $$select public.notify_email_delivery_problem('   ', 'email.bounced', null)$$,
+  $$select public.notify_email_delivery_problem('msg_228', '   ', 'email.bounced', null)$$,
   'PT400', 'email_required',
   'a blank address is refused');
 select throws_ok(
-  $$select public.notify_email_delivery_problem(null, 'email.bounced', null)$$,
+  $$select public.notify_email_delivery_problem('msg_232', null, 'email.bounced', null)$$,
   'PT400', 'email_required',
   'a null address is refused');
+select throws_ok(
+  $$select public.notify_email_delivery_problem('  ', 'ana.bounce@test.local', 'email.bounced', null)$$,
+  'PT400', 'invalid_delivery_id',
+  'a blank delivery id (svix-id) is refused');
 reset role;
 
 -- A long reason is cut so one Notification stays readable.
 delete from notifications where dedupe_key = pg_temp.today_key('dan.other@test.local');
 set local role service_role;
 select is(
-  public.notify_email_delivery_problem('dan.other@test.local', 'email.bounced', repeat('x', 1000)),
+  public.notify_email_delivery_problem('msg_241', 'dan.other@test.local', 'email.bounced', repeat('x', 1000)),
   (select n from expected_recipients),
   'a long reason is accepted');
 reset role;

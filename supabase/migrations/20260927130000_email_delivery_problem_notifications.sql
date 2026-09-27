@@ -16,11 +16,42 @@
 -- email_delivery:<lower address>:<yyyy-mm-dd>, and a recipient who already
 -- holds that key -- read or not -- is skipped, so Resend's retries and a
 -- bounce followed by its suppression the same day write nothing new.
+--
+-- Before any of that, each Resend delivery is recorded once: the svix-id
+-- header (unique per event; Resend delivers at least once and retries for
+-- about a day and a half) with the recipient address, in
+-- private.resend_webhook_deliveries. A delivery id already recorded for that
+-- address writes nothing, so a replayed request -- inside the function's
+-- five-minute signature window, or a retry the next Bucharest day, which the
+-- per-day key alone would let through -- never notifies twice. Rows older
+-- than seven days are purged on the way in.
+
+create table private.resend_webhook_deliveries (
+  delivery_id text        not null,
+  email       text        not null,
+  received_at timestamptz not null default now(),
+  primary key (delivery_id, email),
+  constraint resend_webhook_deliveries_delivery_id_length_ck
+    check (length(delivery_id) between 1 and 255),
+  constraint resend_webhook_deliveries_email_length_ck
+    check (length(email) between 1 and 320)
+);
+
+comment on table private.resend_webhook_deliveries is
+  '#776: every Resend webhook delivery (svix-id) already acted on, per recipient address -- one event can name several. Written only by private.notify_email_delivery_problem_impl, which skips a pair already here and purges rows older than seven days. Not exposed to PostgREST (private) and granted to nobody.';
+
+create index resend_webhook_deliveries_received_at_idx
+  on private.resend_webhook_deliveries (received_at);
+
+alter table private.resend_webhook_deliveries enable row level security;
+revoke all on table private.resend_webhook_deliveries
+  from public, anon, authenticated, service_role;
 
 create function private.notify_email_delivery_problem_impl(
-  p_email  text,
-  p_event  text,
-  p_reason text
+  p_delivery_id text,
+  p_email       text,
+  p_event       text,
+  p_reason      text
 )
 returns integer
 language plpgsql
@@ -28,22 +59,42 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_email      text := lower(trim(p_email));
-  v_reason     text := nullif(trim(p_reason), '');
-  v_member_id  uuid;
-  v_name       text;
-  v_key        text;
-  v_title      text;
-  v_body       text;
-  v_recipients uuid[];
+  v_delivery_id text := trim(p_delivery_id);
+  v_email       text := lower(trim(p_email));
+  v_reason      text := nullif(trim(p_reason), '');
+  v_member_id   uuid;
+  v_name        text;
+  v_key         text;
+  v_title       text;
+  v_body        text;
+  v_recipients  uuid[];
+  v_recorded    integer;
 begin
   -- 1. Malformed for every caller.
+  if v_delivery_id is null or v_delivery_id = '' or length(v_delivery_id) > 255 then
+    raise sqlstate 'PT400' using message = 'invalid_delivery_id';
+  end if;
   if v_email is null or v_email = '' then
     raise sqlstate 'PT400' using message = 'email_required';
+  end if;
+  if length(v_email) > 320 then
+    raise sqlstate 'PT400' using message = 'email_too_long';
   end if;
   if p_event is null
      or p_event not in ('email.bounced', 'email.complained', 'email.suppressed') then
     raise sqlstate 'PT400' using message = 'invalid_email_event';
+  end if;
+
+  -- 1b. Once per delivery and address. A concurrent duplicate waits on the
+  --     primary key and then finds the row: still once.
+  delete from private.resend_webhook_deliveries
+   where received_at < now() - interval '7 days';
+  insert into private.resend_webhook_deliveries (delivery_id, email)
+  values (v_delivery_id, v_email)
+  on conflict (delivery_id, email) do nothing;
+  get diagnostics v_recorded = row_count;
+  if v_recorded = 0 then
+    return 0;
   end if;
 
   -- 2. The Member behind the address. profiles.email is stored lowercased
@@ -117,29 +168,30 @@ begin
 end;
 $$;
 
-comment on function private.notify_email_delivery_problem_impl(text, text, text) is
-  '#776: body of public.notify_email_delivery_problem. PT400 email_required (null or blank p_email) and PT400 invalid_email_event (anything but email.bounced, email.complained, email.suppressed). Maps the trimmed, lowercased address to a profiles row case-insensitively (two case-variant rows: the exact lowercase one first, then an activ one, then the lowest id) and returns 0 -- no error -- when none carries it. Otherwise writes one system Notification through private.notify to every live active Member at level >= 6 (BC, Moderator), titled by the event and naming the Member (full name, as Administrare lists it) and the address, with Resend''s reason appended (cut to 300 characters) and a link to /administrare/membri/<member id>. Dedupe key email_delivery:<lower address>:<Europe/Bucharest yyyy-mm-dd>; a recipient who already holds it, read or not, is skipped, so a second event for the address the same day writes nothing. Returns the number of Notifications written. Granted to nobody: only the security-definer wrapper calls it.';
+comment on function private.notify_email_delivery_problem_impl(text, text, text, text) is
+  '#776: body of public.notify_email_delivery_problem. PT400 invalid_delivery_id (null, blank or over 255 characters), PT400 email_required (null or blank p_email), PT400 email_too_long (over 320) and PT400 invalid_email_event (anything but email.bounced, email.complained, email.suppressed). Then records (p_delivery_id, address) in private.resend_webhook_deliveries, purging rows older than seven days, and returns 0 when the pair is already there -- a replayed Resend delivery never notifies twice. Maps the trimmed, lowercased address to a profiles row case-insensitively (two case-variant rows: the exact lowercase one first, then an activ one, then the lowest id) and returns 0 -- no error -- when none carries it. Otherwise writes one system Notification through private.notify to every live active Member at level >= 6 (BC, Moderator), titled by the event and naming the Member (full name, as Administrare lists it) and the address, with Resend''s reason appended (cut to 300 characters) and a link to /administrare/membri/<member id>. Dedupe key email_delivery:<lower address>:<Europe/Bucharest yyyy-mm-dd>; a recipient who already holds it, read or not, is skipped, so a second event for the address the same day writes nothing. Returns the number of Notifications written. Granted to nobody: only the security-definer wrapper calls it.';
 
-revoke execute on function private.notify_email_delivery_problem_impl(text, text, text)
+revoke execute on function private.notify_email_delivery_problem_impl(text, text, text, text)
   from public, anon, authenticated, service_role;
 
 create function public.notify_email_delivery_problem(
-  p_email  text,
-  p_event  text,
-  p_reason text default null
+  p_delivery_id text,
+  p_email       text,
+  p_event       text,
+  p_reason      text default null
 )
 returns integer
 language sql
 security definer
 set search_path = ''
 as $$
-  select private.notify_email_delivery_problem_impl(p_email, p_event, p_reason);
+  select private.notify_email_delivery_problem_impl(p_delivery_id, p_email, p_event, p_reason);
 $$;
 
-comment on function public.notify_email_delivery_problem(text, text, text) is
-  '#776: resend-webhook only (service_role, reached with the project''s secret key). Security definer because service_role has no usage on private (conventions §4); does nothing but call private.notify_email_delivery_problem_impl, which see. Returns the number of BC/Moderator Notifications written: 0 for an unknown address or an address already reported today.';
+comment on function public.notify_email_delivery_problem(text, text, text, text) is
+  '#776: resend-webhook only (service_role, reached with the project''s secret key). Security definer because service_role has no usage on private (conventions §4); does nothing but call private.notify_email_delivery_problem_impl, which see. Returns the number of BC/Moderator Notifications written: 0 for a delivery already recorded for the address, an unknown address, or an address already reported today.';
 
-revoke execute on function public.notify_email_delivery_problem(text, text, text)
+revoke execute on function public.notify_email_delivery_problem(text, text, text, text)
   from public, anon, authenticated, service_role;
-grant execute on function public.notify_email_delivery_problem(text, text, text)
+grant execute on function public.notify_email_delivery_problem(text, text, text, text)
   to service_role;

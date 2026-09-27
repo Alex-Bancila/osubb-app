@@ -13,8 +13,15 @@
 //                               non-2xx would only make Resend retry it
 //   400  the signed body is not a Resend event
 //   401  missing, stale (more than 5 minutes either way) or wrong signature;
-//        nothing is read or written
+//        nothing is parsed or written
+//   413  a body over 64 KB: refused before the signature is even computed,
+//        reading no further than the cap
 //   405  not POST
+//
+// A delivery is acted on once: the database records each svix-id per
+// recipient address, so a replayed request -- within the timestamp window,
+// or a retry on another day -- writes nothing the second time.
+//
 //   500  RESEND_WEBHOOK_SECRET or the project's secret key is missing, or the
 //        database call failed (Resend retries; the dedupe makes that safe)
 //
@@ -27,6 +34,45 @@
 
 import type { HandledEvent, ResendWebhookDeps } from "./deps.ts";
 import { decodeSigningSecret, verifySignature } from "./signature.ts";
+
+/** The largest body read. Resend's email events are a few kilobytes. */
+export const MAX_BODY_BYTES = 64 * 1024;
+
+/**
+ * The request body as text, or null once it passes `limit` bytes. A
+ * declared Content-Length over the limit is refused without reading; the
+ * stream is read chunk by chunk and cancelled the moment it passes the limit,
+ * so a sender that lies about (or omits) the length still cannot make the
+ * function buffer more than the cap.
+ */
+export async function readBodyCapped(
+  req: Request,
+  limit: number,
+): Promise<string | null> {
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > limit) return null;
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
 
 export const HANDLED_EVENTS: readonly HandledEvent[] = [
   "email.bounced",
@@ -108,13 +154,18 @@ export async function handleResendWebhook(
     return json({ error: "configuration", problems }, 500);
   }
 
-  // The raw body, byte for byte: the signature covers it exactly.
-  const body = await req.text();
+  // The raw body, byte for byte: the signature covers it exactly. Capped
+  // first, so an unsigned sender cannot make the function hash megabytes.
+  const body = await readBodyCapped(req, MAX_BODY_BYTES);
+  if (body === null) {
+    return json({ error: "body too large" }, 413);
+  }
+  const deliveryId = req.headers.get("svix-id");
   // verify_jwt = false in config.toml: this check is the whole
   // authentication, and it runs before the body is parsed.
   const problem = await verifySignature(
     {
-      id: req.headers.get("svix-id"),
+      id: deliveryId,
       timestamp: req.headers.get("svix-timestamp"),
       signature: req.headers.get("svix-signature"),
       body,
@@ -122,7 +173,7 @@ export async function handleResendWebhook(
     key,
     deps.nowSeconds(),
   );
-  if (problem) {
+  if (problem || !deliveryId) {
     console.warn("resend-webhook refused", problem);
     return json({ error: "invalid signature" }, 401);
   }
@@ -149,7 +200,7 @@ export async function handleResendWebhook(
   let notified = 0;
   try {
     for (const email of recipients(payload.to)) {
-      notified += await deps.notify(email, type, reason);
+      notified += await deps.notify(deliveryId, email, type, reason);
     }
   } catch (cause) {
     console.error("resend-webhook notify failed", cause);

@@ -23,10 +23,12 @@ export interface ResendWebhookDeps {
   nowSeconds(): number;
   /**
    * public.notify_email_delivery_problem: the number of BC/Moderator
-   * Notifications written (0 for an unknown address or one already reported
-   * today). Throws on a database error.
+   * Notifications written (0 for a delivery already acted on for this
+   * address, an unknown address, or one already reported today). The
+   * delivery id is the request's svix-id. Throws on a database error.
    */
   notify(
+    deliveryId: string,
     email: string,
     event: HandledEvent,
     reason: string | null,
@@ -53,10 +55,15 @@ export function realDeps(): ResendWebhookDeps {
     hasSecretKey: () =>
       secretKeys().length > 0 && (Deno.env.get("SUPABASE_URL") ?? "") !== "",
     nowSeconds: () => Math.floor(Date.now() / 1000),
-    async notify(email, event, reason) {
+    async notify(deliveryId, email, event, reason) {
       const { data, error } = await client().rpc(
         "notify_email_delivery_problem",
-        { p_email: email, p_event: event, p_reason: reason },
+        {
+          p_delivery_id: deliveryId,
+          p_email: email,
+          p_event: event,
+          p_reason: reason,
+        },
       );
       if (error) throw error;
       return typeof data === "number" ? data : 0;

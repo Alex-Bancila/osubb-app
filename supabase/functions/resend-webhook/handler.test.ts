@@ -4,7 +4,13 @@
 
 import { assert, assertEquals } from "@std/assert";
 import type { HandledEvent, ResendWebhookDeps } from "./deps.ts";
-import { handleResendWebhook, reasonOf, recipients } from "./handler.ts";
+import {
+  handleResendWebhook,
+  MAX_BODY_BYTES,
+  readBodyCapped,
+  reasonOf,
+  recipients,
+} from "./handler.ts";
 import {
   decodeSigningSecret,
   sign,
@@ -29,14 +35,17 @@ function fakeDeps(options: {
   hasSecretKey?: boolean;
   notified?: number;
   fail?: boolean;
-} = {}): ResendWebhookDeps & { calls: Call[] } {
+} = {}): ResendWebhookDeps & { calls: Call[]; deliveryIds: string[] } {
   const calls: Call[] = [];
+  const deliveryIds: string[] = [];
   return {
     calls,
+    deliveryIds,
     signingSecret: () => options.secret ?? SIGNING_SECRET,
     hasSecretKey: () => options.hasSecretKey ?? true,
     nowSeconds: () => NOW,
-    notify(email, event, reason) {
+    notify(deliveryId, email, event, reason) {
+      deliveryIds.push(deliveryId);
       calls.push({ email, event, reason });
       if (options.fail) return Promise.reject(new Error("db down"));
       return Promise.resolve(options.notified ?? 2);
@@ -388,4 +397,88 @@ Deno.test("reasonOf reads only the event's own detail", () => {
     reasonOf("email.complained", { bounce: { message: "x" } }),
     null,
   );
+});
+
+// ==================== Body cap and delivery id (security audit) ====================
+
+Deno.test("the request's svix-id reaches the database as the delivery id", async () => {
+  const deps = fakeDeps();
+  const body = event("email.bounced", {
+    to: ["ana@example.ro", "ion@example.ro"],
+    bounce: { type: "Permanent" },
+  });
+  await handleResendWebhook(await signed(body, { id: "msg_replayed" }), deps);
+  assertEquals(deps.deliveryIds, ["msg_replayed", "msg_replayed"]);
+});
+
+Deno.test("a body declared over 64 KB is a 413 before any signature check", async () => {
+  const deps = fakeDeps();
+  const request = await signed(BOUNCED);
+  const headers = new Headers(request.headers);
+  headers.set("content-length", String(MAX_BODY_BYTES + 1));
+  const response = await handleResendWebhook(
+    new Request(request.url, { method: "POST", headers, body: BOUNCED }),
+    deps,
+  );
+  assertEquals(response.status, 413);
+  assertEquals(deps.calls, []);
+});
+
+Deno.test("a streamed body over 64 KB without a length is a 413, correctly signed or not", async () => {
+  const deps = fakeDeps();
+  const big = event("email.bounced", {
+    to: ["ana@example.ro"],
+    bounce: { message: "x".repeat(MAX_BODY_BYTES) },
+  });
+  const signedRequest = await signed(big);
+  let pulled = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      // 16 KB at a time, 160 KB in all: without the cap the whole body is
+      // read and the request fails the signature (401) instead.
+      pulled++;
+      controller.enqueue(new Uint8Array(16 * 1024).fill(120));
+      if (pulled === 10) controller.close();
+    },
+  });
+  const response = await handleResendWebhook(
+    new Request(signedRequest.url, {
+      method: "POST",
+      headers: signedRequest.headers,
+      body: stream,
+    }),
+    deps,
+  );
+  assertEquals(response.status, 413);
+  assertEquals(deps.calls, []);
+  assert(pulled <= 6, `read ${pulled} chunks, expected the cap to stop it`);
+});
+
+Deno.test("a body of exactly 64 KB is read in full", async () => {
+  const text = "a".repeat(MAX_BODY_BYTES);
+  const read = await readBodyCapped(
+    new Request("http://localhost/", { method: "POST", body: text }),
+    MAX_BODY_BYTES,
+  );
+  assertEquals(read, text);
+  assertEquals(
+    await readBodyCapped(
+      new Request("http://localhost/", { method: "POST", body: text + "a" }),
+      MAX_BODY_BYTES,
+    ),
+    null,
+  );
+});
+
+Deno.test("an unsigned body that is not JSON is a 401, never parsed", async () => {
+  const deps = fakeDeps();
+  const response = await handleResendWebhook(
+    new Request("http://localhost/functions/v1/resend-webhook", {
+      method: "POST",
+      body: "not json",
+    }),
+    deps,
+  );
+  assertEquals(response.status, 401);
+  assertEquals(deps.calls, []);
 });
