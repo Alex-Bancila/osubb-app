@@ -183,4 +183,4 @@ The sweep reads `pg_get_functiondef`, which returns the body as written — so a
 
 ## 11. Edge Functions
 
-`supabase/functions/deno.json`'s import map pins every `jsr:` and `npm:` specifier to the exact version currently resolved — never a `^`/`~` range — so a cache refresh can't silently move a function's dependencies; bump a version, and regenerate `supabase/functions/deno.lock` (`deno cache --lock=deno.lock <files>`), only as a deliberate, reviewed change.
+`supabase/functions/deno.json`'s import map pins every `jsr:` and `npm:` specifier to the exact version currently resolved — never a `^`/`~` range — so a cache refresh can't silently move a function's dependencies. To bump a version, edit `deno.json` and, from `supabase/functions`, regenerate `deno.lock` with `deno install --entrypoint **/*.ts` (a bare `deno install` also installs unrelated optional deps and dirties the lock) — only as a deliberate, reviewed change.
