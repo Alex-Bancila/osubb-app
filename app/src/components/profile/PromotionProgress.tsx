@@ -22,12 +22,12 @@ import { useRoles } from '../../queries/reference';
  * - Recrut: the date the `time` rule makes them Voluntar. No bar.
  * - Voluntar before the tenure date: the date they can become Voluntar Activ.
  *   Nothing about points (R18).
- * - Voluntar with tenure: a bar from 0 to the Promotion Threshold in force —
- *   the constant stamped at the previous close, never a live percentile.
- * - Voluntar Activ and Voluntar cu Drept de Vot: their Period points beside the
+ * - Voluntar with tenure: a bar from 0 to the Voluntar Activ Promotion
+ *   Threshold in force (#826), points counted since the last Role Evaluation.
+ * - Voluntar Activ and Voluntar cu Drept de Vot: their points beside the
  *   threshold, the reference the Retention Signal will use. No bar.
  * - Level ≥ 5: nothing at all (R13).
- * - No open Period (or no threshold): the tenure lines only; the bar is hidden,
+ * - No threshold in force: the tenure lines only; the bar is hidden,
  *   never faked.
  *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
@@ -87,7 +87,7 @@ export function PromotionProgress() {
               {formatPoints(view.points)}
             </span>
             <span className="text-sm font-semibold text-muted-foreground">
-              {pointWord(view.points)} în {view.periodName}
+              {pointWord(view.points)} {view.sinceLabel}
             </span>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -103,7 +103,7 @@ const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
 type View =
   | { kind: 'tenure'; text: string }
   | { kind: 'bar'; points: number; threshold: number }
-  | { kind: 'reference'; points: number; threshold: number; periodName: string }
+  | { kind: 'reference'; points: number; threshold: number; sinceLabel: string }
   | null;
 
 function viewFor(
@@ -111,10 +111,9 @@ function viewFor(
   joinedAt: string | null,
   progress: Progress,
 ): View {
-  const { openPeriod, threshold, periodPoints } = progress;
-  // The bar needs both an open Period and a target; without either it is hidden.
-  const measurable =
-    openPeriod !== null && threshold !== null && periodPoints !== null;
+  const { threshold, points, since } = progress;
+  // The bar needs a target; without one it is hidden, never faked.
+  const measurable = threshold !== null;
 
   if (role === 'recrut') {
     const date = tenureDate(joinedAt, progress.voluntarTenureMonths);
@@ -127,7 +126,7 @@ function viewFor(
     const date = tenureDate(joinedAt, progress.activTenureMonths);
     if (!date) return null;
     if (measurable && startOfToday() >= date) {
-      return { kind: 'bar', points: periodPoints, threshold };
+      return { kind: 'bar', points, threshold };
     }
     return {
       kind: 'tenure',
@@ -139,9 +138,11 @@ function viewFor(
   return measurable
     ? {
         kind: 'reference',
-        points: periodPoints,
+        points,
         threshold,
-        periodName: openPeriod.name,
+        sinceLabel: since
+          ? `de la ${formatDayMonthYear(since) ?? since}`
+          : 'în total',
       }
     : null;
 }
