@@ -106,6 +106,13 @@ describe('eventSchema', () => {
     expect(check({ title })).toEqual(expected);
   });
 
+  it('limits the location to 200 characters, measured trimmed (security pass 2026-09-27)', () => {
+    expect(check({ location: '  ' + 'l'.repeat(200) + '  ' })).toEqual([]);
+    expect(check({ location: 'l'.repeat(201) })).toEqual([
+      'location: location_too_long',
+    ]);
+  });
+
   it('limits the description to 2000 characters', () => {
     expect(check({ description: 'd'.repeat(2000) })).toEqual([]);
     expect(check({ description: 'd'.repeat(2001) })).toEqual([
@@ -184,6 +191,7 @@ it('maps every reason an Event command raises to an Event field', () => {
       'title_too_short',
       'title_too_long',
       'description_too_long',
+      'location_too_long',
       'starts_at_in_past',
       'invalid_event_title',
       'invalid_event_type',

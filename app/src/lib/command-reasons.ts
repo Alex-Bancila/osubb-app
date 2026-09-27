@@ -170,6 +170,12 @@ const REASON_COPY = new Map<string, string>([
   ['link_label_too_long', 'Numele linkului are cel mult 60 de caractere.'],
   ['link_url_invalid', 'Adresa trebuie să înceapă cu http:// sau https://.'],
   ['link_url_too_long', 'Adresa are cel mult 2048 de caractere.'],
+  // Security pass 2026-09-27: the column limits that had none.
+  ['location_too_long', 'Locul are cel mult 200 de caractere.'],
+  ['short_too_long', 'Prescurtarea are cel mult 16 caractere.'],
+  ['manager_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
+  ['position_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
+  ['full_name_too_long', 'Numele complet are cel mult 120 de caractere.'],
   [
     'link_incomplete',
     'Completează și numele, și adresa linkului, sau lasă-le pe amândouă goale.',

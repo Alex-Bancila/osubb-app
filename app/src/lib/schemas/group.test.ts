@@ -54,6 +54,30 @@ describe('Group name', () => {
     },
   );
 
+  it('limits Prescurtare to 16 and the coordinator title to 80 characters (security pass 2026-09-27)', () => {
+    expect(check(groupCreateSchema, create, { short: 's'.repeat(16) })).toEqual(
+      [],
+    );
+    expect(check(groupCreateSchema, create, { short: 's'.repeat(17) })).toEqual(
+      ['short: short_too_long'],
+    );
+    expect(
+      check(
+        groupStructureSchema,
+        { color: '', short: '' },
+        { short: 's'.repeat(17) },
+      ),
+    ).toEqual(['short: short_too_long']);
+    expect(
+      check(groupSettingsSchema, settings, {
+        managerTitle: ' ' + 'm'.repeat(80) + ' ',
+      }),
+    ).toEqual([]);
+    expect(
+      check(groupSettingsSchema, settings, { managerTitle: 'm'.repeat(81) }),
+    ).toEqual(['managerTitle: manager_title_too_long']);
+  });
+
   it('trims the name and turns blank optional texts into null', () => {
     expect(
       groupCreateSchema.parse({ ...create, name: '  Logistică  ', short: ' ' }),
@@ -121,6 +145,8 @@ it('maps every reason a Group command raises to a Group field', () => {
       'group_name_taken',
       'invalid_group_category',
       'invalid_group_color',
+      'short_too_long',
+      'manager_title_too_long',
       'invalid_group_min_level',
       'invalid_position_title',
       'invalid_application_level',

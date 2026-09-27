@@ -373,15 +373,19 @@ function EventForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-1.5" htmlFor={`${id}-location`}>
-            <span className="text-sm font-medium">Loc (opțional)</span>
-            <input
-              id={`${id}-location`}
-              className={control}
-              value={values.location}
-              onChange={(event) => update({ location: event.target.value })}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5" htmlFor={`${id}-location`}>
+              <span className="text-sm font-medium">Loc (opțional)</span>
+              <input
+                id={`${id}-location`}
+                className={control}
+                value={values.location}
+                onChange={(event) => update({ location: event.target.value })}
+                {...form.field('location')}
+              />
+            </label>
+            <FieldError {...form.errorProps('location')} />
+          </div>
           <div className="grid gap-1.5">
             <label className="grid gap-1.5" htmlFor={`${id}-capacity`}>
               <span className="text-sm font-medium">Capacitate (opțional)</span>

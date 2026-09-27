@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CommandError, commandReason } from '../command-reasons';
 import { charLength, emptyToNull, trimText } from '../normalize';
-import { requiredText } from './text';
+import { optionalText, requiredText } from './text';
 
 /**
  * A Group, as `create_group`, `update_group` and `update_group_structure`
@@ -27,6 +27,18 @@ const optional = z
   .nullish()
   .transform((value) => emptyToNull(trimText(value)));
 
+/**
+ * Security pass 2026-09-27: the Group labels' column limits, the same as the
+ * inputs' maxLength -- Prescurtare at most 16 characters (groups_short_length_ck),
+ * a Manager title at most 80 (groups_manager_title_length_ck). The Responsible
+ * title input caps itself at the same 80 (group_members_position_title_length_ck).
+ */
+const short = optionalText({ max: 16, tooLong: 'short_too_long' });
+const managerTitle = optionalText({
+  max: 80,
+  tooLong: 'manager_title_too_long',
+});
+
 const color = optional.superRefine((value, ctx) => {
   if (value !== null && !/^#[0-9A-Fa-f]{6}$/.test(value))
     ctx.addIssue({ code: 'custom', message: 'invalid_group_color' });
@@ -42,7 +54,7 @@ export const groupCreateSchema = z.object({
     .refine((value) => CATEGORIES.includes(value), 'invalid_group_category'),
   minLevel: level('invalid_group_min_level').nullable(),
   color,
-  short: optional,
+  short,
 });
 
 /**
@@ -82,7 +94,7 @@ const applicationForm = z
 export const groupSettingsSchema = z
   .object({
     name: groupName,
-    managerTitle: optional,
+    managerTitle,
     acceptsApplications: z.boolean(),
     applicationLevel: level('invalid_application_level').nullable(),
     sharedWorkVisibility: z.boolean(),
@@ -105,7 +117,7 @@ export const groupSettingsSchema = z
 
 export const groupStructureSchema = z.object({
   color,
-  short: optional,
+  short,
 });
 
 /** Where each reason a Group command (or these schemas) raises is shown. */
@@ -116,7 +128,9 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   group_name_taken: 'name',
   invalid_group_category: 'category',
   invalid_group_color: 'color',
+  short_too_long: 'short',
   invalid_position_title: 'managerTitle',
+  manager_title_too_long: 'managerTitle',
   invalid_group_min_level: 'minLevel',
   group_min_level_below_parent: 'minLevel',
   group_min_level_above_actor: 'minLevel',
