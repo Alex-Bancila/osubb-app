@@ -17,6 +17,7 @@ import AnnouncementDetailsSheet from './AnnouncementDetailsSheet';
 import CriticalAnnouncementBanner from './CriticalAnnouncementBanner';
 import AnnouncementComposeSheet from './AnnouncementComposeSheet';
 import { Empty, ErrorState, Loading } from '../../components/states';
+import { Page, PageGrid, PageHeader } from '../../components/layout';
 
 export default function AnnouncementsScreen() {
   const { session } = useAuth();
@@ -76,28 +77,18 @@ export default function AnnouncementsScreen() {
   const isPending = feedQuery.isPending || groupsQuery.isPending;
 
   return (
-    <section
-      className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8"
-      aria-labelledby="announcements-title"
-    >
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1
-            id="announcements-title"
-            className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
-          >
-            Anunțuri
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {unreadCount === 0
-              ? 'Toate anunțurile sunt citite'
-              : unreadCount === 1
-                ? '1 anunț necitit'
-                : `${unreadCount} anunțuri necitite`}
-          </p>
-        </div>
-        <AnnouncementComposeSheet />
-      </header>
+    <Page width="reading">
+      <PageHeader
+        title="Anunțuri"
+        description={
+          unreadCount === 0
+            ? 'Toate anunțurile sunt citite'
+            : unreadCount === 1
+              ? '1 anunț necitit'
+              : `${unreadCount} anunțuri necitite`
+        }
+        actions={<AnnouncementComposeSheet />}
+      />
 
       {isPending ? (
         <Loading label="Se încarcă anunțurile…" />
@@ -108,7 +99,7 @@ export default function AnnouncementsScreen() {
           onRetry={() => void feedQuery.refetch()}
         />
       ) : announcements.length === 0 ? (
-        <Empty text="Nu sunt anunțuri disponibile în acest moment." />
+        <Empty bare text="Nu sunt anunțuri disponibile în acest moment." />
       ) : (
         <div className="space-y-6">
           {unreadCritical && (
@@ -118,7 +109,12 @@ export default function AnnouncementsScreen() {
             />
           )}
 
-          <ul className="space-y-4" role="list" aria-label="Flux de anunțuri">
+          <PageGrid
+            columns={1}
+            as="ul"
+            role="list"
+            aria-label="Flux de anunțuri"
+          >
             {announcements.map((announcement) => (
               <li key={announcement.id}>
                 <AnnouncementCard
@@ -127,7 +123,7 @@ export default function AnnouncementsScreen() {
                 />
               </li>
             ))}
-          </ul>
+          </PageGrid>
         </div>
       )}
 
@@ -135,6 +131,6 @@ export default function AnnouncementsScreen() {
         announcement={selectedAnnouncement}
         onClose={() => setSelectedAnnouncementId(null)}
       />
-    </section>
+    </Page>
   );
 }

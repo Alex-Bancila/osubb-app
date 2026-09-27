@@ -27,6 +27,7 @@ import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { TaskEditControl } from './TaskEditControl';
 import { TaskEvaluationControl } from './TaskEvaluationControl';
+import { DifficultyStars } from '../../components/tasks/DifficultyStars';
 import { isTerminalTask, toTaskPresentation } from './task-presentation';
 
 function TaskDetails({
@@ -110,10 +111,22 @@ function TaskDetails({
       />
       <dl className="grid gap-3 text-sm">
         {task.kind === 'task' && (
-          <div>
-            <dt className="font-semibold">Dificultate</dt>
-            <dd>{task.difficulty ?? 'Neevaluat'}</dd>
-          </div>
+          <>
+            <div>
+              <dt className="font-semibold">Dificultate</dt>
+              <dd>
+                {task.difficulty === null ? (
+                  'Neevaluat'
+                ) : (
+                  <DifficultyStars value={task.difficulty} />
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Nota</dt>
+              <dd className="tabular-nums">{task.rating ?? 'Neevaluat'}</dd>
+            </div>
+          </>
         )}
         {/* A direct Task is local only (R26): its Audience says nothing. */}
         {task.assignmentMode === 'public' && (

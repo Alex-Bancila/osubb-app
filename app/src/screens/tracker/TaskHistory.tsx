@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
+import { DifficultyStars } from '../../components/tasks/DifficultyStars';
 import { Button } from '../../components/ui/button';
 import {
   formatBucharestDay,
@@ -46,7 +48,7 @@ const fields: Record<string, string> = {
   description: 'Descriere',
   deadline: 'Termen',
   difficulty: 'Dificultate',
-  rating: 'Notă',
+  rating: 'Nota',
   audience: 'Audiență',
   assignment_mode: 'Atribuire',
   campaign_id: 'Campanie',
@@ -114,21 +116,37 @@ function submittedLink(details: Json) {
     ? { label, url }
     : null;
 }
+// One before/after line: its text keys it, its content is what shows. A
+// Difficulty reads as stars (R29a); every other value is plain text.
+type ChangeLine = { key: string; content: ReactNode };
 function changes(
   details: Json,
   side: 'before' | 'after',
   groupNames?: ReadonlyMap<number, { name: string }>,
-) {
+): ChangeLine[] {
   if (!details || typeof details !== 'object' || Array.isArray(details))
     return [];
   const values = details[side] ?? details[side === 'before' ? 'from' : 'to'];
   if (!values || typeof values !== 'object' || Array.isArray(values)) return [];
-  return Object.entries(values).flatMap(([field, value]) => {
+  return Object.entries(values).flatMap(([field, value]): ChangeLine[] => {
     if (
       !fields[field] ||
       (value !== null && typeof value !== 'string' && typeof value !== 'number')
     )
       return [];
+    if (
+      field === 'difficulty' &&
+      typeof value === 'number' &&
+      Number.isInteger(value) &&
+      value >= 1 &&
+      value <= 5
+    )
+      return [
+        {
+          key: `difficulty:${value}`,
+          content: <DifficultyStars value={value} label="Dificultate:" />,
+        },
+      ];
     const text =
       field === 'deadline' && typeof value === 'string'
         ? `${formatBucharestDay(value)}, ${formatBucharestTime(value)}`
@@ -149,7 +167,8 @@ function changes(
               : field === 'group_id' && typeof value === 'number'
                 ? (groupNames?.get(value)?.name ?? `#${value}`)
                 : String(value ?? '—');
-    return [`${fields[field]}: ${text}`];
+    const line = `${fields[field]}: ${text}`;
+    return [{ key: line, content: line }];
   });
 }
 function SubmittedLink({ details }: { details: Json }) {
@@ -232,8 +251,8 @@ export function TaskTimeline({
                       {side === 'before' ? 'Înainte' : 'După'}
                     </p>
                     {lines.map((line) => (
-                      <p key={line} className="whitespace-pre-wrap">
-                        {line}
+                      <p key={line.key} className="whitespace-pre-wrap">
+                        {line.content}
                       </p>
                     ))}
                   </div>

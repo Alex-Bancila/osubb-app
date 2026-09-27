@@ -1,4 +1,4 @@
-// The words of the rating guide (ruling R22 of the 2026-09-23 grill). Every
+// The words of the rating guide (rulings R22 and R29a of the 2026-09-23 grill). Every
 // Rating hint lives in this one module, so when the approved guide arrives
 // (#638) the swap touches nothing else. The Difficulty hints are reference
 // data (`difficulty_guide.note`, house rule 6) and are read from the server.
@@ -8,8 +8,8 @@ export type RatingHint = { value: 1 | 2 | 3 | 4 | 5; hint: string };
 export const ratingGuide = {
   title: 'Ghid de evaluare',
   description:
-    'Calificativul spune cât de bine a fost făcut taskul, iar dificultatea cât de greu a fost. Alege pentru fiecare treapta care descrie cel mai bine lucrarea.',
-  ratingHeading: 'Calificativ',
+    'Nota spune cât de bine a fost făcut taskul, iar dificultatea, în stele, cât de greu a fost. Alege pentru fiecare treapta care descrie cel mai bine lucrarea.',
+  ratingHeading: 'Nota',
   difficultyHeading: 'Dificultate',
   ratingHints: [
     { value: 1, hint: 'Nelivrat / inacceptabil' },

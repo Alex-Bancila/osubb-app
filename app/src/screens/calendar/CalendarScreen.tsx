@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ListIcon } from 'lucide-react';
+import { CalendarDays, ListFilter, ListIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 
-import { Button } from '../../components/ui/button';
+import {
+  Page,
+  PageHeader,
+  Panel,
+  SegmentedToggle,
+  type SegmentedOption,
+} from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { useWorkFilter } from '../../lib/use-work-filter';
@@ -24,13 +31,9 @@ import {
 import { useCalendarView, type CalendarView } from './calendar-view';
 import { NewEventControl } from './NewEventControl';
 
-const VIEWS: ReadonlyArray<{
-  value: CalendarView;
-  label: string;
-  Icon: typeof CalendarDays;
-}> = [
-  { value: 'month', label: 'Lună', Icon: CalendarDays },
-  { value: 'agenda', label: 'Agendă', Icon: ListIcon },
+const VIEWS: ReadonlyArray<SegmentedOption<CalendarView>> = [
+  { value: 'month', label: 'Lună', icon: CalendarDays },
+  { value: 'agenda', label: 'Agendă', icon: ListIcon },
 ];
 
 function capitalized(text: string): string {
@@ -100,95 +103,69 @@ export default function CalendarScreen() {
         : 'Agendă';
 
   return (
-    <section className="w-full" aria-labelledby="calendar-title">
-      <div className="page calendar-page">
-        <header className="page-head calendar-head">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="calendar-kicker">Calendar OSUBB</p>
-              <h1 id="calendar-title" className="page-title">
-                {title}
-              </h1>
-              <p className="calendar-intro">
-                Întâlnirile, activitățile și termenele vizibile pentru tine.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div
-                role="group"
-                aria-label="Vizualizare"
-                className="calendar-view-toggle"
-              >
-                {VIEWS.map(({ value, label, Icon }) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    variant="ghost"
-                    className="calendar-view-option"
-                    aria-pressed={view === value ? 'true' : 'false'}
-                    onClick={() => chooseView(value)}
-                  >
-                    <Icon aria-hidden="true" />
-                    {label}
-                  </Button>
-                ))}
-              </div>
-              <NewEventControl />
-            </div>
-          </div>
-        </header>
-
-        <section aria-label="Filtre calendar" className="calendar-filter">
-          {groups.isError || campaigns.isError ? (
-            <div role="alert" className="flex flex-wrap items-center gap-3">
-              <p>Nu am putut încărca filtrele.</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void groups.refetch();
-                  void campaigns.refetch();
-                }}
-              >
-                Reîncarcă filtrele
-              </Button>
-            </div>
-          ) : !groups.data || !campaigns.data ? (
-            <p role="status" className="text-sm text-muted-foreground">
-              Se încarcă filtrele…
-            </p>
-          ) : (
-            <WorkFilter
-              groups={[...groups.data.values()]}
-              campaigns={campaigns.data}
-              hint={
-                view === 'month'
-                  ? 'Grupul include toate subgrupurile sale. Perioada citește începutul evenimentului și termenul taskului, iar luna afișată este cea a primei zile alese.'
-                  : 'Grupul include toate subgrupurile sale. Perioada citește începutul evenimentului; fără perioadă, agenda începe azi.'
-              }
+    <Page>
+      <PageHeader
+        eyebrow="Calendar OSUBB"
+        title={title}
+        description="Întâlnirile, activitățile și termenele vizibile pentru tine."
+        actions={
+          <>
+            <SegmentedToggle
+              label="Vizualizare"
+              options={VIEWS}
+              value={view}
+              onChange={chooseView}
             />
-          )}
-        </section>
+            <NewEventControl />
+          </>
+        }
+      />
 
-        {view === 'month' ? (
-          <CalendarMonth
-            month={shownMonth}
-            now={now}
-            todayKey={todayKey}
-            filter={filter}
-            groups={groups.data}
-            relevanceOf={relevanceOf}
+      <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre calendar">
+        {groups.isError || campaigns.isError ? (
+          <ErrorState
+            error={groups.error ?? campaigns.error}
+            text="Nu am putut încărca filtrele."
+            retryLabel="Reîncarcă filtrele"
+            onRetry={() => {
+              void groups.refetch();
+              void campaigns.refetch();
+            }}
           />
+        ) : !groups.data || !campaigns.data ? (
+          <Loading label="Se încarcă filtrele…" />
         ) : (
-          <CalendarAgenda
-            now={now}
-            todayKey={todayKey}
-            filter={filter}
-            linkedId={linkedId}
-            groups={groups.data}
-            relevanceOf={relevanceOf}
+          <WorkFilter
+            groups={[...groups.data.values()]}
+            campaigns={campaigns.data}
+            hint={
+              view === 'month'
+                ? 'Grupul include toate subgrupurile sale. Perioada citește începutul evenimentului și termenul taskului, iar luna afișată este cea a primei zile alese.'
+                : 'Grupul include toate subgrupurile sale. Perioada citește începutul evenimentului; fără perioadă, agenda începe azi.'
+            }
           />
         )}
-      </div>
-    </section>
+      </Panel>
+
+      {view === 'month' ? (
+        <CalendarMonth
+          month={shownMonth}
+          now={now}
+          todayKey={todayKey}
+          filter={filter}
+          groups={groups.data}
+          relevanceOf={relevanceOf}
+        />
+      ) : (
+        <CalendarAgenda
+          now={now}
+          todayKey={todayKey}
+          filter={filter}
+          linkedId={linkedId}
+          groups={groups.data}
+          relevanceOf={relevanceOf}
+        />
+      )}
+    </Page>
   );
 }

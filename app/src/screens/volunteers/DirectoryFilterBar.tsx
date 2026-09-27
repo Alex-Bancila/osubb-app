@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { CheckIcon, ListFilter, Search, XIcon } from 'lucide-react';
 import { cn } from 'cn';
 import { Button } from '../../components/ui/button';
@@ -77,23 +77,57 @@ function RemovableChip({
 }
 
 /**
- * The directory's filter controls: a "Filtrează" button that opens a small
- * Dialog for adding Group, role and status filters, and the active filters as
- * removable chips above the list.
+ * The "Filtrează" button, with the number of active filters. It lives in the
+ * page header's action slot (ruling R27) and opens `DirectoryFilterBar`'s
+ * Dialog.
+ */
+export function DirectoryFilterButton({
+  count,
+  onOpen,
+}: {
+  count: number;
+  onOpen: () => void;
+}) {
+  return (
+    <Button
+      variant="outline"
+      aria-label={count ? `Filtrează, ${count} filtre active` : undefined}
+      onClick={onOpen}
+    >
+      <ListFilter aria-hidden="true" />
+      Filtrează
+      {count > 0 && (
+        <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground">
+          {count}
+          <span className="sr-only"> filtre active</span>
+        </span>
+      )}
+    </Button>
+  );
+}
+
+/**
+ * The directory's filter controls: the search, a small Dialog (opened by
+ * `DirectoryFilterButton`) for adding Group, role and status filters, and the
+ * active filters as removable chips above the list.
  */
 export function DirectoryFilterBar({
   members,
   filters,
   onChange,
+  open,
+  onOpenChange: setOpen,
   trailing,
 }: {
   members: DirectoryMember[];
   filters: DirectoryFilters;
   onChange: (filters: DirectoryFilters) => void;
+  /** Whether the filter Dialog is open. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   /** Controls that sit at the end of the toolbar (the view switch). */
   trailing?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
   const groupsQuery = useGroups();
   const groupsById = groupsQuery.data ?? noGroups;
   const groupOptions = useMemo(
@@ -153,20 +187,6 @@ export function DirectoryFilterBar({
             }
           />
         </label>
-        <Button
-          variant="outline"
-          aria-label={count ? `Filtrează, ${count} filtre active` : undefined}
-          onClick={() => setOpen(true)}
-        >
-          <ListFilter aria-hidden="true" />
-          Filtrează
-          {count > 0 && (
-            <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground">
-              {count}
-              <span className="sr-only"> filtre active</span>
-            </span>
-          )}
-        </Button>
         {trailing}
       </div>
 

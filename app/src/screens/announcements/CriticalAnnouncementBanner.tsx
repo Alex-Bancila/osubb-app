@@ -22,7 +22,7 @@ export default function CriticalAnnouncementBanner({
   return (
     <div
       role="alert"
-      className="mb-6 flex flex-col gap-3 rounded-xl border border-destructive/60 bg-destructive/10 p-4 text-destructive shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      className="flex flex-col gap-3 rounded-md border border-destructive/60 bg-destructive/10 p-4 text-destructive shadow-(--sh-sm) sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex items-start gap-3">
         <AlertTriangle

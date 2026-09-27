@@ -1,5 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
+import {
+  EmptyState,
+  Page,
+  PageGrid,
+  PageHeader,
+  Panel,
+} from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
 import { useAdminGroups, useMyGroupRoles } from '../../queries/groups-admin';
@@ -15,10 +23,26 @@ export default function GroupsScreen() {
   const applications = useGroupApplications();
   const level = useAuth().claims?.member_level ?? 0;
   const [search, setSearch] = useState('');
+  const header = (
+    <PageHeader
+      title="Grupuri"
+      description="Descoperă grupurile în care te poți implica."
+    />
+  );
   if (groups.isPending || mine.isPending || applications.isPending)
-    return <p role="status">Se încarcă grupurile…</p>;
+    return (
+      <Page>
+        {header}
+        <Loading label="Se încarcă grupurile…" />
+      </Page>
+    );
   if (groups.isError || mine.isError || applications.isError)
-    return <p role="alert">Nu am putut încărca grupurile. Reîncarcă pagina.</p>;
+    return (
+      <Page>
+        {header}
+        <ErrorState text="Nu am putut încărca grupurile. Reîncarcă pagina." />
+      </Page>
+    );
   // Ruling R25: a Private Group is never offered here, even to a Member who
   // can read it (acceptsApplication skips is_private rows).
   const available = groups.data.filter((group) =>
@@ -28,13 +52,8 @@ export default function GroupsScreen() {
     group.name.toLocaleLowerCase('ro').includes(search.toLocaleLowerCase('ro')),
   );
   return (
-    <section className="page space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Grupuri</h1>
-        <p className="mt-2 text-muted-foreground">
-          Descoperă grupurile în care te poți implica.
-        </p>
-      </header>
+    <Page>
+      {header}
       <label className="grid max-w-lg gap-2">
         Caută un grup
         <input
@@ -46,9 +65,11 @@ export default function GroupsScreen() {
         />
       </label>
       {!visible.length && (
-        <p role="status">Nu sunt grupuri disponibile pentru această căutare.</p>
+        <EmptyState bare role="status">
+          Nu sunt grupuri disponibile pentru această căutare.
+        </EmptyState>
       )}
-      <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <PageGrid as="ul" columns="collection">
         {visible.map((group) => {
           const pending = applications.data.find(
             (row) => row.group_id === group.id,
@@ -68,51 +89,49 @@ export default function GroupsScreen() {
               ),
           );
           return (
-            <li
-              key={group.id}
-              className="space-y-4 rounded-xl border bg-card p-5"
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  aria-hidden="true"
-                  className="mt-1 h-4 w-4 shrink-0 rounded-full"
-                  style={{ backgroundColor: group.color ?? '#5C5C61' }}
-                />
-                <div>
-                  <Link
-                    className="text-lg font-semibold underline-offset-4 hover:underline"
-                    to={`/grupuri/${group.id}`}
-                  >
-                    {group.name}
-                  </Link>
-                  <p className="text-sm text-muted-foreground">
-                    {categoryLabel(group.category)}
-                    {ancestor ? ` · ${ancestor.name}` : ''}
-                  </p>
-                </div>
-              </div>
-              {membership ? (
-                <Badge variant="secondary">Ești membru</Badge>
-              ) : pending ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="secondary">Cerere în așteptare</Badge>
+            <li key={group.id}>
+              <Panel
+                eyebrow={`${categoryLabel(group.category)}${ancestor ? ` · ${ancestor.name}` : ''}`}
+                title={
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="size-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: group.color ?? '#5C5C61' }}
+                    />
+                    <Link
+                      className="min-w-0 underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      to={`/grupuri/${group.id}`}
+                    >
+                      {group.name}
+                    </Link>
+                  </span>
+                }
+                boxClassName="flex flex-col items-start justify-center"
+              >
+                {membership ? (
+                  <Badge variant="secondary">Ești membru</Badge>
+                ) : pending ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Badge variant="secondary">Cerere în așteptare</Badge>
+                    <ApplicationAction
+                      label="Retrage aplicația"
+                      command={{ kind: 'withdraw', applicationId: pending.id }}
+                    />
+                  </div>
+                ) : form ? (
+                  <ApplicationFormLink label={form.label} url={form.url} />
+                ) : (
                   <ApplicationAction
-                    label="Retrage aplicația"
-                    command={{ kind: 'withdraw', applicationId: pending.id }}
+                    label="Aplică"
+                    command={{ kind: 'apply', groupId: group.id, note: '' }}
                   />
-                </div>
-              ) : form ? (
-                <ApplicationFormLink label={form.label} url={form.url} />
-              ) : (
-                <ApplicationAction
-                  label="Aplică"
-                  command={{ kind: 'apply', groupId: group.id, note: '' }}
-                />
-              )}
+                )}
+              </Panel>
             </li>
           );
         })}
-      </ul>
-    </section>
+      </PageGrid>
+    </Page>
   );
 }
