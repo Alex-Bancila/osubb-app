@@ -246,3 +246,78 @@ it.each([
     ).toHaveAccessibleDescription(copy);
   },
 );
+
+it('offers every Minimum Level picker by Role name, the six rungs only, in ladder order (R29b)', () => {
+  render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group({ parent_id: null, path: [2], min_level: 0 })}
+        parent={undefined}
+        roster={[]}
+        authority={{ ...authority, editStructure: true }}
+        levels={[9, 6, 5, 3, 2, 1, 0]}
+        actorLevel={9}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+      />
+    </MemoryRouter>,
+  );
+  const texts = (field: HTMLElement) =>
+    Array.from((field as HTMLSelectElement).options).map(
+      (option) => option.text,
+    );
+  const six = [
+    'Recrut',
+    'Voluntar',
+    'Voluntar Activ',
+    'Voluntar cu Drept de Vot',
+    'BCE',
+    'BC',
+  ];
+  const pickers = screen.getAllByLabelText('Nivel minim');
+  // The settings form's and the structure section's pickers alike.
+  expect(pickers).toHaveLength(2);
+  for (const picker of pickers) expect(texts(picker)).toEqual(six);
+  expect(
+    texts(screen.getByLabelText('Nivelul de la care se poate cere înscrierea')),
+  ).toEqual(['Ca nivelul minim al grupului', ...six]);
+});
+
+it('names the Minimum Level by Role in the removal preview (R29b)', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group({ min_level: 0 })}
+        parent={undefined}
+        roster={[
+          {
+            memberId: 'm1',
+            name: 'Ana Pop',
+            level: 1,
+            avatarColor: null,
+            groupRole: 'member',
+            positionTitle: null,
+            status: 'activ',
+            roleLabel: 'Voluntar',
+          },
+        ]}
+        authority={authority}
+        levels={[0, 1, 2, 3, 5, 6]}
+        actorLevel={6}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+      />
+    </MemoryRouter>,
+  );
+  await user.selectOptions(screen.getByLabelText('Nivel minim'), '3');
+  expect(
+    screen.getByText(
+      /iese din grup la nivelul minim Voluntar cu Drept de Vot:/,
+    ),
+  ).toBeVisible();
+});

@@ -1,4 +1,8 @@
 import type { Database } from '../../lib/database.types';
+import {
+  EVENT_MINIMUM_LEVELS,
+  minimumLevelOptions,
+} from '../../lib/minimum-level';
 
 export type EventType = Database['public']['Enums']['event_type'];
 
@@ -58,19 +62,18 @@ export const EVENT_TYPE_CHOICES: ReadonlyArray<{
   { value: 'recrutare', label: 'Recrutare' },
 ];
 
-const MINIMUM_LEVELS = [
-  { value: 0, label: 'Toți membrii' },
-  { value: 3, label: 'Membru cu Drept de Vot+' },
-  { value: 5, label: 'BCE+' },
-  { value: 6, label: 'BC+' },
-] as const;
-
-export function minimumLevelChoices(groupFloor: number, actorLevel: number) {
-  return MINIMUM_LEVELS.filter(
-    (choice) =>
-      choice.value >= groupFloor &&
-      (actorLevel >= 9 || choice.value <= actorLevel),
-  );
+/**
+ * "Cine îl vede": the ladder rungs `events_min_level_ck` accepts, by Role name
+ * (ruling R29b), from the Group's floor up to the actor's own level.
+ */
+export function minimumLevelChoices(
+  groupFloor: number,
+  actorLevel: number,
+): Array<{ value: number; label: string }> {
+  return minimumLevelOptions(
+    EVENT_MINIMUM_LEVELS,
+    (level) => level >= groupFloor && (actorLevel >= 9 || level <= actorLevel),
+  ).map((rung) => ({ value: rung.level, label: rung.label }));
 }
 
 /**

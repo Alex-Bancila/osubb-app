@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
+import { minimumLevelText } from '../../lib/minimum-level';
 import { fieldForReason, groupCreateSchema } from '../../lib/schemas/group';
 import { useFormValidation } from '../../lib/use-form-validation';
 import type {
@@ -229,14 +230,17 @@ export function GroupCreateDialog({
               >
                 <option value="">
                   {effectiveParent
-                    ? `Ca grupul părinte (${effectiveParent.min_level})`
-                    : 'Oricine (0)'}
+                    ? `Ca grupul părinte (${minimumLevelText(effectiveParent.min_level)})`
+                    : minimumLevelText(0)}
                 </option>
-                {choices.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
-                ))}
+                {choices
+                  // A top-level Group's default is Recrut already: one option.
+                  .filter((level) => effectiveParent || level !== 0)
+                  .map((level) => (
+                    <option key={level} value={level}>
+                      {minimumLevelText(level)}
+                    </option>
+                  ))}
               </select>
             </label>
             <FieldError {...form.errorProps('minLevel')} />

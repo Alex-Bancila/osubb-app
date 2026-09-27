@@ -18,6 +18,7 @@ import {
   groupStructureSchema,
 } from '../../lib/schemas/group';
 import { reasonCopy } from '../../lib/command-reasons';
+import { isMinimumLevel, minimumLevelText } from '../../lib/minimum-level';
 import { useFormValidation } from '../../lib/use-form-validation';
 import type {
   AdminGroup,
@@ -85,7 +86,7 @@ function RemovalPreview({
         {leaving.length === 1
           ? 'Un membru iese din grup la nivelul minim '
           : `${leaving.length} membri ies din grup la nivelul minim `}
-        {minLevel}:
+        {minimumLevelText(minLevel)}:
       </p>
       <ul className="space-y-1 text-sm" aria-label="Membri care ies din grup">
         {leaving.map((entry) => (
@@ -449,12 +450,15 @@ export function GroupSettingsTab({
                   {...settingsForm.field('applicationLevel')}
                 >
                   <option value="">Ca nivelul minim al grupului</option>
-                  {levels
-                    .filter((level) => level >= chosenMinLevel)
+                  {[...new Set(levels)]
+                    .filter(
+                      (level) =>
+                        isMinimumLevel(level) && level >= chosenMinLevel,
+                    )
                     .sort((left, right) => left - right)
                     .map((level) => (
                       <option key={level} value={level}>
-                        {level}
+                        {minimumLevelText(level)}
                       </option>
                     ))}
                 </select>
@@ -501,7 +505,7 @@ export function GroupSettingsTab({
                 .sort((left, right) => left - right)
                 .map((level) => (
                   <option key={level} value={level}>
-                    {level}
+                    {minimumLevelText(level)}
                   </option>
                 ))}
             </select>
@@ -580,7 +584,7 @@ export function GroupSettingsTab({
                     .sort((left, right) => left - right)
                     .map((level) => (
                       <option key={level} value={level}>
-                        {level}
+                        {minimumLevelText(level)}
                       </option>
                     ))}
                 </select>

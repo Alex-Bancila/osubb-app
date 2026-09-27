@@ -1,3 +1,4 @@
+import { isMinimumLevel } from '../../lib/minimum-level';
 import type { AdminGroup } from '../../queries/groups-admin';
 
 /**
@@ -128,8 +129,9 @@ export function groupPathNames(
 /**
  * The Minimum Levels a caller may choose for this Group: at least the parent's
  * (`group_min_level_below_parent`) and never above their own
- * (`group_min_level_above_actor`). The UI stops the mistake; the server still
- * decides.
+ * (`group_min_level_above_actor`), and only a rung of the Minimum Level ladder
+ * (ruling R29b: never the Moderator's 9). The UI stops the mistake; the server
+ * still decides.
  */
 export function minLevelChoices(
   levels: readonly number[],
@@ -137,7 +139,10 @@ export function minLevelChoices(
   actorLevel: number,
 ): number[] {
   return [...new Set(levels)]
-    .filter((level) => level >= parentMinLevel && level <= actorLevel)
+    .filter(
+      (level) =>
+        isMinimumLevel(level) && level >= parentMinLevel && level <= actorLevel,
+    )
     .sort((left, right) => left - right);
 }
 
