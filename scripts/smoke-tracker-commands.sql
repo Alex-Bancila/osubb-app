@@ -1151,8 +1151,13 @@ select pg_temp.smoke_assert(not exists(select 1 from information_schema.tables
 select pg_temp.smoke_assert(not exists(select 1 from information_schema.columns
  where table_schema='public' and table_name='groups' and column_name like 'legacy_%'),
  'Wave 3: Group backfill keys are absent');
+-- Only the SET list counts: each UPDATE of public.groups up to its `;`, cut
+-- at its WHERE, so a filter on parent_id is not read as an assignment.
 select pg_temp.smoke_assert(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
- where n.nspname in ('public','private') and p.prosrc ~* 'update[[:space:]]+public[.]groups[[:space:]]+(as[[:space:]]+[a-z_]+[[:space:]]+)?set[^;]*parent_id[[:space:]]*='),
+ cross join lateral regexp_matches(p.prosrc,
+   'update[[:space:]]+public[.]groups[[:space:]]+(as[[:space:]]+[a-z_]+[[:space:]]+)?set([^;]*)', 'gi') as m
+ where n.nspname in ('public','private')
+   and split_part(lower(m[2]), 'where', 1) ~ '(^|[^a-z_.])parent_id[[:space:]]*='),
  'Wave 3: no live function reparents a Group');
 
 -- ==================== done ====================
