@@ -9,10 +9,14 @@ import { charLength, trimText } from '../normalize';
  */
 
 /**
- * `[[:alnum:] ._-]` as #675's `profiles_nickname_ck` reads it: any letter or
- * digit (diacritics included), a space, `.`, `-` or `_`.
+ * `profiles_nickname_ck` as the security pass (L5) tightened it: Latin
+ * letters only, so a Cyrillic or Greek look-alike cannot pass for another
+ * Member. ASCII letters and digits, the Latin-1 and Latin Extended-A letters
+ * (U+00C0-U+017E, less the multiplication and division signs), the Romanian
+ * comma-below letters (U+0218-U+021B), a space, `.`, `-` or `_`.
  */
-const NICKNAME_CHARACTERS = /^[\p{L}\p{N} ._-]+$/u;
+const NICKNAME_CHARACTERS =
+  /^[A-Za-z0-9\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u017E\u0218-\u021B ._-]+$/u;
 
 /**
  * A Nickname as `private.guard_profile_nickname` (#675, ruling R5) stores it:

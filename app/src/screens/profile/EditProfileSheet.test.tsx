@@ -184,7 +184,7 @@ describe('EditProfileSheet', () => {
       await user.tab();
 
       expect(nicknameInput()).toHaveAccessibleDescription(
-        /Pseudonimul poate avea doar litere, cifre, spații, punct, cratimă sau underscore\./,
+        /Pseudonimul poate avea doar litere latine, cifre, spații, punct, cratimă sau underscore\./,
       );
       await save();
       expect(updateProfileMock).not.toHaveBeenCalled();
