@@ -18,6 +18,15 @@
 -- is miserable. Real onboarding is invite-only and passwordless (ADR-0003);
 -- these accounts are @demo.osubb, an address nobody can receive mail at.
 --
+-- The repository is public, so the password a hosted project gets is NOT in
+-- this file (security pass 2026-09-27, finding H3). It comes from the
+-- `app.seed_password` setting the caller provides for this transaction;
+-- seed-staging.yml sets it from the staging Environment's `SEED_PASSWORD`
+-- secret. Only a LOCAL Supabase stack — recognised by the CLI's published
+-- development JWT secret, which no hosted project has — may fall back to the
+-- local default below. Anywhere else a missing or short password aborts the
+-- seed before its first write.
+--
 -- ⚠️ Must be applied in a single transaction (`psql -1` / `--single-transaction`,
 -- or `supabase db reset`, which already wraps it). The demo-cohort cleanup
 -- below briefly disables the append-only guards on `task_evaluations` and
@@ -26,6 +35,35 @@
 -- a live database with those guards off. Every documented apply path
 -- already runs this way — seed-staging.yml, scripts/check-seed-rerunnable.sh,
 -- and `supabase db reset` — see docs/backend/seeding-staging.md.
+
+-- ==================== Demo password ====================
+-- Resolved before the first write, so a refusal touches nothing.
+create or replace function pg_temp.seed_password()
+returns text language plpgsql stable as $$
+declare
+  v_password text := nullif(current_setting('app.seed_password', true), '');
+  -- The Supabase CLI's published local JWT secret. A hosted project has no
+  -- such setting or its own random secret — never this one.
+  v_local boolean := coalesce(current_setting('app.settings.jwt_secret', true), '')
+    = 'super-secret-jwt-token-with-at-least-32-characters-long';
+begin
+  if v_password is null then
+    if v_local then
+      return 'parola123';  -- local default: valid on a local Docker stack only
+    end if;
+    raise exception using errcode = 'P0001',
+      message = 'seed_password_required',
+      detail = 'This is not a local Supabase stack, so the demo password must come from app.seed_password (seed-staging.yml sets it from the SEED_PASSWORD secret).';
+  end if;
+  if not v_local and (char_length(v_password) < 16 or v_password = 'parola123') then
+    raise exception using errcode = 'P0001',
+      message = 'seed_password_too_weak',
+      detail = 'Outside a local stack the demo password must be at least 16 characters and must not be the local default.';
+  end if;
+  return v_password;
+end;
+$$;
+do $$ begin perform pg_temp.seed_password(); end $$;
 
 -- ==================== Clear the previous demo data ====================
 -- `db reset` drops the database before running this file, so locally these
@@ -183,7 +221,7 @@ delete from groups g
 delete from auth.users where email like '%@demo.osubb';
 
 -- ==================== One login per role ====================
--- Password for all of them: parola123
+-- Password for all of them: pg_temp.seed_password() — see the header.
 --
 -- ⚠️ Writing auth.users by hand has one non-obvious requirement: GoTrue reads
 -- the token columns as NOT NULL strings, so they must be '' and not left null.
@@ -197,7 +235,7 @@ insert into auth.users (
   email_change_token_current, phone_change, phone_change_token, reauthentication_token
 )
 select '00000000-0000-0000-0000-000000000000', m.id, 'authenticated', 'authenticated',
-       m.email, extensions.crypt('parola123', extensions.gen_salt('bf')), now(),
+       m.email, extensions.crypt(pg_temp.seed_password(), extensions.gen_salt('bf')), now(),
        now(), now(), '{"provider":"email","providers":["email"]}', '{}',
        '', '', '', '', '', '', '', ''
   from (values

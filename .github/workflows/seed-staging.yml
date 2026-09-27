@@ -46,11 +46,16 @@ jobs:
           # A variable of the staging Environment after #110; the secret until then.
           STAGING_REF: ${{ vars.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_REF }}
           DB_URL: ${{ secrets.STAGING_DB_URL }}
+          SEED_PASSWORD: ${{ secrets.SEED_PASSWORD }}
         run: |
           fail() { echo "::error::$1"; exit 1; }
 
           [ -n "$STAGING_REF" ] || fail "SUPABASE_PROJECT_REF is not set (staging Environment variable, or the old repository secret)."
           [ -n "$DB_URL" ] || fail "Secret STAGING_DB_URL is not set — see docs/backend/seeding-staging.md."
+          # The repo is public: the demo password comes from a secret, never from
+          # seed.sql (security pass 2026-09-27, H3). seed.sql refuses too.
+          [ -n "$SEED_PASSWORD" ] || fail "Secret SEED_PASSWORD is not set (staging Environment) — see docs/backend/seeding-staging.md."
+          [ "${#SEED_PASSWORD}" -ge 16 ] || fail "Secret SEED_PASSWORD is shorter than 16 characters."
 
           [ "$TYPED_REF" = "$STAGING_REF" ] || \
             fail "The ref you typed is not the staging project ref. Nothing was touched."
@@ -95,10 +100,19 @@ jobs:
       # --single-transaction: the seed clears the previous demo cohort before
       # inserting the new one, so a failure halfway must leave staging with the
       # old data rather than with half of the new.
+      # The password reaches the seed as app.seed_password, set for this
+      # transaction only (set_config(..., true)), so it is never stored in a
+      # database setting. The select prints only 't', never the value.
       - name: Apply supabase/seed.sql
         env:
           DB_URL: ${{ secrets.STAGING_DB_URL }}
-        run: psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f supabase/seed.sql
+          SEED_PASSWORD: ${{ secrets.SEED_PASSWORD }}
+        run: |
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -v seed_password="$SEED_PASSWORD" \
+            --single-transaction -f - <<'SQL'
+          select set_config('app.seed_password', :'seed_password', true) is not null as seed_password_set;
+          \i supabase/seed.sql
+          SQL
 
       # What landed, in the log, so a green tick is not the only evidence.
       - name: Show what landed

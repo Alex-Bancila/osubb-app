@@ -16,8 +16,11 @@
 # is deliberate: `DB_URL` is the name seed-staging.yml uses for the
 # *staging* connection string, and a scoped, distinct variable name here
 # stops that value ever being picked up by accident and pointed at a live
-# database (which would insert a sentinel row and apply the demo seed —
-# including the published BC/Moderator password — to it).
+# database (which would insert a sentinel row and apply the demo seed to it).
+#
+# It also proves the demo-password contract (security pass 2026-09-27, H3):
+# outside a local stack the seed refuses to run without a strong
+# `app.seed_password`, and with one set every demo login uses it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -115,6 +118,56 @@ if ! probe=$(run_sql -c "select 1" 2>&1) || [ "$probe" != "1" ]; then
   echo "::error::Could not reach the local Supabase database (tried psql+LOCAL_DB_URL, then docker exec into $CONTAINER). Is the local Supabase stack running? Docker output: $probe" >&2
   exit 1
 fi
+
+# ==================== Demo password from a secret (H3) ====================
+# Each run below is one transaction that ends in ROLLBACK, so none of them
+# changes the database. "Hosted" is simulated by overriding the CLI's local
+# JWT secret for that transaction only — the signal seed.sql reads.
+seed_as_hosted() { # $1 = app.seed_password ('' for none), $2 = SQL after the seed
+  {
+    echo "begin;"
+    echo "select set_config('app.settings.jwt_secret', 'hosted-project-secret', true) is not null;"
+    echo "select set_config('app.seed_password', '$1', true) is not null;"
+    cat supabase/seed.sql
+    printf '%s\n' "$2"
+    echo "rollback;"
+  } | run_sql 2>&1
+}
+
+if out=$(seed_as_hosted "" ""); then
+  echo "::error::seed.sql ran on a non-local database without app.seed_password." >&2
+  exit 1
+fi
+case "$out" in
+  *seed_password_required*) ;;
+  *) echo "::error::seed.sql without app.seed_password failed, but not with seed_password_required: $out" >&2; exit 1 ;;
+esac
+
+if out=$(seed_as_hosted "parola123" ""); then
+  echo "::error::seed.sql accepted the local default password on a non-local database." >&2
+  exit 1
+fi
+case "$out" in
+  *seed_password_too_weak*) ;;
+  *) echo "::error::seed.sql with a weak app.seed_password failed, but not with seed_password_too_weak: $out" >&2; exit 1 ;;
+esac
+
+configured_check=$(cat <<'SQL'
+select 'configured:' || format('%s:%s',
+  count(*) filter (where encrypted_password = extensions.crypt('ci-seed-password-0123456789', encrypted_password)),
+  count(*) filter (where encrypted_password = extensions.crypt('parola123', encrypted_password)))
+  from auth.users where email like '%@demo.osubb';
+SQL
+)
+out=$(seed_as_hosted "ci-seed-password-0123456789" "$configured_check") || {
+  echo "::error::seed.sql refused a strong app.seed_password: $out" >&2
+  exit 1
+}
+case "$out" in
+  *configured:8:0*) ;;
+  *) echo "::error::With app.seed_password set, the eight demo logins did not all use it (expected configured:8:0): $out" >&2; exit 1 ;;
+esac
+echo "Demo password: refused without a secret off-local; all eight logins use the configured one."
 
 # Clean up the sentinel rows on every exit path, including a failure, so a
 # broken run does not poison the next one.
