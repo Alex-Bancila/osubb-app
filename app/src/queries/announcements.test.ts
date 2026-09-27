@@ -115,7 +115,6 @@ describe('announcements query layer', () => {
       body: 'Detalii',
       group_id: 12,
       audience: 'local',
-      created_by: 'member-1',
     };
     await createAnnouncement(payload);
     expect(insert).toHaveBeenCalledWith(payload);

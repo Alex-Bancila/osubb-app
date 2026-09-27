@@ -143,6 +143,7 @@ export function useAnnouncementReaders(
   });
 }
 
+/** No author or date: the server stamps created_by and published_at (security pass M1). */
 export type CreateAnnouncementInput = Pick<
   import('../lib/database.types').Database['public']['Tables']['announcements']['Insert'],
   | 'title'
@@ -153,7 +154,6 @@ export type CreateAnnouncementInput = Pick<
   | 'pinned'
   | 'form_label'
   | 'form_url'
-  | 'created_by'
 >;
 
 /** No RETURNING: a global writer can post a local item outside their own read audience. */
