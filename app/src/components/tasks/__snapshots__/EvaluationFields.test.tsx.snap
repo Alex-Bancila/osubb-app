@@ -73,6 +73,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
       <div
         aria-describedby="_r_70_-hint"
         aria-labelledby="_r_70_-label"
+        aria-required="true"
         class="-mx-1.5 flex w-fit max-w-full"
         role="radiogroup"
       >

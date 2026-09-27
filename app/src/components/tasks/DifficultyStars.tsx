@@ -106,6 +106,7 @@ export function DifficultyStarPicker({
     if (disabled || !/^[1-5]$/.test(event.key)) return;
     event.preventDefault();
     const step = Number(event.key);
+    setPreview(null);
     onChange(step);
     stars.current[step - 1]?.focus();
   }
@@ -120,9 +121,12 @@ export function DifficultyStarPicker({
         aria-labelledby={labelId}
         aria-describedby={invalid && errorId ? `${hintId} ${errorId}` : hintId}
         aria-invalid={invalid || undefined}
+        aria-required="true"
         value={value}
         onValueChange={(next) => {
-          if (typeof next === 'number') onChange(next);
+          if (typeof next !== 'number') return;
+          setPreview(null);
+          onChange(next);
         }}
         disabled={disabled}
         onKeyDown={numberKey}

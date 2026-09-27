@@ -277,6 +277,7 @@ const REASON_COPY = new Map<string, string>([
   ['invalid_difficulty', 'Alege o Dificultate între 1 și 5.'],
   ['invalid_rating', 'Alege o Notă între 1 și 5.'],
   ['evaluation_note_required', 'Scrie observațiile evaluării.'],
+  ['evaluation_note_too_long', 'Observațiile au cel mult 1000 de caractere.'],
   [
     'request_not_pending',
     'Cererea a fost deja decisă. Lista a fost actualizată.',
