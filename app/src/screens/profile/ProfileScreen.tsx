@@ -15,6 +15,7 @@ import { Empty, ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
+import { safeHexColor } from '../../lib/color';
 import { formatLongDate, formatPoints, initials } from '../../lib/format';
 import { PromotionProgress } from '../../components/profile/PromotionProgress';
 import { useTheme } from '../../lib/theme';
@@ -165,7 +166,7 @@ export default function ProfileScreen() {
               <div
                 className="grid size-20 shrink-0 place-items-center rounded-full text-2xl font-bold text-white shadow-md"
                 style={{
-                  backgroundColor: profile.avatar_color ?? 'var(--brand-red)',
+                  backgroundColor: safeHexColor(profile.avatar_color),
                 }}
                 aria-hidden="true"
               >

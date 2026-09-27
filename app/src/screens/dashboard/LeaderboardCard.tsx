@@ -46,7 +46,8 @@ function RankRow({
           memberId={row.member_id}
           nickname={row.nickname}
           fullName={row.full_name ?? 'Membru OSUBB'}
-          avatarColor={(isMe && color) || 'var(--ink-700)'}
+          avatarColor={isMe ? color : null}
+          avatarFallback="var(--ink-700)"
         />
         {isMe && <span className="tag tag--me">tu</span>}
       </span>

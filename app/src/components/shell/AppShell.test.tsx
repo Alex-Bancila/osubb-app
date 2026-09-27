@@ -124,6 +124,25 @@ describe('AppShell', () => {
     ).toHaveAttribute('aria-current', 'page');
   });
 
+  it('renders the signed-in avatar colour only when it is #rrggbb (security audit F1)', () => {
+    queries.useMyProfile.mockReturnValue({
+      data: {
+        full_name: 'Mara Pop',
+        avatar_color: 'url(https://attacker.example/p.gif)',
+      },
+    });
+    const { container } = renderShell();
+    const avatars = [...container.querySelectorAll<HTMLElement>('[style]')];
+    expect(avatars.length).toBeGreaterThan(0);
+    for (const element of avatars)
+      expect(element.getAttribute('style')).not.toContain('url(');
+    expect(
+      avatars.some(
+        (element) => element.style.backgroundColor === 'var(--brand-red)',
+      ),
+    ).toBe(true);
+  });
+
   it('offers Campaigns only to members who manage work in some Group', () => {
     queries.useCapabilities.mockReturnValue({ isPending: true });
     const view = renderShell();

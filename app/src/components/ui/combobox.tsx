@@ -3,6 +3,7 @@ import { CheckIcon, ChevronsUpDownIcon, SearchIcon } from 'lucide-react';
 import { cn } from 'cn';
 
 import { buttonVariants } from '@/components/ui/button';
+import { AVATAR_FALLBACK, safeHexColor } from '@/lib/color';
 import { initials } from '@/lib/format';
 
 // A dropdown whose search box lives inside the pop-up: the trigger looks like
@@ -152,7 +153,10 @@ const MEMBER_AVATAR_PX = 28;
 
 type MemberAvatarProps = {
   name: string;
+  /** The stored `profiles.avatar_color`; anything but `#rrggbb` is ignored. */
   avatarColor?: string | null;
+  /** The app's own colour when there is no usable stored one. */
+  fallbackColor?: string;
   avatarUrl?: string | null;
   className?: string;
 };
@@ -160,6 +164,7 @@ type MemberAvatarProps = {
 function MemberAvatar({
   name,
   avatarColor,
+  fallbackColor = AVATAR_FALLBACK,
   avatarUrl,
   className,
 }: MemberAvatarProps) {
@@ -171,7 +176,9 @@ function MemberAvatar({
         'grid size-7 shrink-0 place-items-center overflow-hidden rounded-full text-[0.65rem] font-bold text-white',
         className,
       )}
-      style={{ background: avatarColor ?? 'var(--brand-red)' }}
+      // `backgroundColor`, never the `background` shorthand: the stored value
+      // is Member-written text, and the shorthand would load a `url(…)`.
+      style={{ backgroundColor: safeHexColor(avatarColor, fallbackColor) }}
     >
       {avatarUrl ? (
         <img

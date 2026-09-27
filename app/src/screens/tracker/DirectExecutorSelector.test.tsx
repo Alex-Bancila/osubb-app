@@ -99,7 +99,7 @@ it('shows a small initials avatar on the member colour, never a full image', asy
   const option = await screen.findByRole('option', { name: 'Ana Șerban' });
   const avatar = option.querySelector('[data-slot="member-avatar"]');
   expect(avatar).toHaveTextContent('AȘ');
-  expect(avatar).toHaveStyle({ background: '#123456' });
+  expect(avatar).toHaveStyle({ backgroundColor: '#123456' });
   expect(screen.getByRole('listbox').querySelector('img')).toBeNull();
 });
 
