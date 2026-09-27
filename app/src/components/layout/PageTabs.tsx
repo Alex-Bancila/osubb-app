@@ -16,7 +16,7 @@ export const tabListClass = 'mb-6 flex min-w-0 flex-wrap gap-2';
  * (a route) or `aria-selected` (a tablist).
  */
 export const tabClass =
-  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-foreground outline-none hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-active:bg-primary data-active:text-primary-foreground aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground';
+  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 py-2 text-sm font-medium outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-active:bg-primary data-active:text-primary-foreground aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground';
 
 export type PageTab = {
   /** The route this tab opens. */
