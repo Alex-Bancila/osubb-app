@@ -23,6 +23,7 @@ import {
   periodNameFieldForReason,
   periodNameSchema,
 } from '../../lib/schemas/evaluation-period';
+import { safeHttpUrl } from '../../lib/links';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
   lastClosedPeriod,
@@ -497,6 +498,7 @@ function AdherenceFormCard({
 }) {
   const inputId = useId();
   const hintId = useId();
+  const currentUrl = safeHttpUrl(current);
   const [url, setUrl] = useState(current ?? '');
   const [message, setMessage] = useState<string | null>(null);
   const form = useFormValidation(
@@ -537,15 +539,18 @@ function AdherenceFormCard({
         </p>
       </div>
       <p className="break-all">
-        {current ? (
+        {currentUrl ? (
           <a
-            href={current}
+            href={currentUrl}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="underline underline-offset-4"
           >
             {current}
           </a>
+        ) : current ? (
+          // Not http(s): shown as text so BC can see and replace it, never as a link.
+          <span>{current}</span>
         ) : (
           <span className="text-muted-foreground">Niciun formular setat</span>
         )}

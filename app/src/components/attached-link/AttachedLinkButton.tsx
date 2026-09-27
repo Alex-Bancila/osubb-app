@@ -1,4 +1,5 @@
 import { ExternalLink } from 'lucide-react';
+import { safeHttpUrl } from '../../lib/links';
 import { cn } from '../../lib/utils';
 
 type AttachedLinkButtonProps = {
@@ -14,7 +15,8 @@ type AttachedLinkButtonProps = {
  * the 2026-09-23 grill): a button-styled link under its label, opening in a
  * new tab. Renders nothing unless both a label and an address are present
  * and the address is `http://` or `https://` — a defensive re-check of the
- * server's rule (`private.is_http_url`, #673), so a row written before the
+ * server's rule (`private.is_http_url`, #673) through the shared
+ * `safeHttpUrl` (`lib/links.ts`), so a row written before the
  * guard existed, or edited outside it, can never open `javascript:` or
  * another scheme.
  */
@@ -23,10 +25,11 @@ export function AttachedLinkButton({
   url,
   className,
 }: AttachedLinkButtonProps) {
-  if (!label || !url || !/^https?:\/\//.test(url)) return null;
+  const href = safeHttpUrl(url);
+  if (!label || !href) return null;
   return (
     <a
-      href={url}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       // The accessible name is set explicitly, not composed from the visible

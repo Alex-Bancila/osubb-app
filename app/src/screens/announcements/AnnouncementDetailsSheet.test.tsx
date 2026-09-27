@@ -135,6 +135,22 @@ describe('AnnouncementDetailsSheet', () => {
     expect(formLink).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
+  it.each(['javascript:alert(1)', 'data:text/html,hi', 'forms.gle/feedback'])(
+    'renders no form link for a stored address that is not http(s): %s',
+    (formUrl) => {
+      const item = presentation({ formLabel: 'Feedback formular', formUrl });
+
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />,
+      );
+
+      expect(
+        screen.queryByRole('link', { name: /Deschide formular/ }),
+      ).toBeNull();
+      expect(screen.queryByText('Formular asociat')).toBeNull();
+    },
+  );
+
   it('calls onClose when close button is clicked', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

@@ -519,6 +519,25 @@ it('says when the last close raised no signal, and when nothing has closed yet',
   expect(rpcCalls('retention_ranking')).toEqual([]);
 });
 
+it('links the adherence form only when its address is http(s)', async () => {
+  db.settings.set('adherence_form_url', 'https://forms.example.org/adeziune');
+  const view = show();
+  const link = await screen.findByRole('link', {
+    name: 'https://forms.example.org/adeziune',
+  });
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  view.unmount();
+
+  // A value written outside the server's guard is shown, never linked.
+  db.settings.set('adherence_form_url', 'javascript:alert(1)');
+  show();
+  const section = (
+    await screen.findByRole('heading', { name: 'Formular de adeziune' })
+  ).closest('section') as HTMLElement;
+  expect(await within(section).findByText('javascript:alert(1)')).toBeVisible();
+  expect(within(section).queryByRole('link')).toBeNull();
+});
+
 it('sets, refuses and clears the adherence-form address', async () => {
   const user = userEvent.setup();
   show();

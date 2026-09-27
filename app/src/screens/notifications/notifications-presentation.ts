@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { BUCHAREST_TIME_ZONE } from '../../lib/calendar-time';
+import { inAppPath } from '../../lib/links';
 import type { Database } from '../../lib/database.types';
 import type { NotificationRow } from '../../queries/notifications';
 
@@ -68,13 +69,13 @@ export function formatNotificationAge(
  * Notification links are in-app routes — `/tracker/12`, `/grupuri/3`,
  * `/administrare/grupuri/3`, `/calendar`. Anything else (absent, empty, or an
  * absolute URL that would leave the app) is treated as "no link": the row
- * still renders and still marks itself read, it simply goes nowhere.
+ * still renders and still marks itself read, it simply goes nowhere. The rule
+ * is the service worker's (`inAppPath` in `lib/links.ts`): a tab or new line
+ * inside `//`, or a backslash, would otherwise resolve to another host, and
+ * React Router falls back to a full-page load for a cross-origin URL.
  */
 export function inAppLink(link: string | null): string | null {
-  if (!link) return null;
-  const trimmed = link.trim();
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return null;
-  return trimmed;
+  return inAppPath(link, window.location.origin);
 }
 
 export type NotificationPresentation = {
