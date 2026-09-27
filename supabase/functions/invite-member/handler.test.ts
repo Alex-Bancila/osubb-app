@@ -407,3 +407,40 @@ Deno.test("a request with no Origin header gets Vary: Origin and no ACAO", async
   assertEquals(res.headers.get("Vary"), "Origin");
   assertEquals(res.headers.has("Access-Control-Allow-Origin"), false);
 });
+
+// ==================== the rank ceiling (H1) ====================
+// Only the Moderator creates a BC or Moderator account, as only the Moderator
+// appoints one through set_member_role. The refusal comes before Auth is
+// reached, so no account is ever created (and then deleted) for it.
+
+Deno.test("a BC cannot invite a BC or a Moderator, and Auth is never reached", async () => {
+  for (const role of ["bc", "moderator", " Moderator "]) {
+    const { deps, calls } = fakeDeps({ level: 6 });
+
+    const res = await handleInvite(request({ ...validBody, role }), deps);
+    const payload = await res.json();
+
+    assertEquals(res.status, 403);
+    assertEquals(payload.code, "member_manage_forbidden");
+    assertEquals(calls.includes("profileExists"), false);
+    assertEquals(calls.includes("inviteByEmail"), false);
+    assertEquals(calls.includes("provision"), false);
+  }
+});
+
+Deno.test("a BC still invites every rank below BC, BCE included", async () => {
+  const { deps, provisioned } = fakeDeps({ level: 6 });
+  const res = await handleInvite(request({ ...validBody, role: "bce" }), deps);
+  assertEquals(res.status, 201);
+  assertEquals(provisioned[0].role, "bce");
+});
+
+Deno.test("the Moderator invites a BC or a Moderator", async () => {
+  for (const role of ["bc", "moderator"]) {
+    const { deps, provisioned } = fakeDeps({ level: 9 });
+    const res = await handleInvite(request({ ...validBody, role }), deps);
+    assertEquals(res.status, 201);
+    assertEquals(provisioned[0].role, role);
+    assertEquals(provisioned[0].appointedBy, "caller-1");
+  }
+});

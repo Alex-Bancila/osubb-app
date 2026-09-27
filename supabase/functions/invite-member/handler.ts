@@ -7,6 +7,8 @@
 //   201 { user_id }        invited and provisioned
 //   400                    bad input
 //   401 / 403              not signed in / not BC (level < 6)
+//   403 member_manage_forbidden
+//                          role bc or moderator from anyone but the Moderator
 //   409                    that email already has an account
 //
 // Since #602 the initial placement is a list of GROUP ids, appointed through
@@ -20,7 +22,7 @@
 // comments, and handler.test.ts, which fails if any of them is undone.
 
 import { corsHeaders, isAllowedOrigin, json } from "../_shared/cors.ts";
-import { inviteMember } from "../_shared/member-invite.ts";
+import { inviteMember, mayHandleRole } from "../_shared/member-invite.ts";
 import type { InviteDeps } from "./deps.ts";
 
 const INVITE_LEVEL = 6; // BC and above — capability manageRoles (spec §4.1)
@@ -140,11 +142,26 @@ export async function handleInvite(
   }
   const groupIds = rawGroupIds as number[];
 
+  // Only the Moderator creates a BC or Moderator account (H1) — the rule
+  // set_member_role applies. provision_profile refuses it too; answering here
+  // means no Auth user is ever created for a refused rank.
+  const role = body.role ?? "recrut";
+  if (!mayHandleRole(role, callerLevel)) {
+    return json(
+      {
+        error: "Doar Moderatorul poate crea conturi de BC sau Moderator.",
+        code: "member_manage_forbidden",
+      },
+      403,
+      origin,
+    );
+  }
+
   try {
     const result = await inviteMember({
       fullName,
       email,
-      role: body.role ?? "recrut",
+      role,
       groupIds,
       appointedBy: callerId,
     }, deps);

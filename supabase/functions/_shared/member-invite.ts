@@ -1,3 +1,22 @@
+/** public.roles level of the Moderator — the only rank at 9. */
+export const MODERATOR_LEVEL = 9;
+
+/**
+ * The leadership ranks only the Moderator may create or re-invite (security
+ * pass 2026-09-27, H1/H2) — the same reservation `set_member_role` applies.
+ * `public.provision_profile` enforces it too; the Edge Functions refuse first
+ * so the caller gets a 403 before any Auth user is created or moved.
+ */
+export function isReservedRole(role: string): boolean {
+  const normalized = role.trim().toLowerCase();
+  return normalized === "bc" || normalized === "moderator";
+}
+
+/** True when a caller at `callerLevel` may create or re-invite `role`. */
+export function mayHandleRole(role: string, callerLevel: number): boolean {
+  return !isReservedRole(role) || callerLevel >= MODERATOR_LEVEL;
+}
+
 export interface ProvisionArgs {
   userId: string;
   fullName: string;

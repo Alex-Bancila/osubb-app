@@ -294,6 +294,10 @@ export function validateInput({ memberRows, taskRows, groups, today }) {
       if (!earlier) at('appointed_by_email', `${appointer} is not an earlier row`);
       else if (!['bc', 'moderator'].includes(earlier.role)) {
         at('appointed_by_email', `${appointer} is not BC or the Moderator`);
+      } else if (role === 'bc' && earlier.role !== 'moderator') {
+        // public.provision_profile refuses it (42501 member_manage_forbidden):
+        // only the Moderator creates a BC account, as only they appoint one.
+        at('appointed_by_email', `only the Moderator appoints a BC; ${appointer} is BC`);
       } else appointedBy = appointer;
     }
 

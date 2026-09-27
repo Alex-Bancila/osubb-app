@@ -387,6 +387,24 @@ test('the Moderator must come first, and only once', () => {
   );
 });
 
+test('a BC row is appointed by the Moderator, never by another BC', () => {
+  const { errors } = validate(
+    [
+      HEADER,
+      MODERATOR,
+      'b1@example.com,B One,,bc,EDU,,,,',
+      'b2@example.com,B Two,,bc,EDU,,,,b1@example.com',
+      'e@example.com,E,,bce,EDU,,,,b1@example.com',
+    ].join('\n'),
+  );
+  assert.deepEqual(
+    errors.map((e) => `${e.row}:${e.column}`),
+    ['4:appointed_by_email'],
+    'provision_profile would refuse it; a BCE appointed by a BC stays fine',
+  );
+  assert.match(errors[0].message, /only the Moderator appoints a BC/);
+});
+
 test('every input rule is reported at once, with its row and column', () => {
   const { errors } = validate(
     [
