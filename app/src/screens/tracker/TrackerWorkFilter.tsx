@@ -1,4 +1,6 @@
-import { Button } from '../../components/ui/button';
+import { ListFilter } from 'lucide-react';
+import { Panel } from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { useWorkFilterOptions } from '../../queries/work-filter-options';
 
@@ -9,23 +11,16 @@ import { useWorkFilterOptions } from '../../queries/work-filter-options';
 export function TrackerWorkFilter({ hint }: { hint: string }) {
   const options = useWorkFilterOptions();
   return (
-    <section
-      aria-label="Filtre taskuri"
-      className="min-w-0 space-y-3 rounded-xl border border-border bg-card p-4"
-    >
+    <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre taskuri">
       {options.isPending ? (
-        <p role="status">Se încarcă filtrele…</p>
+        <Loading label="Se încarcă filtrele…" />
       ) : options.isError ? (
-        <div role="alert" className="space-y-3">
-          <p>Nu am putut încărca filtrele.</p>
-          <Button
-            variant="outline"
-            className="min-h-11 min-w-11"
-            onClick={() => options.refetch()}
-          >
-            Reîncarcă filtrele
-          </Button>
-        </div>
+        <ErrorState
+          error={options.error}
+          text="Nu am putut încărca filtrele."
+          retryLabel="Reîncarcă filtrele"
+          onRetry={() => void options.refetch()}
+        />
       ) : (
         <WorkFilter
           groups={options.data.groups}
@@ -33,7 +28,7 @@ export function TrackerWorkFilter({ hint }: { hint: string }) {
           hint={hint}
         />
       )}
-    </section>
+    </Panel>
   );
 }
 

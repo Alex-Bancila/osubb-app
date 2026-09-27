@@ -1,5 +1,4 @@
-import { useId } from 'react';
-import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import { EmptyState, Panel } from '../../components/layout';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
@@ -23,7 +22,6 @@ export function AvailableOpportunities({
   onOpenTask: (id: number) => void;
 }) {
   const { params, active } = useWorkFilter();
-  const headingId = useId();
   const shown = params
     ? opportunities.filter((task) => matchesWorkFilter(task, params))
     : [];
@@ -33,15 +31,15 @@ export function AvailableOpportunities({
       {!params ? (
         <p>{RANGE_FIRST}</p>
       ) : (
-        <section aria-labelledby={headingId} className="min-w-0 space-y-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h2 id={headingId} className="text-lg font-semibold">
-              Oportunități deschise
-            </h2>
+        <Panel
+          bare
+          title="Oportunități deschise"
+          control={
             <p className="text-sm text-muted-foreground tabular-nums">
               {formatTaskCount(shown.length)}
             </p>
-          </div>
+          }
+        >
           {shown.length ? (
             <TaskCardGrid
               rows={shown}
@@ -54,17 +52,13 @@ export function AvailableOpportunities({
               })}
             />
           ) : (
-            <Empty className="border border-dashed border-border">
-              <EmptyHeader>
-                <EmptyTitle>
-                  {active
-                    ? 'Nicio oportunitate nu corespunde filtrelor.'
-                    : 'Nu sunt oportunități deschise pentru tine.'}
-                </EmptyTitle>
-              </EmptyHeader>
-            </Empty>
+            <EmptyState bare>
+              {active
+                ? 'Nicio oportunitate nu corespunde filtrelor.'
+                : 'Nu sunt oportunități deschise pentru tine.'}
+            </EmptyState>
           )}
-        </section>
+        </Panel>
       )}
     </div>
   );

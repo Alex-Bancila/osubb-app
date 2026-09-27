@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import { EmptyState } from '../../components/layout';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
@@ -130,11 +130,7 @@ export function ManagerTaskList({
               ))}
             </ul>
           ) : (
-            <Empty className="border border-dashed border-border">
-              <EmptyHeader>
-                <EmptyTitle>Niciun task nu corespunde filtrelor.</EmptyTitle>
-              </EmptyHeader>
-            </Empty>
+            <EmptyState bare>Niciun task nu corespunde filtrelor.</EmptyState>
           )}
         </section>
       )}

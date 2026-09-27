@@ -1,4 +1,13 @@
 import { Link, useParams } from 'react-router';
+import { CalendarDays, Users } from 'lucide-react';
+import {
+  EmptyState,
+  Page,
+  PageGrid,
+  PageHeader,
+  Panel,
+} from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
@@ -31,17 +40,33 @@ export default function MemberGroupScreen() {
   const capabilities = useCapabilities();
   const auth = useAuth();
   const level = auth.claims?.member_level ?? 0;
+  const back = (
+    <Link
+      to="/grupuri"
+      className="inline-flex min-h-11 items-center rounded-sm underline outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      Înapoi la grupuri
+    </Link>
+  );
   if (groups.isPending || mine.isPending || applications.isPending)
-    return <p role="status">Se încarcă grupul…</p>;
+    return (
+      <Page aria-label="Grup">
+        <Loading label="Se încarcă grupul…" />
+      </Page>
+    );
   if (groups.isError || mine.isError || applications.isError)
-    return <p role="alert">Nu am putut încărca grupul. Reîncarcă pagina.</p>;
+    return (
+      <Page aria-label="Grup">
+        <ErrorState text="Nu am putut încărca grupul. Reîncarcă pagina." />
+      </Page>
+    );
   const group = groups.data.find((row) => row.id === id);
   if (!group)
     return (
-      <section className="page">
-        <h1>Grup indisponibil</h1>
-        <Link to="/grupuri">Înapoi la grupuri</Link>
-      </section>
+      <Page>
+        <PageHeader title="Grup indisponibil" />
+        {back}
+      </Page>
     );
   const role = mine.data.find((row) => row.id === id);
   const pending = applications.data.find((row) => row.group_id === id);
@@ -51,132 +76,144 @@ export default function MemberGroupScreen() {
     mine.data,
     capabilities.data?.createTopLevelGroups === true,
   );
+  const roleTitle = role
+    ? role.group_role === 'manager'
+      ? (group.manager_title ?? 'Coordonator')
+      : role.group_role === 'responsible'
+        ? (roster.data?.find((row) => row.memberId === auth.session?.user.id)
+            ?.positionTitle ?? 'Responsabil')
+        : 'Membru'
+    : null;
+  const apply = pending ? (
+    <div className="flex flex-wrap items-center gap-3">
+      <Badge variant="secondary">Cerere în așteptare</Badge>
+      <ApplicationAction
+        label="Retrage aplicația"
+        command={{ kind: 'withdraw', applicationId: pending.id }}
+      />
+    </div>
+  ) : (
+    !role?.explicit &&
+    !role?.automatic &&
+    acceptsApplication(group, level) &&
+    (form ? (
+      <ApplicationFormLink label={form.label} url={form.url} />
+    ) : (
+      <ApplicationAction
+        label="Aplică"
+        command={{ kind: 'apply', groupId: id, note: '' }}
+      />
+    ))
+  );
   return (
-    <section className="page space-y-6">
-      <Link to="/grupuri" className="underline">
-        Înapoi la grupuri
-      </Link>
-      <header className="flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className="mt-1 h-6 w-6 rounded-full"
-          style={{ backgroundColor: group.color ?? '#5C5C61' }}
-        />
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold">{group.name}</h1>
-            <PrivateGroupBadge isPrivate={group.is_private} />
-          </div>
-          <p className="text-muted-foreground">
+    <Page>
+      {back}
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="size-5 shrink-0 rounded-full"
+              style={{ backgroundColor: group.color ?? '#5C5C61' }}
+            />
+            {group.name}
+          </span>
+        }
+        badge={<PrivateGroupBadge isPrivate={group.is_private} />}
+        description={
+          <>
             {categoryLabel(group.category)}
-          </p>
-        </div>
-      </header>
-      {role && (
-        <p>
-          Rolul tău:{' '}
-          <strong>
-            {role.group_role === 'manager'
-              ? (group.manager_title ?? 'Coordonator')
-              : role.group_role === 'responsible'
-                ? (roster.data?.find(
-                    (row) => row.memberId === auth.session?.user.id,
-                  )?.positionTitle ?? 'Responsabil')
-                : 'Membru'}
-          </strong>
-        </p>
-      )}
-      {pending ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="secondary">Cerere în așteptare</Badge>
-          <ApplicationAction
-            label="Retrage aplicația"
-            command={{ kind: 'withdraw', applicationId: pending.id }}
-          />
-        </div>
-      ) : (
-        !role?.explicit &&
-        !role?.automatic &&
-        acceptsApplication(group, level) &&
-        (form ? (
-          <ApplicationFormLink label={form.label} url={form.url} />
-        ) : (
-          <ApplicationAction
-            label="Aplică"
-            command={{ kind: 'apply', groupId: id, note: '' }}
-          />
-        ))
-      )}
-      {authority.manageWork && (
-        <Link
-          className="inline-flex min-h-11 items-center underline"
-          to={`/administrare/grupuri/${id}`}
-        >
-          Administrare
-        </Link>
-      )}
-      <section className="space-y-3 rounded-xl border p-5">
-        <h2 className="text-lg font-semibold">Coordonare</h2>
-        {roster.isPending ? (
-          <p role="status">Se încarcă…</p>
-        ) : roster.isError ? (
-          <p role="alert">Nu am putut încărca funcțiile din grup.</p>
-        ) : !roster.data.some((row) => row.groupRole !== 'member') ? (
-          <p>Nu sunt numite funcții de coordonare în acest grup.</p>
-        ) : (
-          <ul className="space-y-2">
-            {roster.data
-              .filter((row) => row.groupRole !== 'member')
-              .map((row) => (
-                <li
-                  key={row.memberId}
-                  className="flex flex-wrap items-center gap-x-2"
+            {roleTitle && (
+              <span className="mt-1 block text-foreground">
+                Rolul tău: <strong>{roleTitle}</strong>
+              </span>
+            )}
+          </>
+        }
+        actions={
+          (apply || authority.manageWork) && (
+            <>
+              {apply}
+              {authority.manageWork && (
+                <Link
+                  className="inline-flex min-h-11 items-center rounded-sm underline outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  to={`/administrare/grupuri/${id}`}
                 >
-                  <MemberName
-                    memberId={row.memberId}
-                    fullName={row.fullName}
-                    nickname={row.nickname}
-                    size="sm"
-                  />
-                  <span className="text-muted-foreground">
-                    {row.groupRole === 'manager'
-                      ? (group.manager_title ?? 'Coordonator')
-                      : (row.positionTitle ?? 'Responsabil')}
-                  </span>
+                  Administrare
+                </Link>
+              )}
+            </>
+          )
+        }
+      />
+      <PageGrid columns={2}>
+        <Panel eyebrow="Grup" icon={Users} title="Coordonare">
+          {roster.isPending ? (
+            <Loading />
+          ) : roster.isError ? (
+            <ErrorState text="Nu am putut încărca funcțiile din grup." />
+          ) : !roster.data.some((row) => row.groupRole !== 'member') ? (
+            <EmptyState>
+              Nu sunt numite funcții de coordonare în acest grup.
+            </EmptyState>
+          ) : (
+            <ul className="space-y-2">
+              {roster.data
+                .filter((row) => row.groupRole !== 'member')
+                .map((row) => (
+                  <li
+                    key={row.memberId}
+                    className="flex flex-wrap items-center gap-x-2"
+                  >
+                    <MemberName
+                      memberId={row.memberId}
+                      fullName={row.fullName}
+                      nickname={row.nickname}
+                      size="sm"
+                    />
+                    <span className="text-muted-foreground">
+                      {row.groupRole === 'manager'
+                        ? (group.manager_title ?? 'Coordonator')
+                        : (row.positionTitle ?? 'Responsabil')}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </Panel>
+        <Panel
+          eyebrow="Calendar"
+          icon={CalendarDays}
+          title="Evenimente viitoare"
+        >
+          {events.isPending ? (
+            <Loading />
+          ) : events.isError ? (
+            <ErrorState text="Nu am putut încărca evenimentele." />
+          ) : !events.data?.length ? (
+            <EmptyState>Nu sunt evenimente viitoare.</EmptyState>
+          ) : (
+            <ul className="space-y-3">
+              {events.data.map((event) => (
+                <li key={event.id}>
+                  <Link to="/calendar" className="font-medium underline">
+                    {event.title}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    {event.starts_at &&
+                      new Date(event.starts_at).toLocaleString('ro-RO', {
+                        timeZone: 'Europe/Bucharest',
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                    {event.location && ` · ${event.location}`}
+                  </p>
                 </li>
               ))}
-          </ul>
-        )}
-      </section>
-      <section className="space-y-3 rounded-xl border p-5">
-        <h2 className="text-lg font-semibold">Evenimente viitoare</h2>
-        {events.isPending ? (
-          <p role="status">Se încarcă…</p>
-        ) : events.isError ? (
-          <p role="alert">Nu am putut încărca evenimentele.</p>
-        ) : !events.data?.length ? (
-          <p>Nu sunt evenimente viitoare.</p>
-        ) : (
-          <ul className="space-y-3">
-            {events.data.map((event) => (
-              <li key={event.id}>
-                <Link to="/calendar" className="font-medium underline">
-                  {event.title}
-                </Link>
-                <p className="text-sm text-muted-foreground">
-                  {event.starts_at &&
-                    new Date(event.starts_at).toLocaleString('ro-RO', {
-                      timeZone: 'Europe/Bucharest',
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    })}
-                  {event.location && ` · ${event.location}`}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </section>
+            </ul>
+          )}
+        </Panel>
+      </PageGrid>
+    </Page>
   );
 }

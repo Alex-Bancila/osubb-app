@@ -1,21 +1,31 @@
 import { useState } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
-import { cn } from 'cn';
 import { MemberCard } from '../../components/member/MemberCard';
 import { MemberName } from '../../components/member/MemberName';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
-import { Button } from '../../components/ui/button';
+import {
+  EmptyState,
+  Page,
+  PageGrid,
+  PageHeader,
+  SegmentedToggle,
+} from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { formatPoints } from '../../lib/format';
 import {
   useMemberDirectory,
   type DirectoryMember,
 } from '../../queries/member-directory';
-import { DirectoryFilterBar } from './DirectoryFilterBar';
+import {
+  DirectoryFilterBar,
+  DirectoryFilterButton,
+} from './DirectoryFilterBar';
 import { MemberGroups } from './MemberGroups';
 import {
+  activeFilterCount,
   emptyFilters,
   matchesFilters,
   statusLabel,
@@ -119,7 +129,7 @@ function DirectoryCard({
   onOpen: () => void;
 }) {
   return (
-    <li className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-4">
+    <li className="flex min-w-0 flex-col gap-3 rounded-md border border-border bg-card p-4 shadow-(--sh-sm)">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="min-w-0">
           <DirectoryName member={member} />
@@ -153,6 +163,7 @@ export default function VolunteersScreen() {
   const query = useMemberDirectory();
   const [filters, setFilters] = useState<DirectoryFilters>(emptyFilters);
   const [view, setView] = useState<View>('list');
+  const [filterOpen, setFilterOpen] = useState(false);
   const [selected, setSelected] = useState<DirectoryMember | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const openProfile = (member: DirectoryMember) => {
@@ -167,62 +178,47 @@ export default function VolunteersScreen() {
     ? 'Niciun membru nu corespunde filtrelor.'
     : 'Niciun membru disponibil.';
   return (
-    <section
-      className="min-w-0 space-y-5 p-4 md:p-6"
-      aria-labelledby="directory-title"
-    >
-      <header>
-        <h1 id="directory-title" className="text-2xl font-bold">
-          Membri OSUBB
-        </h1>
-        <p className="text-muted-foreground">
-          Caută un membru și vezi rolul, grupurile și punctele sale din taskuri.
-        </p>
-      </header>
+    <Page>
+      <PageHeader
+        title="Membri OSUBB"
+        description="Caută un membru și vezi rolul, grupurile și punctele sale din taskuri."
+        actions={
+          !query.isPending &&
+          !query.isError && (
+            <DirectoryFilterButton
+              count={activeFilterCount(filters)}
+              onOpen={() => setFilterOpen(true)}
+            />
+          )
+        }
+      />
       {query.isPending ? (
-        <p role="status">Se încarcă membrii…</p>
+        <Loading label="Se încarcă membrii…" />
       ) : query.isError ? (
-        <div role="alert" className="space-y-3">
-          <p>Nu am putut încărca membrii.</p>
-          <Button
-            variant="outline"
-            className="min-h-11"
-            onClick={() => query.refetch()}
-          >
-            Încearcă din nou
-          </Button>
-        </div>
+        <ErrorState
+          error={query.error}
+          text="Nu am putut încărca membrii."
+          onRetry={() => void query.refetch()}
+        />
       ) : (
         <>
           <DirectoryFilterBar
             members={members}
             filters={filters}
             onChange={setFilters}
+            open={filterOpen}
+            onOpenChange={setFilterOpen}
             trailing={
-              <div
-                role="group"
-                aria-label="Afișare"
-                className="ml-auto flex rounded-lg border border-border p-0.5"
-              >
-                {(
-                  [
-                    ['list', 'Listă', List],
-                    ['grid', 'Carduri', LayoutGrid],
-                  ] as const
-                ).map(([value, label, Icon]) => (
-                  <Button
-                    key={value}
-                    variant="ghost"
-                    size="sm"
-                    aria-pressed={view === value}
-                    className={cn(view === value && 'bg-muted text-foreground')}
-                    onClick={() => setView(value)}
-                  >
-                    <Icon aria-hidden="true" />
-                    {label}
-                  </Button>
-                ))}
-              </div>
+              <SegmentedToggle
+                label="Afișare"
+                className="ml-auto"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: 'list', label: 'Listă', icon: List },
+                  { value: 'grid', label: 'Carduri', icon: LayoutGrid },
+                ]}
+              />
             }
           />
           <p role="status" className="text-sm text-muted-foreground">
@@ -238,7 +234,7 @@ export default function VolunteersScreen() {
               emptyTitle={emptyTitle}
             />
           ) : visible.length ? (
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <PageGrid as="ul" columns="collection">
               {visible.map((member) => (
                 <DirectoryCard
                   key={member.id}
@@ -246,11 +242,9 @@ export default function VolunteersScreen() {
                   onOpen={() => openProfile(member)}
                 />
               ))}
-            </ul>
+            </PageGrid>
           ) : (
-            <p className="rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground">
-              {emptyTitle}
-            </p>
+            <EmptyState bare>{emptyTitle}</EmptyState>
           )}
         </>
       )}
@@ -264,6 +258,6 @@ export default function VolunteersScreen() {
           avatarColor={selected.avatarColor}
         />
       )}
-    </section>
+    </Page>
   );
 }

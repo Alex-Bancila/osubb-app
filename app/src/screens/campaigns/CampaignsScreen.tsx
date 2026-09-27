@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { Button } from '../../components/ui/button';
+import { ListFilter } from 'lucide-react';
+import { EmptyState, Page, PageHeader, Panel } from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { groupOptionLabel } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import type { WorkFilterGroup } from '../../lib/work-filter';
@@ -40,32 +42,26 @@ export default function CampaignsScreen() {
   const filter = useCampaignsFilter(groups);
   const group = managed.find((row) => row.id === filter.routeGroupId);
   return (
-    <section className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Campanii</h1>
-        <p>
-          O campanie este o etichetă pentru taskurile unui grup și ale
-          subgrupurilor lui. Raportul campaniei arată punctele obținute și cine
-          a lucrat. Campaniile inactive nu mai pot fi alese pentru taskuri noi,
-          dar rămân pe taskurile existente.
-        </p>
-      </header>
+    <Page width="reading">
+      <PageHeader
+        title="Campanii"
+        description="O campanie este o etichetă pentru taskurile unui grup și ale subgrupurilor lui. Raportul campaniei arată punctele obținute și cine a lucrat. Campaniile inactive nu mai pot fi alese pentru taskuri noi, dar rămân pe taskurile existente."
+      />
       {options.isPending ? (
-        <p role="status">Se încarcă grupurile…</p>
+        <Loading label="Se încarcă grupurile…" />
       ) : options.isError ? (
-        <div role="alert">
-          Nu am putut încărca grupurile.{' '}
-          <Button variant="outline" onClick={() => void options.refetch()}>
-            Reîncearcă
-          </Button>
-        </div>
+        <ErrorState
+          error={options.error}
+          text="Nu am putut încărca grupurile."
+          retryLabel="Reîncearcă"
+          onRetry={() => void options.refetch()}
+        />
       ) : !groups.length ? (
-        <p>Nu ai grupuri pentru care poți gestiona campanii.</p>
+        <EmptyState bare>
+          Nu ai grupuri pentru care poți gestiona campanii.
+        </EmptyState>
       ) : (
-        <section
-          aria-label="Filtre campanii"
-          className="rounded-xl border border-border bg-card p-4"
-        >
+        <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre campanii">
           <WorkFilter
             groups={groups}
             groupNames={options.data?.groupNames}
@@ -75,7 +71,7 @@ export default function CampaignsScreen() {
             state={filter}
             hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
           />
-        </section>
+        </Panel>
       )}
       {filter.routeGroupId !== undefined && options.isSuccess && !group && (
         <p role="alert">
@@ -92,11 +88,9 @@ export default function CampaignsScreen() {
       ) : (
         filter.routeGroupId === undefined &&
         groups.length > 0 && (
-          <p className="text-muted-foreground">
-            Alege un grup ca să-i vezi campaniile.
-          </p>
+          <EmptyState bare>Alege un grup ca să-i vezi campaniile.</EmptyState>
         )
       )}
-    </section>
+    </Page>
   );
 }

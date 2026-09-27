@@ -160,7 +160,7 @@ export function TaskCard({
       id={anchor ? `task-${task.id}` : undefined}
       aria-labelledby={titleId}
       data-highlighted={highlighted || undefined}
-      className="h-full min-w-0 scroll-mt-24 rounded-xl data-highlighted:ring-3 data-highlighted:ring-primary data-highlighted:ring-offset-2 data-highlighted:ring-offset-background motion-safe:transition-shadow motion-safe:duration-300"
+      className="h-full min-w-0 scroll-mt-24 rounded-md data-highlighted:ring-3 data-highlighted:ring-primary data-highlighted:ring-offset-2 data-highlighted:ring-offset-background motion-safe:transition-shadow motion-safe:duration-300"
     >
       <Card
         className="relative h-full pl-1.5"

@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react';
+import { PageGrid } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
@@ -12,7 +13,11 @@ type CardOptions = Pick<
   'allowInterest' | 'joinable' | 'titleLevel'
 >;
 
-/** One Task card per row, one column wide; the shell does the scrolling. */
+/**
+ * Task cards on the collection grid (ruling R27, decision D4): one column on a
+ * phone, two from `md`, three from `xl`, every card in a row the same height.
+ * The shell does the scrolling.
+ */
 export function TaskCardGrid<Row extends TaskPresentationRow>({
   rows,
   now,
@@ -30,12 +35,9 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
   const progress = useTaskProgress();
   const { session } = useAuth();
   return (
-    <ul
-      data-slot="task-card-grid"
-      className="grid min-w-0 grid-cols-1 items-stretch gap-4 p-0"
-    >
+    <PageGrid as="ul" columns="collection" data-grid="task-cards">
       {rows.map((row) => (
-        <li key={row.id} data-slot="task-card-row" className="h-full min-w-0">
+        <li key={row.id} data-slot="task-card-row">
           <TaskCard
             {...card?.(row)}
             task={toTaskPresentation(row, now)}
@@ -49,6 +51,6 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
           />
         </li>
       ))}
-    </ul>
+    </PageGrid>
   );
 }
