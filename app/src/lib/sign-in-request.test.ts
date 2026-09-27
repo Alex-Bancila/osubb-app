@@ -1,6 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
+  ANY_ACCOUNT,
+  clearAccountPending,
   forgetSignInRequest,
+  isAccountPending,
+  markAccountPending,
+  pendingAccount,
   rememberSignInRequest,
   requestedSignInFor,
 } from './sign-in-request';
@@ -37,4 +42,16 @@ it('treats a missing, garbled or unreadable record as no request', () => {
     throw new Error('blocked');
   });
   expect(requestedSignInFor('membru@exemplu.ro')).toBe(false);
+});
+
+it('holds a session only for the pending account, or any while verifying', () => {
+  expect(isAccountPending(pendingAccount(), 'user-1')).toBe(false);
+  markAccountPending(ANY_ACCOUNT);
+  expect(isAccountPending(pendingAccount(), 'user-1')).toBe(true);
+  markAccountPending('user-1');
+  expect(isAccountPending(pendingAccount(), 'user-1')).toBe(true);
+  expect(isAccountPending(pendingAccount(), 'user-2')).toBe(false);
+  expect(isAccountPending(pendingAccount(), undefined)).toBe(false);
+  clearAccountPending();
+  expect(pendingAccount()).toBeNull();
 });

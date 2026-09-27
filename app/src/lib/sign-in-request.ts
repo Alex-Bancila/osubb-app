@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react';
+
 /**
  * The address this browser asked a sign-in link for (security audit F3).
  *
@@ -54,4 +56,75 @@ export function requestedSignInFor(email: string, now = Date.now()): boolean {
   } catch {
     return false;
   }
+}
+
+/*
+ * An account signed in by a link but not yet confirmed by the Member.
+ *
+ * `verifyOtp` stores the session before `/auth/confirm` can ask anything, and
+ * supabase-js hands it to every open tab. So the question is shared state, not
+ * the confirm page's: every guarded route shows the same confirmation while
+ * this names the session's user (`AccountConfirmGate`). `ANY` is written just
+ * before `verifyOtp`, while the user is not known yet, so no tab can show the
+ * app in between.
+ */
+const PENDING_KEY = 'osubb.account-pending';
+export const ANY_ACCOUNT = '*';
+
+const listeners = new Set<() => void>();
+const notify = () => listeners.forEach((listener) => listener());
+
+export function markAccountPending(userId: string) {
+  try {
+    localStorage.setItem(PENDING_KEY, userId);
+  } catch {
+    // No storage: only the confirm page itself can ask.
+  }
+  notify();
+}
+
+export function clearAccountPending() {
+  try {
+    localStorage.removeItem(PENDING_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+  notify();
+}
+
+export function pendingAccount(): string | null {
+  try {
+    return localStorage.getItem(PENDING_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Whether `userId`'s session is waiting for the Member to confirm it. */
+export function isAccountPending(
+  pending: string | null,
+  userId: string | undefined,
+): boolean {
+  return (
+    pending !== null &&
+    userId !== undefined &&
+    (pending === ANY_ACCOUNT || pending === userId)
+  );
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  // Another tab's write arrives as a storage event.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === PENDING_KEY || event.key === null) listener();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+export function usePendingAccount(): string | null {
+  return useSyncExternalStore(subscribe, pendingAccount, () => null);
 }

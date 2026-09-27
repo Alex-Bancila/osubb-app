@@ -16,6 +16,8 @@ vi.mock('../../lib/supabase', () => ({
 
 import { loginEmailFrom } from '../../lib/auth-destination';
 import {
+  ANY_ACCOUNT,
+  pendingAccount,
   rememberSignInRequest,
   requestedSignInFor,
 } from '../../lib/sign-in-request';
@@ -319,7 +321,12 @@ describe('AuthConfirm', () => {
           session: { access_token: 'token' },
         });
         return {
-          data: { session: { access_token: 'token', user: { email } } },
+          data: {
+            session: {
+              access_token: 'token',
+              user: { id: `id-${email}`, email },
+            },
+          },
           error: null,
         };
       });
@@ -336,10 +343,30 @@ describe('AuthConfirm', () => {
       await screen.findByRole('heading', { name: 'Confirmă contul' });
       expect(screen.getByText('membru+osubb@exemplu.ro')).toBeVisible();
       expect(screen.queryByRole('heading', { name: 'Aplicație' })).toBeNull();
+      // Every other tab's guarded routes are held for this account too.
+      expect(pendingAccount()).toBe('id-membru+osubb@exemplu.ro');
 
       fireEvent.click(screen.getByRole('button', { name: 'Continuă' }));
       await screen.findByRole('heading', { name: 'Aplicație' });
       expect(mocks.signOut).not.toHaveBeenCalled();
+      expect(pendingAccount()).toBeNull();
+    });
+
+    it('holds every tab while the link is being verified, and releases a matching account', async () => {
+      let settle: () => void = () => undefined;
+      mocks.verifyOtp.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settle = () => resolve({ data: { session: SESSION }, error: null });
+          }),
+      );
+      renderConfirm(inviteLink);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+      expect(pendingAccount()).toBe(ANY_ACCOUNT);
+
+      settle();
+      await waitFor(() => expect(pendingAccount()).toBeNull());
     });
 
     it("catches a link to the sender's own account even when it names that account", async () => {
@@ -389,6 +416,8 @@ describe('AuthConfirm', () => {
       const alert = await screen.findByRole('alert');
       expect(alert).not.toHaveTextContent('Linkul nu corespunde adresei tale.');
       expect(screen.queryByRole('heading', { name: 'Aplicație' })).toBeNull();
+      // The guarded routes stay held while that session may still be there.
+      expect(pendingAccount()).not.toBeNull();
     });
   });
 });

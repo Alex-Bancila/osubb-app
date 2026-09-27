@@ -73,7 +73,7 @@ The page never shows the link's `email=` as the Member's address: anyone can put
 - a link for the address the login screen on **this browser** asked for within the last hour (`lib/sign-in-request.ts`, a `localStorage` entry holding the address and a time) signs in straight away;
 - anything else — an invitation, a link opened on another device, a link someone sent — shows **Confirmă contul** with the _verified_ address, and waits for **Continuă** or **Nu este adresa mea**.
 
-A refusal signs out on this device only (`signOut({ scope: 'local' })`) and says **Linkul nu corespunde adresei tale.** only once the session is gone; the retry does not pre-fill the refused address. An `email_change` link is not compared: it carries the old address while the session ends on the new one, and only a signed-in Member can start one.
+`verifyOtp` stores the session before the question can be asked, and supabase-js shares it with every open tab, so the pending confirmation is shared state too: a `localStorage` entry naming the account (or any account, while the link is being verified) that `AccountConfirmGate` checks in both route guards. Until the Member answers, every guarded route in every tab shows the same **Confirmă contul**; leaving the confirm page does not get anyone into the app. A refusal signs out on this device only (`signOut({ scope: 'local' })`) and says **Linkul nu corespunde adresei tale.** only once the session is gone; the retry does not pre-fill the refused address. An `email_change` link is not compared: it carries the old address while the session ends on the new one, and only a signed-in Member can start one.
 
 ### The client runs the PKCE flow
 

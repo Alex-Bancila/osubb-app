@@ -11,9 +11,13 @@ import {
 } from '../../lib/auth-destination';
 import { useAuth } from '../../lib/auth';
 import {
+  ANY_ACCOUNT,
+  clearAccountPending,
   forgetSignInRequest,
+  markAccountPending,
   requestedSignInFor,
 } from '../../lib/sign-in-request';
+import { ConfirmAccountScreen } from '../../components/shell/ConfirmAccountScreen';
 import { Button, buttonVariants } from '../../components/ui/button';
 import {
   SessionLoader,
@@ -114,6 +118,7 @@ export default function AuthConfirm() {
 
   function enter() {
     forgetSignInRequest();
+    clearAccountPending();
     setStatus({ kind: 'signed-in' });
   }
 
@@ -125,6 +130,8 @@ export default function AuthConfirm() {
     } catch (thrown) {
       failure = thrown;
     }
+    // Every guarded route stays held while the session could not be dropped.
+    if (!failure) clearAccountPending();
     setStatus({
       kind: 'error',
       message: failure ? toAuthErrorMessage(failure) : MISMATCH_MESSAGE,
@@ -135,6 +142,8 @@ export default function AuthConfirm() {
   async function confirm() {
     if (!link) return;
     setStatus({ kind: 'verifying' });
+    // Hold every tab's guarded routes until this link's account is settled.
+    markAccountPending(ANY_ACCOUNT);
     try {
       const { data, error } = await supabase.auth.verifyOtp({
         token_hash: link.tokenHash,
@@ -144,22 +153,27 @@ export default function AuthConfirm() {
         if (import.meta.env.DEV) {
           console.error('Supabase Auth link confirmation failed', error);
         }
+        clearAccountPending();
         setStatus({ kind: 'error', message: toAuthErrorMessage(error) });
         return;
       }
       if (!data.session) {
+        clearAccountPending();
         setStatus({ kind: 'half-confirmed' });
         return;
       }
       const email = data.session.user.email ?? '';
       const check = checkAccount(link, email);
       if (check === 'mismatch') await refuse();
-      else if (check === 'ask') setStatus({ kind: 'confirm-account', email });
-      else enter();
+      else if (check === 'ask') {
+        markAccountPending(data.session.user.id);
+        setStatus({ kind: 'confirm-account', email });
+      } else enter();
     } catch (failure) {
       if (import.meta.env.DEV) {
         console.error('Supabase Auth link confirmation failed', failure);
       }
+      clearAccountPending();
       setStatus({ kind: 'error', message: toAuthErrorMessage(failure) });
     }
   }
@@ -178,28 +192,11 @@ export default function AuthConfirm() {
 
   if (status.kind === 'confirm-account') {
     return (
-      <SessionScreen>
-        <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
-          Confirmă contul
-        </h1>
-        <p className="leading-relaxed">
-          Linkul te-a conectat ca <strong>{status.email}</strong>.
-        </p>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Continuă doar dacă aceasta este adresa ta.
-        </p>
-        <Button type="button" className="w-full" onClick={enter}>
-          Continuă
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() => void refuse()}
-        >
-          Nu este adresa mea
-        </Button>
-      </SessionScreen>
+      <ConfirmAccountScreen
+        email={status.email}
+        onContinue={enter}
+        onRefuse={() => void refuse()}
+      />
     );
   }
 

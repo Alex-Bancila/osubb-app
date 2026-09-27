@@ -29,6 +29,7 @@ import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import ProfileScreen from './screens/profile/ProfileScreen';
 import PrivacyNoticeScreen from './screens/privacy/PrivacyNoticeScreen';
 import { PrivacyGate } from './components/shell/PrivacyGate';
+import { AccountConfirmGate } from './components/shell/AccountConfirmGate';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
 
 const GroupsScreen = lazy(() => import('./screens/groups/GroupsScreen'));
@@ -93,7 +94,7 @@ function RequireSession({ children }: { children: ReactElement }) {
         replace
       />
     );
-  return children;
+  return <AccountConfirmGate session={session}>{children}</AccountConfirmGate>;
 }
 
 function RequireMember({ children }: { children: ReactElement }) {
@@ -111,7 +112,7 @@ function RequireMember({ children }: { children: ReactElement }) {
       />
     );
   if (!claims) return <Navigate to="/no-profile" replace />;
-  return children;
+  return <AccountConfirmGate session={session}>{children}</AccountConfirmGate>;
 }
 
 /**
