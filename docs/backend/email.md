@@ -62,3 +62,74 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST \
 ```
 
 Locally, mail never reaches Resend (Mailpit catches it), so there is no webhook to receive. The function's behaviour is covered by `supabase/functions/resend-webhook/handler.test.ts` (signature, timestamp tolerance, each event, ignored events) and the database side by `supabase/tests/email_delivery_notifications.test.sql` (mapping, recipients, dedupe, unknown address, grants).
+
+## The daily Email Digest (#775)
+
+A Member who turns on **Rezumat zilnic pe email** in Profil gets, at most once a day, one email listing the in-app Notifications they have not read, each with a link into the app. It is off by default. Ruling L20 of the launch grill deferred it to after launch because every digest competes with sign-in emails for Resend's daily cap.
+
+### How the digest works
+
+1. **The switch.** Profil → **Rezumat zilnic pe email** upserts the Member's row in `public.notification_email_preferences` (`digest_enabled`, self-only RLS, no row means off). Every digest ends with a line linking to `/profil#rezumat-email`, which opens that switch: turning it off is the one-click opt-out. A link opened without a session goes through the login screen and lands there afterwards.
+2. **The selection, at 07:00 Bucharest.** The `pg_cron` job **`osubb-email-digest`** runs every hour (`0 * * * *`), and its body, `private.prepare_email_digests()`, reads the Bucharest clock, so 07:00 stays 07:00 across the summer-time change. At 07:00 it writes one row in the outbox `private.email_digests` for every Member who has the switch on, an `activ` Profile and at least one Notification that is **unread, older than one hour and never digested before**, and stamps those Notifications `digested_at`. So each Notification is emailed at most once, and a Member gets **at most one digest per Bucharest day** (a unique key on Member and day). A Member whose earlier digest is still waiting gets no second one until it is gone.
+3. **The call.** Between 07:00 and 21:59 Bucharest, whenever a digest is due and today's quota is not spent, the job POSTs to the Edge Function **`send-digest`** with the Vault row `secret_key` on the `apikey` header, exactly like `osubb-send-push` (`docs/backend/push.md`). `send-digest` has `verify_jwt = false` and compares the key in constant time. Nothing is sent at night.
+4. **The quota guard.** `send-digest` claims digests with `public.claim_email_digests`, which never hands out more than **`email_daily_quota` minus the digests sent (or being sent) since 00:00 UTC**, the day Resend counts in. The claim takes the quota row's lock, so two overlapping runs cannot spend the same slot. Whatever the quota holds back stays pending and goes out the next morning. At claim time it also re-checks each digest: a Member who turned the switch off (the same day included), was deactivated, or has read every Notification in it is skipped, and no email leaves.
+5. **The email.** Romanian, plain text plus HTML: "Ai N notificări necitite", then one line per Notification (title, Bucharest time, the start of its text, its link; at most the 20 newest, with "Și încă M în aplicație" for the rest), a button to `/notificari` and the opt-out line. Every title, text and Nickname is HTML-escaped, and a stored link that would leave the app opens `/notificari` instead. It is sent through the Resend API (`POST https://api.resend.com/emails`) from `EMAIL_FROM`, with the `Idempotency-Key` `osubb-digest-<id>`, so Resend never accepts the same digest twice.
+6. **The outcome**, recorded with `public.settle_email_digest`:
+
+| Resend answer                                               | Outcome                                                                                            |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `2xx`                                                       | `sent`; Resend's email id kept as `provider_id`                                                    |
+| `429` `daily_quota_exceeded` / `monthly_quota_exceeded`     | back to `pending` for 07:00 the next day, the attempt not counted; the rest of the run is deferred |
+| `401`, `403` (a wrong key, or a sender domain not verified) | the same, and the function answers `502`                                                           |
+| `429` rate limit, `5xx`, network error                      | retried one hour, then two hours later; the third failure is `failed`                              |
+| `409` (Resend's idempotency guard)                          | `sent` without a `provider_id`: an earlier attempt already reached Resend, so the slot stays spent |
+| anything else (`400`, `422` a bad address)                  | `failed` at once, Resend's answer kept in `last_error`                                             |
+
+The 07:00 run deletes finished digests (`sent`, `failed`, `skipped`) older than 30 days.
+
+### Setting up the digest, per environment
+
+The IT Coordinator does this once per environment, staging first. Values live in Bitwarden, never in git (house rule 8).
+
+1. **Resend API key.** Resend → API Keys → create a **sending-only** key scoped to the `app.osubb.ro` domain for this environment (ruling L5), store it in Bitwarden as "Resend API key – staging" (or "– production"), then, from a real terminal:
+
+   ```bash
+   npx supabase secrets set --project-ref <ref> RESEND_API_KEY=re_…
+   ```
+
+2. **Sender.** Production uses the default, `OSUBB <noreply@app.osubb.ro>`. Staging sets its own name (ruling L5):
+
+   ```bash
+   npx supabase secrets set --project-ref <ref> "EMAIL_FROM=OSUBB staging <noreply@app.osubb.ro>"
+   ```
+
+3. **App origin.** The links use the **first `ALLOWED_ORIGINS` entry**, which must be the app's `https` origin (already set for `invite-member`, `docs/backend/inviting.md`).
+4. **Vault rows.** `project_url` and `secret_key`, the same two rows `osubb-send-push` reads (`docs/backend/push.md`, step 3). Nothing new to create.
+5. **Quota.** The organization setting **`email_daily_quota`** is seeded `90`: Resend's free plan allows 100 emails a day for the whole team, and invitations and sign-in links need the rest. BC or the Moderator changes it with `public.set_org_setting('email_daily_quota', '<n>')`: a whole number 0–99999, never empty; `0` pauses the digest. On a paid Resend plan without a daily cap, raise it.
+
+Until `RESEND_API_KEY` is set, or while `ALLOWED_ORIGINS` has no `https` origin first, `send-digest` answers `500` naming the setting (never its value) before claiming anything, so no attempt is burned. The function is deployed with the rest, by CI on every merge (staging) and by the Release (production).
+
+### Checking the digest works (staging)
+
+1. Sign in as a team account whose address Resend may send to from staging (a team address, ruling L5), turn on **Rezumat zilnic pe email**, and leave a Notification unread for more than an hour.
+2. Instead of waiting for 07:00, in the SQL editor, write the digest the 07:00 run would write, then call the function the way the job does:
+
+   ```sql
+   select private.enqueue_email_digests(now());
+   select net.http_post(
+     url := (select decrypted_secret from vault.decrypted_secrets where name = 'project_url') || '/functions/v1/send-digest',
+     headers := jsonb_build_object('apikey', (select decrypted_secret from vault.decrypted_secrets where name = 'secret_key')),
+     body := '{}'::jsonb);
+   ```
+
+3. The email arrives. Then read the outbox and the function's answer:
+
+   ```sql
+   select id, member_id, digest_day, status, attempts, next_attempt_at, last_error, provider_id, sent_at
+     from private.email_digests order by id desc limit 10;
+   select created, status_code, content from net._http_response order by id desc limit 5;
+   ```
+
+   `pending` with `next_attempt_at` at 07:00 tomorrow and `last_error` `provider_quota` or `provider_auth` means Resend refused on quota or on the key; `skipped` names why (`opted_out`, `member_inactive`, `nothing_unread`). A `401` in `net._http_response` is the Vault `secret_key`; a `500` names the missing setting.
+
+The function is covered by `supabase/functions/send-digest/render.test.ts` (text, links, escaping) and `handler.test.ts` (auth, the quota guard, each Resend answer); the database side by `supabase/tests/email_digest.test.sql` (the preference's RLS, the selection, the quota guard and its race, settle, the job's hours, the setting, grants).
