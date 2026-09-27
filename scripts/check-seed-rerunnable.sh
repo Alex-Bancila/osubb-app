@@ -143,14 +143,18 @@ case "$out" in
   *) echo "::error::seed.sql without app.seed_password failed, but not with seed_password_required: $out" >&2; exit 1 ;;
 esac
 
-if out=$(seed_as_hosted "parola123" ""); then
-  echo "::error::seed.sql accepted the local default password on a non-local database." >&2
-  exit 1
-fi
-case "$out" in
-  *seed_password_too_weak*) ;;
-  *) echo "::error::seed.sql with a weak app.seed_password failed, but not with seed_password_too_weak: $out" >&2; exit 1 ;;
-esac
+# Each weak password on its own, so dropping any one rule turns a case red:
+# the local default, 15 characters, and 73 bytes (bcrypt reads only 72).
+for weak in "parola123" "fifteen-chars-1" "$(printf 'x%.0s' $(seq 1 73))"; do
+  if out=$(seed_as_hosted "$weak" ""); then
+    echo "::error::seed.sql accepted a weak app.seed_password (${#weak} characters) on a non-local database." >&2
+    exit 1
+  fi
+  case "$out" in
+    *seed_password_too_weak*) ;;
+    *) echo "::error::seed.sql with a weak app.seed_password (${#weak} characters) failed, but not with seed_password_too_weak: $out" >&2; exit 1 ;;
+  esac
+done
 
 configured_check=$(cat <<'SQL'
 select 'configured:' || format('%s:%s',

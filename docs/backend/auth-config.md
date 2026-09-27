@@ -97,7 +97,7 @@ curl -s -X POST "$SUPABASE_URL/auth/v1/signup" -H "apikey: $ANON_KEY" \
 # 2 · an existing member signs in and their token carries claims
 curl -s -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" -H "apikey: $ANON_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"email":"bc@demo.osubb","password":"'"$DEMO_PASSWORD"'"}'
+  -d "$(jq -n --arg password "$DEMO_PASSWORD" '{email: "bc@demo.osubb", password: $password}')"
 # → access_token whose app_metadata has member_role / member_level / group_ids
 ```
 

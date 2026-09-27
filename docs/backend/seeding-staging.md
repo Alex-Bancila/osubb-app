@@ -28,7 +28,7 @@ Use the **session pooler** (port 5432), not the direct `db.<ref>.supabase.co` co
 
 The repository is public, so the password of the eight demo logins on staging is not in `seed.sql` (security pass 2026-09-27, finding H3). The workflow passes it to the seed as the transaction-local setting `app.seed_password`, and the seed uses it for every demo account.
 
-1. Generate one: `openssl rand -base64 24` (at least 16 characters; the workflow and the seed both refuse anything shorter).
+1. Generate one: `openssl rand -base64 24` (16 characters to 72 bytes; the workflow and the seed both refuse anything outside that — bcrypt reads only the first 72 bytes).
 2. Store it in Bitwarden next to the other staging credentials — that is where demo presenters read it from.
 3. GitHub → repo **Settings → Environments → staging → Add environment secret**, named `SEED_PASSWORD`. Same ⚠️ as above: a browser or a real terminal, never a piped `gh secret set`.
 4. Run the workflow once (below). Until you do, the accounts already on staging keep whatever password they were seeded with.
@@ -47,7 +47,7 @@ The job refuses to do anything unless all three are true:
 | ----------------------------------------------- | ------------------------------------------------------------------------------ |
 | the ref you typed equals `SUPABASE_PROJECT_REF` | you meant a different project, or mistyped                                     |
 | `STAGING_DB_URL` contains that same ref         | the URL secret points somewhere else — production, another project, an old one |
-| `SEED_PASSWORD` is set, 16+ characters          | the demo-password secret is missing or too short                               |
+| `SEED_PASSWORD` is set, 16 chars to 72 bytes    | the demo-password secret is missing, too short or too long                     |
 
 Then it preflights (are the migrations applied? can this role write `auth.users`?) before writing anything, applies the seed **in a single transaction**, and prints the leaderboard it produced.
 
@@ -140,7 +140,7 @@ Run it twice; the data will be the same both times. If you change `seed.sql`, ch
 | `violates foreign key constraint "completed_work_requests_task_id_fkey"`          | a completed-work request outside the demo cohort names a demo Task. Decide or delete that request first; nothing was written.                                                                                                        |
 | `password authentication failed`                                                  | the password in `STAGING_DB_URL` is wrong or the secret is empty (see the ⚠️ above).                                                                                                                                                 |
 | `Secret SEED_PASSWORD is not set` / `seed_password_required`                      | the staging Environment has no `SEED_PASSWORD` secret (or it is empty). See "One-time setup: the `SEED_PASSWORD` secret". Nothing was written.                                                                                       |
-| `seed_password_too_weak`                                                          | `SEED_PASSWORD` is shorter than 16 characters or is the local default. Generate a new one. Nothing was written.                                                                                                                      |
+| `seed_password_too_weak`                                                          | `SEED_PASSWORD` is shorter than 16 characters, longer than 72 bytes, or the local default. Generate a new one. Nothing was written.                                                                                                  |
 | Logins fail with a 500 and _"converting NULL to string is unsupported"_           | GoTrue read a null token column. `seed.sql` sets all eight to `''`; if you add a user by hand, do the same.                                                                                                                          |
 | Sign-in works but every screen is empty                                           | the **claims hook** is off on staging — the JWT carries no `member_role`, so RLS denies everything. See `docs/backend/auth-config.md` and issue #54.                                                                                 |
 

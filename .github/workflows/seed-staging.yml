@@ -56,6 +56,8 @@ jobs:
           # seed.sql (security pass 2026-09-27, H3). seed.sql refuses too.
           [ -n "$SEED_PASSWORD" ] || fail "Secret SEED_PASSWORD is not set (staging Environment) — see docs/backend/seeding-staging.md."
           [ "${#SEED_PASSWORD}" -ge 16 ] || fail "Secret SEED_PASSWORD is shorter than 16 characters."
+          # bcrypt reads at most 72 bytes; seed.sql refuses a longer one too.
+          [ "$(printf '%s' "$SEED_PASSWORD" | wc -c)" -le 72 ] || fail "Secret SEED_PASSWORD is longer than 72 bytes."
 
           [ "$TYPED_REF" = "$STAGING_REF" ] || \
             fail "The ref you typed is not the staging project ref. Nothing was touched."

@@ -55,10 +55,13 @@ begin
       message = 'seed_password_required',
       detail = 'This is not a local Supabase stack, so the demo password must come from app.seed_password (seed-staging.yml sets it from the SEED_PASSWORD secret).';
   end if;
-  if not v_local and (char_length(v_password) < 16 or v_password = 'parola123') then
+  -- bcrypt reads at most 72 bytes: a longer password would let a rotation that
+  -- changes only its tail leave the old one valid.
+  if not v_local and (char_length(v_password) < 16 or octet_length(v_password) > 72
+                      or v_password = 'parola123') then
     raise exception using errcode = 'P0001',
       message = 'seed_password_too_weak',
-      detail = 'Outside a local stack the demo password must be at least 16 characters and must not be the local default.';
+      detail = 'Outside a local stack the demo password must be 16 characters to 72 bytes long and must not be the local default.';
   end if;
   return v_password;
 end;

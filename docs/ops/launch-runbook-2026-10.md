@@ -131,8 +131,9 @@ Project `osubb-app` (staging, ref `bbhetqtmavveaoqlxjhp`):
    `resend`; password = the **staging** Resend key. Save.
 6. **Authentication → Rate Limits → Emails sent per hour**: `100`.
 7. Verify with the two curl checks in `docs/backend/auth-config.md` (self-signup must answer
-   `422 signup_disabled`; a demo member login, with `DEMO_PASSWORD` set to the staging
-   `SEED_PASSWORD` value, must return a token with `member_role`). Then
+   `422 signup_disabled`; a demo member login must return a token with `member_role` — run that
+   second check only after §6 has set `SEED_PASSWORD` and re-seeded staging, with `DEMO_PASSWORD`
+   set to that value; before the re-seed the demo accounts still carry the old password). Then
    **Authentication → Users → Invite user** to your own address and confirm the email arrives from
    `noreply@app.osubb.ro`, in the inbox, within a minute. Check **Resend → Emails** shows it as delivered.
 8. After the first staging web deploy (§9) only: from a real terminal,
