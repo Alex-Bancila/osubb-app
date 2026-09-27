@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(23);
+select plan(26);
 
 -- ==================== Fixtures ====================
 
@@ -38,7 +38,8 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 insert into public.group_members (group_id, member_id, group_role)
-values (pg_temp.cap_group('Plafon Lucru'), pg_temp.cap_uid(2), 'member');
+values (pg_temp.cap_group('Plafon Lucru'), pg_temp.cap_uid(1), 'manager'),
+       (pg_temp.cap_group('Plafon Lucru'), pg_temp.cap_uid(2), 'member');
 
 -- Two public Opportunities in the Voluntar's Group, created through the command.
 select pg_temp.test_login_leadership(pg_temp.cap_uid(1));
@@ -191,6 +192,23 @@ select throws_ok(
          pg_temp.cap_group('Plafon Lucru')),
   'PT409', 'rate_limited',
   'the twenty-first Announcement in 24 hours is refused');
+-- The count reads the live rows: deleting an Announcement gives its slot back
+-- (documented in conventions.md), and the cap closes again on the next insert.
+with deleted as (
+  delete from public.announcements
+   where id = (select min(id) from public.announcements where title like 'Anunț vechi %')
+  returning 1)
+select is((select count(*) from deleted)::int, 1,
+  'the author, a Manager of the Group, deletes one of their Announcements');
+select lives_ok(
+  format($$ insert into public.announcements (title, body, group_id, audience) values ('Anunț după ștergere', 'b', %s, 'local') $$,
+         pg_temp.cap_group('Plafon Lucru')),
+  'a deleted Announcement no longer counts toward the cap');
+select throws_ok(
+  format($$ insert into public.announcements (title, body, group_id, audience) values ('Anunț 22', 'b', %s, 'local') $$,
+         pg_temp.cap_group('Plafon Lucru')),
+  'PT409', 'rate_limited',
+  'the cap closes again on the next Announcement');
 reset role;
 
 select pg_temp.test_clear_jwt();
