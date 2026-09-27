@@ -198,7 +198,10 @@ it('draws each Assignment with the Task card, read-only, keeping the evaluation 
   expect(first).toHaveTextContent('Echipă · Mentorat');
   expect(first).toHaveTextContent('Campanie: Bun venit');
   // The standing Evaluation is the one the reversal left.
-  expect(first).toHaveTextContent('18 puncte · Dificultate 3 · Nota 5');
+  expect(first).toHaveTextContent(/18 puncte · Dificultate\s+· Nota 5/);
+  expect(
+    within(first).getAllByRole('img', { name: 'Dificultate 3 din 5' }),
+  ).not.toHaveLength(0);
   expect(
     within(first).getByText(/Finalizat ·/, { selector: 'dd' }),
   ).toBeInTheDocument();
@@ -211,6 +214,8 @@ it('draws each Assignment with the Task card, read-only, keeping the evaluation 
     within(first).getByText(/−1\.234 puncte · Evaluare anulată/),
   ).toBeVisible();
   expect(within(first).getByText(/Corecție/)).toBeVisible();
+  // R29a: each Evaluation reads Difficulty as stars and Nota as a number.
+  expect(within(first).getAllByText(/· Nota \d/).length).toBeGreaterThan(0);
   await user.click(within(first).getByText('Subtaskuri (1)'));
   expect(within(first).getByText(/Materiale · Finalizat/)).toBeVisible();
   expect(

@@ -45,7 +45,9 @@ it.each([
 it('requires a note of at most 1000 characters', () => {
   expect(check({ note: '   ' })).toEqual(['note: evaluation_note_required']);
   expect(check({ note: 'n'.repeat(1000) })).toEqual([]);
-  expect(check({ note: 'n'.repeat(1001) })).toEqual(['note: note_too_long']);
+  expect(check({ note: 'n'.repeat(1001) })).toEqual([
+    'note: evaluation_note_too_long',
+  ]);
 });
 
 it('maps every reason an evaluating command raises to its field', () => {
@@ -56,6 +58,8 @@ it('maps every reason an evaluating command raises to its field', () => {
       'invalid_difficulty',
       'invalid_rating',
       'evaluation_note_required',
+      // The browser says Observații; the server keeps the shared reason.
+      'evaluation_note_too_long',
       'note_too_long',
     ],
   );
