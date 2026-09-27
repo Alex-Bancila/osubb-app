@@ -3914,6 +3914,10 @@ export type Database = {
         }[]
       }
       my_unread_announcements_count: { Args: never; Returns: number }
+      notify_email_delivery_problem: {
+        Args: { p_email: string; p_event: string; p_reason?: string }
+        Returns: number
+      }
       open_evaluation_period: { Args: { p_name: string }; Returns: number }
       pending_request_decisions: {
         Args: never

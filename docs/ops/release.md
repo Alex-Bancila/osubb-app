@@ -154,6 +154,7 @@ originally written; this page only points at them.
 | The `/auth/confirm` redirect the click-to-confirm templates depend on                                                                                 | `docs/backend/auth-config.md` § "Why the link opens a page with a button"                | §5.3               | §7.1                  |
 | `ALLOWED_ORIGINS` for `invite-member` and every other CORS-gated function                                                                             | `docs/backend/inviting.md` § "CORS: who is allowed to call this function from a browser" | §5.8               | §7.5                  |
 | Optional (only if push is enabled): VAPID pair and the two Vault rows (`project_url`, `secret_key`)                                                   | `docs/backend/push.md` § "Setting it up, per environment"                                | §5.9               | §7.5                  |
+| Resend webhook for bounces, complaints and suppressions (#776): the endpoint in Resend and the function secret `RESEND_WEBHOOK_SECRET`                | `docs/backend/email.md` § "Setting it up, per environment"                               | after launch       | after launch          |
 | Pages project and custom domain                                                                                                                       | `launch-runbook-2026-10.md`                                                              | §1                 | §11.2, §11.4          |
 
 _Why linked and not copied:_ a value repeated in two places is a value that goes stale in one of them the
@@ -234,6 +235,19 @@ Member's own inbox is at fault:
    who has never signed in (#773; `docs/backend/inviting.md` § "The invitation never arrived"). _Why not
    delete and re-invite:_ that re-provisions the Member and loses their Groups and history; `invite-member`
    refuses an existing profile on purpose (`409`) so it can never overwrite one.
+
+Once the Resend webhook is set up for an environment (#776, `docs/backend/email.md`), a hard bounce, a spam
+complaint or a suppression of a Member's address also shows up unasked: BC and the Moderator get a `system`
+Notification (**Email respins**, **Email marcat ca spam** or **Email blocat**, naming the Member) linking to
+the Member's Administrare page, at most one per address per day. The lookup above stays the full picture: a
+delivered email sitting in spam, or a send that never happened, sends no webhook.
+
+**Acceptance check, per environment, after setting the webhook up:** on staging, invite a throwaway Member
+at `bounced@resend.dev`. Within a minute **Notificări** shows `Email respins: <name>`, and Resend →
+Webhooks → the endpoint shows the delivery answered `200` with `{"notified": n}`. A POST to
+`/functions/v1/resend-webhook` with a made-up `svix-signature` answers `401` and writes nothing. The exact
+steps and the curl are in `docs/backend/email.md` § "Checking it works". On production, check only the
+`401`: never invite a test address there.
 
 ## November recruitment pacing
 

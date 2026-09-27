@@ -147,3 +147,16 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/send-push/index.ts"
+
+# #776 (ruling L20) — Resend's bounce/complaint/suppression webhook, turned
+# into a system Notification for BC and the Moderator. verify_jwt = false:
+# Resend sends no Supabase JWT, it signs each request the Svix way instead
+# (svix-id / svix-timestamp / svix-signature), and the handler verifies that
+# HMAC in constant time against the function secret RESEND_WEBHOOK_SECRET,
+# refusing anything unsigned, forged or older than five minutes with 401
+# before it reads the body. docs/backend/email.md.
+[functions.resend-webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/resend-webhook/index.ts"
