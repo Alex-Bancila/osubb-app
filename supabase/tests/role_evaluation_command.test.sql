@@ -53,7 +53,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(56);
+select plan(57);
 
 -- ==================== 1. The lock ====================
 -- A held-lock probe, as #52's suite probes (52, 1): a run must wait on
@@ -65,12 +65,14 @@ select extensions.dblink_connect('run_setup', format(
   current_database()));
 select extensions.dblink_exec('run_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('run_setup', $$
-  delete from public.profiles where id = '82600000-0000-0000-0000-0000000000f1';
-  delete from auth.users where id = '82600000-0000-0000-0000-0000000000f1';
+  delete from public.profiles where id in ('82600000-0000-0000-0000-0000000000f1', '82600000-0000-0000-0000-0000000000f2');
+  delete from auth.users where id in ('82600000-0000-0000-0000-0000000000f1', '82600000-0000-0000-0000-0000000000f2');
   insert into auth.users (id, email) values
-    ('82600000-0000-0000-0000-0000000000f1', 'race.bc.826@test.local');
+    ('82600000-0000-0000-0000-0000000000f1', 'race.bc.826@test.local'),
+    ('82600000-0000-0000-0000-0000000000f2', 'race.vol.826@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
-    ('82600000-0000-0000-0000-0000000000f1', 'Race BC 826', 'race.bc.826@test.local', 'bc', 'activ');
+    ('82600000-0000-0000-0000-0000000000f1', 'Race BC 826', 'race.bc.826@test.local', 'bc', 'activ'),
+    ('82600000-0000-0000-0000-0000000000f2', 'Race Voluntar 826', 'race.vol.826@test.local', 'voluntar', 'activ');
 $$);
 
 reset role;
@@ -96,12 +98,34 @@ select throws_ok(
   'a run waits on the (47, 1) advisory lock another run or a threshold edit holds, before it reads a threshold');
 select extensions.dblink_exec('run_retry', 'rollback;');
 select extensions.dblink_exec('run_lock', 'rollback;');
+
+-- A run holds the Profiles of its population `for key share` until it
+-- commits (CodeRabbit on #835): a set_member_role on a Voluntar of that
+-- population waits instead of promoting underneath the ranking. F2 is an
+-- untenured Voluntar, never a candidate, so no candidate FK lock can stand in
+-- for the Profile lock -- without it the promotion goes straight through.
+select extensions.dblink_exec('run_lock', format(
+  'begin; set local lock_timeout = ''2s''; select set_config(''request.jwt.claims'', %L, true); set local role authenticated;',
+  current_setting('request.jwt.claims')));
+select extensions.dblink_exec('run_lock',
+  'do $run$ begin perform * from public.run_role_evaluation(''voluntar_activ'', current_date - 30, current_date - 1, ''Probă profiluri #826''); end $run$;');
+select extensions.dblink_exec('run_retry', format(
+  'begin; set local lock_timeout = ''250ms''; select set_config(''request.jwt.claims'', %L, true); set local role authenticated;',
+  current_setting('request.jwt.claims')));
+select throws_ok(
+  $$ select * from extensions.dblink('run_retry',
+       'select (public.set_member_role(''82600000-0000-0000-0000-0000000000f2'', ''activ'')).id::text')
+       as result (id text) $$,
+  '55P03', 'canceling statement due to lock timeout',
+  'a Role change of a ranked Member waits for the run holding the population''s Profiles');
+select extensions.dblink_exec('run_retry', 'rollback;');
+select extensions.dblink_exec('run_lock', 'rollback;');
 select extensions.dblink_disconnect('run_retry');
 select extensions.dblink_disconnect('run_lock');
 
 select extensions.dblink_exec('run_setup', $$
-  delete from public.profiles where id = '82600000-0000-0000-0000-0000000000f1';
-  delete from auth.users where id = '82600000-0000-0000-0000-0000000000f1';
+  delete from public.profiles where id in ('82600000-0000-0000-0000-0000000000f1', '82600000-0000-0000-0000-0000000000f2');
+  delete from auth.users where id in ('82600000-0000-0000-0000-0000000000f1', '82600000-0000-0000-0000-0000000000f2');
 $$);
 select extensions.dblink_disconnect('run_setup');
 select pg_temp.test_clear_jwt();

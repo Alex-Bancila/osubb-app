@@ -50,7 +50,9 @@
 -- Locks: pg_advisory_xact_lock(47, 1) serialises runs and threshold edits,
 -- then the kind's promotion_thresholds row is taken `for no key update` (a
 -- parent row: promotion_threshold_changes references it -- conventions
--- section 2). The daily job keeps (52, 1) and never takes (47, 1).
+-- section 2), then the population's live Profiles `for key share`, so a
+-- set_member_role (Profile `for update`) waits for the run. The daily job keeps
+-- (52, 1) and never takes (47, 1).
 
 -- ---------------------------------------------------------------------------
 -- 1. Guard: an open Period cannot be carried into a model without one.
@@ -715,6 +717,19 @@ begin
   if v_threshold.threshold is null then
     raise sqlstate 'PT409' using message = 'promotion_threshold_not_set';
   end if;
+
+  -- Role changes wait for this run: set_member_role locks the Profile `for
+  -- update` and its role_history trigger then closes candidates, so taking
+  -- the population's Profiles `for key share` here (Profiles first,
+  -- candidates after -- the order set_member_role uses) keeps the ranking
+  -- below from listing a Member promoted underneath it, and the candidate
+  -- insert's FK check from deadlocking against that promotion.
+  perform 1
+     from public.profiles as profile
+    where profile.status = 'activ'
+      and profile.role in ('voluntar', 'activ', 'vot')
+    order by profile.id
+      for key share;
 
   -- 5. The ranking, read once (one snapshot for every step below).
   select coalesce(jsonb_agg(to_jsonb(ranked)), '[]'::jsonb) into v_rows

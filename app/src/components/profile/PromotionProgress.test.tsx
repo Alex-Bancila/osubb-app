@@ -154,6 +154,7 @@ describe('PromotionProgress (#634)', () => {
       expect(bar).toHaveAttribute('aria-valuemax', '30');
       expect(bar).toHaveAttribute('aria-valuenow', '12');
       expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 de puncte');
+      expect(screen.getByText('de la 1 iulie 2026')).toBeInTheDocument();
       expect(
         screen.getByText('Mai ai 18 puncte până la Voluntar Activ'),
       ).toBeInTheDocument();
@@ -170,7 +171,7 @@ describe('PromotionProgress (#634)', () => {
       ).toBeInTheDocument();
     });
 
-    it('exactly at the threshold: past it, the role follows automatically', () => {
+    it('exactly at the threshold: past it, BC decides at the next evaluation', () => {
       setup('voluntar', progress({ points: 30 }));
 
       expect(screen.getByRole('progressbar')).toHaveAttribute(
@@ -178,7 +179,9 @@ describe('PromotionProgress (#634)', () => {
         '30',
       );
       expect(
-        screen.getByText('Ai depășit pragul — rolul se acordă automat'),
+        screen.getByText(
+          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+        ),
       ).toBeInTheDocument();
       expect(screen.queryByText(/mai ai/i)).not.toBeInTheDocument();
     });
@@ -191,7 +194,9 @@ describe('PromotionProgress (#634)', () => {
         '30',
       );
       expect(
-        screen.getByText('Ai depășit pragul — rolul se acordă automat'),
+        screen.getByText(
+          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+        ),
       ).toBeInTheDocument();
     });
 
@@ -202,7 +207,9 @@ describe('PromotionProgress (#634)', () => {
       expect(full).toHaveAttribute('aria-valuemax', '1');
       expect(full).toHaveAttribute('aria-valuenow', '1');
       expect(
-        screen.getByText('Ai depășit pragul — rolul se acordă automat'),
+        screen.getByText(
+          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+        ),
       ).toBeInTheDocument();
       cleanup();
 

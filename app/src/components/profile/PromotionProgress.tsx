@@ -76,7 +76,11 @@ export function PromotionProgress() {
     case 'bar':
       return (
         <Frame title="Promovare">
-          <ThresholdBar points={view.points} threshold={view.threshold} />
+          <ThresholdBar
+            points={view.points}
+            threshold={view.threshold}
+            sinceLabel={view.sinceLabel}
+          />
         </Frame>
       );
     case 'reference':
@@ -102,7 +106,7 @@ const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
 
 type View =
   | { kind: 'tenure'; text: string }
-  | { kind: 'bar'; points: number; threshold: number }
+  | { kind: 'bar'; points: number; threshold: number; sinceLabel: string }
   | { kind: 'reference'; points: number; threshold: number; sinceLabel: string }
   | null;
 
@@ -114,6 +118,9 @@ function viewFor(
   const { threshold, points, since } = progress;
   // The bar needs a target; without one it is hidden, never faked.
   const measurable = threshold !== null;
+  const sinceLabel = since
+    ? `de la ${formatDayMonthYear(since) ?? since}`
+    : 'în total';
 
   if (role === 'recrut') {
     const date = tenureDate(joinedAt, progress.voluntarTenureMonths);
@@ -126,7 +133,7 @@ function viewFor(
     const date = tenureDate(joinedAt, progress.activTenureMonths);
     if (!date) return null;
     if (measurable && startOfToday() >= date) {
-      return { kind: 'bar', points, threshold };
+      return { kind: 'bar', points, threshold, sinceLabel };
     }
     return {
       kind: 'tenure',
@@ -140,9 +147,7 @@ function viewFor(
         kind: 'reference',
         points,
         threshold,
-        sinceLabel: since
-          ? `de la ${formatDayMonthYear(since) ?? since}`
-          : 'în total',
+        sinceLabel,
       }
     : null;
 }
@@ -150,11 +155,14 @@ function viewFor(
 function ThresholdBar({
   points,
   threshold,
+  sinceLabel,
 }: {
   points: number;
   threshold: number;
+  sinceLabel: string;
 }) {
-  // Reaching the threshold promotes (R9), so "at" counts as past it.
+  // Reaching the threshold makes a Promotion Candidate at the next Role
+  // Evaluation (#826); BC decides. "At" counts as past it.
   const reached = points >= threshold;
   // A stamped threshold can be 0 or negative (net points after reversals and
   // low Ratings): no scale to fill, so the bar is simply full or empty.
@@ -171,7 +179,7 @@ function ThresholdBar({
         <span className="font-semibold text-foreground">
           {formatPoints(points)} / {pointCount(threshold)}
         </span>
-        <span className="text-muted-foreground">în semestrul curent</span>
+        <span className="text-muted-foreground">{sinceLabel}</span>
       </div>
       <div
         role="progressbar"
@@ -189,7 +197,7 @@ function ThresholdBar({
       </div>
       <p className="text-sm font-medium text-foreground">
         {reached
-          ? 'Ai depășit pragul — rolul se acordă automat'
+          ? 'Ai depășit pragul — BC va fi anunțat la următoarea evaluare'
           : `Mai ai ${pointCount(threshold - points)} până la Voluntar Activ`}
       </p>
     </div>
