@@ -7,7 +7,8 @@ import { useEvaluationScale } from '../../queries/reference';
 import { formatPoints } from '../../lib/format';
 import { RatingGuideDialog } from '../../screens/tracker/RatingGuideDialog';
 import { ratingHint } from '../../screens/tracker/rating-guide-content';
-import { ScoreScale } from './ScoreScale';
+import { DifficultyStarPicker } from './DifficultyStars';
+import { RatingPicker } from './RatingPicker';
 
 export function EvaluationFields({
   executorName,
@@ -87,12 +88,12 @@ export function EvaluationFields({
       <RatingGuideDialog />
       {scale.isPending && (
         <p role="status" className="text-sm">
-          Se încarcă dificultățile și calificativele…
+          Se încarcă dificultățile și notele…
         </p>
       )}
       {scale.isError && (
         <div role="alert" className="space-y-2 text-sm">
-          <p>Nu am putut încărca dificultățile și calificativele.</p>
+          <p>Nu am putut încărca dificultățile și notele.</p>
           <Button
             type="button"
             variant="outline"
@@ -106,12 +107,11 @@ export function EvaluationFields({
       )}
       <fieldset disabled={isPending || !scale.data} className="space-y-3">
         <legend className="sr-only">
-          Dificultate, calificativ și notă obligatorii
+          Dificultate, notă și observații obligatorii
         </legend>
-        <ScoreScale
-          variant="steps"
+        <DifficultyStarPicker
           label="Dificultate (obligatoriu)"
-          prompt="Alege dificultatea: 1 e cel mai ușor, 5 cel mai greu."
+          prompt="Alege între 1 și 5 stele: 1 e cel mai ușor, 5 cel mai greu."
           value={difficulty === '' ? null : Number(difficulty)}
           onChange={(value) => setDifficulty(String(value))}
           hint={(value) =>
@@ -124,10 +124,9 @@ export function EvaluationFields({
           groupRef={form.slot('difficulty').ref}
         />
         <FieldError {...form.errorProps('difficulty')} />
-        <ScoreScale
-          variant="stars"
-          label="Calificativ (obligatoriu)"
-          prompt="Alege între 1 și 5 stele."
+        <RatingPicker
+          label="Nota (obligatoriu)"
+          prompt="Alege o notă între 1 și 5."
           value={rating === '' ? null : Number(rating)}
           onChange={(value) => setRating(String(value))}
           hint={ratingHint}
@@ -139,11 +138,11 @@ export function EvaluationFields({
         <FieldError {...form.errorProps('rating')} />
         <p role="status" className="rounded-md bg-muted p-3 text-sm">
           {points === null
-            ? 'Alege dificultatea și calificativul pentru previzualizare.'
+            ? 'Alege dificultatea și nota pentru previzualizare.'
             : `Previzualizare: ${formatPoints(points)} puncte. ${points < 0 ? 'Se scad puncte.' : points === 0 ? 'Nu se acordă puncte.' : 'Se acordă puncte.'} Serverul confirmă punctajul final.`}
         </p>
         <label htmlFor={`${id}-note`} className="block text-sm font-medium">
-          Notă (obligatoriu)
+          Observații (obligatoriu)
         </label>
         <textarea
           id={`${id}-note`}

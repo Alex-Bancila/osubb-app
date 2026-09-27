@@ -38,7 +38,7 @@ it('lists both scales with every hint, and no placeholder text', async () => {
   });
   expect(dialog).toHaveAccessibleDescription(ratingGuide.description);
 
-  const rating = within(dialog).getByRole('region', { name: 'Calificativ' });
+  const rating = within(dialog).getByRole('region', { name: 'Nota' });
   for (const hint of [
     'Nelivrat / inacceptabil',
     'Sub așteptări',
@@ -54,6 +54,13 @@ it('lists both scales with every hint, and no placeholder text', async () => {
   });
   for (const row of scale.data.difficulties)
     expect(within(difficulty).getByText(row.note)).toBeVisible();
+  // R29a: Difficulty reads as stars, Nota as a bare number.
+  expect(
+    within(difficulty)
+      .getAllByRole('img')
+      .map((stars) => stars.getAttribute('aria-label')),
+  ).toEqual([1, 2, 3, 4, 5].map((n) => `Dificultate ${n} din 5`));
+  expect(within(rating).queryByRole('img')).toBeNull();
 
   // R22: no placeholder or lorem text is left anywhere in the guide.
   expect(dialog).not.toHaveTextContent(/Text provizoriu|lorem|ipsum/i);

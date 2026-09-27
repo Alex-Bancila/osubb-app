@@ -1,4 +1,4 @@
-import { BookOpenIcon, Star } from 'lucide-react';
+import { BookOpenIcon } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -8,26 +8,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../../components/ui/dialog';
+import { DifficultyStars } from '../../components/tasks/DifficultyStars';
 import { useEvaluationScale } from '../../queries/reference';
 import { ratingGuide } from './rating-guide-content';
-
-function Stars({ count }: { count: number }) {
-  return (
-    <span aria-hidden="true" className="flex shrink-0 gap-px">
-      {[1, 2, 3, 4, 5].map((step) => (
-        <Star
-          key={step}
-          strokeWidth={1.75}
-          className={
-            step <= count
-              ? 'size-3.5 fill-primary text-primary'
-              : 'size-3.5 text-muted-foreground/50'
-          }
-        />
-      ))}
-    </span>
-  );
-}
 
 function Difficulty() {
   const scale = useEvaluationScale();
@@ -55,10 +38,8 @@ function Difficulty() {
   return (
     <ol className="divide-y divide-border">
       {scale.data.difficulties.map((row) => (
-        <li key={row.stars} className="flex items-baseline gap-3 py-2">
-          <span className="w-4 shrink-0 text-right font-bold tabular-nums">
-            {row.stars}
-          </span>
+        <li key={row.stars} className="flex items-center gap-3 py-2">
+          <DifficultyStars value={row.stars} className="shrink-0" />
           <span className="min-w-0 wrap-anywhere">{row.note}</span>
         </li>
       ))}
@@ -66,7 +47,11 @@ function Difficulty() {
   );
 }
 
-/** Opens the rating guide beside the rating controls, without leaving the form. */
+/**
+ * Opens the rating guide beside the evaluation controls, without leaving the
+ * form. Same presentation as the controls (R29a): Nota as a number,
+ * Dificultate as stars. The content stays a placeholder until #638.
+ */
 export function RatingGuideDialog() {
   return (
     <Dialog>
@@ -87,11 +72,10 @@ export function RatingGuideDialog() {
           </h3>
           <ol className="divide-y divide-border">
             {ratingGuide.ratingHints.map((row) => (
-              <li key={row.value} className="flex items-center gap-3 py-2">
+              <li key={row.value} className="flex items-baseline gap-3 py-2">
                 <span className="w-4 shrink-0 text-right font-bold tabular-nums">
                   {row.value}
                 </span>
-                <Stars count={row.value} />
                 <span className="min-w-0 wrap-anywhere">{row.hint}</span>
               </li>
             ))}

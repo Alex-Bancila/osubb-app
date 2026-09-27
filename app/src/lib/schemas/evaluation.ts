@@ -23,7 +23,7 @@ export const evaluationSchema = z.object({
   note: requiredText({
     required: 'evaluation_note_required',
     max: 1000,
-    tooLong: 'note_too_long',
+    tooLong: 'evaluation_note_too_long',
   }),
 });
 
@@ -34,5 +34,6 @@ export const fieldForReason: Readonly<
   invalid_difficulty: 'difficulty',
   invalid_rating: 'rating',
   evaluation_note_required: 'note',
+  evaluation_note_too_long: 'note',
   note_too_long: 'note',
 };

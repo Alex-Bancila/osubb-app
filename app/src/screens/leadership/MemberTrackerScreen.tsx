@@ -18,6 +18,7 @@ import {
 import { useMemberCard } from '../../queries/member-card';
 import { TaskCard } from '../tracker/TaskCard';
 import { LeadershipAccess } from './LeadershipAccess';
+import { DifficultyStars } from '../../components/tasks/DifficultyStars';
 import {
   filterMemberTasks,
   historyEvaluations,
@@ -94,8 +95,15 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
                   {entry.reversedAt ? ' · Evaluare anulată' : ''}
                 </p>
                 <p>
-                  Dificultate: {score(entry.difficulty)} · Notă:{' '}
-                  {score(entry.rating)}
+                  {entry.difficulty === null ? (
+                    'Dificultate: —'
+                  ) : (
+                    <DifficultyStars
+                      value={entry.difficulty}
+                      label="Dificultate:"
+                    />
+                  )}{' '}
+                  · Nota {score(entry.rating)}
                 </p>
                 <p className="text-muted-foreground">
                   {day(entry.evaluatedAt)}
