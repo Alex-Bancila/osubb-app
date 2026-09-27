@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(15);
+select plan(17);
 
 -- ==================== Fixtures — prefix 49900000-… ====================
 
@@ -175,6 +175,22 @@ select is(
   (select count(*) from public.visible_task_executors(null::bigint[])),
   0::bigint,
   'a null Task-id set returns no rows');
+
+-- Security pass I1: at most 200 Task ids per call, refused before any row is read.
+select throws_ok(
+  $$ select * from public.visible_task_executors(array(
+        select (select visible_task_id from f499)
+        union all select g::bigint from generate_series(-200, -1) as g)) $$,
+  'PT400', 'too_many_ids',
+  '201 Task ids are refused as PT400 too_many_ids');
+
+select is(
+  (select count(*)
+     from public.visible_task_executors(array(
+       select (select visible_task_id from f499)
+       union all select g::bigint from generate_series(-199, -1) as g))),
+  1::bigint,
+  '200 Task ids are accepted and still return the readable Executor');
 
 select pg_temp.test_login(
   '49900000-0000-0000-0000-000000000005',

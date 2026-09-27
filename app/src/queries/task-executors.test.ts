@@ -8,7 +8,11 @@ import { taskRow } from '../test/task-fixtures';
 import { attachVisibleTaskExecutors } from './task-executors';
 
 describe('visible Task Executors', () => {
-  beforeEach(() => api.rpc.mockReset());
+  // A block body: an arrow returning the mock would make Vitest call it as a
+  // teardown hook after every test.
+  beforeEach(() => {
+    api.rpc.mockReset();
+  });
 
   it('loads one safe Executor batch and marks Tasks without one explicitly', async () => {
     api.rpc.mockResolvedValue({
@@ -53,6 +57,32 @@ describe('visible Task Executors', () => {
 
     expect(api.rpc).toHaveBeenCalledWith('visible_task_executors', {
       p_task_ids: [2, 1],
+    });
+  });
+
+  it('splits more than 200 Task ids into batches the RPC accepts', async () => {
+    api.rpc.mockImplementation(
+      async (_name: string, { p_task_ids }: { p_task_ids: number[] }) => {
+        return {
+          data: p_task_ids.includes(450)
+            ? [{ task_id: 450, member_id: 'executor-450', full_name: 'Ana' }]
+            : [],
+          error: null,
+        };
+      },
+    );
+    const rows = Array.from({ length: 450 }, (_, index) =>
+      taskRow({ id: index + 1 }),
+    );
+
+    const enriched = await attachVisibleTaskExecutors(rows);
+
+    expect(api.rpc).toHaveBeenCalledTimes(3);
+    expect(
+      api.rpc.mock.calls.map(([, args]) => args.p_task_ids.length),
+    ).toEqual([200, 200, 50]);
+    expect(enriched.at(-1)?.visibleExecutor).toMatchObject({
+      memberId: 'executor-450',
     });
   });
 
