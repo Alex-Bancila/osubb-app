@@ -504,7 +504,13 @@ export function GroupSettingsTab({
               {[...new Set([group.min_level, ...choices])]
                 .sort((left, right) => left - right)
                 .map((level) => (
-                  <option key={level} value={level}>
+                  <option
+                    key={level}
+                    value={level}
+                    // A stored off-ladder level (the Moderator's 9) stays
+                    // readable as the current value, never a choice (R29b).
+                    disabled={!isMinimumLevel(level)}
+                  >
                     {minimumLevelText(level)}
                   </option>
                 ))}
@@ -583,7 +589,11 @@ export function GroupSettingsTab({
                   {[...new Set([group.min_level, ...choices])]
                     .sort((left, right) => left - right)
                     .map((level) => (
-                      <option key={level} value={level}>
+                      <option
+                        key={level}
+                        value={level}
+                        disabled={!isMinimumLevel(level)}
+                      >
                         {minimumLevelText(level)}
                       </option>
                     ))}

@@ -321,3 +321,41 @@ it('names the Minimum Level by Role in the removal preview (R29b)', async () => 
     ),
   ).toBeVisible();
 });
+
+it('keeps a stored Moderator level readable but never offers it as a choice (R29b)', () => {
+  render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group({ parent_id: null, path: [2], min_level: 9 })}
+        parent={undefined}
+        roster={[]}
+        authority={{ ...authority, editStructure: true }}
+        levels={[0, 1, 2, 3, 5, 6, 9]}
+        actorLevel={9}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+      />
+    </MemoryRouter>,
+  );
+  for (const picker of screen.getAllByLabelText('Nivel minim')) {
+    const select = picker as HTMLSelectElement;
+    expect(select.value).toBe('9');
+    const stored = Array.from(select.options).find((o) => o.value === '9');
+    expect(stored?.text).toBe('Moderator');
+    expect(stored?.disabled).toBe(true);
+    expect(
+      Array.from(select.options)
+        .filter((o) => !o.disabled)
+        .map((o) => o.text),
+    ).toEqual([
+      'Recrut',
+      'Voluntar',
+      'Voluntar Activ',
+      'Voluntar cu Drept de Vot',
+      'BCE',
+      'BC',
+    ]);
+  }
+});
