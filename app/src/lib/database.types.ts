@@ -1106,6 +1106,70 @@ export type Database = {
           },
         ]
       }
+      notification_email_preferences: {
+        Row: {
+          created_at: string
+          digest_enabled: boolean
+          member_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          digest_enabled?: boolean
+          member_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          digest_enabled?: boolean
+          member_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_email_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "leaderboard"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notification_email_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "member_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notification_email_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "notification_email_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_email_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_email_preferences_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_push_preferences: {
         Row: {
           created_at: string
@@ -1179,6 +1243,7 @@ export type Database = {
           created_at: string
           critical: boolean
           dedupe_key: string | null
+          digested_at: string | null
           icon: string | null
           id: number
           kind: Database["public"]["Enums"]["noti_kind"]
@@ -1193,6 +1258,7 @@ export type Database = {
           created_at?: string
           critical?: boolean
           dedupe_key?: string | null
+          digested_at?: string | null
           icon?: string | null
           id?: never
           kind: Database["public"]["Enums"]["noti_kind"]
@@ -1207,6 +1273,7 @@ export type Database = {
           created_at?: string
           critical?: boolean
           dedupe_key?: string | null
+          digested_at?: string | null
           icon?: string | null
           id?: never
           kind?: Database["public"]["Enums"]["noti_kind"]
@@ -3259,6 +3326,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_email_digests: {
+        Args: { p_limit: number }
+        Returns: {
+          attempt: number
+          digest_id: number
+          email: string
+          items: Json
+          member_name: string
+          unread_count: number
+        }[]
+      }
       claim_push_deliveries: {
         Args: { p_limit: number }
         Returns: {
@@ -4316,6 +4394,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      settle_email_digest: {
+        Args: {
+          p_attempt: number
+          p_error?: string
+          p_id: number
+          p_outcome: string
+          p_provider_id?: string
+        }
+        Returns: string
       }
       settle_push_delivery: {
         Args: {

@@ -28,6 +28,7 @@ function notificationRow(
     link: '/tracker/12',
     created_at: '2026-09-20T09:00:00.000Z',
     dedupe_key: null,
+    digested_at: null,
     task_id: 12,
     ...overrides,
   };

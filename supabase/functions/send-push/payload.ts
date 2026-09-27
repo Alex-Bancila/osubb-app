@@ -16,7 +16,16 @@
 // Nothing here is new data: the declarative half repeats the title and body,
 // and `navigate` is the link the service worker would open on a tap.
 
-import { allowedOrigins } from "../_shared/cors.ts";
+import { targetUrl } from "../_shared/app-links.ts";
+
+// Moved to _shared/app-links.ts for the Email Digest (#775); re-exported so
+// the push side reads as before.
+export {
+  appOrigin,
+  appOriginOf,
+  NOTIFICATIONS_PATH,
+  targetUrl,
+} from "../_shared/app-links.ts";
 
 /** The slice of a claimed outbox row that goes into the payload. */
 export interface PushNotification {
@@ -26,9 +35,6 @@ export interface PushNotification {
   link: string | null;
 }
 
-/** Where a notification without a usable link opens: the notification list. */
-export const NOTIFICATIONS_PATH = "/notificari";
-
 // A push message is one aes128gcm record of at most 4096 bytes (RFC 8030
 // section 7.2, RFC 8291): 86 bytes of header, a 16-byte tag and a 1-byte
 // padding delimiter leave 3993 bytes of plaintext. A longer payload is
@@ -37,47 +43,6 @@ export const NOTIFICATIONS_PATH = "/notificari";
 export const MAX_PAYLOAD_BYTES = 3_800;
 
 const ELLIPSIS = "…";
-
-/**
- * The app's origin for `navigate`: the first ALLOWED_ORIGINS entry (the same
- * setting that lets the app call invite-member), or null when it is not an
- * https origin -- the local default, a malformed entry, or an environment
- * where the setting was never made. Without it only the service worker
- * shape is sent, so a tap can never be sent to localhost.
- */
-export function appOriginOf(origins: readonly string[]): string | null {
-  const first = origins[0];
-  if (!first) return null;
-  try {
-    const url = new URL(first);
-    return url.protocol === "https:" ? url.origin : null;
-  } catch {
-    return null;
-  }
-}
-
-/** appOriginOf the function's own ALLOWED_ORIGINS. */
-export function appOrigin(): string | null {
-  return appOriginOf(allowedOrigins());
-}
-
-/**
- * The absolute URL a tap opens -- the same rule as the service worker's
- * `targetUrl` in app/src/pwa/push-payload.ts. An in-app route (`/tracker/12`)
- * opens itself; anything else (absent, empty, protocol-relative, an absolute
- * URL that would leave the app) opens the notification list. The resolved
- * origin is checked too: the URL parser reads `/\host` (and a tab or new
- * line inside `//`) as another host.
- */
-export function targetUrl(link: string | null, origin: string): string {
-  const fallback = new URL(NOTIFICATIONS_PATH, origin);
-  const trimmed = link?.trim() ?? "";
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return fallback.href;
-  }
-  const url = new URL(trimmed, origin);
-  return url.origin === fallback.origin ? url.href : fallback.href;
-}
 
 function serialize(
   id: number,

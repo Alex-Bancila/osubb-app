@@ -276,6 +276,10 @@ _Avoid_: Scope, visibility, org-wide flag
 **Notification**:
 A personal in-app alert delivered to one intended Member.
 
+**Email Digest**:
+An optional daily email to one Member listing the Notifications they have not read, sent only on a day when there is something unread, each Notification at most once. The Member turns it on and off in Profil.
+_Avoid_: Newsletter, email notification
+
 **Suppression**:
 A rule preventing selected broadcast notification kinds from reaching a Role while preserving direct notifications about a Member’s own work.
 

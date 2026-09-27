@@ -157,6 +157,10 @@ insert into push_deliveries (notification_id, token_id)
 insert into notification_push_preferences (member_id, kind, push_enabled) values
   ('ffffffff-0000-0000-0000-000000000006', 'announce', false),
   ('eeeeeeee-0000-0000-0000-000000000156', 'event', false);
+-- #775: the Email Digest preference is self-only too; the same two owners.
+insert into notification_email_preferences (member_id, digest_enabled) values
+  ('ffffffff-0000-0000-0000-000000000006', true),
+  ('eeeeeeee-0000-0000-0000-000000000156', true);
 -- #771: Privacy Acknowledgements are own-row plus level >= 6. The row owned
 -- by the claimless uid is what exercises the own-row limb of
 -- privacy_notice_acknowledgements_read for the real claimless user below.

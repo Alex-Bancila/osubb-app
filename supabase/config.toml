@@ -161,3 +161,15 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/resend-webhook/index.ts"
+
+# #775 (ruling L20) — the Email Digest sender, called by the hourly pg_cron
+# job osubb-email-digest through pg_net. verify_jwt = false, exactly like
+# send-push: the caller is authenticated by the project's secret key on the
+# apikey header, compared in constant time in the handler. It sends through
+# the Resend API with the function secret RESEND_API_KEY.
+# docs/backend/email.md.
+[functions.send-digest]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/send-digest/index.ts"

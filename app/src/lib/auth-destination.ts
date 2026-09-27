@@ -7,6 +7,8 @@ const memberRoutes = new Set([
   '/calendar',
   '/cereri',
   '/anunturi',
+  // #775: the Email Digest's "Deschide notificările" button survives the login.
+  '/notificari',
   '/voluntari',
   '/profil',
   '/administrare',

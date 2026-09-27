@@ -34,6 +34,12 @@ describe('safe authentication destinations', () => {
     expect(safeAuthDestination(callback.searchParams.get('next'))).toBe(next);
     window.history.replaceState({}, '', '/');
   });
+  it('lets the Email Digest land on the notification list and the Profil switch (#775)', () => {
+    expect(safeAuthDestination('/notificari')).toBe('/notificari');
+    expect(safeAuthDestination('/profil#rezumat-email')).toBe(
+      '/profil#rezumat-email',
+    );
+  });
 });
 
 describe('click-to-confirm destinations (#768)', () => {

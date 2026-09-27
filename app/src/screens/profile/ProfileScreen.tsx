@@ -25,6 +25,7 @@ import { useMyGroups, useRoles } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
 import ChangeEmailSection from './ChangeEmailSection';
 import { JoiningSection } from './JoiningSection';
+import { EmailDigestCard } from './EmailDigestCard';
 import { PushDeviceCard } from './PushDeviceCard';
 import { RoleTimeline } from './RoleTimeline';
 
@@ -392,6 +393,8 @@ export default function ProfileScreen() {
           </section>
 
           <PushDeviceCard />
+
+          <EmailDigestCard />
 
           {/* The Privacy Notice (#771): always one tap away. */}
           <section className="card p-6" aria-labelledby="privacy-card-title">

@@ -451,6 +451,16 @@ const REASON_COPY = new Map<string, string>([
     'push_preferences_unavailable',
     'Nu am putut încărca preferințele. Verifică internetul și reîncarcă pagina.',
   ],
+  /* ---- The Email Digest (#775) ---- */
+  /* browser */
+  [
+    'email_digest_preference_failed',
+    'Nu am putut salva preferința. Verifică internetul și încearcă din nou.',
+  ],
+  [
+    'email_digest_preference_unavailable',
+    'Nu am putut încărca preferința. Verifică internetul și reîncarcă pagina.',
+  ],
 
   /* ---- The Privacy Notice (#771, ruling L16) ---- */
   ['notice_version_required', 'Reîncarcă pagina și citește politica din nou.'],
