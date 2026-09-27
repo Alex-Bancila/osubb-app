@@ -11,12 +11,15 @@
 -- stay reviewed, not machine-checked. The written rules:
 -- docs/backend/conventions.md. #520 also forbids presentation-category
 -- references in functions and policies, apart from the three named mirror writers.
+-- The security pass (2026-09-27, I1) adds four more: authenticated cannot write the
+-- command-only tables at all, no public/private function reaches pg_net, the cron
+-- jobs that do call pg_net run as a role that can, and pg_graphql is not installed.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(21);
 
 -- Postgres stores an empty search_path as the literal proconfig entry
 -- search_path="" (confirmed against add_group_member_impl on the live
@@ -154,6 +157,78 @@ select is(pg_temp.category_branching_policies(), array['groups.conventions_probe
   'a policy whose qual reads category is reported by name');
 drop policy conventions_probe_category on public.groups;
 drop function public.conventions_probe_category(bigint);
+
+-- Security pass I1: tables that only migrations or security-definer commands
+-- write carry no write grant to authenticated. RLS (no write policy) is the
+-- second guard, never the only one. Reference data (roles, difficulty_guide,
+-- rating_guide) changes only by migration; a profiles row is inserted only by
+-- provision_profile (service role) and never deleted by a client. profiles
+-- keeps its column-level UPDATE grants for profiles_update_self.
+create function pg_temp.command_only_write_grants() returns text[]
+language sql as $$
+  select coalesce(array_agg(t.tbl || ':' || t.priv order by t.tbl, t.priv), '{}')
+    from (values ('roles', 'INSERT'), ('roles', 'UPDATE'), ('roles', 'DELETE'),
+                 ('difficulty_guide', 'INSERT'), ('difficulty_guide', 'UPDATE'),
+                 ('difficulty_guide', 'DELETE'),
+                 ('rating_guide', 'INSERT'), ('rating_guide', 'UPDATE'),
+                 ('rating_guide', 'DELETE'),
+                 ('profiles', 'INSERT'), ('profiles', 'DELETE')) as t(tbl, priv)
+   where has_table_privilege('authenticated', ('public.' || t.tbl)::regclass, t.priv);
+$$;
+select is(pg_temp.command_only_write_grants(), '{}'::text[],
+  'authenticated has no INSERT/UPDATE/DELETE on roles, difficulty_guide or rating_guide, and no INSERT/DELETE on profiles');
+select ok(
+  has_table_privilege('authenticated', 'public.roles', 'select')
+  and has_table_privilege('authenticated', 'public.difficulty_guide', 'select')
+  and has_table_privilege('authenticated', 'public.rating_guide', 'select'),
+  'authenticated still reads the three reference tables');
+-- Non-hollow: a re-grant is named.
+grant insert on table public.roles to authenticated;
+select is(pg_temp.command_only_write_grants(), array['roles:INSERT'],
+  'a re-granted write privilege on a command-only table is reported by name');
+revoke insert on table public.roles from authenticated;
+
+-- pg_net: EXECUTE on net.http_get/http_post stays granted to anon and
+-- authenticated by Supabase (supabase_admin owns net and granted it; the
+-- migration role cannot revoke it). The net schema is not exposed through the
+-- Data API, so the remaining path would be one of our own functions calling
+-- it. None may: HTTP leaves the database only from the cron jobs below.
+create function pg_temp.pg_net_calling_functions() returns text[]
+language sql as $$
+  select coalesce(array_agg(n.nspname || '.' || p.proname order by n.nspname, p.proname), '{}')
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname in ('public', 'private')
+     and p.prokind = 'f'
+     and pg_get_functiondef(p.oid) ~ '\mnet\.(http_|_http)';
+$$;
+select is(pg_temp.pg_net_calling_functions(), '{}'::text[],
+  'no function in public/private calls pg_net (net.http_*)');
+create function public.conventions_probe_net() returns bigint
+language plpgsql security definer set search_path = '' as $$
+begin
+  return net.http_get('https://example.invalid');
+end;
+$$;
+select is(pg_temp.pg_net_calling_functions(), array['public.conventions_probe_net'],
+  'a function that calls net.http_get is reported by name');
+drop function public.conventions_probe_net();
+
+-- The cron path keeps working: exactly the two outbox jobs call
+-- net.http_post, and each runs as a role that can execute it.
+select is(
+  (select coalesce(array_agg(job.jobname || ':' || job.username order by job.jobname), '{}')
+     from cron.job as job
+    where job.command ~ '\mnet\.http_post'
+      and has_function_privilege(job.username,
+            'net.http_post(text, jsonb, jsonb, jsonb, integer)', 'execute')),
+  array['osubb-email-digest:postgres', 'osubb-send-push:postgres'],
+  'osubb-send-push and osubb-email-digest are the only cron jobs calling net.http_post, and both run as postgres, which can execute it');
+
+select is(
+  (select count(*) from pg_extension where extname = 'pg_graphql'),
+  0::bigint,
+  'pg_graphql is not installed: nothing uses GraphQL and it gave schema introspection to anon-key holders');
 
 select * from finish();
 rollback;

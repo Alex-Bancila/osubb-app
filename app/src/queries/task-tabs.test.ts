@@ -73,9 +73,16 @@ it('pages authorized IDs and reads only those Tasks through RLS in bounded batch
   expect(filter).toHaveBeenCalledTimes(6);
   expect(filter).toHaveBeenLastCalledWith('id', [501]);
   expect(mocks.rpc).toHaveBeenCalledWith('my_managed_task_ids');
-  expect(mocks.rpc).toHaveBeenCalledWith('visible_task_executors', {
-    p_task_ids: ids.map((item) => item.task_id),
-  });
+  // The Executor read takes at most 200 Task ids per call (PT400 too_many_ids).
+  const taskIds = ids.map((item) => item.task_id);
+  const executorCalls = mocks.rpc.mock.calls.filter(
+    ([name]) => name === 'visible_task_executors',
+  );
+  expect(executorCalls).toEqual([
+    ['visible_task_executors', { p_task_ids: taskIds.slice(0, 200) }],
+    ['visible_task_executors', { p_task_ids: taskIds.slice(200, 400) }],
+    ['visible_task_executors', { p_task_ids: taskIds.slice(400) }],
+  ]);
 });
 
 it('propagates a capability read failure without falling back to a broad Tasks query', async () => {
