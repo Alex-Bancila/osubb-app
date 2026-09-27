@@ -199,9 +199,13 @@ describe('Member Task cards', () => {
           status === 'completed' ? 'Finalizat cu întârziere' : 'Nerealizat',
         ),
       ).toBeInTheDocument();
-      expect(
-        screen.getByText('0 puncte · Dificultate 3 · Nota 2'),
-      ).toBeInTheDocument();
+      // R29a: Difficulty as stars, Nota as a number.
+      const stars = screen.getByRole('img', {
+        name: 'Dificultate 3 din 5',
+      });
+      expect(stars.closest('p')).toHaveTextContent(
+        /^0 puncte · Dificultate\s+· Nota 2$/,
+      );
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
       expect(screen.queryByText('Termen depășit')).not.toBeInTheDocument();
     },

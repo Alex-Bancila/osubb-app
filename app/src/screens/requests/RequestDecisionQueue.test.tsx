@@ -59,9 +59,15 @@ it('shares evaluation fields and retains success after the queue refetches empty
   await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
   await user.click(screen.getByRole('button', { name: 'Aprobă cererea' }));
   expect(state.mutate).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
-  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
-  await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Bine făcut');
+  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(
+    screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
+  );
+  await user.keyboard('5');
+  await user.type(
+    screen.getByLabelText('Observații (obligatoriu)'),
+    'Bine făcut',
+  );
   await user.dblClick(screen.getByRole('button', { name: 'Aprobă cererea' }));
   expect(state.mutate).toHaveBeenCalledTimes(1);
   expect(state.mutate).toHaveBeenCalledWith({
