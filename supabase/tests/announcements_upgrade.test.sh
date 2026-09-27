@@ -27,6 +27,10 @@ drop policy announcements_read on public.announcements;
 drop policy announcements_create on public.announcements;
 drop policy announcements_update on public.announcements;
 drop policy announcements_delete on public.announcements;
+-- The security pass (M1/L2) made the read-receipt policy call the predicate;
+-- give it back its pre-#581 self-only check for this rollback replay.
+alter policy announcement_reads_manage_self on public.announcement_reads
+  with check (public.auth_is_member() and member_id = (select auth.uid()));
 drop function private.can_read_announcement(bigint,text);
 -- #590 removed the final legacy column; restore it only for this historical replay.
 alter table public.announcements add column dept_id text;

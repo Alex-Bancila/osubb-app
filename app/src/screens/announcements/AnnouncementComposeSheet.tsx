@@ -94,7 +94,6 @@ export default function AnnouncementComposeSheet() {
         pinned: extra.get('pinned') === 'on',
         form_label: values.link.label,
         form_url: values.link.url,
-        created_by: session.user.id,
       });
       setPublished(true);
       setOpen(false);

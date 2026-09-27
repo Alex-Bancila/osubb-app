@@ -136,9 +136,11 @@ describe('Announcement composer', () => {
         body: 'Vineri la 18:00',
         group_id: 2,
         audience: 'org',
-        created_by: 'member-1',
       }),
     );
+    // The server stamps the author and the date (security pass M1).
+    expect(mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty('created_by');
+    expect(mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty('published_at');
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Anunțul a fost publicat.',
     );
