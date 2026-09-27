@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
 import { parsePositiveInt } from '../../lib/ids';
+import { minimumLevelText } from '../../lib/minimum-level';
 import { useRoles } from '../../queries/reference';
 import {
   groupAuthority,
@@ -216,7 +217,7 @@ export default function GroupScreen() {
           )}
         </div>
         <p className="text-muted-foreground">
-          Nivel minim {group.min_level}
+          Nivel minim: {minimumLevelText(group.min_level)}
           {group.automatic_membership
             ? ' · membri adăugați automat'
             : ` · ${group.memberCount} membri`}

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { bucharestWallTimeToIso } from '../calendar-time';
+import { EVENT_MINIMUM_LEVELS } from '../minimum-level';
 import {
   EVENT_TYPE_CHOICES,
   eventCampaignsFor,
@@ -13,7 +14,6 @@ import { optionalText, requiredText } from './text';
 const EVENT_TYPES: readonly string[] = EVENT_TYPE_CHOICES.map(
   (choice) => choice.value,
 );
-const MINIMUM_LEVELS = [0, 3, 5, 6];
 
 /**
  * An Event, as `create_event` / `update_event` accept it (#673, ruling R8):
@@ -79,7 +79,7 @@ export function eventSchema(
           issue('capacity', 'invalid_event_capacity');
       }
 
-      if (!MINIMUM_LEVELS.includes(values.minLevel))
+      if (!EVENT_MINIMUM_LEVELS.includes(values.minLevel))
         issue('minLevel', 'invalid_event_min_level');
       else if (group && values.minLevel < group.minLevel)
         issue('minLevel', 'event_min_level_below_group');

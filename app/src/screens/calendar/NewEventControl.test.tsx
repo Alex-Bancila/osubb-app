@@ -132,6 +132,17 @@ describe('NewEventControl', () => {
     expect(results.violations).toEqual([]);
   });
 
+  it('offers "Cine îl vede" by Role name: the Event subset of the ladder, in order (R29b)', async () => {
+    const user = setup();
+    await open(user);
+    await chooseGroup(user);
+    expect(
+      Array.from(
+        (screen.getByLabelText('Cine îl vede') as HTMLSelectElement).options,
+      ).map((option) => option.text),
+    ).toEqual(['Recrut', 'Voluntar cu Drept de Vot', 'BCE', 'BC']);
+  });
+
   it('creates through the normalized RPC draft and closes', async () => {
     state.mutateAsync.mockResolvedValue({ id: 44 });
     const user = setup();
