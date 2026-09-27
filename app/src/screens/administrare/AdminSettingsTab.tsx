@@ -155,6 +155,8 @@ function AdunareaGeneralaPanel({
     setError(null);
     try {
       await onSave({ key: 'adunarea_generala_group_id', value: chosen });
+      // The saved value comes back as `current`; a stale draft must not win.
+      setDraft('');
       setMessage('Grupul Adunării Generale a fost salvat.');
     } catch (failure) {
       setError(
