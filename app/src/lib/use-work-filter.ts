@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import { reasonCopy } from './command-reasons';
 import {
   dateRangeReason,
+  hiddenWorkFilter,
   isWorkFilterActive,
   parseWorkFilter,
   serializeWorkFilter,
@@ -33,7 +34,7 @@ export type WorkFilterState = {
     level: L,
     next: WorkFilterValue[L] | undefined,
   ) => void;
-  /** Remove every level (the page's own query keys stay). */
+  /** Remove every level the page shows (hidden levels and the page's own query keys stay). */
   clear: () => void;
 };
 
@@ -52,15 +53,17 @@ export type WorkFilterState = {
 export function useWorkFilter(levels: WorkFilterLevels = {}): WorkFilterState {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.toString();
+  const group = levels.group ?? true;
   const campaign = levels.campaign ?? true;
   const dates = levels.dates ?? true;
   const value = useMemo(
     () =>
       visibleWorkFilter(parseWorkFilter(new URLSearchParams(query)), {
+        group,
         campaign,
         dates,
       }),
-    [query, campaign, dates],
+    [query, group, campaign, dates],
   );
 
   const set = useCallback(
@@ -76,12 +79,23 @@ export function useWorkFilter(levels: WorkFilterLevels = {}): WorkFilterState {
     [setSearchParams],
   );
 
+  // Clearing removes what the page shows; a level it hides (the Group in
+  // the Cupa view) stays in the URL for the view that shows it.
   const clear = useCallback(
     () =>
-      setSearchParams((current) => serializeWorkFilter({}, current), {
-        replace: true,
-      }),
-    [setSearchParams],
+      setSearchParams(
+        (current) =>
+          serializeWorkFilter(
+            hiddenWorkFilter(parseWorkFilter(current), {
+              group,
+              campaign,
+              dates,
+            }),
+            current,
+          ),
+        { replace: true },
+      ),
+    [setSearchParams, group, campaign, dates],
   );
 
   return useMemo(() => {

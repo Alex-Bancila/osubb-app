@@ -58,6 +58,17 @@ describe('useWorkFilter', () => {
     expect(hidden.result.current.params).toEqual({});
   });
 
+  it('hides the Group levels on request and keeps them in the URL when clearing', () => {
+    const { result } = hook('?grup=1&subgrup=2&campanie=11', { group: false });
+    expect(result.current.value).toEqual({ campaignId: 11 });
+    expect(result.current.params).toEqual({ p_campaign_id: 11 });
+    act(() => result.current.clear());
+    expect(result.current.value).toEqual({});
+    expect(result.current.active).toBe(false);
+    const shown = hook('?grup=1&subgrup=2');
+    expect(shown.result.current.params).toEqual({ p_group_id: 2 });
+  });
+
   it('sends nothing and says why while the range is inverted', () => {
     const { result } = hook('?de_la=2026-09-30&pana_la=2026-09-01');
     expect(result.current.params).toBeNull();

@@ -114,10 +114,16 @@ export function setWorkFilterLevel<L extends WorkFilterLevel>(
 }
 
 /**
- * Which optional levels a page filters by; the two Group levels always count.
+ * Which levels a page filters by; every level counts unless it is `false`.
+ * `group: false` hides both Group levels (Grup principal and Subgrup) — the
+ * Cupa Departamentelor ranks Groups, so a Group narrows nothing there (#823).
  * The page passes the same value to `useWorkFilter` and `<WorkFilter>`.
  */
-export type WorkFilterLevels = { campaign?: boolean; dates?: boolean };
+export type WorkFilterLevels = {
+  group?: boolean;
+  campaign?: boolean;
+  dates?: boolean;
+};
 
 /**
  * The filter a page actually applies: a level it hides is dropped even when
@@ -129,12 +135,33 @@ export function visibleWorkFilter(
   levels: WorkFilterLevels = {},
 ): WorkFilterValue {
   const visible = { ...value };
+  if (levels.group === false) {
+    delete visible.rootGroupId;
+    delete visible.groupId;
+  }
   if (levels.campaign === false) delete visible.campaignId;
   if (levels.dates === false) {
     delete visible.from;
     delete visible.to;
   }
   return visible;
+}
+
+/**
+ * The levels a page hides that the URL carries: what **Șterge filtrele** keeps,
+ * so clearing a view that hides the Group (the Cupa) leaves the Group for the
+ * way back to the view that shows it.
+ */
+export function hiddenWorkFilter(
+  value: WorkFilterValue,
+  levels: WorkFilterLevels = {},
+): WorkFilterValue {
+  const visible = visibleWorkFilter(value, levels);
+  const hidden: WorkFilterValue = {};
+  for (const level of LEVELS)
+    if (visible[level] === undefined && value[level] !== undefined)
+      (hidden as Record<WorkFilterLevel, unknown>)[level] = value[level];
+  return hidden;
 }
 
 /** Whether any level is set. */

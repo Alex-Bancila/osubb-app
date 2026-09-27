@@ -9,6 +9,7 @@ import {
   rootGroups,
   serializeWorkFilter,
   setWorkFilterLevel,
+  hiddenWorkFilter,
   visibleWorkFilter,
   workFilterParams,
   type WorkFilterCampaign,
@@ -264,6 +265,25 @@ describe('visibleWorkFilter', () => {
       rootGroupId: 1,
       campaignId: 10,
     });
+  });
+
+  it('drops both Group levels when the page hides the Group (the Cupa view)', () => {
+    const value = {
+      rootGroupId: 1,
+      groupId: 2,
+      campaignId: 10,
+      from: '2026-09-01',
+    };
+    expect(visibleWorkFilter(value, { group: false })).toEqual({
+      campaignId: 10,
+      from: '2026-09-01',
+    });
+    // What clearing keeps: exactly the hidden levels the URL carries.
+    expect(hiddenWorkFilter(value, { group: false })).toEqual({
+      rootGroupId: 1,
+      groupId: 2,
+    });
+    expect(hiddenWorkFilter(value)).toEqual({});
   });
 });
 
