@@ -1,4 +1,5 @@
 import { bucharestWallTimeToIso } from './calendar-time';
+import { parsePositiveInt } from './ids';
 import { dateRangeSchema, ISO_DAY } from './schemas/date-range';
 
 /**
@@ -54,9 +55,7 @@ const DEPENDENTS: Record<WorkFilterLevel, readonly WorkFilterLevel[]> = {
 };
 
 function parseId(raw: string | null): number | undefined {
-  if (!raw || !/^\d+$/.test(raw)) return undefined;
-  const id = Number(raw);
-  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+  return parsePositiveInt(raw) ?? undefined;
 }
 
 function parseDay(raw: string | null): string | undefined {

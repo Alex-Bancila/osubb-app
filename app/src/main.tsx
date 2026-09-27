@@ -17,6 +17,7 @@ import { createQueryClient } from './queries/client';
 import { AuthProvider } from './lib/auth';
 import App from './App';
 import { PwaUpdatePrompt } from './pwa/PwaUpdatePrompt';
+import { ErrorBoundary } from './components/shell/ErrorBoundary';
 
 const queryClient = createQueryClient();
 
@@ -25,11 +26,13 @@ if (!root) throw new Error('index.html has no #root element');
 
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <App />
-        <PwaUpdatePrompt />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <App />
+          <PwaUpdatePrompt />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

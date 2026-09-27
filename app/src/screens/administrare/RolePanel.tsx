@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { commandErrorMessage } from '../../lib/command-reasons';
+import { isUuid } from '../../lib/ids';
 import {
   useAdminGroups,
   useAppointableMembers,
@@ -50,7 +51,9 @@ export function RolePanel({
   const groups = useAdminGroups();
   const change = useMemberChange();
   const [searchParams] = useSearchParams();
-  const requested = searchParams.get(ROLE_PANEL_MEMBER_PARAM) ?? '';
+  // `?membru=` only preselects; anything but a Member id is ignored.
+  const param = searchParams.get(ROLE_PANEL_MEMBER_PARAM);
+  const requested = isUuid(param) ? param : '';
   const [memberId, setMemberId] = useState(selectedMemberId ?? requested);
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {

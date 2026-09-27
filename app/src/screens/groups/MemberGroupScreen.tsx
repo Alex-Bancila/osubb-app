@@ -3,6 +3,7 @@ import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
+import { parsePositiveInt } from '../../lib/ids';
 import { MemberName } from '../../components/member/MemberName';
 import {
   useAdminGroups,
@@ -20,7 +21,8 @@ import { ApplicationFormLink } from './ApplicationFormLink';
 import { acceptsApplication, applicationForm } from './application-eligibility';
 
 export default function MemberGroupScreen() {
-  const id = Number(useParams().groupId);
+  // A malformed id is no Group: 0 matches none, and the queries skip it.
+  const id = parsePositiveInt(useParams().groupId) ?? 0;
   const groups = useAdminGroups();
   const mine = useMyGroupRoles();
   const applications = useGroupApplications();

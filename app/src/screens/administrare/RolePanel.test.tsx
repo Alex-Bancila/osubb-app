@@ -52,7 +52,7 @@ const people = [
     avatarColor: null,
   },
   {
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     name: 'Ana Pop',
     roleId: 'bce',
     roleLabel: 'BCE',
@@ -117,13 +117,18 @@ beforeEach(() => {
     isError: false,
     isSuccess: true,
   });
-  state.mutate.mockReset().mockResolvedValue({ id: 'target' });
+  state.mutate
+    .mockReset()
+    .mockResolvedValue({ id: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d' });
 });
 
 it('offers seven reference ranks, excludes responsabil, and blocks self and BC targets for a BC', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   const select = screen.getByLabelText('Rol organizațional');
   const options = within(select).getAllByRole('option');
   expect(options.map((option) => option.getAttribute('value'))).toEqual([
@@ -149,7 +154,10 @@ it('offers seven reference ranks, excludes responsabil, and blocks self and BC t
 it('shows explicit archived and automatic Groups before a demotion and sends the audited Role command', async () => {
   const user = userEvent.setup();
   const { container } = renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'vot');
   expect(screen.getByText(/Confirmi Drept de Vot/)).toBeVisible();
   expect(screen.getByText('Explicit')).toBeVisible();
@@ -169,7 +177,7 @@ it('shows explicit archived and automatic Groups before a demotion and sends the
   await user.click(screen.getByRole('button', { name: 'Salvează rolul' }));
   expect(state.mutate).toHaveBeenCalledWith({
     kind: 'role',
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     role: 'vot',
     reason: 'Confirmat la vot',
   });
@@ -178,7 +186,7 @@ it('shows explicit archived and automatic Groups before a demotion and sends the
 it('names a Drept de Vot withdrawal only when the new reference rank is lower', async () => {
   state.members.mockReturnValue({
     data: people.map((person) =>
-      person.memberId === 'target'
+      person.memberId === '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'
         ? {
             ...person,
             roleId: 'vot',
@@ -192,7 +200,10 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'bce');
   expect(screen.queryByText(/Retragi Drept de Vot/)).toBeNull();
   await user.selectOptions(
@@ -203,7 +214,7 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
   await user.click(screen.getByRole('button', { name: 'Salvează rolul' }));
   expect(state.mutate).toHaveBeenCalledWith({
     kind: 'role',
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     role: 'voluntar',
     reason: null,
   });
@@ -212,13 +223,16 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
 it('deactivates through the atomic Status command and explains the token window', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   expect(screen.getByText(/cel mult o oră/)).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
   expect(state.mutate).toHaveBeenCalledWith({
     kind: 'status',
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     status: 'inactiv',
     reason: null,
   });
@@ -227,7 +241,10 @@ it('deactivates through the atomic Status command and explains the token window'
 it('offers all three reference statuses', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   const select = screen.getByLabelText('Status');
   const options = within(select).getAllByRole('option');
   expect(options.map((option) => option.getAttribute('value'))).toEqual([
@@ -245,14 +262,19 @@ it('offers all three reference statuses', async () => {
 it('opens on the matching option for a Member already marked alumni', async () => {
   state.members.mockReturnValue({
     data: people.map((person) =>
-      person.memberId === 'target' ? { ...person, status: 'alumni' } : person,
+      person.memberId === '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'
+        ? { ...person, status: 'alumni' }
+        : person,
     ),
     isPending: false,
     isError: false,
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   expect(screen.getByLabelText('Status')).toHaveValue('alumni');
   expect(screen.getByText('Status actual: Alumni')).toBeVisible();
 });
@@ -260,13 +282,16 @@ it('opens on the matching option for a Member already marked alumni', async () =
 it('sends the atomic Status command with alumni and the reason', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   await user.selectOptions(screen.getByLabelText('Status'), 'alumni');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Absolvent');
   await user.click(screen.getByRole('button', { name: 'Salvează statusul' }));
   expect(state.mutate).toHaveBeenCalledWith({
     kind: 'status',
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     status: 'alumni',
     reason: 'Absolvent',
   });
@@ -322,7 +347,10 @@ it('disables edits when the live actor is inactive', async () => {
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
 });
 
@@ -330,36 +358,56 @@ it('keeps the target and reason on a refused command', async () => {
   state.mutate.mockRejectedValueOnce({ message: 'member_manage_forbidden' });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Verificare');
   await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Nu mai ai permisiunea',
   );
-  expect(screen.getByLabelText('Membru')).toHaveValue('target');
+  expect(screen.getByLabelText('Membru')).toHaveValue(
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   expect(screen.getByLabelText('Motiv (opțional)')).toHaveValue('Verificare');
 });
 
 it('opens on the Member a Retention Signal links to (?membru=, #702)', () => {
-  renderPanel('/administrare?membru=target');
-  expect(screen.getByLabelText('Membru')).toHaveValue('target');
+  renderPanel('/administrare?membru=7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d');
+  expect(screen.getByLabelText('Membru')).toHaveValue(
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   expect(screen.getByText('Rol actual: BCE')).toBeVisible();
+});
+
+it('ignores a ?membru= that is not a Member id and queries nothing for it', () => {
+  renderPanel('/administrare?membru=target%27%20or%201%3D1');
+  expect(screen.getByLabelText('Membru')).toHaveValue('');
+  expect(state.groupIds).not.toHaveBeenCalledWith("target' or 1=1");
+  expect(state.groupIds).toHaveBeenLastCalledWith(null);
 });
 
 it('links the chosen Member to their Administrare page (#103)', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'target');
+  await user.selectOptions(
+    screen.getByLabelText('Membru'),
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   expect(
     screen.getByRole('link', { name: 'Vezi detaliile membrului' }),
-  ).toHaveAttribute('href', '/administrare/membri/target');
+  ).toHaveAttribute(
+    'href',
+    '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
 });
 
 it('edits only the given Member on their own page, without the picker (#103)', () => {
   render(
     <MemoryRouter>
-      <RolePanel selectedMemberId="target" />
+      <RolePanel selectedMemberId="7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d" />
     </MemoryRouter>,
   );
   expect(screen.queryByLabelText('Membru')).toBeNull();

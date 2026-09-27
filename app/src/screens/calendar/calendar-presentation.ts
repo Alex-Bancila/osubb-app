@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import { bucharestDayKey, formatBucharestTime } from '../../lib/calendar-time';
+import { parsePositiveInt } from '../../lib/ids';
 import {
   chosenGroupId,
   rangeBounds,
@@ -96,9 +97,7 @@ export function eventCardId(eventId: number): string {
 
 /** `?event=<id>`: a positive whole Event id, or nothing. */
 export function linkedEventId(value: string | null): number | null {
-  if (!value || !/^[1-9][0-9]*$/.test(value)) return null;
-  const id = Number(value);
-  return Number.isSafeInteger(id) ? id : null;
+  return parsePositiveInt(value);
 }
 
 /** Neutral ink: a Group with no colour anywhere on its chain. */

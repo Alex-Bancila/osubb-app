@@ -7,6 +7,7 @@ import { MemberAvatar } from '../../components/ui/combobox';
 import { FieldError } from '../../components/ui/field';
 import { useCapabilities } from '../../lib/capabilities';
 import { formatDayMonthYear, formatPoints } from '../../lib/format';
+import { isUuid } from '../../lib/ids';
 import {
   fieldForReason,
   memberIdentitySchema,
@@ -128,8 +129,21 @@ function LedgerSource({ row }: { row: LedgerRow }) {
  * Card's Groups (Private Groups already filtered), contact details only when
  * `profiles_contact` answers, and only the ledger rows RLS lets them read.
  */
+function MemberUnavailable() {
+  return (
+    <section className="page space-y-4">
+      <h1 className="text-2xl font-semibold">Membru indisponibil</h1>
+      <Link className="underline" to="/administrare">
+        Înapoi la Administrare
+      </Link>
+    </section>
+  );
+}
+
 export default function MemberScreen() {
-  const { memberId } = useParams();
+  const { memberId: raw } = useParams();
+  // A malformed id is no Member: nothing is queried and the page says so.
+  const memberId = isUuid(raw) ? raw : undefined;
   const member = useAdminMember(memberId);
   const capabilities = useCapabilities();
   const groups = useAdminGroups();
@@ -139,6 +153,7 @@ export default function MemberScreen() {
     memberId,
     capabilities.data?.manageRoles === true,
   );
+  if (!memberId) return <MemberUnavailable />;
   if (
     member.isPending ||
     capabilities.isPending ||
@@ -149,15 +164,7 @@ export default function MemberScreen() {
   if (member.isError || capabilities.isError || groups.isError || mine.isError)
     return <ErrorState text="Nu am putut încărca membrul. Reîncarcă pagina." />;
   const data = member.data;
-  if (!data)
-    return (
-      <section className="page space-y-4">
-        <h1 className="text-2xl font-semibold">Membru indisponibil</h1>
-        <Link className="underline" to="/administrare">
-          Înapoi la Administrare
-        </Link>
-      </section>
-    );
+  if (!data) return <MemberUnavailable />;
 
   // BC and the Moderator see every membership; a Group Manager or
   // Responsible, only those in the Groups they lead and below.

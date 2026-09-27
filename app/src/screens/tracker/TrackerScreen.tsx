@@ -12,6 +12,7 @@ import {
 } from '../../queries/task-tabs';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import { parsePositiveInt } from '../../lib/ids';
 import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskList } from './ManagerTaskList';
@@ -85,9 +86,7 @@ function TaskQueryPanel({
 }
 /** `?task=<id>`: a positive whole Task id, or nothing. */
 function linkedTaskId(value: string | null): number | null {
-  if (!value || !/^[1-9][0-9]*$/.test(value)) return null;
-  const id = Number(value);
-  return Number.isSafeInteger(id) ? id : null;
+  return parsePositiveInt(value);
 }
 
 const HIGHLIGHT_MS = 4000;
