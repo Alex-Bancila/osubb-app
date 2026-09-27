@@ -18,7 +18,7 @@ import { normalizeSearch, statusLabel } from '../volunteers/directory-filters';
 import { CsvImportPanel } from './CsvImportPanel';
 
 /** The Member's page in Administrare (#103). */
-export function memberPagePath(memberId: string) {
+function memberPagePath(memberId: string) {
   return `/administrare/membri/${encodeURIComponent(memberId)}`;
 }
 
