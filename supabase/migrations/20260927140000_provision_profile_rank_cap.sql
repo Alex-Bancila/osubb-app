@@ -55,6 +55,17 @@ begin
     if p_appointed_by is null then
       -- The bootstrap path: the first Moderator, appointed by nobody. Once an
       -- `activ` Moderator exists, a null appointer creates no leadership.
+      -- Two concurrent bootstrap calls would both see "no Moderator yet", so
+      -- the `moderator` Role row is locked first: the second call waits, and
+      -- its check below (a new snapshot under read committed) sees the
+      -- first's committed row. `for no key update`, the house mode for a row
+      -- other tables reference, so a key-share lock on it is never blocked.
+      if p_role = 'moderator' then
+        perform 1
+           from public.roles as role
+          where role.id = 'moderator'
+            for no key update;
+      end if;
       if p_role <> 'moderator'
          or exists (select 1
                       from public.profiles as holder
