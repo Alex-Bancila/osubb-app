@@ -89,7 +89,7 @@ create or replace view public.member_points with (security_invoker = off) as
          coalesce(sum(l.delta), 0::bigint)::integer as points
     from public.profiles p
     left join public.points_ledger l on l.member_id = p.id
-   where (select private.caller_level()) >= 5
+   where (public.auth_is_member() and (select private.caller_level()) >= 5)
       or current_user <> all (array['authenticated'::name, 'anon'::name])
    group by p.id;
 
@@ -116,7 +116,7 @@ create or replace view public.leaderboard with (security_invoker = on) as
          rank() over (order by mp.points desc) as rank
     from public.member_points mp
     join public.profiles pr on pr.id = mp.member_id
-   where ((select private.caller_level()) >= 5
+   where ((public.auth_is_member() and (select private.caller_level()) >= 5)
           or current_user <> all (array['authenticated'::name, 'anon'::name]))
      and pr.status = 'activ'::public.member_status;
 

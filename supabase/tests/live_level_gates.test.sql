@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(28);
+select plan(30);
 
 truncate public.profiles cascade;
 
@@ -182,6 +182,10 @@ select is((select count(*) from public.profiles_contact), 0::bigint,
   'a live BC Profile without organisation claims reads no contact details');
 select is((select count(*) from public.points_ledger), 0::bigint,
   'a live BC Profile without organisation claims reads no ledger rows');
+select is((select count(*) from public.member_points), 0::bigint,
+  'a live BC Profile without organisation claims reads no member_points');
+select is((select count(*) from public.leaderboard), 0::bigint,
+  'a live BC Profile without organisation claims reads no leaderboard');
 reset role;
 
 select * from finish();

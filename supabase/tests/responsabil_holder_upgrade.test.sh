@@ -15,6 +15,9 @@ if {
 begin;
 drop view public.leaderboard;
 drop view public.profiles_directory;
+-- M4 (20260927180000): profiles_update_self reads profiles.role, so it would pin
+-- the column type; the transaction never commits, so dropping it here is local.
+drop policy profiles_update_self on public.profiles;
 create type pg_temp.pre593_member_role as enum ('recrut','voluntar','activ','vot','responsabil','bce','bc','moderator');
 alter table public.profiles alter column role drop default;
 alter table public.profiles alter column role type pg_temp.pre593_member_role using role::text::pg_temp.pre593_member_role;
