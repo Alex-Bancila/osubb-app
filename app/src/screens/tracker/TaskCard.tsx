@@ -21,6 +21,7 @@ import { TaskStageSummary } from './TaskStageSummary';
 import { TaskGiveUpControl } from './TaskGiveUpControl';
 import { SubmitForReviewDialog } from './SubmitForReviewDialog';
 import { SubmissionNote } from './SubmissionNote';
+import { DifficultyStars } from '../../components/tasks/DifficultyStars';
 
 type TaskCardProps = {
   task: TaskPresentation;
@@ -302,8 +303,13 @@ export function TaskCard({
           )}
           {task.points !== null && (
             <p className="text-sm font-medium tabular-nums">
-              {formatPoints(task.points)} puncte · Dificultate {task.difficulty}{' '}
-              · Nota {task.rating}
+              {formatPoints(task.points)} puncte ·{' '}
+              {task.difficulty === null ? (
+                'Dificultate —'
+              ) : (
+                <DifficultyStars value={task.difficulty} label="Dificultate" />
+              )}{' '}
+              · Nota {task.rating ?? '—'}
             </p>
           )}
           {history}

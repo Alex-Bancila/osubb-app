@@ -47,74 +47,96 @@ function renderForm() {
   );
 }
 
-it('offers Rating as five named stars and Difficulty as five named steps', () => {
+const nota = () =>
+  screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' });
+
+it('offers Difficulty as five named stars and Nota as one number (R29a)', () => {
   renderForm();
-  const rating = screen.getByRole('radiogroup', {
-    name: 'Calificativ (obligatoriu)',
-  });
-  expect(
-    within(rating)
-      .getAllByRole('radio')
-      .map((star) => star.getAttribute('aria-label')),
-  ).toEqual([
-    '1 — Nelivrat / inacceptabil',
-    '2 — Sub așteptări',
-    '3 — Conform așteptărilor',
-    '4 — Peste așteptări',
-    '5 — Excepțional',
-  ]);
   const difficulty = screen.getByRole('radiogroup', {
     name: 'Dificultate (obligatoriu)',
   });
   expect(
     within(difficulty)
       .getAllByRole('radio')
-      .map((step) => step.getAttribute('aria-label')),
+      .map((star) => star.getAttribute('aria-label')),
   ).toEqual([
-    '1 — Foarte ușor',
-    '2 — Ușor',
-    '3 — Mediu',
-    '4 — Greu',
-    '5 — Foarte greu',
+    '1 stea — Foarte ușor',
+    '2 stele — Ușor',
+    '3 stele — Mediu',
+    '4 stele — Greu',
+    '5 stele — Foarte greu',
   ]);
+  expect(nota()).toHaveAttribute('aria-valuemin', '1');
+  expect(nota()).toHaveAttribute('aria-valuemax', '5');
+  expect(nota()).not.toHaveAttribute('aria-valuenow');
+  expect(nota()).toHaveAttribute('aria-valuetext', 'Nealeasă');
+  // Nota is a number, not a scale of radios.
+  expect(
+    screen.queryByRole('radiogroup', { name: /Nota/ }),
+  ).not.toBeInTheDocument();
 });
 
-it('moves the choice with the arrow keys and shows the chosen hint', async () => {
+it('sets the stars with the arrow keys and the number keys', async () => {
   const user = userEvent.setup();
   renderForm();
-  const rating = screen.getByRole('radiogroup', {
-    name: 'Calificativ (obligatoriu)',
-  });
-  await user.click(
-    screen.getByRole('radio', { name: '3 — Conform așteptărilor' }),
-  );
-  expect(rating).toHaveAccessibleDescription('3 — Conform așteptărilor');
-  await user.keyboard('{ArrowRight}');
-  expect(
-    screen.getByRole('radio', { name: '4 — Peste așteptări' }),
-  ).toBeChecked();
-  expect(
-    screen.getByRole('radio', { name: '4 — Peste așteptări' }),
-  ).toHaveFocus();
-  expect(rating).toHaveAccessibleDescription('4 — Peste așteptări');
-
   const difficulty = screen.getByRole('radiogroup', {
     name: 'Dificultate (obligatoriu)',
   });
-  await user.click(screen.getByRole('radio', { name: '2 — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  expect(difficulty).toHaveAccessibleDescription('2 din 5 — Ușor');
+  await user.keyboard('{ArrowRight}');
+  expect(screen.getByRole('radio', { name: '3 stele — Mediu' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: '3 stele — Mediu' })).toHaveFocus();
+  await user.keyboard('5');
+  const five = screen.getByRole('radio', { name: '5 stele — Foarte greu' });
+  expect(five).toBeChecked();
+  expect(five).toHaveFocus();
+  expect(difficulty).toHaveAccessibleDescription('5 din 5 — Foarte greu');
   await user.keyboard('{ArrowLeft}');
-  expect(screen.getByRole('radio', { name: '1 — Foarte ușor' })).toBeChecked();
-  expect(difficulty).toHaveAccessibleDescription('1 — Foarte ușor');
+  expect(screen.getByRole('radio', { name: '4 stele — Greu' })).toBeChecked();
+  // Keys outside 1–5 choose nothing.
+  await user.keyboard('0');
+  expect(screen.getByRole('radio', { name: '4 stele — Greu' })).toBeChecked();
+});
+
+it('steps Nota with the keyboard and the buttons, only within 1–5', async () => {
+  const user = userEvent.setup();
+  renderForm();
+  // Nothing is chosen for the evaluator: the first step up is 1.
+  await user.click(screen.getByRole('button', { name: 'Crește nota' }));
+  expect(nota()).toHaveAttribute('aria-valuenow', '1');
+  expect(nota()).toHaveAccessibleDescription(
+    '1 din 5 — Nelivrat / inacceptabil',
+  );
+  expect(screen.getByRole('button', { name: 'Scade nota' })).toBeDisabled();
+  await user.click(nota());
+  await user.keyboard('{ArrowUp}{ArrowRight}');
+  expect(nota()).toHaveAttribute('aria-valuenow', '3');
+  expect(nota()).toHaveAttribute('aria-valuetext', '3 — Conform așteptărilor');
+  await user.keyboard('{End}{ArrowUp}');
+  expect(nota()).toHaveAttribute('aria-valuenow', '5');
+  expect(screen.getByRole('button', { name: 'Crește nota' })).toBeDisabled();
+  await user.keyboard('{Home}{ArrowDown}');
+  expect(nota()).toHaveAttribute('aria-valuenow', '1');
+  await user.keyboard('4');
+  expect(nota()).toHaveAttribute('aria-valuenow', '4');
+  expect(nota()).toHaveTextContent('Nota4');
+  await user.keyboard('9');
+  expect(nota()).toHaveAttribute('aria-valuenow', '4');
 });
 
 it('keeps the points preview and sends the same integers to the command', async () => {
   const user = userEvent.setup();
   renderForm();
-  await user.click(screen.getByRole('radio', { name: '4 — Greu' }));
-  await user.click(screen.getByRole('radio', { name: '5 — Excepțional' }));
+  await user.click(screen.getByRole('radio', { name: '4 stele — Greu' }));
+  await user.click(nota());
+  await user.keyboard('5');
   // Difficulty × the Rating's multiplier from `rating_guide`: 4 × 3.
   expect(screen.getByRole('status')).toHaveTextContent('12 puncte');
-  await user.type(screen.getByLabelText('Notă (obligatoriu)'), 'Foarte bine');
+  await user.type(
+    screen.getByLabelText('Observații (obligatoriu)'),
+    'Foarte bine',
+  );
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   expect(onEvaluate).toHaveBeenCalledWith({
     difficulty: 4,
@@ -122,6 +144,28 @@ it('keeps the points preview and sends the same integers to the command', async 
     note: 'Foarte bine',
   });
 });
+
+it.each([1, 2, 3, 4, 5])(
+  'sends Difficulty %i and Nota %i as they were chosen',
+  async (value) => {
+    const user = userEvent.setup();
+    renderForm();
+    const star = screen.getAllByRole('radio')[value - 1];
+    if (!star) throw new Error('Expected five stars');
+    await user.click(star);
+    await user.click(nota());
+    await user.keyboard(String(value));
+    await user.type(screen.getByLabelText('Observații (obligatoriu)'), 'ok');
+    await user.click(
+      screen.getByRole('button', { name: 'Confirmă evaluarea' }),
+    );
+    expect(onEvaluate).toHaveBeenCalledWith({
+      difficulty: value,
+      rating: value,
+      note: 'ok',
+    });
+  },
+);
 
 it('refuses a missing choice under its control and focuses it', async () => {
   const user = userEvent.setup();
@@ -131,20 +175,31 @@ it('refuses a missing choice under its control and focuses it', async () => {
   expect(
     screen.getByText('Alege o Dificultate între 1 și 5.'),
   ).toBeInTheDocument();
-  expect(
-    screen.getByText('Alege un Calificativ între 1 și 5.'),
-  ).toBeInTheDocument();
+  expect(screen.getByText('Alege o Notă între 1 și 5.')).toBeInTheDocument();
   expect(
     screen.getByRole('radiogroup', { name: 'Dificultate (obligatoriu)' }),
   ).toHaveAttribute('aria-invalid', 'true');
-  expect(screen.getByRole('radio', { name: '1 — Foarte ușor' })).toHaveFocus();
+  expect(nota()).toHaveAttribute('aria-invalid', 'true');
+  expect(
+    screen.getByRole('radio', { name: '1 stea — Foarte ușor' }),
+  ).toHaveFocus();
+});
+
+it('keeps the Evaluation dialog layout (snapshot)', async () => {
+  const user = userEvent.setup();
+  const { container } = renderForm();
+  await user.click(screen.getByRole('radio', { name: '3 stele — Mediu' }));
+  await user.click(nota());
+  await user.keyboard('4');
+  expect(container.firstChild).toMatchSnapshot();
 });
 
 it('passes automated accessibility checks with a choice made', async () => {
   const user = userEvent.setup();
   const { container } = renderForm();
-  await user.click(screen.getByRole('radio', { name: '3 — Mediu' }));
-  await user.click(screen.getByRole('radio', { name: '2 — Sub așteptări' }));
+  await user.click(screen.getByRole('radio', { name: '3 stele — Mediu' }));
+  await user.click(nota());
+  await user.keyboard('2');
   const results = await axe.run(container, {
     rules: { 'color-contrast': { enabled: false } },
   });
