@@ -31,6 +31,21 @@ type ConfirmLink = {
   email: string;
 };
 
+const MISMATCH_MESSAGE = 'Linkul nu corespunde adresei tale.';
+
+const normalize = (email: string) => email.trim().toLowerCase();
+
+/**
+ * Whether the account a link signed in is the one the link names. Only a
+ * sign-in link is compared, and only when it names an address: an email
+ * change's link carries the old address while the session ends on the new
+ * one.
+ */
+function sameAccount(link: ConfirmLink, verified: string | undefined) {
+  if (link.type === 'email_change' || !link.email) return true;
+  return normalize(verified ?? '') === normalize(link.email);
+}
+
 /** Reads the emailed link. `null` when it is not one we can verify. */
 function linkFromUrl(): ConfirmLink | null {
   const params = new URLSearchParams(window.location.search);
@@ -43,7 +58,7 @@ function linkFromUrl(): ConfirmLink | null {
 type Status =
   | { kind: 'idle' }
   | { kind: 'verifying' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; mismatch?: boolean }
   /* An email change confirmed at one address of two (`double_confirm_changes`):
      GoTrue accepts the link but returns no session until the other one is used. */
   | { kind: 'half-confirmed' }
@@ -56,8 +71,13 @@ type Status =
  * Only the Member's tap calls `verifyOtp` with the token hash, so the link and
  * the six-digit code in the same email stay valid until then.
  *
- * `/auth/callback` still handles `?code=` and `#access_token=` for any link
- * that goes through Supabase's own verify endpoint.
+ * `/auth/callback` still handles `?code=` (PKCE) for any link that goes
+ * through Supabase's own verify endpoint.
+ *
+ * The address in the link is never shown: it is text anyone can put in a URL.
+ * After `verifyOtp`, a sign-in link must have signed in that same address;
+ * otherwise someone sent the Member a link for another account (login CSRF),
+ * so the session is dropped on this device and the page says so.
  */
 export default function AuthConfirm() {
   const { session, loading } = useAuth();
@@ -85,6 +105,11 @@ export default function AuthConfirm() {
           console.error('Supabase Auth link confirmation failed', error);
         }
         setStatus({ kind: 'error', message: toAuthErrorMessage(error) });
+        return;
+      }
+      if (data.session && !sameAccount(link, data.session.user.email)) {
+        await supabase.auth.signOut({ scope: 'local' });
+        setStatus({ kind: 'error', message: MISMATCH_MESSAGE, mismatch: true });
         return;
       }
       setStatus(
@@ -131,20 +156,18 @@ export default function AuthConfirm() {
   }
 
   const verifying = status.kind === 'verifying';
-  const handoff: LoginHandoff | undefined = link?.email
-    ? { email: link.email }
-    : undefined;
+  // The link's address only pre-fills the login form, and not after a
+  // mismatch: then it is not this Member's address at all.
+  const handoff: LoginHandoff | undefined =
+    link?.email && !(status.kind === 'error' && status.mismatch)
+      ? { email: link.email }
+      : undefined;
 
   return (
     <SessionScreen>
       <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
         Conectare la aplicația OSUBB
       </h1>
-      {link?.email && (
-        <p className="leading-relaxed">
-          Te conectezi ca <strong>{link.email}</strong>.
-        </p>
-      )}
       <p className="text-sm leading-relaxed text-muted-foreground">
         Apasă butonul ca să intri în aplicație pe acest dispozitiv. Linkul se
         folosește o singură dată.

@@ -6,11 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   verifyOtp: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: mocks.useAuth }));
 vi.mock('../../lib/supabase', () => ({
-  supabase: { auth: { verifyOtp: mocks.verifyOtp } },
+  supabase: { auth: { verifyOtp: mocks.verifyOtp, signOut: mocks.signOut } },
 }));
 
 import { loginEmailFrom } from '../../lib/auth-destination';
@@ -44,12 +45,18 @@ function renderConfirm(search: string) {
 const inviteLink =
   '?token_hash=hash-123&type=invite&email=membru%2Bosubb%40exemplu.ro';
 
+/** The session `verifyOtp` returns: the account the link actually signed in. */
+const SESSION = {
+  access_token: 'token',
+  user: { email: 'membru+osubb@exemplu.ro' },
+};
+
 describe('AuthConfirm', () => {
   beforeEach(() => {
     mocks.useAuth.mockReturnValue({ loading: false, session: null });
     mocks.verifyOtp.mockReset();
     mocks.verifyOtp.mockResolvedValue({
-      data: { session: { access_token: 'token' } },
+      data: { session: SESSION },
       error: null,
     });
   });
@@ -60,7 +67,9 @@ describe('AuthConfirm', () => {
     expect(
       screen.getByRole('heading', { name: 'Conectare la aplicația OSUBB' }),
     ).toBeVisible();
-    expect(screen.getByText('membru+osubb@exemplu.ro')).toBeVisible();
+    // The address in the URL is unverified text: it is never shown as the
+    // Member's (security audit F3).
+    expect(screen.queryByText(/exemplu\.ro/)).toBeNull();
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Conectează-mă' })).toBeEnabled();
 
@@ -101,7 +110,7 @@ describe('AuthConfirm', () => {
                 session: { access_token: 'token' },
               });
               resolve({
-                data: { session: { access_token: 'token' } },
+                data: { session: SESSION },
                 error: null,
               });
             };
@@ -135,7 +144,7 @@ describe('AuthConfirm', () => {
         loading: false,
         session: { access_token: 'token' },
       });
-      return { data: { session: { access_token: 'token' } }, error: null };
+      return { data: { session: SESSION }, error: null };
     });
     renderConfirm(`?token_hash=hash-123&type=email&redirect_to=${redirect}`);
 
@@ -210,5 +219,89 @@ describe('AuthConfirm', () => {
     expect(
       screen.getByRole('link', { name: 'Mergi în aplicație' }),
     ).toHaveAttribute('href', '/');
+  });
+
+  describe('the account a link signs in (security audit F3)', () => {
+    beforeEach(() => {
+      mocks.signOut.mockResolvedValue({ error: null });
+    });
+
+    it('signs out on this device when the link signed in another address', async () => {
+      mocks.verifyOtp.mockImplementation(async () => {
+        // The auth listener would publish the attacker's session at once.
+        mocks.useAuth.mockReturnValue({
+          loading: false,
+          session: { access_token: 'token' },
+        });
+        return {
+          data: {
+            session: {
+              access_token: 'token',
+              user: { email: 'attacker@exemplu.ro' },
+            },
+          },
+          error: null,
+        };
+      });
+      renderConfirm(inviteLink);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Linkul nu corespunde adresei tale.',
+      );
+      expect(mocks.signOut).toHaveBeenCalledWith({ scope: 'local' });
+      expect(screen.queryByRole('heading', { name: 'Aplicație' })).toBeNull();
+      expect(screen.queryByText(/attacker/)).toBeNull();
+
+      // The retry does not pre-fill the address the link claimed.
+      fireEvent.click(screen.getByRole('link', { name: 'Trimite alt link' }));
+      await screen.findByRole('heading', { name: 'Conectare' });
+      expect(screen.getByText('email=')).toBeInTheDocument();
+    });
+
+    it('accepts the same address in another case', async () => {
+      mocks.verifyOtp.mockImplementation(async () => {
+        mocks.useAuth.mockReturnValue({
+          loading: false,
+          session: { access_token: 'token' },
+        });
+        return { data: { session: SESSION }, error: null };
+      });
+      renderConfirm(
+        '?token_hash=hash-123&type=email&email=%20Membru%2BOSUBB%40Exemplu.ro',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      await screen.findByRole('heading', { name: 'Aplicație' });
+      expect(mocks.signOut).not.toHaveBeenCalled();
+    });
+
+    it('does not compare an email change, whose link names the old address', async () => {
+      mocks.verifyOtp.mockImplementation(async () => {
+        mocks.useAuth.mockReturnValue({
+          loading: false,
+          session: { access_token: 'token' },
+        });
+        return {
+          data: {
+            session: {
+              access_token: 'token',
+              user: { email: 'nou@exemplu.ro' },
+            },
+          },
+          error: null,
+        };
+      });
+      renderConfirm(
+        '?token_hash=hash-123&type=email_change&email=vechi%40exemplu.ro',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      await screen.findByRole('heading', { name: 'Aplicație' });
+      expect(mocks.signOut).not.toHaveBeenCalled();
+    });
   });
 });
