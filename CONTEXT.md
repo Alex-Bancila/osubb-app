@@ -288,28 +288,36 @@ Turning one organization event into targeted Notifications for its intended reci
 
 ## Governance
 
+**Role Evaluation**:
+A run BC performs from Administrare over an Evaluation Period chosen at that moment, of one kind: Voluntar Activ or Adunarea Generală. It ranks the Task Points of the Task Evaluations falling in that range, records the Promotion Threshold it used and the one it computed, and produces Promotion Candidates and Retention Signals. Nothing ranks live between Role Evaluations.
+_Avoid_: Evaluation alone (that is a Task's review), opening or closing a Period, live ranking
+
 **Evaluation Period**:
-A named span of time opened and closed by BC, typically from one AGO to the next, within which Task Points are ranked for Promotion Rules and the vote re-check.
-_Avoid_: Season, scoring window, semester when the ranking window is meant
+The date range, from one day to another, that BC chooses for one Role Evaluation, typically from one AGO to the next. It is a parameter of that run: it is never opened, closed, or current.
+_Avoid_: Season, scoring window, semester when the ranking window is meant, open Period
 
 **Promotion Rule**:
-A BC-set rule that moves a Member to a higher Role. Automatic for Recrut to Voluntar (tenure) and for Voluntar to Voluntar Activ, which needs the required tenure counted from the join date plus either a top share of the Evaluation Period's Leaderboard when the Period closes or, during the following Period, passing the Promotion Threshold; human-confirmed for Voluntar Activ to Voluntar cu Drept de Vot; never automatic downward. A Member below the required tenure is neither promoted nor notified.
+A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold at a Role Evaluation, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified.
 _Avoid_: Auto-promotion, level-up, threshold alone
 
+**Promotion Candidate**:
+A Voluntar with the required tenure whose Task Points reach the Voluntar Activ Promotion Threshold at a Role Evaluation. They join the candidates list and BC and Moderator receive one Notification per Member per Role Evaluation; they are never promoted automatically, only by BC in the Role panel. Distinct from a Candidate, who waits in a Task's Candidate Queue.
+_Avoid_: Candidate alone, eligible, auto-promoted
+
 **Promotion Threshold**:
-The Task Points the last Member inside the top share held when an Evaluation Period closed. It stays constant through the following Period as the visible target a Voluntar with the required tenure must pass to become Voluntar Activ; BC seeds it by hand before the first Period closes.
+A Task Points value kept per Role Evaluation kind: the Voluntar Activ threshold and the Adunarea Generală threshold. BC enters the first value by hand and may edit either at any time, every edit audited. Each Role Evaluation uses the threshold in force and computes a new one, the Task Points of the last Member inside its kind's top share, which is in force for that kind's next Role Evaluation unless BC edits it.
 _Avoid_: Cutoff, minimum points, prag alone
 
 **Retention Signal**:
-The automatic notice BC receives when an Evaluation Period closes with a Voluntar Activ or a Voluntar cu Drept de Vot below the share of the Leaderboard their Role requires. BC decides each withdrawal by hand; nobody loses a Role automatically.
+The automatic notice BC receives when a Role Evaluation ranks a Voluntar Activ (Voluntar Activ kind) or a Voluntar cu Drept de Vot (Adunarea Generală kind) below the share of the ranking their Role requires. BC decides each withdrawal by hand; nobody loses a Role automatically.
 _Avoid_: Demotion, auto-demotion, downgrade
 
 **AG Eligibility**:
-The qualification every Voluntar Activ holds by Role, because that Role already required both tenure and the Promotion Threshold. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală. There is no second threshold.
-_Avoid_: Drept de Vot threshold, AG threshold
+The qualification every Voluntar Activ holds by Role, because that Role already required both tenure and the Voluntar Activ Promotion Threshold. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală. No threshold leads to Drept de Vot; the Adunarea Generală Promotion Threshold only measures who keeps it.
+_Avoid_: Drept de Vot threshold
 
 **Vote Retention Threshold**:
-The top share of the Evaluation Period's Leaderboard a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after the Period closes; nobody is removed automatically.
+The top share of an Adunarea Generală Role Evaluation's ranking a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after that Role Evaluation; nobody is removed automatically.
 _Avoid_: Quorum, Top 25%
 
 ## Access

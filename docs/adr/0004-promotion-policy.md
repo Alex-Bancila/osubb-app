@@ -4,7 +4,8 @@
 - **Date:** 2026-08-12
 - **Amended:** 2026-09-18 — ADR-0009: the level-2 rank is displayed as Voluntar Activ and its rule becomes top x% of the Evaluation Period's Leaderboard plus tenure; Drept de vot is granted only after BC confirms; level 4 (`responsabil`) leaves the ladder
 - **Amended:** 2026-09-20 — Moderator is a transferable Role, not a fixed account; a manual Role change notifies the Member and, when it drops them below a Group's Minimum Level, removes them from that Group
-- **Amended:** 2026-09-21 — profile grilling: Voluntar → Voluntar Activ has two doors behind one tenure gate (the top x% at a Period's close, or the Promotion Threshold during the following Period); a Retention Signal to BC replaces any downward automation for Voluntar Activ and Drept de Vot; AG Eligibility follows from the Voluntar Activ Role alone; BC seeds the first threshold
+- **Amended:** 2026-09-21 — profile grilling: Voluntar → Voluntar Activ has two doors behind one tenure gate (the top x% at a Period's close, or the Promotion Threshold during the following Period); a Retention Signal to BC replaces any downward automation for Voluntar Activ and Drept de Vot; AG Eligibility follows from the Voluntar Activ Role alone; BC seeds the first threshold (superseded 2026-09-27)
+- **Amended:** 2026-09-27 — ruling R28: no Period is opened or closed; BC runs Role Evaluations over a chosen date range, of two kinds with one BC-editable Promotion Threshold each; Voluntar → Voluntar Activ is BC-confirmed from a list of Promotion Candidates; only Recrut → Voluntar stays automatic
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
@@ -47,6 +48,8 @@ Every manual Role change, upward or downward, writes `role_history` with the rea
 
 ## Amendment (2026-09-21) — two doors, one tenure gate, and the Retention Signal
 
+> **Superseded 2026-09-27** by the amendment of that date (ruling R28): the two doors, the automatic close-time promotion and the Promotion Threshold fixed at a Period's close no longer apply. The tenure gate, the Retention Signal and AG Eligibility by Role stand as reworded there.
+
 Read decision 1's Voluntar → Voluntar Activ rule, and the 2026-09-18 reading of it, as follows.
 
 **One tenure gate.** A Voluntar needs the required tenure in the organization, measured from `profiles.joined_at`, before anything happens; below it there is neither promotion nor notification, whatever their points.
@@ -58,3 +61,17 @@ Read decision 1's Voluntar → Voluntar Activ rule, and the 2026-09-18 reading o
 **AG Eligibility by Role.** A Voluntar Activ is eligible for the Adunarea Generală by that Role alone, because reaching it already required tenure and the threshold; there is no second threshold. The promotion notification offers the adherence form, and only BC's confirmation grants Drept de Vot. The separate "Drept de Vot eligibility signal" the Wave 4 issues described is withdrawn.
 
 The `ag_eligibility` / `ag_quorum_top25` views named in decision 2 have no successor (#47); their role is taken by the Period ranking, the Promotion Threshold, and the Retention Signals.
+
+## Amendment (2026-09-27) — Role Evaluations over a date range, two thresholds, manual promotion
+
+Ruling R28 (`docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`). It supersedes the 2026-09-21 amendment's two doors and its Promotion Threshold fixed at a Period's close; read decision 1 and the earlier amendments as follows.
+
+**No Period is opened or closed.** BC runs a **Role Evaluation** from Administrare over an **Evaluation Period** chosen at that moment, a date range from one day to another, of one kind: Voluntar Activ or Adunarea Generală. It ranks the Task Points of the Task Evaluations falling in that range; nothing ranks live between runs.
+
+**Two Promotion Thresholds, one per kind.** BC enters each by hand the first time and may edit either at any time; every edit is audited. Each Role Evaluation records the threshold in force when it ran and computes a new one, the Task Points of the last Member inside its kind's top share (x% for Voluntar Activ, y% for Adunarea Generală), which is in force for that kind's next run unless BC edits it.
+
+**Voluntar → Voluntar Activ is BC-confirmed.** The Voluntar Activ kind ranks active Voluntar and Voluntar Activ holders. A Voluntar with the required tenure (the tenure gate stands) at or above the threshold becomes a **Promotion Candidate**: a row in the candidates list and one Notification per Member per run to BC and Moderator. Nobody is promoted by the run; BC promotes by hand in the Role panel, which writes `role_history` and notifies the Member as the 2026-09-20 amendment rules. Decision 1's automatic Voluntar → Membru Activ is withdrawn; **Recrut → Voluntar by tenure is the only automatic promotion left**, and the daily job keeps only that rule.
+
+**Retention Signals.** The Voluntar Activ kind raises one for each Voluntar Activ below the top x%; the Adunarea Generală kind ranks only current Voluntar cu Drept de Vot holders and raises one for each below the top y%, with no promotion path. Decision 3 stands: nothing lowers a Role automatically.
+
+**AG Eligibility** still follows from the Voluntar Activ Role alone; no threshold leads to Drept de Vot, which only BC's confirmation grants.

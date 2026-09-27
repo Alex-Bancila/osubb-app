@@ -434,6 +434,8 @@ table; `aria-label="Secțiunile administrării"`; Cereri empty `Nicio cerere de 
 empty `Niciun membru găsit.`; every existing panel keeps its own copy (its `h2` becomes the `SectionHeader`
 title). The Perioade page's "Înapoi la Administrare" link goes (the tab bar replaces it).
 
+**Ruling R28 (2026-09-27):** the Perioade tab becomes **Evaluări** (Role Evaluations over a chosen date range, the two Praguri, the Promotion Candidates list and the Retention Signals); its route and panels follow that ruling's issues.
+
 **Data:** existing reads, plus **one new client read** `useManagedGroupApplications()` in
 `queries/group-applications.ts`: `group_applications` with `status = 'pending'` and no Group filter, minus
 the viewer's own rows — RLS returns exactly the Groups they may decide on — with the applicant identities
