@@ -1,15 +1,23 @@
 // Tests for send-push. Run with `deno test supabase/functions/`.
 // The port is faked end to end: no database, no push service, no network.
 
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import * as handler from "./handler.ts";
-import { BATCH_SIZE, classify, handleSendPush } from "./handler.ts";
+import {
+  BATCH_SIZE,
+  classify,
+  handleSendPush,
+  isPushServiceEndpoint,
+} from "./handler.ts";
 import {
   type ClaimedDelivery,
   InvalidSubscriptionError,
+  MAX_RESPONSE_BODY_BYTES,
   type Outcome,
+  postToPushService,
   type PushResponse,
   type PushSubscriptionJson,
+  readCapped,
   realDeps,
   type SendPushDeps,
   type Settled,
@@ -18,7 +26,7 @@ import {
 import webpush from "web-push";
 
 const SUBSCRIPTION = JSON.stringify({
-  endpoint: "https://push.example/device-1",
+  endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
   keys: { p256dh: "BPublicKey", auth: "authSecret" },
 });
 
@@ -324,7 +332,7 @@ Deno.test("the payload is the Notification's id, title, body and link, twice: fo
   const { deps, sent } = fakeDeps();
   await handleSendPush(post(), deps);
   assertEquals(sent[0].subscription, {
-    endpoint: "https://push.example/device-1",
+    endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
     keys: { p256dh: "BPublicKey", auth: "authSecret" },
   });
   assertEquals(JSON.parse(sent[0].payload), {
@@ -424,4 +432,123 @@ Deno.test("malformed VAPID settings are a configuration problem, not a subscript
       else Deno.env.set(name, value);
     }
   }
+});
+
+// ==================== Security pass M2: where send-push may POST ====================
+
+Deno.test("the browser vendors' push services are allowed endpoints", () => {
+  for (
+    const endpoint of [
+      "https://fcm.googleapis.com/fcm/send/device-1",
+      "https://updates.push.services.mozilla.com/wpush/v2/device-2",
+      "https://web.push.apple.com/device-3",
+      "https://wns2-par02p.notify.windows.com/w/?token=device-4",
+    ]
+  ) {
+    assert(isPushServiceEndpoint(endpoint), endpoint);
+  }
+});
+
+Deno.test("an endpoint off the push services is never fetched and never deletes the device", async () => {
+  const endpoints = [
+    "https://evil.example/collect",
+    "https://127.0.0.1/internal",
+    "https://[::1]/internal",
+    "https://fcm.googleapis.com:8443/fcm/send/x",
+    "https://me@fcm.googleapis.com/fcm/send/x",
+    "https://fcm.googleapis.com.evil.example/x",
+    "https://evilpush.apple.com/x",
+  ];
+  const { deps, settled, sent } = fakeDeps({
+    batches: [
+      endpoints.map((endpoint, index) =>
+        row(
+          index + 1,
+          JSON.stringify({
+            endpoint,
+            keys: { p256dh: "BPublicKey", auth: "authSecret" },
+          }),
+        )
+      ),
+    ],
+  });
+  await handleSendPush(post(), deps);
+  assertEquals(sent.length, 0);
+  assertEquals(
+    settled.map((s) => [s.outcome, s.error]),
+    endpoints.map(() => ["failed", "endpoint_not_allowed"]),
+  );
+});
+
+/** A body of `total` bytes of "a", produced lazily; records a cancel. */
+function streamingResponse(total: number | null) {
+  let produced = 0;
+  let cancelled = false;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (total !== null && produced >= total) {
+        controller.close();
+        return;
+      }
+      const size = total === null ? 4096 : Math.min(4096, total - produced);
+      produced += size;
+      controller.enqueue(new Uint8Array(size).fill(97));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  return {
+    response: new Response(body, { status: 400 }),
+    produced: () => produced,
+    cancelled: () => cancelled,
+  };
+}
+
+Deno.test("a push service's answer is read to at most 1 KB, and an endless one is cancelled", async () => {
+  const endless = streamingResponse(null);
+  const text = await readCapped(endless.response);
+  assertEquals(text.length, MAX_RESPONSE_BODY_BYTES);
+  assert(endless.cancelled());
+  assert(endless.produced() < 64 * 1024, `read ${endless.produced()} bytes`);
+
+  const short = streamingResponse(10);
+  assertEquals(await readCapped(short.response), "a".repeat(10));
+  assertEquals(await readCapped(new Response(null, { status: 201 })), "");
+});
+
+const PUSH_REQUEST = {
+  endpoint: "https://fcm.googleapis.com/fcm/send/device-1",
+  method: "POST",
+  headers: { TTL: "86400" },
+  body: new Uint8Array([1, 2, 3]),
+};
+
+Deno.test("a delivery keeps only the first 1 KB of the answer, refuses redirects and carries a timeout", async () => {
+  let init: RequestInit | undefined;
+  const huge = streamingResponse(10 * 1024 * 1024);
+  const fakeFetch = ((_url: string, options?: RequestInit) => {
+    init = options;
+    return Promise.resolve(huge.response);
+  }) as typeof fetch;
+  const answer = await postToPushService(PUSH_REQUEST, fakeFetch);
+  assertEquals(answer.status, 400);
+  assertEquals(answer.body.length, MAX_RESPONSE_BODY_BYTES);
+  assert(huge.cancelled());
+  assertEquals(init?.redirect, "error");
+  assert(init?.signal instanceof AbortSignal);
+});
+
+Deno.test("a push service that never answers is abandoned at the timeout (then retried as a network error)", async () => {
+  const hangingFetch =
+    ((_url: string, options?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        options?.signal?.addEventListener(
+          "abort",
+          () => reject(options.signal?.reason),
+        );
+      })) as typeof fetch;
+  const started = Date.now();
+  await assertRejects(() => postToPushService(PUSH_REQUEST, hangingFetch, 50));
+  assert(Date.now() - started < 5_000);
 });

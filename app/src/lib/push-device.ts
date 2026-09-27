@@ -1,3 +1,4 @@
+import { commandReason } from './command-reasons';
 import { supabase } from './supabase';
 import {
   normalizeUrlBase64,
@@ -147,6 +148,30 @@ async function storeRow(memberId: string, token: string): Promise<void> {
   if (error && error.code !== '23505') throw error;
 }
 
+/**
+ * Store the row for a new subscription, then delete the one it replaces. At
+ * the five-device cap (security pass M2,
+ * `push_devices_limit`) the new row cannot sit beside the old one even for a
+ * moment, so the old row goes first and the store is tried once more.
+ */
+async function replaceRow(
+  memberId: string,
+  freshToken: string,
+  staleToken: string | null,
+): Promise<void> {
+  const stale = staleToken !== freshToken ? staleToken : null;
+  try {
+    await storeRow(memberId, freshToken);
+  } catch (error) {
+    if (stale === null || commandReason(error) !== 'push_devices_limit')
+      throw error;
+    await deleteRow(memberId, stale);
+    await storeRow(memberId, freshToken);
+    return;
+  }
+  if (stale !== null) await deleteRow(memberId, stale);
+}
+
 /** Delete the Member's row for a token, if there is one. */
 async function deleteRow(memberId: string, token: string): Promise<void> {
   const { error } = await supabase
@@ -203,10 +228,7 @@ export async function repairDevice(
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
-  const freshToken = tokenFor(fresh);
-  await storeRow(memberId, freshToken);
-  if (rowExists && token && token !== freshToken)
-    await deleteRow(memberId, token);
+  await replaceRow(memberId, tokenFor(fresh), rowExists ? token : null);
   return 'repaired';
 }
 
@@ -225,8 +247,11 @@ export async function storeRenewedSubscription(
   const hadRow = oldToken ? await hasRow(memberId, oldToken) : false;
   if (!hadRow && !pushOnHere(memberId)) return false;
   rememberPushOn(memberId, true);
-  await storeRow(memberId, JSON.stringify(subscription));
-  if (oldToken && hadRow) await deleteRow(memberId, oldToken);
+  await replaceRow(
+    memberId,
+    JSON.stringify(subscription),
+    hadRow ? oldToken : null,
+  );
   return true;
 }
 

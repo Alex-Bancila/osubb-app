@@ -43,7 +43,73 @@ export interface PushResponse {
 export class InvalidSubscriptionError extends Error {}
 
 /** How long one push request, response body included, may take. */
-export const SEND_TIMEOUT_MS = 20_000;
+export const SEND_TIMEOUT_MS = 10_000;
+
+/**
+ * How much of a push service's answer is read: enough for last_error, which
+ * keeps 1000 characters anyway. A hostile endpoint streaming an endless body
+ * cannot hold memory or the batch (security pass M2).
+ */
+export const MAX_RESPONSE_BODY_BYTES = 1024;
+
+/**
+ * The first `limit` bytes of a response body as text, then the rest of the
+ * stream is cancelled unread. A multi-byte character cut at the limit decodes
+ * as U+FFFD rather than throwing.
+ */
+export async function readCapped(
+  response: Response,
+  limit = MAX_RESPONSE_BODY_BYTES,
+): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const kept = new Uint8Array(limit);
+  let length = 0;
+  try {
+    while (length < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const take = value.subarray(0, limit - length);
+      kept.set(take, length);
+      length += take.length;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return new TextDecoder().decode(kept.subarray(0, length));
+}
+
+/** The encrypted, signed request web-push prepares for one subscription. */
+export interface PushRequest {
+  endpoint: string;
+  method: string;
+  headers: Record<string, string>;
+  body: Uint8Array<ArrayBuffer> | null;
+}
+
+/**
+ * POST one prepared push request: no redirect, at most `timeoutMs` for the
+ * request and the capped body read together, at most 1 KB of the answer.
+ * A timeout or network failure throws and is retried like any network error.
+ */
+export async function postToPushService(
+  request: PushRequest,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = SEND_TIMEOUT_MS,
+): Promise<PushResponse> {
+  const response = await fetchImpl(request.endpoint, {
+    method: request.method,
+    headers: request.headers,
+    body: request.body,
+    // A push service answers directly; following a redirect would send the
+    // signed request somewhere the subscription never named.
+    redirect: "error",
+    // Bounds the request and the body read below, so one hung push service
+    // cannot hold the batch past its lease.
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return { status: response.status, body: await readCapped(response) };
+}
 
 export interface SendPushDeps {
   /**
@@ -182,20 +248,13 @@ export function realDeps(): SendPushDeps {
           cause instanceof Error ? cause.message : String(cause),
         );
       }
-      const response = await fetch(request.endpoint, {
+      return await postToPushService({
+        endpoint: request.endpoint,
         method: request.method,
         headers: request.headers,
         // A copy typed Uint8Array<ArrayBuffer>, which fetch accepts as BodyInit.
         body: request.body ? new Uint8Array(request.body) : null,
-        // A push service answers directly; following a redirect would send
-        // the signed request somewhere the subscription never named.
-        redirect: "error",
-        // Bounds the request and the body read below, so one hung push
-        // service cannot hold the batch past its lease. A timeout throws and
-        // is retried like any network error.
-        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       });
-      return { status: response.status, body: await response.text() };
     },
   };
 }

@@ -6,6 +6,14 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 select plan(24);
 truncate public.push_tokens cascade; -- #703: push_deliveries references it
+-- A Member's own registration must be a real subscription on a vendor push
+-- service (security pass M2, push_tokens_guard), so the own-device rows here
+-- are one; the forged rows name another Member and are RLS's to refuse.
+create function pg_temp.sub(p_device text) returns text language sql immutable as $$
+  select jsonb_build_object('endpoint', 'https://fcm.googleapis.com/fcm/send/' || p_device,
+    'keys', jsonb_build_object('p256dh', 'BPublicKey', 'auth', 'authSecret'))::text;
+$$;
+grant execute on function pg_temp.sub(text) to authenticated;
 insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000001', 'push66-1@test.local');
 insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000001', 'Device Member 1', 'push66-1@test.local', 'recrut', 'activ');
 insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000002', 'push66-2@test.local');
@@ -22,12 +30,12 @@ insert into push_tokens (member_id, token, platform) values
   ('06600000-0000-0000-0000-000000000002', 'other-device', 'web'),
   ('06600000-0000-0000-0000-000000000006', 'inactive-device', 'web');
 select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000001');
-select lives_ok($$insert into push_tokens (member_id, token, platform) values (auth.uid(), 'own-device', 'web')$$, 'Member registers own device');
+select lives_ok($$insert into push_tokens (member_id, token, platform) values (auth.uid(), pg_temp.sub('own-device'), 'web')$$, 'Member registers own device');
 select is((select count(*) from push_tokens), 1::bigint, 'Member sees only own device');
 select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000002', 'forged-device', 'web')$$, '42501', null, 'Cannot register another Member device');
 with deleted as (delete from push_tokens where token = 'other-device' returning id) select is(count(*), 0::bigint, 'Cannot delete another Member device') from deleted;
 select throws_ok($$update push_tokens set token = 'replacement'$$, '42501', null, 'Devices have no update path');
-with deleted as (delete from push_tokens where token = 'own-device' returning id) select is(count(*), 1::bigint, 'Member removes own device') from deleted;
+with deleted as (delete from push_tokens where token = pg_temp.sub('own-device') returning id) select is(count(*), 1::bigint, 'Member removes own device') from deleted;
 reset role;
 select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000003');
 select is((select count(*) from push_tokens), 0::bigint, 'BCE reads no device rows');
@@ -47,12 +55,12 @@ reset role;
 select pg_temp.test_login_leadership('06600000-0000-0000-0000-000000000006');
 select is((select count(*) from push_tokens), 0::bigint, 'Inactive Member with stale claims reads no device rows');
 with deleted as (delete from push_tokens returning id) select is(count(*), 0::bigint, 'Inactive Member with stale claims deletes no device rows') from deleted;
-select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000006', 'forged-6', 'web')$$, '42501', null, 'Inactive Member with stale claims cannot register forbidden device');
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000006', pg_temp.sub('forged-6'), 'web')$$, '42501', null, 'Inactive Member with stale claims cannot register forbidden device');
 reset role;
 select pg_temp.test_login('06600000-0000-0000-0000-000000000002', '{}'::jsonb);
 select is((select count(*) from push_tokens), 0::bigint, 'Claimless owner reads nothing');
 with deleted as (delete from push_tokens returning id) select is(count(*), 0::bigint, 'Claimless owner deletes nothing') from deleted;
-select throws_ok($$insert into push_tokens (member_id, token, platform) values (auth.uid(), 'claimless', 'web')$$, '42501', null, 'Claimless owner cannot register');
+select throws_ok($$insert into push_tokens (member_id, token, platform) values (auth.uid(), pg_temp.sub('claimless'), 'web')$$, '42501', null, 'Claimless owner cannot register');
 reset role;
 select pg_temp.test_clear_jwt();
 set local role anon;

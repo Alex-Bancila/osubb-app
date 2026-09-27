@@ -211,6 +211,35 @@ describe('usePushSelfRepair (#769)', () => {
     expect(supabaseMock.delete).not.toHaveBeenCalled();
   });
 
+  it('at the five-device cap, frees the old row first and then stores the new one (security pass M2)', async () => {
+    const stale = fakeSubscription('https://push.example.test/old', OLD_KEY);
+    browser.current = stale;
+    supabaseMock.insert
+      .mockResolvedValueOnce({
+        error: { code: '23514', message: 'push_devices_limit' },
+      })
+      .mockResolvedValueOnce({ error: null });
+    rowPresent(true);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+
+    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(2));
+    expect(supabaseMock.delete).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.eq).toHaveBeenCalledWith('token', tokenOf(stale));
+    // Refused, then the old row goes, then the new one is stored.
+    expect(supabaseMock.delete.mock.invocationCallOrder[0]).toBeGreaterThan(
+      supabaseMock.insert.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(supabaseMock.delete.mock.invocationCallOrder[0]).toBeLessThan(
+      supabaseMock.insert.mock.invocationCallOrder[1] ?? 0,
+    );
+    expect(supabaseMock.insert).toHaveBeenLastCalledWith({
+      member_id: MEMBER,
+      token: tokenOf(browser.fresh),
+      platform: 'web',
+    });
+  });
+
   it('resubscribes when the row is missing and push is on here', async () => {
     const current = fakeSubscription('https://push.example.test/cur', NEW_KEY);
     browser.current = current;
