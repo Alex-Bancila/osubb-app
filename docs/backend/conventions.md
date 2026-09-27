@@ -180,3 +180,7 @@ The sweep reads `pg_get_functiondef`, which returns the body as written — so a
 **Applications and Member commands.** `apply_to_group`, `withdraw_group_application`, and `decide_group_application` are the only Application mutations. `set_member_role` and `set_member_status` record their decisions in Role History; deactivation revokes refresh sessions while leaving Group positions intact. `update_task`/`preview_task_update` cover full-state Task editing, including the Group change rules. The live rank enum has seven values, with no level 4; old audit labels remain readable.
 
 **Group lock ordering.** Keep a Group/parent lock at `FOR NO KEY UPDATE`. Taking a share lock first and upgrading it later can deadlock against a command holding the parent first and waiting for that shared roster row. The hierarchy and roster commands preserve one lock order rather than relying on a stronger lock to be safer.
+
+## 11. Edge Functions
+
+`supabase/functions/deno.json`'s import map pins every `jsr:` and `npm:` specifier to the exact version currently resolved — never a `^`/`~` range — so a cache refresh can't silently move a function's dependencies. To bump a version, edit `deno.json` and, from `supabase/functions`, regenerate `deno.lock` with `deno install --entrypoint **/*.ts` (a bare `deno install` also installs unrelated optional deps and dirties the lock) — only as a deliberate, reviewed change.
