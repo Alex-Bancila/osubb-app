@@ -71,7 +71,7 @@ supabase/
 ├── functions/invite-member/     # the only Deno code, and the only way an account is created:
 │                                # deps.ts (the injectable port) · handler.ts (all the logic) ·
 │                                # index.ts (six lines of wiring) · handler.test.ts (11 tests)
-├── seed.sql                     # demo data: 8 logins (parola123) · 16 tasks · 7 events ·
+├── seed.sql                     # demo data: 8 logins (local: parola123; staging: a secret) · 16 tasks · 7 events ·
 │                                # 5 announcements. Re-runnable — staging gets this same file.
 └── tests/                       # pgTAP suites; run `npx supabase test db` for pass/fail, or
                                  # `ls supabase/migrations | wc -l` / `ls supabase/tests/*.test.sql

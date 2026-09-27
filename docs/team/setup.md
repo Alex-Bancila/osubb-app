@@ -180,7 +180,7 @@ Three things worth five minutes each.
 
 **Mailpit** (`127.0.0.1:54324`) — a fake inbox that catches every email the app sends locally. Empty now. When you test an invitation, the magic link lands here instead of a real address.
 
-**The demo accounts.** The seed creates eight, one per role, all with the password `parola123`:
+**The demo accounts.** The seed creates eight, one per role, all with the password `parola123` on your local stack (staging uses a secret password, `SEED_PASSWORD` in Bitwarden — see `docs/backend/seeding-staging.md`):
 
 | Email                    | Role           | What they show                         |
 | ------------------------ | -------------- | -------------------------------------- |

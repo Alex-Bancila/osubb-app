@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(72);
+select plan(73);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -55,6 +55,18 @@ select is(
   (select count(*) from auth.users
     where email like '%@demo.osubb' and encrypted_password is not null),
   8::bigint, 'each demo account has a password hash');
+
+-- Security pass 2026-09-27 (H3): the password is whatever the caller set in
+-- `app.seed_password`, and only a local stack falls back to the local default
+-- (`parola123`). The off-local refusals and a configured-secret round trip
+-- run in scripts/check-seed-rerunnable.sh, which can apply seed.sql itself.
+select is(
+  (select count(*) from auth.users
+    where email like '%@demo.osubb'
+      and encrypted_password = extensions.crypt(
+            coalesce(nullif(current_setting('app.seed_password', true), ''), 'parola123'),
+            encrypted_password)),
+  8::bigint, 'every demo login authenticates with the configured seed password');
 
 select is(
   (select count(*) from auth.users

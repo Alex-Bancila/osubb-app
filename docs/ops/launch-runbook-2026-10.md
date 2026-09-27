@@ -131,7 +131,9 @@ Project `osubb-app` (staging, ref `bbhetqtmavveaoqlxjhp`):
    `resend`; password = the **staging** Resend key. Save.
 6. **Authentication → Rate Limits → Emails sent per hour**: `100`.
 7. Verify with the two curl checks in `docs/backend/auth-config.md` (self-signup must answer
-   `422 signup_disabled`; a demo member login must return a token with `member_role`). Then
+   `422 signup_disabled`; a demo member login must return a token with `member_role` — run that
+   second check only after §6 has set `SEED_PASSWORD` and re-seeded staging, with `DEMO_PASSWORD`
+   set to that value; before the re-seed the demo accounts still carry the old password). Then
    **Authentication → Users → Invite user** to your own address and confirm the email arrives from
    `noreply@app.osubb.ro`, in the inbox, within a minute. Check **Resend → Emails** shows it as delivered.
 8. After the first staging web deploy (§9) only: from a real terminal,
@@ -178,7 +180,10 @@ reviewer approves. Variables hold the public build values so a reviewer can read
    - `staging`: _Deployment branches and tags_ → **Selected branches** → add `main`. Secrets:
      `SUPABASE_ACCESS_TOKEN` (create a new one at `supabase.com/dashboard/account/tokens`, name
      `github-ci`, Bitwarden), `SUPABASE_DB_PASSWORD` (staging), `STAGING_DB_URL` (same value as today's
-     repository secret), `CLOUDFLARE_API_TOKEN`. Variables: `SUPABASE_PROJECT_REF` =
+     repository secret), `CLOUDFLARE_API_TOKEN`, `SEED_PASSWORD` (the demo-login password:
+     `openssl rand -base64 24`, into Bitwarden first; then re-run **Seed staging demo data** so the eight
+     demo accounts stop using the old public one — `docs/backend/seeding-staging.md`). _Why:_ the repo
+     is public, so a password written in `seed.sql` is everybody's. Variables: `SUPABASE_PROJECT_REF` =
      `bbhetqtmavveaoqlxjhp`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` = staging's
      **publishable** key (`sb_publishable_…`), `VITE_VAPID_PUBLIC_KEY` (from §5.9; can be added later).
    - `production`: _Required reviewers_ → add yourself and Dobre; _Deployment branches_ → `main` only.
@@ -249,7 +254,8 @@ anything on Thursday except fixes found by the acceptance run.
 ## §11 Acceptance, production Pages project, first Release — Thursday 1 Oct
 
 1. **Acceptance run on staging** with Dobre (ruling L17): sign in as each demo identity (anonymous,
-   no-profile, inactive, ordinary, scoped Manager, BCE, BC, Moderator; demo passwords per
+   no-profile, inactive, ordinary, scoped Manager, BCE, BC, Moderator; the demo password is the
+   `SEED_PASSWORD` value in Bitwarden, and the curl checks are in
    `auth-config.md`); the full Task lifecycle and the two-session queue race; Calendar month view, RSVP;
    Announcements and Notifications; PWA install on Android and iPhone; push subscribe + one test
    notification; DevTools console clean; `curl -sI` on `/`, `/taskuri`, `/sw.js`, `/manifest.webmanifest`;

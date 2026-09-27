@@ -95,19 +95,21 @@ Plan around the provider's **daily** cap, not the monthly one. At the time of wr
 
 ## Verifying the whole thing works
 
-Two commands, both of which must behave as written:
+Two commands, both of which must behave as written. `DEMO_PASSWORD` is the demo-login password: `parola123` on a local stack, and on staging the `SEED_PASSWORD` value from Bitwarden (see `seeding-staging.md`). Type it into your own shell; never paste the staging value into a doc, an issue or a log.
 
 ```bash
+DEMO_PASSWORD="${DEMO_PASSWORD:-parola123}"   # local default; staging: the SEED_PASSWORD secret
+
 # 1 · self-registration is refused — invite-only is intact
 curl -s -X POST "$SUPABASE_URL/auth/v1/signup" -H "apikey: $ANON_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"email":"strain@example.com","password":"parola123"}'
+  -d '{"email":"strain@example.com","password":"not-a-real-account-1"}'
 # → 422 signup_disabled
 
 # 2 · an existing member signs in and their token carries claims
 curl -s -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" -H "apikey: $ANON_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"email":"bc@demo.osubb","password":"parola123"}'
+  -d "$(jq -n --arg password "$DEMO_PASSWORD" '{email: "bc@demo.osubb", password: $password}')"
 # → access_token whose app_metadata has member_role / member_level / group_ids
 ```
 
