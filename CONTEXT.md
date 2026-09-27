@@ -216,10 +216,10 @@ The immutable chronological history of Task lifecycle, assignment, queue, evalua
 The final review that sets Difficulty and Rating together and determines Task Points for the active Executor. Difficulty is not proposed at creation.
 
 **Difficulty**:
-A 1–5 estimate of how demanding a Task is.
+A 1–5 estimate of how demanding a Task is. The app shows and chooses it as one to five stars ("Dificultate").
 
 **Rating**:
-A 1–5 assessment of the quality of completed work.
+A 1–5 assessment of the quality of completed work. The app shows and chooses it as a plain number ("Nota 4"), never as stars.
 
 **Task Points**:
 Points produced by a completed Task’s Difficulty and Rating. They belong only to the evaluated Executor.
