@@ -19,6 +19,8 @@
  * fit every command that raises it.
  */
 const REASON_COPY = new Map<string, string>([
+  /* ---- Security pass L3: the per-Member daily cap on every notifying write ---- */
+  ['rate_limited', 'Ai atins limita zilnică. Încearcă mâine.'],
   /* ---- Group Applications (#584, #589); already_group_member is below (#583) ---- */
   [
     'group_not_accepting_applications',
@@ -337,7 +339,7 @@ const REASON_COPY = new Map<string, string>([
   ['nickname_too_long', 'Pseudonimul are cel mult 24 de caractere.'],
   [
     'nickname_invalid',
-    'Pseudonimul poate avea doar litere, cifre, spații, punct, cratimă sau underscore.',
+    'Pseudonimul poate avea doar litere latine, cifre, spații, punct, cratimă sau underscore.',
   ],
   [
     'nickname_taken',

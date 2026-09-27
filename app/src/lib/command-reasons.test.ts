@@ -251,3 +251,17 @@ it.each([
   expect(reasonCopy(reason)).toBe(copy);
   expect(commandReason({ code: 'PT400', message: reason })).toBe(reason);
 });
+
+it('tells a Member over a daily cap to come back tomorrow (security pass L3)', () => {
+  expect(
+    commandErrorMessage(
+      {
+        code: 'PT409',
+        message: 'rate_limited',
+        details: 'group_application: at most 10 per Member in any 24 hours',
+      },
+      'fallback',
+    ),
+  ).toBe('Ai atins limita zilnică. Încearcă mâine.');
+  expect(reasonCopy('rate_limited')).not.toMatch(/_/);
+});

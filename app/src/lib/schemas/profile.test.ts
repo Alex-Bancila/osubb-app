@@ -136,3 +136,13 @@ describe('emailChangeSchema (#632)', () => {
     expect(issues(change(null, 'maria@osubb.ro'))).toEqual([]);
   });
 });
+
+it('refuses a Cyrillic or Greek look-alike and keeps the Romanian letters (security pass L5)', () => {
+  // Cyrillic А (U+0410) and Greek Α (U+0391) look like the Latin A.
+  for (const value of ['Аlex', 'Αlex', 'Ιon'])
+    expect(check({ nickname: value }), value).toEqual([
+      'nickname: nickname_invalid',
+    ]);
+  expect(nickname('Ștefan Țăran-Îâ')).toBe('Ștefan Țăran-Îâ');
+  expect(nickname('Şerban Łukasz')).toBe('Şerban Łukasz');
+});
