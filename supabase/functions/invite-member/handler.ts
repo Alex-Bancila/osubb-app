@@ -9,7 +9,10 @@
 //   401 / 403              not signed in / not BC (level < 6)
 //   403 member_manage_forbidden
 //                          role bc or moderator from anyone but the Moderator
-//   409                    that email already has an account
+//   409 already_exists     that email already has an account
+//
+// Every error body is { code, error } (_shared/errors.ts): a stable reason
+// and a fixed message. Database and Auth details go to the function log only.
 //
 // Since #602 the initial placement is a list of GROUP ids, appointed through
 // the roster path with the caller as the Appointment's actor. `dept_ids` and
@@ -21,7 +24,12 @@
 // is there because of a bug this function actually shipped with — see the
 // comments, and handler.test.ts, which fails if any of them is undone.
 
-import { corsHeaders, isAllowedOrigin, json } from "../_shared/cors.ts";
+import {
+  corsHeaders,
+  isAllowedOrigin,
+  json,
+  refusal,
+} from "../_shared/cors.ts";
 import { inviteMember, mayHandleRole } from "../_shared/member-invite.ts";
 import type { InviteDeps } from "./deps.ts";
 
@@ -52,11 +60,14 @@ export async function handleInvite(
     }
     return new Response("ok", { headers: corsHeaders(origin) });
   }
-  if (req.method !== "POST") return json({ error: "Use POST." }, 405, origin);
+  if (req.method !== "POST") {
+    return refusal("method_not_allowed", "Use POST.", 405, origin);
+  }
 
   if (!(req.headers.get("Authorization") ?? "").startsWith("Bearer ")) {
-    return json(
-      { error: "Autentifică-te pentru a invita membri." },
+    return refusal(
+      "not_signed_in",
+      "Autentifică-te pentru a invita membri.",
       401,
       origin,
     );
@@ -64,7 +75,12 @@ export async function handleInvite(
 
   const callerId = await deps.callerId();
   if (!callerId) {
-    return json({ error: "Sesiune invalidă sau expirată." }, 401, origin);
+    return refusal(
+      "session_invalid",
+      "Sesiune invalidă sau expirată.",
+      401,
+      origin,
+    );
   }
 
   // Authorization reads the level from the DATABASE, not from the caller's
@@ -76,32 +92,46 @@ export async function handleInvite(
     callerLevel = await deps.memberLevel(callerId);
   } catch (error) {
     console.error("caller lookup failed", error);
-    return json({ error: "Nu am putut verifica permisiunile." }, 500, origin);
+    return refusal(
+      "permission_check_failed",
+      "Nu am putut verifica permisiunile.",
+      500,
+      origin,
+    );
   }
   if (callerLevel < INVITE_LEVEL) {
-    return json({ error: "Doar BC poate invita membri." }, 403, origin);
+    return refusal(
+      "member_manage_forbidden",
+      "Doar BC poate invita membri.",
+      403,
+      origin,
+    );
   }
 
   let parsed: unknown;
   try {
     parsed = await req.json();
   } catch {
-    return json({ error: "Corp de cerere invalid (JSON)." }, 400, origin);
+    return refusal(
+      "invalid_json",
+      "Corp de cerere invalid (JSON).",
+      400,
+      origin,
+    );
   }
 
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return json(
-      { error: "Corpul cererii trebuie să fie un obiect." },
+    return refusal(
+      "invalid_body",
+      "Corpul cererii trebuie să fie un obiect.",
       400,
       origin,
     );
   }
   if ("dept_ids" in parsed || "team_ids" in parsed) {
-    return json(
-      {
-        error:
-          "Câmpurile dept_ids și team_ids nu mai există. Trimite group_ids.",
-      },
+    return refusal(
+      "legacy_placement_fields",
+      "Câmpurile dept_ids și team_ids nu mai există. Trimite group_ids.",
       400,
       origin,
     );
@@ -113,8 +143,9 @@ export async function handleInvite(
     (body.full_name !== undefined && typeof body.full_name !== "string") ||
     (body.role !== undefined && typeof body.role !== "string")
   ) {
-    return json(
-      { error: "Câmpurile email, full_name și role trebuie să fie text." },
+    return refusal(
+      "invalid_body",
+      "Câmpurile email, full_name și role trebuie să fie text.",
       400,
       origin,
     );
@@ -123,10 +154,15 @@ export async function handleInvite(
   const email = body.email?.trim().toLowerCase();
   const fullName = body.full_name?.trim();
   if (!email || !email.includes("@")) {
-    return json({ error: "Email invalid." }, 400, origin);
+    return refusal("email_invalid", "Email invalid.", 400, origin);
   }
   if (!fullName) {
-    return json({ error: "Numele este obligatoriu." }, 400, origin);
+    return refusal(
+      "full_name_required",
+      "Numele este obligatoriu.",
+      400,
+      origin,
+    );
   }
 
   const rawGroupIds = body.group_ids ?? [];
@@ -134,8 +170,9 @@ export async function handleInvite(
     !Array.isArray(rawGroupIds) ||
     rawGroupIds.some((id) => !Number.isSafeInteger(id))
   ) {
-    return json(
-      { error: "group_ids trebuie să fie o listă de id-uri de grup." },
+    return refusal(
+      "invalid_group_ids",
+      "group_ids trebuie să fie o listă de id-uri de grup.",
       400,
       origin,
     );
@@ -147,11 +184,9 @@ export async function handleInvite(
   // means no Auth user is ever created for a refused rank.
   const role = body.role ?? "recrut";
   if (!mayHandleRole(role, callerLevel)) {
-    return json(
-      {
-        error: "Doar Moderatorul poate crea conturi de BC sau Moderator.",
-        code: "member_manage_forbidden",
-      },
+    return refusal(
+      "member_manage_forbidden",
+      "Doar Moderatorul poate crea conturi de BC sau Moderator.",
       403,
       origin,
     );
@@ -174,30 +209,44 @@ export async function handleInvite(
           origin,
         );
       case "already_exists":
-        return json(
-          { error: `${email} are deja cont.`, code: "already_exists" },
+        return refusal(
+          "already_exists",
+          `${email} are deja cont.`,
           409,
           origin,
         );
       case "invalid_reference":
-        return json({ error: result.message }, 400, origin);
+        return refusal("invalid_reference", result.message, 400, origin);
       case "invite_failed":
         console.error("invite failed", result.cause);
-        return json({ error: "Trimiterea invitației a eșuat." }, 502, origin);
+        return refusal(
+          "invite_failed",
+          "Trimiterea invitației a eșuat.",
+          502,
+          origin,
+        );
       case "provision_failed":
-        console.error("provisioning failed, invite rolled back", result.cause);
-        return json(
-          {
-            error:
-              "Datele membrului nu sunt valide (un grup inexistent, arhivat, automat sau peste nivelul membrului).",
-            details: result.details,
-          },
+        // The database's own words stay in the log (security pass L4): they
+        // name constraints, functions and columns a caller has no use for.
+        console.error(
+          "provisioning failed, invite rolled back",
+          result.details,
+          result.cause,
+        );
+        return refusal(
+          "provision_failed",
+          "Datele membrului nu sunt valide (un grup inexistent, arhivat, automat sau peste nivelul membrului).",
           400,
           origin,
         );
     }
   } catch (error) {
     console.error("invite-member failed", error);
-    return json({ error: "Ceva n-a mers. Încearcă din nou." }, 500, origin);
+    return refusal(
+      "unexpected_error",
+      "Ceva n-a mers. Încearcă din nou.",
+      500,
+      origin,
+    );
   }
 }

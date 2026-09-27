@@ -18,6 +18,9 @@
 //        reading no further than the cap
 //   405  not POST
 //
+// Every error body is { code, error } (_shared/errors.ts). Which secret is
+// missing, and what the database said, is in the function log only.
+//
 // A delivery is acted on once: the database records each svix-id per
 // recipient address, so a replayed request -- within the timestamp window,
 // or a retry on another day -- writes nothing the second time.
@@ -32,6 +35,7 @@
 // suppression list). email.failed, email.delivery_delayed and the rest are
 // ignored: none of them says the address itself is bad.
 
+import { errorBody } from "../_shared/errors.ts";
 import type { HandledEvent, ResendWebhookDeps } from "./deps.ts";
 import { decodeSigningSecret, verifySignature } from "./signature.ts";
 
@@ -79,6 +83,8 @@ export const HANDLED_EVENTS: readonly HandledEvent[] = [
   "email.complained",
   "email.suppressed",
 ];
+
+const NOT_AN_EVENT = errorBody("invalid_event", "Not a Resend event.");
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -141,24 +147,34 @@ export async function handleResendWebhook(
   req: Request,
   deps: ResendWebhookDeps,
 ): Promise<Response> {
-  if (req.method !== "POST") return json({ error: "Use POST." }, 405);
+  if (req.method !== "POST") {
+    return json(errorBody("method_not_allowed", "Use POST."), 405);
+  }
 
   const problems: string[] = [];
   const key = decodeSigningSecret(deps.signingSecret());
   if (!key) problems.push("RESEND_WEBHOOK_SECRET");
   if (!deps.hasSecretKey()) problems.push("SUPABASE_SECRET_KEYS");
   if (!key || problems.length > 0) {
-    // Names only, never values. Without the signing secret nothing could
-    // ever be verified; say so rather than answer 401 to Resend.
+    // Without the signing secret nothing could ever be verified; say so
+    // rather than answer 401 to Resend. The names (never the values) go to
+    // the function log only: this answer reaches anyone, unauthenticated
+    // (security pass L4).
     console.error("resend-webhook configuration", problems);
-    return json({ error: "configuration", problems }, 500);
+    return json(
+      errorBody(
+        "configuration",
+        "The function is not configured. See its logs.",
+      ),
+      500,
+    );
   }
 
   // The raw body, byte for byte: the signature covers it exactly. Capped
   // first, so an unsigned sender cannot make the function hash megabytes.
   const body = await readBodyCapped(req, MAX_BODY_BYTES);
   if (body === null) {
-    return json({ error: "body too large" }, 413);
+    return json(errorBody("body_too_large", "Body too large."), 413);
   }
   const deliveryId = req.headers.get("svix-id");
   // verify_jwt = false in config.toml: this check is the whole
@@ -175,24 +191,24 @@ export async function handleResendWebhook(
   );
   if (problem || !deliveryId) {
     console.warn("resend-webhook refused", problem);
-    return json({ error: "invalid signature" }, 401);
+    return json(errorBody("invalid_signature", "Invalid signature."), 401);
   }
 
   let event: unknown;
   try {
     event = JSON.parse(body);
   } catch {
-    return json({ error: "not a Resend event" }, 400);
+    return json(NOT_AN_EVENT, 400);
   }
   if (typeof event !== "object" || event === null) {
-    return json({ error: "not a Resend event" }, 400);
+    return json(NOT_AN_EVENT, 400);
   }
   const { type, data } = event as { type?: unknown; data?: unknown };
   if (!isHandled(type)) {
     return json({ notified: 0, ignored: String(type ?? "") }, 200);
   }
   if (typeof data !== "object" || data === null) {
-    return json({ error: "not a Resend event" }, 400);
+    return json(NOT_AN_EVENT, 400);
   }
 
   const payload = data as Record<string, unknown>;
@@ -204,7 +220,7 @@ export async function handleResendWebhook(
     }
   } catch (cause) {
     console.error("resend-webhook notify failed", cause);
-    return json({ error: "notify failed" }, 500);
+    return json(errorBody("notify_failed", "Notify failed."), 500);
   }
 
   console.log("resend-webhook", type, { notified });

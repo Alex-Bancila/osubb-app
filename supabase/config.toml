@@ -7,9 +7,16 @@ project_id = "osubb-app"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "graphql_public"]
+# `public` only. `graphql_public` is not exposed (security pass 2026-09-27,
+# I1): nothing in the app or the functions uses GraphQL, and exposing it gives
+# schema introspection to anyone holding the anon key. Hosted projects mirror
+# this by hand (docs/backend/auth-config.md, "Hosted projects").
+schemas = ["public"]
 extra_search_path = ["public", "extensions"]
-max_rows = 1000
+# At most 500 rows per response. Every list the app pages reads 500 at a time
+# (the Work Filter lists, Clasament, the directory, the history), so this is
+# exactly one page; a request for more gets a short page, never a huge one.
+max_rows = 500
 
 [db]
 port = 54322
@@ -60,6 +67,27 @@ refresh_token_reuse_interval = 10
 # admin invite / CSV-import flow (magic link). See docs/adr/0003-invite-only-auth.md.
 enable_signup = false
 enable_manual_linking = false
+
+# Auth rate limits (security pass 2026-09-27, I1), pinned rather than left to
+# the CLI's defaults so the hosted dashboard has one place to be checked
+# against (docs/backend/auth-config.md, "Rate limits"). Sized for ~20 Members
+# at launch, many of them behind one university or event NAT: a whole room
+# signing in at once must fit under the per-IP limits, a script trying
+# addresses or codes must not.
+[auth.rate_limit]
+# Emails per hour, project-wide. Only applies with custom SMTP, so locally
+# (Mailpit) it has no effect; on the hosted projects it matches the Resend
+# plan (launch runbook §5 step 6; raised to 250 on CSV-import days only).
+email_sent = 100
+# Sign-in (magic link / code) requests per IP per 5 minutes.
+sign_in_sign_ups = 30
+# Link or six-digit code verifications per IP per 5 minutes. With six-digit
+# codes this is the brute-force bound: 30 guesses per IP per 5 minutes, each
+# code dying on use or at its expiry.
+token_verifications = 30
+# Token refreshes per IP per 5 minutes; the app refreshes on focus once a
+# token is ~15 minutes old (ADR-0003), well under this for a room of 30.
+token_refresh = 150
 
 # Epic 2.2: inject member_role / member_level / group_ids into the JWT (#591 dropped dept_ids / team_ids).
 # Hosted projects need this enabled once in Dashboard → Authentication → Hooks.

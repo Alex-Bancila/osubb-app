@@ -32,7 +32,7 @@ The IT Coordinator does this once per environment, staging first. Values live in
    npx supabase secrets set --project-ref <ref> RESEND_WEBHOOK_SECRET=whsec_…
    ```
 
-   Functions read secrets at request time, so no redeploy is needed. Until it is set, the function answers `500` naming `RESEND_WEBHOOK_SECRET` (never its value), and Resend keeps retrying. The function itself is deployed with the rest, by CI on every merge (staging) and by the Release (production).
+   Functions read secrets at request time, so no redeploy is needed. Until it is set, the function answers `500 {"code":"configuration"}` and Resend keeps retrying; the function's log (**Edge Functions → resend-webhook → Logs**) names `RESEND_WEBHOOK_SECRET` (never its value). The body names nothing: it reaches unsigned callers too (security pass L4). The function itself is deployed with the rest, by CI on every merge (staging) and by the Release (production).
 
 4. **Check it**, below.
 

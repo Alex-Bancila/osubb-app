@@ -282,6 +282,11 @@ Deno.test("a Group the roster path refuses rolls the invitation back", async () 
   assertEquals(res.status, 400);
   // Nothing to log into, so the account must not linger and burn the address.
   assertEquals(calls.includes("deleteUser"), true);
+  // The database's own words stay in the function log (security pass L4).
+  const payload = await res.json();
+  assertEquals(Object.keys(payload).sort(), ["code", "error"]);
+  assertEquals(payload.code, "provision_failed");
+  assertEquals(JSON.stringify(payload).includes("group_archived"), false);
 });
 
 // ==================== CORS allow-list (#378) ====================

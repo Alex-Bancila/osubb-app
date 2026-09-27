@@ -2,6 +2,7 @@
 // The port is faked end to end: no database, no push service, no network.
 
 import { assert, assertEquals, assertRejects } from "@std/assert";
+import { capturingErrors } from "../_shared/test-logs.ts";
 import * as handler from "./handler.ts";
 import {
   BATCH_SIZE,
@@ -173,11 +174,18 @@ Deno.test("no role parsing remains: a service_role JWT bearer without the key is
   assertEquals("bearerRole" in handler, false);
 });
 
-Deno.test("with no secret key provided the function answers 500 naming the setting", async () => {
+Deno.test("with no secret key provided the function answers 500, naming the setting in the log only", async () => {
   const { deps, claimCount } = fakeDeps({ keys: [] });
-  const response = await handleSendPush(post(SECRET), deps);
+  const { result: response, logged } = await capturingErrors(() =>
+    handleSendPush(post(SECRET), deps)
+  );
   assertEquals(response.status, 500);
-  assertEquals((await response.json()).problems, ["SUPABASE_SECRET_KEYS"]);
+  // The answer reaches anyone, unauthenticated (security pass L4).
+  assertEquals(await response.json(), {
+    code: "configuration",
+    error: "The function is not configured. See its logs.",
+  });
+  assertEquals(logged.includes("SUPABASE_SECRET_KEYS"), true);
   assertEquals(claimCount(), 0);
 });
 
@@ -191,9 +199,15 @@ Deno.test("only POST is accepted", async () => {
 
 Deno.test("a missing VAPID secret answers 500 before claiming anything", async () => {
   const { deps, claimCount } = fakeDeps({ missing: ["VAPID_PRIVATE_KEY"] });
-  const response = await handleSendPush(post(), deps);
+  const { result: response, logged } = await capturingErrors(() =>
+    handleSendPush(post(), deps)
+  );
   assertEquals(response.status, 500);
-  assertEquals((await response.json()).problems, ["VAPID_PRIVATE_KEY"]);
+  assertEquals(await response.json(), {
+    code: "configuration",
+    error: "The function is not configured. See its logs.",
+  });
+  assertEquals(logged.includes("VAPID_PRIVATE_KEY"), true);
   assertEquals(claimCount(), 0);
 });
 

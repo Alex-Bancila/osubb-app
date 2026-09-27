@@ -7,6 +7,8 @@
 // the function's environment; unset it locally and Vite's default origin
 // applies. See docs/backend/inviting.md for the hosted deployment story.
 
+import { errorBody } from "./errors.ts";
+
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
@@ -45,4 +47,14 @@ export function json(
     status,
     headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
   });
+}
+
+/** An error answer in the shared shape ({@link errorBody}): code + message. */
+export function refusal(
+  code: string,
+  error: string,
+  status: number,
+  origin: string | null,
+): Response {
+  return json(errorBody(code, error), status, origin);
 }

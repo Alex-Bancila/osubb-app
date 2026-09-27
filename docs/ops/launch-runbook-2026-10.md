@@ -129,7 +129,10 @@ Project `osubb-app` (staging, ref `bbhetqtmavveaoqlxjhp`):
 5. **Project Settings → Authentication → SMTP Settings**: _Enable Custom SMTP_; sender email
    `noreply@app.osubb.ro`; sender name `OSUBB staging`; host `smtp.resend.com`; port `465`; username
    `resend`; password = the **staging** Resend key. Save.
-6. **Authentication → Rate Limits → Emails sent per hour**: `100`.
+6. **Authentication → Rate Limits**: _Emails sent per hour_ `100`; _Sign-ups and sign-ins_ `30`; _Token
+   verifications_ `30`; _Token refreshes_ `150`. **Project Settings → Data API**: exposed schemas `public` only
+   (remove `graphql_public`), _Max rows_ `500`. _Why:_ the same values as `supabase/config.toml`
+   (`docs/backend/auth-config.md` § "Rate limits, the API surface and sessions"); hosted projects never read it.
 7. Verify with the two curl checks in `docs/backend/auth-config.md` (self-signup must answer
    `422 signup_disabled`; a demo member login must return a token with `member_role` — run that
    second check only after §6 has set `SEED_PASSWORD` and re-seeded staging, with `DEMO_PASSWORD`
