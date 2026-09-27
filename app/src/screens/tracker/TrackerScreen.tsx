@@ -11,7 +11,14 @@ import {
   useAllTasks,
 } from '../../queries/task-tabs';
 import { Button } from '../../components/ui/button';
-import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import {
+  EmptyState,
+  Page,
+  PageHeader,
+  tabClass,
+  tabListClass,
+} from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
 import { parsePositiveInt } from '../../lib/ids';
 import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
@@ -29,19 +36,14 @@ function TaskQueryStates<Row>({
   query: UseQueryResult<Row[], Error>;
   children: (rows: Row[]) => ReactNode;
 }) {
-  if (query.isPending) return <p role="status">Se încarcă taskurile…</p>;
+  if (query.isPending) return <Loading label="Se încarcă taskurile…" />;
   if (query.isError)
     return (
-      <div role="alert" className="space-y-3">
-        <p>Nu am putut încărca taskurile.</p>
-        <Button
-          variant="outline"
-          className="min-h-11 min-w-11"
-          onClick={() => query.refetch()}
-        >
-          Încearcă din nou
-        </Button>
-      </div>
+      <ErrorState
+        error={query.error}
+        text="Nu am putut încărca taskurile."
+        onRetry={() => void query.refetch()}
+      />
     );
   return children(query.data);
 }
@@ -65,11 +67,7 @@ function TaskQueryPanel({
     <TaskQueryStates query={query}>
       {(rows) =>
         !rows.length ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>{empty}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
+          <EmptyState bare>{empty}</EmptyState>
         ) : manager ? (
           <ManagerTaskList rows={rows} now={now} onOpenTask={onOpenTask} />
         ) : (
@@ -156,142 +154,131 @@ export default function TrackerScreen() {
     (tab === 'managed' && !management.data) || (tab === 'all' && !showAll)
       ? 'mine'
       : tab;
-  const tabClass =
-    'min-h-11 min-w-11 rounded-md px-3 py-2 text-sm font-medium data-active:bg-primary data-active:text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring';
   return (
-    <section className="w-full" aria-labelledby="tracker-title">
-      <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <h1 id="tracker-title" className="text-2xl font-semibold">
-              Taskuri
-            </h1>
-            <p className="text-muted-foreground">
-              Lucrul tău și oportunitățile din OSUBB.
-            </p>
-          </div>
+    <Page>
+      <PageHeader
+        title="Taskuri"
+        description="Lucrul tău și oportunitățile din OSUBB."
+        actions={
           <NewTaskControl
             onCreated={(id) => {
               setCreatedId(id);
               setDetailId(id);
             }}
           />
-        </header>
-        {management.isError && (
-          <div role="alert" className="text-sm">
-            <p>Nu am putut verifica accesul la taskurile de gestionat.</p>
-            <Button
-              variant="outline"
-              className="min-h-11 min-w-11"
-              onClick={() => management.refetch()}
-            >
-              Reîncarcă accesul
-            </Button>
-          </div>
-        )}
-        {leadership.isPending && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Se verifică accesul la toate taskurile…
-          </p>
-        )}
-        {leadership.isError && (
-          <div role="alert" className="space-y-3 text-sm">
-            <p>Nu am putut verifica accesul la toate taskurile.</p>
-            <Button
-              variant="outline"
-              className="min-h-11 min-w-11"
-              onClick={() => leadership.refetch()}
-            >
-              Reîncarcă accesul complet
-            </Button>
-          </div>
-        )}
-        <Tabs.Root
-          value={selected}
-          onValueChange={(value) => {
-            if (typeof value === 'string') setTab(value);
-          }}
-        >
-          <Tabs.List
-            aria-label="Liste de taskuri"
-            className="mb-5 flex flex-wrap gap-2"
+        }
+      />
+      {management.isError && (
+        <div role="alert" className="text-sm">
+          <p>Nu am putut verifica accesul la taskurile de gestionat.</p>
+          <Button
+            variant="outline"
+            className="min-h-11 min-w-11"
+            onClick={() => management.refetch()}
           >
-            <Tabs.Tab value="mine" className={tabClass}>
-              Taskurile mele
-            </Tabs.Tab>
-            <Tabs.Tab value="available" className={tabClass}>
-              Disponibile
-            </Tabs.Tab>
-            {management.data && (
-              <Tabs.Tab value="managed" className={tabClass}>
-                De gestionat
-              </Tabs.Tab>
-            )}
-            {showAll && (
-              <Tabs.Tab value="all" className={tabClass}>
-                Toate
-              </Tabs.Tab>
-            )}
-          </Tabs.List>
-          <Tabs.Panel value="mine" className="space-y-5">
-            <PersonalScoreHeader />
-            <TaskQueryPanel
-              query={mine}
-              empty="Nu ai niciun task atribuit încă."
-              now={now}
-              onOpenTask={setDetailId}
-              highlightedId={highlightedId}
-            />
-          </Tabs.Panel>
-          <Tabs.Panel value="available">
-            <TaskQueryStates query={available}>
-              {(opportunities) => (
-                <AvailableOpportunities
-                  opportunities={opportunities}
-                  now={now}
-                  onOpenTask={setDetailId}
-                />
-              )}
-            </TaskQueryStates>
-          </Tabs.Panel>
+            Reîncarcă accesul
+          </Button>
+        </div>
+      )}
+      {leadership.isPending && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Se verifică accesul la toate taskurile…
+        </p>
+      )}
+      {leadership.isError && (
+        <div role="alert" className="space-y-3 text-sm">
+          <p>Nu am putut verifica accesul la toate taskurile.</p>
+          <Button
+            variant="outline"
+            className="min-h-11 min-w-11"
+            onClick={() => leadership.refetch()}
+          >
+            Reîncarcă accesul complet
+          </Button>
+        </div>
+      )}
+      <Tabs.Root
+        value={selected}
+        onValueChange={(value) => {
+          if (typeof value === 'string') setTab(value);
+        }}
+      >
+        <Tabs.List aria-label="Liste de taskuri" className={tabListClass}>
+          <Tabs.Tab value="mine" className={tabClass}>
+            Taskurile mele
+          </Tabs.Tab>
+          <Tabs.Tab value="available" className={tabClass}>
+            Disponibile
+          </Tabs.Tab>
           {management.data && (
-            <Tabs.Panel value="managed">
-              <TaskQueryPanel
-                query={managed}
-                empty="Nu ai taskuri de gestionat acum."
-                manager
-                now={now}
-                onOpenTask={setDetailId}
-              />
-            </Tabs.Panel>
+            <Tabs.Tab value="managed" className={tabClass}>
+              De gestionat
+            </Tabs.Tab>
           )}
           {showAll && (
-            <Tabs.Panel value="all">
-              <TaskQueryPanel
-                query={all}
-                empty="Nu există taskuri vizibile."
-                manager
+            <Tabs.Tab value="all" className={tabClass}>
+              Toate
+            </Tabs.Tab>
+          )}
+        </Tabs.List>
+        <Tabs.Panel value="mine" className="space-y-6">
+          <PersonalScoreHeader />
+          <TaskQueryPanel
+            query={mine}
+            empty="Nu ai niciun task atribuit încă."
+            now={now}
+            onOpenTask={setDetailId}
+            highlightedId={highlightedId}
+          />
+        </Tabs.Panel>
+        <Tabs.Panel value="available">
+          <TaskQueryStates query={available}>
+            {(opportunities) => (
+              <AvailableOpportunities
+                opportunities={opportunities}
                 now={now}
                 onOpenTask={setDetailId}
               />
-            </Tabs.Panel>
-          )}
-        </Tabs.Root>
-        <TaskDetailsSheet
-          key={detailId}
-          taskId={detailId}
-          managedTaskIds={managedTaskIds}
-          notice={
-            detailId !== null && detailId === createdId
-              ? 'Taskul a fost creat.'
-              : null
-          }
-          onClose={() => {
-            setDetailId(null);
-            setCreatedId(null);
-          }}
-        />
-      </div>
-    </section>
+            )}
+          </TaskQueryStates>
+        </Tabs.Panel>
+        {management.data && (
+          <Tabs.Panel value="managed">
+            <TaskQueryPanel
+              query={managed}
+              empty="Nu ai taskuri de gestionat acum."
+              manager
+              now={now}
+              onOpenTask={setDetailId}
+            />
+          </Tabs.Panel>
+        )}
+        {showAll && (
+          <Tabs.Panel value="all">
+            <TaskQueryPanel
+              query={all}
+              empty="Nu există taskuri vizibile."
+              manager
+              now={now}
+              onOpenTask={setDetailId}
+            />
+          </Tabs.Panel>
+        )}
+      </Tabs.Root>
+      <TaskDetailsSheet
+        key={detailId}
+        taskId={detailId}
+        managedTaskIds={managedTaskIds}
+        notice={
+          detailId !== null && detailId === createdId
+            ? 'Taskul a fost creat.'
+            : null
+        }
+        onClose={() => {
+          setDetailId(null);
+          setCreatedId(null);
+        }}
+      />
+    </Page>
   );
 }

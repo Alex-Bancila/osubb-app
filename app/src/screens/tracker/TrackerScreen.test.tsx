@@ -234,7 +234,7 @@ describe('My tasks screen', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 
-  it('leaves scrolling to the shell and lays out one task per row', () => {
+  it('leaves scrolling to the shell and lays the cards on the collection grid', () => {
     query({ data: [taskRow(), taskRow({ id: 2, title: 'Al doilea task' })] });
 
     const { container } = render(<TrackerScreen />, { wrapper: Router });
@@ -243,21 +243,20 @@ describe('My tasks screen', () => {
       'h-full',
       'overflow-y-auto',
     );
-    expect(container.querySelector('[data-slot="task-card-grid"]')).toHaveClass(
+    // Decision D4 (ruling R27): one column, two from md, three from xl.
+    const grid = container.querySelector('[data-grid="task-cards"]');
+    expect(grid).toHaveAttribute('data-columns', 'collection');
+    expect(grid).toHaveClass(
       'grid-cols-1',
+      'md:grid-cols-2',
+      'xl:grid-cols-3',
       'items-stretch',
+      '*:h-full',
+      '*:min-w-0',
     );
-    expect(
-      container.querySelector('[data-slot="task-card-grid"]'),
-    ).not.toHaveClass('md:grid-cols-2');
     expect(
       container.querySelectorAll('[data-slot="task-card-row"]'),
     ).toHaveLength(2);
-    for (const row of container.querySelectorAll(
-      '[data-slot="task-card-row"]',
-    )) {
-      expect(row).toHaveClass('h-full', 'min-w-0');
-    }
     for (const card of screen.getAllByRole('article')) {
       expect(card).toHaveClass('h-full', 'min-w-0');
     }

@@ -1,7 +1,15 @@
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
-import { cn } from 'cn';
+import { Megaphone } from 'lucide-react';
+import {
+  EmptyState,
+  ListRow,
+  Panel,
+  rowListClass,
+  SegmentedToggle,
+} from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
+import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
@@ -235,13 +243,10 @@ function CampaignRow({
   const [open, setOpen] = useState(false);
   const reportId = useId();
   return (
-    <li className="space-y-3 rounded-lg border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="grid min-w-0 gap-0.5">
-          <span className="font-medium break-words">{campaign.name}</span>
-          <span className="text-sm text-muted-foreground">Grup: {owner}</span>
-        </span>
-        <span className="flex flex-wrap gap-2">
+    <ListRow
+      stackAction
+      action={
+        <>
           <CampaignNameDialog
             title="Redenumește campania"
             label="Numele campaniei"
@@ -274,14 +279,21 @@ function CampaignRow({
           >
             {open ? 'Ascunde raportul' : 'Vezi raportul'}
           </Button>
-        </span>
-      </div>
-      {open && (
-        <div id={reportId}>
-          <CampaignReportView campaignId={campaign.id} range={range} />
-        </div>
-      )}
-    </li>
+        </>
+      }
+      footer={
+        open && (
+          <div id={reportId} className="pb-2">
+            <CampaignReportView campaignId={campaign.id} range={range} />
+          </div>
+        )
+      }
+    >
+      <span className="grid min-w-0 gap-0.5">
+        <span className="font-medium break-words">{campaign.name}</span>
+        <span className="text-sm text-muted-foreground">Grup: {owner}</span>
+      </span>
+    </ListRow>
   );
 }
 
@@ -315,7 +327,6 @@ export function CampaignsPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
-  const toggleId = useId();
 
   /** One change at a time; a refusal is thrown to whoever asked. */
   async function run(change: CampaignChange) {
@@ -375,15 +386,12 @@ export function CampaignsPanel({
     [campaigns.data, groups, group.id, state],
   );
   return (
-    <>
-      {message && <p role="status">{message}</p>}
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">{label}</h2>
+    <Panel
+      eyebrow="Campanii"
+      icon={Megaphone}
+      title={label}
+      description={`Campaniile grupului și ale subgrupurilor lui. O campanie nouă aparține grupului ${group.name}.`}
+      control={
         <CampaignNameDialog
           title="Campanie nouă"
           label="Numele campaniei"
@@ -393,55 +401,41 @@ export function CampaignsPanel({
           disabled={mutation.isPending}
           onSave={(name) => run({ kind: 'create', groupId: group.id, name })}
         />
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Campaniile grupului și ale subgrupurilor lui. O campanie nouă aparține
-        grupului {group.name}.
-      </p>
-      <div
-        role="group"
-        aria-labelledby={toggleId}
-        className="flex w-fit items-center gap-3"
-      >
-        <span id={toggleId} className="text-sm font-medium">
+      }
+      boxClassName="space-y-4"
+    >
+      {message && <p role="status">{message}</p>}
+      {error && (
+        <p role="alert" className="text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <span aria-hidden="true" className="text-sm font-medium">
           Stare
         </span>
-        <span className="flex rounded-lg border border-border p-0.5">
-          {(
-            [
-              ['active', 'Active'],
-              ['inactive', 'Inactive'],
-            ] as const
-          ).map(([value, text]) => (
-            <Button
-              key={value}
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={state === value}
-              className={cn(
-                'min-h-11 sm:min-h-9',
-                state === value && 'bg-muted text-foreground',
-              )}
-              onClick={() => show(value)}
-            >
-              {text}
-            </Button>
-          ))}
-        </span>
+        <SegmentedToggle
+          label="Stare"
+          value={state}
+          onChange={show}
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ]}
+        />
       </div>
       {campaigns.isPending ? (
-        <p role="status">Se încarcă campaniile…</p>
+        <Loading label="Se încarcă campaniile…" />
       ) : campaigns.isError ? (
-        <div role="alert">
-          Nu am putut încărca campaniile.{' '}
-          <Button variant="outline" onClick={() => void campaigns.refetch()}>
-            Reîncearcă
-          </Button>
-        </div>
+        <ErrorState
+          error={campaigns.error}
+          text="Nu am putut încărca campaniile."
+          retryLabel="Reîncearcă"
+          onRetry={() => void campaigns.refetch()}
+        />
       ) : listed.length ? (
         <ul
-          className="space-y-3"
+          className={`${rowListClass} -mx-3`}
           aria-label={
             state === 'active' ? 'Campanii active' : 'Campanii inactive'
           }
@@ -462,12 +456,12 @@ export function CampaignsPanel({
           ))}
         </ul>
       ) : (
-        <p className="text-muted-foreground">
+        <EmptyState>
           {state === 'active'
             ? 'Nicio campanie activă în acest grup sau în subgrupurile lui.'
             : 'Nicio campanie inactivă în acest grup sau în subgrupurile lui.'}
-        </p>
+        </EmptyState>
       )}
-    </>
+    </Panel>
   );
 }

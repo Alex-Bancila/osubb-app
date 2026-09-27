@@ -1,5 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { ListRow, Panel, rowListClass } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
+import { ErrorState } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import { fieldForReason, noteSchema } from '../../lib/schemas/note';
@@ -113,13 +115,11 @@ export function RequestDecisionQueue() {
     queue.isPending || (!queue.isError && !queue.data?.length);
   if (nothingToDecide && !receipt && !selected) return null;
   return (
-    <section aria-labelledby="request-decisions-title" className="space-y-4">
-      <h2 id="request-decisions-title" className="text-lg font-bold">
-        Cereri de evaluat
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        Aici apar doar cererile pentru care poți lua o decizie.
-      </p>
+    <Panel
+      title="Cereri de evaluat"
+      description="Aici apar doar cererile pentru care poți lua o decizie."
+      boxClassName="space-y-4"
+    >
       {receipt && <TaskActionSuccess>{receipt}</TaskActionSuccess>}
       {selected ? (
         <div className="space-y-3">
@@ -162,42 +162,44 @@ export function RequestDecisionQueue() {
         </div>
       ) : null}
       {queue.isPending ? null : queue.isError ? (
-        <div role="alert">
-          <p>Nu am putut încărca cererile de evaluat.</p>
-          <Button variant="outline" onClick={() => void queue.refetch()}>
-            Reîncearcă
-          </Button>
-        </div>
+        <ErrorState
+          error={queue.error}
+          text="Nu am putut încărca cererile de evaluat."
+          retryLabel="Reîncearcă"
+          onRetry={() => void queue.refetch()}
+        />
       ) : !queue.data?.length ? null : (
-        <ul className="space-y-3">
+        <ul className={`${rowListClass} -mx-3`}>
           {queue.data.map((request) => (
-            <li
+            <ListRow
               key={request.id}
-              className="space-y-2 rounded-lg border bg-card p-4"
+              stackAction
+              action={
+                <>
+                  <Button
+                    disabled={selected !== null || mutation.isPending}
+                    onClick={() => open(request, 'approve')}
+                  >
+                    Evaluează cererea
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={selected !== null || mutation.isPending}
+                    onClick={() => open(request, 'reject')}
+                  >
+                    Respinge
+                  </Button>
+                </>
+              }
             >
               <RequesterLine request={request} />
               <p className="whitespace-pre-wrap wrap-anywhere">
                 {request.description}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  disabled={selected !== null || mutation.isPending}
-                  onClick={() => open(request, 'approve')}
-                >
-                  Evaluează cererea
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={selected !== null || mutation.isPending}
-                  onClick={() => open(request, 'reject')}
-                >
-                  Respinge
-                </Button>
-              </div>
-            </li>
+            </ListRow>
           ))}
         </ul>
       )}
-    </section>
+    </Panel>
   );
 }

@@ -1,5 +1,12 @@
 import { useNavigate } from 'react-router';
 import { Empty, ErrorState, Loading } from '../../components/states';
+import {
+  ListRow,
+  Page,
+  PageHeader,
+  panelBoxClass,
+  rowListClass,
+} from '../../components/layout';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
@@ -24,21 +31,27 @@ function NotificationListItem({
   const Icon = notification.icon;
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(notification)}
+    <ListRow
       className={cn(
-        'flex w-full items-start gap-3 rounded-xl border border-border p-4 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50',
-        notification.isRead ? 'bg-card' : 'bg-accent/40',
+        'relative rounded-sm has-[button:hover]:bg-muted',
+        !notification.isRead && 'bg-accent/40',
       )}
+      leading={
+        <span
+          className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+          aria-hidden="true"
+        >
+          <Icon className="size-5" />
+        </span>
+      }
     >
-      <span
-        className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-        aria-hidden="true"
+      {/* The whole row opens the notification: the button's ::after covers
+          it, and carries the focus ring. */}
+      <button
+        type="button"
+        onClick={() => onOpen(notification)}
+        className="block w-full text-left outline-none after:absolute after:inset-0 after:rounded-sm focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
       >
-        <Icon className="size-5" />
-      </span>
-      <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2">
           <Badge variant={notification.critical ? 'destructive' : 'outline'}>
             {notification.kindLabel}
@@ -75,8 +88,8 @@ function NotificationListItem({
         >
           {notification.ageLabel}
         </time>
-      </span>
-    </button>
+      </button>
+    </ListRow>
   );
 }
 
@@ -105,23 +118,8 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <section
-      className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8"
-      aria-labelledby="notifications-title"
-    >
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1
-            id="notifications-title"
-            className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
-          >
-            Notificări
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Necitite: {unreadCount}
-          </p>
-        </div>
-      </header>
+    <Page width="reading">
+      <PageHeader title="Notificări" description={`Necitite: ${unreadCount}`} />
 
       {feed.isPending ? (
         <Loading label="Se încarcă notificările…" />
@@ -132,19 +130,23 @@ export default function NotificationsScreen() {
           onRetry={() => void feed.refetch()}
         />
       ) : notifications.length === 0 ? (
-        <Empty text="Nu ai nicio notificare deocamdată." />
+        <Empty bare text="Nu ai nicio notificare deocamdată." />
       ) : (
         <>
-          <ul className="space-y-3" aria-label="Lista de notificări">
-            {notifications.map((notification) => (
-              <li key={notification.id}>
+          <div className={panelBoxClass}>
+            <ul
+              className={cn(rowListClass, '-mx-3 -my-2')}
+              aria-label="Lista de notificări"
+            >
+              {notifications.map((notification) => (
                 <NotificationListItem
+                  key={notification.id}
                   notification={notification}
                   onOpen={open}
                 />
-              </li>
-            ))}
-          </ul>
+              ))}
+            </ul>
+          </div>
 
           {feed.hasNextPage && (
             <div className="flex justify-center">
@@ -161,6 +163,6 @@ export default function NotificationsScreen() {
           )}
         </>
       )}
-    </section>
+    </Page>
   );
 }

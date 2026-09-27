@@ -1,22 +1,24 @@
 import { queryErrorMessage } from '../../lib/query-error';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '../ui/button';
+import { EmptyState, stateBoxClass } from '../layout/EmptyState';
 
 /**
  * The three states every query renders (mini-spec §5). They live together
  * because they are one decision — "what does this screen show when there is no
  * data yet, no data at all, or no answer" — and screens should make it the same
- * way every time.
+ * way every time. All three share `EmptyState`'s `py-8` rhythm (ruling R27), so
+ * a panel's box never jumps height as its query settles.
  */
 
 export function Loading({ label = 'Se încarcă…' }: { label?: string }) {
   return (
-    <div className="state" role="status">
+    <div className={stateBoxClass} role="status" data-slot="loading-state">
       <LoaderCircle
-        className="size-5 animate-spin motion-reduce:animate-none"
+        className="size-5 animate-spin text-muted-foreground motion-reduce:animate-none"
         aria-hidden="true"
       />
-      <p className="state-text">{label}</p>
+      <p className="m-0 text-sm text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -26,12 +28,8 @@ export function Loading({ label = 'Se încarcă…' }: { label?: string }) {
  * be here — "Niciun task deschis acum" tells a member the tracker works and
  * there is simply nothing to claim; "Nicio informație" tells them nothing.
  */
-export function Empty({ text }: { text: string }) {
-  return (
-    <div className="state">
-      <p className="state-text">{text}</p>
-    </div>
-  );
+export function Empty({ text, bare }: { text: string; bare?: boolean }) {
+  return <EmptyState bare={bare}>{text}</EmptyState>;
 }
 
 /**
@@ -43,19 +41,23 @@ export function ErrorState({
   onRetry,
   error,
   text,
+  retryLabel = 'Încearcă din nou',
 }: {
   onRetry?: () => void;
   error?: unknown;
   text?: string;
+  retryLabel?: string;
 }) {
   if (import.meta.env.DEV && error) console.error('[query]', error);
 
   return (
-    <div className="state" role="alert">
-      <p className="state-text">{text ?? queryErrorMessage(error)}</p>
+    <div className={stateBoxClass} role="alert" data-slot="error-state">
+      <p className="m-0 text-sm text-muted-foreground">
+        {text ?? queryErrorMessage(error)}
+      </p>
       {onRetry && (
         <Button variant="outline" size="sm" onClick={onRetry}>
-          Încearcă din nou
+          {retryLabel}
         </Button>
       )}
     </div>
