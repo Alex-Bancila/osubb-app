@@ -19,7 +19,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(22);
 
 -- Postgres stores an empty search_path as the literal proconfig entry
 -- search_path="" (confirmed against add_group_member_impl on the live
@@ -219,11 +219,17 @@ drop function public.conventions_probe_net();
 select is(
   (select coalesce(array_agg(job.jobname || ':' || job.username order by job.jobname), '{}')
      from cron.job as job
-    where job.command ~ '\mnet\.http_post'
-      and has_function_privilege(job.username,
-            'net.http_post(text, jsonb, jsonb, jsonb, integer)', 'execute')),
+    where job.command ~ '\mnet\.http_post'),
   array['osubb-email-digest:postgres', 'osubb-send-push:postgres'],
-  'osubb-send-push and osubb-email-digest are the only cron jobs calling net.http_post, and both run as postgres, which can execute it');
+  'osubb-send-push and osubb-email-digest are the only cron jobs calling net.http_post, and both run as postgres');
+select is(
+  (select coalesce(array_agg(job.jobname order by job.jobname), '{}')
+     from cron.job as job
+    where job.command ~ '\mnet\.http_post'
+      and not has_function_privilege(job.username,
+            'net.http_post(text, jsonb, jsonb, jsonb, integer)', 'execute')),
+  '{}'::text[],
+  'every cron job calling net.http_post runs as a role that can execute it');
 
 select is(
   (select count(*) from pg_extension where extname = 'pg_graphql'),
