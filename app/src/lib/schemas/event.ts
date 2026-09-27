@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { bucharestWallTimeToIso } from '../calendar-time';
-import { emptyToNull, trimText } from '../normalize';
 import {
   EVENT_TYPE_CHOICES,
   eventCampaignsFor,
@@ -44,7 +43,8 @@ export function eventSchema(
       groupId: z.number().nullable(),
       startsAt: z.string(),
       endsAt: z.string(),
-      location: z.string().transform((value) => emptyToNull(trimText(value))),
+      // Security pass 2026-09-27: events_location_length_ck (at most 200).
+      location: optionalText({ max: 200, tooLong: 'location_too_long' }),
       capacity: z.string(),
       description: optionalText({ max: 2000, tooLong: 'description_too_long' }),
       minLevel: z.number(),
@@ -116,6 +116,7 @@ export const fieldForReason: Readonly<Record<string, keyof EventFormValues>> = {
   title_too_short: 'title',
   title_too_long: 'title',
   description_too_long: 'description',
+  location_too_long: 'location',
   invalid_event_type: 'type',
   event_group_required: 'groupId',
   starts_at_required: 'startsAt',

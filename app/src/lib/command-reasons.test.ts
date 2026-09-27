@@ -101,6 +101,22 @@ it.each([
   expect(copy).not.toMatch(/_/);
 });
 
+/* The security pass of 2026-09-27: the column limits that had none, from the
+   commands (PT400) and the profile guard (23514). */
+it.each([
+  ['location_too_long', 'Locul are cel mult 200 de caractere.'],
+  ['short_too_long', 'Prescurtarea are cel mult 16 caractere.'],
+  ['manager_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
+  ['position_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
+  ['full_name_too_long', 'Numele complet are cel mult 120 de caractere.'],
+  ['invalid_avatar_color', 'Alege o culoare din listă.'],
+])('has Romanian copy for the column-limit reason %s', (reason, copy) => {
+  expect(reasonCopy(reason)).toBe(copy);
+  expect(
+    commandErrorMessage({ code: '23514', message: reason }, 'fallback'),
+  ).toBe(copy);
+});
+
 it('says the limits in words a member can act on', () => {
   expect(reasonCopy('title_too_short')).toBe(
     'Titlul are cel puțin 3 caractere.',

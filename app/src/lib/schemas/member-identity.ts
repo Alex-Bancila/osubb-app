@@ -10,7 +10,12 @@ import { requiredText } from './text';
  */
 export const memberIdentitySchema = z.object({
   nickname: memberNicknameSchema,
-  fullName: requiredText({ required: 'full_name_required' }),
+  // Security pass 2026-09-27: profiles_full_name_length_ck (at most 120).
+  fullName: requiredText({
+    required: 'full_name_required',
+    max: 120,
+    tooLong: 'full_name_too_long',
+  }),
 });
 
 /** Where each reason about a Member's names is shown. */
@@ -20,6 +25,7 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   nickname_invalid: 'nickname',
   nickname_taken: 'nickname',
   full_name_required: 'fullName',
+  full_name_too_long: 'fullName',
 };
 
 /**

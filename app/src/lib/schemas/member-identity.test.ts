@@ -27,6 +27,13 @@ it('requires a full name', () => {
   expect(check({ fullName: '   ' })).toEqual(['fullName: full_name_required']);
 });
 
+it('limits the full name to 120 characters (security pass 2026-09-27)', () => {
+  expect(check({ fullName: 'n'.repeat(120) })).toEqual([]);
+  expect(check({ fullName: 'n'.repeat(121) })).toEqual([
+    'fullName: full_name_too_long',
+  ]);
+});
+
 it('refuses a Nickname the server refuses, in the server order', () => {
   expect(check({ nickname: 'A' })).toEqual(['nickname: nickname_too_short']);
   expect(check({ nickname: 'a'.repeat(25) })).toEqual([
@@ -45,6 +52,7 @@ it('maps every name reason to its field', () => {
       'nickname_too_long',
       'nickname_invalid',
       'nickname_taken',
+      'full_name_too_long',
     ],
   );
 });
