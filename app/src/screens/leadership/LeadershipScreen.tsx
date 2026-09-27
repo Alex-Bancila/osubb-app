@@ -238,6 +238,16 @@ function CupBoard({ rows }: { rows: CupRow[] }) {
   const groups = useGroups();
   // Wait for the Groups too, so no row is painted before its tag and colour.
   if (groups.isPending) return <Loading label="Se încarcă Cupa…" />;
+  // A failed read is not "a Group you cannot see": say so, never '—' rows.
+  if (groups.isError)
+    return (
+      <ErrorState
+        error={groups.error}
+        text="Nu am putut încărca grupurile Cupei."
+        retryLabel="Reîncarcă grupurile"
+        onRetry={() => void groups.refetch()}
+      />
+    );
   if (!rows.length)
     return <EmptyState>Nu există grupuri înscrise în Cupă.</EmptyState>;
   const max = Math.max(1, ...rows.map((row) => row.points ?? 0));

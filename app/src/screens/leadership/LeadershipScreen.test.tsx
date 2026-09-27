@@ -419,6 +419,26 @@ it('says when a board fails and offers the read again', async () => {
   expect(cupRetry).toHaveBeenCalled();
 });
 
+it('says when the Cup’s Groups fail to load instead of drawing unnamed rows', async () => {
+  const retry = vi.fn();
+  state.groups.mockReturnValue({
+    isPending: false,
+    isError: true,
+    refetch: retry,
+  });
+  renderPage('?vedere=cupa');
+  expect(
+    screen.queryByRole('list', { name: 'Cupa Departamentelor' }),
+  ).toBeNull();
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Nu am putut încărca grupurile Cupei.',
+  );
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Reîncarcă grupurile' }),
+  );
+  expect(retry).toHaveBeenCalled();
+});
+
 it('shows loading and empty states without inventing totals', () => {
   state.board.mockReturnValue({ isPending: true });
   const { unmount } = renderPage();
