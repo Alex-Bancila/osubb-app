@@ -29,13 +29,11 @@ function errorFromUrl(): { code?: string; message?: string } | null {
 }
 
 /**
- * Where a magic link lands. Supabase hands the session over in one of two
- * shapes and we accept both, because which one is in play depends on the
- * client's flow type and is not worth coupling this screen to:
- *
- *   PKCE     → `?code=…`, which we exchange for a session here.
- *   implicit → `#access_token=…`, which the client already picked up on its own
- *              (detectSessionInUrl), so there is nothing to do but wait for it.
+ * Where a link through Supabase's own verify endpoint lands. The client runs
+ * the PKCE flow (`lib/supabase.ts`), so the session arrives as `?code=…`,
+ * which this screen exchanges using the verifier stored when the link was
+ * requested. A `#access_token=…` fragment (the implicit flow) is ignored: it
+ * would sign the browser into whichever account the tokens belong to.
  */
 export default function AuthCallback() {
   const { session, loading } = useAuth();

@@ -1,3 +1,4 @@
+import { safeHttpUrl } from '../../lib/links';
 import type { AdminGroup } from '../../queries/groups-admin';
 
 export function acceptsApplication(group: AdminGroup, level: number) {
@@ -23,6 +24,6 @@ export function applicationForm(
   group: AdminGroup,
 ): { label: string; url: string } | null {
   const label = group.application_form_label;
-  const url = group.application_form_url;
-  return label && url && /^https?:\/\//.test(url) ? { label, url } : null;
+  const url = safeHttpUrl(group.application_form_url);
+  return label && url ? { label, url } : null;
 }

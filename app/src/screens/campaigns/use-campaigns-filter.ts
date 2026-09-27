@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
+import { parsePositiveInt } from '../../lib/ids';
 import { useWorkFilter, type WorkFilterState } from '../../lib/use-work-filter';
 import {
   chosenGroupId,
@@ -39,7 +40,7 @@ export function useCampaignsFilter(
   const { groupId: raw } = useParams();
   const navigate = useNavigate();
   const { search } = useLocation();
-  const routeGroupId = raw && /^\d+$/.test(raw) ? Number(raw) : undefined;
+  const routeGroupId = parsePositiveInt(raw) ?? undefined;
 
   const value = useMemo(() => {
     const next: WorkFilterValue = placeGroup(groups, routeGroupId, 'topmost');

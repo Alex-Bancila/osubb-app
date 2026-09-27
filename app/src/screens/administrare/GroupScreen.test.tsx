@@ -206,6 +206,27 @@ function show(id = 2) {
 
 const tab = (name: string) => screen.getByRole('tab', { name });
 
+it.each(['2.0', '0x2', '2e0', '02', 'abc'])(
+  'shows the not-found state for the malformed id %s and never queries it',
+  (raw) => {
+    render(
+      <MemoryRouter initialEntries={[`/administrare/grupuri/${raw}`]}>
+        <Routes>
+          <Route
+            path="/administrare/grupuri/:groupId"
+            element={<GroupScreen />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Nu ai acces la acest grup sau grupul nu există.',
+    );
+    expect(screen.queryByRole('heading', { name: 'Logistică' })).toBeNull();
+    expect(api.roster).toHaveBeenLastCalledWith(null);
+  },
+);
+
 it('heads the Group with its place in the tree and offers the five built tabs', async () => {
   const { container } = show();
   expect(screen.getByRole('heading', { name: 'Logistică' })).toBeVisible();

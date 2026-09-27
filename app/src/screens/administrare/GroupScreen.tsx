@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
+import { parsePositiveInt } from '../../lib/ids';
 import { useRoles } from '../../queries/reference';
 import {
   groupAuthority,
@@ -84,11 +85,13 @@ function Breadcrumb({
  */
 export default function GroupScreen() {
   const { groupId } = useParams();
-  const id = Number(groupId);
+  // A malformed id is no Group: 0 matches none, and no query is sent for it.
+  const parsedId = parsePositiveInt(groupId);
+  const id = parsedId ?? 0;
   const capabilities = useCapabilities();
   const groupsQuery = useAdminGroups();
   const myGroupsQuery = useMyGroupRoles();
-  const rosterQuery = useGroupRoster(Number.isFinite(id) ? id : null);
+  const rosterQuery = useGroupRoster(parsedId);
   const rolesQuery = useRoles();
   const membersQuery = useAppointableMembers();
   const command = useGroupCommand();
@@ -166,7 +169,7 @@ export default function GroupScreen() {
     }
   }
 
-  if (groupsQuery.isPending)
+  if (parsedId !== null && groupsQuery.isPending)
     return (
       <section className="p-4 md:p-6">
         <p role="status">Se încarcă grupul…</p>

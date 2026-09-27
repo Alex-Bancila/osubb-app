@@ -88,6 +88,12 @@ describe('notification presentation', () => {
     expect(inAppLink('https://example.com')).toBeNull();
     expect(inAppLink('//example.com')).toBeNull();
     expect(inAppLink('javascript:alert(1)')).toBeNull();
+    // The URL parser strips a tab or new line and reads a backslash as a
+    // slash, so these would resolve to another host (security audit F5).
+    expect(inAppLink('/\t/evil.example')).toBeNull();
+    expect(inAppLink('/\n/evil.example')).toBeNull();
+    expect(inAppLink('/\\evil.example')).toBeNull();
+    expect(inAppLink('data:text/html,hi')).toBeNull();
   });
 
   it('maps a row into the model the screen renders', () => {

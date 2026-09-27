@@ -198,7 +198,7 @@ describe('MemberOption', () => {
     expect(screen.getByText('Ana Pop')).toBeVisible();
     const avatar = container.querySelector('[data-slot="member-avatar"]');
     expect(avatar).toHaveTextContent('AP');
-    expect(avatar).toHaveStyle({ background: '#123456' });
+    expect(avatar).toHaveStyle({ backgroundColor: '#123456' });
     expect(container.querySelector('img')).toBeNull();
   });
 
@@ -207,7 +207,7 @@ describe('MemberOption', () => {
     const avatar = container.querySelector<HTMLElement>(
       '[data-slot="member-avatar"]',
     );
-    expect(avatar?.style.background).toBe('var(--brand-red)');
+    expect(avatar?.style.backgroundColor).toBe('var(--brand-red)');
   });
 
   it('loads only a small, lazy thumbnail when one exists', () => {

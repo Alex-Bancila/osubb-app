@@ -5,6 +5,7 @@ import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
+import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
@@ -135,7 +136,7 @@ function SidebarContent({
         <div className="flex min-w-0 items-center gap-3 rounded-lg p-2">
           <span
             className="grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold text-white"
-            style={{ background: avatarColor ?? 'var(--brand-red)' }}
+            style={{ backgroundColor: safeHexColor(avatarColor) }}
             aria-hidden="true"
           >
             {initials(memberName ?? memberEmail)}

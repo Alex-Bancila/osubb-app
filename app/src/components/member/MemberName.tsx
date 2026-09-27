@@ -14,10 +14,13 @@ import { memberDisplayName, type MemberIdentity } from './member-identity';
 export function MemberName({
   showFullName = false,
   size = 'default',
+  avatarFallback,
   className,
   ...identity
 }: MemberIdentity & {
   showFullName?: boolean;
+  /** The avatar's colour when the Member has no usable one of their own. */
+  avatarFallback?: string;
   /** `sm` for dense rows: a smaller avatar and type, same touch target. */
   size?: 'default' | 'sm';
   className?: string;
@@ -44,6 +47,7 @@ export function MemberName({
         <MemberAvatar
           name={identity.fullName}
           avatarColor={identity.avatarColor}
+          fallbackColor={avatarFallback}
           className={size === 'sm' ? 'size-6 text-[0.6rem]' : undefined}
         />
         <span className="grid min-w-0">

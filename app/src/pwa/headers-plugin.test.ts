@@ -49,9 +49,7 @@ describe('Cloudflare _headers (ruling L12, #770)', () => {
     expect(template).toContain('__SUPABASE_REALTIME_ORIGIN__');
     expect(rendered).not.toMatch(/__SUPABASE_\w+__/);
     const all = rules.get('/*');
-    const csp = directives(
-      all?.get('Content-Security-Policy-Report-Only') ?? '',
-    );
+    const csp = directives(all?.get('Content-Security-Policy') ?? '');
     expect(csp.get('connect-src')).toEqual([
       "'self'",
       `https://${STAGING_HOST}`,
@@ -59,15 +57,16 @@ describe('Cloudflare _headers (ruling L12, #770)', () => {
     ]);
   });
 
-  it('ships the CSP report-only, scripts from self only', () => {
+  it('enforces the CSP (security audit F2): scripts and styles from self only', () => {
     const all = rules.get('/*');
-    expect(all?.has('Content-Security-Policy')).toBe(false);
-    const csp = directives(
-      all?.get('Content-Security-Policy-Report-Only') ?? '',
-    );
+    // Enforcing, not report-only: a report-only policy blocks nothing.
+    expect(all?.has('Content-Security-Policy-Report-Only')).toBe(false);
+    const csp = directives(all?.get('Content-Security-Policy') ?? '');
     expect(csp.get('default-src')).toEqual(["'self'"]);
     expect(csp.get('script-src')).toEqual(["'self'"]);
-    expect(csp.get('style-src')).toEqual(["'self'", "'unsafe-inline'"]);
+    // No 'unsafe-inline': React sets style props through the CSSOM, which CSP
+    // does not govern, and nothing writes a <style> or style="" as markup.
+    expect(csp.get('style-src')).toEqual(["'self'"]);
     expect(csp.get('frame-ancestors')).toEqual(["'none'"]);
     expect(csp.get('object-src')).toEqual(["'none'"]);
   });

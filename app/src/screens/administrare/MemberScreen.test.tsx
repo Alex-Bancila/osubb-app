@@ -46,7 +46,11 @@ const ready = { isPending: false, isError: false };
 
 function show() {
   return render(
-    <MemoryRouter initialEntries={['/administrare/membri/target']}>
+    <MemoryRouter
+      initialEntries={[
+        '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+      ]}
+    >
       <Routes>
         <Route
           path="/administrare/membri/:memberId"
@@ -59,7 +63,7 @@ function show() {
 
 function member(patch: object = {}) {
   return {
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     nickname: 'Nana',
     fullName: 'Ana Pop',
     roleLabel: 'Voluntar',
@@ -127,8 +131,12 @@ it('BC sees the Nickname over the full name, every Group Role and both editors',
   expect(
     screen.getByRole('link', { name: 'Evenimente · Comunicare' }),
   ).toHaveAttribute('href', '/administrare/grupuri/2');
-  expect(screen.getByText('Editor rol target')).toBeVisible();
-  expect(screen.getByText('Retrimitere target')).toBeVisible();
+  expect(
+    screen.getByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Retrimitere 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+  ).toBeVisible();
   expect(screen.getByRole('button', { name: 'Salvează numele' })).toBeVisible();
   expect(
     (
@@ -141,7 +149,10 @@ it('BC sees the Nickname over the full name, every Group Role and both editors',
 
 it('BC sees whether the Member acknowledged the Privacy Notice, and which version', () => {
   const view = show();
-  expect(state.privacy).toHaveBeenLastCalledWith('target', true);
+  expect(state.privacy).toHaveBeenLastCalledWith(
+    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+    true,
+  );
   expect(
     screen.getByText('Politica de confidențialitate').nextElementSibling,
   ).toHaveTextContent('neconfirmată');
@@ -150,7 +161,7 @@ it('BC sees whether the Member acknowledged the Privacy Notice, and which versio
   state.privacy.mockReturnValue({
     ...ready,
     data: {
-      memberId: 'target',
+      memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
       noticeVersion: '1.0',
       acknowledgedAt: '2026-09-26T08:30:00Z',
     },
@@ -176,10 +187,17 @@ it.each(['manager', 'responsible'])(
     ).toBeVisible();
     expect(screen.queryByRole('link', { name: 'Proiecte' })).toBeNull();
     expect(screen.queryByLabelText('Pseudonim')).toBeNull();
-    expect(screen.queryByText('Editor rol target')).toBeNull();
-    expect(screen.queryByText('Retrimitere target')).toBeNull();
+    expect(
+      screen.queryByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+    ).toBeNull();
+    expect(
+      screen.queryByText('Retrimitere 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+    ).toBeNull();
     expect(screen.queryByText('Politica de confidențialitate')).toBeNull();
-    expect(state.privacy).toHaveBeenLastCalledWith('target', false);
+    expect(state.privacy).toHaveBeenLastCalledWith(
+      '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+      false,
+    );
   },
 );
 
@@ -197,7 +215,9 @@ it('an ordinary Member of a Group gets no subtree, no editors and no invented po
     screen.getByText('Nu există grupuri în aria ta de administrare.'),
   ).toBeVisible();
   expect(screen.queryByLabelText('Pseudonim')).toBeNull();
-  expect(screen.queryByText('Editor rol target')).toBeNull();
+  expect(
+    screen.queryByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+  ).toBeNull();
   expect(
     screen.getByText('Nu există înregistrări pe care le poți vedea.'),
   ).toBeVisible();
@@ -215,7 +235,7 @@ it('sends the trimmed names and puts a Nickname refusal under its field', async 
   await user.type(nickname, '  Anuța ');
   await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
   expect(state.mutate).toHaveBeenCalledWith({
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     nickname: 'Anuța',
     fullName: 'Ana Pop',
   });
@@ -244,7 +264,7 @@ it('clears the Nickname to none and refuses a blank full name before sending', a
   await user.type(screen.getByLabelText('Nume complet'), 'Ana Maria Pop');
   await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
   expect(state.mutate).toHaveBeenCalledWith({
-    memberId: 'target',
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     nickname: null,
     fullName: 'Ana Maria Pop',
   });
@@ -290,6 +310,27 @@ it('says the Member is unavailable when the server returns no card', () => {
   ).toBeVisible();
 });
 
+it.each(['target', '7a3c1e2b', 'not-a-uuid-at-all-0000000000000000'])(
+  'says the Member is unavailable for the malformed id %s and queries nothing',
+  (raw) => {
+    render(
+      <MemoryRouter initialEntries={[`/administrare/membri/${raw}`]}>
+        <Routes>
+          <Route
+            path="/administrare/membri/:memberId"
+            element={<MemberScreen />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Membru indisponibil' }),
+    ).toBeVisible();
+    expect(state.member).toHaveBeenLastCalledWith(undefined);
+    expect(state.privacy).not.toHaveBeenCalledWith(raw, expect.anything());
+  },
+);
+
 it('keeps the confirmation and the stored names when the page refetches', async () => {
   const user = userEvent.setup();
   const view = show();
@@ -306,7 +347,11 @@ it('keeps the confirmation and the stored names when the page refetches', async 
     data: member({ nickname: 'Anuța' }),
   });
   view.rerender(
-    <MemoryRouter initialEntries={['/administrare/membri/target']}>
+    <MemoryRouter
+      initialEntries={[
+        '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+      ]}
+    >
       <Routes>
         <Route
           path="/administrare/membri/:memberId"

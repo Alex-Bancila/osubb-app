@@ -1,3 +1,5 @@
+import { sameOriginPath } from './links';
+
 /** Only application routes may survive the trip through an email link. */
 const memberRoutes = new Set([
   '/',
@@ -10,23 +12,17 @@ const memberRoutes = new Set([
   '/administrare',
 ]);
 
+/**
+ * A `next` or `redirect_to` destination: a same-origin path (the shared rule,
+ * `sameOriginPath`) whose route is a member route, otherwise `/`. Resolved
+ * against a sentinel origin, so the answer does not depend on where the page
+ * runs. Surrounding whitespace is refused outright rather than trimmed.
+ */
 export function safeAuthDestination(value: string | null): string {
-  if (
-    !value ||
-    !value.startsWith('/') ||
-    value.startsWith('//') ||
-    value.includes('\\') ||
-    [...value].some((character) => character.charCodeAt(0) <= 32)
-  )
-    return '/';
-  try {
-    const url = new URL(value, 'https://app.invalid');
-    if (url.origin !== 'https://app.invalid' || !memberRoutes.has(url.pathname))
-      return '/';
-    return url.pathname + url.search + url.hash;
-  } catch {
-    return '/';
-  }
+  if (!value || value !== value.trim()) return '/';
+  const path = sameOriginPath(value, 'https://app.invalid');
+  const { pathname } = new URL(path, 'https://app.invalid');
+  return memberRoutes.has(pathname) ? path : '/';
 }
 
 export function authDestination(): string {

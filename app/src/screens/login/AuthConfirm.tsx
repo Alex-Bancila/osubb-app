@@ -10,6 +10,14 @@ import {
   type LoginHandoff,
 } from '../../lib/auth-destination';
 import { useAuth } from '../../lib/auth';
+import {
+  ANY_ACCOUNT,
+  clearAccountPending,
+  forgetSignInRequest,
+  markAccountPending,
+  requestedSignInFor,
+} from '../../lib/sign-in-request';
+import { ConfirmAccountScreen } from '../../components/shell/ConfirmAccountScreen';
 import { Button, buttonVariants } from '../../components/ui/button';
 import {
   SessionLoader,
@@ -31,6 +39,32 @@ type ConfirmLink = {
   email: string;
 };
 
+const MISMATCH_MESSAGE = 'Linkul nu corespunde adresei tale.';
+
+const normalize = (email: string) => email.trim().toLowerCase();
+
+/**
+ * What a verified session means for a link, before the Member is let in.
+ *
+ *   'mismatch' — the link names an address and signed in another one.
+ *   'ask'      — nothing ties the account to this browser: no request for it
+ *                was made here (an invitation, another device, or a link
+ *                someone else sent). The verified address is shown first.
+ *   'ok'       — this browser asked for exactly that address.
+ *
+ * An email change is not compared: its link carries the old address while the
+ * session ends on the new one, and only a signed-in Member can start one.
+ */
+function checkAccount(
+  link: ConfirmLink,
+  verified: string,
+): 'ok' | 'ask' | 'mismatch' {
+  if (link.type === 'email_change') return 'ok';
+  if (link.email && normalize(verified) !== normalize(link.email))
+    return 'mismatch';
+  return requestedSignInFor(verified) ? 'ok' : 'ask';
+}
+
 /** Reads the emailed link. `null` when it is not one we can verify. */
 function linkFromUrl(): ConfirmLink | null {
   const params = new URLSearchParams(window.location.search);
@@ -43,10 +77,13 @@ function linkFromUrl(): ConfirmLink | null {
 type Status =
   | { kind: 'idle' }
   | { kind: 'verifying' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; mismatch?: boolean }
   /* An email change confirmed at one address of two (`double_confirm_changes`):
      GoTrue accepts the link but returns no session until the other one is used. */
   | { kind: 'half-confirmed' }
+  /* Signed in, but not by a request from this browser: the verified address
+     is shown and the Member confirms it is theirs before going in. */
+  | { kind: 'confirm-account'; email: string }
   | { kind: 'signed-in' };
 
 /**
@@ -56,8 +93,15 @@ type Status =
  * Only the Member's tap calls `verifyOtp` with the token hash, so the link and
  * the six-digit code in the same email stay valid until then.
  *
- * `/auth/callback` still handles `?code=` and `#access_token=` for any link
- * that goes through Supabase's own verify endpoint.
+ * `/auth/callback` still handles `?code=` (PKCE) for any link that goes
+ * through Supabase's own verify endpoint.
+ *
+ * The address in the link is never shown: it is text anyone can put in a URL.
+ * After `verifyOtp`, a link that names another address than the one it signed
+ * in is refused, and a link this browser did not ask for shows the verified
+ * address and waits for the Member to confirm it (`checkAccount`). Someone
+ * sending a Member a link to their own account (login CSRF) is caught either
+ * way: the session is dropped on this device and the page says so.
  */
 export default function AuthConfirm() {
   const { session, loading } = useAuth();
@@ -72,9 +116,34 @@ export default function AuthConfirm() {
         },
   );
 
+  function enter() {
+    forgetSignInRequest();
+    clearAccountPending();
+    setStatus({ kind: 'signed-in' });
+  }
+
+  /** Drops the session on this device, and says so only once it is gone. */
+  async function refuse() {
+    let failure: unknown = null;
+    try {
+      ({ error: failure } = await supabase.auth.signOut({ scope: 'local' }));
+    } catch (thrown) {
+      failure = thrown;
+    }
+    // Every guarded route stays held while the session could not be dropped.
+    if (!failure) clearAccountPending();
+    setStatus({
+      kind: 'error',
+      message: failure ? toAuthErrorMessage(failure) : MISMATCH_MESSAGE,
+      mismatch: true,
+    });
+  }
+
   async function confirm() {
     if (!link) return;
     setStatus({ kind: 'verifying' });
+    // Hold every tab's guarded routes until this link's account is settled.
+    markAccountPending(ANY_ACCOUNT);
     try {
       const { data, error } = await supabase.auth.verifyOtp({
         token_hash: link.tokenHash,
@@ -84,16 +153,27 @@ export default function AuthConfirm() {
         if (import.meta.env.DEV) {
           console.error('Supabase Auth link confirmation failed', error);
         }
+        clearAccountPending();
         setStatus({ kind: 'error', message: toAuthErrorMessage(error) });
         return;
       }
-      setStatus(
-        data.session ? { kind: 'signed-in' } : { kind: 'half-confirmed' },
-      );
+      if (!data.session) {
+        clearAccountPending();
+        setStatus({ kind: 'half-confirmed' });
+        return;
+      }
+      const email = data.session.user.email ?? '';
+      const check = checkAccount(link, email);
+      if (check === 'mismatch') await refuse();
+      else if (check === 'ask') {
+        markAccountPending(data.session.user.id);
+        setStatus({ kind: 'confirm-account', email });
+      } else enter();
     } catch (failure) {
       if (import.meta.env.DEV) {
         console.error('Supabase Auth link confirmation failed', failure);
       }
+      clearAccountPending();
       setStatus({ kind: 'error', message: toAuthErrorMessage(failure) });
     }
   }
@@ -107,6 +187,16 @@ export default function AuthConfirm() {
       <SessionScreen centered>
         <SessionLoader label="Te conectăm…" />
       </SessionScreen>
+    );
+  }
+
+  if (status.kind === 'confirm-account') {
+    return (
+      <ConfirmAccountScreen
+        email={status.email}
+        onContinue={enter}
+        onRefuse={() => void refuse()}
+      />
     );
   }
 
@@ -131,20 +221,18 @@ export default function AuthConfirm() {
   }
 
   const verifying = status.kind === 'verifying';
-  const handoff: LoginHandoff | undefined = link?.email
-    ? { email: link.email }
-    : undefined;
+  // The link's address only pre-fills the login form, and not after a
+  // mismatch: then it is not this Member's address at all.
+  const handoff: LoginHandoff | undefined =
+    link?.email && !(status.kind === 'error' && status.mismatch)
+      ? { email: link.email }
+      : undefined;
 
   return (
     <SessionScreen>
       <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
         Conectare la aplicația OSUBB
       </h1>
-      {link?.email && (
-        <p className="leading-relaxed">
-          Te conectezi ca <strong>{link.email}</strong>.
-        </p>
-      )}
       <p className="text-sm leading-relaxed text-muted-foreground">
         Apasă butonul ca să intri în aplicație pe acest dispozitiv. Linkul se
         folosește o singură dată.

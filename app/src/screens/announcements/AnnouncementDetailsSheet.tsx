@@ -17,6 +17,7 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
+import { safeHttpUrl } from '../../lib/links';
 import { cn } from '../../lib/utils';
 import {
   priorityMeta,
@@ -37,6 +38,9 @@ export default function AnnouncementDetailsSheet({
 
   const meta = priorityMeta(announcement.priority);
   const isCritical = announcement.priority === 'critical';
+  // The Attached Link rule (`safeHttpUrl`): a legacy row that is not http(s)
+  // renders no form link rather than an href the server never checked.
+  const formUrl = safeHttpUrl(announcement.formUrl);
 
   return (
     <Sheet
@@ -165,13 +169,13 @@ export default function AnnouncementDetailsSheet({
               {announcement.body}
             </div>
 
-            {announcement.formLabel && announcement.formUrl && (
+            {announcement.formLabel && formUrl && (
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
                 <div className="mb-2 text-xs font-semibold text-primary">
                   Formular asociat
                 </div>
                 <a
-                  href={announcement.formUrl}
+                  href={formUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-ring"

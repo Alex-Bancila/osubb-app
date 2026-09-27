@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { formatBucharestDay } from '../../lib/calendar-time';
 import { formatPoints } from '../../lib/format';
+import { isUuid } from '../../lib/ids';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { chosenGroupId } from '../../lib/work-filter';
 import {
@@ -316,11 +317,9 @@ function MemberHistory({ memberId }: { memberId: string }) {
 
 export default function MemberTrackerScreen() {
   const { id = '' } = useParams();
-  const valid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   return (
     <LeadershipAccess>
-      {valid ? (
+      {isUuid(id) ? (
         <MemberHistory memberId={id} />
       ) : (
         <div className="p-6">

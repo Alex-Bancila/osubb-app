@@ -156,6 +156,7 @@ describe('route guards', () => {
     grant(...EVERY_CAPABILITY);
     capabilities.pending = false;
     privacy.blocked = false;
+    localStorage.removeItem('osubb.account-pending');
     window.history.pushState({}, '', '/');
   });
 
@@ -177,6 +178,17 @@ describe('route guards', () => {
     expect(
       await screen.findByRole('heading', { name: 'Privacy Notice' }),
     ).toBeVisible();
+  });
+
+  it('holds every member screen while a link-signed account waits for confirmation (security audit F3)', async () => {
+    auth.useAuth.mockReturnValue(member);
+    localStorage.setItem('osubb.account-pending', 'member');
+    window.history.pushState({}, '', '/profil');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Confirmă contul' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Profil screen' })).toBeNull();
   });
 
   it('puts the Privacy Acknowledgement step in front of every member screen', async () => {

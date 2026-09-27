@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react';
 import { toAuthErrorMessage } from '../../lib/auth-error-message';
 import { authCallbackUrl } from '../../lib/auth-destination';
 import { normalizeEmail } from '../../lib/normalize';
+import { rememberSignInRequest } from '../../lib/sign-in-request';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '../../components/ui/field';
@@ -52,6 +53,8 @@ export default function LoginScreen({
     if (!address) return;
 
     setStatus('sending');
+    // `/auth/confirm` signs in without a second question only for this address.
+    rememberSignInRequest(address);
     let authError;
     try {
       ({ error: authError } = await supabase.auth.signInWithOtp({

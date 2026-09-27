@@ -7,6 +7,8 @@
  * Web Push (`web_push`, `notification`) for Safari, which shows that one
  * without waking this worker. Every other top-level key is ignored here.
  */
+import { inAppPath } from '../lib/links';
+
 export type PushPayload = {
   id: number;
   title: string;
@@ -49,17 +51,10 @@ export function parsePushPayload(text: string | null | undefined) {
  * The absolute URL a tap opens. Notification links are in-app routes
  * (`/tracker/12`); anything else — absent, empty, protocol-relative or an
  * absolute URL that would leave the app — opens the notification list, the
- * same rule the in-app list applies (`inAppLink`).
+ * same rule the in-app list applies (`inAppPath` in `lib/links.ts`).
  */
 export function targetUrl(link: string | null | undefined, origin: string) {
-  const fallback = new URL(NOTIFICATIONS_PATH, origin);
-  const trimmed = link?.trim() ?? '';
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//'))
-    return fallback.href;
-  // The URL parser reads `/\host` (and a tab or new line inside `//`) as
-  // another host, so the resolved origin is checked too.
-  const url = new URL(trimmed, origin);
-  return url.origin === fallback.origin ? url.href : fallback.href;
+  return new URL(inAppPath(link, origin) ?? NOTIFICATIONS_PATH, origin).href;
 }
 
 /** The slice of the worker's `Clients` and `WindowClient` a tap needs. */

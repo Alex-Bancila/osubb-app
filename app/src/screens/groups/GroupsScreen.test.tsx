@@ -119,6 +119,23 @@ function detail(id = 2) {
     </MemoryRouter>,
   );
 }
+it.each(['2.0', '0x2', '2e0', '02'])(
+  'shows Grup indisponibil for the malformed id %s and never queries Group 2',
+  (raw) => {
+    render(
+      <MemoryRouter initialEntries={[`/grupuri/${raw}`]}>
+        <Routes>
+          <Route path="/grupuri/:groupId" element={<MemberGroupScreen />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Grup indisponibil' }),
+    ).toBeVisible();
+    expect(api.roster).not.toHaveBeenCalledWith(2);
+    expect(api.events).not.toHaveBeenCalledWith(2);
+  },
+);
 it('lists only eligible active Groups and searches by name, with their first ancestor', async () => {
   list();
   expect(

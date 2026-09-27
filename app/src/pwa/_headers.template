@@ -11,14 +11,18 @@
 # rules gets both values joined with a comma. So Cache-Control is set only in
 # the path-specific rules below, never under /*.
 #
-# The CSP ships as Report-Only: violations show in DevTools and block nothing.
-# After a clean pass on staging, a follow-up renames the header to
-# Content-Security-Policy. style-src keeps 'unsafe-inline' while Ionic is in
-# the bundle (#699), then is retried without it. frame-ancestors is ignored in
-# Report-Only, which is why X-Frame-Options stays alongside it.
+# The CSP is enforced. There is no report-uri or report-to: a violation shows
+# in the browser's DevTools console, and is blocked. Enforcing is what makes
+# the policy a defence: supabase-js keeps the session, refresh token included,
+# in localStorage, so injected script would otherwise be an account takeover.
+# style-src has no 'unsafe-inline': React applies style={…} through the CSSOM,
+# which CSP does not govern, and nothing in the bundle writes a <style> or a
+# style="" attribute. docs/backend/hosting-headers.md records the walk-through
+# that showed zero violations on every page before this switched.
+# X-Frame-Options stays alongside frame-ancestors for older browsers.
 
 /*
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' __SUPABASE_ORIGIN__ __SUPABASE_REALTIME_ORIGIN__; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' __SUPABASE_ORIGIN__ __SUPABASE_REALTIME_ORIGIN__; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff

@@ -44,6 +44,7 @@ vi.mock('../Placeholder', () => ({
 import App from '../../App';
 import { AuthProvider } from '../../lib/auth';
 import LoginScreen from './LoginScreen';
+import { requestedSignInFor } from '../../lib/sign-in-request';
 
 type FakeSession = { access_token: string; user: { id: string } };
 type AuthListener = (event: string, session: FakeSession | null) => void;
@@ -95,6 +96,16 @@ describe('LoginScreen', () => {
         expect.objectContaining({ email: 'membru@exemplu.ro' }),
       ),
     );
+  });
+
+  it('remembers the address it asked a link for, so /auth/confirm can match it (audit F3)', async () => {
+    localStorage.clear();
+    render(<LoginScreen initialEmail="Membru@Exemplu.ro" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Trimite linkul' }));
+
+    await waitFor(() => expect(auth.signInWithOtp).toHaveBeenCalled());
+    expect(requestedSignInFor('membru@exemplu.ro')).toBe(true);
+    expect(requestedSignInFor('altcineva@exemplu.ro')).toBe(false);
   });
 
   it('links the Privacy Notice from the footer, before and after sending (#771)', async () => {

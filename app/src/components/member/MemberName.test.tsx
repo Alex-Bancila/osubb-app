@@ -67,3 +67,35 @@ it('reads nothing until pressed, then opens the Member Card', async () => {
   expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
   expect(hook).toHaveBeenCalledWith('m-1');
 });
+
+it('renders a stored avatar colour only when it is #rrggbb (security audit F1)', () => {
+  const { container, rerender } = render(
+    <MemberName
+      memberId="m-1"
+      fullName="Ana Pop"
+      avatarColor="url(https://attacker.example/p.gif?m=1)"
+    />,
+  );
+  const avatar = () =>
+    container.querySelector<HTMLElement>('[data-slot="member-avatar"]');
+  // Every name in the app renders this avatar: a Member-written value such
+  // as url(...) must never reach a style, so the fallback colour shows.
+  expect(avatar()?.getAttribute('style') ?? '').not.toContain('url(');
+  expect(avatar()?.style.backgroundImage).toBe('');
+  expect(avatar()?.style.backgroundColor).toBe('var(--brand-red)');
+
+  rerender(
+    <MemberName memberId="m-1" fullName="Ana Pop" avatarColor="#284C93" />,
+  );
+  expect(avatar()?.style.backgroundColor).toBe('rgb(40, 76, 147)');
+
+  rerender(
+    <MemberName
+      memberId="m-1"
+      fullName="Ana Pop"
+      avatarColor={null}
+      avatarFallback="var(--ink-700)"
+    />,
+  );
+  expect(avatar()?.style.backgroundColor).toBe('var(--ink-700)');
+});
