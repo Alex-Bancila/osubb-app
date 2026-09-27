@@ -80,7 +80,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
         <span
           aria-checked="false"
           aria-label="1 stea — Foarte ușor"
-          class="group/star grid size-11 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
+          class="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
           data-unchecked=""
           id="base-ui-_r_72_"
           role="radio"
@@ -115,7 +115,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
         <span
           aria-checked="false"
           aria-label="2 stele — Ușor"
-          class="group/star grid size-11 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
+          class="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
           data-unchecked=""
           id="base-ui-_r_75_"
           role="radio"
@@ -150,7 +150,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
         <span
           aria-checked="true"
           aria-label="3 stele — Mediu"
-          class="group/star grid size-11 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
+          class="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
           data-checked=""
           data-composite-item-active=""
           id="base-ui-_r_78_"
@@ -186,7 +186,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
         <span
           aria-checked="false"
           aria-label="4 stele — Greu"
-          class="group/star grid size-11 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
+          class="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
           data-unchecked=""
           id="base-ui-_r_7b_"
           role="radio"
@@ -221,7 +221,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
         <span
           aria-checked="false"
           aria-label="5 stele — Foarte greu"
-          class="group/star grid size-11 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
+          class="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
           data-unchecked=""
           id="base-ui-_r_7e_"
           role="radio"
