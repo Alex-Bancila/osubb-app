@@ -85,7 +85,7 @@ export function PromotionProgress() {
       );
     case 'reference':
       return (
-        <Frame title="Punctaj în semestru">
+        <Frame title="Punctaj de la ultima evaluare">
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-2xl font-bold text-foreground">
               {formatPoints(view.points)}
@@ -95,7 +95,7 @@ export function PromotionProgress() {
             </span>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Pragul semestrului: {pointCount(view.threshold)}
+            Pragul în vigoare: {pointCount(view.threshold)}
           </p>
         </Frame>
       );

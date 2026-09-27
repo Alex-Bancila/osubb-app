@@ -261,7 +261,10 @@ describe('PromotionProgress (#634)', () => {
       expect(screen.getByText('12')).toBeInTheDocument();
       expect(screen.getByText('puncte de la 1 iulie 2026')).toBeInTheDocument();
       expect(
-        screen.getByText('Pragul semestrului: 30 de puncte'),
+        screen.getByText('Pragul în vigoare: 30 de puncte'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Punctaj de la ultima evaluare' }),
       ).toBeInTheDocument();
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(screen.queryByText(/mai ai|depășit/i)).not.toBeInTheDocument();
