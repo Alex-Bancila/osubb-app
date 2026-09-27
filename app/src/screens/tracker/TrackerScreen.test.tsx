@@ -145,6 +145,7 @@ function query(overrides: Record<string, unknown> = {}) {
     data: [],
     isPending: false,
     isError: false,
+    isSuccess: !overrides.isPending && !overrides.isError,
     refetch,
     ...overrides,
   });
@@ -845,6 +846,25 @@ describe('My tasks screen', () => {
       );
       expect(screen.queryByRole('dialog')).toBeNull();
       await user.click(screen.getByRole('tab', { name: 'Taskurile mele' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('never opens De gestionat while Taskurile mele failed to load', () => {
+      query({ isError: true, data: undefined, error: new Error('boom') });
+      hooks.useTaskManagement.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+      });
+      hooks.useManagedTasks.mockReturnValue({
+        data: [taskRow({ id: 2, title: 'Al doilea task' })],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?task=2');
+      expect(
+        screen.getByRole('tab', { name: 'Taskurile mele' }),
+      ).toHaveAttribute('aria-selected', 'true');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
 

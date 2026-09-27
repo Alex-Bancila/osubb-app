@@ -117,11 +117,12 @@ export default function TrackerScreen() {
   }
   // A Task that is not one of mine but is in De gestionat (Acasă's De evaluat,
   // #822) opens De gestionat and that Task's details sheet — where the
-  // Evaluation control is — once per link, after both lists have loaded.
+  // Evaluation control is — once per link, after both lists have loaded (a
+  // failed Taskurile mele read never routes a Task of mine to De gestionat).
   const managedLanding =
     linkedId !== null &&
-    !mine.isPending &&
-    !mine.data?.some((task) => task.id === linkedId) &&
+    mine.isSuccess &&
+    !mine.data.some((task) => task.id === linkedId) &&
     managed.data?.some((task) => task.id === linkedId)
       ? linkedId
       : null;
