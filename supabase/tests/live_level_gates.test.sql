@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(33);
 
 truncate public.profiles cascade;
 
@@ -186,6 +186,14 @@ select is((select count(*) from public.member_points), 0::bigint,
   'a live BC Profile without organisation claims reads no member_points');
 select is((select count(*) from public.leaderboard), 0::bigint,
   'a live BC Profile without organisation claims reads no leaderboard');
+with u as (update public.profiles set nickname = 'Fara Revendicari' where id = 'e4700000-0000-0000-0000-000000000000' returning 1)
+select is((select count(*) from u)::int, 0,
+  'a live BC Profile without organisation claims edits no Profile');
+select throws_ok(
+  $$ insert into public.points_ledger (member_id, delta, reason, awarded_by, note)
+     values ('e4700000-0000-0000-0000-000000000000', -4, 'sanction', 'e4700000-0000-0000-0000-000000000006', 'claimless') $$,
+  '42501', null,
+  'a live BC Profile without organisation claims records no sanction');
 reset role;
 -- member_points already answers nothing without claims, so the leaderboard's
 -- own guards are pinned in the catalog.
