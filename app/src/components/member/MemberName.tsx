@@ -21,7 +21,11 @@ export function MemberName({
   showFullName?: boolean;
   /** The avatar's colour when the Member has no usable one of their own. */
   avatarFallback?: string;
-  /** `sm` for dense rows: a smaller avatar and type, same touch target. */
+  /**
+   * `sm` for dense rows: a smaller avatar and type, as tall as its text with
+   * a mouse and a 44 px target on a touch screen. (`min-h-9` is 56 px in this
+   * app's spacing scale, so no step of it is used here.)
+   */
   size?: 'default' | 'sm';
   className?: string;
 }) {
@@ -39,7 +43,7 @@ export function MemberName({
         className={cn(
           'group/member inline-flex max-w-full min-w-0 items-center rounded-md text-left align-middle outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring',
           size === 'sm'
-            ? 'min-h-9 gap-1.5 text-sm pointer-coarse:min-h-11'
+            ? 'gap-1.5 text-sm pointer-coarse:min-h-11'
             : 'min-h-11 gap-2',
           className,
         )}

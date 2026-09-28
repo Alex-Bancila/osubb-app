@@ -35,7 +35,7 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
   const progress = useTaskProgress();
   const { session } = useAuth();
   return (
-    <PageGrid as="ul" columns="collection" data-grid="task-cards">
+    <PageGrid as="ul" columns="collection" equalHeights data-grid="task-cards">
       {rows.map((row) => (
         <li key={row.id} data-slot="task-card-row">
           <TaskCard

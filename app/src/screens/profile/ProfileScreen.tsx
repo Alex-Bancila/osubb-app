@@ -61,14 +61,12 @@ import { useRoleTimelineShown } from './role-timeline-shown';
 const BOARD_LEVEL = 5;
 
 /*
- * Rows of unrelated panels (#859): each panel keeps its own height instead of
- * stretching to the tallest one in its row, and small panels stack in one
- * column beside a tall one. The stack is one grid cell; the panels in it keep
- * the grid's gap between them.
+ * Rows of unrelated panels (#859, on #876's content-sized `PageGrid`): each
+ * panel keeps its own height, and small panels stack in one column beside a
+ * tall one. The stack is one grid cell; the panels in it keep the grid's gap
+ * between them.
  */
-const contentSized = 'items-start *:h-auto';
 const stackClass = 'flex min-w-0 flex-col gap-4 md:gap-6';
-const inStack = 'h-auto';
 
 /**
  * Profilul meu (#824, ruling R27; #859): three rows of two columns from
@@ -214,7 +212,8 @@ export default function ProfileScreen() {
       {/* PageGrid is m-0, which cancels the Page's space-y between rows;
           the rows keep the grid's own gap between them instead. */}
       <div className="flex flex-col gap-4 md:gap-6">
-        <PageGrid columns={2}>
+        {/* A like pair, each ending in its Editează button: one height. */}
+        <PageGrid columns={2} equalHeights>
           <Panel eyebrow="Cont" icon={UserRound} title="Identitate">
             <div className="flex h-full flex-col gap-4">
               <div className="flex min-w-0 items-start gap-4">
@@ -319,7 +318,7 @@ export default function ProfileScreen() {
           </Panel>
         </PageGrid>
 
-        <PageGrid columns={2} className={contentSized}>
+        <PageGrid columns={2}>
           {onBoard ? (
             <Panel
               eyebrow={
@@ -355,7 +354,6 @@ export default function ProfileScreen() {
                     eyebrow="Parcurs"
                     icon={TrendingUp}
                     title="Punctaj personal"
-                    className={inStack}
                   >
                     <div data-testid="personal-points-card">
                       <PointsTotal points={pointsQuery.data ?? 0} />
@@ -365,7 +363,6 @@ export default function ProfileScreen() {
                   <PromotionPanel
                     state={promotion}
                     totalPoints={pointsQuery.data}
-                    className={inStack}
                   />
                 ))}
               {timelineShown && (
@@ -373,7 +370,6 @@ export default function ProfileScreen() {
                   eyebrow="Parcurs"
                   icon={GraduationCap}
                   title="Parcursul organizațional"
-                  className={inStack}
                 >
                   <RoleTimeline profile={profile} />
                 </Panel>
@@ -382,7 +378,7 @@ export default function ProfileScreen() {
           )}
         </PageGrid>
 
-        <PageGrid columns={2} className={contentSized}>
+        <PageGrid columns={2}>
           <Panel
             eyebrow="Setări"
             icon={BellRing}
@@ -391,12 +387,7 @@ export default function ProfileScreen() {
             <PushDeviceCard />
           </Panel>
           <div className={stackClass}>
-            <Panel
-              eyebrow="Setări"
-              icon={Mail}
-              title="Email zilnic"
-              className={inStack}
-            >
+            <Panel eyebrow="Setări" icon={Mail} title="Email zilnic">
               <EmailDigestCard />
             </Panel>
             {/* The Privacy Notice (#771): always one tap away. */}
@@ -404,7 +395,6 @@ export default function ProfileScreen() {
               eyebrow="Setări"
               icon={ShieldCheck}
               title="Confidențialitate"
-              className={inStack}
             >
               <p className="text-sm text-muted-foreground">
                 Ce date folosește aplicația, cine le vede și ce drepturi ai.

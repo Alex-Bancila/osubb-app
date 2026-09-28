@@ -18,7 +18,8 @@ function capitalised(text: string): string {
  * Headers and boxes on shared rows. Once panels sit side by side, each spans
  * two grid rows — its header, then its box — through a subgrid, so a header
  * that wraps its link or carries a description never pushes its box below
- * the boxes next to it: the boxes in a row start and end together. Headers
+ * the boxes next to it. Two cards are like items, so the row has
+ * `equalHeights` (#876) and their boxes start and end together. Headers
  * keep to the bottom of their row, so the titles share one line whether or
  * not a panel carries an eyebrow (Următorul eveniment keeps 'Calendar'; the
  * Task panels drop theirs, B7).
@@ -82,7 +83,7 @@ export default function DashboardScreen() {
           onRetry={() => void capabilities.refetch()}
         />
       ) : leader ? (
-        <PageGrid columns={2} className={panelRow}>
+        <PageGrid columns={2} equalHeights className={panelRow}>
           {reviewer ? (
             <AwaitingReviewCard now={now} className={twoColumnPanel} />
           ) : (
@@ -95,13 +96,13 @@ export default function DashboardScreen() {
           {/* Its own row, as tall as what it holds: the row below shares one
               height between two cards, which this one should not dictate. */}
           <AwaitingReviewCard now={now} />
-          <PageGrid columns={2} className={panelRow}>
+          <PageGrid columns={2} equalHeights className={panelRow}>
             <NextTaskCard now={now} className={twoColumnPanel} />
             <NextEventCard now={now} className={twoColumnPanel} />
           </PageGrid>
         </>
       ) : (
-        <PageGrid columns={2} className={panelRow}>
+        <PageGrid columns={2} equalHeights className={panelRow}>
           <NextTaskCard now={now} className={twoColumnPanel} />
           <NextEventCard now={now} className={twoColumnPanel} />
         </PageGrid>

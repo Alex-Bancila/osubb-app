@@ -235,7 +235,7 @@ export default function VolunteersScreen() {
               emptyTitle={emptyTitle}
             />
           ) : visible.length ? (
-            <PageGrid as="ul" columns="collection">
+            <PageGrid as="ul" columns="collection" equalHeights>
               {visible.map((member) => (
                 <DirectoryCard
                   key={member.id}

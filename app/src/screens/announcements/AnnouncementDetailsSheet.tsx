@@ -93,15 +93,15 @@ function AnnouncementDetails({
             {announcement.publishedLabel}
           </time>
         </SheetDescription>
-        <div className="-my-1.5 flex min-w-0 items-center text-xs">
+        <div className="flex min-w-0 items-center text-xs pointer-coarse:-my-1.5">
           {announcement.authorMember ? (
             <MemberName
               {...announcement.authorMember}
               size="sm"
-              className="min-h-11 text-xs"
+              className="text-xs"
             />
           ) : (
-            <span className="inline-flex min-h-11 items-center gap-1 font-medium text-foreground">
+            <span className="inline-flex items-center gap-1 font-medium text-foreground pointer-coarse:min-h-11">
               <UserRound className="size-3.5" aria-hidden="true" />
               {announcement.author ?? 'OSUBB'}
             </span>

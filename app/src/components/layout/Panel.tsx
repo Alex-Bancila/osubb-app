@@ -1,6 +1,7 @@
-import { useId, type ReactNode } from 'react';
+import { useContext, useId, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from 'cn';
+import { PageGridFillContext } from './grid-fill';
 import { SectionHeader, type SectionHeaderAction } from './SectionHeader';
 import { stackClass, type PanelStack } from './stack';
 
@@ -10,12 +11,23 @@ import { stackClass, type PanelStack } from './stack';
  * colour and the small shadow. `rounded-xl` (24 px) is not used for boxes.
  */
 export const panelBoxClass =
-  'min-w-0 flex-1 rounded-md border border-border bg-card p-4 text-card-foreground shadow-(--sh-sm)';
+  'min-w-0 rounded-md border border-border bg-card p-4 text-card-foreground shadow-(--sh-sm)';
 
 /**
- * One panel: a `SectionHeader` **above** one box. The panel is a
- * `flex h-full flex-col` section and the box grows (`flex-1`), so in a
- * `PageGrid` row every box has the same height whatever it holds.
+ * The box's height: its content by default, the row under `equalHeights`.
+ * `self-start` keeps it to its content in a grid (an `alignHeaders`
+ * subgrid); `w-full` keeps it full width in the panel's flex column.
+ */
+function fillClass(fill: boolean) {
+  return fill ? 'flex-1 self-stretch' : 'w-full self-start';
+}
+
+/**
+ * One panel: a `SectionHeader` **above** one box. The box is as tall as its
+ * content (ruling of 2026-09-28, #876): it keeps to the top of its row
+ * (`self-start`, full width), also in an `alignHeaders` subgrid. Only in a
+ * `PageGrid` with `equalHeights` — a row of like items — does the panel fill
+ * its cell (`h-full`) and the box grow to the row (`flex-1`, `self-stretch`).
  *
  * Rules:
  * - The header sits outside the box; the box holds content only.
@@ -68,15 +80,19 @@ export function Panel({
   'aria-label'?: string;
 }) {
   const titleId = useId();
+  // Only the Panel that is the cell (or the one card in a cell's li) fills;
+  // it resets the context below, so a nested panel keeps to its content.
+  const fill = useContext(PageGridFillContext);
   const hasHeader = Boolean(
     eyebrow || title || description || action || control,
   );
   return (
     <section
       data-slot="panel"
+      data-fill={fill || undefined}
       aria-labelledby={title && !ariaLabel ? titleId : undefined}
       aria-label={ariaLabel}
-      className={cn('flex h-full min-w-0 flex-col', className)}
+      className={cn('flex min-w-0 flex-col', fill && 'h-full', className)}
     >
       {hasHeader && (
         <SectionHeader
@@ -95,12 +111,13 @@ export function Panel({
         <div
           data-slot="panel-body"
           className={cn(
-            'row-start-2 flex min-w-0 flex-1 flex-col',
+            'row-start-2 flex min-w-0 flex-col',
+            fillClass(fill),
             stack && stackClass[stack],
             boxClassName,
           )}
         >
-          {children}
+          <PageGridFillContext value={false}>{children}</PageGridFillContext>
         </div>
       ) : (
         <div
@@ -109,12 +126,13 @@ export function Panel({
           className={cn(
             panelBoxClass,
             'row-start-2',
+            fillClass(fill),
             stack && stackClass[stack],
             flush && 'p-0 [&_[data-slot=list-row]]:px-4',
             boxClassName,
           )}
         >
-          {children}
+          <PageGridFillContext value={false}>{children}</PageGridFillContext>
         </div>
       )}
     </section>
