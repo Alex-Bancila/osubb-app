@@ -209,33 +209,83 @@ it('describes a failure for a form: the reason and the copy', () => {
 });
 
 /*
- * Every reason the Perioade de evaluare panel (#702) can meet: #701's two
- * Period commands, #702's set_promotion_rule, #49's rule lookup passing
- * through a close, and set_org_setting (#681, #512).
+ * Every reason the Evaluări de rol tab (#827) can meet: #826's
+ * run_role_evaluation, set_promotion_threshold and reject_promotion_candidate,
+ * the rule lookup the run's ranking passes through, and set_org_setting
+ * (#681, #512) in the Setări tab.
  */
+it.each([
+  [
+    'role_evaluation_manage_forbidden',
+    'Doar BC și Moderatorul pot rula o evaluare de rol.',
+  ],
+  ['invalid_role_evaluation_kind', 'Alege tipul evaluării.'],
+  ['invalid_role_evaluation_name', 'Scrie numele evaluării.'],
+  ['date_range_in_future', 'Intervalul se poate termina cel târziu azi.'],
+  [
+    'promotion_threshold_not_set',
+    'Setează întâi pragul pentru acest tip de evaluare.',
+  ],
+  [
+    'promotion_threshold_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba pragurile.',
+  ],
+  [
+    'invalid_promotion_threshold',
+    'Pragul este un număr întreg de cel puțin 1.',
+  ],
+  [
+    'promotion_candidate_manage_forbidden',
+    'Doar BC și Moderatorul pot decide asupra candidaților.',
+  ],
+  [
+    'promotion_candidate_not_found',
+    'Candidatul nu mai este în listă. Pagina a fost actualizată.',
+  ],
+  [
+    'promotion_candidate_decided',
+    'Candidatul a fost deja decis. Pagina a fost actualizată.',
+  ],
+  ['invalid_rejection_reason', 'Scrie motivul respingerii.'],
+  ['rejection_reason_too_long', 'Motivul are cel mult 500 de caractere.'],
+  ['date_required', 'Alege data.'],
+])(
+  "has the issue's Romanian copy for the Evaluări de rol reason %s",
+  (reason, copy) => {
+    expect(reasonCopy(reason)).toBe(copy);
+    expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
+  },
+);
+
+it.each([
+  'invalid_date_range',
+  'name_too_short',
+  'name_too_long',
+  'reason_too_long',
+  'promotion_rule_not_found',
+  'nothing_to_update',
+  'invalid_org_setting_value',
+  'org_settings_manage_forbidden',
+  'org_setting_not_found',
+  'value_too_long',
+])('has Romanian copy for the shared reason %s', (reason) => {
+  const copy = reasonCopy(reason);
+  expect(copy).toBeDefined();
+  expect(copy).not.toMatch(/_/);
+});
+
 it.each([
   'period_already_open',
   'period_already_closed',
   'period_manage_forbidden',
   'period_not_found',
   'invalid_period_name',
-  'name_too_short',
-  'name_too_long',
   'promotion_threshold_already_stamped',
   'promotion_rule_manage_forbidden',
-  'promotion_rule_not_found',
   'promotion_rule_not_top_percent',
   'invalid_initial_threshold',
-  'nothing_to_update',
-  'invalid_org_setting_value',
-  'org_settings_manage_forbidden',
-  'org_setting_not_found',
-  'value_too_long',
-])('has Romanian copy for the Perioade de evaluare reason %s', (reason) => {
-  const copy = reasonCopy(reason);
-  expect(copy).toBeDefined();
-  expect(copy).not.toMatch(/_/);
-  expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
+])('no longer carries the retired open/close reason %s (R28)', (reason) => {
+  expect(reasonCopy(reason)).toBeUndefined();
 });
 
 /* #698: the application form link's own words (the settings form renames

@@ -379,40 +379,47 @@ const REASON_COPY = new Map<string, string>([
     'Invitația nu a putut fi trimisă. Încearcă din nou peste câteva minute.',
   ],
 
-  /* ---- Evaluation Periods and the Promotion Threshold (#701, #702) ---- */
+  /* ---- Role Evaluations, Promotion Thresholds and Candidates (#826, #827) ---- */
   [
-    'period_manage_forbidden',
-    'Doar BC și Moderatorul pot deschide sau închide o perioadă de evaluare.',
+    'role_evaluation_manage_forbidden',
+    'Doar BC și Moderatorul pot rula o evaluare de rol.',
   ],
-  ['invalid_period_name', 'Scrie numele perioadei.'],
+  ['invalid_role_evaluation_kind', 'Alege tipul evaluării.'],
+  ['invalid_role_evaluation_name', 'Scrie numele evaluării.'],
+  ['date_range_in_future', 'Intervalul se poate termina cel târziu azi.'],
+  // The browser's own: a date input left empty.
+  ['date_required', 'Alege data.'],
   [
-    'period_already_open',
-    'O perioadă de evaluare este deja deschisă. Pagina a fost actualizată.',
+    'promotion_threshold_not_set',
+    'Setează întâi pragul pentru acest tip de evaluare.',
   ],
   [
-    'period_already_closed',
-    'Perioada a fost deja închisă. Pagina a fost actualizată.',
+    'promotion_threshold_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba pragurile.',
   ],
-  ['period_not_found', 'Perioada nu mai este disponibilă. Reîncarcă pagina.'],
   [
-    'promotion_rule_manage_forbidden',
-    'Doar BC și Moderatorul pot schimba pragul de promovare.',
+    'invalid_promotion_threshold',
+    'Pragul este un număr întreg de cel puțin 1.',
   ],
+  [
+    'promotion_candidate_manage_forbidden',
+    'Doar BC și Moderatorul pot decide asupra candidaților.',
+  ],
+  [
+    'promotion_candidate_not_found',
+    'Candidatul nu mai este în listă. Pagina a fost actualizată.',
+  ],
+  [
+    'promotion_candidate_decided',
+    'Candidatul a fost deja decis. Pagina a fost actualizată.',
+  ],
+  ['invalid_rejection_reason', 'Scrie motivul respingerii.'],
+  // The browser's own limit for a rejection: 500, not the shared 1000.
+  ['rejection_reason_too_long', 'Motivul are cel mult 500 de caractere.'],
+  // Still raised by the ranking a run reads (`private.role_evaluation_rows`).
   [
     'promotion_rule_not_found',
     'Regula de promovare nu mai este disponibilă. Reîncarcă pagina.',
-  ],
-  [
-    'promotion_rule_not_top_percent',
-    'Această regulă de promovare nu are un prag de puncte.',
-  ],
-  [
-    'promotion_threshold_already_stamped',
-    'O perioadă s-a închis deja, așa că pragul vine acum din ultima închidere.',
-  ],
-  [
-    'invalid_initial_threshold',
-    'Pragul inițial este un număr întreg de cel puțin 1.',
   ],
 
   /* ---- Organization settings (#681, #512) ---- */

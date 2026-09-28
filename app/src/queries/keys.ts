@@ -49,6 +49,8 @@ export const keys = {
        Under `points` so an Evaluation's invalidation moves the bar too. */
     promotionProgress: (memberId: string | undefined) =>
       ['points', 'promotion-progress', { memberId }] as const,
+    /* Every viewer's bar: a threshold change moves them all (#827). */
+    promotionProgressAll: ['points', 'promotion-progress'] as const,
   },
   profile: {
     all: ['profile'] as const,
@@ -221,14 +223,26 @@ export const keys = {
     member: (memberId: string, viewerId: string | undefined) =>
       ['privacy', 'member', { memberId, viewerId }] as const,
   },
-  /* Evaluation Periods and what their close fixes (#702): the Periods, the
-     Promotion Threshold in force and the last close's Retention Signals. One
-     `['evaluation']` prefix, so opening or closing a Period refreshes all three
-     from a single invalidation. */
+  /* Role Evaluations and what they decide (#826, #827; ruling R28): the runs,
+     the two Promotion Thresholds and their log, the open Promotion
+     Candidates, a run's ranking and x. One `['evaluation']` prefix, so a run,
+     a threshold edit or a rejection refreshes all of them at once. */
   evaluation: {
     all: ['evaluation'] as const,
     roleEvaluations: (memberId: string | undefined) =>
       ['evaluation', 'role-evaluations', { memberId }] as const,
+    thresholds: (memberId: string | undefined) =>
+      ['evaluation', 'thresholds', { memberId }] as const,
+    thresholdChanges: (memberId: string | undefined) =>
+      ['evaluation', 'threshold-changes', { memberId }] as const,
+    candidates: (memberId: string | undefined) =>
+      ['evaluation', 'candidates', { memberId }] as const,
+    ranking: (
+      range: { kind: string; from: string; to: string } | null,
+      memberId: string | undefined,
+    ) => ['evaluation', 'ranking', range, { memberId }] as const,
+    topPercent: (memberId: string | undefined) =>
+      ['evaluation', 'top-percent', { memberId }] as const,
   },
   /* The organization settings (#681): every row, read by every Member. */
   orgSettings: {
