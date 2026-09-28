@@ -33,7 +33,7 @@ export function usePromotionProgressState(): PromotionState {
     level !== undefined &&
     level < 5;
 
-  const progress = usePromotionProgress({ enabled: onLadder });
+  const progress = usePromotionProgress({ role, enabled: onLadder });
 
   if (!onLadder || !role) return { kind: 'hidden' };
   if (progress.isError) {

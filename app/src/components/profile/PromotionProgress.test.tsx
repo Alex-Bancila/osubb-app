@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
     refetch: vi.fn(),
   },
   enabled: [] as boolean[],
+  roles: [] as (string | undefined)[],
 }));
 
 vi.mock('../../lib/auth', () => ({
@@ -43,8 +44,15 @@ vi.mock('../../queries/reference', () => ({
 }));
 
 vi.mock('../../queries/promotion-progress', () => ({
-  usePromotionProgress: ({ enabled }: { enabled: boolean }) => {
+  usePromotionProgress: ({
+    enabled,
+    role,
+  }: {
+    enabled: boolean;
+    role: string | undefined;
+  }) => {
     state.enabled.push(enabled);
+    state.roles.push(role);
     return state.progress;
   },
 }));
@@ -97,6 +105,7 @@ describe('PromotionProgress (#634)', () => {
     state.progress.error = null;
     state.progress.refetch.mockClear();
     state.enabled = [];
+    state.roles = [];
   });
 
   afterEach(() => {
@@ -148,7 +157,7 @@ describe('PromotionProgress (#634)', () => {
       setup('voluntar', progress(), { today: DAY_OF_TENURE });
 
       const bar = screen.getByRole('progressbar', {
-        name: 'Progres spre Voluntar Activ',
+        name: 'Progres spre pragul Voluntar Activ',
       });
       expect(bar).toHaveAttribute('aria-valuemin', '0');
       expect(bar).toHaveAttribute('aria-valuemax', '30');
@@ -156,7 +165,7 @@ describe('PromotionProgress (#634)', () => {
       expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 de puncte');
       expect(screen.getByText('de la 1 iulie 2026')).toBeInTheDocument();
       expect(
-        screen.getByText('Mai ai 18 puncte până la Voluntar Activ'),
+        screen.getByText('Mai ai 18 puncte până la pragul Voluntar Activ'),
       ).toBeInTheDocument();
       expect(
         screen.queryByText(/poți deveni voluntar activ/i),
@@ -167,7 +176,7 @@ describe('PromotionProgress (#634)', () => {
       setup('voluntar', progress({ points: 29 }));
 
       expect(
-        screen.getByText('Mai ai 1 punct până la Voluntar Activ'),
+        screen.getByText('Mai ai 1 punct până la pragul Voluntar Activ'),
       ).toBeInTheDocument();
     });
 
@@ -219,7 +228,7 @@ describe('PromotionProgress (#634)', () => {
       expect(empty).toHaveAttribute('aria-valuemax', '1');
       expect(empty).toHaveAttribute('aria-valuenow', '0');
       expect(
-        screen.getByText('Mai ai 3 puncte până la Voluntar Activ'),
+        screen.getByText('Mai ai 3 puncte până la pragul Voluntar Activ'),
       ).toBeInTheDocument();
     });
 
@@ -227,7 +236,7 @@ describe('PromotionProgress (#634)', () => {
       setup('voluntar', progress({ threshold: 40, points: 5 }));
 
       expect(
-        screen.getByText('Mai ai 35 de puncte până la Voluntar Activ'),
+        screen.getByText('Mai ai 35 de puncte până la pragul Voluntar Activ'),
       ).toBeInTheDocument();
     });
 
@@ -282,6 +291,24 @@ describe('PromotionProgress (#634)', () => {
       expect(container).toBeEmptyDOMElement();
     });
   });
+
+  // #828 (R28): the standing is read for the Member's own Role, which picks
+  // the kind (roleEvaluationKindFor: vot -> adunarea_generala), and no state
+  // promises a Role granted automatically.
+  it.each([
+    ['recrut', progress()],
+    ['voluntar', progress({ points: 45 })],
+    ['activ', progress()],
+    ['vot', progress()],
+  ])(
+    '%s: asks for the standing of its own Role and never says "automat"',
+    (role, data) => {
+      setup(role, data);
+
+      expect(state.roles.at(-1)).toBe(role);
+      expect(document.body.textContent).not.toMatch(/automat/i);
+    },
+  );
 
   it.each(['bce', 'bc'])(
     'level >= 5 (%s): the block is absent and nothing is fetched',
