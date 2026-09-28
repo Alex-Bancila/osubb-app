@@ -115,9 +115,7 @@ function AnnouncementDetails({
 
       {announcement.formLabel && formUrl && (
         <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-4">
-          <p className="m-0 text-xs font-semibold text-primary">
-            Formular asociat
-          </p>
+          <p className="m-0 text-xs font-semibold text-primary">Link atașat</p>
           <a
             href={formUrl}
             target="_blank"

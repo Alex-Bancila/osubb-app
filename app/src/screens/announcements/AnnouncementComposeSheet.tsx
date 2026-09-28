@@ -280,7 +280,7 @@ export default function AnnouncementComposeSheet() {
               className="space-y-3 rounded-md border p-4"
             >
               <p id={linkGroupLabelId} className="text-sm font-medium">
-                Formular asociat (opțional)
+                Link atașat (opțional)
               </p>
               <AttachedLinkFields
                 value={{ label: linkLabel, url: linkUrl }}

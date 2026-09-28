@@ -139,6 +139,7 @@ describe('AnnouncementDetailsSheet', () => {
     expect(formLink).toHaveAttribute('href', 'https://forms.gle/feedback');
     expect(formLink).toHaveAttribute('target', '_blank');
     expect(formLink).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getByText('Link atașat')).toBeInTheDocument();
   });
 
   it.each(['javascript:alert(1)', 'data:text/html,hi', 'forms.gle/feedback'])(
@@ -153,7 +154,7 @@ describe('AnnouncementDetailsSheet', () => {
       expect(
         screen.queryByRole('link', { name: /Deschide formular/ }),
       ).toBeNull();
-      expect(screen.queryByText('Formular asociat')).toBeNull();
+      expect(screen.queryByText('Link atașat')).toBeNull();
     },
   );
 
