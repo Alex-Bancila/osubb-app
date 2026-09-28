@@ -311,7 +311,8 @@ export default function MemberScreen() {
   });
   const name = memberDisplayName(data.nickname, data.fullName);
   // A Group page opened from here comes back here (navigation D4, A63).
-  const fromHere = backLinkState(location, `Înapoi la ${name}`);
+  // A label, not the name: names render only through MemberName.
+  const fromHere = backLinkState(location, 'Înapoi la membru');
 
   return (
     <Page>

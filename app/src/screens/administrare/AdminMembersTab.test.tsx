@@ -90,8 +90,14 @@ it('lists every Member with Rol and Status, the row opening their page', async (
     .closest('tr') as HTMLElement;
   expect(row).toHaveTextContent('BCE');
   expect(row).toHaveTextContent('Inactiv');
-  // One affordance per row: no "Pagina membrului" column beside it (B62).
-  expect(within(panel).queryByRole('link')).toBeNull();
+  // One visible affordance per row: no "Pagina membrului" column (B62); the
+  // keyboard gets a link that shows only when focused.
+  const keyboard = within(row).getByRole('link', {
+    name: 'Deschide pagina membrului Ștefi',
+  });
+  expect(keyboard).toHaveAttribute('href', '/administrare/membri/stefan');
+  expect(keyboard).toHaveClass('sr-only', 'focus-visible:not-sr-only');
+  expect(within(panel).getAllByRole('link')).toHaveLength(2);
   expect(
     within(panel).queryByRole('columnheader', { name: /Pagina membrului/ }),
   ).toBeNull();
@@ -130,7 +136,8 @@ it('folds Rol under the name on a phone and keeps the search full width (AD1)', 
   const row = screen
     .getByRole('button', { name: 'Profilul membrului Ștefi' })
     .closest('td') as HTMLElement;
-  expect(within(row).getByText('BCE')).toHaveClass('sm:hidden');
+  // Rol, and a status other than Activ, fold under the name on a phone.
+  expect(within(row).getByText('BCE · Inactiv')).toHaveClass('sm:hidden');
   expect(screen.getByLabelText('Caută un membru')).toHaveClass('w-full');
 });
 

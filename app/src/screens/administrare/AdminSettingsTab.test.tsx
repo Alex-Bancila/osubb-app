@@ -182,6 +182,7 @@ beforeEach(() => {
     parent_id: null,
     automatic_membership: true,
     is_organization: false,
+    min_level: 3,
   };
   db.groups.mockReturnValue({
     data: [
@@ -199,6 +200,7 @@ beforeEach(() => {
       }),
       group(9, 'Echipa IT', { ...team, parent_id: 8 }),
       group(10, 'Echipa Logistică', { ...team, automatic_membership: false }),
+      group(11, 'Voluntari activi', { ...team, min_level: 2 }),
       group(6, 'Consiliu privat', { is_private: true }),
       group(7, 'Gala 2025', { status: 'archived' }),
     ],
@@ -329,7 +331,8 @@ it('offers the Adunarea Generală only top-level Teams with automatic membership
     await screen.findByRole('heading', { name: 'Adunarea Generală' })
   ).closest('section') as HTMLElement;
   const select = within(section).getByLabelText('Grupul Adunării Generale');
-  // Not OSUBB, a Department, a child Team or a Team with a roster.
+  // Not OSUBB, a Department, a child Team, a Team with a roster or one at
+  // another Minimum Level than 3.
   expect(
     within(select)
       .getAllByRole('option')

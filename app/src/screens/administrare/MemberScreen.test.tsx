@@ -387,7 +387,9 @@ it('sends a Group page opened from here back to this member (D4, A63)', async ()
     </MemoryRouter>,
   );
   await user.click(screen.getByRole('link', { name: 'Comunicare' }));
-  expect(screen.getByRole('link', { name: 'Înapoi la Nana' })).toHaveAttribute(
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la membru' }),
+  ).toHaveAttribute(
     'href',
     '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
   );

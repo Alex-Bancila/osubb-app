@@ -152,13 +152,14 @@ const ADUNAREA_GENERALA: GroupSetting = {
   label: 'Grupul Adunării Generale',
   saved: 'Grupul Adunării Generale a fost salvat.',
   cleared: 'Grupul Adunării Generale a fost șters din setări.',
-  // The Adunarea Generală's shape: a public top-level Team whose membership
-  // follows a Minimum Level automatically — not OSUBB, a Department or a
+  // The Adunarea Generală's shape (CONTEXT.md): a public top-level Team with
+  // Automatic Membership at Minimum Level 3 — not OSUBB, a Department or a
   // Project, which the list used to offer too.
   fits: (group) =>
     group.category === 'team' &&
     group.parent_id === null &&
     group.automatic_membership &&
+    group.min_level === 3 &&
     !group.is_organization &&
     !group.is_private,
 };
