@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
-import { ChevronLeft, ChevronRight, Flag } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Flag } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 
+import { EmptyState, Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
@@ -15,7 +16,7 @@ import { useMyTasks } from '../../queries/tasks';
 import {
   buildMonthGrid,
   calendarTasks,
-  dayKeyLabel,
+  dayKeyHeading,
   daySummary,
   eventRangeForDays,
   filterEvents,
@@ -143,11 +144,17 @@ export function CalendarMonth({
     candidatures.isPending ||
     (managesTasks && showManaged && managed.isPending);
   const selected = selectedDay ? byDay.get(selectedDay) : undefined;
+  const hasItems = Boolean(
+    selected && (selected.events.length > 0 || selected.tasks.length > 0),
+  );
+  const heading = selectedDay ? dayKeyHeading(selectedDay) : null;
 
   return (
     <div className="calendar-month-view">
       <div className="calendar-month-bar">
-        <div className="flex items-center gap-1">
+        {/* The month sits between its arrows (C2), so what they move is
+            where the eye already is. */}
+        <div className="calendar-month-nav">
           <Button
             type="button"
             variant="outline"
@@ -157,6 +164,9 @@ export function CalendarMonth({
           >
             <ChevronLeft aria-hidden="true" />
           </Button>
+          <h2 className="calendar-month-label" aria-live="polite">
+            {monthLabel(month)}
+          </h2>
           <Button
             type="button"
             variant="outline"
@@ -305,13 +315,6 @@ export function CalendarMonth({
               <Flag className="size-3.5" aria-hidden="true" />
               Termen de task
             </span>
-            <span className="calendar-legend-item">
-              <span
-                className="calendar-legend-swatch is-other"
-                aria-hidden="true"
-              />
-              Alt eveniment OSUBB
-            </span>
           </p>
 
           {taskError ? (
@@ -336,66 +339,56 @@ export function CalendarMonth({
             )
           )}
 
-          <section
+          {/* One column under the grid (C1): the kit's header over the day's
+              cards, or over a box as tall as its one sentence. */}
+          <Panel
             className="calendar-selected-day"
-            aria-labelledby={
-              selectedDay ? 'calendar-selected-day-title' : undefined
+            eyebrow={heading?.weekday}
+            icon={CalendarDays}
+            title={
+              selectedDay && heading ? (
+                <time dateTime={selectedDay}>{heading.date}</time>
+              ) : (
+                'Ziua aleasă'
+              )
             }
-            aria-label={selectedDay ? undefined : 'Ziua aleasă'}
+            bare={hasItems}
+            stack={hasItems ? 4 : undefined}
           >
-            {selectedDay ? (
+            {!selectedDay ? (
+              <EmptyState>
+                Alege o zi din lună ca să vezi ce conține.
+              </EmptyState>
+            ) : !selected || !hasItems ? (
+              <EmptyState>Nimic programat în această zi.</EmptyState>
+            ) : (
               <>
-                <header className="calendar-day-head">
-                  <span className="calendar-day-rule" aria-hidden="true" />
-                  <h2 id="calendar-selected-day-title">
-                    <time dateTime={selectedDay}>
-                      {dayKeyLabel(selectedDay)}
-                    </time>
-                  </h2>
-                </header>
-                {!selected ||
-                (selected.events.length === 0 &&
-                  selected.tasks.length === 0) ? (
-                  <p className="calendar-day-empty">
-                    Nimic programat în această zi.
-                  </p>
-                ) : (
-                  <div className="calendar-day-lists">
-                    {selected.events.length > 0 && (
-                      <ol
-                        className="calendar-event-list"
-                        aria-label="Evenimente"
-                      >
-                        {selected.events.map((event) => (
-                          <li key={event.id}>
-                            <EventCard
-                              event={event}
-                              groups={groups}
-                              relevance={relevanceOf(event)}
-                              past={Date.parse(event.startsAt) < now}
-                            />
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                    {selected.tasks.length > 0 && (
-                      <ul className="calendar-task-list" aria-label="Termene">
-                        {selected.tasks.map((task) => (
-                          <li key={task.id}>
-                            <TaskDayRow task={task} />
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                {selected.events.length > 0 && (
+                  <ol className="calendar-day-list" aria-label="Evenimente">
+                    {selected.events.map((event) => (
+                      <li key={event.id}>
+                        <EventCard
+                          event={event}
+                          groups={groups}
+                          relevance={relevanceOf(event)}
+                          past={Date.parse(event.startsAt) < now}
+                        />
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {selected.tasks.length > 0 && (
+                  <ul className="calendar-day-list" aria-label="Termene">
+                    {selected.tasks.map((task) => (
+                      <li key={task.id}>
+                        <TaskDayRow task={task} />
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </>
-            ) : (
-              <p className="calendar-day-empty">
-                Alege o zi ca să vezi ce conține.
-              </p>
             )}
-          </section>
+          </Panel>
         </>
       )}
     </div>

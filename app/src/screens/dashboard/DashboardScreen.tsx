@@ -21,8 +21,7 @@ function capitalised(text: string): string {
  * the boxes next to it. Two cards are like items, so the row has
  * `equalHeights` (#876) and their boxes start and end together. Headers
  * keep to the bottom of their row, so the titles share one line whether or
- * not a panel carries an eyebrow (Următorul eveniment keeps 'Calendar'; the
- * Task panels drop theirs, B7).
+ * not a panel carries an eyebrow (none repeats its title: B7, #848).
  */
 const twoColumnPanel =
   'md:row-span-2 md:grid md:grid-rows-subgrid md:gap-y-0 md:*:first:self-end ' +

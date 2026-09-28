@@ -6,6 +6,7 @@
 - **Amended:** 2026-09-20 — ADR-0009 Wave 2 as built: `create_event` takes the owning Group, `update_event` and `cancel_event` join it, and the level-4 Calendar gate is gone (see the ADR-0009 header for the exact signatures)
 - **Amended:** 2026-09-20 — the relevant audience of an Event is its Group's Group Audience (Automatic Membership resolved, every Group below included); archiving a Group cancels its future Events
 - **Amended:** 2026-09-23 — past Events readable under the same Minimum Level rule; an Event may carry one Campaign; the month view and the Work Filter
+- **Amended:** 2026-09-28 — Other OSUBB Events are labelled by their Group's name ("Alt eveniment OSUBB" retired); a deadline Event offers no RSVP
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -107,8 +108,14 @@ Member Web Push delivery is a later architecture decision. Calendar commands wri
 
 **An Event may carry one Campaign.** `events.campaign_id` is nullable and, like a Task's, must name a Campaign owned by the Event's Group or by a Group above it on its path; `create_event` and `update_event` set it, and a Campaign change alone is not an important change. Campaigns remain labels: they earn points only through Tasks and never decide who may see or manage an Event.
 
-**Month view and filter.** The Calendar offers a month grid beside the agenda. A day shows the Events the Member may read and the deadlines of the Member's own Tasks (Executor or pending Candidate), with a manager-only toggle adding the Tasks they manage. The Work Filter (`CONTEXT.md`) narrows both, with its date range on the Event start. Colours follow the Tracker's rule: the Member's own Groups in their colour, the Organization Group in OSUBB red, Other OSUBB Events grey (grilling of 2026-09-23).
+**Month view and filter.** The Calendar offers a month grid beside the agenda. A day shows the Events the Member may read and the deadlines of the Member's own Tasks (Executor or pending Candidate), with a manager-only toggle adding the Tasks they manage. The Work Filter (`CONTEXT.md`) narrows both, with its date range on the Event start. Colours follow the Tracker's rule: the Member's own Groups in their colour, the Organization Group in OSUBB red, Other OSUBB Events grey (grilling of 2026-09-23). _Amended 2026-09-28 (Alex): Other OSUBB Events are labelled by their Group's name — the "Alt eveniment OSUBB" label is retired; grey stays, and the Group name is the non-colour cue._
 
 ## Amendment (2026-09-24) — Wave 3 cleanup
 
 An Event belongs to one Group. Organization behavior comes from `groups.is_organization`, and Group Audience drives notification recipients. The attendance read threshold for other Members is level 5; self attendance still requires that the Event itself is visible.
+
+## Amendment (2026-09-28) — Event labels and deadlines
+
+**Every Event is labelled by its Group's name** (Alex, 2026-09-28). An Event card names the Group that owns it — a Child Group with its parent ("Echipa Aplicație · Diverse"), the Organization Group as "OSUBB" — never a category noun. This applies to Other OSUBB Events too: the "Alt eveniment OSUBB" label (§Month view and filter, 2026-09-23) is retired. Their grey treatment stays, and the Group's name is the cue that does not depend on colour.
+
+**A deadline Event offers no RSVP.** An Event of type `deadline` is a date to keep, not a gathering, so the Calendar shows no "Participi?" controls on it. §RSVP and capacity is otherwise unchanged; the server still accepts an RSVP on any visible future Event.

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,6 +60,31 @@ describe('EventRsvpControls', () => {
     expect(rsvpButton('Nu particip')).toHaveAttribute('aria-pressed', 'false');
   });
 
+  // B4: the pressed button is the answer; no "Ai răspuns" line beside it.
+  it('shows no status line at rest, answered or not', () => {
+    const { unmount } = render(
+      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
+    );
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.queryByText(/Ai răspuns/)).not.toBeInTheDocument();
+    unmount();
+
+    hooks.useEventRsvp.mockReturnValue({
+      data: null,
+      error: null,
+      isError: false,
+      isPending: false,
+      refetch: vi.fn(),
+    });
+    const unanswered = render(
+      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
+    );
+    expect(
+      within(unanswered.container).getByRole('status'),
+    ).toBeEmptyDOMElement();
+    expect(screen.queryByText(/Nu ai răspuns/)).not.toBeInTheDocument();
+  });
+
   it('disables both answers while one RSVP is being saved', () => {
     hooks.useSetEventRsvp.mockReturnValue({
       isPending: true,
@@ -92,8 +117,11 @@ describe('EventRsvpControls', () => {
       eventId: 7,
       status: 'declined',
     });
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Răspuns salvat: nu participi.',
+    // Announced, not shown: the pressed button already says it (B4).
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Răspuns salvat: nu participi.');
+    expect(screen.getByText('Răspuns salvat: nu participi.')).toHaveClass(
+      'sr-only',
     );
   });
 
@@ -105,7 +133,7 @@ describe('EventRsvpControls', () => {
 
     render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
 
-    expect(screen.getByText('Se salvează…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Se salvează…');
     expect(
       screen.getByRole('group', { name: 'Alege răspunsul' }),
     ).toHaveAttribute('aria-busy', 'true');

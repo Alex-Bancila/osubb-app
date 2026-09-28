@@ -142,51 +142,46 @@ export function eventAccentColor(
 }
 
 /**
- * Who an Event belongs to, in the words a member uses.
+ * Who an Event belongs to: the Group's **name** (ruling of 2026-09-28, B24),
+ * never its category — "Festivalul Studențesc 2026", not "Proiect".
  *
- * Three things decide it, all of them on the Group itself:
- *
- *  * `is_organization` — the one Group that *is* OSUBB says so, rather than the
- *    calendar recognising it by name or by a legacy id;
- *  * the ancestor `path` — a Group with a parent is somebody's Child Group, so a
- *    Department Team reads "Echipă · Educațional" while an Independent Team,
- *    which has no parent, is just "Echipă";
- *  * `category`, for the noun.
+ *  * `is_organization` — the one Group that *is* OSUBB reads "OSUBB", whatever
+ *    its row is called, rather than the calendar recognising it by name;
+ *  * the ancestor `path` — a Child Group adds its parent's name, so Echipa
+ *    Aplicație under Diverse reads "Echipa Aplicație · Diverse". A parent that
+ *    is the Organization Group adds nothing: every Group is OSUBB's.
  *
  * `groups` is the Groups this member may read; it is needed only to name the
- * parent of a Child Group.
+ * parent of a Child Group, and an unreadable parent is simply left out.
  */
 export function eventGroupLabel(
   event: EventPresentation,
   groups?: Map<number, Group>,
 ): string {
   const group = event.group;
+  const name = group?.name.trim();
   // Either the Event names no Group at all, or it names one RLS withholds (an
   // archived Project's, say). Neither is worth an id on screen.
-  if (!group) return 'Grup';
+  if (!group || !name) return 'Grup';
 
   if (group.is_organization) return 'OSUBB';
 
-  if (group.category === 'team') {
-    const parentId =
-      group.path.length > 1 ? group.path[group.path.length - 2] : undefined;
-    const parent = parentId === undefined ? undefined : groups?.get(parentId);
-    return parent ? `Echipă · ${parent.name}` : 'Echipă';
-  }
-
-  if (group.category === 'project') return 'Proiect';
-
-  return group.name;
+  const parentId =
+    group.path.length > 1 ? group.path[group.path.length - 2] : undefined;
+  const parent = parentId === undefined ? undefined : groups?.get(parentId);
+  const parentName = parent?.is_organization ? '' : parent?.name.trim();
+  return parentName ? `${name} · ${parentName}` : name;
 }
 
 /* ------------------------------------------------------------------------ */
 /* Relevance and colour (ruling R10, ADR-0008 §Relevance)                    */
 /* ------------------------------------------------------------------------ */
 
-/** The label an Other OSUBB Event carries, so grey is never the only cue. */
-export const OTHER_EVENT_LABEL = 'Alt eveniment OSUBB';
-
-/** Grey for an Other OSUBB Event. */
+/**
+ * Grey for an Other OSUBB Event. Grey is never the only cue: the card names
+ * the Event's Group (ruling of 2026-09-28 retired the "Alt eveniment OSUBB"
+ * label).
+ */
 export const OTHER_EVENT_COLOR = 'var(--event-other)';
 
 /**
@@ -209,7 +204,7 @@ export type EventRelevance = 'organization' | 'own' | 'going' | 'other';
  * Which colour band an Event falls in: the Organization Group's (OSUBB red),
  * one of the member's own Groups' (the Group colour), an Other OSUBB Event the
  * member answered "Vin" to (the Group colour too), or any other readable Event
- * (grey, labelled **Alt eveniment OSUBB**).
+ * (grey, named by its Group like every other).
  */
 export function eventRelevance(
   event: Pick<EventPresentation, 'id' | 'groupId' | 'group'>,
@@ -455,6 +450,30 @@ export function monthLabel(month: MonthKey): string {
 /** `luni, 26 octombrie 2026` for a Bucharest day key. */
 export function dayKeyLabel(dayKey: string): string {
   return DAY_LABEL.format(utcDay(dayKey));
+}
+
+const WEEKDAY_LABEL = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: 'UTC',
+  weekday: 'long',
+});
+
+const DATE_LABEL = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: 'UTC',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+/**
+ * The selected day's header (C1): the weekday as the eyebrow and the date as
+ * the title — `{ weekday: 'luni', date: '26 octombrie 2026' }`.
+ */
+export function dayKeyHeading(dayKey: string): {
+  weekday: string;
+  date: string;
+} {
+  const day = utcDay(dayKey);
+  return { weekday: WEEKDAY_LABEL.format(day), date: DATE_LABEL.format(day) };
 }
 
 /** Monday-first column headings. */

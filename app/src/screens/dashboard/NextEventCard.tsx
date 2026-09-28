@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { CalendarDays } from 'lucide-react';
 import { EmptyState, Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { bucharestDayKey } from '../../lib/calendar-time';
@@ -25,7 +24,12 @@ import { nextRelevantEvent } from './next-items';
  * Events that already started today are dropped here, against `now`.
  *
  * The Calendar's card shows only the time (the Agendă prints the day above
- * it), so the day is printed here too.
+ * it); here the card prints the day itself (`showDay`), so the box starts
+ * level with its row neighbour, and fills the box (`*:flex-1`) so it ends
+ * level with Următorul task's card in their `equalHeights` row.
+ *
+ * No eyebrow: "Calendar" above "Următorul eveniment" says the title twice,
+ * as "Taskuri" did above "Următorul task" (B7).
  */
 export default function NextEventCard({
   now,
@@ -57,8 +61,6 @@ export default function NextEventCard({
 
   return (
     <Panel
-      eyebrow="Calendar"
-      icon={CalendarDays}
       title="Următorul eveniment"
       className={className}
       action={
@@ -67,6 +69,7 @@ export default function NextEventCard({
           : undefined
       }
       bare={Boolean(shown)}
+      boxClassName={shown ? '*:flex-1' : undefined}
     >
       {failed ? (
         <ErrorState
@@ -76,16 +79,14 @@ export default function NextEventCard({
       ) : isPending ? (
         <Loading />
       ) : shown ? (
-        <div className="flex min-w-0 flex-1 flex-col gap-2 *:last:flex-1">
-          <p className="m-0 text-sm font-semibold text-muted-foreground first-letter:uppercase">
-            <time dateTime={shown.startsAt}>{shown.dayLabel}</time>
-          </p>
-          <EventCard
-            event={shown}
-            groups={groups.data}
-            relevance={eventRelevance(shown, relevant, new Set())}
-          />
-        </div>
+        // The day is inside the card (X9/A2): a line above it pushed the box
+        // below its row neighbour's.
+        <EventCard
+          event={shown}
+          groups={groups.data}
+          relevance={eventRelevance(shown, relevant, new Set())}
+          showDay
+        />
       ) : (
         <EmptyState>Niciun eveniment viitor pentru tine.</EmptyState>
       )}

@@ -398,12 +398,33 @@ describe('CalendarScreen', () => {
       expect(within(card).getByText('Educațional')).toBeInTheDocument();
       expect(within(card).getByText('10:00–12:00')).toBeInTheDocument();
       expect(within(card).getByText('Sala 305')).toBeInTheDocument();
-      expect(
-        within(card).getByText('Capacitate: 30 de persoane'),
-      ).toBeInTheDocument();
+      // One label for one number (B5): "Locuri · 30".
+      expect(within(card).getByText('Locuri')).toBeInTheDocument();
+      expect(within(card).getByText('30')).toBeInTheDocument();
+      expect(within(card).queryByText(/Capacitate/)).not.toBeInTheDocument();
+      expect(within(card).queryByText(/persoane/)).not.toBeInTheDocument();
       expect(
         within(card).getByLabelText('Răspuns pentru Ședință Educațional'),
       ).toBeInTheDocument();
+      // Under the Agendă's day heading the card repeats only the time.
+      expect(within(card).queryByText('Data')).not.toBeInTheDocument();
+    });
+
+    // B25: nobody answers a deadline, past or future.
+    it('offers no RSVP on a deadline Event', () => {
+      setEvents([
+        event({ type: 'deadline', title: 'Deadline: raport trimestrial' }),
+      ]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', {
+        name: 'Deadline: raport trimestrial',
+      });
+      expect(within(card).getByText('Deadline')).toBeInTheDocument();
+      expect(within(card).queryByText('Participi?')).not.toBeInTheDocument();
+      expect(
+        within(card).queryByRole('button', { name: 'Particip' }),
+      ).not.toBeInTheDocument();
     });
 
     // Mutation this catches: delete the ancestor walk in groupAccentColor and
@@ -430,11 +451,13 @@ describe('CalendarScreen', () => {
       });
       expect(card).toHaveStyle({ '--event-accent': '#284C93' });
       expect(
-        within(card).getByText('Echipă · Educațional'),
+        within(card).getByText('Social Media · Educațional'),
       ).toBeInTheDocument();
     });
 
-    it('greys an Other OSUBB Event with a label, until the member says Vin', () => {
+    // Ruling of 2026-09-28: an Other OSUBB Event is grey and named by its
+    // Group; the "Alt eveniment OSUBB" label is gone from every surface.
+    it('greys an Other OSUBB Event named by its Group, until the member says Vin', () => {
       setEvents([
         festivalEvent,
         event({ id: 3, title: 'AG', groupId: 5, group: osubbGroup }),
@@ -443,16 +466,13 @@ describe('CalendarScreen', () => {
 
       const other = screen.getByRole('article', { name: 'Festival deschis' });
       expect(other).toHaveStyle({ '--event-accent': 'var(--event-other)' });
-      expect(
-        within(other).getByText('Alt eveniment OSUBB'),
-      ).toBeInTheDocument();
+      expect(within(other).getByText('Festival')).toBeInTheDocument();
       const organization = screen.getByRole('article', { name: 'AG' });
       expect(organization).toHaveStyle({
         '--event-accent': 'var(--scope-org)',
       });
-      expect(
-        within(organization).queryByText('Alt eveniment OSUBB'),
-      ).not.toBeInTheDocument();
+      expect(within(organization).getByText('OSUBB')).toBeInTheDocument();
+      expect(screen.queryByText(/Alt eveniment OSUBB/)).not.toBeInTheDocument();
       unmount();
 
       hooks.useGoingEventIds.mockReturnValue(query([2]));
@@ -461,9 +481,7 @@ describe('CalendarScreen', () => {
         name: 'Festival deschis',
       });
       expect(answered).toHaveStyle({ '--event-accent': '#1B9E4B' });
-      expect(
-        within(answered).queryByText('Alt eveniment OSUBB'),
-      ).not.toBeInTheDocument();
+      expect(within(answered).getByText('Festival')).toBeInTheDocument();
     });
 
     it('omits absent optional event details instead of rendering placeholders', () => {
@@ -480,7 +498,7 @@ describe('CalendarScreen', () => {
 
       const card = screen.getByRole('article', { name: 'Ședință Educațional' });
       expect(within(card).getByText('10:00')).toBeInTheDocument();
-      expect(within(card).queryByText(/Capacitate:/)).not.toBeInTheDocument();
+      expect(within(card).queryByText('Locuri')).not.toBeInTheDocument();
       expect(within(card).queryByText('Sala 305')).not.toBeInTheDocument();
     });
 
@@ -590,8 +608,45 @@ describe('CalendarScreen', () => {
         'true',
       );
       expect(
-        screen.getByRole('heading', { level: 1, name: 'Octombrie 2026' }),
+        screen.getByRole('heading', { level: 1, name: 'Lună' }),
       ).toBeInTheDocument();
+    });
+
+    // C2: the month's name sits between its arrows, not only in the title.
+    it('puts the month label between the arrows', () => {
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      renderCalendar();
+
+      const label = screen.getByRole('heading', {
+        level: 2,
+        name: 'octombrie 2026',
+      });
+      const previous = screen.getByRole('button', {
+        name: 'Luna anterioară: septembrie 2026',
+      });
+      const next = screen.getByRole('button', {
+        name: 'Luna următoare: noiembrie 2026',
+      });
+      expect(label.previousElementSibling).toBe(previous);
+      expect(label.nextElementSibling).toBe(next);
+      expect(screen.queryByText(/Alt eveniment OSUBB/)).not.toBeInTheDocument();
+    });
+
+    // C1: one column, the kit's header (weekday eyebrow, date title) and an
+    // EmptyState in a box as tall as its sentence.
+    it('shows the selected day as a kit panel with an empty state', () => {
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      renderCalendar();
+
+      const panel = screen.getByRole('region', { name: '14 octombrie 2026' });
+      expect(panel).toHaveAttribute('data-slot', 'panel');
+      expect(within(panel).getByText('miercuri')).toHaveAttribute(
+        'data-slot',
+        'section-eyebrow',
+      );
+      const empty = within(panel).getByText('Nimic programat în această zi.');
+      expect(empty.closest('[data-slot=empty-state]')).not.toBeNull();
+      expect(empty.closest('[data-slot=panel-box]')).not.toBeNull();
     });
 
     it('still works when storage is unavailable', async () => {
@@ -642,12 +697,17 @@ describe('CalendarScreen', () => {
       expect(
         screen.getByRole('heading', {
           level: 2,
-          name: 'marți, 20 octombrie 2026',
+          name: '20 octombrie 2026',
         }),
       ).toBeInTheDocument();
-      expect(
-        screen.getByRole('article', { name: 'Ședință Educațional' }),
-      ).toBeInTheDocument();
+      expect(screen.getByText('marți')).toHaveAttribute(
+        'data-slot',
+        'section-eyebrow',
+      );
+      // The cards are the day's content: no box around them.
+      const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+      expect(card.closest('[data-slot=panel-box]')).toBeNull();
+      expect(card.closest('[data-slot=panel-body]')).not.toBeNull();
       const row = screen.getByRole('link', { name: /Afiș pentru ședință/ });
       expect(row).toHaveAttribute('href', '/tracker?task=100');
       expect(row).toHaveTextContent('În lucru');

@@ -132,6 +132,20 @@ describe('NewEventControl', () => {
     expect(results.violations).toEqual([]);
   });
 
+  // X11, X12: one select look (#842) and the kit footer.
+  it('draws Tip, Cine îl vede and Campanie with the shared select and footer', async () => {
+    const user = setup();
+    const dialog = await open(user);
+    for (const label of ['Tip', 'Cine îl vede', 'Campanie (opțional)'])
+      expect(screen.getByLabelText(label)).toHaveAttribute(
+        'data-slot',
+        'native-select',
+      );
+    const submit = screen.getByRole('button', { name: 'Creează evenimentul' });
+    expect(submit.parentElement).toHaveAttribute('data-slot', 'dialog-footer');
+    expect(dialog.querySelector('[data-slot=dialog-header]')).not.toBeNull();
+  });
+
   it('offers "Cine îl vede" by Role name: the Event subset of the ladder, in order (R29b)', async () => {
     const user = setup();
     await open(user);

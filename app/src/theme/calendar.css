@@ -6,7 +6,7 @@
    colour tabs, Task deadlines hollow dashed tabs with a flag — two shapes, so
    an Event and a deadline never differ by colour alone. Colour follows the
    Tracker's rule (R10): own Groups in their colour, the Organization Group in
-   OSUBB red, Other OSUBB Events grey and labelled.
+   OSUBB red, Other OSUBB Events grey and named by their Group.
    ========================================================================== */
 
 :root {
@@ -32,6 +32,27 @@
   justify-content: space-between;
   gap: var(--s-3);
   margin-bottom: var(--s-4);
+}
+
+.calendar-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* A fixed width, so the arrows do not move as the month's name changes. */
+.calendar-month-label {
+  min-width: 9.5rem;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: 1.25;
+  text-align: center;
+}
+
+.calendar-month-label::first-letter {
+  text-transform: uppercase;
 }
 
 .calendar-managed-toggle {
@@ -86,7 +107,7 @@
   font-size: var(--fs-xs);
   font-weight: var(--fw-bold);
   letter-spacing: 0.06em;
-  text-align: left;
+  text-align: center;
   text-transform: uppercase;
 }
 
@@ -237,45 +258,16 @@
   background: var(--red);
 }
 
-.calendar-legend-swatch.is-other {
-  background: var(--event-other);
-}
-
+/* The selected day is a kit Panel (C1); only its distance from the grid and
+   its lists are drawn here. */
 .calendar-selected-day {
-  display: grid;
-  grid-template-columns: minmax(170px, 0.32fr) minmax(0, 1fr);
-  gap: var(--s-6);
   margin-top: var(--s-7);
 }
 
-.calendar-selected-day .calendar-day-head {
-  position: static;
-}
-
-.calendar-day-empty {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-}
-
-.calendar-selected-day .calendar-day-head + .calendar-day-empty {
-  grid-column: auto;
-  padding-top: var(--s-2);
-}
-
-.calendar-day-lists {
+.calendar-day-list {
   display: flex;
   flex-direction: column;
-  gap: var(--s-5);
-  min-width: 0;
-}
-
-.calendar-task-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
+  gap: var(--s-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -444,7 +436,7 @@
 .event-card {
   position: relative;
   overflow: hidden;
-  padding: var(--s-5);
+  padding: var(--s-4);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -483,8 +475,7 @@
 }
 
 .event-type,
-.event-scope,
-.event-relevance {
+.event-scope {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -503,13 +494,13 @@
 
 .event-scope {
   gap: 6px;
+  min-width: 0;
   color: var(--text-muted);
 }
 
-.event-relevance {
-  padding: 2px 9px;
-  border: 1px dashed var(--event-other);
-  color: var(--text-muted);
+.event-scope-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* The Group's category, drawn in the Event's colour. */
@@ -555,9 +546,14 @@
   text-transform: uppercase;
 }
 
-.event-details time {
+.event-details time,
+.event-capacity {
   font-variant-numeric: tabular-nums;
   font-weight: var(--fw-semibold);
+}
+
+.event-day::first-letter {
+  text-transform: uppercase;
 }
 
 .event-description {
@@ -651,8 +647,7 @@
     gap: var(--s-8);
   }
 
-  .calendar-day,
-  .calendar-selected-day {
+  .calendar-day {
     grid-template-columns: 1fr;
     gap: var(--s-4);
   }
@@ -682,7 +677,6 @@
 
   .calendar-grid th {
     padding-inline: 0;
-    text-align: center;
   }
 
   .calendar-cell {
@@ -731,10 +725,6 @@
 }
 
 @media (max-width: 420px) {
-  .event-card {
-    padding: var(--s-4);
-  }
-
   .event-details {
     flex-direction: column;
     align-items: flex-start;

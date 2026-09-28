@@ -59,7 +59,11 @@ export default function EventRsvpControls({
     <section className="event-rsvp" aria-label={`Răspuns pentru ${eventTitle}`}>
       <div className="event-rsvp-head">
         <p className="event-rsvp-prompt">Participi?</p>
-        <span className="event-rsvp-state">
+        {/* The pressed button is the answer (B4): text shows here only while
+            something is in flight or has gone wrong. The live region stays
+            mounted, so a change of its words is announced; a saved answer
+            is announced here without being shown. */}
+        <span className="event-rsvp-state" role="status" aria-live="polite">
           {mutation.isPending ? (
             <>
               <LoaderCircle
@@ -72,13 +76,9 @@ export default function EventRsvpControls({
             'Se încarcă răspunsul…'
           ) : rsvp.isError ? (
             'Răspuns indisponibil'
-          ) : answer === 'going' ? (
-            'Ai răspuns: particip'
-          ) : answer === 'declined' ? (
-            'Ai răspuns: nu particip'
-          ) : (
-            'Nu ai răspuns încă'
-          )}
+          ) : feedback?.kind === 'success' ? (
+            <span className="sr-only">{feedback.message}</span>
+          ) : null}
         </span>
       </div>
 
@@ -114,17 +114,9 @@ export default function EventRsvpControls({
         </Button>
       </div>
 
-      {/* One inline message, seen and announced alike: it replaced the Ionic
-          toast, which needed a hidden twin for assistive technology. */}
-      {feedback && (
-        <p
-          className={
-            feedback.kind === 'error'
-              ? 'event-rsvp-live is-error'
-              : 'event-rsvp-live'
-          }
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
-        >
+      {/* An error is seen and announced at once. */}
+      {feedback?.kind === 'error' && (
+        <p className="event-rsvp-live is-error" role="alert">
           {feedback.message}
         </p>
       )}
