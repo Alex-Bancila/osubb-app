@@ -257,35 +257,34 @@ describe('the greeting', () => {
 });
 
 describe('the panels each viewer sees', () => {
-  it('a Voluntar: Punctajul meu, Următorul task, Următorul eveniment in three columns', () => {
+  it('a Voluntar: the points as a header stat, then Următorul task and Următorul eveniment in two columns', () => {
     renderDashboard();
-    expect(panels()).toEqual([
-      'Punctajul meu',
-      'Următorul task',
-      'Următorul eveniment',
-    ]);
-    expect(gridColumns()).toBe('3');
-    const points = slot('Punctajul meu');
-    expect(
-      points.querySelector('[data-slot="points-value"]'),
-    ).toHaveTextContent(/^12$/);
-    expect(within(points).getByText('puncte')).toBeInTheDocument();
-    expect(within(points).getByText('voluntar')).toBeInTheDocument();
+    expect(panels()).toEqual(['Următorul task', 'Următorul eveniment']);
+    expect(gridColumns()).toBe('2');
+    // #859: no Punctaj panel — a compact stat on the greeting line, to Profil.
+    expect(screen.queryByRole('region', { name: /punctaj/i })).toBeNull();
+    const stat = screen.getByRole('link', { name: /12s*puncte/ });
+    expect(stat).toHaveAttribute('href', '/profil');
+    expect(stat.closest('[data-slot="page-header"]')).not.toBeNull();
+    expect(stat.querySelector('[data-slot="points-value"]')).toHaveTextContent(
+      /^12$/,
+    );
+    expect(stat).toHaveTextContent('voluntar');
     expect(hooks.useAwaitingMyReview).not.toHaveBeenCalled();
     expectNoBoards();
   });
 
-  it('a Responsabil below BCE: all four in a 2 × 2', () => {
+  it('a Responsabil below BCE: the stat, De evaluat in its own row, then Următorul task beside Următorul eveniment', () => {
     auth.useAuth.mockReturnValue(claims(2));
     viewer({ seeLeadership: false, manageTasks: true });
     renderDashboard();
-    expect(panels()).toEqual([
-      'Punctajul meu',
-      'De evaluat',
-      'Următorul task',
-      'Următorul eveniment',
-    ]);
+    expect(slot('De evaluat').closest('[data-slot="page-grid"]')).toBeNull();
+    expect(panels()).toEqual(['Următorul task', 'Următorul eveniment']);
     expect(gridColumns()).toBe('2');
+    expect(screen.getByRole('link', { name: /12s*puncte/ })).toHaveAttribute(
+      'href',
+      '/profil',
+    );
     expectNoBoards();
   });
 
@@ -296,6 +295,8 @@ describe('the panels each viewer sees', () => {
     expect(panels()).toEqual(['De evaluat', 'Următorul eveniment']);
     expect(gridColumns()).toBe('2');
     expect(screen.queryByText('Punctajul meu')).toBeNull();
+    // No stat for BC/BCE: they do not work by points.
+    expect(screen.queryByRole('link', { name: /puncte/ })).toBeNull();
     expect(hooks.useMyPoints).not.toHaveBeenCalled();
     expect(hooks.useMyTasks).not.toHaveBeenCalled();
     expectNoBoards();
@@ -454,21 +455,67 @@ describe('Următorul task', () => {
     ).toHaveAttribute('href', '/tracker?task=3');
   });
 
-  it('skips undated Tasks and says so when nothing dated is in work', () => {
+  it('never shows a Task În verificare: it waits on the reviewer (B1)', () => {
     hooks.useMyTasks.mockReturnValue(
       query([
-        mine({ id: 5, title: 'Fără termen', deadline: null }),
-        mine({ id: 6, title: 'Anulat', status: 'cancelled' }),
+        mine({
+          id: 7,
+          title: 'Trimis la verificare',
+          status: 'in_review',
+          deadline: '2026-01-16T10:00:00Z',
+        }),
+        mine({
+          id: 8,
+          title: 'Returnat pentru modificări',
+          status: 'in_progress',
+          review_round: 1,
+          deadline: '2026-01-20T10:00:00Z',
+        }),
       ]),
     );
     renderDashboard();
 
     const next = slot('Următorul task');
+    expect(within(next).queryByText('Trimis la verificare')).toBeNull();
     expect(
-      within(next).getByText('Niciun task cu termen în lucru.'),
+      within(next).getByRole('heading', {
+        level: 3,
+        name: 'Returnat pentru modificări',
+      }),
     ).toBeInTheDocument();
+  });
+
+  it('skips undated Tasks; with nothing in work it invites to Disponibile', () => {
+    hooks.useMyTasks.mockReturnValue(
+      query([
+        mine({ id: 5, title: 'Fără termen', deadline: null }),
+        mine({ id: 6, title: 'Anulat', status: 'cancelled' }),
+        mine({
+          id: 9,
+          title: 'În verificare',
+          status: 'in_review',
+          deadline: '2026-01-16T10:00:00Z',
+        }),
+      ]),
+    );
+    renderDashboard();
+
+    const next = slot('Următorul task');
+    expect(within(next).getByText('Niciun task în lucru.')).toBeInTheDocument();
     expect(within(next).queryByRole('article')).toBeNull();
-    expect(within(next).queryByRole('link')).toBeNull();
+    expect(
+      within(next).getByRole('link', { name: 'Vezi oportunitățile' }),
+    ).toHaveAttribute('href', '/tracker?lista=disponibile');
+    expect(
+      within(next).queryByRole('link', { name: /Vezi în Taskuri/ }),
+    ).toBeNull();
+  });
+
+  it('has no eyebrow repeating its title (B7)', () => {
+    renderDashboard();
+    expect(
+      slot('Următorul task').querySelector('[data-slot="section-eyebrow"]'),
+    ).toBeNull();
   });
 
   it('keeps its own loading and error states', () => {

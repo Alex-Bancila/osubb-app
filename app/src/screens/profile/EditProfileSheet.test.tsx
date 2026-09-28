@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import type { ReactNode } from 'react';
@@ -88,7 +88,7 @@ describe('EditProfileSheet', () => {
     expect(phoneInput()).toHaveValue('0711223344');
     expect(
       screen.getByText(
-        /numărul de telefon este vizibil doar pentru tine și membrii cu nivel ≥5/i,
+        /numărul de telefon este vizibil doar pentru tine, BCE și BC./i,
       ),
     ).toBeInTheDocument();
     expect(
@@ -99,6 +99,26 @@ describe('EditProfileSheet', () => {
     expect(screen.queryByLabelText(/adresă de email/i)).not.toBeInTheDocument();
 
     expect((await axe.run(screen.getByRole('dialog'))).violations).toEqual([]);
+  });
+
+  it('lays the swatches out as one row of seven 44 px targets; selecting one never resizes it (P4)', async () => {
+    const user = userEvent.setup();
+    renderSheet();
+
+    const group = screen.getByRole('group', {
+      name: 'Alege culoarea avatarului',
+    });
+    expect(group).toHaveClass('grid-cols-7');
+    const swatches = within(group).getAllByRole('button');
+    expect(swatches).toHaveLength(7);
+    for (const swatch of swatches) expect(swatch).toHaveClass('size-11');
+
+    const red = within(group).getByRole('button', { name: /roșu osubb/i });
+    await user.click(red);
+    expect(red).toHaveAttribute('aria-pressed', 'true');
+    expect(red.className).not.toMatch(/scale/);
+    expect(red.firstElementChild?.className).not.toMatch(/scale/);
+    expect(red.firstElementChild).toHaveClass('ring-2');
   });
 
   it('shows the full name read-only with the BC note, whoever edits (#675, R5)', () => {

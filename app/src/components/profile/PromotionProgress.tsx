@@ -50,12 +50,10 @@ import {
 export function PromotionPanel({
   state,
   totalPoints,
-  className,
 }: {
   state: Exclude<PromotionState, { kind: 'hidden' }>;
   /** The Member's total (`my_points`); the panel then leads with it. */
   totalPoints?: number;
-  className?: string;
 }) {
   const view = state.kind === 'view' ? state.view : null;
   // A Voluntar Activ or a Voluntar cu Drept de Vot has no promotion to show
@@ -65,12 +63,7 @@ export function PromotionPanel({
   const figureIsTotal = view !== null && view.kind !== 'tenure' && !view.since;
   const showTotal = totalPoints !== undefined && !figureIsTotal;
   return (
-    <Panel
-      eyebrow="Parcurs"
-      icon={TrendingUp}
-      title={title}
-      className={className}
-    >
+    <Panel eyebrow="Parcurs" icon={TrendingUp} title={title}>
       <div data-testid="promotion-progress" className="flex flex-col gap-3">
         {showTotal && <PointsTotal points={totalPoints} />}
         <PromotionBody state={state} />
