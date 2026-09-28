@@ -137,7 +137,10 @@ export default function NotificationsScreen() {
             ? undefined
             : unreadCount > 0
               ? `Necitite: ${unreadCount}`
-              : 'Toate notificările sunt citite'
+              : // A zero only counts when no row on screen contradicts it.
+                hasUnread
+                ? undefined
+                : 'Toate notificările sunt citite'
         }
         actions={
           hasUnread && (

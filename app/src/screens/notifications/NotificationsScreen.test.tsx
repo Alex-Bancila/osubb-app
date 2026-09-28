@@ -258,6 +258,20 @@ describe('NotificationsScreen', () => {
       ).toBeInTheDocument();
     });
 
+    it('does not call a stale zero "all read" while a row on screen is unread', () => {
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+      hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
+
+      renderScreen();
+
+      expect(
+        screen.queryByText('Toate notificările sunt citite'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+      ).toBeInTheDocument();
+    });
+
     it('cannot be sent twice while the first write is on its way', () => {
       hooks.useMarkAllNotificationsRead.mockReturnValue({
         mutate: markAllRead,
