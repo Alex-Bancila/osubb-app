@@ -78,10 +78,12 @@ export function ManagerTaskList({
       ),
     [presented],
   );
-  const state =
-    listControls && states.some(([value]) => value === chosenState)
-      ? chosenState
-      : '';
+  const stateOffered =
+    listControls && states.some(([value]) => value === chosenState);
+  // Cleared, not just ignored, so a later row that brings the state back
+  // does not silently filter by it again.
+  if (chosenState && !stateOffered) setState('');
+  const state = stateOffered ? chosenState : '';
 
   const tasks = useMemo(
     () =>

@@ -264,6 +264,14 @@ describe('ManagerTaskList', () => {
     );
     expect(screen.getByLabelText('Stare')).toHaveValue('');
     expect(titles()).toHaveLength(more.length);
+    // The state is cleared, not hidden: it does not return with its rows.
+    rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={sixRows} now={now} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByLabelText('Stare')).toHaveValue('');
+    expect(titles()).toHaveLength(sixRows.length);
   });
 
   it('shows Stare, Caută and Ordonează only from six Tasks', () => {
