@@ -1,4 +1,5 @@
--- #861 (frontend QA pass 2026-09-28, Audit D): the server fixes the functional
+-- #861: Audit D server fixes -- finished Task's Executor, archived Group off the Cup, Announcement reads, one acceptance Notification.
+-- Frontend QA pass 2026-09-28, Audit D: the server fixes the functional
 -- walkthrough found, in one migration.
 --
 --   D-1  A finished Task still names the Member who did it.
@@ -254,19 +255,23 @@ security definer
 set search_path = ''
 as $$
 begin
-  -- Only the reader's own row, only while it is unread: the partial unique
-  -- index (member_id, dedupe_key) where not read holds at most one.
+  -- Only the reader's own rows, only while unread: the one keyed
+  -- announcement:<id>, and any older duplicate the backfill below left
+  -- unkeyed (the partial unique index admits one unread row per key), found
+  -- by the link every "Anunț nou" carries since #843.
   update public.notifications as notification
      set read = true
    where notification.member_id = new.member_id
-     and notification.dedupe_key = 'announcement:' || new.announcement_id::text
-     and not notification.read;
+     and not notification.read
+     and (notification.dedupe_key = 'announcement:' || new.announcement_id::text
+          or (notification.kind = 'announce'
+              and notification.link = '/anunturi?anunt=' || new.announcement_id::text));
   return new;
 end;
 $$;
 
 comment on function private.mark_announcement_notification_read() is
-  'After-insert trigger on announcement_reads (#861, Audit D-20): marks the reader''s own unread "Anunț nou" Notification for that Announcement (dedupe key announcement:<id>) read, and nobody else''s. Executable by no client role.';
+  'After-insert trigger on announcement_reads (#861, Audit D-20): marks the reader''s own unread "Anunț nou" Notifications for that Announcement (dedupe key announcement:<id>, or an unkeyed older duplicate linked /anunturi?anunt=<id>) read, and nobody else''s. Executable by no client role.';
 
 revoke execute on function private.mark_announcement_notification_read()
   from public, anon, authenticated, service_role;

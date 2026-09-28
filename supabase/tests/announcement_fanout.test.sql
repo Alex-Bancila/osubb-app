@@ -5,7 +5,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(22);
 
 create function pg_temp.u68(n integer) returns uuid language sql immutable as $$
   select ('68000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -165,5 +165,10 @@ select is((select string_agg(coalesce(dedupe_key,'<none>') || ':' || read::text,
              from notifications where title='Anunț nou: Backfill #861' and member_id=pg_temp.u68(3)),
   '<none>:false,announcement:' || (select id from announcements where title='Backfill #861')::text || ':false',
 '#861 D-20 backfill: an unread row takes the key from its link -- only the newest of two, as the unique index admits one');
+insert into announcement_reads(announcement_id,member_id)
+values ((select id from announcements where title='Backfill #861'),pg_temp.u68(3));
+select is((select count(*) from notifications
+            where title='Anunț nou: Backfill #861' and member_id=pg_temp.u68(3) and not read),0::bigint,
+'#861 D-20: reading the Announcement clears the keyed row and the unkeyed older duplicate alike');
 select * from finish();
 rollback;
