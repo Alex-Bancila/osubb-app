@@ -1,7 +1,9 @@
-import { ExternalLink, UserRound } from 'lucide-react';
+import { useState } from 'react';
+import { ExternalLink, Pin, PinOff, UserRound } from 'lucide-react';
 import { EmptyState } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import {
   Sheet,
   SheetBackdrop,
@@ -11,9 +13,18 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
+import { useCapability } from '../../lib/capabilities';
 import { safeHttpUrl } from '../../lib/links';
+import {
+  AnnouncementPinRefusedError,
+  useSetAnnouncementPinned,
+} from '../../queries/announcements';
+import { useMyGroupRoles } from '../../queries/my-groups';
 import { AnnouncementMeta } from './AnnouncementMeta';
-import type { AnnouncementPresentation } from './announcements-presentation';
+import {
+  mayPinAnnouncement,
+  type AnnouncementPresentation,
+} from './announcements-presentation';
 import AnnouncementReaders from './AnnouncementReaders';
 
 type AnnouncementDetailsSheetProps = {
@@ -129,6 +140,99 @@ function AnnouncementDetails({
       )}
 
       <AnnouncementReaders announcement={announcement} />
+
+      <AnnouncementPinControl
+        key={announcement.id}
+        announcement={announcement}
+      />
     </>
+  );
+}
+
+/**
+ * "Fixează anunțul" / "Anulează fixarea" (#857), only for a viewer
+ * `announcements_update` lets through (`mayPinAnnouncement`). The feed's
+ * refetch moves the card into or out of the pinned band (R15) and flips the
+ * pin in the meta line above.
+ */
+function AnnouncementPinControl({
+  announcement,
+}: {
+  announcement: AnnouncementPresentation;
+}) {
+  const bcOrModerator = useCapability('manageRoles').data === true;
+  const managesAnyGroup = useCapability('managesAnyGroup').data === true;
+  const myGroups = useMyGroupRoles();
+  const setPinned = useSetAnnouncementPinned();
+  const [outcome, setOutcome] = useState<{
+    tone: 'status' | 'alert';
+    text: string;
+  } | null>(null);
+
+  if (
+    !mayPinAnnouncement(announcement, {
+      bcOrModerator,
+      managesAnyGroup,
+      groups: myGroups.data,
+    })
+  )
+    return null;
+
+  const pinned = announcement.pinned;
+
+  function toggle() {
+    setOutcome(null);
+    setPinned.mutate(
+      { id: announcement.id, pinned: !pinned },
+      {
+        onSuccess: () =>
+          setOutcome({
+            tone: 'status',
+            text: pinned
+              ? 'Anunțul nu mai este fixat.'
+              : 'Anunțul a fost fixat.',
+          }),
+        onError: (cause) =>
+          setOutcome({
+            tone: 'alert',
+            text:
+              cause instanceof AnnouncementPinRefusedError ||
+              (cause as { code?: string })?.code === '42501'
+                ? 'Nu poți modifica acest anunț.'
+                : 'Nu am putut schimba fixarea. Încearcă din nou.',
+          }),
+      },
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4">
+      <Button
+        type="button"
+        variant="outline"
+        className="min-h-11 gap-2"
+        disabled={setPinned.isPending}
+        onClick={toggle}
+      >
+        {pinned ? (
+          <PinOff className="size-4" aria-hidden="true" />
+        ) : (
+          <Pin className="size-4" aria-hidden="true" />
+        )}
+        {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
+      </Button>
+      {outcome && (
+        <p
+          role={outcome.tone}
+          className={
+            outcome.tone === 'alert'
+              ? 'm-0 text-sm text-destructive'
+              : 'm-0 text-sm text-muted-foreground'
+          }
+        >
+          {outcome.text}
+        </p>
+      )}
+    </div>
   );
 }

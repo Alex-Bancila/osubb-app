@@ -178,6 +178,51 @@ export function useCreateAnnouncement() {
   });
 }
 
+export type SetAnnouncementPinnedInput = { id: number; pinned: boolean };
+
+/** `announcements_update` refused the row: it filters it out, so nothing comes back. */
+export class AnnouncementPinRefusedError extends Error {
+  constructor() {
+    super('announcement_pin_refused');
+    this.name = 'AnnouncementPinRefusedError';
+  }
+}
+
+/**
+ * Pin or unpin a published Announcement (#857). A direct update under
+ * `announcements_update`; only `pinned` is sent (the authorship trigger keeps
+ * the author and date). An update fires no fan-out — that trigger is
+ * `after insert` only — so nobody is notified again. RLS filters a row the
+ * caller may not update, so zero rows back means refused.
+ */
+export async function setAnnouncementPinned({
+  id,
+  pinned,
+}: SetAnnouncementPinnedInput): Promise<void> {
+  const { data, error } = await supabase
+    .from('announcements')
+    .update({ pinned })
+    .eq('id', id)
+    .select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new AnnouncementPinRefusedError();
+}
+
+export function setAnnouncementPinnedMutationOptions(queryClient: QueryClient) {
+  return {
+    mutationFn: setAnnouncementPinned,
+    onSuccess: async () => {
+      // The feed (and its pinned band) and the unread count live under `all`.
+      await queryClient.invalidateQueries({ queryKey: keys.announcements.all });
+    },
+  } as const;
+}
+
+export function useSetAnnouncementPinned() {
+  const queryClient = useQueryClient();
+  return useMutation(setAnnouncementPinnedMutationOptions(queryClient));
+}
+
 /**
  * Mark an announcement as read for the active member.
  * Uses upsert with ignoreDuplicates so repeated or concurrent reads are idempotent.

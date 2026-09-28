@@ -12,6 +12,9 @@ import {
   fetchUnreadAnnouncementsCount,
   markAnnouncementReadMutationOptions,
   unreadAnnouncementsCountQueryOptions,
+  AnnouncementPinRefusedError,
+  setAnnouncementPinned,
+  setAnnouncementPinnedMutationOptions,
   useAnnouncementReaders,
 } from './announcements';
 import { keys } from './keys';
@@ -125,6 +128,56 @@ describe('announcements query layer', () => {
     await createAnnouncement(payload);
     expect(insert).toHaveBeenCalledWith(payload);
     expect(select).not.toHaveBeenCalled();
+  });
+
+  describe('setAnnouncementPinned (#857)', () => {
+    function answer(result: { data: unknown; error: unknown }) {
+      const select = vi.fn().mockResolvedValue(result);
+      const eq = vi.fn().mockReturnValue({ select });
+      const update = vi.fn().mockReturnValue({ eq });
+      (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        update,
+      });
+      return { update, eq, select };
+    }
+
+    it('sends only { pinned } for the id and reads the row back', async () => {
+      const { update, eq, select } = answer({
+        data: [{ id: 5 }],
+        error: null,
+      });
+      await setAnnouncementPinned({ id: 5, pinned: true });
+      expect(supabase.from).toHaveBeenCalledWith('announcements');
+      expect(update).toHaveBeenCalledWith({ pinned: true });
+      expect(eq).toHaveBeenCalledWith('id', 5);
+      expect(select).toHaveBeenCalledWith('id');
+    });
+
+    it('reads zero rows back as a refusal', async () => {
+      answer({ data: [], error: null });
+      await expect(
+        setAnnouncementPinned({ id: 5, pinned: false }),
+      ).rejects.toBeInstanceOf(AnnouncementPinRefusedError);
+    });
+
+    it('throws a server error as it is', async () => {
+      answer({ data: null, error: { code: '23514', message: 'x' } });
+      await expect(
+        setAnnouncementPinned({ id: 5, pinned: true }),
+      ).rejects.toMatchObject({ code: '23514' });
+    });
+
+    it('invalidates the feed and the unread count on success', async () => {
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(keys.announcements.feed('m1'), []);
+      queryClient.setQueryData(keys.announcements.unread('m1'), 2);
+      await setAnnouncementPinnedMutationOptions(queryClient).onSuccess();
+      for (const key of [
+        keys.announcements.feed('m1'),
+        keys.announcements.unread('m1'),
+      ])
+        expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    });
   });
 
   describe('markAnnouncementRead', () => {
