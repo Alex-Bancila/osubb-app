@@ -20,6 +20,7 @@ const executor = {
   assignmentId: 2,
   name: null,
   nickname: null,
+  isCurrent: true,
 };
 
 describe('Romanian current-stage summary', () => {

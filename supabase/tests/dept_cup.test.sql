@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(16);
+select plan(19);
 
 
 -- Remove the demo members and every dependent row inside this rolled-back
@@ -130,6 +130,24 @@ select is((select points from public.department_cup(null, '2001-03-10 10:00:00+0
 select is((select points from public.department_cup(null, '2001-03-11 10:00:00+00', null)
             where group_id = pg_temp.dept_group('hr')), 15,
   'and from the day after it holds only the three awards made since');
+reset role;
+
+-- #861 (Audit D-10): an archived Group has left the Cup, even with points
+-- and the competes_in_cup flag still set -- in the view and in every range
+-- and Campaign of department_cup.
+update public.groups set status = 'archived' where id = pg_temp.dept_group('hr');
+select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
+select is(
+  (select count(*) from public.dept_cup where group_id = pg_temp.dept_group('hr')), 0::bigint,
+  '#861: an archived competing Group is absent from the dept_cup view despite its 17 points');
+select is(
+  (select count(*) from public.department_cup(null, '2001-03-10 10:00:00+00', '2001-03-11 10:00:00+00')
+    where group_id = pg_temp.dept_group('hr'))
+  + (select count(*) from public.department_cup(-861) where group_id = pg_temp.dept_group('hr')),
+  0::bigint,
+  '#861: an archived competing Group is absent from department_cup for a date range and for a Campaign');
+select is((select count(*) from public.dept_cup), 4::bigint,
+  '#861: the four active Departments still compete');
 reset role;
 select * from finish();
 rollback;

@@ -54,11 +54,16 @@ export type TaskPresentationRow = Pick<
     Tables['task_assignments']['Row'],
     'id' | 'member_id' | 'ended_at'
   >[];
-  /** Explicitly null means #499's safe Executor lookup found no active row. */
+  /**
+   * Explicitly null means #499's safe Executor lookup found no row: no open
+   * Assignment, and for a finished Task no Executor who finished it.
+   */
   visibleExecutor?: {
     memberId: string;
     fullName: string | null;
     nickname?: string | null;
+    /** False for the Executor who finished the Task (#861); absent = open. */
+    isCurrent?: boolean;
   } | null;
   evaluations?: Pick<
     Tables['task_evaluations']['Row'],
@@ -89,6 +94,11 @@ export type TaskPresentation = {
     assignmentId: number | null;
     name: string | null;
     nickname: string | null;
+    /**
+     * False once the Task is finished: the Member who did it, whose
+     * Assignment the Evaluation ended (#861). Only a current Executor acts.
+     */
+    isCurrent: boolean;
   } | null;
   candidature: {
     status: 'pending' | 'selected' | 'withdrawn' | 'closed';
@@ -269,6 +279,7 @@ export function toTaskPresentation(
                 : null,
             name: visibleExecutor.fullName?.trim() || null,
             nickname: visibleExecutor.nickname?.trim() || null,
+            isCurrent: visibleExecutor.isCurrent ?? true,
           }
         : null,
     candidature: kind === 'task' ? candidature : null,

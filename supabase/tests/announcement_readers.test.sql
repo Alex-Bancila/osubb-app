@@ -71,6 +71,13 @@ select (select id from announcements where title='EDU local #693') as edu_local,
        (select id from announcements where title='PR local #693') as pr_local;
 grant select on ann693 to authenticated, anon;
 
+-- #861: the fan-out gives an author inside the read audience their own read
+-- row (announcement_fanout.test.sql proves it). This suite's read state is its
+-- own fixture, so those rows go and every read below is one written here.
+delete from announcement_reads
+ where announcement_id in (select edu_local from ann693 union all select edu_org from ann693
+                           union all select child_local from ann693 union all select pr_local from ann693);
+
 insert into announcement_reads(announcement_id,member_id,read_at) values
 ((select edu_local from ann693),'69300000-0000-0000-0000-000000000002','2026-09-01 10:00+00'),
 ((select edu_local from ann693),'69300000-0000-0000-0000-000000000007','2026-09-02 10:00+00'),
