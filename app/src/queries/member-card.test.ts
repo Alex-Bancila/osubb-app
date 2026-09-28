@@ -137,6 +137,7 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
       label: 'Educațional',
       color: '#284C93',
       roleLabel: 'Membru',
+      groupRole: 'member',
       isPrivate: false,
     },
     {
@@ -145,6 +146,7 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
       label: 'Mentorat · Educațional',
       color: null,
       roleLabel: 'Mentor-coordonator',
+      groupRole: 'manager',
       isPrivate: false,
     },
     {
@@ -153,6 +155,7 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
       label: 'Foto · Imagine & PR',
       color: null,
       roleLabel: 'Fotograf-șef',
+      groupRole: 'responsible',
       isPrivate: true,
     },
   ]);

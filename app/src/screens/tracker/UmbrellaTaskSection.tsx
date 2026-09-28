@@ -7,6 +7,7 @@ import {
   useCreateTask,
 } from '../../queries/task-umbrella';
 import type { TaskDetailsData } from '../../queries/task-details';
+import { SubHeading } from '../../components/layout';
 import { ManagedTaskForm } from './ManagedTaskForm';
 import {
   isTerminalTask,
@@ -111,10 +112,19 @@ function UmbrellaActions({
             </p>
           )}
           {adding && (
-            <div className="space-y-3 rounded-lg border border-border p-4">
-              <h4 className="font-semibold">Subtask nou</h4>
+            <div className="flex flex-col gap-3 rounded-md border border-border p-4">
+              <SubHeading as="h4" variant="label">
+                Subtask nou
+              </SubHeading>
               <ManagedTaskForm
                 parentTaskId={taskId}
+                heading={null}
+                cancelLabel="Închide formularul"
+                onCancel={() => {
+                  if (create.isPending) return;
+                  formAttempt.current += 1;
+                  setAdding(false);
+                }}
                 onDraft={async (draft) => {
                   if (
                     !mounted.current ||
@@ -127,17 +137,6 @@ function UmbrellaActions({
                     onNavigate(task.id);
                 }}
               />
-              <Button
-                variant="outline"
-                className="min-h-11"
-                disabled={create.isPending}
-                onClick={() => {
-                  formAttempt.current += 1;
-                  setAdding(false);
-                }}
-              >
-                Închide formularul
-              </Button>
             </div>
           )}
         </>
@@ -163,11 +162,9 @@ export function UmbrellaTaskSection({
     isTerminalTask(task.status),
   ).length;
   return (
-    <section aria-label="Subtaskuri" className="space-y-3">
-      <h3 className="font-semibold">Subtaskuri vizibile</h3>
-      <p>
-        {terminal} / {subtasks.length} finalizate
-      </p>
+    <section aria-label="Subtaskuri" className="flex flex-col gap-3">
+      {/* The count is on the Umbrella's card ("x din y subtaskuri"). */}
+      <SubHeading variant="label">Subtaskuri vizibile</SubHeading>
       {subtasks.length ? (
         <ul className="space-y-3">
           {subtasks.map((row) => {
@@ -175,7 +172,7 @@ export function UmbrellaTaskSection({
             return (
               <li
                 key={child.id}
-                className="space-y-2 rounded-lg border border-border p-3"
+                className="space-y-2 rounded-md border border-border p-3"
               >
                 <Button
                   variant="link"
@@ -187,11 +184,15 @@ export function UmbrellaTaskSection({
                 <div>
                   <Badge variant="outline">{child.statusLabel}</Badge>
                 </div>
-                <p className="text-sm">
-                  Executor:{' '}
-                  {row.visibleExecutor?.fullName ??
-                    'Neatribuit sau indisponibil'}
-                </p>
+                {/* A finished Subtask's Assignment has ended: the RPC no
+                    longer names its Executor (Audit D-1, #861). */}
+                {!isTerminalTask(child.status) && (
+                  <p className="text-sm">
+                    Executor:{' '}
+                    {row.visibleExecutor?.fullName ??
+                      'Neatribuit sau indisponibil'}
+                  </p>
+                )}
                 <p className="text-sm">Termen: {child.deadlineLabel}</p>
               </li>
             );

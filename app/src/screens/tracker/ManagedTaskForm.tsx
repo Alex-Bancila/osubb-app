@@ -13,6 +13,8 @@ export function ManagedTaskForm({
   heading,
   submitLabel,
   pendingLabel = 'Se verifică opțiunile actuale…',
+  onCancel,
+  cancelLabel,
 }: {
   onDraft: (draft: TaskDraft) => void | Promise<void>;
   parentTaskId?: number | null;
@@ -20,6 +22,9 @@ export function ManagedTaskForm({
   heading?: string | null;
   submitLabel?: string;
   pendingLabel?: string;
+  /** The footer's secondary action (Renunță), passed to the form. */
+  onCancel?: () => void;
+  cancelLabel?: string;
 }) {
   const query = useTaskFormOptions();
   const [pending, setPending] = useState(false);
@@ -78,6 +83,8 @@ export function ManagedTaskForm({
             allowSubtask={allowSubtask}
             heading={heading}
             submitLabel={submitLabel}
+            onCancel={onCancel}
+            cancelLabel={cancelLabel}
           />
         </fieldset>
       )}
