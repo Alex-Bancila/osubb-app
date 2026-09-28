@@ -21,6 +21,7 @@ export function Section({
   columns = 1,
   as,
   alignHeaders,
+  equalHeights,
   className,
   children,
   'aria-label': ariaLabel,
@@ -35,6 +36,8 @@ export function Section({
   as?: 'div' | 'ul' | 'ol';
   /** `PageGrid`'s `alignHeaders`: the band's boxes start on one line. */
   alignHeaders?: boolean;
+  /** `PageGrid`'s `equalHeights`: only for a band of like items. */
+  equalHeights?: boolean;
   className?: string;
   children?: ReactNode;
   'aria-label'?: string;
@@ -62,7 +65,12 @@ export function Section({
           control={control}
         />
       )}
-      <PageGrid columns={columns} as={as} alignHeaders={alignHeaders}>
+      <PageGrid
+        columns={columns}
+        as={as}
+        alignHeaders={alignHeaders}
+        equalHeights={equalHeights}
+      >
         {children}
       </PageGrid>
     </section>

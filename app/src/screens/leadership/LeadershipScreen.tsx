@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Award, ChevronRight, ListFilter, Trophy } from 'lucide-react';
+import { Award, ChevronRight, Trophy } from 'lucide-react';
 import { cn } from 'cn';
 import {
   EmptyState,
@@ -371,24 +371,19 @@ function LeadershipContent() {
           />
         }
       />
-      <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre clasament">
-        {options.isPending ? (
-          <Loading label="Se încarcă filtrele…" />
-        ) : options.isError ? (
-          <ErrorState
-            error={options.error}
-            text="Nu am putut încărca filtrele."
-            retryLabel="Reîncarcă filtrele"
-            onRetry={() => void options.refetch()}
-          />
-        ) : (
-          <WorkFilter
-            groups={options.data.groups}
-            campaigns={options.data.campaigns}
-            levels={levels}
-          />
-        )}
-      </Panel>
+      <WorkFilter
+        label="Filtre clasament"
+        status={{
+          pending: options.isPending,
+          failed: options.isError,
+          error: options.error,
+          onRetry: () => void options.refetch(),
+        }}
+        groups={options.data?.groups ?? []}
+        campaigns={options.data?.campaigns ?? []}
+        work={options.data?.work}
+        levels={levels}
+      />
       {view === 'members' ? (
         <Panel
           eyebrow="Clasament"

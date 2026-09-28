@@ -110,3 +110,13 @@ it('shows a visible keyboard focus ring (X1)', () => {
     screen.getByRole('button', { name: 'Profilul membrului Ani' }),
   ).toHaveClass('focus-visible:outline-2', 'focus-visible:outline-solid');
 });
+
+it('sm is as tall as its text with a mouse and 44 px on touch (#876)', () => {
+  render(
+    <MemberName memberId="m-1" nickname="Ani" fullName="Ana Pop" size="sm" />,
+  );
+  const button = screen.getByRole('button', { name: 'Profilul membrului Ani' });
+  // min-h-9 is 56 px in this app's spacing scale: no fixed height with a mouse.
+  expect(button.className).not.toMatch(/(^|\s)min-h-(?!11)/);
+  expect(button).toHaveClass('pointer-coarse:min-h-11');
+});
