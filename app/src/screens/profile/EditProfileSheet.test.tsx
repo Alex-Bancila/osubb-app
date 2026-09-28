@@ -7,7 +7,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyProfile } from '../../queries/profile';
 import EditProfileSheet from './EditProfileSheet';
 
-vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+const updateUser = vi.hoisted(() => vi.fn());
+vi.mock('../../lib/supabase', () => ({
+  supabase: { auth: { updateUser } },
+}));
+
+// #824: the email change (#632) lives in this sheet and reads the session.
+vi.mock('../../lib/auth', () => ({
+  useAuth: () => ({
+    session: { user: { id: 'p1' } },
+    claims: null,
+    loading: false,
+    signOut: vi.fn(),
+  }),
+}));
 
 const updateProfileMock = vi.fn();
 
@@ -64,9 +77,10 @@ describe('EditProfileSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     updateProfileMock.mockResolvedValue(undefined);
+    updateUser.mockResolvedValue({ data: {}, error: null });
   });
 
-  it('edits the Nickname, the phone and the colour; email and full name are locked', async () => {
+  it('edits the Nickname, the phone and the colour; the full name is locked', async () => {
     renderSheet();
 
     expect(nicknameInput()).toHaveValue('Ani');
@@ -81,9 +95,8 @@ describe('EditProfileSheet', () => {
       screen.getByRole('group', { name: 'Alege culoarea avatarului' }),
     ).toBeInTheDocument();
 
-    const emailInput = screen.getByLabelText(/adresă de email/i);
-    expect(emailInput).toHaveValue('ana@osubb.ro');
-    expect(emailInput).toBeDisabled();
+    // #824: no locked email field any more -- the address changes below.
+    expect(screen.queryByLabelText(/adresă de email/i)).not.toBeInTheDocument();
 
     expect((await axe.run(screen.getByRole('dialog'))).violations).toEqual([]);
   });
@@ -318,5 +331,42 @@ describe('EditProfileSheet', () => {
     await user.click(screen.getByRole('button', { name: /închide/i }));
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  describe('Schimbă adresa de email (#824)', () => {
+    it('is a section of the sheet, below the profile form, with the current address', () => {
+      renderSheet();
+
+      const section = screen.getByRole('region', {
+        name: 'Schimbă adresa de email',
+      });
+      expect(section).toHaveTextContent('Adresa actuală: ana@osubb.ro');
+      const saveButton = screen.getByRole('button', {
+        name: /salvează modificările/i,
+      });
+      // Below the profile form, and not inside it: two forms, two submits.
+      expect(
+        saveButton.compareDocumentPosition(section) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(saveButton.closest('form')).not.toContainElement(section);
+    });
+
+    it('submits Schimbă adresa from the sheet without saving the profile', async () => {
+      const user = userEvent.setup();
+      renderSheet();
+
+      await user.type(screen.getByLabelText('Adresa nouă'), 'ana@gmail.com');
+      await user.click(screen.getByRole('button', { name: 'Schimbă adresa' }));
+
+      expect(updateUser).toHaveBeenCalledWith(
+        { email: 'ana@gmail.com' },
+        expect.objectContaining({ emailRedirectTo: expect.any(String) }),
+      );
+      expect(updateProfileMock).not.toHaveBeenCalled();
+      expect(
+        await screen.findByTestId('email-change-pending'),
+      ).toHaveTextContent('ana@gmail.com');
+    });
   });
 });

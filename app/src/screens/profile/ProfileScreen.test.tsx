@@ -8,13 +8,43 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberClaims } from '../../lib/auth';
 import type { Database } from '../../lib/database.types';
 import type { GroupApplication } from '../../queries/group-applications';
-import type { Group, MemberGroup } from '../../queries/reference';
+import type {
+  Group,
+  GroupMemberRow,
+  MemberGroup,
+} from '../../queries/reference';
+import type { PromotionState } from '../../components/profile/promotion-state';
 import ProfileScreen from './ProfileScreen';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
-// Promotion progress (#634) has its own suite; here it is only a slot.
+// Promotion progress (#634) has its own suite; here it is only a slot, and
+// the page only asks whether the panel exists (#824).
+const promotionMock = vi.hoisted(() => ({
+  state: { kind: 'hidden' } as PromotionState,
+}));
+vi.mock('../../components/profile/promotion-state', () => ({
+  usePromotionProgressState: () => promotionMock.state,
+}));
 vi.mock('../../components/profile/PromotionProgress', () => ({
-  PromotionProgress: () => <div data-testid="promotion-progress-slot" />,
+  PromotionPanel: () => (
+    <section aria-label="Promovare" data-testid="promotion-progress-slot" />
+  ),
+}));
+
+// #824 (decision D1): the organization setting naming the board Group.
+const orgSettingsMock = vi.hoisted(() => ({
+  data: new Map<string, string | null>([['board_group_id', '99']]),
+  isPending: false,
+  isError: false,
+  error: null as Error | null,
+  refetch: vi.fn(),
+  enabled: [] as boolean[],
+}));
+vi.mock('../../queries/org-settings', () => ({
+  useOrgSettings: ({ enabled = true }: { enabled?: boolean } = {}) => {
+    orgSettingsMock.enabled.push(enabled);
+    return orgSettingsMock;
+  },
 }));
 
 const authMock = vi.hoisted(() => ({
@@ -200,7 +230,7 @@ const referenceMocks = vi.hoisted(() => {
     },
     groupsQueryMock: {
       data: defaultMemberGroups,
-      membershipRows: [],
+      membershipRows: [] as GroupMemberRow[],
       isPending: false,
       isError: false,
       error: null as Error | null,
@@ -316,7 +346,14 @@ describe('ProfileScreen', () => {
     applicationMocks.useGroupApplications.mockImplementation(
       () => applicationMocks.applicationsQuery,
     );
+    groupsQueryMock.membershipRows = [];
     groupsQueryMock.refetch.mockClear();
+
+    promotionMock.state = { kind: 'hidden' };
+    orgSettingsMock.data = new Map([['board_group_id', '99']]);
+    orgSettingsMock.isPending = false;
+    orgSettingsMock.isError = false;
+    orgSettingsMock.enabled = [];
   });
 
   it('A Voluntar sees header, contact, edit, Groups, points total, and the theme toggle', () => {
@@ -326,7 +363,6 @@ describe('ProfileScreen', () => {
     expect(
       screen.getByRole('heading', { name: /maria enache/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Rol organizațional')).toBeInTheDocument();
     expect(screen.getByText('Voluntar')).toBeInTheDocument();
     expect(screen.getByText(/membru din/i)).toBeInTheDocument();
 
@@ -334,12 +370,15 @@ describe('ProfileScreen', () => {
     expect(screen.queryByText('Activ')).not.toBeInTheDocument();
 
     // Contact
-    expect(screen.getByText('maria@osubb.ro')).toBeInTheDocument();
+    const contact = screen.getByRole('region', { name: 'Date de contact' });
+    expect(within(contact).getByText('E-mail')).toBeInTheDocument();
+    expect(within(contact).getByText('maria@osubb.ro')).toBeInTheDocument();
+    expect(within(contact).getByText('Telefon')).toBeInTheDocument();
+    // #824: no email form on the page itself; it lives in the sheet.
+    expect(screen.queryByLabelText('Adresa nouă')).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        /autentificarea se face prin link sau cod trimis la această adresă/i,
-      ),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Schimbă adresa' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('0722334455')).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -349,11 +388,13 @@ describe('ProfileScreen', () => {
 
     // Edit button
     expect(
-      screen.getByRole('button', { name: /editează profil/i }),
+      screen.getByRole('button', { name: 'Editează profilul' }),
     ).toBeInTheDocument();
 
     // Groups
-    expect(screen.getByTestId('groups-card')).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Grupurile mele' }),
+    ).toBeInTheDocument();
     // Voluntar does not see Adunarea Generală chip
     expect(screen.queryByText('Adunarea Generală')).not.toBeInTheDocument();
 
@@ -362,8 +403,10 @@ describe('ProfileScreen', () => {
     expect(screen.getByText('Punctaj personal')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
 
-    // Promotion progress (#634) is mounted; it decides its own states.
-    expect(screen.getByTestId('promotion-progress-slot')).toBeInTheDocument();
+    // Promotion progress (#634): hidden here, so its panel is absent.
+    expect(
+      screen.queryByTestId('promotion-progress-slot'),
+    ).not.toBeInTheDocument();
 
     // Theme toggle
     expect(
@@ -482,7 +525,7 @@ describe('ProfileScreen', () => {
     const user = userEvent.setup();
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    await user.click(screen.getByRole('button', { name: /editează profil/i }));
+    await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
 
     expect(
       screen.getByRole('heading', { name: /editează profilul/i }),
@@ -505,16 +548,16 @@ describe('ProfileScreen', () => {
 
     // Without a Nickname the full name is the heading, and is not repeated.
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Maria Enache' }),
+      screen.getByRole('heading', { level: 3, name: 'Maria Enache' }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('profile-full-name')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /editează profil/i }));
+    await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
     await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
     await user.click(screen.getByRole('button', { name: /salvează/i }));
 
     expect(
-      await screen.findByRole('heading', { level: 2, name: 'Mara' }),
+      await screen.findByRole('heading', { level: 3, name: 'Mara' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('profile-full-name')).toHaveTextContent(
       'Maria Enache',
@@ -525,7 +568,7 @@ describe('ProfileScreen', () => {
     setTestProfile({ ...mockProfile, nickname: 'Mara' });
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    const heading = screen.getByRole('heading', { level: 2, name: 'Mara' });
+    const heading = screen.getByRole('heading', { level: 3, name: 'Mara' });
     const fullName = screen.getByTestId('profile-full-name');
     expect(fullName).toHaveTextContent('Maria Enache');
     // The full name follows the Nickname in the identity block.
@@ -543,7 +586,7 @@ describe('ProfileScreen', () => {
     render(<ProfileScreen />, { wrapper: wrapper() });
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Maria Enache' }),
+      screen.getByRole('heading', { level: 3, name: 'Maria Enache' }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('profile-full-name')).not.toBeInTheDocument();
   });
@@ -552,10 +595,7 @@ describe('ProfileScreen', () => {
     it('at level 1 shows the memberships, a pending Application with withdraw, and the button to /grupuri', async () => {
       render(<ProfileScreen />, { wrapper: wrapper() });
 
-      const card = screen.getByTestId('groups-card');
-      expect(
-        within(card).getByRole('heading', { name: 'Grupurile mele' }),
-      ).toBeInTheDocument();
+      const card = screen.getByRole('region', { name: 'Grupurile mele' });
       // One card: the memberships stay in it, listed once.
       expect(within(card).getByText('Educațional')).toBeInTheDocument();
       expect(within(card).getByText('Echipa IT')).toBeInTheDocument();
@@ -626,7 +666,7 @@ describe('ProfileScreen', () => {
       ).toBeInTheDocument();
     });
 
-    it('at level 5 stays Grupuri with none of the joining parts', () => {
+    it('at level 5 there is no Groups panel and none of the joining parts (#824)', () => {
       authMock.claims = {
         member_role: 'bce',
         member_level: 5,
@@ -635,12 +675,10 @@ describe('ProfileScreen', () => {
       setTestProfile({ ...mockProfile, role: 'bce' });
       render(<ProfileScreen />, { wrapper: wrapper() });
 
-      const card = screen.getByTestId('groups-card');
-      expect(
-        within(card).getByRole('heading', { name: 'Grupuri' }),
-      ).toBeInTheDocument();
-      expect(within(card).getByText('Educațional')).toBeInTheDocument();
+      expect(screen.queryByTestId('groups-card')).not.toBeInTheDocument();
       expect(screen.queryByText('Grupurile mele')).not.toBeInTheDocument();
+      expect(screen.queryByText('Grupuri')).not.toBeInTheDocument();
+      expect(screen.queryByText('Educațional')).not.toBeInTheDocument();
       expect(screen.queryByTestId('joining-section')).not.toBeInTheDocument();
       expect(screen.queryByText('Cereri în așteptare')).not.toBeInTheDocument();
       expect(
@@ -754,14 +792,189 @@ describe('ProfileScreen', () => {
 
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    const timeline = screen.getByTestId('role-timeline-card');
-    expect(
-      within(timeline).getByRole('heading', {
-        name: 'Parcursul organizațional',
-      }),
-    ).toBeInTheDocument();
+    const timeline = screen.getByRole('region', {
+      name: 'Parcursul organizațional',
+    });
     expect(within(timeline).getByRole('listitem')).toHaveTextContent(
       'din 1 oct. 2024',
     );
+  });
+
+  it('keeps the Parcursul organizațional panel with a loading state while the history loads (#824)', () => {
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    const timeline = screen.getByRole('region', {
+      name: 'Parcursul organizațional',
+    });
+    expect(within(timeline).getByRole('status')).toHaveTextContent(
+      'Se încarcă parcursul…',
+    );
+  });
+
+  describe('panels (#824, R27)', () => {
+    /** Every panel's name, in document (and so 375 px reading) order. */
+    const panelNames = () =>
+      [
+        ...document.querySelectorAll(
+          '[data-slot="panel"], [aria-label="Promovare"]',
+        ),
+      ].map(
+        (panel) =>
+          panel.getAttribute('aria-label') ??
+          panel.querySelector('h2')?.textContent,
+      );
+    const gridColumns = () =>
+      [...document.querySelectorAll('[data-slot="page-grid"]')].map((grid) =>
+        grid.getAttribute('data-columns'),
+      );
+
+    it('below BCE: Identitate, Punctaj, Contact; Grupuri, Parcurs, Promovare; Notificări, Email, Confidențialitate', () => {
+      promotionMock.state = { kind: 'loading' };
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      expect(panelNames()).toEqual([
+        'Identitate',
+        'Punctaj personal',
+        'Date de contact',
+        'Grupurile mele',
+        'Parcursul organizațional',
+        'Promovare',
+        'Notificări pe acest dispozitiv',
+        'Email zilnic',
+        'Confidențialitate',
+      ]);
+      expect(gridColumns()).toEqual(['3', '3', '3']);
+      expect(screen.queryByText('Funcția în OSUBB')).not.toBeInTheDocument();
+      // The page never asks for the board setting below BCE.
+      expect(orgSettingsMock.enabled.every((enabled) => !enabled)).toBe(true);
+    });
+
+    it('without a Promovare to show, row 2 has two columns', () => {
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      expect(gridColumns()).toEqual(['3', '2', '3']);
+      expect(panelNames()).not.toContain('Promovare');
+    });
+
+    it('at level >= 5: Funcția în OSUBB replaces Punctaj, and Parcursul organizațional is row 2 alone', () => {
+      authMock.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
+      setTestProfile({ ...mockProfile, role: 'bc' });
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      expect(panelNames()).toEqual([
+        'Identitate',
+        'Funcția în OSUBB',
+        'Date de contact',
+        'Parcursul organizațional',
+        'Notificări pe acest dispozitiv',
+        'Email zilnic',
+        'Confidențialitate',
+      ]);
+      expect(gridColumns()).toEqual(['3', '1', '3']);
+      expect(screen.getByText('Biroul de Conducere')).toBeInTheDocument();
+    });
+
+    it('Funcția în OSUBB shows the title from the board Group, then the Role', () => {
+      authMock.claims = { member_role: 'bce', member_level: 5, group_ids: [] };
+      setTestProfile({ ...mockProfile, role: 'bce' });
+      groupsQueryMock.membershipRows = [
+        { group_id: 10, group_role: 'manager', position_title: null },
+        // A title on another Group is not the board title.
+        {
+          group_id: 20,
+          group_role: 'responsible',
+          position_title: 'Coordonator Tehnic',
+        },
+        {
+          group_id: 99,
+          group_role: 'responsible',
+          position_title: 'Coordonator IT',
+        },
+      ];
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const panel = screen.getByRole('region', { name: 'Funcția în OSUBB' });
+      expect(
+        within(panel).getByText('Biroul de Conducere Extins'),
+      ).toBeInTheDocument();
+      expect(within(panel).getByText('Coordonator IT')).toBeInTheDocument();
+      expect(within(panel).getByText('BCE · OSUBB')).toBeInTheDocument();
+      expect(
+        within(panel).queryByText('Funcția nu este setată încă.'),
+      ).not.toBeInTheDocument();
+      expect(orgSettingsMock.enabled).toContain(true);
+    });
+
+    it('Funcția în OSUBB falls back to the Role when no title is set', () => {
+      authMock.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
+      setTestProfile({ ...mockProfile, role: 'bc' });
+      groupsQueryMock.membershipRows = [
+        {
+          group_id: 20,
+          group_role: 'responsible',
+          position_title: 'Coordonator Tehnic',
+        },
+        // Only a Responsible row on the board carries a board title.
+        { group_id: 99, group_role: 'member', position_title: 'Casier' },
+      ];
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const panel = screen.getByRole('region', { name: 'Funcția în OSUBB' });
+      expect(within(panel).getByText('BC')).toBeInTheDocument();
+      expect(
+        within(panel).getByText('Funcția nu este setată încă.'),
+      ).toBeInTheDocument();
+      expect(
+        within(panel).queryByText(/Coordonator|Casier/),
+      ).not.toBeInTheDocument();
+    });
+
+    it('Funcția în OSUBB falls back to the Role when the board setting is unset', () => {
+      authMock.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
+      setTestProfile({ ...mockProfile, role: 'bc' });
+      orgSettingsMock.data = new Map([['board_group_id', null]]);
+      groupsQueryMock.membershipRows = [
+        {
+          group_id: 99,
+          group_role: 'responsible',
+          position_title: 'Președinte',
+        },
+      ];
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      expect(
+        screen.getByText('Funcția nu este setată încă.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Președinte')).not.toBeInTheDocument();
+    });
+
+    it('the Adunarea Generală badge sits in Identitate, for BC too', () => {
+      authMock.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
+      setTestProfile({ ...mockProfile, role: 'bc' });
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const identity = screen.getByRole('region', { name: 'Identitate' });
+      expect(
+        within(identity).getByText('Adunarea Generală'),
+      ).toBeInTheDocument();
+    });
+
+    it('Editează on Date de contact opens the sheet with the email change inside', async () => {
+      const user = userEvent.setup();
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Editează datele de contact' }),
+      );
+      const sheet = screen.getByRole('dialog');
+      expect(
+        within(sheet).getByRole('heading', {
+          name: 'Schimbă adresa de email',
+        }),
+      ).toBeInTheDocument();
+      expect(
+        within(sheet).getByRole('button', { name: 'Schimbă adresa' }),
+      ).toBeInTheDocument();
+    });
   });
 });

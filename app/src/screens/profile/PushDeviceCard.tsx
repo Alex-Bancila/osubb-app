@@ -1,4 +1,3 @@
-import { BellRing } from 'lucide-react';
 import { useId } from 'react';
 import { Switch } from '../../components/ui/switch';
 import { usePushSubscription } from '../../queries/push-subscription';
@@ -7,11 +6,11 @@ import { PushPreferences } from './PushPreferences';
 /**
  * **Notificări pe acest dispozitiv** (#704, ADR-0010): whether this browser
  * receives Web Push, and below it the Member's per-kind switches (#635).
- * Self-contained, so it survives the Profil rebuild (#699).
+ * The body of Profil's panel of that name (#824): the page owns the panel
+ * and its header, so the switch carries the name itself.
  */
 export function PushDeviceCard() {
   const push = usePushSubscription();
-  const titleId = useId();
   const statusId = useId();
 
   const unsupported = !push.supported;
@@ -30,24 +29,13 @@ export function PushDeviceCard() {
           : 'Nu primești notificări pe acest dispozitiv';
 
   return (
-    <section
-      className="card p-6"
-      aria-labelledby={titleId}
-      data-testid="push-device-card"
-    >
-      <div className="card-head">
-        <h3 id={titleId} className="card-title flex items-center gap-2">
-          <BellRing className="size-5 text-primary" aria-hidden="true" />
-          <span>Notificări pe acest dispozitiv</span>
-        </h3>
-      </div>
-
+    <div data-testid="push-device-card">
       <div className="flex items-center justify-between gap-4">
         <p id={statusId} className="text-sm text-muted-foreground">
           {status}
         </p>
         <Switch
-          aria-labelledby={titleId}
+          aria-label="Notificări pe acest dispozitiv"
           aria-describedby={statusId}
           checked={checked}
           disabled={
@@ -68,6 +56,6 @@ export function PushDeviceCard() {
       )}
 
       <PushPreferences />
-    </section>
+    </div>
   );
 }

@@ -4,7 +4,8 @@
 -- #512, `adunarea_generala_group_id`, whose rules evaluation_rankings_read.test.sql
 -- owns; since #48, `vote_retention_percent`, whose rules role_evaluation_ranking.test.sql
 -- owns; since #771, `privacy_notice_version`, whose rules
--- privacy_notice_acknowledgements.test.sql owns).
+-- privacy_notice_acknowledgements.test.sql owns; since #824, `board_group_id`,
+-- whose rules board_group_setting.test.sql owns).
 --
 -- In order: the schema (RLS, the one read policy, the trigger, the named
 -- constraints -- Ruling 23), the seed row, the grants on the table and on
@@ -108,10 +109,13 @@ select throws_ok(
 -- vote_retention_percent, at R20's placeholder 25 (role_evaluation_ranking.test.sql
 -- owns its rules). #771 seeds a fourth, privacy_notice_version, at 1.0
 -- (privacy_notice_acknowledgements.test.sql owns its rules). #775 seeds a
--- fifth, email_daily_quota, at 90 (email_digest.test.sql owns its rules).
+-- fifth, email_daily_quota, at 90 (email_digest.test.sql owns its rules). #824
+-- seeds a sixth, board_group_id, whose value is whatever the demo seed
+-- pointed it at (board_group_setting.test.sql owns its rules).
 select results_eq(
   $$ select key,
             case key when 'adunarea_generala_group_id' then true
+                     when 'board_group_id' then true
                      when 'vote_retention_percent' then value = '25'
                      when 'privacy_notice_version' then value = '1.0'
                      when 'email_daily_quota' then value = '90'
@@ -120,10 +124,11 @@ select results_eq(
        from public.org_settings order by key $$,
   $$ values ('adherence_form_url'::text, true, null::uuid),
             ('adunarea_generala_group_id'::text, true, null::uuid),
+            ('board_group_id'::text, true, null::uuid),
             ('email_daily_quota'::text, true, null::uuid),
             ('privacy_notice_version'::text, true, null::uuid),
             ('vote_retention_percent'::text, true, null::uuid) $$,
-  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id, #48''s vote_retention_percent at 25, #771''s privacy_notice_version at 1.0 and #775''s email_daily_quota at 90, none set through the command -- and no other key');
+  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id, #48''s vote_retention_percent at 25, #771''s privacy_notice_version at 1.0, #775''s email_daily_quota at 90 and #824''s board_group_id, none set through the command -- and no other key');
 
 -- ==================== 3. Grants ====================
 
@@ -166,23 +171,25 @@ select is(
 -- ==================== 4. Reading ====================
 
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000001');
-select is((select count(*) from public.org_settings), 5::bigint, 'the Moderator reads every setting');
+select is((select count(*) from public.org_settings), 6::bigint, 'the Moderator reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000002');
-select is((select count(*) from public.org_settings), 5::bigint, 'BC reads every setting');
+select is((select count(*) from public.org_settings), 6::bigint, 'BC reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000003');
-select is((select count(*) from public.org_settings), 5::bigint, 'a BCE reads every setting');
+select is((select count(*) from public.org_settings), 6::bigint, 'a BCE reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select results_eq(
   $$ select key, case key when 'adunarea_generala_group_id' then true
+                          when 'board_group_id' then true
                           when 'vote_retention_percent' then true
                           when 'privacy_notice_version' then value = '1.0'
                           when 'email_daily_quota' then value = '90'
                           else value is null end
        from public.org_settings order by key $$,
   $$ values ('adherence_form_url'::text, true), ('adunarea_generala_group_id'::text, true),
+            ('board_group_id'::text, true),
             ('email_daily_quota'::text, true), ('privacy_notice_version'::text, true), ('vote_retention_percent'::text, true) $$,
   'an ordinary Member reads every setting, the empty adherence form included -- #52 sends it to exactly this Member; the #771 step reads the version');
 reset role;
@@ -392,8 +399,8 @@ reset role;
 
 select results_eq(
   $$ select count(*)::int from public.org_settings $$,
-  $$ values (5) $$,
-  'no command ever created a key beyond the five the migrations seed');
+  $$ values (6) $$,
+  'no command ever created a key beyond the six the migrations seed');
 
 select * from finish();
 rollback;

@@ -275,8 +275,10 @@ if [ "$before" != "$after" ]; then
   exit 1
 fi
 
-# The fingerprint compares stable content. Check the migration-specific
-# absence/presence facts explicitly so an old legacy fixture cannot hide in it.
+# The fingerprint compares stable content. Seven native demo Groups: three
+# Teams, two Projects, the Adunarea Generală and the board (#824). Check the
+# migration-specific absence/presence facts explicitly so an old legacy
+# fixture cannot hide in it.
 native_shape=$(run_sql -c "select format('%s:%s:%s:%s',
   (select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'),
   (select count(*) from groups where name='Adunarea Generală'
@@ -285,8 +287,8 @@ native_shape=$(run_sql -c "select format('%s:%s:%s:%s',
     and not accepts_applications),
   (select count(*) from information_schema.tables where table_schema='public' and table_name='teams'),
   (select count(*) from information_schema.tables where table_schema='public' and table_name='projects'))")
-if [ "$native_shape" != "6:1:0:0" ]; then
-  echo "::error::The native demo Group shape changed ($native_shape, expected 6:1:0:0)."
+if [ "$native_shape" != "7:1:0:0" ]; then
+  echo "::error::The native demo Group shape changed ($native_shape, expected 7:1:0:0)."
   exit 1
 fi
 

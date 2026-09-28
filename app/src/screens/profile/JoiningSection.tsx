@@ -29,9 +29,9 @@ export function JoiningSection() {
       data-testid="joining-section"
     >
       <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
           Cereri în așteptare
-        </h4>
+        </h3>
         {applications.isPending ? (
           <Loading label="Se încarcă cererile…" />
         ) : applications.isError ? (

@@ -1,18 +1,12 @@
 import type { ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
-import { ErrorState } from '../states';
-import { useAuth } from '../../lib/auth';
+import { Panel } from '../layout';
+import { ErrorState, Loading } from '../states';
+import { formatPoints } from '../../lib/format';
 import {
-  formatDayMonthYear,
-  formatPoints,
-  parseLocalDate,
-} from '../../lib/format';
-import { useMyProfile } from '../../queries/profile';
-import {
-  usePromotionProgress,
-  type PromotionProgress as Progress,
-} from '../../queries/promotion-progress';
-import { useRoles } from '../../queries/reference';
+  usePromotionProgressState,
+  type PromotionState,
+} from './promotion-state';
 
 /**
  * #634 — where a Member stands on the automatic ladder (ADR-0004 amended
@@ -30,62 +24,71 @@ import { useRoles } from '../../queries/reference';
  * - No threshold in force: the tenure lines only; the bar is hidden,
  *   never faked.
  *
+ * #824 lifts the gate to the page: `usePromotionProgressState` says whether
+ * the panel exists at all (`hidden`, in `promotion-state.ts`), and `PromotionPanel` renders one that
+ * does — its loading and error states inside the box — so a `PageGrid` cell
+ * is never `null`.
+ *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
  */
+
+/** The panel for a state the page decided to show. */
+export function PromotionPanel({
+  state,
+}: {
+  state: Exclude<PromotionState, { kind: 'hidden' }>;
+}) {
+  const title =
+    state.kind === 'view' && state.view.kind === 'reference'
+      ? 'Punctaj de la ultima evaluare'
+      : 'Promovare';
+  return (
+    <Panel eyebrow="Parcurs" icon={TrendingUp} title={title}>
+      <div data-testid="promotion-progress">
+        <PromotionBody state={state} />
+      </div>
+    </Panel>
+  );
+}
+
+/** Standalone: the panel, or nothing when there is nothing to show. */
 export function PromotionProgress() {
-  const { claims } = useAuth();
-  const profile = useMyProfile().data;
-  const roles = useRoles().data;
+  const state = usePromotionProgressState();
+  return state.kind === 'hidden' ? null : <PromotionPanel state={state} />;
+}
 
-  const role = profile?.role ?? claims?.member_role;
-  const level =
-    claims?.member_level ?? (role ? roles?.get(role)?.level : undefined);
-  const onLadder =
-    role !== undefined &&
-    LADDER_ROLES.has(role) &&
-    level !== undefined &&
-    level < 5;
-
-  const progress = usePromotionProgress({ enabled: onLadder });
-
-  if (!onLadder || !role) return null;
-
-  if (progress.isError) {
+function PromotionBody({
+  state,
+}: {
+  state: Exclude<PromotionState, { kind: 'hidden' }>;
+}): ReactNode {
+  if (state.kind === 'loading') {
+    return <Loading label="Se încarcă progresul…" />;
+  }
+  if (state.kind === 'error') {
     return (
-      <Frame title="Promovare">
-        <ErrorState
-          text="Nu am putut încărca progresul spre următorul rol."
-          error={progress.error}
-          onRetry={() => void progress.refetch()}
-        />
-      </Frame>
+      <ErrorState
+        text="Nu am putut încărca progresul spre următorul rol."
+        error={state.error}
+        onRetry={state.retry}
+      />
     );
   }
-  if (!progress.data) return null;
-
-  const view = viewFor(role, profile?.joined_at ?? null, progress.data);
-  if (!view) return null;
-
+  const { view } = state;
   switch (view.kind) {
     case 'tenure':
-      return (
-        <Frame title="Promovare">
-          <p className="text-sm font-medium text-foreground">{view.text}</p>
-        </Frame>
-      );
+      return <p className="text-sm font-medium text-foreground">{view.text}</p>;
     case 'bar':
       return (
-        <Frame title="Promovare">
-          <ThresholdBar
-            points={view.points}
-            threshold={view.threshold}
-            sinceLabel={view.sinceLabel}
-          />
-        </Frame>
+        <ThresholdBar
+          points={view.points}
+          threshold={view.threshold}
+          sinceLabel={view.sinceLabel}
+        />
       );
     case 'reference':
       return (
-        <Frame title="Punctaj de la ultima evaluare">
+        <>
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-2xl font-bold text-foreground">
               {formatPoints(view.points)}
@@ -97,59 +100,9 @@ export function PromotionProgress() {
           <p className="mt-2 text-sm text-muted-foreground">
             Pragul în vigoare: {pointCount(view.threshold)}
           </p>
-        </Frame>
+        </>
       );
   }
-}
-
-const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
-
-type View =
-  | { kind: 'tenure'; text: string }
-  | { kind: 'bar'; points: number; threshold: number; sinceLabel: string }
-  | { kind: 'reference'; points: number; threshold: number; sinceLabel: string }
-  | null;
-
-function viewFor(
-  role: string,
-  joinedAt: string | null,
-  progress: Progress,
-): View {
-  const { threshold, points, since } = progress;
-  // The bar needs a target; without one it is hidden, never faked.
-  const measurable = threshold !== null;
-  const sinceLabel = since
-    ? `de la ${formatDayMonthYear(since) ?? since}`
-    : 'în total';
-
-  if (role === 'recrut') {
-    const date = tenureDate(joinedAt, progress.voluntarTenureMonths);
-    return date
-      ? { kind: 'tenure', text: `Devii Voluntar din ${formatTenure(date)}` }
-      : null;
-  }
-
-  if (role === 'voluntar') {
-    const date = tenureDate(joinedAt, progress.activTenureMonths);
-    if (!date) return null;
-    if (measurable && startOfToday() >= date) {
-      return { kind: 'bar', points, threshold, sinceLabel };
-    }
-    return {
-      kind: 'tenure',
-      text: `Poți deveni Voluntar Activ din ${formatTenure(date)}`,
-    };
-  }
-
-  // Voluntar Activ and Voluntar cu Drept de Vot: no tenure line to fall back on.
-  return measurable
-    ? {
-        kind: 'reference',
-        points,
-        threshold,
-        sinceLabel,
-      }
-    : null;
 }
 
 function ThresholdBar({
@@ -204,20 +157,6 @@ function ThresholdBar({
   );
 }
 
-function Frame({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="card p-6" data-testid="promotion-progress">
-      <div className="card-head">
-        <h3 className="card-title flex items-center gap-2">
-          <TrendingUp className="size-5 text-primary" aria-hidden="true" />
-          <span>{title}</span>
-        </h3>
-      </div>
-      {children}
-    </section>
-  );
-}
-
 /**
  * "1 punct", "5 puncte", "30 de puncte" — Romanian puts "de" before the noun
  * when the last two digits are 00 or 20–99, as `formatTaskCount` does.
@@ -233,32 +172,4 @@ function pointWord(points: number): string {
 
 function pointCount(points: number): string {
   return `${formatPoints(points)} ${pointWord(points)}`;
-}
-
-/**
- * `joined_at` + the rule's months, as a local calendar date. A day the target
- * month lacks clamps to its last day (31 August + 6 months is 28/29 February),
- * the way PostgreSQL's `date + interval 'n months'` does.
- */
-function tenureDate(joinedAt: string | null, months: number | null) {
-  const joined = parseLocalDate(joinedAt);
-  if (!joined || months === null) return null;
-  const year = joined.getFullYear();
-  const month = joined.getMonth() + months;
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  return new Date(year, month, Math.min(joined.getDate(), lastDay));
-}
-
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-function formatTenure(date: Date): string {
-  const iso = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
-  return formatDayMonthYear(iso) ?? iso;
 }

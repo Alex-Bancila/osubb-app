@@ -20,6 +20,7 @@ import { fieldForReason, profileSchema } from '../../lib/schemas/profile';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { cn } from '../../lib/utils';
 import { type MyProfile, useUpdateMyProfile } from '../../queries/profile';
+import ChangeEmailSection from './ChangeEmailSection';
 
 const AVATAR_PALETTE = [
   { name: 'Roșu OSUBB', color: '#ED2025' },
@@ -124,21 +125,6 @@ function EditProfileForm({
           />
           <FieldDescription id="edit-profile-name-hint">
             Numele complet se schimbă doar de BC sau Moderator.
-          </FieldDescription>
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor="edit-profile-email">Adresă de email</FieldLabel>
-          <input
-            id="edit-profile-email"
-            type="email"
-            value={profile.email ?? ''}
-            disabled
-            className={LOCKED_INPUT_CLASS}
-          />
-          <FieldDescription>
-            Adresa de email se schimbă din secțiunea „Adresa de e-mail” de pe
-            pagina de profil.
           </FieldDescription>
         </Field>
 
@@ -249,7 +235,16 @@ export default function EditProfileSheet({
             </SheetClose>
           </div>
 
-          {open && <EditProfileForm profile={profile} onClose={onClose} />}
+          {open && (
+            <>
+              <EditProfileForm profile={profile} onClose={onClose} />
+              {/* #824: the sign-in address changes here too, as its own form
+                  below the profile form, so the page itself has no email card. */}
+              <div className="mt-6 border-t border-border pt-6">
+                <ChangeEmailSection profile={profile} />
+              </div>
+            </>
+          )}
         </SheetPopup>
       </SheetPortal>
     </Sheet>

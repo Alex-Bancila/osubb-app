@@ -30,9 +30,9 @@ export function PushPreferences() {
       aria-labelledby={titleId}
       data-testid="push-preferences"
     >
-      <h4 id={titleId} className="text-sm font-semibold">
+      <h3 id={titleId} className="text-sm font-semibold">
         Ce primești ca notificare push
-      </h4>
+      </h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Pe toate dispozitivele tale. Lista din aplicație rămâne completă.
       </p>

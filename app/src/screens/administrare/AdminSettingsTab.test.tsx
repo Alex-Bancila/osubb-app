@@ -171,6 +171,7 @@ beforeEach(() => {
   db.settings = new Map<string, string | null>([
     ['adherence_form_url', null],
     ['adunarea_generala_group_id', null],
+    ['board_group_id', null],
     ['vote_retention_percent', '25'],
   ]);
   db.ranking = [];
@@ -204,13 +205,16 @@ function show() {
 const rpcCalls = (name: string) =>
   db.rpc.mock.calls.filter(([called]) => called === name).map(([, a]) => a);
 
-it('sets the two settings side by side, as panels', async () => {
+it('sets the three settings side by side, as panels', async () => {
   const { container } = show();
   expect(
     await screen.findByRole('region', { name: 'Formular de adeziune' }),
   ).toBeVisible();
   expect(
     screen.getByRole('region', { name: 'Adunarea Generală' }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('region', { name: 'Biroul de Conducere' }),
   ).toBeVisible();
   expect((await axe.run(container)).violations).toEqual([]);
 });
@@ -321,4 +325,52 @@ it('points the Adunarea Generală setting at an active, non-private Group', asyn
   expect(
     within(section).getByText('Adunarea Generală', { selector: 'span' }),
   ).toBeVisible();
+});
+
+it('points the board setting at an active Private Group (#824)', async () => {
+  const user = userEvent.setup();
+  show();
+  const section = await screen.findByRole('region', {
+    name: 'Biroul de Conducere',
+  });
+  expect(within(section).getByText('Niciun grup setat')).toBeVisible();
+  const select = within(section).getByLabelText('Grupul Biroului de Conducere');
+  expect(
+    within(select)
+      .getAllByRole('option')
+      .map((option) => option.textContent),
+  ).toEqual(['Alege un grup', 'Consiliu privat']);
+
+  await user.selectOptions(select, '6');
+  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  await waitFor(() =>
+    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
+      p_key: 'board_group_id',
+      p_value: '6',
+    }),
+  );
+  expect(
+    await within(section).findByText(
+      'Grupul Biroului de Conducere a fost salvat.',
+    ),
+  ).toBeVisible();
+
+  // … and back to no Group: a blank choice clears it on the server.
+  expect(
+    within(section).getByRole('option', { name: 'Niciun grup' }),
+  ).toBeInTheDocument();
+  await user.selectOptions(select, '');
+  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  await waitFor(() =>
+    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
+      p_key: 'board_group_id',
+      p_value: '',
+    }),
+  );
+  expect(
+    await within(section).findByText(
+      'Grupul Biroului de Conducere a fost șters din setări.',
+    ),
+  ).toBeVisible();
+  expect(within(section).getByText('Niciun grup setat')).toBeVisible();
 });

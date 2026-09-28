@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { MyProfile } from '../../queries/profile';
@@ -15,6 +16,8 @@ const historyMock = vi.hoisted(() => ({
   data: [] as RoleHistoryRow[] | undefined,
   isPending: false,
   isError: false,
+  error: null as Error | null,
+  refetch: vi.fn(),
 }));
 vi.mock('../../queries/role-history', () => ({
   useMyRoleHistory: () => historyMock,
@@ -65,20 +68,37 @@ describe('RoleTimeline', () => {
     historyMock.data = [];
     historyMock.isPending = false;
     historyMock.isError = false;
+    historyMock.error = null;
+    historyMock.refetch.mockClear();
     identitiesMock.data = undefined;
     identitiesMock.lastIds = [];
   });
 
-  it('renders nothing while the history loads or when it fails', () => {
+  // #824: the page owns the panel, so the states render in its box and the
+  // grid cell is never empty.
+  it('shows a loading state in the box while the history loads', () => {
     historyMock.isPending = true;
-    const pending = render(<RoleTimeline profile={profile} />);
-    expect(pending.container).toBeEmptyDOMElement();
-    pending.unmount();
+    render(<RoleTimeline profile={profile} />);
 
-    historyMock.isPending = false;
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se încarcă parcursul…',
+    );
+    expect(
+      screen.queryByRole('list', { name: 'Parcursul organizațional' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows an error with a retry in the box when the history fails', async () => {
+    const user = userEvent.setup();
     historyMock.isError = true;
-    const failed = render(<RoleTimeline profile={profile} />);
-    expect(failed.container).toBeEmptyDOMElement();
+    historyMock.error = new Error('boom');
+    render(<RoleTimeline profile={profile} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Nu am putut încărca parcursul organizațional.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Încearcă din nou' }));
+    expect(historyMock.refetch).toHaveBeenCalled();
   });
 
   it('with no role_history rows shows one open segment from joined_at', () => {

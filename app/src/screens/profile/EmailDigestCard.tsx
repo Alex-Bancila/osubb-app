@@ -1,4 +1,3 @@
-import { Mail } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 import { useLocation } from 'react-router';
 import { Switch } from '../../components/ui/switch';
@@ -12,12 +11,13 @@ export const EMAIL_DIGEST_ANCHOR = 'rezumat-email';
  * Notifications the Member has not read -- only on a day there is something
  * unread. The digest links back here, so turning the switch off is the
  * one-click opt-out, and it stops that day's email if it has not left yet.
+ * The body of Profil's **Email zilnic** panel (#824): the page owns the
+ * panel and its header, so the switch carries its own name.
  */
 export function EmailDigestCard() {
   const digest = useEmailDigest();
-  const titleId = useId();
   const statusId = useId();
-  const sectionRef = useRef<HTMLElement>(null);
+  const sectionRef = useRef<HTMLDivElement>(null);
   const { hash } = useLocation();
 
   // Arriving from the email's opt-out link: bring the switch into view.
@@ -28,20 +28,11 @@ export function EmailDigestCard() {
   }, [hash]);
 
   return (
-    <section
+    <div
       ref={sectionRef}
       id={EMAIL_DIGEST_ANCHOR}
-      className="card p-6"
-      aria-labelledby={titleId}
       data-testid="email-digest-card"
     >
-      <div className="card-head">
-        <h3 id={titleId} className="card-title flex items-center gap-2">
-          <Mail className="size-5 text-primary" aria-hidden="true" />
-          <span>Rezumat zilnic pe email</span>
-        </h3>
-      </div>
-
       <div className="flex items-center justify-between gap-4">
         <p id={statusId} className="text-sm text-muted-foreground">
           {digest.enabled
@@ -49,7 +40,7 @@ export function EmailDigestCard() {
             : 'Nu primești emailuri cu notificările necitite.'}
         </p>
         <Switch
-          aria-labelledby={titleId}
+          aria-label="Rezumat zilnic pe email"
           aria-describedby={statusId}
           checked={digest.enabled}
           disabled={digest.loading || digest.pending}
@@ -67,6 +58,6 @@ export function EmailDigestCard() {
           {digest.error}
         </p>
       )}
-    </section>
+    </div>
   );
 }

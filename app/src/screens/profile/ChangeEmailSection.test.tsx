@@ -60,7 +60,7 @@ describe('ChangeEmailSection (#632)', () => {
     render(<ChangeEmailSection profile={profile} />);
     expect(screen.getByText('maria@osubb.ro')).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Adresa de e-mail' }),
+      screen.getByRole('heading', { name: 'Schimbă adresa de email' }),
     ).toBeInTheDocument();
   });
 
