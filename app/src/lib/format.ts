@@ -19,6 +19,25 @@ export function formatPoints(points: number): string {
 }
 
 /**
+ * The noun after a points figure: '1 punct', '5 puncte', '30 de puncte',
+ * '−2 puncte'. Romanian puts 'de' before the noun when the last two digits
+ * are 00 or 20–99, as `formatTaskCount` does; the sign does not change it.
+ */
+export function pointWord(points: number): string {
+  const count = Math.abs(points);
+  if (count === 1) return 'punct';
+  const lastTwo = count % 100;
+  return count >= 20 && (lastTwo === 0 || lastTwo >= 20)
+    ? 'de puncte'
+    : 'puncte';
+}
+
+/** A points figure with its noun: '12 puncte', '30 de puncte', '−1 punct'. */
+export function formatPointCount(points: number): string {
+  return `${formatPoints(points)} ${pointWord(points)}`;
+}
+
+/**
  * A count of Tasks with the Romanian plural: "1 task", "3 taskuri",
  * "20 de taskuri" — the "de" appears when the last two digits are 0 or 20+,
  * for any count above 19.

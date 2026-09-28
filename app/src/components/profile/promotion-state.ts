@@ -53,11 +53,25 @@ export function usePromotionProgressState(): PromotionState {
 
 const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
 
+/**
+ * `since` is the last Role Evaluation's date, formatted ('1 iulie 2026'),
+ * or null before any: then `points` is the Member's total, and the panel
+ * says it once rather than as a second 'total' (#859 B38).
+ */
 export type View =
   | { kind: 'tenure'; text: string }
-  | { kind: 'bar'; points: number; threshold: number; sinceLabel: string }
-  | { kind: 'reference'; points: number; threshold: number; sinceLabel: string }
+  | { kind: 'bar'; points: number; threshold: number; since: string | null }
+  | {
+      kind: 'reference';
+      points: number;
+      threshold: number;
+      since: string | null;
+    }
   | null;
+
+/** The line a Recrut reads once the tenure date has passed (#859 B43). */
+export const TENURE_MET_TEXT =
+  'Îndeplinești vechimea; promovarea se aplică la următoarea rulare.';
 
 function viewFor(
   role: string,
@@ -67,22 +81,23 @@ function viewFor(
   const { threshold, points, since } = progress;
   // The bar needs a target; without one it is hidden, never faked.
   const measurable = threshold !== null;
-  const sinceLabel = since
-    ? `de la ${formatDayMonthYear(since) ?? since}`
-    : 'în total';
+  const sinceDate = since ? (formatDayMonthYear(since) ?? since) : null;
 
   if (role === 'recrut') {
     const date = tenureDate(joinedAt, progress.voluntarTenureMonths);
-    return date
-      ? { kind: 'tenure', text: `Devii Voluntar din ${formatTenure(date)}` }
-      : null;
+    if (!date) return null;
+    // The tenure job promotes on its next run, so a date already reached is
+    // never promised in the future tense (Audit D D-7).
+    return startOfToday() >= date
+      ? { kind: 'tenure', text: TENURE_MET_TEXT }
+      : { kind: 'tenure', text: `Devii Voluntar din ${formatTenure(date)}` };
   }
 
   if (role === 'voluntar') {
     const date = tenureDate(joinedAt, progress.activTenureMonths);
     if (!date) return null;
     if (measurable && startOfToday() >= date) {
-      return { kind: 'bar', points, threshold, sinceLabel };
+      return { kind: 'bar', points, threshold, since: sinceDate };
     }
     return {
       kind: 'tenure',
@@ -96,7 +111,7 @@ function viewFor(
         kind: 'reference',
         points,
         threshold,
-        sinceLabel,
+        since: sinceDate,
       }
     : null;
 }

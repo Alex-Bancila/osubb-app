@@ -274,7 +274,9 @@ export function TaskCard({
     onProgress !== undefined &&
     task.kind === 'task' &&
     memberId !== undefined &&
-    task.executor?.memberId === memberId;
+    task.executor?.memberId === memberId &&
+    // Who finished a Task (#861) no longer holds it: no actions.
+    task.executor.isCurrent;
   const action = isExecutor
     ? task.status === 'todo'
       ? 'start'

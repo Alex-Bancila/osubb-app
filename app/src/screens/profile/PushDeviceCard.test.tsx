@@ -39,7 +39,7 @@ function answer(overrides: Partial<PushState> = {}) {
 }
 
 function theSwitch() {
-  return screen.getByRole('switch', { name: 'Notificări pe acest dispozitiv' });
+  return screen.getByRole('switch', { name: 'Notificări push' });
 }
 
 describe('PushDeviceCard', () => {

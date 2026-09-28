@@ -32,7 +32,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(88);
+select plan(89);
 
 -- ==================== Fixtures ====================
 
@@ -448,6 +448,9 @@ reset role;
 select is(pg_temp.g584_status((select third_id from fx584_third)), 'pending',
   'a declined Application never blocks a new one — re-applying after a decline succeeds');
 
+-- #861: every Notification from here on is the accept's.
+create temp table fx861_mark as select coalesce(max(id), 0) as last_id from public.notifications;
+
 select pg_temp.g584_as(2);
 select lives_ok(
   format($$select public.decide_group_application(%s, true)$$, (select third_id from fx584_third)),
@@ -461,13 +464,14 @@ select is(
     where group_id = pg_temp.g584_group('Deschis #584') and member_id = pg_temp.g584_uid(4)),
   'member',
   'decide_group_application: the accept places the Member through the Appointment core, as an ordinary member');
+-- #861 (Audit D-20): one decision, one Notification. The Appointment core's
+-- own "Ai fost adăugat în …" is not written on this path.
 select is(
-  (select count(*) from public.notifications
+  (select string_agg(title, ' | ' order by id) from public.notifications
     where member_id = pg_temp.g584_uid(4)
-      and link = '/grupuri/' || pg_temp.g584_group('Deschis #584')::text
-      and dedupe_key is null),
-  1::bigint,
-  'the accept also writes the Appointment core''s own "added to the Group" Notification to the new Member');
+      and id > (select last_id from fx861_mark)),
+  'Cerere acceptată: Deschis #584',
+  '#861: accepting an Application writes exactly one Notification to the applicant -- "Cerere acceptată", not also "Ai fost adăugat"');
 
 -- Authority flows DOWN the path, never up: the Child Group's own Manager has
 -- no say over the parent's queue, while the parent's Manager (member 2) holds
@@ -766,6 +770,19 @@ select ok(
   and not has_table_privilege('authenticated', 'public.group_applications', 'delete')
   and has_table_privilege('authenticated', 'public.group_applications', 'select'),
   'group_applications grants SELECT to authenticated and no DML at all');
+
+-- ==================== 15 · #861: a direct Appointment still notifies ====================
+
+-- Every caller but the accept keeps the default p_notify (true): the
+-- Appointment core's own Notification is still written.
+select private.appoint_group_member(pg_temp.g584_group('Închis #584'), pg_temp.g584_uid(6), pg_temp.g584_uid(1));
+select is(
+  (select count(*) from public.notifications
+    where member_id = pg_temp.g584_uid(6)
+      and title = 'Ai fost adăugat în Închis #584'
+      and link = '/grupuri/' || pg_temp.g584_group('Închis #584')::text),
+  1::bigint,
+  '#861: a direct call to private.appoint_group_member still writes "Ai fost adăugat în <Group>"');
 
 select * from finish();
 rollback;

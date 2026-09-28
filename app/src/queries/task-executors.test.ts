@@ -86,6 +86,46 @@ describe('visible Task Executors', () => {
     });
   });
 
+  it('maps is_current: the Executor who finished a Task is not current (#861)', async () => {
+    api.rpc.mockResolvedValue({
+      data: [
+        {
+          task_id: 1,
+          member_id: 'executor-1',
+          full_name: 'Ana Executor',
+          nickname: null,
+          is_current: true,
+        },
+        {
+          task_id: 2,
+          member_id: 'finisher-2',
+          full_name: 'Ioana Finalizare',
+          nickname: 'Ioana',
+          is_current: false,
+        },
+      ],
+      error: null,
+    });
+
+    const [open, finished] = await attachVisibleTaskExecutors([
+      taskRow({ id: 1 }),
+      taskRow({ id: 2, status: 'completed', assignments: [] }),
+    ]);
+
+    expect(open?.visibleExecutor).toEqual({
+      memberId: 'executor-1',
+      fullName: 'Ana Executor',
+      nickname: null,
+      isCurrent: true,
+    });
+    expect(finished?.visibleExecutor).toEqual({
+      memberId: 'finisher-2',
+      fullName: 'Ioana Finalizare',
+      nickname: 'Ioana',
+      isCurrent: false,
+    });
+  });
+
   it('does not call the backend for an empty Task set', async () => {
     await expect(attachVisibleTaskExecutors([])).resolves.toEqual([]);
     expect(api.rpc).not.toHaveBeenCalled();

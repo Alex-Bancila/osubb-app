@@ -5,9 +5,10 @@ import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 export const VISIBLE_EXECUTORS_BATCH = 200;
 
 /**
- * Adds the deliberately narrow Executor identity returned by #499's RPC.
- * One request per 200 Task ids enriches an entire result set; Task cards never
- * fetch profiles.
+ * Adds the deliberately narrow Executor identity returned by #499's RPC: the
+ * open Assignment's member, or the member who finished a completed or
+ * unfulfilled Task (#861). One request per 200 Task ids enriches an entire
+ * result set; Task cards never fetch profiles.
  */
 export async function attachVisibleTaskExecutors<
   Row extends TaskPresentationRow,
@@ -40,6 +41,9 @@ export async function attachVisibleTaskExecutors<
         memberId: executor.member_id,
         fullName: executor.full_name?.trim() || null,
         nickname: executor.nickname?.trim() || null,
+        // #861: false for the Executor who finished a completed or
+        // unfulfilled Task, whose Assignment the Evaluation ended.
+        isCurrent: executor.is_current,
       },
     ]),
   );
