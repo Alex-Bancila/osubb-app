@@ -92,7 +92,7 @@ export function useEventWork() {
  * The items the Calendar can show (Rule W, #845): every readable Event, the
  * member's own and pending-candidature Task deadlines, and — while
  * **Taskurile gestionate** is on — the managed Tasks' deadlines. Not `ready`
- * until the first three reads have settled, so the filter never offers a partial list;
+ * until every read in use has settled, so the filter never offers a partial list;
  * when one of them failed, `work` is `undefined` and the filter offers every
  * option rather than hiding the page's own.
  */
@@ -106,9 +106,7 @@ export function useCalendarWork(showManaged: boolean): {
   const management = useTaskManagement();
   const withManaged = showManaged && management.data === true;
   const managed = useManagedTasks(withManaged);
-  // The managed deadlines join once they arrive: turning the toggle on
-  // never takes the filter back to its loading state.
-  const reads = [events, mine, candidatures];
+  const reads = [events, mine, candidatures, ...(withManaged ? [managed] : [])];
   const ready = reads.every((read) => !read.isPending);
   const failed = reads.some((read) => read.isError);
   const work = useMemo(

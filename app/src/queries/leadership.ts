@@ -70,9 +70,9 @@ export function fetchLeadershipMemberTasks(
 }
 /**
  * The Work Filter's choices on Clasament and Tracker membru, plus `work`:
- * the Group and Campaign of every Task that carries Task Points — completed
- * or unfulfilled, never an Umbrella (it has none) — which Rule W (#845)
- * offers from. BCE, BC and Moderator read every Task.
+ * the Group and Campaign of every Task that has an Evaluation, so carries
+ * Task Points (a reopened one keeps its Evaluation and reversal; an Umbrella
+ * has none) — which Rule W (#845) offers from. BCE, BC and Moderator read every Task.
  */
 export async function fetchLeadershipFilters() {
   const [groups, campaigns, work] = await Promise.all([
@@ -93,8 +93,11 @@ export async function fetchLeadershipFilters() {
     pages((from, to) =>
       supabase
         .from('tasks')
-        .select('group_id,campaign_id')
-        .in('status', ['completed', 'unfulfilled'])
+        // An Evaluation, through its Assignment: a reopened Task keeps its
+        // Evaluation and its reversal on the board, so it counts too.
+        .select(
+          'group_id,campaign_id,task_assignments!inner(task_evaluations!inner(id))',
+        )
         .eq('kind', 'task')
         .order('id')
         .range(from, to),

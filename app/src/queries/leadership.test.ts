@@ -80,13 +80,11 @@ it('reads paged Group and Campaign options without category exclusions, and the 
   expect(builder.select.mock.calls).toEqual([
     ['id,name,path,status,is_organization,parent_id,color,category'],
     ['id,name,group_id'],
-    ['group_id,campaign_id'],
+    ['group_id,campaign_id,task_assignments!inner(task_evaluations!inner(id))'],
   ]);
-  // Only Tasks that carry Task Points: evaluated, never an Umbrella.
-  expect(builder.in).toHaveBeenCalledWith('status', [
-    'completed',
-    'unfulfilled',
-  ]);
+  // Only Tasks that carry Task Points: evaluated (a reopened one too), never
+  // an Umbrella — by the Evaluation, not by status.
+  expect(builder.in).not.toHaveBeenCalled();
   expect(builder.eq).toHaveBeenCalledWith('kind', 'task');
   expect(range).toHaveBeenCalledTimes(3);
 });

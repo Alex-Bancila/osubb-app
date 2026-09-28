@@ -177,7 +177,7 @@ describe('ManagerTaskList', () => {
 
   it('searches titles without case or diacritics, after a short pause', async () => {
     const user = userEvent.setup();
-    renderList('', vi.fn(), sixRows);
+    const { rerender } = renderList('', vi.fn(), sixRows);
     await user.type(
       screen.getByRole('searchbox', { name: 'Caută după titlu' }),
       'SEDINTA',
@@ -187,6 +187,19 @@ describe('ManagerTaskList', () => {
     expect(
       screen.getByRole('button', { name: 'Filtre (1)' }),
     ).toBeInTheDocument();
+    // Below six Tasks the search stops applying, and stops being counted.
+    rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: 'Filtre' })).toBeInTheDocument();
+    expect(titles()).toHaveLength(rows.length);
+    rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={sixRows} now={now} />
+      </MemoryRouter>,
+    );
     await user.selectOptions(screen.getByLabelText('Stare'), 'completed');
     expect(
       screen.getByText('Niciun task nu corespunde filtrelor.'),
