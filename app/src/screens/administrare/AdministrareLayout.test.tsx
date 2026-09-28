@@ -5,9 +5,17 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Capabilities } from '../../lib/capabilities';
 
-const api = vi.hoisted(() => ({ capabilities: vi.fn() }));
+const api = vi.hoisted(() => ({
+  capabilities: vi.fn(),
+  applications: vi.fn(),
+}));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: api.capabilities,
+}));
+// Whether a managed Group takes Applications is its own tested rule
+// (`applications-tab.test.ts`); here it is an answer the layout reads.
+vi.mock('./applications-tab', () => ({
+  useApplicationsTabShown: api.applications,
 }));
 import AdministrareLayout from './AdministrareLayout';
 
@@ -74,7 +82,11 @@ const tabNames = () =>
     .getAllByRole('link')
     .map((link) => link.textContent);
 
-beforeEach(() => api.capabilities.mockReset());
+beforeEach(() => {
+  api.capabilities.mockReset();
+  api.applications.mockReset();
+  api.applications.mockReturnValue(true);
+});
 
 it('shows BC and the Moderator all seven tabs, in the order Alex listed', async () => {
   const { container } = show('/administrare/grupuri', BC);
@@ -82,7 +94,7 @@ it('shows BC and the Moderator all seven tabs, in the order Alex listed', async 
     'Membri',
     'Grupuri',
     'Roluri',
-    'Cereri',
+    'Cereri de aderare',
     'Evaluări de rol',
     'Confidențialitate',
     'Setări',
@@ -104,10 +116,32 @@ it('shows BC and the Moderator all seven tabs, in the order Alex listed', async 
   expect((await axe.run(container)).violations).toEqual([]);
 });
 
-it('shows a Group Manager or Responsible Grupuri and Cereri only', () => {
+it('shows a Group Manager or Responsible Grupuri and Cereri de aderare only', () => {
   show('/administrare/grupuri', MANAGER);
-  expect(tabNames()).toEqual(['Grupuri', 'Cereri']);
-  expect(screen.getByText('Grupurile pe care le coordonezi.')).toBeVisible();
+  expect(tabNames()).toEqual(['Grupuri', 'Cereri de aderare']);
+  // A Responsible does not coordinate (relevance B56).
+  expect(screen.getByText('Grupurile în care ai o funcție.')).toBeVisible();
+});
+
+it('hides Cereri de aderare while none of the viewer’s Groups takes Applications or has one pending (B55)', () => {
+  api.applications.mockReturnValue(false);
+  const view = show('/administrare/grupuri', MANAGER);
+  expect(tabNames()).toEqual(['Grupuri']);
+  view.unmount();
+
+  // Not known yet: not shown, so it never appears and then vanishes.
+  api.applications.mockReturnValue(undefined);
+  const loading = show('/administrare/grupuri', MANAGER);
+  expect(tabNames()).toEqual(['Grupuri']);
+  loading.unmount();
+
+  // Opened by a link, the page keeps its tab.
+  api.applications.mockReturnValue(false);
+  show('/administrare/cereri', MANAGER);
+  expect(tabNames()).toEqual(['Grupuri', 'Cereri de aderare']);
+  expect(
+    within(tabBar()).getByRole('link', { name: 'Cereri de aderare' }),
+  ).toHaveAttribute('aria-current', 'page');
 });
 
 it('marks the open tab aria-current and moves with a click', async () => {

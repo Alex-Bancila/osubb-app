@@ -78,12 +78,13 @@ it('lists the pending Applications of every managed Group, each with its Group',
   ).toBeVisible();
   expect(within(ana).getByRole('link', { name: 'Logistică' })).toHaveAttribute(
     'href',
-    '/administrare/grupuri/2',
+    // Straight to the Group's Cereri tab (navigation D6).
+    '/administrare/grupuri/2?tab=cereri',
   );
   expect(ana).toHaveTextContent('Vreau să ajut la evenimente.');
   expect(within(dan).getByRole('link', { name: 'Foto' })).toHaveAttribute(
     'href',
-    '/administrare/grupuri/5',
+    '/administrare/grupuri/5?tab=cereri',
   );
   expect((await axe.run(container)).violations).toEqual([]);
 });

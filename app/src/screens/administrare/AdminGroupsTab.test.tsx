@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as axe from 'axe-core';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useParams } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { AdminGroup } from '../../queries/groups-admin';
 import type { MyGroup } from '../../queries/my-groups';
@@ -33,6 +33,8 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useAppointableMembers: api.members,
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
 }));
+// The Cereri de aderare tab's rule has its own suite (applications-tab).
+vi.mock('./applications-tab', () => ({ useApplicationsTabShown: () => true }));
 import AdminGroupsTab from './AdminGroupsTab';
 import AdministrareLayout from './AdministrareLayout';
 
@@ -109,6 +111,11 @@ beforeEach(() => {
   capabilities({ createTopLevelGroups: true });
 });
 
+function GroupPage() {
+  const { groupId } = useParams();
+  return <h1>Grupul {groupId}</h1>;
+}
+
 /** The tab inside the Administrare layout, whose header carries its action. */
 function show() {
   const client = new QueryClient();
@@ -119,10 +126,37 @@ function show() {
           <Route path="/administrare" element={<AdministrareLayout />}>
             <Route path="grupuri" element={<AdminGroupsTab />} />
           </Route>
+          <Route
+            path="/administrare/grupuri/:groupId"
+            element={<GroupPage />}
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function myGroup(
+  id: number,
+  name: string,
+  groupRole: string,
+  extra: Partial<MyGroup> = {},
+): MyGroup {
+  return {
+    id,
+    name,
+    short: '',
+    color: '',
+    category: 'team',
+    path: [id],
+    min_level: 1,
+    status: 'active',
+    is_organization: false,
+    group_role: groupRole,
+    explicit: true,
+    automatic: false,
+    ...extra,
+  };
 }
 
 it('puts the whole tree in the Structura grupurilor panel for BC', () => {
@@ -202,10 +236,17 @@ it('shows a Group Manager their own Groups instead, with the inherited role mark
     isPending: false,
     isError: false,
   });
+  api.myGroups.mockReturnValue({
+    // A plain membership is no function: OSUBB is not listed (relevance B47).
+    data: [...mine, myGroup(9, 'OSUBB', 'member', { automatic: true })],
+    isPending: false,
+    isError: false,
+  });
   show();
 
   expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
-  expect(screen.getByText('Grupurile pe care le coordonezi.')).toBeVisible();
+  expect(screen.getByText('Grupurile în care ai o funcție.')).toBeVisible();
+  expect(screen.queryByRole('link', { name: 'OSUBB' })).toBeNull();
   expect(screen.getByRole('link', { name: 'Logistică' })).toHaveAttribute(
     'href',
     '/administrare/grupuri/2',
@@ -427,21 +468,9 @@ it("shows a Manager's own Groups' Minimum Level by Role name (R29b)", () => {
   capabilities({ createTopLevelGroups: false });
   api.myGroups.mockReturnValue({
     data: [
-      {
-        id: 2,
-        name: 'Logistică',
-        short: '',
-        color: '',
-        category: 'team',
-        path: [1, 2],
-        min_level: 2,
-        status: 'active',
-        is_organization: false,
-        group_role: 'manager',
-        explicit: true,
-        automatic: false,
-      },
-    ] satisfies MyGroup[],
+      myGroup(2, 'Logistică', 'manager', { path: [1, 2], min_level: 2 }),
+      myGroup(4, 'Tineret', 'responsible', { min_level: 0 }),
+    ],
     isPending: false,
     isError: false,
   });
@@ -449,4 +478,54 @@ it("shows a Manager's own Groups' Minimum Level by Role name (R29b)", () => {
   const row = screen.getByRole('link', { name: 'Logistică' }).closest('tr');
   expect(within(row as HTMLElement).getByText('Voluntar Activ')).toBeVisible();
   expect(within(row as HTMLElement).queryByText('2')).toBeNull();
+});
+
+it('shows only the columns whose values differ, and an archived Group by a badge (B48)', () => {
+  api.groups.mockReturnValue({
+    data: [
+      group(1, 'Educațional', [1], null),
+      group(3, 'Balul Bobocilor', [3], null, {
+        category: 'department',
+        status: 'archived',
+      }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  const headers = screen
+    .getAllByRole('columnheader')
+    .map((header) => header.textContent);
+  // One category, one Minimum Level, one size: none is a column. No Stare.
+  expect(headers).toEqual(['Grup']);
+  const archived = screen
+    .getByRole('link', { name: 'Balul Bobocilor' })
+    .closest('tr') as HTMLElement;
+  expect(within(archived).getByText('Arhivat')).toBeVisible();
+  expect(screen.getAllByText('Arhivat')).toHaveLength(1);
+});
+
+it("hides a Manager's single-valued columns too, but always names their function", () => {
+  capabilities({ createTopLevelGroups: false });
+  api.myGroups.mockReturnValue({
+    data: [myGroup(2, 'Logistică', 'responsible')],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(
+    screen.getAllByRole('columnheader').map((header) => header.textContent),
+  ).toEqual(['Grup', 'Funcția ta']);
+});
+
+it('opens the Group from anywhere on its row, and the name is a 44 px target (AD6)', async () => {
+  const user = userEvent.setup();
+  show();
+  const link = screen.getByRole('link', { name: 'Balul Bobocilor' });
+  expect(link).toHaveClass('min-h-11');
+  const row = link.closest('tr') as HTMLElement;
+  await user.click(within(row).getAllByRole('cell').at(-1) as HTMLElement);
+  expect(
+    await screen.findByRole('heading', { name: 'Grupul 3' }),
+  ).toBeVisible();
 });

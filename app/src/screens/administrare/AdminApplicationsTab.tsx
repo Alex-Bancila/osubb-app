@@ -74,7 +74,7 @@ export default function AdminApplicationsTab() {
               <MemberName {...row.member} showFullName size="sm" />
               <p className="m-0 text-sm text-muted-foreground">
                 <Link
-                  to={`/administrare/grupuri/${row.group.id}`}
+                  to={`/administrare/grupuri/${row.group.id}?tab=cereri`}
                   className="font-medium text-foreground underline-offset-4 hover:underline"
                 >
                   {row.group.name}

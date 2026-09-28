@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
+import { Panel } from '../../components/layout';
 import {
   DataTable,
   type DataTableColumn,
@@ -24,7 +25,7 @@ import type {
 } from '../../queries/groups-admin';
 import { statusLabel } from '../volunteers/directory-filters';
 import { MemberPicker } from './MemberPicker';
-import { groupRoleLabel } from './group-tree';
+import { groupRoleLabel, rosterBackState } from './group-tree';
 
 /** Appointment: a Group Manager or Responsible adds a Member (ADR-0009). */
 function AddMemberDialog({
@@ -217,8 +218,11 @@ function rosterColumns({
             avatarColor={row.original.avatarColor}
           />
           <Link
-            className="truncate font-medium underline"
+            className="inline-flex min-h-11 min-w-0 items-center truncate font-medium underline underline-offset-4"
             to={`/administrare/membri/${row.original.memberId}`}
+            // The member page's back link returns here, to the Roster
+            // (navigation D4), not to a Membri tab the viewer may not open.
+            state={rosterBackState(group.id)}
           >
             {row.original.name}
           </Link>
@@ -260,7 +264,10 @@ function rosterColumns({
       enableSorting: false,
       cell: ({ row }) =>
         // A position is ended by the authority that granted it, never by a
-        // roster removal — so a Manager or Responsible is demoted first.
+        // roster removal — so a Manager or Responsible is demoted first, and
+        // the hint shows only to whoever may withdraw that position
+        // (relevance B50): a Manager's by the level above, a Responsible's
+        // by the Group's Managers.
         row.original.groupRole === 'member' ? (
           <RemoveMemberDialog
             entry={row.original}
@@ -275,13 +282,23 @@ function rosterColumns({
               })
             }
           />
-        ) : (
+        ) : canWithdraw(row.original.groupRole, authority) ? (
           <span className="text-sm text-muted-foreground">
             Retrage întâi funcția
           </span>
-        ),
+        ) : null,
     },
   ];
+}
+
+/** Whether the viewer may end this Group Role (Roluri's own rule). */
+function canWithdraw(
+  groupRole: RosterEntry['groupRole'],
+  authority: GroupAuthority,
+) {
+  if (groupRole === 'manager') return authority.appointManager;
+  if (groupRole === 'responsible') return authority.manageGroup;
+  return false;
 }
 
 /**
@@ -317,17 +334,14 @@ export function GroupRosterTab({
 
   const columns = rosterColumns({ group, authority, busy, error, onRun });
 
+  // The count is the page header's (relevance B51); this panel carries only
+  // the action.
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p role="status" className="text-sm text-muted-foreground">
-          {group.automatic_membership
-            ? 'Membrii acestui grup se adaugă automat, după nivel.'
-            : roster.length === 1
-              ? '1 membru'
-              : `${roster.length} membri`}
-        </p>
-        {authority.manageWork && !group.automatic_membership && (
+    <Panel
+      aria-label="Roster"
+      control={
+        authority.manageWork &&
+        !group.automatic_membership && (
           <AddMemberDialog
             group={group}
             candidates={candidates}
@@ -337,14 +351,19 @@ export function GroupRosterTab({
               onRun({ kind: 'addMember', groupId: group.id, memberId })
             }
           />
-        )}
-      </div>
+        )
+      }
+    >
       <DataTable
         columns={columns}
         data={roster}
         initialSorting={[{ id: 'name', desc: false }]}
-        emptyTitle="Grupul nu are încă membri."
+        emptyTitle={
+          group.automatic_membership
+            ? 'Membrii acestui grup se adaugă automat, după nivel.'
+            : 'Grupul nu are încă membri.'
+        }
       />
-    </div>
+    </Panel>
   );
 }

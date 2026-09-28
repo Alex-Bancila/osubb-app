@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
@@ -8,6 +8,7 @@ import type {
   AdminGroup,
   GroupAuthority,
   GroupCommand,
+  RosterEntry,
 } from '../../queries/groups-admin';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -277,8 +278,14 @@ it('offers every Minimum Level picker by Role name, the six rungs only, in ladde
     'BC',
   ];
   const pickers = screen.getAllByLabelText('Nivel minim');
-  // The settings form's and the structure section's pickers alike.
-  expect(pickers).toHaveLength(2);
+  // One picker (relevance B52): a top-level Group's Minimum Level is its
+  // structure, so it sits in Structura only.
+  expect(pickers).toHaveLength(1);
+  expect(
+    within(
+      screen.getByRole('form', { name: 'Structura grupului' }),
+    ).getByLabelText('Nivel minim'),
+  ).toBe(pickers[0]);
   for (const picker of pickers) expect(texts(picker)).toEqual(six);
   expect(
     texts(screen.getByLabelText('Nivelul de la care se poate cere înscrierea')),
@@ -381,4 +388,168 @@ it('keeps a stored Moderator Application Level readable but never offers it (R29
     'BCE',
     'BC',
   ]);
+});
+
+function root(extra: Partial<AdminGroup> = {}, roster: RosterEntry[] = []) {
+  return render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group({ parent_id: null, path: [2], min_level: 0, ...extra })}
+        parent={undefined}
+        roster={roster}
+        authority={{ ...authority, editStructure: true, archive: true }}
+        levels={[0, 1, 2, 3, 5, 6]}
+        actorLevel={6}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+      />
+    </MemoryRouter>,
+  );
+}
+
+it('shows the level and the form link only while the Group takes Applications (B54)', async () => {
+  const user = userEvent.setup();
+  show({
+    accepts_applications: false,
+    application_level: null,
+    application_form_label: 'Înscrie-te',
+    application_form_url: FORM_URL,
+  });
+  expect(screen.queryByLabelText('Eticheta butonului')).toBeNull();
+  expect(
+    screen.queryByLabelText('Nivelul de la care se poate cere înscrierea'),
+  ).toBeNull();
+  // Hidden is not cleared: a save sends the stored link back.
+  await save();
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      acceptsApplications: false,
+      applicationFormLabel: 'Înscrie-te',
+      applicationFormUrl: FORM_URL,
+    }),
+    expect.any(Function),
+  );
+
+  await user.click(
+    screen.getByRole('checkbox', { name: /Primește cereri de înscriere/ }),
+  );
+  expect(labelField()).toHaveValue('Înscrie-te');
+  expect(
+    screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
+  ).toBeVisible();
+});
+
+it('offers "Grupul organizației" only on the Organization Group, read-only there (B53)', async () => {
+  const user = userEvent.setup();
+  const other = root();
+  expect(
+    screen.queryByRole('checkbox', { name: /^Grupul organizației/ }),
+  ).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Salvează structura' }));
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: 'structure', isOrganization: false }),
+    expect.any(Function),
+  );
+  other.unmount();
+
+  root({ is_organization: true, name: 'OSUBB' });
+  const organization = screen.getByRole('checkbox', {
+    name: /^Grupul organizației/,
+  });
+  expect(organization).toBeChecked();
+  expect(organization).toHaveAttribute('aria-disabled', 'true');
+  await user.click(screen.getByRole('button', { name: 'Salvează structura' }));
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: 'structure', isOrganization: true }),
+    expect.any(Function),
+  );
+});
+
+it("names who leaves before a top-level Group's structure raises its Minimum Level", async () => {
+  const user = userEvent.setup();
+  root({}, [
+    {
+      memberId: 'm1',
+      name: 'Ana Pop',
+      level: 1,
+      avatarColor: null,
+      groupRole: 'member',
+      positionTitle: null,
+      status: 'activ',
+      roleLabel: 'Voluntar',
+    },
+  ]);
+  await user.selectOptions(screen.getByLabelText('Nivel minim'), '3');
+  await user.click(
+    screen.getByRole('button', { name: 'Vezi cine iese din grup' }),
+  );
+  expect(run).not.toHaveBeenCalled();
+  expect(
+    within(
+      screen.getByRole('list', { name: 'Membri care ies din grup' }),
+    ).getByText(/Ana Pop/),
+  ).toBeVisible();
+  await user.click(
+    screen.getByRole('button', { name: 'Confirmă și salvează' }),
+  );
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'structure',
+      minLevel: 3,
+      confirmRemovals: true,
+    }),
+    expect.any(Function),
+  );
+  // The settings form sends the stored level back, never a second copy.
+  await save();
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: 'settings', minLevel: 0 }),
+    expect.any(Function),
+  );
+});
+
+it('lays Setări, Structura and Arhivare out as panels with their own headers (AD3)', () => {
+  root();
+  for (const name of ['Setările grupului', 'Structura grupului', 'Arhivare'])
+    expect(screen.getByRole('region', { name })).toBeVisible();
+  // Every select is the kit's (#842), none native-styled.
+  for (const select of document.querySelectorAll('select'))
+    expect(select).toHaveAttribute('data-slot', 'native-select');
+  // At most one primary action per panel.
+  const primaries = (name: string) =>
+    within(screen.getByRole('region', { name }))
+      .getAllByRole('button')
+      .filter((button) => button.classList.contains('bg-primary')).length;
+  expect(primaries('Setările grupului')).toBe(1);
+  expect(primaries('Structura grupului')).toBe(1);
+  expect(primaries('Arhivare')).toBe(0);
+});
+
+it('renders nothing for a viewer who can change none of it', () => {
+  const { container } = render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group()}
+        parent={undefined}
+        roster={[]}
+        authority={{
+          manageWork: true,
+          manageGroup: false,
+          editStructure: false,
+          appointManager: false,
+          archive: false,
+          editMinLevel: false,
+        }}
+        levels={[0, 1]}
+        actorLevel={2}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+      />
+    </MemoryRouter>,
+  );
+  expect(container).toBeEmptyDOMElement();
 });

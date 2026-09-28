@@ -1,21 +1,24 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import {
   BackLink,
   Page,
   PageHeader,
-  panelBoxClass,
+  Panel,
   tabClass,
   tabListClass,
+  useActiveTabInView,
 } from '../../components/layout';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
+import { formatMemberCount } from '../../lib/format';
 import { parsePositiveInt } from '../../lib/ids';
 import { Loading } from '../../components/states';
 import { minimumLevelText } from '../../lib/minimum-level';
+import { useGroupApplications } from '../../queries/group-applications';
 import { useRoles } from '../../queries/reference';
 import {
   groupAuthority,
@@ -33,18 +36,16 @@ import { GroupChildrenTab } from './GroupChildrenTab';
 import { GroupRolesTab } from './GroupRolesTab';
 import { GroupRosterTab } from './GroupRosterTab';
 import { GroupSettingsTab } from './GroupSettingsTab';
-import { categoryLabel, groupPathNames, groupStatusLabel } from './group-tree';
+import {
+  categoryLabel,
+  currentGroupTab,
+  groupPathNames,
+  groupStatusLabel,
+  groupTabs,
+} from './group-tree';
 
-const TABS = [
-  { id: 'setari', label: 'Setări' },
-  { id: 'roster', label: 'Roster' },
-  { id: 'roluri', label: 'Roluri' },
-  { id: 'copii', label: 'Grupuri copil' },
-  { id: 'campanii', label: 'Campanii' },
-  { id: 'cereri', label: 'Cereri' },
-] as const;
-
-type TabId = (typeof TABS)[number]['id'];
+/** The query key that holds the open tab (navigation D6). */
+const TAB_KEY = 'tab';
 
 const SUCCESS: Record<GroupCommand['kind'], string> = {
   create: 'Grupul a fost creat.',
@@ -85,9 +86,51 @@ function Breadcrumb({
   );
 }
 
-/** Back to the Grupuri tab this page sits under (#825). */
+/**
+ * Back to the Grupuri tab this page sits under (#825) — or, when a member page
+ * opened this one with `state.from`, back there (navigation D4).
+ */
 function BackToGroups() {
   return <BackLink to="/administrare/grupuri" label="Înapoi la Administrare" />;
+}
+
+/**
+ * The Group's tabs as links to `?tab=<id>` (navigation D6): a notification,
+ * the Cereri queue or a reload opens the tab the link names. Each link
+ * replaces the history entry — switching tabs is not a page to go back to —
+ * and carries the page's `state`, so a back link set by the member page
+ * survives a tab change. One row at 375 px (#841's strip).
+ */
+function GroupTabs({
+  tabs,
+  active,
+}: {
+  tabs: readonly { id: string; label: string }[];
+  active: string;
+}) {
+  const nav = useRef<HTMLElement>(null);
+  const location = useLocation();
+  useActiveTabInView(nav, active);
+  return (
+    <nav ref={nav} aria-label="Secțiunile grupului" className={tabListClass}>
+      {tabs.map((item) => {
+        const params = new URLSearchParams(location.search);
+        params.set(TAB_KEY, item.id);
+        return (
+          <Link
+            key={item.id}
+            to={{ search: `?${params.toString()}` }}
+            replace
+            state={location.state}
+            aria-current={item.id === active ? 'page' : undefined}
+            className={tabClass}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
 
 const EYEBROW = 'Administrare';
@@ -111,7 +154,8 @@ export default function GroupScreen() {
   const membersQuery = useAppointableMembers();
   const command = useGroupCommand();
   const actorLevel = useAuth().claims?.member_level ?? 0;
-  const [tab, setTab] = useState<TabId>('setari');
+  const [searchParams] = useSearchParams();
+  const applicationsQuery = useGroupApplications(id);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastReason, setLastReason] = useState<string | undefined>(undefined);
@@ -156,6 +200,13 @@ export default function GroupScreen() {
       ),
     [group, id, myGroupsQuery.data, createTopLevel],
   );
+  const tabs = groupTabs(authority, {
+    hasChildren: children.length > 0,
+    canCreateChild: authority.manageGroup && group?.status === 'active',
+    acceptsApplications: group?.accepts_applications === true,
+    pendingApplications: applicationsQuery.data?.length ?? 0,
+  });
+  const tab = currentGroupTab(searchParams.get(TAB_KEY), tabs);
 
   async function run(
     next: GroupCommand,
@@ -184,7 +235,12 @@ export default function GroupScreen() {
     }
   }
 
-  if (parsedId !== null && groupsQuery.isPending)
+  if (
+    parsedId !== null &&
+    (groupsQuery.isPending ||
+      myGroupsQuery.isPending === true ||
+      capabilities.isPending === true)
+  )
     return (
       <Page aria-label="Grup">
         <Loading label="Se încarcă grupul…" />
@@ -202,6 +258,7 @@ export default function GroupScreen() {
 
   const busy = command.isPending;
   const roster = rosterQuery.data ?? [];
+  const activeLabel = tabs.find((item) => item.id === tab)?.label ?? '';
 
   return (
     <Page>
@@ -237,10 +294,18 @@ export default function GroupScreen() {
             Nivel minim: {minimumLevelText(group.min_level)}
             {group.automatic_membership
               ? ' · membri adăugați automat'
-              : ` · ${group.memberCount} membri`}
+              : ` · ${formatMemberCount(group.memberCount)}`}
           </>
         }
       />
+
+      {/* The one refusal line (relevance B49): a viewer who can change
+          nothing here is told once, not once per tab. */}
+      {!authority.manageWork && !authority.manageGroup && (
+        <p className="m-0 -mt-3 text-sm text-muted-foreground">
+          Vezi grupul, dar schimbările îi revin coordonatorului lui.
+        </p>
+      )}
 
       {message && <p role="status">{message}</p>}
       {error && (
@@ -249,36 +314,9 @@ export default function GroupScreen() {
         </p>
       )}
 
-      <div
-        role="tablist"
-        aria-label="Secțiunile grupului"
-        className={tabListClass}
-      >
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            id={`tab-${item.id}`}
-            aria-selected={tab === item.id}
-            aria-controls={`panel-${item.id}`}
-            tabIndex={tab === item.id ? 0 : -1}
-            className={tabClass}
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <GroupTabs tabs={tabs} active={tab} />
 
-      <div
-        role="tabpanel"
-        id={`panel-${tab}`}
-        aria-labelledby={`tab-${tab}`}
-        tabIndex={0}
-        // Campanii is itself a Panel; every other tab sits in the one box.
-        className={tab === 'campanii' ? undefined : panelBoxClass}
-      >
+      <div role="region" aria-label={activeLabel} className="min-w-0">
         {tab === 'setari' && (
           <GroupSettingsTab
             // A new Group is a new draft: every field starts from its row.
@@ -298,7 +336,9 @@ export default function GroupScreen() {
         )}
         {tab === 'roster' &&
           (rosterQuery.isPending ? (
-            <p role="status">Se încarcă membrii…</p>
+            <Panel aria-label="Roster">
+              <Loading label="Se încarcă membrii…" />
+            </Panel>
           ) : (
             <GroupRosterTab
               group={group}
@@ -312,7 +352,9 @@ export default function GroupScreen() {
           ))}
         {tab === 'roluri' &&
           (rosterQuery.isPending ? (
-            <p role="status">Se încarcă funcțiile…</p>
+            <Panel aria-label="Roluri">
+              <Loading label="Se încarcă funcțiile…" />
+            </Panel>
           ) : (
             <GroupRolesTab
               group={group}
@@ -341,39 +383,32 @@ export default function GroupScreen() {
           />
         )}
         {tab === 'campanii' && (
-          <div className="space-y-4">
-            <p className="text-muted-foreground">
-              O campanie este o etichetă pentru taskurile grupului și ale
-              subgrupurilor lui. Raportul ei arată punctele obținute și cine a
-              lucrat.
+          <div className="flex flex-col gap-4">
+            <p className="m-0 text-sm text-muted-foreground">
+              Raportul unei campanii arată punctele obținute și cine a lucrat.
             </p>
             <CampaignsPanel group={group} label={group.name} groups={groups} />
           </div>
         )}
         {tab === 'cereri' && (
-          <div className="space-y-4">
-            {/* #698 (ruling R18): with a form link, applicants go to the form
-                and join by Appointment. Applications filed before the link
-                was set still list below, to be decided. */}
-            {group.application_form_url && (
-              <p className="text-muted-foreground">
-                Grupul primește înscrieri prin formular; adaugă membrii din
-                Roster.
-              </p>
-            )}
+          <Panel
+            aria-label="Cereri"
+            // #698 (ruling R18): with a form link, applicants go to the form
+            // and join by Appointment. Applications filed before the link was
+            // set still list below, to be decided.
+            description={
+              group.application_form_url
+                ? 'Grupul primește înscrieri prin formular; adaugă membrii din Roster.'
+                : undefined
+            }
+          >
             <GroupApplicationsTab
               groupId={id}
               canDecide={authority.manageWork}
             />
-          </div>
+          </Panel>
         )}
       </div>
-
-      {!authority.manageWork && !authority.manageGroup && (
-        <p className="text-sm text-muted-foreground">
-          Vezi grupul, dar schimbările îi revin coordonatorului lui.
-        </p>
-      )}
     </Page>
   );
 }
