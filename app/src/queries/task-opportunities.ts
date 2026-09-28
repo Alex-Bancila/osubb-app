@@ -143,15 +143,22 @@ export async function fetchTaskOpportunities(
     .in('status', [...OPEN_TASK_STATUSES]);
   const openResult = await openTasks;
   if (openResult.error) throw openResult.error;
-  const queuedTasks: TaskPresentationRow[] = [];
   const pendingIds = [...pendingTaskIds];
-  for (let offset = 0; offset < pendingIds.length; offset += 100) {
-    const result = await latestSubmissionOnly(
-      supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
-    )
-      .eq('kind', 'task')
-      .eq('assignment_mode', 'public')
-      .in('id', pendingIds.slice(offset, offset + 100));
+  const batches: number[][] = [];
+  for (let offset = 0; offset < pendingIds.length; offset += 100)
+    batches.push(pendingIds.slice(offset, offset + 100));
+  const queuedResults = await Promise.all(
+    batches.map((ids) =>
+      latestSubmissionOnly(
+        supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+      )
+        .eq('kind', 'task')
+        .eq('assignment_mode', 'public')
+        .in('id', ids),
+    ),
+  );
+  const queuedTasks: TaskPresentationRow[] = [];
+  for (const result of queuedResults) {
     if (result.error) throw result.error;
     queuedTasks.push(...result.data);
   }

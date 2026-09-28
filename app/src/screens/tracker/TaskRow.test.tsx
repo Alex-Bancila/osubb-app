@@ -91,6 +91,18 @@ describe('TaskRow (#846, layout T1)', () => {
     expect(onOpenTask).toHaveBeenCalledWith(1);
   });
 
+  it('opens the Executor’s Member Card, not the Task, from their name', async () => {
+    const user = userEvent.setup();
+    const { onOpenTask, row } = renderRow();
+    await user.click(
+      within(row).getByRole('button', {
+        name: 'Profilul membrului Maria Dobre',
+      }),
+    );
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Maria Dobre');
+    expect(onOpenTask).not.toHaveBeenCalled();
+  });
+
   it('uses the kit’s box radius and shows the ring on the row when its button has focus', () => {
     const { row } = renderRow();
     expect(row).toHaveClass('rounded-md');
