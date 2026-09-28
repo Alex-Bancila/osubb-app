@@ -7,6 +7,7 @@ import {
   Info,
   ListTodo,
   Megaphone,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { BUCHAREST_TIME_ZONE } from '../../lib/calendar-time';
@@ -36,6 +37,40 @@ export function notificationKindMeta(
   kind: NotificationKind,
 ): NotificationKindMeta {
   return KIND_META[kind] ?? { label: 'Sistem', icon: Info };
+}
+
+/* Group membership, Appointments and Applications travel as `system`
+   notifications (the enum has no Group kind), so the chip names them by what
+   they are about (#858, B37). A link to a Group page says so; the titles the
+   server writes cover the ones that carry no link (an archived or Private
+   Group, a raised Minimum Level). */
+const GROUP_META: NotificationKindMeta = { label: 'Grupuri', icon: Users };
+const GROUP_LINK = /^\/(?:administrare\/)?grupuri(?:[/?#]|$)/;
+const GROUP_TITLE_PREFIXES = [
+  'Ai fost adăugat în ',
+  'Nu mai faci parte din ',
+  'Numire în ',
+  'Numire încheiată în ',
+  'Nivel minim actualizat: ',
+  'Cerere de înscriere: ',
+  'Cerere acceptată: ',
+  'Cerere respinsă: ',
+];
+
+/** Whether a `system` notification is about a Group ("Grupuri"). */
+export function isGroupNotification(
+  row: Pick<NotificationRow, 'kind' | 'title' | 'link'>,
+): boolean {
+  if (row.kind !== 'system') return false;
+  if (row.link && GROUP_LINK.test(row.link)) return true;
+  return GROUP_TITLE_PREFIXES.some((prefix) => row.title.startsWith(prefix));
+}
+
+/** The chip and icon for one row: its kind, or "Grupuri" for Group news. */
+export function notificationMeta(
+  row: Pick<NotificationRow, 'kind' | 'title' | 'link'>,
+): NotificationKindMeta {
+  return isGroupNotification(row) ? GROUP_META : notificationKindMeta(row.kind);
 }
 
 /** `20 septembrie 2026, 15:00` — the exact moment, in Romanian wall time. */
@@ -97,7 +132,7 @@ export function toNotificationPresentation(
   row: NotificationRow,
   now: Date = new Date(),
 ): NotificationPresentation {
-  const meta = notificationKindMeta(row.kind);
+  const meta = notificationMeta(row);
 
   return {
     id: row.id,
