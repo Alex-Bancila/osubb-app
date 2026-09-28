@@ -1,4 +1,4 @@
-import { GraduationCap } from 'lucide-react';
+import { ErrorState, Loading } from '../../components/states';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import { MemberName } from '../../components/member/MemberName';
 import {
@@ -18,8 +18,11 @@ import { useMyRoleHistory } from '../../queries/role-history';
  * "din <dată>". A change a BC or Moderator made names them with `MemberName`
  * (#676); one the promotion job made says so.
  *
- * Self-contained and non-critical: while the history loads or if it fails,
- * the section is absent and the rest of the profile is unaffected.
+ * The body of Profil's **Parcursul organizațional** panel (#824): the page
+ * owns the panel and its header, so this never renders `null` inside the
+ * grid — while the history loads it shows `Loading`, and if it fails an
+ * `ErrorState` with a retry, in the box. The rest of the profile is
+ * unaffected either way.
  */
 export function RoleTimeline({ profile }: { profile: MyProfile }) {
   const historyQuery = useMyRoleHistory();
@@ -30,73 +33,72 @@ export function RoleTimeline({ profile }: { profile: MyProfile }) {
   );
   const actorsQuery = useMemberIdentities(actorIds);
 
-  if (historyQuery.isPending || historyQuery.isError) return null;
+  if (historyQuery.isError) {
+    return (
+      <ErrorState
+        text="Nu am putut încărca parcursul organizațional."
+        error={historyQuery.error}
+        onRetry={() => void historyQuery.refetch()}
+      />
+    );
+  }
+  if (historyQuery.isPending) {
+    return <Loading label="Se încarcă parcursul…" />;
+  }
 
   const segments = buildRoleSegments(profile.joined_at, profile.role, rows);
   const roleName = (role: string) => rolesQuery.data?.get(role)?.name ?? role;
   const undated = segments.length === 1 && !segments[0]?.startDate;
 
   return (
-    <section className="card p-6" data-testid="role-timeline-card">
-      <div className="card-head">
-        <h3 className="card-title flex items-center gap-2">
-          <GraduationCap className="size-5 text-primary" aria-hidden="true" />
-          <span>Parcursul organizațional</span>
-        </h3>
-      </div>
-
-      <ol
-        className="space-y-4 border-l border-border pl-4"
-        aria-label="Parcursul organizațional"
-      >
-        {segments.map((segment, i) => {
-          const isCurrent = segment.endDate === null;
-          const period = formatSegmentPeriod(segment);
-          const duration = formatRoleDuration(
-            segment.startDate,
-            segment.endDate,
-          );
-          return (
-            <li key={i} className="relative text-sm">
-              <span
-                className={`absolute -left-[calc(1rem+0.3125rem)] top-1 size-2.5 rounded-full ${
-                  isCurrent ? 'bg-primary ring-2 ring-primary/20' : 'bg-border'
-                }`}
-                aria-hidden="true"
-              />
-              <p
-                className={`font-semibold ${
-                  isCurrent ? 'text-foreground' : 'text-muted-foreground'
-                }`}
-              >
-                {roleName(segment.role)}
+    <ol
+      className="space-y-4 border-l border-border pl-4"
+      aria-label="Parcursul organizațional"
+    >
+      {segments.map((segment, i) => {
+        const isCurrent = segment.endDate === null;
+        const period = formatSegmentPeriod(segment);
+        const duration = formatRoleDuration(segment.startDate, segment.endDate);
+        return (
+          <li key={i} className="relative text-sm">
+            <span
+              className={`absolute -left-[calc(1rem+0.3125rem)] top-1 size-2.5 rounded-full ${
+                isCurrent ? 'bg-primary ring-2 ring-primary/20' : 'bg-border'
+              }`}
+              aria-hidden="true"
+            />
+            <p
+              className={`font-semibold ${
+                isCurrent ? 'text-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              {roleName(segment.role)}
+            </p>
+            {period && (
+              <p className="text-xs text-muted-foreground">
+                {period}
+                {duration && ` · ${duration}`}
               </p>
-              {period && (
-                <p className="text-xs text-muted-foreground">
-                  {period}
-                  {duration && ` · ${duration}`}
-                </p>
-              )}
-              {undated && profile.joined_year && (
-                <p className="text-xs text-muted-foreground">
-                  Membru din {profile.joined_year}
-                </p>
-              )}
-              {segment.openedBy && (
-                <ChangeActor
-                  actor={segment.openedBy}
-                  identity={
-                    segment.openedBy.memberId
-                      ? actorsQuery.data?.get(segment.openedBy.memberId)
-                      : undefined
-                  }
-                />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </section>
+            )}
+            {undated && profile.joined_year && (
+              <p className="text-xs text-muted-foreground">
+                Membru din {profile.joined_year}
+              </p>
+            )}
+            {segment.openedBy && (
+              <ChangeActor
+                actor={segment.openedBy}
+                identity={
+                  segment.openedBy.memberId
+                    ? actorsQuery.data?.get(segment.openedBy.memberId)
+                    : undefined
+                }
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

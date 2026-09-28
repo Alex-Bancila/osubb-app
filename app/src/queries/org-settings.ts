@@ -18,17 +18,17 @@ export async function fetchOrgSettings(): Promise<Map<string, string | null>> {
   return new Map((data ?? []).map((row) => [row.key, row.value]));
 }
 
-export function useOrgSettings() {
+export function useOrgSettings({ enabled = true }: { enabled?: boolean } = {}) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
     queryKey: keys.orgSettings.list(memberId),
-    queryFn: memberId ? fetchOrgSettings : skipToken,
+    queryFn: memberId && enabled ? fetchOrgSettings : skipToken,
   });
 }
 
 /** The settings Administrare → Setări edits (#825). */
 export type OrgSettingChange = {
-  key: 'adherence_form_url' | 'adunarea_generala_group_id';
+  key: 'adherence_form_url' | 'adunarea_generala_group_id' | 'board_group_id';
   value: string | null;
 };
 

@@ -376,6 +376,20 @@ select public.set_group_role(pg_temp.seed_group_id('Adunarea Generală'),
 update public.org_settings
    set value = pg_temp.seed_group_id('Adunarea Generală')::text
  where key = 'adunarea_generala_group_id';
+-- #824 (pages-pass decision D1): the board. A Private Group at Minimum Level
+-- 5 whose Group Responsibles' display names are the BC/BCE board titles
+-- Profil shows under "Funcția în OSUBB"; org_settings.board_group_id names
+-- it, written as the owner for the same reason as above. No Task or Event
+-- lives here, and nothing derives authority from the Group or the setting.
+select public.create_group('Biroul de Conducere','team',
+  p_min_level => 5, p_is_private => true);
+select public.set_group_role(pg_temp.seed_group_id('Biroul de Conducere'),
+  'd0000000-0000-0000-0000-000000000007','responsible','Președinte');
+select public.set_group_role(pg_temp.seed_group_id('Biroul de Conducere'),
+  'd0000000-0000-0000-0000-000000000006','responsible','Coordonator IT');
+update public.org_settings
+   set value = pg_temp.seed_group_id('Biroul de Conducere')::text
+ where key = 'board_group_id';
 select public.archive_group(pg_temp.seed_group_id('Gala Voluntarilor 2025'));
 select set_config('request.jwt.claims','',true);
 

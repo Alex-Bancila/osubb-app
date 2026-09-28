@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertCircle, Mail, MailCheck } from 'lucide-react';
+import { useId, useMemo, useState } from 'react';
+import { AlertCircle, MailCheck } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import {
   Field,
@@ -23,8 +23,10 @@ const INPUT_CLASS =
   'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:focus-visible:border-destructive';
 
 /**
- * "Adresa de e-mail" on Profil (#632, ruling R7): the address the Member signs
- * in with, and the request to move it.
+ * "Schimbă adresa de email" (#632, ruling R7): the address the Member signs in
+ * with, and the request to move it. Since #824 it is the second section of
+ * the **Editează profilul** sheet, a form of its own below the profile form,
+ * so every edit of yourself lives in one place.
  *
  * The request is Supabase Auth's `updateUser({ email })`. With secure email
  * change on, Auth mails a confirmation to the current AND the new address
@@ -40,6 +42,7 @@ export default function ChangeEmailSection({
   profile: MyProfile;
 }) {
   const { session } = useAuth();
+  const headingId = useId();
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [requested, setRequested] = useState<string | null>(null);
@@ -93,16 +96,20 @@ export default function ChangeEmailSection({
   };
 
   return (
-    <section className="card p-6" data-testid="change-email-card">
-      <div className="card-head">
-        <h3 className="card-title flex items-center gap-2">
-          <Mail className="size-5 text-primary" aria-hidden="true" />
-          <span>Adresa de e-mail</span>
-        </h3>
-      </div>
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col"
+      data-testid="change-email-section"
+    >
+      <h3 id={headingId} className="text-base font-semibold text-foreground">
+        Schimbă adresa de email
+      </h3>
 
-      <p className="text-sm font-medium break-all text-foreground">
-        {profile.email ?? (
+      <p className="mt-2 text-sm text-foreground">
+        Adresa actuală:{' '}
+        {profile.email ? (
+          <strong className="font-medium break-all">{profile.email}</strong>
+        ) : (
           <span className="text-muted-foreground italic">Indisponibil</span>
         )}
       </p>
@@ -141,7 +148,7 @@ export default function ChangeEmailSection({
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="mt-4 flex flex-col gap-4 border-t border-border pt-4"
+        className="mt-4 flex flex-col gap-4"
       >
         <Field>
           <FieldLabel htmlFor="change-email-input">Adresa nouă</FieldLabel>

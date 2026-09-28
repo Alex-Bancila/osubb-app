@@ -149,6 +149,23 @@ export function buildMemberGroups(
 }
 
 /**
+ * The caller's board title (#824, pages-pass decision D1): the display name on
+ * their own roster row in the Private Group "Biroul de Conducere", which the
+ * organization setting `board_group_id` names. Null when the setting is unset,
+ * the caller is not on that Group, or the row has no title — Profil then
+ * shows the Role label. Nothing is derived from it but this label.
+ */
+export function boardTitleFrom(
+  membershipRows: GroupMemberRow[] | undefined,
+  boardGroupId: string | null | undefined,
+): string | null {
+  if (!membershipRows || !boardGroupId) return null;
+  const id = Number(boardGroupId);
+  const row = membershipRows.find((candidate) => candidate.group_id === id);
+  return row?.position_title?.trim() || null;
+}
+
+/**
  * Hook to fetch the signed-in member's own group memberships from `group_members`
  * joined to `groups`. Memberships come from the tables, never from the `group_ids` claim.
  */

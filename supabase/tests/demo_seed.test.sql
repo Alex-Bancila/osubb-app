@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(73);
+select plan(75);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -98,7 +98,7 @@ select is((select count(*) from (
                        order by coalesce((select fixture.id from pg_temp.fixture_teams fixture where fixture.group_id=g.id),g.name))
        from group_members gm join groups g on g.id=gm.group_id
       where gm.member_id=p.id and g.category='team'
-        and g.name <> 'Adunarea Generală') as teams
+        and g.name not in ('Adunarea Generală', 'Biroul de Conducere')) as teams
   from profiles p where p.email like '%@demo.osubb'
   intersect
   select * from (values
@@ -124,14 +124,14 @@ select ok(exists (select 1 from group_members gm join groups g on g.id=gm.group_
   where g.name = 'Secretariat' and gm.member_id='d0000000-0000-0000-0000-000000000004'),
   'both coordination Departments have a demo member');
 select is((select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'
-  and category='team'), 4::bigint, 'BC creates three Teams and the General Assembly');
+  and category='team'), 5::bigint, 'BC creates three Teams, the General Assembly and the board (#824)');
 select ok(exists (select 1 from groups where name='Echipa Logistică'
   and created_by='d0000000-0000-0000-0000-000000000007' and parent_id is null),
   'Logistică remains an independent Team');
 select is((select min_level from events where title='Training pentru recruți'), 0,
   'recruit training remains visible at Minimum Level zero');
 select is((select count(*) from groups where created_by='d0000000-0000-0000-0000-000000000007'),
-  6::bigint, 'six native demo Groups exist');
+  7::bigint, 'seven native demo Groups exist');
 select is(to_regclass('public.teams'), null::regclass, 'legacy Team storage is absent');
 select is(to_regclass('public.projects'), null::regclass, 'legacy Project storage is absent');
 select is(to_regclass('public.member_departments'), null::regclass, 'legacy Department roster storage is absent');
@@ -178,6 +178,18 @@ select is((select string_agg(gm.member_id::text||'='||gm.group_role,',' order by
     and g.created_by='d0000000-0000-0000-0000-000000000007'),
   'd0000000-0000-0000-0000-000000000006=responsible,d0000000-0000-0000-0000-000000000008=responsible',
   'the Assembly roster is exactly Interne''s two Responsibles');
+-- #824 (decision D1): the board titles Profil shows under Funcția în OSUBB.
+select is((select value from org_settings where key='board_group_id'),
+  (select id::text from groups g where g.name='Biroul de Conducere'
+    and g.created_by='d0000000-0000-0000-0000-000000000007'
+    and g.is_private and g.min_level=5),
+  'the board_group_id setting names the demo Private Group Biroul de Conducere (#824)');
+select is((select string_agg(gm.member_id::text||'='||gm.group_role||'='||gm.position_title,',' order by gm.member_id)
+  from group_members gm join groups g on g.id=gm.group_id
+  where g.name='Biroul de Conducere'
+    and g.created_by='d0000000-0000-0000-0000-000000000007'),
+  'd0000000-0000-0000-0000-000000000006=responsible=Coordonator IT,d0000000-0000-0000-0000-000000000007=responsible=Președinte',
+  'the board roster is the demo BCE and BC, each a Responsible carrying their board title');
 select ok(not exists (select 1 from group_members gm join groups g on g.id=gm.group_id
   where g.name='Festivalul Studențesc 2026'
     and g.created_by='d0000000-0000-0000-0000-000000000007'
