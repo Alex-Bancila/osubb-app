@@ -25,6 +25,11 @@ export type MemberCardGroup = {
   label: string;
   color: string | null;
   roleLabel: string;
+  /**
+   * `manager`, `responsible` or `member`: whether `roleLabel` names a Group
+   * Role at all (the member page shows "Rol în grup" only for one, B60).
+   */
+  groupRole?: string;
   /** A Private Group (#757), from the Group rows the viewer can read. */
   isPrivate: boolean;
 };
@@ -167,6 +172,7 @@ export function toMemberCardData(
           groups?.get(item.group_id)?.manager_title || 'Coordonator',
           item.position_title,
         ),
+        groupRole: item.group_role,
         isPrivate: groups?.get(item.group_id)?.is_private === true,
       };
     }),

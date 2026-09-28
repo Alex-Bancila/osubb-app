@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
+import { BackLink } from '../../components/layout';
 const state = vi.hoisted(() => ({
   member: vi.fn(),
   capabilities: vi.fn(),
@@ -44,11 +45,14 @@ import MemberScreen from './MemberScreen';
 
 const ready = { isPending: false, isError: false };
 
-function show() {
+function show(from?: unknown) {
   return render(
     <MemoryRouter
       initialEntries={[
-        '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+        {
+          pathname: '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+          state: from,
+        },
       ]}
     >
       <Routes>
@@ -79,6 +83,7 @@ function member(patch: object = {}) {
         label: 'Comunicare',
         color: null,
         roleLabel: 'Director comunicare',
+        groupRole: 'manager',
         isPrivate: false,
       },
       {
@@ -87,6 +92,7 @@ function member(patch: object = {}) {
         label: 'Evenimente · Comunicare',
         color: null,
         roleLabel: 'Responsabil logistică',
+        groupRole: 'responsible',
         isPrivate: false,
       },
       {
@@ -95,6 +101,7 @@ function member(patch: object = {}) {
         label: 'Proiecte',
         color: null,
         roleLabel: 'Membru',
+        groupRole: 'member',
         isPrivate: false,
       },
     ],
@@ -133,7 +140,9 @@ it('BC sees the Nickname over the full name, every Group Role and both editors',
   expect(screen.getByText('Ana Pop')).toBeVisible();
   expect(screen.getByText('Rol în grup: Director comunicare')).toBeVisible();
   expect(screen.getByText('Rol în grup: Responsabil logistică')).toBeVisible();
-  expect(screen.getByText('Rol în grup: Membru')).toBeVisible();
+  // A plain membership names no Group Role (B60).
+  expect(screen.queryByText('Rol în grup: Membru')).toBeNull();
+  expect(screen.getByRole('link', { name: 'Proiecte' })).toBeVisible();
   expect(
     screen.getByRole('link', { name: 'Evenimente · Comunicare' }),
   ).toHaveAttribute('href', '/administrare/grupuri/2');
@@ -294,6 +303,16 @@ it('lists only the returned ledger rows and links a Task through the Tracker', (
           reason: 'task',
           created_at: '2026-09-20T10:00:00Z',
           task_id: 30,
+          task_title: 'Raport parteneriate',
+        },
+        {
+          id: 0,
+          delta: 2,
+          reason: 'task',
+          created_at: '2026-09-19T10:00:00Z',
+          task_id: 31,
+          // A Task the viewer cannot read: only its id stands in.
+          task_title: null,
         },
       ],
     }),
@@ -302,9 +321,93 @@ it('lists only the returned ledger rows and links a Task through the Tracker', (
   expect(screen.getByText('+5 puncte')).toBeVisible();
   expect(screen.getByText('−3 puncte')).toBeVisible();
   expect(screen.getByText(/Sancțiune/)).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Task #30' })).toHaveAttribute(
+  // The Task by its title (B61); the id only when it is unreadable.
+  expect(
+    screen.getByRole('link', { name: 'Raport parteneriate' }),
+  ).toHaveAttribute('href', '/tracker?task=30');
+  expect(screen.queryByRole('link', { name: 'Task #30' })).toBeNull();
+  expect(screen.getByRole('link', { name: 'Task #31' })).toHaveAttribute(
     'href',
-    '/tracker?task=30',
+    '/tracker?task=31',
+  );
+});
+
+it('goes back where the member came from, then by capability (D4)', () => {
+  // A Roster, Roluri or Confidențialitate link says where it was.
+  const view = show({
+    from: { to: '/administrare/grupuri/4?tab=roster', label: 'Înapoi la grup' },
+  });
+  expect(screen.getByRole('link', { name: 'Înapoi la grup' })).toHaveAttribute(
+    'href',
+    '/administrare/grupuri/4?tab=roster',
+  );
+  view.unmount();
+
+  // No origin: BC/Mod go to Membri…
+  const bc = show();
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Administrare' }),
+  ).toHaveAttribute('href', '/administrare/membri');
+  bc.unmount();
+
+  // …and a Group Manager, Responsible or BCE (administer only) to Grupuri,
+  // never to a tab they cannot open.
+  state.capabilities.mockReturnValue({
+    ...ready,
+    data: { manageRoles: false, provisionMembers: false, administer: true },
+  });
+  state.mine.mockReturnValue({
+    ...ready,
+    data: [{ id: 1, group_role: 'responsible' }],
+  });
+  show();
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Administrare' }),
+  ).toHaveAttribute('href', '/administrare/grupuri');
+});
+
+it('sends a Group page opened from here back to this member (D4, A63)', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter
+      initialEntries={[
+        '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+      ]}
+    >
+      <Routes>
+        <Route
+          path="/administrare/membri/:memberId"
+          element={<MemberScreen />}
+        />
+        <Route
+          path="/administrare/grupuri/:groupId"
+          element={<BackLink to="/administrare/grupuri" label="Implicit" />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await user.click(screen.getByRole('link', { name: 'Comunicare' }));
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la membru' }),
+  ).toHaveAttribute(
+    'href',
+    '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
+});
+
+it('sets the identity facts as a muted label over a larger value (AD2)', () => {
+  show();
+  const label = screen.getByText('Membru din');
+  expect(label.tagName).toBe('DT');
+  expect(label).toHaveClass('text-muted-foreground');
+  expect(label.nextElementSibling).toHaveClass('text-[length:var(--fs-md)]');
+  // No m-0 on the list: the page's flex gap spaces it (X2).
+  expect(label.closest('dl')).not.toHaveClass('m-0');
+  // "Salvează numele" is its own width from `sm` (X15).
+  expect(screen.getByRole('button', { name: 'Salvează numele' })).toHaveClass(
+    'w-full',
+    'sm:w-auto',
+    'sm:justify-self-start',
   );
 });
 
@@ -314,7 +417,7 @@ it('says the Member is unavailable when the server returns no card', () => {
   expect(
     screen.getByRole('heading', { name: 'Membru indisponibil' }),
   ).toBeVisible();
-  // Back to the Membri tab the page sits under (#825).
+  // Back to the Membri tab the page sits under (#825), for BC.
   expect(
     screen.getByRole('link', { name: 'Înapoi la Administrare' }),
   ).toHaveAttribute('href', '/administrare/membri');

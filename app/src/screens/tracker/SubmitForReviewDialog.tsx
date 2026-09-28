@@ -90,7 +90,7 @@ export function SubmitForReviewDialog({
         render={
           <Button
             type="button"
-            className="min-h-11 min-w-11 w-full whitespace-normal sm:w-auto"
+            className="min-h-11 w-full whitespace-normal"
             disabled={pending}
           />
         }

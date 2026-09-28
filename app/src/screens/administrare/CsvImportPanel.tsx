@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Upload } from 'lucide-react';
-import { Panel } from '../../components/layout';
+import { Panel, SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { supabase } from '../../lib/supabase';
 import { keys } from '../../queries/keys';
@@ -94,7 +94,7 @@ export function CsvImportPanel() {
       icon={Upload}
       title="Import CSV"
       description="Adaugă membri dintr-un fișier cu coloanele name,email,dept,team. Pentru dept și team, folosește numele scurt sau numele afișat al Grupului; literele mari și diacriticele nu contează."
-      boxClassName="space-y-4"
+      stack={4}
     >
       <a
         className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
@@ -105,7 +105,7 @@ export function CsvImportPanel() {
       </a>
 
       <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
+        <div className="grid gap-1.5">
           <span className="block text-sm font-medium">Fișier CSV</span>
           <input
             id="csv-import-file"
@@ -126,7 +126,7 @@ export function CsvImportPanel() {
           >
             Alege fișier CSV
           </label>
-          {file && <span className="ml-2 text-sm break-all">{file.name}</span>}
+          {file && <span className="text-sm break-all">{file.name}</span>}
         </div>
         <Button
           type="button"
@@ -143,8 +143,11 @@ export function CsvImportPanel() {
         </p>
       )}
       {report && (
-        <div className="min-w-0 space-y-3 break-words" aria-live="polite">
-          <h3 className="font-semibold">Rezultatul importului</h3>
+        <div
+          className="flex min-w-0 flex-col gap-3 break-words"
+          aria-live="polite"
+        >
+          <SubHeading variant="label">Rezultatul importului</SubHeading>
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <div>
               <dt className="inline font-medium">Create</dt>

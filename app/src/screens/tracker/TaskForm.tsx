@@ -1,6 +1,11 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
+import { DialogFooter } from '../../components/ui/dialog';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
 import { FieldError } from '../../components/ui/field';
 import {
   Combobox,
@@ -74,6 +79,8 @@ export function TaskForm({
   allowSubtask = true,
   heading = 'Pregătește un task',
   submitLabel = 'Continuă',
+  onCancel,
+  cancelLabel = 'Renunță',
 }: {
   options: TaskFormOptions;
   onDraft: (draft: TaskDraft) => void | Promise<void>;
@@ -83,6 +90,9 @@ export function TaskForm({
   /** Null when a surrounding Dialog already names the form. */
   heading?: string | null;
   submitLabel?: string;
+  /** Adds the secondary action to the footer, left of the submit button. */
+  onCancel?: () => void;
+  cancelLabel?: string;
 }) {
   const id = useId();
   const [values, setValues] = useState<TaskFormValues>(() => {
@@ -167,7 +177,11 @@ export function TaskForm({
       noValidate
       className="space-y-5"
     >
-      {heading && <h2 className="text-xl font-semibold">{heading}</h2>}
+      {heading && (
+        <h2 className="m-0 text-(length:--fs-lg) leading-snug font-bold">
+          {heading}
+        </h2>
+      )}
       <div className="grid gap-2" {...form.slot('kind')}>
         <span id={`${id}-kind`} className="text-sm font-medium">
           Ce fel de task?
@@ -287,7 +301,7 @@ export function TaskForm({
           )}
         </div>
       )}
-      <div>
+      <div className="grid gap-1.5">
         <label htmlFor={`${id}-title`} className="text-sm font-medium">
           Titlu (obligatoriu)
         </label>
@@ -301,7 +315,7 @@ export function TaskForm({
         />
         <FieldError {...form.errorProps('title')} />
       </div>
-      <div>
+      <div className="grid gap-1.5">
         <label htmlFor={`${id}-description`} className="text-sm font-medium">
           Descriere
         </label>
@@ -315,7 +329,7 @@ export function TaskForm({
         />
         <FieldError {...form.errorProps('description')} />
       </div>
-      <div>
+      <div className="grid gap-1.5">
         <label htmlFor={`${id}-deadline`} className="text-sm font-medium">
           Termen{umbrella ? ' (opțional)' : ' (obligatoriu)'} — ora României
         </label>
@@ -332,13 +346,12 @@ export function TaskForm({
       </div>
       {!umbrella && (
         <>
-          <div>
+          <div className="grid gap-1.5">
             <label htmlFor={`${id}-mode`} className="text-sm font-medium">
               Mod de atribuire
             </label>
-            <select
+            <NativeSelect
               id={`${id}-mode`}
-              className={control}
               value={values.assignmentMode}
               onChange={(event) =>
                 update({
@@ -349,23 +362,22 @@ export function TaskForm({
               }
               {...form.field('assignmentMode')}
             >
-              <option value="direct">Direct</option>
-              <option value="public">
+              <NativeSelectOption value="direct">Direct</NativeSelectOption>
+              <NativeSelectOption value="public">
                 Public — înscriere prin lista de candidați
-              </option>
-            </select>
+              </NativeSelectOption>
+            </NativeSelect>
             <FieldError {...form.errorProps('assignmentMode')} />
           </div>
           {/* A direct Task is local only (R26); `values.audience` keeps the
               choice for when the mode goes back to Public. */}
           {values.assignmentMode === 'public' && (
-            <div>
+            <div className="grid gap-1.5">
               <label htmlFor={`${id}-audience`} className="text-sm font-medium">
                 Audiență
               </label>
-              <select
+              <NativeSelect
                 id={`${id}-audience`}
-                className={control}
                 value={localOnly ? 'local' : values.audience}
                 onChange={(event) =>
                   update({
@@ -374,11 +386,13 @@ export function TaskForm({
                 }
                 {...form.field('audience', `${id}-audience-hint`)}
               >
-                <option value="local">{AUDIENCE_LABELS.local}</option>
-                <option value="org" disabled={localOnly}>
+                <NativeSelectOption value="local">
+                  {AUDIENCE_LABELS.local}
+                </NativeSelectOption>
+                <NativeSelectOption value="org" disabled={localOnly}>
                   {AUDIENCE_LABELS.org}
-                </option>
-              </select>
+                </NativeSelectOption>
+              </NativeSelect>
               <FieldError {...form.errorProps('audience')} />
               <p
                 id={`${id}-audience-hint`}
@@ -405,9 +419,8 @@ export function TaskForm({
             <label htmlFor={`${id}-campaign`} className="text-sm font-medium">
               Campanie (opțional)
             </label>
-            <select
+            <NativeSelect
               id={`${id}-campaign`}
-              className={control}
               value={
                 campaigns.some((campaign) => campaign.id === values.campaignId)
                   ? (values.campaignId ?? '')
@@ -423,13 +436,13 @@ export function TaskForm({
               }
               {...form.field('campaignId', `${id}-campaign-hint`)}
             >
-              <option value="">Fără campanie</option>
+              <NativeSelectOption value="">Fără campanie</NativeSelectOption>
               {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
+                <NativeSelectOption key={campaign.id} value={campaign.id}>
                   {campaign.name}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
+            </NativeSelect>
             <FieldError {...form.errorProps('campaignId')} />
             <p
               id={`${id}-campaign-hint`}
@@ -452,9 +465,14 @@ export function TaskForm({
         />
       </fieldset>
       <FieldError>{form.formError}</FieldError>
-      <Button className="min-h-11" type="submit">
-        {submitLabel}
-      </Button>
+      <DialogFooter>
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+        )}
+        <Button type="submit">{submitLabel}</Button>
+      </DialogFooter>
     </form>
   );
 }

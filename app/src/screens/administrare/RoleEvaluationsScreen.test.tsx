@@ -873,20 +873,45 @@ it('shows each kind’s Retention Signals from its latest run', async () => {
   });
 });
 
-it('says when a kind has never run', async () => {
-  show();
-  const signals = await panel('Semnale de retenție');
+it('shows only Run and Praguri before the first run (B58)', async () => {
+  const { container } = show();
+  await panel('Rulează o evaluare de rol');
+  await panel('Praguri');
+  // No empty candidates, signals, history or threshold-log blocks.
   expect(
-    within(signals).getAllByText('Nicio evaluare de acest tip încă.'),
-  ).toHaveLength(2);
-  const history = await panel('Istoricul evaluărilor');
-  expect(
-    within(history).getByText('Nicio evaluare de rol încă.'),
-  ).toBeVisible();
+    [...container.querySelectorAll('[data-slot="panel"] h2')].map(
+      (heading) => heading.textContent,
+    ),
+  ).toEqual(['Rulează o evaluare de rol', 'Praguri']);
+  // Once the (empty) log has loaded, it leaves no block behind.
+  await waitFor(() =>
+    expect(screen.queryByText('Istoricul pragurilor')).toBeNull(),
+  );
+  expect(screen.queryByText('Nicio schimbare încă.')).toBeNull();
   expect(db.rpc).not.toHaveBeenCalledWith(
     'role_evaluation_ranking',
     expect.anything(),
   );
+  // The two boxes of the first row start on one line (X9).
+  expect(container.querySelector('[data-slot="page-grid"]')).toHaveAttribute(
+    'data-align-headers',
+    'true',
+  );
+});
+
+it('says when a kind has never run, once another kind has', async () => {
+  db.runs = [RUN_VA];
+  db.rankings.set('voluntar_activ:2026-02-01:2026-06-30', []);
+  show();
+  const signals = await panel('Semnale de retenție');
+  const ag = within(signals)
+    .getByRole('heading', { name: 'Adunarea Generală' })
+    .closest('section') as HTMLElement;
+  expect(
+    within(ag).getByText('Nicio evaluare de acest tip încă.'),
+  ).toBeVisible();
+  expect(await panel('Candidați la promovare')).toBeVisible();
+  expect(await panel('Istoricul evaluărilor')).toBeVisible();
 });
 
 it('lists the history of runs, newest first, with a dash for no computed threshold', async () => {

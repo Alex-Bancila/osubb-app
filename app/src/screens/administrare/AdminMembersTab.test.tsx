@@ -78,7 +78,7 @@ beforeEach(() => {
   });
 });
 
-it('lists every Member with Rol and Status, each opening their page', async () => {
+it('lists every Member with Rol and Status, the row opening their page', async () => {
   const user = userEvent.setup();
   const { container } = show();
   const panel = screen.getByRole('region', { name: 'Membri' });
@@ -90,16 +90,55 @@ it('lists every Member with Rol and Status, each opening their page', async () =
     .closest('tr') as HTMLElement;
   expect(row).toHaveTextContent('BCE');
   expect(row).toHaveTextContent('Inactiv');
+  // One visible affordance per row: no "Pagina membrului" column (B62); the
+  // keyboard gets a link that shows only when focused.
+  const keyboard = within(row).getByRole('link', {
+    name: 'Deschide pagina membrului Ștefi',
+  });
+  expect(keyboard).toHaveAttribute('href', '/administrare/membri/stefan');
+  expect(keyboard).toHaveClass('sr-only', 'focus-visible:not-sr-only');
+  expect(within(panel).getAllByRole('link')).toHaveLength(2);
   expect(
-    within(row).getByRole('link', { name: 'Pagina membrului: Ștefi' }),
-  ).toHaveAttribute('href', '/administrare/membri/stefan');
+    within(panel).queryByRole('columnheader', { name: /Pagina membrului/ }),
+  ).toBeNull();
   expect((await axe.run(container)).violations).toEqual([]);
 
   // A click anywhere on the row opens the page too.
-  await user.click(within(row).getByText('BCE'));
+  await user.click(within(row).getByText('Inactiv'));
   expect(screen.getByTestId('where')).toHaveTextContent(
     '/administrare/membri/stefan',
   );
+});
+
+it('shows Status only when a Member who is not active is listed (B62)', () => {
+  api.members.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: [member('ana', 'Ana Pop'), member('ion', 'Ion Rus')],
+  });
+  show();
+  expect(
+    screen
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent?.trim()),
+  ).toEqual([
+    expect.stringContaining('Membru'),
+    expect.stringContaining('Rol'),
+  ]);
+});
+
+it('folds Rol under the name on a phone and keeps the search full width (AD1)', () => {
+  show();
+  const [name, role, status] = screen.getAllByRole('columnheader');
+  expect(name).toHaveClass('min-w-40');
+  expect(role).toHaveClass('max-sm:hidden');
+  expect(status).toHaveClass('max-sm:hidden');
+  const row = screen
+    .getByRole('button', { name: 'Profilul membrului Ștefi' })
+    .closest('td') as HTMLElement;
+  // Rol, and a status other than Activ, fold under the name on a phone.
+  expect(within(row).getByText('BCE · Inactiv')).toHaveClass('sm:hidden');
+  expect(screen.getByLabelText('Caută un membru')).toHaveClass('w-full');
 });
 
 it('finds a Member by name, blind to case and diacritics, and says when none matches', async () => {

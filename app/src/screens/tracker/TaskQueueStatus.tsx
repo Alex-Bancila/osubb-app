@@ -2,21 +2,18 @@ import type { TaskPresentation } from './task-presentation';
 import { TaskStageSummary } from './TaskStageSummary';
 import { Button } from '../../components/ui/button';
 import { useTaskQueue, type OwnTaskQueue } from '../../queries/task-queue';
+import { queueText } from './queue-text';
 
-export function QueuePosition({ queue }: { queue: OwnTaskQueue }) {
-  const text =
-    queue.status === 'pending'
-      ? queue.position === null
-        ? 'Înscris în lista de așteptare. Poziția se actualizează.'
-        : // Ruling R9: every Candidate is queued; the card says where.
-          `Te-ai înscris pe locul ${queue.position}.`
-      : queue.status === 'selected'
-        ? 'Ai fost selectat pentru acest task.'
-        : queue.status === 'withdrawn'
-          ? 'Te-ai retras din lista de așteptare.'
-          : queue.status === 'closed'
-            ? 'Înscriere închisă.'
-            : 'Nu ești înscris în lista de așteptare.';
+export function QueuePosition({
+  queue,
+  stageShown = false,
+}: {
+  queue: OwnTaskQueue;
+  /** The stage sentence is on screen and already names a pending place. */
+  stageShown?: boolean;
+}) {
+  const text = queueText(queue, { stageShown });
+  if (text === null) return null;
   return (
     <p role="status" className="text-sm">
       {text}
@@ -62,7 +59,7 @@ export function TaskQueueStatus({
           }}
         />
       )}
-      <QueuePosition queue={query.data} />
+      <QueuePosition queue={query.data} stageShown={task !== undefined} />
     </>
   );
 }
