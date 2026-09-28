@@ -1,11 +1,23 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
+import { Checkbox } from '../../components/ui/checkbox';
 import { FieldError } from '../../components/ui/field';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
+import {
+  ChoiceRow,
+  RadioGroup,
+  RadioGroupItem,
+} from '../../components/ui/radio-group';
 import {
   Sheet,
   SheetBackdrop,
+  SheetFooter,
+  SheetHeader,
   SheetPopup,
   SheetPortal,
   SheetTitle,
@@ -26,6 +38,8 @@ const inputClass =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring';
 const fieldClass = 'block space-y-1.5 text-sm font-medium text-foreground';
 
+type Priority = 'normal' | 'important' | 'critical';
+
 export default function AnnouncementComposeSheet() {
   const { session } = useAuth();
   const capabilities = useCapabilities();
@@ -33,8 +47,12 @@ export default function AnnouncementComposeSheet() {
   const groups = useGroups();
   const create = useCreateAnnouncement();
   const [open, setOpen] = useState(false);
+  const audienceLabelId = useId();
+  const linkGroupLabelId = useId();
   const [originId, setOriginId] = useState('');
   const [audience, setAudience] = useState<'local' | 'org'>('local');
+  const [priority, setPriority] = useState<Priority>('normal');
+  const [pinned, setPinned] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [linkLabel, setLinkLabel] = useState('');
@@ -63,6 +81,8 @@ export default function AnnouncementComposeSheet() {
   function clear() {
     setOriginId('');
     setAudience('local');
+    setPriority('normal');
+    setPinned(false);
     setTitle('');
     setBody('');
     setLinkLabel('');
@@ -82,16 +102,14 @@ export default function AnnouncementComposeSheet() {
       );
       return;
     }
-    const extra = new FormData(event.currentTarget);
     try {
       await create.mutateAsync({
         title: values.title,
         body: values.body,
         group_id: selected.id,
         audience,
-        priority: String(extra.get('priority') ?? 'normal') as
-          'normal' | 'important' | 'critical',
-        pinned: extra.get('pinned') === 'on',
+        priority,
+        pinned,
         form_label: values.link.label,
         form_url: values.link.url,
       });
@@ -141,26 +159,17 @@ export default function AnnouncementComposeSheet() {
       <SheetPortal>
         <SheetBackdrop />
         <SheetPopup
-          className="right-0 left-auto w-full max-w-xl overflow-y-auto p-5 sm:p-7"
+          side="right"
+          className="max-w-xl gap-5 p-4 sm:p-6"
           aria-describedby={undefined}
         >
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <SheetTitle className="font-heading text-xl font-semibold">
-              Anunț nou
-            </SheetTitle>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={create.isPending}
-              onClick={() => setOpen(false)}
-            >
-              Închide
-            </Button>
-          </div>
+          <SheetHeader showCloseButton={!create.isPending}>
+            <SheetTitle>Anunț nou</SheetTitle>
+          </SheetHeader>
           <form
             onSubmit={(event) => void submit(event)}
             noValidate
-            className="space-y-4"
+            className="flex flex-1 flex-col gap-4"
           >
             <div className="space-y-1.5">
               <label className={fieldClass}>
@@ -193,8 +202,7 @@ export default function AnnouncementComposeSheet() {
             <div className="space-y-1.5">
               <label className={fieldClass}>
                 Grup de origine
-                <select
-                  className={inputClass}
+                <NativeSelect
                   value={originId}
                   onChange={(event) => setOriginId(event.target.value)}
                   required
@@ -206,13 +214,13 @@ export default function AnnouncementComposeSheet() {
                   }
                   {...form.field('groupId')}
                 >
-                  <option value="">Alege grupul</option>
+                  <NativeSelectOption value="">Alege grupul</NativeSelectOption>
                   {origins.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
+                    <NativeSelectOption key={group.id} value={group.id}>
+                      {group.is_organization ? 'OSUBB' : group.name}
+                    </NativeSelectOption>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <FieldError {...form.errorProps('groupId')} />
             </div>
@@ -221,46 +229,59 @@ export default function AnnouncementComposeSheet() {
                 Nu am putut încărca grupurile. Încearcă din nou.
               </p>
             )}
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Audiență</legend>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <label className="flex min-h-11 items-center gap-2">
-                  <input
-                    type="radio"
-                    name="audience"
-                    checked={audience === 'local'}
-                    onChange={() => setAudience('local')}
-                  />{' '}
+            <div className="space-y-1">
+              <span id={audienceLabelId} className="text-sm font-medium">
+                Audiență
+              </span>
+              <RadioGroup
+                aria-labelledby={audienceLabelId}
+                value={audience}
+                onValueChange={(next: 'local' | 'org') => setAudience(next)}
+                className="flex flex-wrap gap-x-6 gap-y-0"
+              >
+                <ChoiceRow>
+                  <RadioGroupItem value="local" />
                   Doar grupul
-                </label>
-                <label className="flex min-h-11 items-center gap-2">
-                  <input
-                    type="radio"
-                    name="audience"
-                    checked={audience === 'org'}
-                    onChange={() => setAudience('org')}
-                  />{' '}
+                </ChoiceRow>
+                <ChoiceRow>
+                  <RadioGroupItem value="org" />
                   Toată organizația
-                </label>
-              </div>
-            </fieldset>
+                </ChoiceRow>
+              </RadioGroup>
+            </div>
             <label className={fieldClass}>
               Prioritate
-              <select
-                className={inputClass}
+              <NativeSelect
                 name="priority"
-                defaultValue="normal"
+                value={priority}
+                onChange={(event) =>
+                  setPriority(event.target.value as Priority)
+                }
               >
-                <option value="normal">Normală</option>
-                <option value="important">Importantă</option>
-                <option value="critical">Critică</option>
-              </select>
+                <NativeSelectOption value="normal">Normală</NativeSelectOption>
+                <NativeSelectOption value="important">
+                  Importantă
+                </NativeSelectOption>
+                <NativeSelectOption value="critical">
+                  Critică
+                </NativeSelectOption>
+              </NativeSelect>
             </label>
-            <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
-              <input type="checkbox" name="pinned" /> Fixează anunțul
-            </label>
-            <div className="space-y-3 rounded-lg border p-3 sm:p-4">
-              <p className="text-sm font-medium">Formular asociat (opțional)</p>
+            <ChoiceRow className="font-medium">
+              <Checkbox
+                checked={pinned}
+                onCheckedChange={(next) => setPinned(next === true)}
+              />
+              Fixează anunțul
+            </ChoiceRow>
+            <div
+              role="group"
+              aria-labelledby={linkGroupLabelId}
+              className="space-y-3 rounded-md border p-4"
+            >
+              <p id={linkGroupLabelId} className="text-sm font-medium">
+                Link atașat (opțional)
+              </p>
               <AttachedLinkFields
                 value={{ label: linkLabel, url: linkUrl }}
                 onChange={(next) => {
@@ -272,13 +293,22 @@ export default function AnnouncementComposeSheet() {
               />
             </div>
             <FieldError>{form.formError}</FieldError>
-            <Button
-              type="submit"
-              disabled={create.isPending || origins.length === 0}
-              className="min-h-11 w-full"
-            >
-              {create.isPending ? 'Se publică…' : 'Publică anunțul'}
-            </Button>
+            <SheetFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={create.isPending}
+                onClick={() => setOpen(false)}
+              >
+                Renunță
+              </Button>
+              <Button
+                type="submit"
+                disabled={create.isPending || origins.length === 0}
+              >
+                {create.isPending ? 'Se publică…' : 'Publică anunțul'}
+              </Button>
+            </SheetFooter>
           </form>
         </SheetPopup>
       </SheetPortal>

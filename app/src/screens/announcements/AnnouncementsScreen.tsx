@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useAuth } from '../../lib/auth';
 import {
   useAnnouncementsFeed,
@@ -8,6 +9,7 @@ import { useMemberIdentities } from '../../queries/member-identities';
 import { useGroups } from '../../queries/reference';
 import {
   countUnreadAnnouncements,
+  getUnreadCriticalAnnouncement,
   sortAnnouncements,
   toAnnouncementPresentation,
   type AnnouncementPresentation,
@@ -19,21 +21,33 @@ import AnnouncementComposeSheet from './AnnouncementComposeSheet';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Page, PageGrid, PageHeader } from '../../components/layout';
 
+/** The deep link a "Anunț nou" notification carries: `/anunturi?anunt=<id>` (#843). */
+const ANNOUNCEMENT_PARAM = 'anunt';
+
+function parseAnnouncementId(value: string | null): number | null {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 export default function AnnouncementsScreen() {
   const { session } = useAuth();
   const memberId = session?.user.id;
   const feedQuery = useAnnouncementsFeed(memberId);
   const groupsQuery = useGroups();
   const markRead = useMarkAnnouncementRead(memberId);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
     number | null
   >(null);
   const markedIdsRef = useRef<Set<number>>(new Set());
   const inFlightIdsRef = useRef<Set<number>>(new Set());
+  // The `?anunt=` value already opened on this visit: a rerender or a feed
+  // refetch never reopens a sheet the member closed.
+  const handledParamRef = useRef<string | null>(null);
 
-  function handleOpenAnnouncement(announcement: AnnouncementPresentation) {
-    setSelectedAnnouncementId(announcement.id);
+  function markAsRead(announcement: AnnouncementPresentation) {
     if (
       !announcement.isRead &&
       !markedIdsRef.current.has(announcement.id) &&
@@ -54,6 +68,11 @@ export default function AnnouncementsScreen() {
     }
   }
 
+  function handleOpenAnnouncement(announcement: AnnouncementPresentation) {
+    setSelectedAnnouncementId(announcement.id);
+    markAsRead(announcement);
+  }
+
   const rawAnnouncements = feedQuery.data ?? [];
   // Authors as Member Card buttons: one directory read for the whole feed.
   const authors = useMemberIdentities(
@@ -67,14 +86,62 @@ export default function AnnouncementsScreen() {
 
   const unreadCount = countUnreadAnnouncements(announcements);
 
-  const unreadCritical = announcements.find(
-    (a) => a.priority === 'critical' && !a.isRead,
-  );
+  // B33: the banner points at a critical Announcement further down; when that
+  // Announcement is already the first card, the card is enough.
+  const unreadCritical = getUnreadCriticalAnnouncement(announcements);
+  const showCriticalBanner =
+    unreadCritical !== null && announcements[0]?.id !== unreadCritical.id;
 
   const selectedAnnouncement =
     announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
 
   const isPending = feedQuery.isPending || groupsQuery.isPending;
+  const feedReady = !isPending && !feedQuery.isError;
+
+  // D14: `?anunt=<id>` opens that Announcement once the feed is in, and marks
+  // it read like a click on "Citește". An id the member cannot read (deleted,
+  // or outside their Audience) opens the sheet's unavailable state.
+  const paramValue = searchParams.get(ANNOUNCEMENT_PARAM);
+  const linkedId = parseAnnouncementId(paramValue);
+  const linkedAnnouncement =
+    linkedId === null
+      ? null
+      : (announcements.find((a) => a.id === linkedId) ?? null);
+  const [linkUnavailable, setLinkUnavailable] = useState(false);
+
+  useEffect(() => {
+    if (paramValue === null) {
+      handledParamRef.current = null;
+      return;
+    }
+    if (!feedReady || handledParamRef.current === paramValue) return;
+    handledParamRef.current = paramValue;
+    if (linkedAnnouncement) {
+      setLinkUnavailable(false);
+      handleOpenAnnouncement(linkedAnnouncement);
+    } else {
+      setSelectedAnnouncementId(null);
+      setLinkUnavailable(true);
+    }
+    // Runs when the param or the feed's readiness changes; the handled ref
+    // keeps it to once per link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramValue, feedReady]);
+
+  function closeDetails() {
+    setSelectedAnnouncementId(null);
+    setLinkUnavailable(false);
+    if (searchParams.has(ANNOUNCEMENT_PARAM)) {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete(ANNOUNCEMENT_PARAM);
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }
 
   return (
     <Page width="reading">
@@ -102,7 +169,7 @@ export default function AnnouncementsScreen() {
         <Empty bare text="Nu sunt anunțuri disponibile în acest moment." />
       ) : (
         <div className="space-y-6">
-          {unreadCritical && (
+          {showCriticalBanner && (
             <CriticalAnnouncementBanner
               announcement={unreadCritical}
               onOpen={handleOpenAnnouncement}
@@ -129,7 +196,8 @@ export default function AnnouncementsScreen() {
 
       <AnnouncementDetailsSheet
         announcement={selectedAnnouncement}
-        onClose={() => setSelectedAnnouncementId(null)}
+        unavailable={linkUnavailable}
+        onClose={closeDetails}
       />
     </Page>
   );
