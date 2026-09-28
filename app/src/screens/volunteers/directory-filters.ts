@@ -1,4 +1,5 @@
 import type { DirectoryMember } from '../../queries/member-directory';
+import type { Group } from '../../queries/reference';
 
 /**
  * What the directory is narrowed by. Values of one kind widen the result
@@ -69,6 +70,48 @@ export function matchesFilters(
   if (filters.statuses.length && !filters.statuses.includes(member.status))
     return false;
   return true;
+}
+
+/**
+ * Which optional columns say something about the directory (B69): Statut
+ * only when some member is not active; Contact only when the protected view
+ * supplied contact rows (a phone shows under the email only where there is
+ * one, never as a column of dashes).
+ */
+export type DirectoryColumns = {
+  withStatus: boolean;
+  withContact: boolean;
+};
+
+export function directoryColumns(
+  members: readonly DirectoryMember[],
+): DirectoryColumns {
+  return {
+    withStatus: members.some((member) => member.status !== 'activ'),
+    withContact: members.some((member) => member.contact !== undefined),
+  };
+}
+
+/**
+ * The Grup options (B68): the active Groups at least one listed member is in
+ * (directly or through a Group below), without the Organization Group and the
+ * automatic-membership Groups — the Adunarea Generală is a Role filter
+ * (Voluntar cu Drept de Vot and up), not a roster.
+ */
+export function directoryGroupOptions(
+  groups: Iterable<Group>,
+  members: readonly DirectoryMember[],
+): Group[] {
+  const listed = new Set(
+    members.flatMap((member) => member.groups.flatMap((group) => group.path)),
+  );
+  return [...groups].filter(
+    (group) =>
+      group.status === 'active' &&
+      !group.is_organization &&
+      !group.automatic_membership &&
+      listed.has(group.id),
+  );
 }
 
 /** Filters shown as chips — the search box speaks for itself. */

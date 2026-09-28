@@ -373,7 +373,7 @@ describe('Member directory', () => {
     render(<VolunteersScreen />);
     await user.click(
       screen.getByRole('button', {
-        name: 'Sortează Puncte din taskuri crescător',
+        name: 'Sortează Puncte crescător',
       }),
     );
     expect(names()[0]).toContain('Ștefan Pop');
@@ -393,5 +393,202 @@ describe('Member directory', () => {
     await user.click(screen.getByRole('button', { name: 'Filtrează' }));
     const dialog = await screen.findByRole('dialog');
     expect((await axe.run(dialog, { rules })).violations).toEqual([]);
+  });
+
+  it('is called Voluntari, as the navigation calls it (B67)', () => {
+    render(<VolunteersScreen />);
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Voluntari' }),
+    ).toBeVisible();
+  });
+
+  it('shows no points for BC and the Moderator and sorts them last both ways (ruling 1)', async () => {
+    const user = userEvent.setup();
+    mock.useMemberDirectory.mockReturnValue(
+      result({
+        data: members.map((member) =>
+          member.id === 'b' ? { ...member, points: null } : member,
+        ),
+      }),
+    );
+    render(<VolunteersScreen />);
+    const cells = () =>
+      within(rowOf('Ana Ionescu')).getAllByRole('cell', { hidden: true });
+    expect(cells()[3]).toHaveTextContent('fără puncte');
+    expect(cells()[3]).not.toHaveTextContent('0');
+    await user.click(
+      screen.getByRole('button', { name: 'Sortează Puncte crescător' }),
+    );
+    expect(names()).toEqual(['Ștefan Pop', 'Maria Dobre', 'Ana Ionescu']);
+    await user.click(
+      screen.getByRole('button', { name: 'Sortează Puncte descrescător' }),
+    );
+    expect(names()).toEqual(['Maria Dobre', 'Ștefan Pop', 'Ana Ionescu']);
+
+    // The card shows no points figure for her either.
+    await user.click(screen.getByRole('button', { name: 'Carduri' }));
+    const card = screen
+      .getByRole('button', { name: 'Profilul membrului Ana Ionescu' })
+      .closest('li') as HTMLElement;
+    expect(card).not.toHaveTextContent('puncte');
+    const maria = screen
+      .getByRole('button', { name: 'Profilul membrului Maria Dobre' })
+      .closest('li') as HTMLElement;
+    expect(maria).toHaveTextContent('40puncte');
+  });
+
+  it('shows Statut only when a member is not active, and a phone only where there is one (B69)', () => {
+    const view = render(<VolunteersScreen />);
+    // Ana is inactive: the column tells something.
+    expect(screen.getByRole('columnheader', { name: /Statut/ })).toBeVisible();
+    mock.useMemberDirectory.mockReturnValue(
+      result({
+        data: members.map((member) => ({ ...member, status: 'activ' })),
+      }),
+    );
+    view.rerender(<VolunteersScreen />);
+    expect(screen.queryByRole('columnheader', { name: /Statut/ })).toBeNull();
+    expect(screen.queryByText('Activ')).toBeNull();
+    // No Telefon column of dashes: the one phone sits under its email.
+    expect(screen.queryByRole('columnheader', { name: /Telefon/ })).toBeNull();
+    const contact = within(rowOf('Maria Dobre')).getByText('0700');
+    expect(contact.parentElement).toHaveTextContent('maria@example.test0700');
+    expect(
+      within(rowOf('Ștefan Pop')).getByText('stefan@example.test')
+        .parentElement,
+    ).toHaveTextContent(/^stefan@example\.test$/);
+  });
+
+  it('keeps the name whole and gives Grupuri and Contact way first (V1)', () => {
+    render(<VolunteersScreen />);
+    expect(screen.getByRole('columnheader', { name: /Nume/ })).toHaveClass(
+      'min-w-48',
+    );
+    expect(screen.getByRole('columnheader', { name: /Grupuri/ })).toHaveClass(
+      'max-md:hidden',
+    );
+    expect(screen.getByRole('columnheader', { name: /Contact/ })).toHaveClass(
+      'max-lg:hidden',
+    );
+  });
+
+  it('lists members as rows, not a sideways-scrolling table, under md (V1)', () => {
+    const matchMedia = vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    vi.stubGlobal('matchMedia', matchMedia);
+    try {
+      mock.useMemberDirectory.mockReturnValue(
+        result({
+          data: members.map((member) =>
+            member.id === 'b' ? { ...member, points: null } : member,
+          ),
+        }),
+      );
+      render(<VolunteersScreen />);
+      expect(matchMedia).toHaveBeenCalledWith('(min-width: 48rem)');
+      expect(screen.queryByRole('table')).toBeNull();
+      const list = screen.getByRole('list', { name: 'Membri' });
+      const rows = within(list).getAllByRole('listitem');
+      // By name, the Role under it, points on the right — none for BC.
+      expect(rows).toHaveLength(3);
+      expect(rows[0]).toHaveTextContent(/Ana Ionescu.*BC · Inactiv$/);
+      expect(rows[1]).toHaveTextContent(
+        /Maria Dobre.*Membru cu Drept de Vot · Activ40puncte$/,
+      );
+      expect(rows[2]).toHaveTextContent(
+        /Ștefan Pop.*Voluntar · Activ−2puncte$/,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('offers no automatic-membership Group and no Group without a listed member (B68)', async () => {
+    const user = userEvent.setup();
+    const groups = new Map<number, unknown>(byId);
+    groups.set(20, {
+      id: 20,
+      name: 'Adunarea Generală',
+      path: [20],
+      category: 'assembly',
+      status: 'active',
+      is_organization: false,
+      automatic_membership: true,
+    });
+    groups.set(21, {
+      id: 21,
+      name: 'Race',
+      path: [21],
+      category: 'project',
+      status: 'active',
+      is_organization: false,
+    });
+    mock.useGroups.mockReturnValue({ data: groups, isError: false });
+    mock.useMemberDirectory.mockReturnValue(
+      result({
+        data: members.map((member) =>
+          member.id === 'c'
+            ? {
+                ...member,
+                groups: [
+                  ...member.groups,
+                  {
+                    id: 20,
+                    name: 'Adunarea Generală',
+                    label: 'Adunarea Generală',
+                    category: 'assembly',
+                    path: [20],
+                  },
+                ],
+              }
+            : member,
+        ),
+      }),
+    );
+    render(<VolunteersScreen />);
+    await user.click(screen.getByRole('button', { name: 'Filtrează' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('combobox', { name: 'Grup' }));
+    const options = await screen.findAllByRole('option');
+    const labels = options.map((option) => option.textContent);
+    expect(labels).not.toContain('Adunarea Generală');
+    expect(labels).not.toContain('Race');
+    expect(labels).toContain('Voluntariat de iarnă');
+  });
+
+  it('draws the three filter titles alike and hides a filter with one option (V2)', async () => {
+    const user = userEvent.setup();
+    const view = render(<VolunteersScreen />);
+    await user.click(screen.getByRole('button', { name: 'Filtrează' }));
+    let dialog = await screen.findByRole('dialog');
+    const titles = within(dialog)
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => [heading.textContent, heading.dataset.slot]);
+    expect(titles).toEqual([
+      ['Grup', 'sub-heading'],
+      ['Rol', 'sub-heading'],
+      ['Statut', 'sub-heading'],
+    ]);
+    expect(within(dialog).getByRole('group', { name: 'Rol' })).toHaveClass(
+      'grid-cols-2',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Gata' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // Everyone active: Statut is no choice.
+    mock.useMemberDirectory.mockReturnValue(
+      result({
+        data: members.map((member) => ({ ...member, status: 'activ' })),
+      }),
+    );
+    view.rerender(<VolunteersScreen />);
+    await user.click(screen.getByRole('button', { name: 'Filtrează' }));
+    dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('group', { name: 'Statut' })).toBeNull();
+    expect(within(dialog).getByRole('group', { name: 'Rol' })).toBeVisible();
   });
 });

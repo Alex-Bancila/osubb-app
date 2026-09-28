@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { CheckIcon, ListFilter, Search, XIcon } from 'lucide-react';
 import { cn } from 'cn';
+import { SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
 import { groupOptionLabel } from '../../components/ui/combobox';
@@ -17,6 +18,7 @@ import type { DirectoryMember } from '../../queries/member-directory';
 import { useGroups, type Group } from '../../queries/reference';
 import {
   activeFilterCount,
+  directoryGroupOptions,
   emptyFilters,
   statusLabel,
   toggle,
@@ -41,35 +43,47 @@ function ToggleChip({
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
-        'inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        // Two equal columns on a phone (V2), so no label is left alone on
+        // a row; from `sm` they flow in one wrapping line.
+        'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-center text-sm leading-tight font-medium transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         pressed
           ? 'border-primary bg-primary/5 text-foreground'
           : 'border-border hover:bg-muted',
       )}
     >
-      {pressed && <CheckIcon aria-hidden="true" className="size-4" />}
+      {pressed && <CheckIcon aria-hidden="true" className="size-4 shrink-0" />}
       {children}
     </button>
   );
 }
 
+/** The chip row of `ToggleChip`s: two columns under `sm`, a flow above. */
+const toggleChipRowClass = 'grid grid-cols-2 gap-2 sm:flex sm:flex-wrap';
+
+/**
+ * An active filter, drawn as the Work Filter draws its chips (#845): the
+ * kind muted, the value, and an X.
+ */
 function RemovableChip({
-  label,
+  kind,
+  text,
   onRemove,
 }: {
-  label: string;
+  kind: string;
+  text: string;
   onRemove: () => void;
 }) {
   return (
-    <li>
+    <li className="min-w-0">
       <Button
         variant="secondary"
         size="sm"
-        className="max-w-full rounded-full"
-        aria-label={`Elimină filtrul ${label}`}
+        className="max-w-full"
+        aria-label={`Elimină filtrul ${kind}: ${text}`}
         onClick={onRemove}
       >
-        <span className="truncate">{label}</span>
+        <span className="text-muted-foreground">{kind}:</span>
+        <span className="max-w-48 truncate">{text}</span>
         <XIcon aria-hidden="true" />
       </Button>
     </li>
@@ -132,15 +146,13 @@ export function DirectoryFilterBar({
   const groupsById = groupsQuery.data ?? noGroups;
   const groupOptions = useMemo(
     () =>
-      [...groupsById.values()]
-        .filter((group) => group.status === 'active' && !group.is_organization)
-        .sort((a, b) =>
-          groupOptionLabel(a, groupsById).localeCompare(
-            groupOptionLabel(b, groupsById),
-            'ro',
-          ),
+      directoryGroupOptions(groupsById.values(), members).sort((a, b) =>
+        groupOptionLabel(a, groupsById).localeCompare(
+          groupOptionLabel(b, groupsById),
+          'ro',
         ),
-    [groupsById],
+      ),
+    [groupsById, members],
   );
   const roles = useMemo(() => {
     const byId = new Map<string, { label: string; level: number }>();
@@ -200,13 +212,8 @@ export function DirectoryFilterBar({
             </DialogDescription>
           </DialogHeader>
 
-          <section
-            aria-labelledby="directory-filter-group"
-            className="space-y-2"
-          >
-            <h3 id="directory-filter-group" className="font-semibold">
-              Grup
-            </h3>
+          <div className="grid gap-2">
+            <SubHeading id="directory-filter-group">Grup</SubHeading>
             {groupsQuery.isError ? (
               <p role="alert" className="text-destructive">
                 Nu am putut încărca grupurile.
@@ -229,15 +236,19 @@ export function DirectoryFilterBar({
                 placeholder="Adaugă un grup"
               />
             )}
-            <p className="text-muted-foreground">
+            <p className="m-0 text-muted-foreground">
               Un grup îi include și pe membrii grupurilor din el.
             </p>
             {filters.groupIds.length > 0 && (
-              <ul className="flex flex-wrap gap-2" aria-label="Grupuri alese">
+              <ul
+                className="m-0 flex list-none flex-wrap gap-2 p-0"
+                aria-label="Grupuri alese"
+              >
                 {filters.groupIds.map((id) => (
                   <RemovableChip
                     key={id}
-                    label={`Grup: ${groupLabel(id)}`}
+                    kind="Grup"
+                    text={groupLabel(id)}
                     onRemove={() =>
                       onChange({
                         ...filters,
@@ -250,47 +261,60 @@ export function DirectoryFilterBar({
                 ))}
               </ul>
             )}
-          </section>
+          </div>
 
-          <fieldset className="space-y-2">
-            <legend className="mb-2 font-semibold">Rol</legend>
-            <div className="flex flex-wrap gap-2">
-              {roles.map((role) => (
-                <ToggleChip
-                  key={role.value}
-                  pressed={filters.roleIds.includes(role.value)}
-                  onClick={() =>
-                    onChange({
-                      ...filters,
-                      roleIds: toggle(filters.roleIds, role.value),
-                    })
-                  }
-                >
-                  {role.label}
-                </ToggleChip>
-              ))}
+          {(roles.length > 1 || filters.roleIds.length > 0) && (
+            <div className="grid gap-2">
+              <SubHeading id="directory-filter-role">Rol</SubHeading>
+              <div
+                role="group"
+                aria-labelledby="directory-filter-role"
+                className={toggleChipRowClass}
+              >
+                {roles.map((role) => (
+                  <ToggleChip
+                    key={role.value}
+                    pressed={filters.roleIds.includes(role.value)}
+                    onClick={() =>
+                      onChange({
+                        ...filters,
+                        roleIds: toggle(filters.roleIds, role.value),
+                      })
+                    }
+                  >
+                    {role.label}
+                  </ToggleChip>
+                ))}
+              </div>
             </div>
-          </fieldset>
+          )}
 
-          <fieldset className="space-y-2">
-            <legend className="mb-2 font-semibold">Statut</legend>
-            <div className="flex flex-wrap gap-2">
-              {statuses.map((status) => (
-                <ToggleChip
-                  key={status.value}
-                  pressed={filters.statuses.includes(status.value)}
-                  onClick={() =>
-                    onChange({
-                      ...filters,
-                      statuses: toggle(filters.statuses, status.value),
-                    })
-                  }
-                >
-                  {status.label}
-                </ToggleChip>
-              ))}
+          {/* One status is no choice (Rule W): Statut shows from two. */}
+          {(statuses.length > 1 || filters.statuses.length > 0) && (
+            <div className="grid gap-2">
+              <SubHeading id="directory-filter-status">Statut</SubHeading>
+              <div
+                role="group"
+                aria-labelledby="directory-filter-status"
+                className={toggleChipRowClass}
+              >
+                {statuses.map((status) => (
+                  <ToggleChip
+                    key={status.value}
+                    pressed={filters.statuses.includes(status.value)}
+                    onClick={() =>
+                      onChange({
+                        ...filters,
+                        statuses: toggle(filters.statuses, status.value),
+                      })
+                    }
+                  >
+                    {status.label}
+                  </ToggleChip>
+                ))}
+              </div>
             </div>
-          </fieldset>
+          )}
 
           <DialogFooter>
             <Button variant="outline" disabled={!count} onClick={clear}>
@@ -303,11 +327,15 @@ export function DirectoryFilterBar({
 
       {count > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <ul className="flex flex-wrap gap-2" aria-label="Filtre active">
+          <ul
+            className="m-0 flex min-w-0 list-none flex-wrap gap-2 p-0"
+            aria-label="Filtre active"
+          >
             {filters.groupIds.map((id) => (
               <RemovableChip
                 key={`group-${id}`}
-                label={`Grup: ${groupLabel(id)}`}
+                kind="Grup"
+                text={groupLabel(id)}
                 onRemove={() =>
                   onChange({
                     ...filters,
@@ -319,7 +347,8 @@ export function DirectoryFilterBar({
             {filters.roleIds.map((id) => (
               <RemovableChip
                 key={`role-${id}`}
-                label={`Rol: ${roles.find((role) => role.value === id)?.label ?? id}`}
+                kind="Rol"
+                text={roles.find((role) => role.value === id)?.label ?? id}
                 onRemove={() =>
                   onChange({ ...filters, roleIds: toggle(filters.roleIds, id) })
                 }
@@ -328,7 +357,8 @@ export function DirectoryFilterBar({
             {filters.statuses.map((status) => (
               <RemovableChip
                 key={`status-${status}`}
-                label={`Statut: ${statusLabel(status)}`}
+                kind="Statut"
+                text={statusLabel(status)}
                 onRemove={() =>
                   onChange({
                     ...filters,
@@ -338,11 +368,7 @@ export function DirectoryFilterBar({
               />
             ))}
           </ul>
-          <Button
-            variant="link"
-            className="px-2 text-foreground underline"
-            onClick={clear}
-          >
+          <Button variant="ghost" size="sm" onClick={clear}>
             Șterge filtrele
           </Button>
         </div>
