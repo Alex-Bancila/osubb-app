@@ -199,6 +199,38 @@ export function mayAskForReaders(
   );
 }
 
+/**
+ * Whether to offer "Fixează anunțul" / "Anulează fixarea" (#857): the client
+ * copy of `announcements_update`. BC/Moderator (`private.can_manage_group_work`'s
+ * level ≥ 6 arm, any Group status); a Manager or Responsible on the Origin's
+ * path while the Origin is active (the same function's other arm —
+ * `my_groups()` carries the inherited Roles); and, for an Organization Group
+ * Announcement, anyone holding a Group Role anywhere
+ * (`private.holds_any_group_role()`, i.e. `my_capabilities().manages_any_group`).
+ * Presentation only: the policy decides.
+ */
+export function mayPinAnnouncement(
+  announcement: Pick<AnnouncementPresentation, 'groupId' | 'group'>,
+  viewer: {
+    /** BC/Moderator by live rank (`useCapability('manageRoles')`). */
+    bcOrModerator: boolean;
+    /** Holds a Group Role anywhere (`useCapability('managesAnyGroup')`). */
+    managesAnyGroup: boolean;
+    groups:
+      readonly { id: number; group_role: string; status: string }[] | undefined;
+  },
+): boolean {
+  if (viewer.bcOrModerator) return true;
+  if (announcement.group.isOrganization === true && viewer.managesAnyGroup)
+    return true;
+  return (viewer.groups ?? []).some(
+    (group) =>
+      group.id === announcement.groupId &&
+      group.status === 'active' &&
+      (group.group_role === 'manager' || group.group_role === 'responsible'),
+  );
+}
+
 export type AnnouncementReader = {
   member: MemberIdentity;
   /** Null while the recipient has not opened the Announcement. */
