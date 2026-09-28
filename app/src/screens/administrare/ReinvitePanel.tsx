@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react';
+import { MailPlus } from 'lucide-react';
+import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
@@ -48,41 +50,42 @@ function ReinviteForm({
     }
   }
 
+  // On the layout kit like the page's other panels (header above the box).
   return (
-    <form
-      noValidate
-      onSubmit={send}
-      aria-labelledby="reinvite-title"
-      className="grid gap-3 rounded-xl border p-5"
+    <Panel
+      eyebrow="Cont"
+      icon={MailPlus}
+      title="Invitație"
+      description="Membrul nu s-a autentificat încă. Dacă adresa e greșită, corecteaz-o înainte să retrimiți invitația."
     >
-      <h2 id="reinvite-title" className="text-lg font-semibold">
-        Invitație
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        Membrul nu s-a autentificat încă. Dacă adresa e greșită, corecteaz-o
-        înainte să retrimiți invitația.
-      </p>
-      <div className="grid gap-1.5">
-        <label className="grid gap-1">
-          Adresa de email
-          <input
-            className={control}
-            type="email"
-            autoComplete="off"
-            value={email}
-            disabled={reinvite.isPending}
-            onChange={(event) => setEmail(event.target.value)}
-            {...form.field('email')}
-          />
-        </label>
-        <FieldError {...form.errorProps('email')} />
-      </div>
-      <Button type="submit" disabled={reinvite.isPending}>
-        {reinvite.isPending ? 'Se trimite…' : 'Retrimite invitația'}
-      </Button>
-      <FieldError>{form.formError}</FieldError>
-      {message && <p role="status">{message}</p>}
-    </form>
+      <form noValidate onSubmit={send} className="grid gap-3">
+        <div className="grid gap-1.5">
+          <label className="grid gap-1">
+            Adresa de email
+            <input
+              className={control}
+              type="email"
+              autoComplete="off"
+              value={email}
+              disabled={reinvite.isPending}
+              onChange={(event) => setEmail(event.target.value)}
+              {...form.field('email')}
+            />
+          </label>
+          <FieldError {...form.errorProps('email')} />
+        </div>
+        <Button
+          type="submit"
+          block
+          className="sm:justify-self-start"
+          disabled={reinvite.isPending}
+        >
+          {reinvite.isPending ? 'Se trimite…' : 'Retrimite invitația'}
+        </Button>
+        <FieldError>{form.formError}</FieldError>
+        {message && <p role="status">{message}</p>}
+      </form>
+    </Panel>
   );
 }
 

@@ -23,7 +23,23 @@ function chain(result: unknown) {
 it('reads the Member Card, the status and only the ledger rows RLS returns', async () => {
   const card = { member_id: 'member', memberships: [] };
   const ledger = [
-    { id: 1, delta: 5, reason: 'task', created_at: 'x', task_id: 30 },
+    {
+      id: 1,
+      delta: 5,
+      reason: 'task',
+      created_at: 'x',
+      task_id: 30,
+      tasks: { title: 'Raport parteneriate' },
+    },
+    // A Task the viewer cannot read embeds as null.
+    {
+      id: 2,
+      delta: 3,
+      reason: 'task',
+      created_at: 'y',
+      task_id: 31,
+      tasks: null,
+    },
   ];
   supabaseMock.rpc.mockReturnValue({
     maybeSingle: vi.fn().mockResolvedValue({ data: card, error: null }),
@@ -41,8 +57,29 @@ it('reads the Member Card, the status and only the ledger rows RLS returns', asy
     card,
     contact: null,
     status: 'activ',
-    points: ledger,
+    points: [
+      {
+        id: 1,
+        delta: 5,
+        reason: 'task',
+        created_at: 'x',
+        task_id: 30,
+        task_title: 'Raport parteneriate',
+      },
+      {
+        id: 2,
+        delta: 3,
+        reason: 'task',
+        created_at: 'y',
+        task_id: 31,
+        task_title: null,
+      },
+    ],
   });
+  // The Task's title comes with the row (B61).
+  expect(tables.points_ledger.select).toHaveBeenCalledWith(
+    'id, delta, reason, created_at, task_id, tasks(title)',
+  );
   expect(supabaseMock.rpc).toHaveBeenCalledWith('member_card', {
     p_member_id: 'member',
   });
