@@ -35,4 +35,43 @@ describe('Button', () => {
     );
     expect(buttonVariants()).not.toMatch(/(^| )active:not-aria/);
   });
+
+  it('shows a disabled button on the muted surface, never faded (#842)', () => {
+    render(<Button disabled>Trimite cererea</Button>);
+    const button = screen.getByRole('button', { name: 'Trimite cererea' });
+    expect(button).toBeDisabled();
+
+    for (const variant of [
+      'default',
+      'outline',
+      'secondary',
+      'ghost',
+      'destructive',
+      'link',
+    ] as const) {
+      const classes = buttonVariants({ variant });
+      expect(classes).not.toMatch(/opacity/);
+      expect(classes).toContain('disabled:text-muted-foreground');
+      expect(classes).toContain('data-disabled:text-muted-foreground');
+    }
+    expect(button.className).toContain('data-disabled:bg-muted');
+    expect(button.className).not.toMatch(/opacity/);
+  });
+
+  it('is full width on a phone and its own width from sm when block (#842)', () => {
+    render(
+      <>
+        <Button block>Salvează numele</Button>
+        <Button>Renunță</Button>
+      </>,
+    );
+    const block = screen.getByRole('button', { name: 'Salvează numele' });
+    expect(block.className).toContain('w-full');
+    expect(block.className).toContain('sm:w-auto');
+    expect(buttonVariants({ block: true })).toContain('w-full sm:w-auto');
+
+    const plain = screen.getByRole('button', { name: 'Renunță' });
+    expect(plain.className).not.toContain('w-full');
+    expect(plain).not.toHaveAttribute('block');
+  });
 });
