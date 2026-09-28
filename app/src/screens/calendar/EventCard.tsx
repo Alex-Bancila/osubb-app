@@ -8,7 +8,6 @@ import {
   eventGroupIcon,
   eventGroupLabel,
   eventTypeLabel,
-  OTHER_EVENT_LABEL,
   relevanceColor,
   type EventRelevance,
 } from './calendar-presentation';
@@ -23,6 +22,11 @@ type EventCardProps = {
   past?: boolean;
   /** The `?event=<id>` landing. */
   highlighted?: boolean;
+  /**
+   * Print the Event's day in the card (Acasă, X9/A2). The Calendar's lists sit
+   * under a day heading, so there the card shows only the time.
+   */
+  showDay?: boolean;
 };
 
 export default function EventCard({
@@ -31,6 +35,7 @@ export default function EventCard({
   relevance = 'own',
   past = false,
   highlighted = false,
+  showDay = false,
 }: EventCardProps) {
   // Colour follows the relevance rule, then the Group chain (eventAccentColor).
   // The category icon is painted from the same variable.
@@ -39,6 +44,8 @@ export default function EventCard({
   const timeLabel = event.endTime
     ? `${event.startTime}–${event.endTime}`
     : event.startTime;
+  // Nobody answers a deadline (B25): it is a date to keep, not a gathering.
+  const takesRsvp = event.type !== 'deadline';
 
   return (
     <article
@@ -55,16 +62,17 @@ export default function EventCard({
     >
       <header className="event-card-head">
         <span className="event-type">{eventTypeLabel(event.type)}</span>
+        {/* The Group's name, never a category (ruling of 2026-09-28): it is
+            also what tells an Other OSUBB Event apart besides its grey. */}
         <span className="event-scope">
           {createElement(eventGroupIcon(event), {
             className: 'event-scope-icon',
             'aria-hidden': true,
           })}
-          {eventGroupLabel(event, groups)}
+          <span className="event-scope-name">
+            {eventGroupLabel(event, groups)}
+          </span>
         </span>
-        {relevance === 'other' && (
-          <span className="event-relevance">{OTHER_EVENT_LABEL}</span>
-        )}
       </header>
 
       <h3 id={titleId} className="event-title">
@@ -72,6 +80,15 @@ export default function EventCard({
       </h3>
 
       <dl className="event-details">
+        {showDay && (
+          <div>
+            <dt>Data</dt>
+            <dd className="event-day">
+              <time dateTime={event.dayKey}>{event.dayLabel}</time>
+            </dd>
+          </div>
+        )}
+
         <div>
           <dt>Ora</dt>
           <dd>
@@ -89,7 +106,7 @@ export default function EventCard({
         {event.capacity !== null && (
           <div>
             <dt>Locuri</dt>
-            <dd>Capacitate: {event.capacity} de persoane</dd>
+            <dd className="event-capacity">{event.capacity}</dd>
           </div>
         )}
       </dl>
@@ -98,11 +115,12 @@ export default function EventCard({
         <p className="event-description">{event.description}</p>
       )}
 
-      {past ? (
-        <p className="event-past">Evenimentul a avut loc.</p>
-      ) : (
-        <EventRsvpControls eventId={event.id} eventTitle={event.title} />
-      )}
+      {takesRsvp &&
+        (past ? (
+          <p className="event-past">Evenimentul a avut loc.</p>
+        ) : (
+          <EventRsvpControls eventId={event.id} eventTitle={event.title} />
+        ))}
     </article>
   );
 }

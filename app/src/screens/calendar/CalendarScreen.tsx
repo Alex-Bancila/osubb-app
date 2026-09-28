@@ -22,7 +22,6 @@ import { CalendarMonth } from './CalendarMonth';
 import {
   eventRelevance,
   linkedEventId,
-  monthLabel,
   monthOfDay,
   relevantGroupIds,
   type EventRelevance,
@@ -34,10 +33,6 @@ const VIEWS: ReadonlyArray<SegmentedOption<CalendarView>> = [
   { value: 'month', label: 'Lună', icon: CalendarDays },
   { value: 'agenda', label: 'Agendă', icon: ListIcon },
 ];
-
-function capitalized(text: string): string {
-  return text.charAt(0).toLocaleUpperCase('ro-RO') + text.slice(1);
-}
 
 /**
  * The Calendar (#692, ruling R14): **Lună**, a month grid of readable Events
@@ -102,9 +97,10 @@ export default function CalendarScreen() {
   );
   const agendaFromToday =
     filter.value.from === undefined || filter.value.from === todayKey;
+  // The month's name sits between its arrows (C2); the title names the view.
   const title =
     view === 'month'
-      ? capitalized(monthLabel(shownMonth))
+      ? 'Lună'
       : agendaFromToday && filter.value.to === undefined
         ? 'Ce urmează'
         : 'Agendă';

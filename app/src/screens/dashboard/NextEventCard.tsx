@@ -25,7 +25,8 @@ import { nextRelevantEvent } from './next-items';
  * Events that already started today are dropped here, against `now`.
  *
  * The Calendar's card shows only the time (the Agendă prints the day above
- * it), so the day is printed here too.
+ * it); here the card prints the day itself (`showDay`), so the box starts
+ * level with its row neighbour.
  */
 export default function NextEventCard({
   now,
@@ -76,16 +77,14 @@ export default function NextEventCard({
       ) : isPending ? (
         <Loading />
       ) : shown ? (
-        <div className="flex min-w-0 flex-1 flex-col gap-2 *:last:flex-1">
-          <p className="m-0 text-sm font-semibold text-muted-foreground first-letter:uppercase">
-            <time dateTime={shown.startsAt}>{shown.dayLabel}</time>
-          </p>
-          <EventCard
-            event={shown}
-            groups={groups.data}
-            relevance={eventRelevance(shown, relevant, new Set())}
-          />
-        </div>
+        // The day is inside the card (X9/A2): a line above it pushed the box
+        // below its row neighbour's.
+        <EventCard
+          event={shown}
+          groups={groups.data}
+          relevance={eventRelevance(shown, relevant, new Set())}
+          showDay
+        />
       ) : (
         <EmptyState>Niciun eveniment viitor pentru tine.</EmptyState>
       )}

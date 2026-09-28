@@ -4,6 +4,10 @@ import { PlusIcon } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
+import {
   Combobox,
   ComboboxContent,
   ComboboxEmpty,
@@ -41,8 +45,10 @@ import {
   type EventFormValues,
 } from './event-form-model';
 
+// The text fields wear the #842 select's field (border, fill, radius, inset),
+// so Titlu, Tip, Grup and the dates read as one form (X12).
 const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+  'min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:border-input dark:bg-input/30';
 
 const initialValues: EventFormValues = {
   title: '',
@@ -215,48 +221,46 @@ function EventForm({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5" htmlFor={`${id}-type`}>
-              <span className="text-sm font-medium">Tip</span>
-              <select
-                id={`${id}-type`}
-                className={control}
-                value={values.type}
-                onChange={(event) =>
-                  update({
-                    type: event.target.value as EventFormValues['type'],
-                  })
-                }
-                {...form.field('type')}
-              >
-                {EVENT_TYPE_CHOICES.map((choice) => (
-                  <option key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
+            <label htmlFor={`${id}-type`} className="text-sm font-medium">
+              Tip
             </label>
+            <NativeSelect
+              id={`${id}-type`}
+              value={values.type}
+              onChange={(event) =>
+                update({
+                  type: event.target.value as EventFormValues['type'],
+                })
+              }
+              {...form.field('type')}
+            >
+              {EVENT_TYPE_CHOICES.map((choice) => (
+                <NativeSelectOption key={choice.value} value={choice.value}>
+                  {choice.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
             <FieldError {...form.errorProps('type')} />
           </div>
 
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5" htmlFor={`${id}-min-level`}>
-              <span className="text-sm font-medium">Cine îl vede</span>
-              <select
-                id={`${id}-min-level`}
-                className={control}
-                value={values.minLevel}
-                onChange={(event) =>
-                  update({ minLevel: Number(event.target.value) })
-                }
-                {...form.field('minLevel')}
-              >
-                {levelChoices.map((choice) => (
-                  <option key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
+            <label htmlFor={`${id}-min-level`} className="text-sm font-medium">
+              Cine îl vede
             </label>
+            <NativeSelect
+              id={`${id}-min-level`}
+              value={values.minLevel}
+              onChange={(event) =>
+                update({ minLevel: Number(event.target.value) })
+              }
+              {...form.field('minLevel')}
+            >
+              {levelChoices.map((choice) => (
+                <NativeSelectOption key={choice.value} value={choice.value}>
+                  {choice.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
             <FieldError {...form.errorProps('minLevel')} />
           </div>
         </div>
@@ -302,30 +306,29 @@ function EventForm({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="grid gap-1.5" htmlFor={`${id}-campaign`}>
-            <span className="text-sm font-medium">Campanie (opțional)</span>
-            <select
-              id={`${id}-campaign`}
-              className={control}
-              value={values.campaignId ?? ''}
-              disabled={!selectedGroup || !campaigns.length}
-              onChange={(event) =>
-                update({
-                  campaignId: event.target.value
-                    ? Number(event.target.value)
-                    : null,
-                })
-              }
-              {...form.field('campaignId', `${id}-campaign-hint`)}
-            >
-              <option value="">Fără campanie</option>
-              {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </option>
-              ))}
-            </select>
+          <label htmlFor={`${id}-campaign`} className="text-sm font-medium">
+            Campanie (opțional)
           </label>
+          <NativeSelect
+            id={`${id}-campaign`}
+            value={values.campaignId ?? ''}
+            disabled={!selectedGroup || !campaigns.length}
+            onChange={(event) =>
+              update({
+                campaignId: event.target.value
+                  ? Number(event.target.value)
+                  : null,
+              })
+            }
+            {...form.field('campaignId', `${id}-campaign-hint`)}
+          >
+            <NativeSelectOption value="">Fără campanie</NativeSelectOption>
+            {campaigns.map((campaign) => (
+              <NativeSelectOption key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
           <FieldError {...form.errorProps('campaignId')} />
           <p
             id={`${id}-campaign-hint`}

@@ -531,13 +531,15 @@ describe('Următorul eveniment', () => {
     renderDashboard();
 
     const next = slot('Următorul eveniment');
+    const card = within(next).getByRole('article', {
+      name: 'Ședință Educațional',
+    });
+    // The day is inside the card (X9/A2), so the box starts level with its
+    // row neighbour: nothing sits between the header and the card.
     expect(
-      within(next).getByRole('article', { name: 'Ședință Educațional' }),
+      within(card).getByText('sâmbătă, 17 ianuarie 2026'),
     ).toBeInTheDocument();
-    // The Calendar's card prints the time; the slot prints the day.
-    expect(
-      within(next).getByText('sâmbătă, 17 ianuarie 2026'),
-    ).toBeInTheDocument();
+    expect(card.parentElement).toHaveAttribute('data-slot', 'panel-body');
     for (const skipped of ['Festival', 'Ședință de azi', 'Adunare OSUBB'])
       expect(within(next).queryByText(skipped)).toBeNull();
     expect(

@@ -59,27 +59,25 @@ export default function EventRsvpControls({
     <section className="event-rsvp" aria-label={`Răspuns pentru ${eventTitle}`}>
       <div className="event-rsvp-head">
         <p className="event-rsvp-prompt">Participi?</p>
-        <span className="event-rsvp-state">
-          {mutation.isPending ? (
-            <>
-              <LoaderCircle
-                className="size-3.5 animate-spin motion-reduce:animate-none"
-                aria-hidden="true"
-              />
-              Se salvează…
-            </>
-          ) : rsvp.isPending ? (
-            'Se încarcă răspunsul…'
-          ) : rsvp.isError ? (
-            'Răspuns indisponibil'
-          ) : answer === 'going' ? (
-            'Ai răspuns: particip'
-          ) : answer === 'declined' ? (
-            'Ai răspuns: nu particip'
-          ) : (
-            'Nu ai răspuns încă'
-          )}
-        </span>
+        {/* The pressed button is the answer (B4): a line appears only while
+            something is in flight or has gone wrong. */}
+        {(mutation.isPending || rsvp.isPending || rsvp.isError) && (
+          <span className="event-rsvp-state">
+            {mutation.isPending ? (
+              <>
+                <LoaderCircle
+                  className="size-3.5 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+                Se salvează…
+              </>
+            ) : rsvp.isPending ? (
+              'Se încarcă răspunsul…'
+            ) : (
+              'Răspuns indisponibil'
+            )}
+          </span>
+        )}
       </div>
 
       <div
@@ -114,14 +112,14 @@ export default function EventRsvpControls({
         </Button>
       </div>
 
-      {/* One inline message, seen and announced alike: it replaced the Ionic
-          toast, which needed a hidden twin for assistive technology. */}
+      {/* An error is seen and announced. A saved answer is only announced:
+          the pressed button already shows it (B4). */}
       {feedback && (
         <p
           className={
             feedback.kind === 'error'
               ? 'event-rsvp-live is-error'
-              : 'event-rsvp-live'
+              : 'event-rsvp-live sr-only'
           }
           role={feedback.kind === 'error' ? 'alert' : 'status'}
         >

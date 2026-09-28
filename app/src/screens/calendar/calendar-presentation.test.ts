@@ -177,27 +177,36 @@ describe('calendar labels', () => {
     expect(eventTypeLabel(type)).toBe(label);
   });
 
-  // One assertion per Group category, plus the Organization. Mutations this
-  // catches: read the parent from the wrong slot of `path` (the Department Team
-  // loses its Department and reads bare "Echipă"), and drop the
-  // `category === 'project'` branch (the Project shows its own long name where
-  // the calendar wants the kind). Dropping the `is_organization` branch is the
-  // next test's job — the Organization Group happens to be *named* OSUBB today,
-  // so this one would stay green.
-  it('labels an Event by its Group, one label per category', () => {
+  // Ruling of 2026-09-28 (B24): the Group's name, never its category. Mutations
+  // this catches: read the parent from the wrong slot of `path` (the Child
+  // Group loses its parent), or put a category noun back ("Proiect",
+  // "Echipă"). Dropping the `is_organization` branch is the next test's job —
+  // the Organization Group happens to be *named* OSUBB today, so this one
+  // would stay green.
+  it('labels an Event by its Group name, a Child Group with its parent', () => {
     expect(eventGroupLabel(event(), readableGroups)).toBe('OSUBB');
     expect(eventGroupLabel(event({ group: eduGroup }), readableGroups)).toBe(
       'Educațional',
     );
     expect(
       eventGroupLabel(event({ group: socialMediaGroup }), readableGroups),
-    ).toBe('Echipă · Educațional');
+    ).toBe('Social Media · Educațional');
     expect(
       eventGroupLabel(event({ group: logisticaGroup }), readableGroups),
-    ).toBe('Echipă');
+    ).toBe('Logistică');
     expect(
       eventGroupLabel(event({ group: festivalGroup }), readableGroups),
-    ).toBe('Proiect');
+    ).toBe('Festivalul Studențesc 2026');
+  });
+
+  it('leaves out a parent that is the Organization Group', () => {
+    const underOrganization: EventGroup = { ...eduGroup, path: [5, 7] };
+    const withOrganization = new Map<number, Group>([
+      [5, group({ id: 5, name: 'OSUBB', path: [5], is_organization: true })],
+    ]);
+    expect(
+      eventGroupLabel(event({ group: underOrganization }), withOrganization),
+    ).toBe('Educațional');
   });
 
   it('reads the Organization label off the marker, not off the Group name', () => {
@@ -218,7 +227,9 @@ describe('calendar labels', () => {
   });
 
   it('names a Child Group by its parent only when the parent is readable', () => {
-    expect(eventGroupLabel(event({ group: socialMediaGroup }))).toBe('Echipă');
+    expect(eventGroupLabel(event({ group: socialMediaGroup }))).toBe(
+      'Social Media',
+    );
   });
 
   it('falls back to a neutral label when the Event names no readable Group', () => {

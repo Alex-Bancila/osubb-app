@@ -60,6 +60,29 @@ describe('EventRsvpControls', () => {
     expect(rsvpButton('Nu particip')).toHaveAttribute('aria-pressed', 'false');
   });
 
+  // B4: the pressed button is the answer; no "Ai răspuns" line beside it.
+  it('shows no status line at rest, answered or not', () => {
+    const { container, unmount } = render(
+      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
+    );
+    expect(container.querySelector('.event-rsvp-state')).toBeNull();
+    expect(screen.queryByText(/Ai răspuns/)).not.toBeInTheDocument();
+    unmount();
+
+    hooks.useEventRsvp.mockReturnValue({
+      data: null,
+      error: null,
+      isError: false,
+      isPending: false,
+      refetch: vi.fn(),
+    });
+    const unanswered = render(
+      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
+    );
+    expect(unanswered.container.querySelector('.event-rsvp-state')).toBeNull();
+    expect(screen.queryByText(/Nu ai răspuns/)).not.toBeInTheDocument();
+  });
+
   it('disables both answers while one RSVP is being saved', () => {
     hooks.useSetEventRsvp.mockReturnValue({
       isPending: true,
@@ -92,9 +115,10 @@ describe('EventRsvpControls', () => {
       eventId: 7,
       status: 'declined',
     });
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Răspuns salvat: nu participi.',
-    );
+    // Announced, not shown: the pressed button already says it (B4).
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Răspuns salvat: nu participi.');
+    expect(status).toHaveClass('sr-only');
   });
 
   it('says it is saving while the answer is sent', () => {
