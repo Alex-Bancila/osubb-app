@@ -177,7 +177,9 @@ describe('Member directory', () => {
       name: 'Grupul Educațional. Vezi profilul membrului Maria Dobre',
     });
     expect(chip).toHaveTextContent('Educațional');
-    expect(chip.className).toContain('truncate');
+    expect(
+      chip.querySelector('[data-slot=group-chip] .truncate'),
+    ).toHaveTextContent('Educațional');
     expect(within(row).queryByText('Imagine & PR')).toBeNull();
     const more = within(row).getByRole('button', {
       name: '+6 grupuri. Vezi profilul membrului Maria Dobre',

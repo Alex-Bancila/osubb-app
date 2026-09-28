@@ -1,5 +1,5 @@
-import { useState, type CSSProperties, type MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useState, type CSSProperties } from 'react';
+import { Link, useLocation } from 'react-router';
 import { Award, ChevronRight, Trophy } from 'lucide-react';
 import { cn } from 'cn';
 import {
@@ -9,6 +9,8 @@ import {
   PageHeader,
   Panel,
   SegmentedToggle,
+  backLinkState,
+  focusRingInsetClass,
   rowListClass,
   type SegmentedOption,
 } from '../../components/layout';
@@ -23,6 +25,7 @@ import { useAuth } from '../../lib/auth';
 import { formatDayMonthYear, formatPoints } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import {
+  WORK_FILTER_KEYS,
   withoutGroup,
   type WorkFilterLevels,
   type WorkFilterValue,
@@ -41,7 +44,21 @@ import { MemberGroups } from '../volunteers/MemberGroups';
 import { LeadershipAccess } from './LeadershipAccess';
 import { useClasamentView, type ClasamentView } from './clasament-view';
 
-const trackerPath = (memberId: string) => `/tracker/membru/${memberId}`;
+/**
+ * A member's tracker under the Clasament's own Work Filter (navigation D10):
+ * the Group, Campaign and period levels of `search` carry over as they are;
+ * anything else — the board's `vedere` — stays behind.
+ */
+function trackerPath(memberId: string, search = ''): string {
+  const current = new URLSearchParams(search);
+  const kept = new URLSearchParams();
+  for (const key of Object.values(WORK_FILTER_KEYS)) {
+    const value = current.get(key);
+    if (value !== null) kept.set(key, value);
+  }
+  const query = kept.toString();
+  return `/tracker/membru/${memberId}${query ? `?${query}` : ''}`;
+}
 
 const VIEWS: ReadonlyArray<SegmentedOption<ClasamentView>> = [
   { value: 'members', label: 'Clasament' },
@@ -63,12 +80,18 @@ const memberCount = (n: number) => `${n} ${n === 1 ? 'membru' : 'membri'}`;
 /**
  * One Clasament row (R11, R27) on the shared `ListRow`: rank (the top three
  * in red), the Member's name button (avatar, Nickname) and their first Group
- * chip with "+n" — both open the Member Card, whose main link is "Vezi
- * trackerul" — then the points and the row's own link to the tracker. A click
- * anywhere else on the row opens the tracker too. The chip is the Member's
- * own Group: someone who earned points in the filtered Group without
- * belonging to it shows where they do belong (the ranking counts the Task's
- * Group, never the Member's).
+ * chip with "+n" — both open the Member Card — then the points.
+ *
+ * The row is one link to the member's tracker (relevance B66): an empty link
+ * named "Vezi trackerul membrului …" stretched over the whole row, first in
+ * the tab order, under the name and chip buttons (`relative`, later in the
+ * DOM, so they paint above it). It keeps the Work Filter and passes the way
+ * back here (navigation D10). From 640 px a chevron in the points cell says
+ * the row opens; under it the row has no chevron column, so the name gets
+ * the width and wraps instead of being cut (layout L1). The chip is the
+ * Member's own Group: someone who earned points in the filtered Group
+ * without belonging to it shows where they do belong (the ranking counts
+ * the Task's Group, never the Member's).
  */
 function BoardRow({
   row,
@@ -83,28 +106,26 @@ function BoardRow({
   self: boolean;
   onOpenCard: () => void;
 }) {
-  const navigate = useNavigate();
+  const location = useLocation();
   const name = memberDisplayName(row.nickname, row.full_name);
   const rank = row.rank ?? position;
-  function openFromRow(event: MouseEvent<HTMLLIElement>) {
-    // React bubbles clicks from a portal (the Member Card) through the row:
-    // only clicks on the row's own DOM, outside its controls, open it.
-    if (
-      !(event.target instanceof Element) ||
-      !event.currentTarget.contains(event.target) ||
-      event.target.closest('a,button')
-    )
-      return;
-    void navigate(trackerPath(row.member_id));
-  }
   return (
-    <li onClick={openFromRow} data-self={self || undefined}>
+    <li className="group/row relative" data-self={self || undefined}>
+      <Link
+        to={trackerPath(row.member_id, location.search)}
+        state={backLinkState(location, 'Înapoi la clasament')}
+        aria-label={`Vezi trackerul membrului ${name}`}
+        data-slot="row-link"
+        className={cn('absolute inset-0 rounded-sm', focusRingInsetClass)}
+      />
       <ListRow
         as="div"
         mine={self}
         className={cn(
-          'cursor-pointer rounded-sm transition-colors max-sm:gap-2 max-sm:px-1',
-          self ? 'hover:bg-primary/10' : 'hover:bg-muted/60',
+          'rounded-sm transition-colors max-sm:gap-2',
+          self
+            ? 'group-hover/row:bg-primary/10'
+            : 'group-hover/row:bg-muted/60',
         )}
         leading={
           <span
@@ -118,22 +139,19 @@ function BoardRow({
           </span>
         }
         value={
-          <span className="font-bold">
-            {formatPoints(row.points)}{' '}
-            <span className="text-xs font-medium text-muted-foreground">
-              pct.
+          <span className="inline-flex items-center gap-3">
+            <span className="font-bold">
+              {formatPoints(row.points)}{' '}
+              <span className="text-xs font-medium text-muted-foreground">
+                pct.
+              </span>
             </span>
+            <ChevronRight
+              aria-hidden="true"
+              data-slot="row-chevron"
+              className="hidden size-4 text-muted-foreground transition-colors group-hover/row:text-foreground sm:block"
+            />
           </span>
-        }
-        action={
-          <Link
-            to={trackerPath(row.member_id)}
-            aria-label={`Vezi trackerul membrului ${name}`}
-            className="inline-flex min-h-11 min-w-11 items-center justify-end gap-1 rounded-md text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring sm:px-2"
-          >
-            <span className="hidden sm:inline">Vezi trackerul</span>
-            <ChevronRight aria-hidden="true" className="size-4" />
-          </Link>
         }
       >
         <div className="flex min-w-0 flex-wrap items-center gap-x-3">
@@ -143,6 +161,8 @@ function BoardRow({
               nickname={row.nickname}
               fullName={row.full_name}
               avatarColor={identity?.avatarColor}
+              wrap
+              className="relative"
             />
             {self && (
               <Badge variant="secondary" className="shrink-0">
@@ -150,10 +170,10 @@ function BoardRow({
               </Badge>
             )}
           </span>
-          {/* Under 640 px the row keeps rank, name, points and the chevron;
-              the Groups stay one tap away, on the Member Card. */}
+          {/* Under 640 px the row keeps rank, name and points; the Groups
+              stay one tap away, on the Member Card. */}
           {identity && (
-            <span className="hidden min-w-0 sm:contents">
+            <span className="relative hidden min-w-0 sm:block">
               <MemberGroups
                 primaryGroup={identity.primaryGroup}
                 otherMemberships={identity.otherMemberships}
@@ -187,7 +207,7 @@ function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
         // A failed lookup is not "no Group": say so, and offer the read again.
         <div
           role="alert"
-          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm bg-muted/60 p-3 text-sm"
+          className="m-2 flex flex-wrap items-center justify-between gap-2 rounded-sm bg-muted/60 p-3 text-sm"
         >
           <p className="m-0">Nu am putut încărca grupurile membrilor.</p>
           <Button
@@ -392,6 +412,8 @@ function LeadershipContent() {
           description={
             params && board.data ? memberCount(board.data.length) : null
           }
+          // The ranking reaches the frame (layout L1); a state keeps its padding.
+          flush={Boolean(params && board.data?.length)}
         >
           {!params ? (
             <EmptyState>{RANGE_FIRST}</EmptyState>
@@ -419,6 +441,8 @@ function LeadershipContent() {
               (campaign) => campaign.id === value.campaignId,
             )?.name,
           )}
+          // The same frame as the members' board, so the toggle moves nothing.
+          flush={Boolean(params && cup.data?.length)}
         >
           {!params ? (
             <EmptyState>{RANGE_FIRST}</EmptyState>

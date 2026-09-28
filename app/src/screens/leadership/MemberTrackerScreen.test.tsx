@@ -22,9 +22,13 @@ vi.mock('../../lib/capabilities', () => ({
 }));
 import { useMemberCard } from '../../test/member-card-mock';
 const uid = '35400000-0000-0000-0000-000000000001';
-function view(id = uid, query = '') {
+function view(id = uid, query = '', from?: unknown) {
   return render(
-    <MemoryRouter initialEntries={[`/tracker/membru/${id}${query}`]}>
+    <MemoryRouter
+      initialEntries={[
+        { pathname: `/tracker/membru/${id}`, search: query, state: from },
+      ]}
+    >
       <main>
         <Routes>
           <Route path="/tracker/membru/:id" element={<MemberTrackerScreen />} />
@@ -299,4 +303,44 @@ it('waits for the Group tree before applying a Group level, instead of claiming 
     screen.getByText('Filtrul de grup se aplică după ce se încarcă filtrele.'),
   ).toBeInTheDocument();
   expect(screen.queryByText(/Nicio atribuire/)).toBeNull();
+});
+it('goes back to the Clasament by default, keeping no stray filter', () => {
+  view(uid, '?grup=7');
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la clasament' }),
+  ).toHaveAttribute('href', '/clasament');
+});
+it('goes back exactly where it was opened from, when the link passed state.from (D10)', () => {
+  view(uid, '?grup=7&de_la=2026-01-01', {
+    from: {
+      to: '/clasament?grup=7&de_la=2026-01-01',
+      label: 'Înapoi la clasament',
+    },
+  });
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la clasament' }),
+  ).toHaveAttribute('href', '/clasament?grup=7&de_la=2026-01-01');
+});
+it('returns to Voluntari when opened from a Member Card there', () => {
+  view(uid, '', { from: { to: '/voluntari?rol=3', label: 'Înapoi' } });
+  expect(screen.getByRole('link', { name: 'Înapoi' })).toHaveAttribute(
+    'href',
+    '/voluntari?rol=3',
+  );
+  expect(
+    screen.queryByRole('link', { name: 'Înapoi la clasament' }),
+  ).toBeNull();
+});
+it('lays the Assignment cards on the collection grid, each as tall as its own record (L3)', () => {
+  view();
+  const grid = screen
+    .getByRole('region', { name: 'Atribuiri' })
+    .querySelector('[data-slot=page-grid]');
+  expect(grid).toHaveAttribute('data-columns', 'collection');
+  expect(grid).toHaveClass('md:grid-cols-2', 'xl:grid-cols-3', 'items-start');
+  expect(grid).not.toHaveAttribute('data-equal-heights');
+  expect(grid?.tagName).toBe('UL');
+  expect(within(grid as HTMLElement).getAllByRole('article')).toHaveLength(
+    cards().length,
+  );
 });

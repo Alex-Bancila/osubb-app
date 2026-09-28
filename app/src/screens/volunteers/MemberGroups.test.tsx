@@ -32,7 +32,10 @@ describe('MemberGroups', () => {
       name: 'Grupul Educațional. Vezi profilul membrului Ana Ionescu',
     });
     expect(chip).toHaveTextContent('Educațional');
-    expect(chip.style.borderColor).toBe('rgb(40, 76, 147)');
+    // The 24 px chip inside the 44 px button carries the Group colour (L2).
+    const pill = chip.querySelector<HTMLElement>('[data-slot=group-chip]');
+    expect(pill).toHaveClass('h-6');
+    expect(pill?.style.borderColor).toBe('rgb(40, 76, 147)');
     expect(screen.queryByRole('button', { name: /^\+/ })).toBeNull();
   });
 
