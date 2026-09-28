@@ -51,6 +51,8 @@ export function CalendarMonth({
   filter,
   groups,
   relevanceOf,
+  showManaged,
+  onShowManagedChange: setShowManaged,
 }: {
   month: MonthKey;
   /** The screen's clock, in milliseconds (a render must not read the time). */
@@ -59,6 +61,9 @@ export function CalendarMonth({
   filter: WorkFilterState;
   groups: Map<number, Group> | undefined;
   relevanceOf: (event: EventPresentation) => EventRelevance;
+  /** **Taskurile gestionate**, kept by the screen: its Work Filter reads it too (#845). */
+  showManaged: boolean;
+  onShowManagedChange: (next: boolean) => void;
 }) {
   const [, setParams] = useSearchParams();
   const weeks = useMemo(
@@ -75,7 +80,6 @@ export function CalendarMonth({
   const mine = useMyTasks();
   const candidatures = usePendingCandidatureTasks();
   const management = useTaskManagement();
-  const [showManaged, setShowManaged] = useState(false);
   const managesTasks = management.data === true;
   const managed = useManagedTasks(managesTasks && showManaged);
 
@@ -178,7 +182,7 @@ export function CalendarMonth({
             variant="outline"
             className="calendar-managed-toggle"
             aria-pressed={showManaged ? 'true' : 'false'}
-            onClick={() => setShowManaged((current) => !current)}
+            onClick={() => setShowManaged(!showManaged)}
           >
             <span className="calendar-switch" aria-hidden="true" />
             Taskurile gestionate

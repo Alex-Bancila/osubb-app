@@ -226,6 +226,66 @@ export function rootGroups<G extends WorkFilterGroup>(
 }
 
 /**
+ * One item a page can show (a Task, an Opportunity, an Event, a deadline),
+ * reduced to what Rule W reads: its Group and its Campaign.
+ */
+export type WorkItem = { group_id: number; campaign_id: number | null };
+
+function keptIds(keepIds: readonly (number | undefined)[]): number[] {
+  return keepIds.filter((id): id is number => id !== undefined);
+}
+
+/**
+ * Rule W for Groups (frontend QA, `relevance.md` §0): the Groups that own at
+ * least one item the page can show, plus every Group above them — so the
+ * cascade still reads top-down — plus the values already in the URL (and
+ * theirs), so a shared link never loses its choice. A Group that owns
+ * nothing (the Adunarea Generală with no Task and no Event, a Private Group)
+ * is not offered.
+ */
+export function groupsWithWork<G extends WorkFilterGroup>(
+  groups: readonly G[],
+  ownerGroupIds: Iterable<number>,
+  keepIds: readonly (number | undefined)[] = [],
+): G[] {
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  const offered = new Set<number>();
+  for (const id of [...ownerGroupIds, ...keptIds(keepIds)])
+    for (const onPath of byId.get(id)?.path ?? [id]) offered.add(onPath);
+  return groups.filter((group) => offered.has(group.id));
+}
+
+/**
+ * Rule W for Campaigns: a Campaign is offered when it labels at least one
+ * item the page can show, active or inactive, or when the URL already
+ * carries it.
+ */
+export function campaignsWithWork<C extends WorkFilterCampaign>(
+  campaigns: readonly C[],
+  usedIds: Iterable<number | null>,
+  keepIds: readonly (number | undefined)[] = [],
+): C[] {
+  const offered = new Set<number | null>([...usedIds, ...keptIds(keepIds)]);
+  return campaigns.filter((campaign) => offered.has(campaign.id));
+}
+
+/**
+ * The items under a chosen Group — that Group and every Group below it —
+ * read through the Group tree; every item when no Group is chosen.
+ */
+export function itemsInGroup<I extends WorkItem>(
+  items: readonly I[],
+  groups: readonly WorkFilterGroup[],
+  groupId: number | undefined,
+): I[] {
+  if (groupId === undefined) return [...items];
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  return items.filter((item) =>
+    (byId.get(item.group_id)?.path ?? [item.group_id]).includes(groupId),
+  );
+}
+
+/**
  * **Subgrup** options: every active Group below the root, at any depth, in
  * tree order — each parent directly before its own children.
  */
@@ -276,6 +336,82 @@ export function campaignsFor<C extends WorkFilterCampaign>(
       chosenPath.includes(campaign.group_id) ||
       (byId.get(campaign.group_id)?.path.includes(groupId) ?? false),
   );
+}
+
+/** What the Work Filter offers at each level, and which levels it renders. */
+export type WorkFilterChoices<
+  G extends WorkFilterGroup,
+  C extends WorkFilterCampaign,
+> = {
+  roots: G[];
+  below: G[];
+  campaigns: C[];
+  showRoot: boolean;
+  showSub: boolean;
+  showCampaign: boolean;
+  /**
+   * The root the Subgrup options hang from: the chosen one, or — when the
+   * Grup principal level is hidden because it has one option — that option.
+   */
+  rootId: number | undefined;
+};
+
+/**
+ * The options of every level. With `work` (the items the page can show),
+ * Rule W applies: only Groups and Campaigns with work are offered, the URL's
+ * values are kept, and a level with one option or none is hidden — one
+ * option means the page already shows only that Group or Campaign. Without
+ * `work` (Campanii, R13: the caller's managed Groups), every given option
+ * is offered and the levels stay as they were.
+ */
+export function workFilterChoices<
+  G extends WorkFilterGroup,
+  C extends WorkFilterCampaign,
+>(
+  groups: readonly G[],
+  campaigns: readonly C[],
+  value: WorkFilterValue,
+  {
+    work,
+    roots = 'top-level',
+  }: { work?: readonly WorkItem[]; roots?: WorkFilterRoots } = {},
+): WorkFilterChoices<G, C> {
+  if (!work)
+    return {
+      roots: rootGroups(groups, roots),
+      below: groupsBelow(groups, value.rootGroupId),
+      campaigns: campaignsFor(campaigns, groups, chosenGroupId(value)),
+      showRoot: true,
+      showSub: true,
+      showCampaign: true,
+      rootId: value.rootGroupId,
+    };
+  const offered = groupsWithWork(
+    groups,
+    work.map((item) => item.group_id),
+    [value.rootGroupId, value.groupId],
+  );
+  const rootOptions = rootGroups(offered, roots);
+  const rootId =
+    value.rootGroupId ??
+    (rootOptions.length === 1 ? rootOptions[0]?.id : undefined);
+  const below = groupsBelow(offered, rootId);
+  const campaignOptions = campaignsWithWork(
+    campaigns,
+    itemsInGroup(work, groups, value.groupId ?? rootId).map(
+      (item) => item.campaign_id,
+    ),
+    [value.campaignId],
+  );
+  return {
+    roots: rootOptions,
+    below,
+    campaigns: campaignOptions,
+    showRoot: rootOptions.length > 1,
+    showSub: below.length > 1,
+    showCampaign: campaignOptions.length > 1,
+    rootId,
+  };
 }
 
 /**

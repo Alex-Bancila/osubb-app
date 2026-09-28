@@ -2,11 +2,12 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { MemoryRouter, useLocation } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   WorkFilterCampaign,
   WorkFilterGroup,
   WorkFilterLevels,
+  WorkItem,
 } from '../../lib/work-filter';
 import { WorkFilter } from './WorkFilter';
 
@@ -36,10 +37,20 @@ function Search() {
   return <output data-testid="search">{useLocation().search}</output>;
 }
 
-function renderFilter(query = '', levels?: WorkFilterLevels) {
+function renderFilter(
+  query = '',
+  levels?: WorkFilterLevels,
+  work?: readonly WorkItem[],
+) {
   return render(
     <MemoryRouter initialEntries={[`/clasament${query}`]}>
-      <WorkFilter groups={groups} campaigns={campaigns} levels={levels} />
+      <WorkFilter
+        groups={groups}
+        campaigns={campaigns}
+        levels={levels}
+        work={work}
+        hint="Grupul include subgrupurile sale."
+      />
       <Search />
     </MemoryRouter>,
   );
@@ -198,5 +209,130 @@ describe('WorkFilter', () => {
         })
       ).violations,
     ).toEqual([]);
+  });
+
+  describe('Rule W', () => {
+    // Two Tasks: one in Grupa A (deep under Educațional), one in Social media.
+    const work: WorkItem[] = [
+      { group_id: 3, campaign_id: 11 },
+      { group_id: 9, campaign_id: 14 },
+    ];
+
+    it('offers only the Groups with work, with their parents, and no Group without any', async () => {
+      const user = userEvent.setup();
+      renderFilter('', undefined, work);
+      await user.click(
+        screen.getByRole('combobox', { name: 'Grup principal' }),
+      );
+      // OSUBB owns nothing here, so it is not offered.
+      expect(await options()).toEqual(['Comunicare', 'Educațional']);
+      await user.click(screen.getByRole('option', { name: 'Educațional' }));
+      // Mentorat is Grupa A's parent; Traineri owns nothing.
+      await user.click(screen.getByRole('combobox', { name: 'Subgrup' }));
+      expect(await options()).toEqual([
+        'Mentorat· Educațional',
+        'Grupa A· Mentorat',
+      ]);
+    });
+
+    it('does not draw a level with one option or none, and shows its URL value as a chip', () => {
+      // Under Comunicare: one Subgrup (Social media), one Campaign (Brand).
+      renderFilter('?grup=8&campanie=14', undefined, work);
+      expect(screen.queryByRole('combobox', { name: 'Subgrup' })).toBeNull();
+      expect(screen.queryByRole('combobox', { name: 'Campanie' })).toBeNull();
+      const chip = screen.getByRole('button', {
+        name: 'Elimină filtrul Campanie: Brand',
+      });
+      // Its control is not drawn, so the chip shows at every width.
+      expect(chip.parentElement).not.toHaveClass('md:hidden');
+      // Grup principal is drawn: its chip is for the phone only (K1).
+      expect(
+        screen.getByRole('button', {
+          name: 'Elimină filtrul Grup principal: Comunicare',
+        }).parentElement,
+      ).toHaveClass('md:hidden');
+    });
+
+    it('keeps a Group the shared URL carries though it owns nothing', () => {
+      renderFilter('?grup=5', undefined, work);
+      expect(
+        screen.getByRole('combobox', { name: 'Grup principal' }),
+      ).toHaveTextContent('OSUBB');
+    });
+  });
+
+  describe('on a phone', () => {
+    it('collapses to a Filtre (n) button that opens the panel in a sheet', async () => {
+      const user = userEvent.setup();
+      renderFilter('?grup=1&de_la=2026-09-01');
+      const open = screen.getByRole('button', { name: 'Filtre (2)' });
+      expect(open).toHaveClass('md:hidden');
+      // The inline grid and hint are for md and up.
+      expect(
+        document.querySelector('[data-slot=work-filter-grid]')?.parentElement,
+      ).toHaveClass('max-md:hidden');
+      await user.click(open);
+      const sheet = screen.getByRole('dialog', { name: 'Filtre' });
+      expect(sheet).toHaveAccessibleDescription(
+        'Grupul include subgrupurile sale.',
+      );
+      expect(
+        within(sheet).getByRole('combobox', { name: 'Grup principal' }),
+      ).toHaveTextContent('Educațional');
+      expect(within(sheet).getByLabelText('De la')).toHaveValue('2026-09-01');
+      await user.click(
+        within(sheet).getByRole('button', { name: 'Vezi rezultatele' }),
+      );
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('clears every level from the sheet', async () => {
+      const user = userEvent.setup();
+      renderFilter('?grup=1');
+      await user.click(screen.getByRole('button', { name: 'Filtre (1)' }));
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Șterge filtrele',
+        }),
+      );
+      expect(search()).toBe('');
+      // The sheet stays open on the cleared controls until Vezi rezultatele.
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Vezi rezultatele',
+        }),
+      );
+      expect(screen.getByRole('button', { name: 'Filtre' })).toBeVisible();
+    });
+  });
+
+  it('says so while the options load, and offers a retry when they fail', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <MemoryRouter>
+        <WorkFilter
+          label="Filtre calendar"
+          status={{ pending: true }}
+          groups={[]}
+          campaigns={[]}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Se încarcă filtrele…')).toBeInTheDocument();
+    const onRetry = vi.fn();
+    rerender(
+      <MemoryRouter>
+        <WorkFilter
+          label="Filtre calendar"
+          status={{ failed: true, error: new Error('x'), onRetry }}
+          groups={[]}
+          campaigns={[]}
+        />
+      </MemoryRouter>,
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Reîncarcă filtrele' }),
+    );
+    expect(onRetry).toHaveBeenCalled();
   });
 });
