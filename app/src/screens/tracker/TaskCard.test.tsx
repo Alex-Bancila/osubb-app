@@ -195,6 +195,69 @@ describe('Member Task cards', () => {
     expect(screen.getByRole('button', { name: 'Începe taskul' })).toBeVisible();
   });
 
+  it.each(['completed', 'unfulfilled'] as const)(
+    'names the Executor who finished a %s Task to everyone else (Audit D-1, #861)',
+    (status) => {
+      card(
+        {
+          status,
+          assignments: [],
+          visibleExecutor: {
+            memberId: 'ioana',
+            fullName: 'Ioana Executor',
+            isCurrent: false,
+          },
+        },
+        vi.fn(),
+        'manager',
+      );
+      expect(screen.getByText('Executor:')).toBeVisible();
+      expect(screen.getByText('Ioana Executor')).toBeVisible();
+      expect(screen.queryByText('Neatribuit')).toBeNull();
+    },
+  );
+
+  it('names no Executor on the finished Task of the Member who did it (B2, #861)', () => {
+    card(
+      {
+        status: 'completed',
+        assignments: [],
+        visibleExecutor: {
+          memberId: 'member',
+          fullName: 'Ioana Executor',
+          isCurrent: false,
+        },
+      },
+      vi.fn(),
+      'member',
+    );
+    expect(screen.queryByText('Executor:')).toBeNull();
+    expect(screen.queryByText('Ioana Executor')).toBeNull();
+    // Who finished a Task no longer holds it: no Începe, Trimite or Renunță.
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('offers no actions to a former Executor even on an open status (#861)', () => {
+    card(
+      {
+        status: 'in_progress',
+        visibleExecutor: {
+          memberId: 'member',
+          fullName: 'Ioana Executor',
+          isCurrent: false,
+        },
+      },
+      vi.fn(),
+      'member',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Trimite la verificare' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Renunță la task' }),
+    ).toBeNull();
+  });
+
   it.each(['completed', 'unfulfilled', 'cancelled'] as const)(
     'never reads "Neatribuit" on a finished Task (%s, B13, Audit D-1)',
     (status) => {

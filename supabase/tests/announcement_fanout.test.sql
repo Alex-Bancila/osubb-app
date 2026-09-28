@@ -1,10 +1,11 @@
 -- #68: exact announcement broadcast recipients, suppression, and author exclusion.
+-- #861: the author's own read row, the announcement:<id> key and read-clears-notification.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(21);
 
 create function pg_temp.u68(n integer) returns uuid language sql immutable as $$
   select ('68000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -92,5 +93,77 @@ select is((select count(*) from notifications where title='Anunț nou: Actor #68
 'forged byline does not suppress the actual recipient');
 select ok(not exists (select 1 from notifications where title like 'Anunț nou: % #68' and member_id=pg_temp.u68(5)),
 'inactive Member receives no announcement Notification');
+
+-- ==================== #861 (Audit D-12, D-20) ====================
+
+-- D-12: the author has read what they wrote -- when inside its read audience.
+select is((select count(*) from announcement_reads
+            where announcement_id=(select id from announcements where title='Local #68')
+              and member_id=pg_temp.u68(1)),1::bigint,
+'#861 D-12: the author (the Group Responsible, inside the local read audience) gets their own read row');
+-- BC (u68(8)) is a global writer but neither on the Child roster nor holding a
+-- position on its path, so a local Child Announcement is outside their audience.
+-- Written server-side (no session), so created_by stands as given.
+select pg_temp.test_clear_jwt();
+insert into announcements(title,body,group_id,audience,created_by)
+select 'Outside #68','Body',id,'local',pg_temp.u68(8)
+from groups where name='Child #68';
+select is((select count(*) from announcement_reads
+            where announcement_id=(select id from announcements where title='Outside #68')),0::bigint,
+'#861 D-12: an author outside the Announcement''s read audience gets no read row');
+
+-- D-20: the Notification carries announcement:<id>, and reading clears only
+-- the reader's own.
+select ok((select bool_and(dedupe_key='announcement:' || (select id from announcements where title='Local #68')::text)
+             from notifications where title='Anunț nou: Local #68'),
+'#861 D-20: every "Anunț nou" Notification carries the dedupe key announcement:<id>');
+insert into announcement_reads(announcement_id,member_id)
+values ((select id from announcements where title='Local #68'),pg_temp.u68(2));
+select ok((select read from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(2))
+          and not (select read from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(3)),
+'#861 D-20: a read row marks the reader''s own "Anunț nou" Notification read, and nobody else''s');
+
+-- D-20 backfill: rows delivered before the key, linked by #843. Replay the
+-- migration's recorded notification updates on a pre-#861 shape.
+alter table announcements disable trigger announcements_fan_out;
+insert into announcements(title,body,group_id,audience,created_by)
+select 'Backfill #861','Body',id,'org',pg_temp.u68(8) from groups where name='Root #68';
+alter table announcements enable trigger announcements_fan_out;
+insert into notifications(member_id,kind,title,link,created_at)
+select pg_temp.u68(n),'announce','Anunț nou: Backfill #861',
+       '/anunturi?anunt=' || (select id from announcements where title='Backfill #861')::text,
+       now() - make_interval(mins => m)
+from (values (2,2),(3,2),(3,1)) as v(n,m);
+insert into announcement_reads(announcement_id,member_id)
+values ((select id from announcements where title='Backfill #861'),pg_temp.u68(2));
+
+create function pg_temp.replay_861_backfill() returns integer language plpgsql as $fn$
+declare
+  v_statement text;
+  v_count     integer := 0;
+begin
+  for v_statement in
+    select statement
+      from supabase_migrations.schema_migrations as migration,
+           unnest(migration.statements) as statement
+     where migration.version = '20260928120000'
+       and statement ~* 'update public\.notifications'
+       and statement !~* 'create (or replace )?function'
+  loop
+    execute v_statement;
+    v_count := v_count + 1;
+  end loop;
+  return v_count;
+end;
+$fn$;
+select is(pg_temp.replay_861_backfill(),2,
+'#861 D-20 backfill: the migration recorded its two notification updates, and they replay');
+select is((select count(*) from notifications
+            where title='Anunț nou: Backfill #861' and member_id=pg_temp.u68(2) and not read),0::bigint,
+'#861 D-20 backfill: no unread "Anunț nou" row is left for a member who already read the Announcement');
+select is((select string_agg(coalesce(dedupe_key,'<none>') || ':' || read::text, ',' order by id)
+             from notifications where title='Anunț nou: Backfill #861' and member_id=pg_temp.u68(3)),
+  '<none>:false,announcement:' || (select id from announcements where title='Backfill #861')::text || ':false',
+'#861 D-20 backfill: an unread row takes the key from its link -- only the newest of two, as the unique index admits one');
 select * from finish();
 rollback;

@@ -145,13 +145,15 @@ function TaskDetails({
           <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
         )}
         <TaskEditControl task={query.data.task} canManage={canManage} />
+        {/* "Has an Executor" means one who holds the Task now; the Member who
+            finished it (#861) is named on the card, not assignable again. */}
         <TaskAssignControl
           taskId={taskId}
           groupId={query.data.task.group_id}
           status={task.status}
           kind={task.kind}
           assignmentMode={task.assignmentMode}
-          hasExecutor={task.executor !== null}
+          hasExecutor={task.executor?.isCurrent === true}
           canManage={canManage}
         />
         <TaskCancelControl
@@ -175,7 +177,7 @@ function TaskDetails({
           status={task.status}
           kind={task.kind}
           overdue={task.overdue}
-          hasExecutor={task.executor !== null}
+          hasExecutor={task.executor?.isCurrent === true}
           executorName={query.data.executorName}
         />
       </div>

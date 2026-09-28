@@ -184,13 +184,16 @@ export function UmbrellaTaskSection({
                 <div>
                   <Badge variant="outline">{child.statusLabel}</Badge>
                 </div>
-                {/* A finished Subtask's Assignment has ended: the RPC no
-                    longer names its Executor (Audit D-1, #861). */}
-                {!isTerminalTask(child.status) && (
+                {/* A finished Subtask names only the Member who finished it,
+                    as the RPC returns them (Audit D-1, #861); a cancelled
+                    one names nobody and never reads "Neatribuit". */}
+                {(!isTerminalTask(child.status) || row.visibleExecutor) && (
                   <p className="text-sm">
                     Executor:{' '}
                     {row.visibleExecutor?.fullName ??
-                      'Neatribuit sau indisponibil'}
+                      (row.visibleExecutor
+                        ? 'Nume indisponibil'
+                        : 'Neatribuit sau indisponibil')}
                   </p>
                 )}
                 <p className="text-sm">Termen: {child.deadlineLabel}</p>

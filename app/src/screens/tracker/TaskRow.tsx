@@ -3,7 +3,7 @@ import { CalendarClock } from 'lucide-react';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import { formatPoints } from '../../lib/format';
-import type { TaskPresentation } from './task-presentation';
+import { isTerminalTask, type TaskPresentation } from './task-presentation';
 import { TaskGroupChip, TaskStatusBadges } from './TaskCard';
 
 /**
@@ -72,23 +72,26 @@ export function TaskRow({
             <span className="text-muted-foreground">{task.deadlineLabel}</span>
           )}
         </p>
-        {task.kind === 'task' && (
-          <p className="flex min-w-0 items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground">Executor:</span>
-            {task.executor?.name ? (
-              <MemberName
-                size="sm"
-                memberId={task.executor.memberId}
-                nickname={task.executor.nickname}
-                fullName={task.executor.name}
-              />
-            ) : (
-              <span className="min-w-0 wrap-anywhere">
-                {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
-              </span>
-            )}
-          </p>
-        )}
+        {/* A finished Task names who finished it (#861), or nothing: a
+            cancelled Task never reads "Neatribuit". */}
+        {task.kind === 'task' &&
+          !(isTerminalTask(task.status) && task.executor === null) && (
+            <p className="flex min-w-0 items-center gap-1.5 text-sm">
+              <span className="text-muted-foreground">Executor:</span>
+              {task.executor?.name ? (
+                <MemberName
+                  size="sm"
+                  memberId={task.executor.memberId}
+                  nickname={task.executor.nickname}
+                  fullName={task.executor.name}
+                />
+              ) : (
+                <span className="min-w-0 wrap-anywhere">
+                  {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
+                </span>
+              )}
+            </p>
+          )}
         {task.points !== null && (
           <p className="text-sm font-medium tabular-nums">
             {formatPoints(task.points)} puncte
