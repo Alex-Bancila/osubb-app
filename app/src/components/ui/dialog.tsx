@@ -107,12 +107,15 @@ function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
+// 19 px bold (`--fs-lg`). `m-0` because the title is an `h2`, and the
+// unlayered heading reset in global.css gives every `h2` an 18 px top margin
+// that would push the title below the X.
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        'font-heading text-(length:--fs-lg) leading-snug font-bold',
+        'm-0 font-heading text-(length:--fs-lg) leading-snug font-bold',
         className,
       )}
       {...props}

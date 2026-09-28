@@ -113,7 +113,7 @@ function SheetTitle({
     <Dialog.Title
       data-slot="sheet-title"
       className={cn(
-        'font-heading text-(length:--fs-lg) leading-snug font-bold',
+        'm-0 font-heading text-(length:--fs-lg) leading-snug font-bold',
         className,
       )}
       {...props}

@@ -92,6 +92,7 @@ describe('Dialog', () => {
     const title = screen.getByText('Redenumește grupul');
     expect(title.className).toContain('text-(length:--fs-lg)');
     expect(title.className).toContain('font-bold');
+    expect(title.className).toContain('m-0');
     const description = screen.getByText('Numele apare în tot OSUBB.');
     expect(description.className).toContain('text-sm');
     expect(description.className).toContain('text-muted-foreground');
