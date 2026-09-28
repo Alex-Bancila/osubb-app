@@ -41,7 +41,7 @@ import {
 /* The name link fills the row's height (layout AD6), and the row itself opens
    the Group on a click, so the 20 px name is no longer the only target. */
 const nameLinkClass =
-  'inline-flex min-h-11 min-w-0 items-center truncate font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring';
+  'inline-flex min-h-11 min-w-0 items-center font-medium wrap-break-word text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring';
 const rowLinkClass = 'cursor-pointer';
 
 function groupPath(id: number) {
@@ -271,6 +271,14 @@ function GroupTree({ groups }: { groups: AdminGroup[] }) {
         columns={columns}
         data={shown}
         emptyTitle="Niciun grup."
+        // Under 640 px the tree is the names: a long one wraps, and the
+        // detail columns wait for the Group page.
+        columnClassName={{
+          name: 'whitespace-normal',
+          category: 'max-sm:hidden',
+          min_level: 'max-sm:hidden',
+          members: 'max-sm:hidden',
+        }}
         rowClassName={(row) =>
           row.group.status === 'active'
             ? rowLinkClass
@@ -299,6 +307,7 @@ function MyGroupsTable({
       columns={columns}
       data={groups}
       initialSorting={[{ id: 'name', desc: false }]}
+      columnClassName={{ name: 'whitespace-normal' }}
       emptyTitle="Nu ai nicio funcție într-un grup."
       emptyDescription="Grupurile în care ai o funcție apar aici."
       rowClassName={() => rowLinkClass}

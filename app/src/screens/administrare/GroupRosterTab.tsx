@@ -358,6 +358,9 @@ export function GroupRosterTab({
         columns={columns}
         data={roster}
         initialSorting={[{ id: 'name', desc: false }]}
+        // Under 640 px the name, the function and the action fit; the
+        // OSUBB Role waits for the member page.
+        columnClassName={{ role: 'max-sm:hidden' }}
         emptyTitle={
           group.automatic_membership
             ? 'Membrii acestui grup se adaugă automat, după nivel.'
