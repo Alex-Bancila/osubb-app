@@ -96,6 +96,10 @@ select task.id, history.member_id::uuid, '49900000-0000-0000-0000-000000000007',
     ('Task finalizat 861',    '49900000-0000-0000-0000-000000000002', interval '1 day',  interval '1 hour', 'completed'),
     ('Task neindeplinit 861', '49900000-0000-0000-0000-000000000003', interval '3 days', interval '2 days', 'gave_up'),
     ('Task neindeplinit 861', '49900000-0000-0000-0000-000000000002', interval '1 day',  interval '1 hour', 'failed'),
+    -- A later row that did not finish the Task (no command writes one after
+    -- an Evaluation, but a direct write could): only a finishing end_reason
+    -- names the Executor, so the failing member above still stands.
+    ('Task neindeplinit 861', '49900000-0000-0000-0000-000000000003', interval '30 minutes', interval '10 minutes', 'task_updated'),
     -- A cancelled Task names nobody, even with a finished Assignment in its history.
     ('Task anulat 861',       '49900000-0000-0000-0000-000000000003', interval '3 days', interval '2 days', 'completed'),
     ('Task anulat 861',       '49900000-0000-0000-0000-000000000002', interval '1 day',  interval '1 hour', 'cancelled'),
@@ -108,12 +112,16 @@ select task.id, '49900000-0000-0000-0000-000000000003', '49900000-0000-0000-0000
   from public.tasks as task
  where task.title = 'Task redeschis 861';
 
--- No command leaves a cancelled Task with an open Assignment, but no
--- constraint forbids a direct write from doing so: it still names nobody.
+-- No command leaves a finished Task with an open Assignment, but no
+-- constraint forbids a direct write from doing so. A cancelled Task still
+-- names nobody, and a completed one still names the member who finished it.
 insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
-select task.id, '49900000-0000-0000-0000-000000000002', '49900000-0000-0000-0000-000000000007', now()
-  from public.tasks as task
- where task.title = 'Task anulat deschis 861';
+select task.id, stray.member_id::uuid, '49900000-0000-0000-0000-000000000007', now()
+  from (values
+    ('Task anulat deschis 861', '49900000-0000-0000-0000-000000000002'),
+    ('Task finalizat 861',      '49900000-0000-0000-0000-000000000003')
+  ) as stray (title, member_id)
+  join public.tasks as task on task.title = stray.title;
 
 create temp table f499 as
 select
