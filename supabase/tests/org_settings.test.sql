@@ -2,7 +2,7 @@
 -- member-readable key-value table and its one BC/Moderator command,
 -- public.set_org_setting, seeded with `adherence_form_url` for #52 (and, since
 -- #512, `adunarea_generala_group_id`, whose rules evaluation_rankings_read.test.sql
--- owns; since #48, `vote_retention_percent`, whose rules retention_ranking.test.sql
+-- owns; since #48, `vote_retention_percent`, whose rules role_evaluation_ranking.test.sql
 -- owns; since #771, `privacy_notice_version`, whose rules
 -- privacy_notice_acknowledgements.test.sql owns).
 --
@@ -105,7 +105,7 @@ select throws_ok(
 -- #512 seeds a second key, adunarea_generala_group_id; its value is whatever
 -- the demo seed pointed it at, so only its presence and audit are pinned here
 -- (evaluation_rankings_read.test.sql owns its rules). #48 seeds a third,
--- vote_retention_percent, at R20's placeholder 25 (retention_ranking.test.sql
+-- vote_retention_percent, at R20's placeholder 25 (role_evaluation_ranking.test.sql
 -- owns its rules). #771 seeds a fourth, privacy_notice_version, at 1.0
 -- (privacy_notice_acknowledgements.test.sql owns its rules). #775 seeds a
 -- fifth, email_daily_quota, at 90 (email_digest.test.sql owns its rules).

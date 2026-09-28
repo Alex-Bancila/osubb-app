@@ -167,10 +167,21 @@ insert into notification_email_preferences (member_id, digest_enabled) values
 insert into privacy_notice_acknowledgements (member_id, notice_version) values
   ('ffffffff-0000-0000-0000-000000000006', '1.0'),
   ('eeeeeeee-0000-0000-0000-000000000156', '1.0');
--- #47: no migration seeds a Period; the owner writes this fixture row as it
--- writes every other one here (#701's open needs a BC session).
-insert into evaluation_periods (name, opened_by)
-  values ('rls-period', 'ffffffff-0000-0000-0000-000000000006');
+-- #826: no migration seeds a Role Evaluation or a candidate; the owner writes
+-- these fixture rows as it writes every other one here (the commands need a
+-- BC session). The candidate owned by the claimless uid exercises the own-row
+-- limb of promotion_candidates_read for the real claimless user below.
+insert into role_evaluations (name, kind, period_from, period_to, run_by, threshold_used, ranked_count)
+  values ('rls-role-evaluation', 'voluntar_activ', '2026-01-01', '2026-06-30',
+          'ffffffff-0000-0000-0000-000000000006', 30, 0);
+insert into promotion_threshold_changes (kind, from_value, to_value, source, changed_by)
+  values ('voluntar_activ', 30, 31, 'manual', 'ffffffff-0000-0000-0000-000000000006');
+insert into promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since)
+  select run.id, member.id, 40, '2026-01-01'
+    from role_evaluations as run,
+         (values ('ffffffff-0000-0000-0000-000000000006'::uuid),
+                 ('eeeeeeee-0000-0000-0000-000000000156'::uuid)) as member (id)
+   where run.name = 'rls-role-evaluation';
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:

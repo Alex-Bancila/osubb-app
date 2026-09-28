@@ -3,10 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type Result = { data: unknown; error: unknown };
 
 const db = vi.hoisted(() => ({
-  period: { data: null, error: null } as Result,
   rules: { data: [], error: null } as Result,
-  threshold: { data: null, error: null } as Result,
-  ranking: { data: null, error: null } as Result,
+  standing: { data: null, error: null } as Result,
   calls: [] as unknown[][],
 }));
 
@@ -28,19 +26,11 @@ vi.mock('../lib/supabase', () => ({
   supabase: {
     from: (table: string) => {
       db.calls.push(['from', table]);
-      return builder(
-        table,
-        table === 'evaluation_periods' ? () => db.period : () => db.rules,
-      );
+      return builder(table, () => db.rules);
     },
     rpc: (fn: string, args?: unknown) => {
       db.calls.push(['rpc', fn, args]);
-      return builder(
-        fn,
-        fn === 'promotion_threshold_in_force'
-          ? () => db.threshold
-          : () => db.ranking,
-      );
+      return builder(fn, () => db.standing);
     },
   },
 }));
@@ -64,63 +54,42 @@ const RULES = [
   },
 ];
 
-describe('fetchPromotionProgress (#634)', () => {
+describe('fetchPromotionProgress (#634, #826)', () => {
   beforeEach(() => {
-    db.period = { data: { id: 7, name: 'Semestrul I' }, error: null };
     db.rules = { data: RULES, error: null };
-    db.threshold = { data: 30, error: null };
-    db.ranking = { data: { task_points: 12 }, error: null };
+    db.standing = {
+      data: { since: '2026-07-01', task_points: 12, threshold: 30 },
+      error: null,
+    };
     db.calls = [];
   });
 
-  it('reads the open Period, both rules, the threshold in force and my own ranking row', async () => {
-    await expect(fetchPromotionProgress('m1')).resolves.toEqual({
-      openPeriod: { id: 7, name: 'Semestrul I' },
+  it('reads both rules and my own Voluntar Activ standing', async () => {
+    await expect(fetchPromotionProgress()).resolves.toEqual({
       voluntarTenureMonths: 6,
       activTenureMonths: 4,
       threshold: 30,
-      periodPoints: 12,
+      since: '2026-07-01',
+      points: 12,
     });
     expect(db.calls).toContainEqual([
-      'evaluation_periods',
-      'is',
-      'closed_at',
-      null,
-    ]);
-    expect(db.calls).toContainEqual([
       'rpc',
-      'promotion_threshold_in_force',
-      undefined,
+      'my_role_evaluation_standing',
+      { p_kind: 'voluntar_activ' },
     ]);
-    expect(db.calls).toContainEqual([
-      'rpc',
-      'evaluation_period_ranking',
-      { p_period_id: 7 },
-    ]);
-    expect(db.calls).toContainEqual([
-      'evaluation_period_ranking',
-      'eq',
-      'member_id',
-      'm1',
-    ]);
-  });
-
-  it('no ranking row inside the open Period is zero points', async () => {
-    db.ranking = { data: null, error: null };
-
-    const result = await fetchPromotionProgress('m1');
-    expect(result.periodPoints).toBe(0);
-  });
-
-  it('with no open Period it never asks for a ranking', async () => {
-    db.period = { data: null, error: null };
-
-    const result = await fetchPromotionProgress('m1');
-    expect(result.openPeriod).toBeNull();
-    expect(result.periodPoints).toBeNull();
     expect(db.calls).not.toContainEqual(
       expect.arrayContaining(['evaluation_period_ranking']),
     );
+  });
+
+  it('no standing row is zero points, no threshold and no start day', async () => {
+    db.standing = { data: null, error: null };
+
+    await expect(fetchPromotionProgress()).resolves.toMatchObject({
+      threshold: null,
+      since: null,
+      points: 0,
+    });
   });
 
   it('a disabled rule promises no tenure date', async () => {
@@ -131,22 +100,26 @@ describe('fetchPromotionProgress (#634)', () => {
       error: null,
     };
 
-    const result = await fetchPromotionProgress('m1');
+    const result = await fetchPromotionProgress();
     expect(result.voluntarTenureMonths).toBe(6);
     expect(result.activTenureMonths).toBeNull();
   });
 
-  it('a null threshold stays null', async () => {
-    db.threshold = { data: null, error: null };
+  it('a threshold not yet entered stays null', async () => {
+    db.standing = {
+      data: { since: null, task_points: 3, threshold: null },
+      error: null,
+    };
 
-    const result = await fetchPromotionProgress('m1');
+    const result = await fetchPromotionProgress();
     expect(result.threshold).toBeNull();
+    expect(result.points).toBe(3);
   });
 
   it('throws a failed read', async () => {
     const error = { message: 'denied', code: '42501' };
     db.rules = { data: null, error };
 
-    await expect(fetchPromotionProgress('m1')).rejects.toBe(error);
+    await expect(fetchPromotionProgress()).rejects.toBe(error);
   });
 });

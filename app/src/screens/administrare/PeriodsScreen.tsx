@@ -1,67 +1,26 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { cn } from 'cn';
-import { MemberName } from '../../components/member/MemberName';
-import { Button, buttonVariants } from '../../components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
-import { BUCHAREST_TIME_ZONE } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
-import { formatPoints } from '../../lib/format';
+import { formatDayMonthYear, formatPoints } from '../../lib/format';
 import {
   adherenceFormFieldForReason,
   adherenceFormSchema,
-  initialThresholdFieldForReason,
-  initialThresholdSchema,
-  periodNameFieldForReason,
-  periodNameSchema,
 } from '../../lib/schemas/evaluation-period';
 import { safeHttpUrl } from '../../lib/links';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
-  lastClosedPeriod,
-  openPeriod,
-  thresholdSource,
-  useEvaluationPeriods,
   useOrgSettings,
   usePeriodCommand,
-  usePromotionThreshold,
-  useRetentionSignals,
-  type EvaluationPeriod,
+  useRoleEvaluations,
   type PeriodCommand,
 } from '../../queries/evaluation-periods';
 import { useAdminGroups } from '../../queries/groups-admin';
-import { useMemberIdentities } from '../../queries/member-identities';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 const card = 'space-y-3 rounded-xl border bg-card p-4 md:p-5';
-
-const dayFormatter = new Intl.DateTimeFormat('ro-RO', {
-  timeZone: BUCHAREST_TIME_ZONE,
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-
-/** `25 septembrie 2026`, the day in Romania whatever the device's zone. */
-function formatDay(iso: string) {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '—' : dayFormatter.format(date);
-}
-
-/** The two Roles a Retention Signal is about (#48). */
-const ROLE_AT_RISK: Record<string, string> = {
-  activ: 'Voluntar Activ',
-  vot: 'Voluntar cu Drept de Vot',
-};
 
 type Run = (command: PeriodCommand) => Promise<void>;
 
@@ -71,412 +30,63 @@ function Loading({ label }: { label: string }) {
 }
 
 /* ------------------------------------------------------------------------ */
-/* Perioada curentă                                                          */
+/* Evaluări de rol (read-only until #827)                                    */
 /* ------------------------------------------------------------------------ */
 
-function OpenPeriodDialog({
-  disabled,
-  onRun,
-}: {
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const inputId = useId();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const form = useFormValidation(
-    periodNameSchema,
-    { name },
-    periodNameFieldForReason,
-  );
+const KIND_LABEL: Record<string, string> = {
+  voluntar_activ: 'Voluntar Activ',
+  adunarea_generala: 'Adunarea Generală',
+};
 
-  function reset(next: boolean) {
-    setOpen(next);
-    if (next) {
-      setName('');
-      form.reset();
-    }
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const values = form.validate();
-    if (!values) return;
-    try {
-      await onRun({ kind: 'open', name: values.name });
-      setOpen(false);
-    } catch (failure) {
-      form.fail(failure, 'Nu am putut deschide perioada. Reîncearcă.');
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => !disabled && reset(next)}>
-      <Button type="button" disabled={disabled} onClick={() => reset(true)}>
-        Deschide o perioadă
-      </Button>
-      <DialogContent>
-        <form onSubmit={submit} noValidate className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>Deschide o perioadă</DialogTitle>
-            <DialogDescription>
-              Punctele primite de acum până la închidere intră în clasamentul
-              perioadei. Poate fi deschisă o singură perioadă odată.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-1.5">
-            <label htmlFor={inputId} className="text-sm font-medium">
-              Numele perioadei
-            </label>
-            <input
-              id={inputId}
-              className={control}
-              value={name}
-              required
-              disabled={disabled}
-              onChange={(event) => setName(event.target.value)}
-              {...form.field('name')}
-            />
-            <FieldError {...form.errorProps('name')} />
-          </div>
-          <FieldError>{form.formError}</FieldError>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={disabled}
-              onClick={() => setOpen(false)}
-            >
-              Renunță
-            </Button>
-            <Button type="submit" disabled={disabled}>
-              Deschide perioada
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+/** `2026-09-25` as `25 septembrie 2026`, a calendar day with no zone shift. */
+function formatDate(iso: string) {
+  return formatDayMonthYear(iso) ?? iso;
 }
 
-function ClosePeriodDialog({
-  period,
-  disabled,
-  onRun,
-}: {
-  period: EvaluationPeriod;
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function reset(next: boolean) {
-    setOpen(next);
-    if (next) setError(null);
-  }
-
-  async function confirm() {
-    setError(null);
-    try {
-      await onRun({ kind: 'close', periodId: period.id });
-      setOpen(false);
-    } catch (failure) {
-      setError(
-        describeFailure(failure, 'Nu am putut închide perioada. Reîncearcă.')
-          .message,
-      );
-    }
-  }
-
+/**
+ * The Role Evaluations run so far (#826, ruling R28), newest first. Nothing
+ * is opened or closed any more; running an evaluation, the two thresholds and
+ * the Promotion Candidates arrive with #827.
+ */
+function RoleEvaluationsCard() {
+  const evaluations = useRoleEvaluations();
   return (
-    <Dialog open={open} onOpenChange={(next) => !disabled && reset(next)}>
-      <Button
-        type="button"
-        variant="destructive"
-        disabled={disabled}
-        onClick={() => reset(true)}
-      >
-        Închide perioada
-      </Button>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Închizi perioada {period.name}?</DialogTitle>
-          <DialogDescription>
-            Închiderea nu se poate anula. În același pas:
-          </DialogDescription>
-        </DialogHeader>
-        <ul className="list-disc space-y-1 pl-5 text-sm">
-          <li>pragul de promovare se fixează din clasamentul perioadei;</li>
-          <li>promovările de închidere se aplică;</li>
-          <li>semnalele de retenție se trimit.</li>
-        </ul>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled}
-            onClick={() => setOpen(false)}
-          >
-            Renunță
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={disabled}
-            onClick={() => void confirm()}
-          >
-            Închide perioada
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CurrentPeriodCard({
-  periods,
-  disabled,
-  onRun,
-}: {
-  periods: readonly EvaluationPeriod[];
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const current = openPeriod(periods);
-  return (
-    <section aria-labelledby="period-current-title" className={card}>
-      <h2 id="period-current-title" className="text-xl font-semibold">
-        Perioada curentă
-      </h2>
-      {current ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p>
-            <span className="font-semibold break-words">{current.name}</span>
-            <span className="block text-sm text-muted-foreground">
-              Deschisă din {formatDay(current.opened_at)}
-            </span>
-          </p>
-          <ClosePeriodDialog
-            key={current.id}
-            period={current}
-            disabled={disabled}
-            onRun={onRun}
-          />
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-muted-foreground">Nicio perioadă deschisă</p>
-          <OpenPeriodDialog disabled={disabled} onRun={onRun} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
-/* Prag de promovare                                                         */
-/* ------------------------------------------------------------------------ */
-
-function InitialThresholdForm({
-  ruleId,
-  initialThreshold,
-  disabled,
-  onRun,
-}: {
-  ruleId: number;
-  initialThreshold: number;
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const inputId = useId();
-  const hintId = useId();
-  const [threshold, setThreshold] = useState(String(initialThreshold));
-  const form = useFormValidation(
-    initialThresholdSchema,
-    { threshold },
-    initialThresholdFieldForReason,
-  );
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const values = form.validate();
-    if (!values) return;
-    try {
-      await onRun({
-        kind: 'initialThreshold',
-        ruleId,
-        threshold: values.threshold,
-      });
-    } catch (failure) {
-      form.fail(failure, 'Nu am putut salva pragul inițial. Reîncearcă.');
-    }
-  }
-
-  return (
-    <form onSubmit={submit} noValidate className="grid max-w-sm gap-1.5">
-      <label htmlFor={inputId} className="text-sm font-medium">
-        Prag inițial
-      </label>
-      <p id={hintId} className="text-sm text-muted-foreground">
-        Puncte de task. Se poate schimba doar până la prima închidere a unei
-        perioade.
-      </p>
-      <div className="flex gap-2">
-        <input
-          id={inputId}
-          type="number"
-          inputMode="numeric"
-          min={1}
-          step={1}
-          className={control}
-          value={threshold}
-          disabled={disabled}
-          onChange={(event) => setThreshold(event.target.value)}
-          {...form.field('threshold', hintId)}
-        />
-        <Button type="submit" disabled={disabled}>
-          Salvează
-        </Button>
-      </div>
-      <FieldError {...form.errorProps('threshold')} />
-      <FieldError>{form.formError}</FieldError>
-    </form>
-  );
-}
-
-function ThresholdCard({
-  periods,
-  disabled,
-  onRun,
-}: {
-  periods: readonly EvaluationPeriod[];
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const threshold = usePromotionThreshold();
-  const source = thresholdSource(periods);
-  const anyClosed = periods.some((period) => period.closed_at !== null);
-  return (
-    <section aria-labelledby="period-threshold-title" className={card}>
-      <h2 id="period-threshold-title" className="text-xl font-semibold">
-        Prag de promovare
-      </h2>
-      {threshold.isPending ? (
-        <Loading label="Se încarcă pragul…" />
-      ) : threshold.isError ? (
-        <p role="alert">Nu am putut încărca pragul de promovare.</p>
-      ) : (
-        <>
-          <p>
-            <span className="text-2xl font-bold tabular-nums">
-              {threshold.data.inForce === null
-                ? '—'
-                : `${formatPoints(threshold.data.inForce)} puncte`}
-            </span>
-            <span className="block text-sm text-muted-foreground">
-              {source ? `din perioada ${source.name}` : 'prag inițial'}
-            </span>
-          </p>
-          {anyClosed ? (
-            <p className="text-sm text-muted-foreground">
-              Pragul vine acum din ultima închidere a unei perioade și nu se mai
-              editează de mână.
-            </p>
-          ) : threshold.data.rule ? (
-            <InitialThresholdForm
-              key={threshold.data.rule.initialThreshold}
-              ruleId={threshold.data.rule.id}
-              initialThreshold={threshold.data.rule.initialThreshold}
-              disabled={disabled}
-              onRun={onRun}
-            />
-          ) : null}
-        </>
-      )}
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
-/* Semnale de retenție                                                       */
-/* ------------------------------------------------------------------------ */
-
-function RetentionSignalsCard({
-  periods,
-}: {
-  periods: readonly EvaluationPeriod[];
-}) {
-  const last = lastClosedPeriod(periods);
-  const signals = useRetentionSignals(last?.id ?? null);
-  const memberIds = useMemo(
-    () => (signals.data ?? []).map((signal) => signal.memberId),
-    [signals.data],
-  );
-  const identities = useMemberIdentities(memberIds);
-  return (
-    <section aria-labelledby="period-signals-title" className={card}>
+    <section aria-labelledby="role-evaluations-title" className={card}>
       <div>
-        <h2 id="period-signals-title" className="text-xl font-semibold">
-          Semnale de retenție
+        <h2 id="role-evaluations-title" className="text-xl font-semibold">
+          Istoricul evaluărilor de rol
         </h2>
         <p className="text-sm text-muted-foreground">
-          {last
-            ? `Membrii sub pragul rolului lor la închiderea perioadei ${last.name}. Retragerea unui rol este decizia BC, din panoul de roluri.`
-            : 'Membrii sub pragul rolului lor la ultima închidere.'}
+          Rularea evaluărilor de rol vine cu #827.
         </p>
       </div>
-      {!last ? (
-        <p className="text-muted-foreground">Nicio perioadă închisă încă</p>
-      ) : signals.isPending ? (
-        <Loading label="Se încarcă semnalele…" />
-      ) : signals.isError ? (
-        <p role="alert">Nu am putut încărca semnalele de retenție.</p>
-      ) : signals.data.length === 0 ? (
-        <p className="text-muted-foreground">
-          Niciun semnal la ultima închidere
-        </p>
+      {evaluations.isPending ? (
+        <Loading label="Se încarcă evaluările…" />
+      ) : evaluations.isError ? (
+        <div role="alert" className="space-y-3">
+          <p>Nu am putut încărca evaluările de rol.</p>
+          <Button variant="outline" onClick={() => void evaluations.refetch()}>
+            Încearcă din nou
+          </Button>
+        </div>
+      ) : evaluations.data.length === 0 ? (
+        <p className="text-muted-foreground">Nicio evaluare de rol încă.</p>
       ) : (
-        <ul className="divide-y" aria-label="Semnale de retenție">
-          {signals.data.map((signal) => {
-            const identity = identities.data?.get(signal.memberId);
-            const fullName = identity?.fullName ?? 'Membru OSUBB';
-            const shown = identity?.nickname?.trim() || fullName;
-            return (
-              <li
-                key={`${signal.role}:${signal.memberId}`}
-                className="flex flex-wrap items-center justify-between gap-3 py-3"
-              >
-                <span className="grid min-w-0 gap-0.5">
-                  <MemberName
-                    size="sm"
-                    memberId={signal.memberId}
-                    nickname={identity?.nickname}
-                    fullName={fullName}
-                    avatarColor={identity?.avatarColor}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {ROLE_AT_RISK[signal.role] ?? signal.role} ·{' '}
-                    {formatPoints(signal.taskPoints)} puncte · locul{' '}
-                    {signal.rank} din {signal.cohortSize}, în afara primilor{' '}
-                    {signal.shareSize}
-                  </span>
-                </span>
-                <Link
-                  to={`/administrare?membru=${encodeURIComponent(signal.memberId)}`}
-                  aria-label={`Editează rolul: ${shown}`}
-                  className={cn(buttonVariants({ variant: 'outline' }))}
-                >
-                  Editează rolul
-                </Link>
-              </li>
-            );
-          })}
+        <ul className="divide-y" aria-label="Evaluări de rol">
+          {evaluations.data.map((evaluation) => (
+            <li key={evaluation.id} className="grid gap-0.5 py-3">
+              <span className="font-medium">{evaluation.name}</span>
+              <span className="text-sm text-muted-foreground">
+                {KIND_LABEL[evaluation.kind] ?? evaluation.kind} ·{' '}
+                {formatDate(evaluation.period_from)} –{' '}
+                {formatDate(evaluation.period_to)} · prag folosit{' '}
+                {formatPoints(evaluation.threshold_used)} · prag calculat{' '}
+                {evaluation.threshold_computed === null
+                  ? '—'
+                  : formatPoints(evaluation.threshold_computed)}
+              </span>
+            </li>
+          ))}
         </ul>
       )}
     </section>
@@ -712,28 +322,18 @@ function AdunareaGeneralaCard({
 /* ------------------------------------------------------------------------ */
 
 /**
- * Perioade de evaluare (#702, ruling R20): where BC and the Moderator open
- * and close the Evaluation Period, seed the Promotion Threshold before the
- * first close, read the last close's Retention Signals and set the two
- * organization settings the close depends on. Mounted behind
+ * Perioade de evaluare (#702, ruling R20; reduced by #826, ruling R28): no
+ * Evaluation Period is opened or closed any more. Until #827 rebuilds this
+ * tab as Evaluări de rol, it lists the Role Evaluations run so far and keeps
+ * the two organization settings a Role Evaluation depends on. Mounted behind
  * `manageRoles`; every command decides again on the server.
  */
 export default function PeriodsScreen() {
-  const periods = useEvaluationPeriods();
   const settings = useOrgSettings();
   const command = usePeriodCommand();
-  const [message, setMessage] = useState<string | null>(null);
 
   const run: Run = async (next) => {
-    setMessage(null);
     await command.mutateAsync(next);
-    if (next.kind === 'open') setMessage('Perioada a fost deschisă.');
-    if (next.kind === 'close')
-      setMessage(
-        'Perioada a fost închisă. Pragul, promovările și semnalele au fost actualizate.',
-      );
-    if (next.kind === 'initialThreshold')
-      setMessage('Pragul inițial a fost salvat.');
   };
 
   return (
@@ -752,39 +352,11 @@ export default function PeriodsScreen() {
           Perioade de evaluare
         </h1>
         <p className="text-muted-foreground">
-          Deschiderea și închiderea perioadei, pragul de promovare și ce a
-          rezultat din ultima închidere.
+          Evaluările de rol rulate până acum și setările de care depind.
         </p>
       </header>
 
-      {message && <p role="status">{message}</p>}
-
-      {periods.isPending ? (
-        <Loading label="Se încarcă perioadele…" />
-      ) : periods.isError ? (
-        <div role="alert" className="space-y-3">
-          <p>Nu am putut încărca perioadele de evaluare.</p>
-          <Button variant="outline" onClick={() => void periods.refetch()}>
-            Încearcă din nou
-          </Button>
-        </div>
-      ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <CurrentPeriodCard
-            periods={periods.data}
-            disabled={command.isPending}
-            onRun={run}
-          />
-          <ThresholdCard
-            periods={periods.data}
-            disabled={command.isPending}
-            onRun={run}
-          />
-          <div className="lg:col-span-2">
-            <RetentionSignalsCard periods={periods.data} />
-          </div>
-        </div>
-      )}
+      <RoleEvaluationsCard />
 
       {settings.isPending ? (
         <Loading label="Se încarcă setările…" />

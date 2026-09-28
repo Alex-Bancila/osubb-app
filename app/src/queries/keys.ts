@@ -231,12 +231,8 @@ export const keys = {
      from a single invalidation. */
   evaluation: {
     all: ['evaluation'] as const,
-    periods: (memberId: string | undefined) =>
-      ['evaluation', 'periods', { memberId }] as const,
-    threshold: (memberId: string | undefined) =>
-      ['evaluation', 'threshold', { memberId }] as const,
-    signals: (periodId: number | null, memberId: string | undefined) =>
-      ['evaluation', 'signals', { periodId, memberId }] as const,
+    roleEvaluations: (memberId: string | undefined) =>
+      ['evaluation', 'role-evaluations', { memberId }] as const,
   },
   /* The organization settings (#681): every row, read by every Member. */
   orgSettings: {

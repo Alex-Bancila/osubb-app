@@ -383,19 +383,17 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #681: the organization settings command. Same wrapper shape -- only BC
   -- and the Moderator get past its gate.
   ('set_org_setting',               'p_key text, p_value text',      false, true,  false, false),
-  -- #47: the Evaluation Period ranking read. Same wrapper shape -- the
-  -- own-row / level >= 5 rule lives inside the body, not in the grant.
-  ('evaluation_period_ranking',     'p_period_id bigint',            false, true,  false, false),
-  -- #49: the Promotion Threshold in force. A security-invoker read over two
-  -- tables every live active Member reads, so no wrapper/_impl pair.
-  ('promotion_threshold_in_force',  '',                              false, true,  false, false),
-  -- #48: the retention ranking read. Same wrapper shape -- the own-row /
-  -- full-read rule (#512's predicate) lives inside the body.
-  ('retention_ranking',             'p_period_id bigint',            false, true,  false, false),
-  -- #701: the two Evaluation Period command wrappers. Same wrapper shape --
-  -- only BC and the Moderator get past the gate inside the _impl.
-  ('open_evaluation_period',        'p_name text',                   false, true,  false, false),
-  ('close_evaluation_period',       'p_period_id bigint',            false, true,  false, false),
+  -- #826 (ruling R28): the Role Evaluation reads and commands. Same wrapper
+  -- shape -- the own-row / full-read rule and the BC/Moderator gates live
+  -- inside the bodies. promotion_threshold_in_force(p_kind) is a
+  -- security-invoker read over a table every live active Member reads, so no
+  -- wrapper/_impl pair.
+  ('role_evaluation_ranking',       'p_kind text, p_from date, p_to date', false, true, false, false),
+  ('promotion_threshold_in_force',  'p_kind text',                   false, true,  false, false),
+  ('my_role_evaluation_standing',   'p_kind text',                   false, true,  false, false),
+  ('run_role_evaluation',           'p_kind text, p_from date, p_to date, p_name text', false, true, false, false),
+  ('set_promotion_threshold',       'p_kind text, p_threshold integer', false, true, false, false),
+  ('reject_promotion_candidate',    'p_candidate_id bigint, p_reason text', false, true, false, false),
   -- #771: the Privacy Acknowledgement command and BC's status read. Same
   -- wrapper shape -- the status read's level >= 6 gate lives in the body.
   ('acknowledge_privacy_notice',    'p_version text',                false, true,  false, false),
@@ -703,47 +701,30 @@ insert into pinned_private_functions (proname, args, category) values
   -- #769: the hourly Web Push health job body (osubb-push-health). Like
   -- remind_deadlines, only the scheduler runs it: granted to nobody.
   ('check_push_health',         '',                         'none'),
-  -- #47: the Evaluation Period ranking. The filtering body behind
-  -- public.evaluation_period_ranking is gated inside (own row, the full read
-  -- behind #512's predicate); the unfiltered core it reads is granted to
-  -- nobody -- only security-definer bodies (#49, #48, #51) and the scheduler
-  -- (#52) read it.
-  ('evaluation_period_ranking_impl', 'p_period_id bigint',          'impl'),
-  ('evaluation_period_ranking_rows', 'p_period_id bigint',          'none'),
-  -- #49: the close-time Promotion Threshold stamp. Granted to nobody: #701's
-  -- close_evaluation_period calls it from its security-definer body.
-  ('stamp_closing_threshold',        'p_period_id bigint',          'none'),
+  -- #826 (ruling R28): Role Evaluations. The ranking core over a range and
+  -- the kind's full ranking are granted to nobody -- only security-definer
+  -- bodies read them; the ranking read, the standing read and the three
+  -- command bodies are called by their invoker wrappers as the caller and
+  -- gated inside; the candidate-closing trigger body on role_history is
+  -- granted to nobody.
+  ('task_points_in_range',           'p_from timestamp with time zone, p_to timestamp with time zone', 'none'),
+  ('role_evaluation_rows',           'p_kind text, p_period_from date, p_period_to date, p_on_date date', 'none'),
+  ('role_evaluation_ranking_impl',   'p_kind text, p_from date, p_to date', 'impl'),
+  ('my_role_evaluation_standing_impl', 'p_kind text',                  'impl'),
+  ('run_role_evaluation_impl',       'p_kind text, p_from date, p_to date, p_name text', 'impl'),
+  ('set_promotion_threshold_impl',   'p_kind text, p_threshold integer', 'impl'),
+  ('reject_promotion_candidate_impl', 'p_candidate_id bigint, p_reason text', 'impl'),
+  ('close_promotion_candidates',     '',                            'trigger'),
   -- #512: who reads the Adunarea Generală's eligibility data in full. Read
-  -- only from security-definer bodies (evaluation_period_ranking_impl, #48's
-  -- retention ranking), never from a policy, so granted to nobody.
+  -- only from security-definer bodies (#826's role_evaluation_ranking_impl),
+  -- never from a policy, so granted to nobody.
   ('can_read_evaluation_rankings',   '',                            'none'),
-  -- #48: the retention ranking. The filtering body behind
-  -- public.retention_ranking is gated inside (own row, the full read behind
-  -- #512's predicate); the unfiltered core is granted to nobody -- #51's
-  -- detection reads it from a security-definer body.
-  ('retention_ranking_impl',         'p_period_id bigint',          'impl'),
-  ('retention_ranking_rows',         'p_period_id bigint',          'none'),
-  -- #51: promotion detection -- pure reads, granted to nobody. #52's daily
-  -- job and #701's close_evaluation_period call them from security-definer
-  -- bodies and apply the rows.
+  -- #51/#52, trimmed by #826: the daily tenure-rule detection, the job body
+  -- (osubb-apply-promotions) and its one-row core -- like remind_deadlines,
+  -- granted to nobody.
   ('detect_promotions',              '',                            'none'),
-  ('detect_close_promotions',        'p_period_id bigint',          'none'),
-  ('detect_retention_signals',       'p_period_id bigint',          'none'),
-  -- #52: applying them. The daily job body (osubb-apply-promotions), the
-  -- close-time run #701's close_evaluation_period calls, and their shared
-  -- one-row core -- like remind_deadlines, granted to nobody.
   ('apply_promotions',               '',                            'none'),
-  ('apply_close_promotions',         'p_period_id bigint, OUT promotions integer, OUT retention_signals integer', 'none'),
-  ('apply_promotion',                'p_member_id uuid, p_from_role member_role, p_to_role member_role, p_rule_kind text, p_period_id bigint', 'none'),
-  -- #701: the Evaluation Period command bodies behind
-  -- public.open_evaluation_period / close_evaluation_period. Called by the
-  -- invoker wrappers as the caller, gated inside (BC/Moderator only).
-  ('open_evaluation_period_impl',    'p_name text',                 'impl'),
-  ('close_evaluation_period_impl',   'p_period_id bigint',          'impl'),
-  -- #702: the initial Promotion Threshold command body behind
-  -- public.set_promotion_rule. Called by the invoker wrapper as the caller,
-  -- gated inside (BC/Moderator only).
-  ('set_promotion_rule_impl',        'p_rule_id bigint, p_initial_threshold integer', 'impl'),
+  ('apply_promotion',                'p_member_id uuid, p_from_role member_role, p_to_role member_role, p_rule_kind text', 'none'),
   -- #794: the groups_read limb (ruling R26) -- a Group reads for every
   -- Member while it owns an open org Opportunity, so authenticated keeps
   -- execute (it runs inside the policy).
@@ -780,8 +761,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('prepare_email_digests',              'p_now timestamp with time zone', 'none');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 158,
-  'the audited roster includes #775''s Email Digest quota read, selection and job body, the security pass''s daily cap and Announcement cap trigger body, the Web Push registration guard trigger body, Announcement authorship stamp trigger body and profile text guard trigger body, #776''s Resend delivery-problem body, #771''s Privacy Acknowledgement command body and status read body, #632''s profile email sync trigger body, #589''s Group coordination reader body, #794''s groups_read org-Opportunity limb predicate, #702''s initial Promotion Threshold command body, #701''s two Evaluation Period command bodies, #52''s promotion job body, close-time run and their shared core, #51''s three promotion detection reads, #48''s retention ranking body and its unfiltered core, #512''s eligibility-data read predicate, #49''s close-time Promotion Threshold stamp, #47''s Evaluation Period ranking body and its unfiltered core, #769''s Web Push health job body, #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies), and less #590''s three legacy structure predicates (can_read_team, is_active_project_member, can_manage_department_memberships)');
+  (select count(*) from pinned_private_functions)::int, 155,
+  'the audited roster includes #775''s Email Digest quota read, selection and job body, the security pass''s daily cap and Announcement cap trigger body, the Web Push registration guard trigger body, Announcement authorship stamp trigger body and profile text guard trigger body, #776''s Resend delivery-problem body, #771''s Privacy Acknowledgement command body and status read body, #632''s profile email sync trigger body, #589''s Group coordination reader body, #794''s groups_read org-Opportunity limb predicate, #826''s Role Evaluation core over a range, full ranking and ranking read body, standing read body, three command bodies (run, threshold, reject) and candidate-closing trigger body, #52''s tenure-rule job body and its one-row core, #51''s tenure-rule detection, #512''s eligibility-data read predicate, #769''s Web Push health job body, #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies), and less #590''s three legacy structure predicates (can_read_team, is_active_project_member, can_manage_department_memberships)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$
