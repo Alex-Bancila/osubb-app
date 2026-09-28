@@ -399,12 +399,14 @@ select throws_ok($$ select public.set_org_setting('adunarea_generala_group_id', 
 select throws_ok($$ select public.set_org_setting('adunarea_generala_group_id', '999999999999') $$,
   'PT400', 'invalid_org_setting_value',
   'BC: after #771''s rebuild, adunarea_generala_group_id must still name an active Group (#512)');
+-- #866 (ruling R30): y no longer changes here at all -- set_evaluation_percent
+-- is its one write path -- so both of #48's refusals are now the key refusal.
 select throws_ok($$ select public.set_org_setting('vote_retention_percent', '0') $$,
-  'PT400', 'invalid_org_setting_value',
-  'BC: after #771''s rebuild, vote_retention_percent must still be a whole percentage 1-100 (#48)');
+  'PT400', 'org_setting_not_settable',
+  'BC: vote_retention_percent is still refused a 0 -- since #866 every value is refused (org_setting_not_settable)');
 select throws_ok($$ select public.set_org_setting('vote_retention_percent', '') $$,
-  'PT400', 'invalid_org_setting_value',
-  'BC: after #771''s rebuild, vote_retention_percent still cannot be cleared (#48)');
+  'PT400', 'org_setting_not_settable',
+  'BC: vote_retention_percent still cannot be cleared -- since #866 every value is refused (org_setting_not_settable)');
 select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.0') $$,
   'PT409', 'nothing_to_update', 'BC: re-sending the current version is nothing_to_update');
 select results_eq(

@@ -31,6 +31,7 @@ type Threshold = {
 type Change = {
   id: number;
   kind: string;
+  field?: string;
   from_value: number | null;
   to_value: number;
   source: string;
@@ -62,8 +63,7 @@ const db = vi.hoisted(() => ({
   changes: [] as Change[],
   candidates: [] as Candidate[],
   rankings: new Map<string, Ranked[]>(),
-  percent: 20 as number | null,
-  settings: new Map<string, string | null>(),
+  percents: new Map<string, number | null>(),
   refuse: new Map<string, { code: string; message: string }>(),
   rpc: vi.fn(),
 }));
@@ -90,10 +90,6 @@ function tableRows(table: string): unknown {
               : null,
           };
         });
-    case 'promotion_rules':
-      return { percent: db.percent };
-    case 'org_settings':
-      return [...db.settings].map(([key, value]) => ({ key, value }));
     default:
       throw new Error(`unexpected table ${table}`);
   }
@@ -161,6 +157,37 @@ vi.mock('../../lib/supabase', () => {
           row.updated_by = 'bc';
         }
         return { data: row, error: null };
+      }
+      case 'evaluation_percents':
+        return {
+          data: ['voluntar_activ', 'adunarea_generala'].map((kind) => {
+            const last = [...db.changes]
+              .filter((c) => c.kind === kind && c.field === 'percent')
+              .sort((a, b) => b.changed_at.localeCompare(a.changed_at))[0];
+            return {
+              kind,
+              percent: db.percents.get(kind) ?? null,
+              changed_at: last?.changed_at ?? null,
+              changed_by: last?.changed_by ?? null,
+            };
+          }),
+          error: null,
+        };
+      case 'set_evaluation_percent': {
+        const change = {
+          id: db.changes.length + 200,
+          kind: String(args.p_kind),
+          field: 'percent',
+          from_value: db.percents.get(String(args.p_kind)) ?? null,
+          to_value: Number(args.p_percent),
+          source: 'manual',
+          changed_by: 'bc',
+          role_evaluation_id: null,
+          changed_at: '2026-09-28T11:30:00Z',
+        };
+        db.changes.push(change);
+        db.percents.set(String(args.p_kind), Number(args.p_percent));
+        return { data: change, error: null };
       }
       case 'reject_promotion_candidate': {
         const row = db.candidates.find((c) => c.id === args.p_candidate_id);
@@ -257,8 +284,10 @@ beforeEach(() => {
   db.changes = [];
   db.candidates = [];
   db.rankings = new Map();
-  db.percent = 20;
-  db.settings = new Map([['vote_retention_percent', '25']]);
+  db.percents = new Map([
+    ['voluntar_activ', 20],
+    ['adunarea_generala', 25],
+  ]);
   db.refuse = new Map();
   db.rpc.mockReset();
 });
@@ -518,6 +547,111 @@ it('edits a threshold and lists every change with its author or run', async () =
     ).toHaveTextContent('28.09.2026 · Voluntar Activ42 → 35·BCBianca Coman'),
   );
   expect(thresholds).toHaveTextContent('introdus deBCBianca Coman');
+});
+
+it('edits each kind’s share (#866): 1–100 in the browser, logged, and the next run’s confirmation names it', async () => {
+  db.runs = [RUN_VA];
+  const user = userEvent.setup();
+  const { container } = show();
+  const thresholds = await panel('Praguri');
+  await waitFor(() => expect(thresholds).toHaveTextContent('Procent:20 %'));
+  expect(thresholds).toHaveTextContent('Procent:25 %');
+
+  await user.click(
+    within(thresholds).getByRole('button', {
+      name: 'Editează: Procentul Voluntar Activ',
+    }),
+  );
+  const input = within(thresholds).getByLabelText('Procentul Voluntar Activ');
+  expect(input).toHaveValue(20);
+  for (const wrong of ['0', '101']) {
+    await user.clear(input);
+    await user.type(input, wrong);
+    await user.click(
+      within(thresholds).getByRole('button', { name: 'Salvează' }),
+    );
+    expect(input).toHaveAccessibleDescription(
+      /Procentul trebuie să fie între 1 și 100./,
+    );
+  }
+  expect(db.rpc).not.toHaveBeenCalledWith(
+    'set_evaluation_percent',
+    expect.anything(),
+  );
+  expect(
+    (
+      await axe.run(container, {
+        rules: { 'color-contrast': { enabled: false } },
+      })
+    ).violations,
+  ).toEqual([]);
+
+  await user.clear(input);
+  await user.type(input, '35');
+  await user.click(
+    within(thresholds).getByRole('button', { name: 'Salvează' }),
+  );
+  expect(db.rpc).toHaveBeenCalledWith('set_evaluation_percent', {
+    p_kind: 'voluntar_activ',
+    p_percent: 35,
+  });
+  expect(
+    await within(thresholds).findByText(
+      'Procentul Voluntar Activ a fost salvat.',
+    ),
+  ).toBeVisible();
+  await waitFor(() =>
+    expect(thresholds).toHaveTextContent(
+      'Procent:35 %·schimbat deBCBianca Coman',
+    ),
+  );
+  const log = within(thresholds).getByRole('list', {
+    name: 'Istoricul pragurilor',
+  });
+  expect(within(log).getAllByRole('listitem')[0]).toHaveTextContent(
+    '28.09.2026 · Voluntar Activ · procent20 % → 35 %·BCBianca Coman',
+  );
+  // A share change is not where the threshold came from.
+  expect(thresholds).not.toHaveTextContent('introdus de');
+
+  // The confirmation reads the share now in force.
+  const run = await panel('Rulează o evaluare de rol');
+  await user.type(within(run).getByLabelText('Nume'), 'Semestrul II');
+  await user.click(
+    within(run).getByRole('button', { name: 'Rulează evaluarea' }),
+  );
+  expect(await screen.findByRole('dialog')).toHaveTextContent(
+    'punctele ultimului Voluntar Activ din primii 35%',
+  );
+});
+
+it('places a server refusal of a share under its field', async () => {
+  db.refuse.set('set_evaluation_percent', {
+    code: '42501',
+    message: 'evaluation_percent_manage_forbidden',
+  });
+  const user = userEvent.setup();
+  show();
+  const thresholds = await panel('Praguri');
+  await user.click(
+    await within(thresholds).findByRole('button', {
+      name: 'Editează: Procentul Adunării Generale',
+    }),
+  );
+  const input = within(thresholds).getByLabelText(
+    'Procentul Adunării Generale',
+  );
+  expect(input).toHaveValue(25);
+  await user.clear(input);
+  await user.type(input, '30');
+  await user.click(
+    within(thresholds).getByRole('button', { name: 'Salvează' }),
+  );
+  expect(
+    await within(thresholds).findByText(
+      'Doar BC și Moderatorul pot schimba procentele.',
+    ),
+  ).toBeVisible();
 });
 
 it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respinge needs a reason', async () => {

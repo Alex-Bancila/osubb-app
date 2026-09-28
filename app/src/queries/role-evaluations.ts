@@ -82,10 +82,15 @@ export function usePromotionThresholds() {
   });
 }
 
-/** One change of a Promotion Threshold: a hand edit or a run's hand-over. */
+/**
+ * One change in the Praguri log: a Promotion Threshold (`field` threshold —
+ * a hand edit or a run's hand-over) or a kind's top share (`field` percent,
+ * always a hand edit; #866, ruling R30).
+ */
 export type ThresholdChange = {
   id: number;
   kind: string;
+  field: string;
   from_value: number | null;
   to_value: number;
   source: string;
@@ -99,7 +104,7 @@ export async function fetchThresholdChanges(): Promise<ThresholdChange[]> {
   const { data, error } = await supabase
     .from('promotion_threshold_changes')
     .select(
-      'id, kind, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
+      'id, kind, field, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
     )
     .order('changed_at', { ascending: false })
     .order('id', { ascending: false });
@@ -226,23 +231,47 @@ export function retentionSignals(
     .sort((a, b) => a.taskPoints - b.taskPoints || a.rank - b.rank);
 }
 
-/** x: the Voluntar Activ cohort's top share (the `top_percent` rule). */
-export async function fetchTopPercent(): Promise<number | null> {
-  const { data, error } = await supabase
-    .from('promotion_rules')
-    .select('percent')
-    .eq('kind', 'top_percent')
-    .maybeSingle();
+/**
+ * A kind's top share in force (#866, ruling R30): x for Voluntar Activ (the
+ * `top_percent` rule's percent), y for the Adunarea Generală (the Vote
+ * Retention Threshold), with who changed it last and when — null before any
+ * change, and for anyone below BC.
+ */
+export type EvaluationPercent = {
+  kind: string;
+  percent: number | null;
+  changedAt: string | null;
+  changedBy: string | null;
+};
+
+/** Both shares, from `evaluation_percents()`: Voluntar Activ first. */
+export async function fetchEvaluationPercents(): Promise<EvaluationPercent[]> {
+  const { data, error } = await supabase.rpc('evaluation_percents');
   if (error) throw error;
-  return data?.percent ?? null;
+  return (data ?? []).map((row) => ({
+    kind: row.kind,
+    // Null for a session that reads neither share nor log (RLS).
+    percent: row.percent as number | null,
+    changedAt: row.changed_at as string | null,
+    changedBy: row.changed_by as string | null,
+  }));
 }
 
-export function useTopPercent() {
+export function useEvaluationPercents() {
   const memberId = useAuth().session?.user.id;
   return useQuery({
-    queryKey: keys.evaluation.topPercent(memberId),
-    queryFn: memberId ? fetchTopPercent : skipToken,
+    queryKey: keys.evaluation.percents(memberId),
+    queryFn: memberId ? fetchEvaluationPercents : skipToken,
   });
+}
+
+/** One kind's share as the run confirmation writes it, `—` while unknown. */
+export function percentText(
+  percents: readonly EvaluationPercent[] | undefined,
+  kind: RoleEvaluationKind,
+): string {
+  const percent = percents?.find((row) => row.kind === kind)?.percent;
+  return percent === null || percent === undefined ? '—' : String(percent);
 }
 
 /** What the tab asks the server to do. */
@@ -255,6 +284,7 @@ export type RoleEvaluationCommand =
       name: string;
     }
   | { kind: 'threshold'; evaluationKind: RoleEvaluationKind; threshold: number }
+  | { kind: 'percent'; evaluationKind: RoleEvaluationKind; percent: number }
   | { kind: 'reject'; candidateId: number; reason: string };
 
 /** What a run reports back. */
@@ -267,6 +297,7 @@ export type RunResult = {
 const FAILED: Record<RoleEvaluationCommand['kind'], string> = {
   run: 'Nu am putut rula evaluarea. Reîncearcă.',
   threshold: 'Nu am putut salva pragul. Reîncearcă.',
+  percent: 'Nu am putut salva procentul. Reîncearcă.',
   reject: 'Nu am putut respinge candidatul. Reîncearcă.',
 };
 
@@ -294,10 +325,15 @@ export async function runRoleEvaluationCommand(
           p_kind: command.evaluationKind,
           p_threshold: command.threshold,
         })
-      : await supabase.rpc('reject_promotion_candidate', {
-          p_candidate_id: command.candidateId,
-          p_reason: command.reason,
-        });
+      : command.kind === 'percent'
+        ? await supabase.rpc('set_evaluation_percent', {
+            p_kind: command.evaluationKind,
+            p_percent: command.percent,
+          })
+        : await supabase.rpc('reject_promotion_candidate', {
+            p_candidate_id: command.candidateId,
+            p_reason: command.reason,
+          });
   if (error) throw new CommandError(error, FAILED[command.kind]);
   return null;
 }

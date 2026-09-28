@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest';
-import { rejectionSchema, runSchema, thresholdSchema } from './role-evaluation';
+import {
+  percentSchema,
+  rejectionSchema,
+  runSchema,
+  thresholdSchema,
+} from './role-evaluation';
 
 const issues = (result: {
   success: boolean;
@@ -62,6 +67,16 @@ it('takes a whole threshold of at least 1', () => {
   expect(thresholdSchema.parse({ threshold: ' 40 ' })).toEqual({
     threshold: 40,
   });
+});
+
+it('takes a whole share from 1 to 100 % (#866)', () => {
+  for (const percent of ['', '0', '-3', '2.5', 'abc', '101', '0100'])
+    expect(issues(percentSchema.safeParse({ percent })), percent).toEqual([
+      'percent:invalid_percent',
+    ]);
+  expect(percentSchema.parse({ percent: ' 35 ' })).toEqual({ percent: 35 });
+  expect(percentSchema.parse({ percent: '1' })).toEqual({ percent: 1 });
+  expect(percentSchema.parse({ percent: '100' })).toEqual({ percent: 100 });
 });
 
 it('requires a rejection reason of at most 500 characters', () => {

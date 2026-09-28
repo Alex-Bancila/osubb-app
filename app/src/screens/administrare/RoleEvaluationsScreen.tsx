@@ -31,6 +31,8 @@ import { bucharestDayKey } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
 import { formatPoints } from '../../lib/format';
 import {
+  percentFieldForReason,
+  percentSchema,
   rejectionFieldForReason,
   rejectionSchema,
   runFieldForReason,
@@ -41,17 +43,18 @@ import {
 } from '../../lib/schemas/role-evaluation';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useMemberIdentities } from '../../queries/member-identities';
-import { useOrgSettings } from '../../queries/org-settings';
 import {
   latestRun,
+  percentText,
   retentionSignals,
+  useEvaluationPercents,
   usePromotionCandidates,
   usePromotionThresholds,
   useRoleEvaluationCommand,
   useRoleEvaluationRanking,
   useRoleEvaluations,
   useThresholdChanges,
-  useTopPercent,
+  type EvaluationPercent,
   type PromotionCandidate,
   type PromotionThreshold,
   type RoleEvaluation,
@@ -85,6 +88,12 @@ const KIND_LABEL: Record<string, string> = {
 const THRESHOLD_NAME: Record<RoleEvaluationKind, string> = {
   voluntar_activ: 'Voluntar Activ',
   adunarea_generala: 'Adunării Generale',
+};
+
+/** Whose ranking each kind's share is taken from (x, y; #866). */
+const COHORT_NAME: Record<RoleEvaluationKind, string> = {
+  voluntar_activ: 'Voluntarilor Activi',
+  adunarea_generala: 'Voluntarilor cu Drept de Vot',
 };
 
 /** The Role a Retention Signal is about. */
@@ -152,8 +161,9 @@ function RunPanel({
   const nameId = useId();
   const blockedId = useId();
   const today = bucharestDayKey(new Date()) ?? '';
-  const topPercent = useTopPercent();
-  const settings = useOrgSettings();
+  // x and y as the server holds them now (#866): the confirmation names the
+  // shares the run will read, refreshed after every share edit.
+  const percents = useEvaluationPercents();
   // "De la" starts the day after the kind's last range; "Până la" is today.
   const defaultFrom = (kind: RoleEvaluationKind) => {
     const last = latestRun(evaluations, kind);
@@ -174,11 +184,8 @@ function RunPanel({
   const threshold =
     thresholds.find((row) => row.kind === kind)?.threshold ?? null;
   const parsed = schema.safeParse({ kind, from, to, name });
-  const x =
-    topPercent.data === null || topPercent.data === undefined
-      ? '—'
-      : String(topPercent.data);
-  const y = settings.data?.get('vote_retention_percent') ?? '—';
+  const x = percentText(percents.data, 'voluntar_activ');
+  const y = percentText(percents.data, 'adunarea_generala');
 
   function choose(next: RoleEvaluationKind) {
     setKind(next);
@@ -361,10 +368,155 @@ function RunPanel({
 /* Praguri                                                                   */
 /* ------------------------------------------------------------------------ */
 
+/**
+ * A kind's top share (#866, ruling R30): `Procent: x %` under the threshold,
+ * edited in place as the threshold is — a whole 1–100 with the percent sign
+ * fixed inside the field, so BC types only the number.
+ */
+function PercentEditor({
+  kind,
+  percent,
+  identities,
+  disabled,
+  onRun,
+}: {
+  kind: RoleEvaluationKind;
+  percent: EvaluationPercent | undefined;
+  identities: Identities;
+  disabled: boolean;
+  onRun: Run;
+}) {
+  const inputId = useId();
+  const hintId = useId();
+  const label = `Procentul ${THRESHOLD_NAME[kind]}`;
+  const current = percent?.percent ?? null;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const form = useFormValidation(
+    percentSchema,
+    { percent: draft },
+    percentFieldForReason,
+  );
+  // The hint follows what BC types while it is a valid share.
+  const typed = percentSchema.safeParse({ percent: draft });
+  const shown = typed.success ? typed.data.percent : (current ?? 'x');
+
+  function open() {
+    setDraft(current === null ? '' : String(current));
+    setMessage(null);
+    form.reset();
+    setEditing(true);
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const values = form.validate();
+    if (!values) return;
+    try {
+      await onRun({
+        kind: 'percent',
+        evaluationKind: kind,
+        percent: values.percent,
+      });
+      setEditing(false);
+      setMessage(`${label} a fost salvat.`);
+    } catch (failure) {
+      form.fail(failure, 'Nu am putut salva procentul. Reîncearcă.');
+    }
+  }
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
+          <span className="text-muted-foreground">Procent:</span>
+          <span className="font-semibold tabular-nums">
+            {current === null ? '—' : `${current} %`}
+          </span>
+          {percent?.changedBy && (
+            <>
+              <span aria-hidden="true" className="text-muted-foreground">
+                ·
+              </span>
+              <span className="text-muted-foreground">schimbat de</span>
+              <Name memberId={percent.changedBy} identities={identities} />
+            </>
+          )}
+        </p>
+        {!editing && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            onClick={open}
+            aria-label={`Editează: ${label}`}
+          >
+            Editează procentul
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <form onSubmit={save} noValidate className="grid gap-1.5">
+          <label htmlFor={inputId} className="text-sm font-medium">
+            {label}
+          </label>
+          <div className="flex min-w-0 flex-wrap gap-2">
+            <div className="relative w-28 flex-none">
+              <input
+                id={inputId}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={100}
+                step={1}
+                className={cn(control, 'pr-9')}
+                value={draft}
+                disabled={disabled}
+                onChange={(event) => setDraft(event.target.value)}
+                {...form.field('percent', hintId)}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+              >
+                %
+              </span>
+            </div>
+            <Button type="submit" disabled={disabled}>
+              Salvează
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={disabled}
+              onClick={() => setEditing(false)}
+            >
+              Renunță
+            </Button>
+          </div>
+          <p id={hintId} className="m-0 text-sm text-muted-foreground">
+            {`Un număr întreg de la 1 la 100. Pragul calculat este punctajul ultimului din primii ${shown} % ai ${COHORT_NAME[kind]}. Se aplică de la următoarea evaluare; evaluările rulate nu se recalculează.`}
+          </p>
+          <FieldError {...form.errorProps('percent')} />
+          <FieldError>{form.formError}</FieldError>
+        </form>
+      )}
+      {message && (
+        <p role="status" className="m-0 text-sm">
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ThresholdRow({
   kind,
   row,
   source,
+  percent,
   runName,
   identities,
   disabled,
@@ -372,8 +524,10 @@ function ThresholdRow({
 }: {
   kind: RoleEvaluationKind;
   row: PromotionThreshold | undefined;
-  /** The kind's latest change, which says where the value in force came from. */
+  /** The kind's latest threshold change: where the value in force came from. */
   source: ThresholdChange | undefined;
+  /** The kind's top share in force, x or y (#866). */
+  percent: EvaluationPercent | undefined;
   runName: (id: number | null) => string;
   identities: Identities;
   disabled: boolean;
@@ -503,6 +657,13 @@ function ThresholdRow({
           {message}
         </p>
       )}
+      <PercentEditor
+        kind={kind}
+        percent={percent}
+        identities={identities}
+        disabled={disabled}
+        onRun={onRun}
+      />
     </li>
   );
 }
@@ -519,6 +680,7 @@ function ThresholdsPanel({
   onRun: Run;
 }) {
   const changes = useThresholdChanges();
+  const percents = useEvaluationPercents();
   const memberIds = useMemo(
     () =>
       (changes.data ?? []).flatMap((change) =>
@@ -535,7 +697,7 @@ function ThresholdsPanel({
       eyebrow="Evaluări de rol"
       icon={Gauge}
       title="Praguri"
-      description="Punctele de task cu care fiecare tip de evaluare compară membrii."
+      description="Punctele de task cu care fiecare tip de evaluare compară membrii și procentul din clasament din care calculează pragul următor."
       boxClassName="grid content-start gap-3"
     >
       <ul className={rowListClass}>
@@ -544,7 +706,10 @@ function ThresholdsPanel({
             key={kind}
             kind={kind}
             row={thresholds.find((row) => row.kind === kind)}
-            source={changes.data?.find((change) => change.kind === kind)}
+            source={changes.data?.find(
+              (change) => change.kind === kind && change.field !== 'percent',
+            )}
+            percent={percents.data?.find((row) => row.kind === kind)}
             runName={runName}
             identities={identities.data}
             disabled={disabled}
@@ -575,13 +740,17 @@ function ThresholdsPanel({
                 <span className="text-muted-foreground tabular-nums">
                   {formatInstantDay(change.changed_at)} ·{' '}
                   {KIND_LABEL[change.kind] ?? change.kind}
+                  {change.field === 'percent' && ' · procent'}
                 </span>
                 <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
                   <span className="font-semibold tabular-nums">
-                    {change.from_value === null
-                      ? 'nesetat'
-                      : formatPoints(change.from_value)}{' '}
-                    → {formatPoints(change.to_value)}
+                    {change.field === 'percent'
+                      ? `${change.from_value ?? '—'} % → ${change.to_value} %`
+                      : `${
+                          change.from_value === null
+                            ? 'nesetat'
+                            : formatPoints(change.from_value)
+                        } → ${formatPoints(change.to_value)}`}
                   </span>
                   <span aria-hidden="true" className="text-muted-foreground">
                     ·

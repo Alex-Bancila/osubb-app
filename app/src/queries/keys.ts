@@ -226,8 +226,9 @@ export const keys = {
   },
   /* Role Evaluations and what they decide (#826, #827; ruling R28): the runs,
      the two Promotion Thresholds and their log, the open Promotion
-     Candidates, a run's ranking and x. One `['evaluation']` prefix, so a run,
-     a threshold edit or a rejection refreshes all of them at once. */
+     Candidates, a run's ranking and the two shares x and y (#866). One
+     `['evaluation']` prefix, so a run, a threshold or share edit or a
+     rejection refreshes all of them at once. */
   evaluation: {
     all: ['evaluation'] as const,
     roleEvaluations: (memberId: string | undefined) =>
@@ -242,8 +243,8 @@ export const keys = {
       range: { kind: string; from: string; to: string } | null,
       memberId: string | undefined,
     ) => ['evaluation', 'ranking', range, { memberId }] as const,
-    topPercent: (memberId: string | undefined) =>
-      ['evaluation', 'top-percent', { memberId }] as const,
+    percents: (memberId: string | undefined) =>
+      ['evaluation', 'percents', { memberId }] as const,
   },
   /* The organization settings (#681): every row, read by every Member. */
   orgSettings: {
