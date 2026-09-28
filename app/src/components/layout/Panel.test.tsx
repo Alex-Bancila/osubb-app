@@ -20,7 +20,6 @@ describe('Panel', () => {
     expect(header).not.toContainElement(screen.getByText('Conținut'));
     // 16 px at every width, --r-md, never rounded-xl.
     expect(box).toHaveClass(
-      'flex-1',
       'rounded-md',
       'border',
       'bg-card',
@@ -29,7 +28,11 @@ describe('Panel', () => {
     );
     expect(box).not.toHaveClass('rounded-xl');
     expect(box?.className).not.toMatch(/\b(md|lg|sm):p-/);
-    expect(panel).toHaveClass('flex', 'h-full', 'flex-col');
+    // As tall as its content outside an equalHeights grid (#876).
+    expect(panel).toHaveClass('flex', 'flex-col');
+    expect(panel).not.toHaveClass('h-full');
+    expect(box).toHaveClass('w-full', 'self-start');
+    expect(box).not.toHaveClass('flex-1');
   });
 
   it('bare renders no box, for a child that is itself a card', () => {

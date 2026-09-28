@@ -140,7 +140,7 @@ export default function GroupsScreen() {
               </label>
             )}
             {visible.length ? (
-              <PageGrid as="ul" columns="collection">
+              <PageGrid as="ul" columns="collection" equalHeights>
                 {visible.map((group) => (
                   <li key={group.id}>
                     <ApplyPanel

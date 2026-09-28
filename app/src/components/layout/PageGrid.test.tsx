@@ -36,7 +36,7 @@ describe('PageGrid', () => {
     },
   );
 
-  it('stretches every cell to the row: equal-height boxes, no overflowing column', () => {
+  it('sizes every cell to its content by default: unrelated panels never stretch (#876)', () => {
     const { container } = render(
       <PageGrid columns={2}>
         <Panel title="Coordonare">Scurt</Panel>
@@ -47,17 +47,70 @@ describe('PageGrid', () => {
     );
     expect(grid(container)).toHaveClass(
       'grid',
-      'items-stretch',
+      'items-start',
       'gap-4',
       'md:gap-6',
-      '*:h-full',
       '*:min-w-0',
     );
-    // Each panel fills its cell and its box grows to the panel's height.
-    for (const panel of container.querySelectorAll('[data-slot="panel"]'))
+    expect(grid(container)).not.toHaveClass('items-stretch');
+    expect(grid(container)).not.toHaveClass('*:h-full');
+    expect(grid(container)).not.toHaveAttribute('data-equal-heights');
+    // Each panel and its box keep to their content.
+    for (const panel of container.querySelectorAll('[data-slot="panel"]')) {
+      expect(panel).not.toHaveClass('h-full');
+      expect(panel).not.toHaveAttribute('data-fill');
+    }
+    for (const box of container.querySelectorAll('[data-slot="panel-box"]')) {
+      expect(box).toHaveClass('self-start', 'w-full');
+      expect(box).not.toHaveClass('flex-1');
+    }
+  });
+
+  it('equalHeights stretches a row of like items: every cell and box share the height', () => {
+    const { container } = render(
+      <PageGrid columns="collection" as="ul" equalHeights>
+        <li>
+          <Panel title="Educațional">Scurt</Panel>
+        </li>
+        <li>
+          <Panel title="Resurse Umane">
+            Un conținut mult mai lung, pe mai multe rânduri.
+          </Panel>
+        </li>
+      </PageGrid>,
+    );
+    expect(grid(container)).toHaveClass('items-stretch', '*:h-full');
+    expect(grid(container)).not.toHaveClass('items-start');
+    expect(grid(container)).toHaveAttribute('data-equal-heights', 'true');
+    // The one Panel in each li fills it, and its box grows to the row.
+    for (const panel of container.querySelectorAll('[data-slot="panel"]')) {
       expect(panel).toHaveClass('flex', 'h-full', 'flex-col');
-    for (const box of container.querySelectorAll('[data-slot="panel-box"]'))
-      expect(box).toHaveClass('flex-1');
+      expect(panel).toHaveAttribute('data-fill', 'true');
+    }
+    for (const box of container.querySelectorAll('[data-slot="panel-box"]')) {
+      expect(box).toHaveClass('flex-1', 'self-stretch');
+      expect(box).not.toHaveClass('self-start');
+    }
+  });
+
+  it('a panel nested in a stretched one keeps to its content', () => {
+    const { container } = render(
+      <PageGrid columns={2} equalHeights>
+        <Panel title="Exterior">
+          <Panel title="Interior" level={3}>
+            x
+          </Panel>
+        </Panel>
+      </PageGrid>,
+    );
+    const inner = screen.getByRole('region', { name: 'Interior' });
+    expect(inner).not.toHaveClass('h-full');
+    expect(inner.querySelector('[data-slot="panel-box"]')).toHaveClass(
+      'self-start',
+    );
+    expect(
+      container.querySelector('[data-slot="panel"]') as HTMLElement,
+    ).toHaveClass('h-full');
   });
 
   it('alignHeaders puts each panel on a two-row subgrid once cells sit side by side (X9)', () => {
@@ -69,8 +122,9 @@ describe('PageGrid', () => {
         <Panel title="Adunarea Generală">b</Panel>
       </PageGrid>,
     );
+    // auto rows, never 1fr: every 1fr row would take the tallest one's height.
+    expect(grid(container).className).not.toMatch(/1fr/);
     expect(grid(container)).toHaveClass(
-      'md:auto-rows-[auto_1fr]',
       'md:*:row-span-2',
       'md:*:grid-rows-subgrid',
       'md:*:gap-y-0',
@@ -78,6 +132,25 @@ describe('PageGrid', () => {
     // The box keeps to the second row even when a panel has no header.
     for (const box of container.querySelectorAll('[data-slot="panel-box"]'))
       expect(box).toHaveClass('row-start-2');
+    // Default: the boxes start on one line but keep to their content.
+    for (const box of container.querySelectorAll('[data-slot="panel-box"]'))
+      expect(box).toHaveClass('self-start');
+    rerender(
+      <PageGrid columns={2} alignHeaders equalHeights>
+        <Panel title="Formular de adeziune" description="Un rând lung.">
+          a
+        </Panel>
+        <Panel title="Adunarea Generală">b</Panel>
+      </PageGrid>,
+    );
+    // equalHeights keeps the subgrid and the boxes end together too.
+    expect(grid(container)).toHaveClass(
+      'md:*:row-span-2',
+      'md:*:grid-rows-subgrid',
+      'items-stretch',
+    );
+    for (const box of container.querySelectorAll('[data-slot="panel-box"]'))
+      expect(box).toHaveClass('row-start-2', 'self-stretch');
     rerender(
       <PageGrid columns={3} alignHeaders>
         <Panel title="a">a</Panel>
