@@ -18,7 +18,17 @@ export type AnnouncementGroup = {
   name: string;
   short?: string;
   color?: string | null;
+  /** The Organization Group: its chip reads "OSUBB" whatever its stored name. */
+  isOrganization?: boolean;
 };
+
+/**
+ * The Origin chip (B34): the Group's name, never its short code ("EDU");
+ * the Organization Group reads "OSUBB".
+ */
+export function originLabel(group: AnnouncementGroup): string {
+  return group.isOrganization ? 'OSUBB' : group.name;
+}
 
 export type AnnouncementPresentation = {
   id: number;
@@ -27,7 +37,12 @@ export type AnnouncementPresentation = {
   groupId: number;
   group: AnnouncementGroup;
   audience: string;
-  audienceLabel: string;
+  /**
+   * "Doar Educațional" for a local Audience. Null when everyone receives it
+   * (an organization Audience, or the Organization Group's own members): the
+   * Origin chip already says whose it is (B34).
+   */
+  audienceLabel: string | null;
   author: string | null;
   /** The author as a Member Card button; null on a legacy row without `created_by`. */
   authorMember: MemberIdentity | null;
@@ -56,6 +71,22 @@ export function priorityMeta(priority: AnnouncementPriority): PriorityMeta {
   return PRIORITY_META[priority] ?? { label: priority, variant: 'outline' };
 }
 
+/** Only Important and Critic earn a mark on the card; "Normal" says nothing (B34). */
+export function showsPriority(priority: AnnouncementPriority): boolean {
+  return priority === 'critical' || priority === 'important';
+}
+
+function localAudienceLabel(
+  audience: string,
+  origin: Group | undefined,
+): string | null {
+  if (audience === 'org') return null;
+  if (!origin) return 'Doar grupul';
+  // Every Member belongs to the Organization Group: its local Audience is everyone.
+  if (origin.is_organization) return null;
+  return `Doar ${origin.name}`;
+}
+
 export function formatAnnouncementDate(instant: string): string {
   const date = new Date(instant);
   if (Number.isNaN(date.getTime())) return '—';
@@ -77,6 +108,7 @@ export function toAnnouncementPresentation(
         name: origin.name,
         short: origin.short ?? undefined,
         color: origin.color,
+        isOrganization: origin.is_organization,
       }
     : { id: row.group_id, name: 'Grup', short: 'GRUP' };
 
@@ -91,7 +123,7 @@ export function toAnnouncementPresentation(
     groupId: row.group_id,
     group,
     audience: row.audience,
-    audienceLabel: row.audience === 'org' ? 'Toată organizația' : 'Doar grupul',
+    audienceLabel: localAudienceLabel(row.audience, origin),
     author: row.author,
     authorMember: row.created_by
       ? (members?.get(row.created_by) ?? {
