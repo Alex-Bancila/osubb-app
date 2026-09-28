@@ -60,10 +60,11 @@ begin
       detail = 'visible_task_executors: at most 200 Task ids per call';
   end if;
 
-  -- One row per readable Task at most: its open Assignment (is_current), or
-  -- (#861, Audit D-1) for a completed or unfulfilled Task the latest
-  -- Assignment its Evaluation ended (completed / failed). A cancelled Task
-  -- and every other Assignment History row stay private.
+  -- One row per readable Task at most: an open Task's open Assignment
+  -- (is_current), or (#861, Audit D-1) for a completed or unfulfilled Task
+  -- the latest Assignment its Evaluation ended (completed / failed). A
+  -- cancelled Task -- even one a direct write left an open row on -- and
+  -- every other Assignment History row stay private.
   return query
   select task.id, executor.member_id, profile.full_name, profile.nickname, executor.is_current
     from public.tasks as task
@@ -71,7 +72,8 @@ begin
       select assignment.member_id, assignment.ended_at is null as is_current
         from public.task_assignments as assignment
        where assignment.task_id = task.id
-         and (assignment.ended_at is null
+         and ((assignment.ended_at is null
+               and task.status not in ('completed', 'unfulfilled', 'cancelled'))
               or (task.status in ('completed', 'unfulfilled')
                   and assignment.end_reason in ('completed', 'failed')))
        order by assignment.ended_at desc nulls first, assignment.id desc

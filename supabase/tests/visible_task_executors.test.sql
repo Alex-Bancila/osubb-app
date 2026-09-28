@@ -78,6 +78,9 @@ values
   ('Task anulat 861', null, '2027-09-05 09:00:00+00',
    pg_temp.dept_group('fin'), 'local', 'direct', 'cancelled',
    null, null, null, null, now(), 'Nu mai e nevoie', null, '49900000-0000-0000-0000-000000000007'),
+  ('Task anulat deschis 861', null, '2027-09-05 10:00:00+00',
+   pg_temp.dept_group('fin'), 'local', 'direct', 'cancelled',
+   null, null, null, null, now(), 'Nu mai e nevoie', null, '49900000-0000-0000-0000-000000000007'),
   ('Task redeschis 861', null, '2027-09-06 09:00:00+00',
    pg_temp.dept_group('fin'), 'local', 'direct', 'in_progress',
    3, null, null, null, null, null, now(), '49900000-0000-0000-0000-000000000007');
@@ -105,6 +108,13 @@ select task.id, '49900000-0000-0000-0000-000000000003', '49900000-0000-0000-0000
   from public.tasks as task
  where task.title = 'Task redeschis 861';
 
+-- No command leaves a cancelled Task with an open Assignment, but no
+-- constraint forbids a direct write from doing so: it still names nobody.
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select task.id, '49900000-0000-0000-0000-000000000002', '49900000-0000-0000-0000-000000000007', now()
+  from public.tasks as task
+ where task.title = 'Task anulat deschis 861';
+
 create temp table f499 as
 select
   (select id from public.tasks where title = 'Oportunitate vizibila 499') as visible_task_id,
@@ -112,6 +122,7 @@ select
   (select id from public.tasks where title = 'Task finalizat 861') as completed_task_id,
   (select id from public.tasks where title = 'Task neindeplinit 861') as unfulfilled_task_id,
   (select id from public.tasks where title = 'Task anulat 861') as cancelled_task_id,
+  (select id from public.tasks where title = 'Task anulat deschis 861') as cancelled_open_task_id,
   (select id from public.tasks where title = 'Task redeschis 861') as reopened_task_id;
 grant select on f499 to authenticated, anon;
 
@@ -262,6 +273,7 @@ select results_eq(
         (select completed_task_id from f499),
         (select unfulfilled_task_id from f499),
         (select cancelled_task_id from f499),
+        (select cancelled_open_task_id from f499),
         (select reopened_task_id from f499)
       ])
   $$,
@@ -270,7 +282,7 @@ select results_eq(
     ((select unfulfilled_task_id from f499), '49900000-0000-0000-0000-000000000002'::uuid, false),
     ((select reopened_task_id from f499), '49900000-0000-0000-0000-000000000003'::uuid, true)
   $$,
-  '#861: a completed or unfulfilled Task names the member of its latest finishing Assignment (is_current false), a cancelled Task names nobody, a reopened Task names its open Assignment');
+  '#861: a completed or unfulfilled Task names the member of its latest finishing Assignment (is_current false), a cancelled Task names nobody (even with an open row), a reopened Task names its open Assignment');
 
 select is(
   (select count(*)
