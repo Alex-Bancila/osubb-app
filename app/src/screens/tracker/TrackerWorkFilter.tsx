@@ -1,34 +1,43 @@
-import { ListFilter } from 'lucide-react';
-import { Panel } from '../../components/layout';
-import { ErrorState, Loading } from '../../components/states';
+import type { ReactNode } from 'react';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
+import type { WorkItem } from '../../lib/work-filter';
 import { useWorkFilterOptions } from '../../queries/work-filter-options';
 
 /**
  * The Work Filter (#678) above a Tracker list. Its state is in the URL, so
- * the list reads the same `useWorkFilter()` and narrows itself.
+ * the list reads the same `useWorkFilter()` and narrows itself. `rows` are
+ * the Tasks the list can show: Rule W (#845) offers only their Groups and
+ * Campaigns.
  */
-export function TrackerWorkFilter({ hint }: { hint: string }) {
+export function TrackerWorkFilter({
+  hint,
+  rows,
+  fields,
+  fieldsActive,
+}: {
+  hint: string;
+  rows: readonly WorkItem[];
+  /** More cells for the same grid (De gestionat's Stare, Caută, Ordonează). */
+  fields?: (id: string) => ReactNode;
+  fieldsActive?: number;
+}) {
   const options = useWorkFilterOptions();
   return (
-    <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre taskuri">
-      {options.isPending ? (
-        <Loading label="Se încarcă filtrele…" />
-      ) : options.isError ? (
-        <ErrorState
-          error={options.error}
-          text="Nu am putut încărca filtrele."
-          retryLabel="Reîncarcă filtrele"
-          onRetry={() => void options.refetch()}
-        />
-      ) : (
-        <WorkFilter
-          groups={options.data.groups}
-          campaigns={options.data.campaigns}
-          hint={hint}
-        />
-      )}
-    </Panel>
+    <WorkFilter
+      label="Filtre taskuri"
+      status={{
+        pending: options.isPending,
+        failed: options.isError,
+        error: options.error,
+        onRetry: () => void options.refetch(),
+      }}
+      groups={options.data?.groups ?? []}
+      campaigns={options.data?.campaigns ?? []}
+      work={rows}
+      hint={hint}
+      fields={fields}
+      fieldsActive={fieldsActive}
+    />
   );
 }
 
