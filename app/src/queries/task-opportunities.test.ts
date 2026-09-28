@@ -119,28 +119,64 @@ describe('Available work ordering (ruling R26)', () => {
     ]);
   });
 
-  it('keeps a row the Member took part in, even when they cannot join it', () => {
+  it('keeps a pending Candidature the Member cannot join, so they can withdraw', () => {
     const rows = [
       taskRow({ id: 8, group_id: 99, audience: 'local' }),
       taskRow({ id: 9, group_id: 21, audience: 'local' }),
     ];
     expect(
+      orderOpportunities(rows, scopes, { pending: new Set([9]) }).map(
+        ({ id, joinable }) => ({ id, joinable }),
+      ),
+    ).toEqual([{ id: 9, joinable: true }]);
+  });
+
+  it('lists no finished Task, even one the Member was a Candidate on (B10)', () => {
+    const rows = (
+      ['todo', 'in_progress', 'in_review', 'completed', 'cancelled'] as const
+    ).map((status, index) =>
+      taskRow({ id: index + 1, status, group_id: 10, audience: 'local' }),
+    );
+    rows.push(
+      taskRow({ id: 6, status: 'unfulfilled', group_id: 10, audience: 'org' }),
+    );
+    expect(
       orderOpportunities(rows, scopes, {
-        pending: new Set([9]),
-        participated: new Set([8, 9]),
-      }).map(({ id, joinable }) => ({ id, joinable })),
-    ).toEqual([
-      { id: 8, joinable: false },
-      // A pending Candidate keeps the controls, so they can withdraw.
-      { id: 9, joinable: true },
-    ]);
+        pending: new Set([4, 5, 6]),
+      }).map((row) => row.id),
+    ).toEqual([1, 2, 3]);
+  });
+
+  it('lists no Task the Member executes now; an ended assignment is no longer theirs (B11)', () => {
+    const mine = taskRow({
+      id: 1,
+      status: 'in_progress',
+      group_id: 10,
+      assignments: [{ id: 1, member_id: 'member', ended_at: null }],
+    });
+    const gaveUp = taskRow({
+      id: 2,
+      group_id: 10,
+      assignments: [
+        { id: 2, member_id: 'member', ended_at: '2026-09-20T10:00:00Z' },
+      ],
+    });
+    const someoneElse = taskRow({
+      id: 3,
+      status: 'in_progress',
+      group_id: 10,
+      assignments: [{ id: 3, member_id: 'other', ended_at: null }],
+    });
+    expect(
+      orderOpportunities([mine, gaveUp, someoneElse], scopes, {
+        memberId: 'member',
+      }).map((row) => row.id),
+    ).toEqual([2, 3]);
   });
 
   it('classifies relevant by membership and joinable by membership or org Audience', () => {
     const classified = (row: ReturnType<typeof taskRow>) => {
-      const [only] = orderOpportunities([row], scopes, {
-        participated: new Set([row.id]),
-      });
+      const [only] = orderOpportunities([row], scopes);
       return { relevant: only?.relevant, joinable: only?.joinable };
     };
     // Own local and own org: relevant and joinable.
@@ -158,15 +194,15 @@ describe('Available work ordering (ruling R26)', () => {
       relevant: false,
       joinable: true,
     });
-    // Another Group's local-Audience Task: not joinable.
+    // Another Group's local-Audience Task: not joinable, so not listed.
     expect(classified(taskRow({ group_id: 99, audience: 'local' }))).toEqual({
-      relevant: false,
-      joinable: false,
+      relevant: undefined,
+      joinable: undefined,
     });
     // A Child Group reached only through a managed ancestor is not own (R31).
     expect(classified(taskRow({ group_id: 21, audience: 'local' }))).toEqual({
-      relevant: false,
-      joinable: false,
+      relevant: undefined,
+      joinable: undefined,
     });
   });
 });
@@ -216,18 +252,30 @@ function mockTaskReads(
   return { openQuery, participatedQuery };
 }
 
-it('keeps an own Candidature after its queue closes, not joinable', async () => {
-  const openTask = taskRow({ id: 1, group_id: 99, audience: 'org' });
-  const participatedTask = taskRow({
-    id: 2,
-    status: 'completed',
-    audience: 'local',
+it('keeps a pending Candidature after its queue closes and drops a finished one', async () => {
+  const openTask = taskRow({
+    id: 1,
     group_id: 99,
+    audience: 'org',
+    assignment_mode: 'public',
+    assignments: [],
+  });
+  const queued = taskRow({
+    id: 2,
+    group_id: 99,
+    audience: 'local',
+    assignment_mode: 'public',
+    queue_closed_at: '2026-09-20T10:00:00Z',
+    assignments: [],
   });
   const { openQuery, participatedQuery } = mockTaskReads(
     [openTask],
-    [participatedTask],
-    [{ task_id: 2 }],
+    [queued],
+    [
+      { task_id: 2, status: 'pending' },
+      // A Task the Member was selected on and finished is Taskurile mele's.
+      { task_id: 3, status: 'selected' },
+    ],
   );
   api.rpc.mockImplementation((name: string) =>
     Promise.resolve(
@@ -257,7 +305,7 @@ it('keeps an own Candidature after its queue closes, not joinable', async () => 
       },
     },
     // Another Group's local Task stays listed only through the Candidature.
-    { id: 2, relevant: false, joinable: false, visibleExecutor: null },
+    { id: 2, relevant: false, joinable: true, visibleExecutor: null },
   ]);
   // Each card's latest Submission Note comes in the same request (#685).
   for (const query of [openQuery, participatedQuery]) {
@@ -272,6 +320,7 @@ it('keeps an own Candidature after its queue closes, not joinable', async () => 
     'in_progress',
     'in_review',
   ]);
+  // Only the pending Candidature is read back; the finished one is not.
   expect(participatedQuery.in).toHaveBeenCalledWith('id', [2]);
   expect(api.rpc).toHaveBeenCalledWith('visible_task_executors', {
     p_task_ids: [1, 2],
@@ -279,7 +328,12 @@ it('keeps an own Candidature after its queue closes, not joinable', async () => 
 });
 
 it('reads membership live from my_groups(), so a new Appointment counts on the next refetch', async () => {
-  const local = taskRow({ id: 3, group_id: 40, audience: 'local' });
+  const local = taskRow({
+    id: 3,
+    group_id: 40,
+    audience: 'local',
+    assignments: [],
+  });
   let appointed = false;
   api.rpc.mockImplementation((name: string) =>
     Promise.resolve(
@@ -308,14 +362,30 @@ it('reads membership live from my_groups(), so a new Appointment counts on the n
 });
 
 it('keeps the controls on another Group’s local row the Member is still queued on, so they can withdraw', async () => {
-  const local = taskRow({ id: 6, group_id: 40, audience: 'local' });
-  const closed = taskRow({ id: 7, group_id: 40, audience: 'local' });
+  const local = taskRow({
+    id: 6,
+    group_id: 40,
+    audience: 'local',
+    assignments: [],
+  });
+  // A withdrawn Candidature leaves nothing to act on: not listed.
+  const withdrawn = taskRow({
+    id: 7,
+    group_id: 40,
+    audience: 'local',
+    assignments: [],
+  });
   // Readable through leadership only (R1/R3), with no Candidature: dropped.
-  const managed = taskRow({ id: 8, group_id: 40, audience: 'local' });
+  const managed = taskRow({
+    id: 8,
+    group_id: 40,
+    audience: 'local',
+    assignments: [],
+  });
   api.rpc.mockImplementation(() => Promise.resolve({ data: [], error: null }));
   mockTaskReads(
-    [local, closed, managed],
-    [local, closed],
+    [local, withdrawn, managed],
+    [local],
     [
       { task_id: 6, status: 'pending' },
       { task_id: 7, status: 'withdrawn' },
@@ -323,6 +393,5 @@ it('keeps the controls on another Group’s local row the Member is still queued
   );
   await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
     { id: 6, relevant: false, joinable: true },
-    { id: 7, relevant: false, joinable: false },
   ]);
 });

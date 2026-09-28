@@ -5,6 +5,7 @@ import {
   formatNotificationAge,
   formatNotificationMoment,
   inAppLink,
+  isGroupNotification,
   notificationKindMeta,
   toNotificationPresentation,
   unreadBadgeLabel,
@@ -131,5 +132,50 @@ describe('notification presentation', () => {
   it('counts unread notifications in words for screen readers', () => {
     expect(unreadBadgeLabel(1)).toBe('1 notificare necitită');
     expect(unreadBadgeLabel(4)).toBe('4 notificări necitite');
+  });
+
+  describe('Group notifications read "Grupuri", not "Sistem" (#858, B37)', () => {
+    it.each([
+      ['Ai fost adăugat în Echipa Logistică', '/grupuri/4'],
+      ['Numire în Educațional', '/grupuri/2'],
+      ['Numire încheiată în Educațional', null],
+      ['Nu mai faci parte din Echipa Logistică', null],
+      ['Nivel minim actualizat: Educațional', '/administrare/grupuri/2'],
+      [
+        'Cerere de înscriere: Echipa Logistică',
+        '/administrare/grupuri/4?tab=cereri',
+      ],
+      ['Cerere acceptată: Echipa Logistică', '/grupuri/4'],
+      ['Cerere respinsă: Echipa Logistică', null],
+    ])('%s', (title, link) => {
+      const presentation = toNotificationPresentation(
+        notificationRow({ kind: 'system', title, link, task_id: null }),
+      );
+
+      expect(presentation.kindLabel).toBe('Grupuri');
+    });
+
+    it('keeps "Sistem" for the other system notifications', () => {
+      for (const [title, link] of [
+        ['Rol actualizat', '/profil'],
+        ['Problemă la livrarea emailului', '/administrare/membri/9'],
+      ] as const) {
+        expect(
+          toNotificationPresentation(
+            notificationRow({ kind: 'system', title, link, task_id: null }),
+          ).kindLabel,
+        ).toBe('Sistem');
+      }
+    });
+
+    it('never relabels another kind, even with a Group link', () => {
+      expect(
+        isGroupNotification({
+          kind: 'announce',
+          title: 'Cerere respinsă: Echipa Logistică',
+          link: '/grupuri/4',
+        }),
+      ).toBe(false);
+    });
   });
 });

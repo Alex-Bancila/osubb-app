@@ -306,21 +306,24 @@ describe('ManagerTaskList', () => {
     const { container } = renderList();
     expect(screen.queryByRole('table')).toBeNull();
     expect(container.querySelector('.overflow-x-auto')).toBeNull();
-    // Only the short status badges keep their words together; they wrap as
-    // whole items.
+    // Only the short status badges and the points keep their words
+    // together; they wrap as whole items.
     expect(
-      list().querySelector('.whitespace-nowrap:not([data-slot="badge"])'),
+      list().querySelector(
+        '.whitespace-nowrap:not([data-slot="badge"]):not([data-slot="list-row-value"])',
+      ),
     ).toBeNull();
     expect(container.querySelector('[data-slot="task-row-list"]')).toHaveClass(
       'min-w-0',
     );
     for (const row of within(list()).getAllByRole('article')) {
       expect(row).toHaveClass('min-w-0');
-      // One line when there is room; below `sm` the title takes its own line.
-      const line = row.querySelector(':scope > div');
-      expect(line).toHaveClass('flex-wrap', 'min-w-0');
+      // The title wraps by word at a readable width (layout T1, #846); the
+      // meta line under it wraps as whole items.
       const heading = row.querySelector('h2');
-      expect(heading).toHaveClass('basis-full', 'sm:basis-0', 'wrap-anywhere');
+      expect(heading).toHaveClass('min-w-48', 'wrap-break-word');
+      const meta = row.querySelector('[data-slot="task-row-meta"]');
+      expect(meta).toHaveClass('flex-wrap', 'min-w-0');
     }
   });
 
