@@ -213,7 +213,9 @@ export default function AppShell() {
   const requestsToDecide = usePendingDecisions();
   const viewer: NavViewer = {
     submitsWorkRequests: submitsWorkRequests(claims),
-    hasRequestsToDecide: (requestsToDecide.data?.length ?? 0) > 0,
+    // A failed read keeps the item, so the page's retry stays reachable.
+    hasRequestsToDecide:
+      requestsToDecide.isError || (requestsToDecide.data?.length ?? 0) > 0,
   };
   const roleLabel =
     (claims && roles.data?.get(claims.member_role)?.name) ??

@@ -444,6 +444,12 @@ describe('AppShell', () => {
       expect(cereri()).toBeNull();
     });
 
+    it('keeps the item when the queue cannot be read, so its retry is reachable', () => {
+      queries.usePendingDecisions.mockReturnValue({ isError: true });
+      renderShell();
+      expect(cereri()).toHaveAttribute('href', '/cereri');
+    });
+
     it('shows the item with one Request to decide', () => {
       queries.usePendingDecisions.mockReturnValue({ data: [{ id: 7 }] });
       renderShell();

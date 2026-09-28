@@ -45,7 +45,10 @@ export type NavItem = {
 export type NavViewer = {
   /** Files Completed-work Requests for their own work (`submitsWorkRequests`). */
   submitsWorkRequests: boolean;
-  /** `pending_request_decisions()` returned at least one Request. */
+  /**
+   * `pending_request_decisions()` returned at least one Request, or could not
+   * be read (the page then offers the retry).
+   */
   hasRequestsToDecide: boolean;
 };
 

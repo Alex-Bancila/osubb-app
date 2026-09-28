@@ -168,7 +168,10 @@ export function RequestDecisionQueue({
   }
   const rows = queue.isPending || queue.isError ? [] : (queue.data ?? []);
   const nothingToDecide = !queue.isError && rows.length === 0;
-  if (nothingToDecide && !receipt && !open && !showEmpty) return null;
+  // `selected` keeps the panel (and the dialog in it) mounted until the
+  // dialog has finished closing, even if the queue emptied meanwhile.
+  if (nothingToDecide && !receipt && !open && !selected && !showEmpty)
+    return null;
   // A list alone fills the box edge to edge; with a receipt above it, the box
   // keeps its padding and the rows step out to meet it.
   const flush = rows.length > 0 && !receipt;
