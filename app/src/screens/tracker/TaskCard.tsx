@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -164,6 +165,18 @@ function TaskChips({
     observer.observe(line);
     return () => observer.disconnect();
   }, [wrap, widths]);
+  // A first measure may use the fallback font; once the web font is in,
+  // measure the chips again (once — this effect does not follow `widths`).
+  useEffect(() => {
+    if (wrap || typeof document === 'undefined' || !document.fonts) return;
+    let live = true;
+    void document.fonts.ready.then(() => {
+      if (live) setWidths(null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [wrap]);
   const measuring = widths === null;
   const shown = measuring ? extras.length + 1 : chipsThatFit(widths, available);
 
