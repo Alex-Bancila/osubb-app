@@ -31,6 +31,29 @@ describe('Withdraw and rejoin', () => {
     expect(
       screen.getByText('Ești pe locul 2 în lista de așteptare.'),
     ).toBeVisible();
+    // One queue sentence (B21).
+    expect(screen.queryByText('Te-ai înscris pe locul 2.')).toBeNull();
+  });
+  it('shows the join button alone to a Member who is not enrolled (B12)', () => {
+    hooks.useTaskQueue.mockReturnValue({
+      data: { status: null, position: null },
+    });
+    render(
+      <TaskInterestControls
+        taskId={1}
+        task={toTaskPresentation(
+          taskRow({ assignment_mode: 'public', assignments: [] }),
+          new Date('2026-09-01'),
+        )}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Vreau să particip' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(
+      screen.queryByText(/Nu ești înscris|Taskul este de făcut/),
+    ).toBeNull();
   });
   beforeEach(() => {
     hooks.useTaskQueue.mockReturnValue({

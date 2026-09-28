@@ -4,17 +4,19 @@ import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
 import { useRef, useState } from 'react';
-import { MemberName } from '../../components/member/MemberName';
+import { ArrowLeft } from 'lucide-react';
+import { focusRingClass, SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import {
   Sheet,
   SheetBackdrop,
-  SheetClose,
+  SheetHeader,
   SheetPopup,
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
 import { useAuth } from '../../lib/auth';
+import { cn } from '../../lib/utils';
 import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskDuplicateControl } from './TaskDuplicateControl';
@@ -27,8 +29,14 @@ import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { TaskEditControl } from './TaskEditControl';
 import { TaskEvaluationControl } from './TaskEvaluationControl';
-import { DifficultyStars } from '../../components/tasks/DifficultyStars';
 import { isTerminalTask, toTaskPresentation } from './task-presentation';
+import {
+  sheetTrailBack,
+  sheetTrailCurrent,
+  sheetTrailPrevious,
+  sheetTrailPush,
+  type SheetTrail,
+} from './sheet-trail';
 
 function TaskDetails({
   taskId,
@@ -56,9 +64,14 @@ function TaskDetails({
   const task = toTaskPresentation(query.data.task, new Date());
   const parentId = task.parent?.id;
   const sourceId = task.duplicatedFromTaskId;
+  // Rundă de verificare says something only once a review returned the work,
+  // and only to whoever reviews it (relevance B20).
+  const showReviewRound = canManage && task.reviewRound >= 1;
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       <div className="[&>article]:h-auto [&_[data-slot=card]]:h-auto">
+        {/* The card says the Group, status, deadline, Executor, stage and
+            Evaluation; the list below adds only what it does not. */}
         <TaskCard
           task={task}
           memberId={memberId}
@@ -66,76 +79,17 @@ function TaskDetails({
           onProgress={(input) => progress.mutateAsync(input)}
           anchor={false}
           showSubmissionNote={false}
+          inSheet
         />
       </div>
       {task.submission && (
         <SubmissionNote submission={task.submission} showTime />
       )}
-      {canManage && task.kind === 'task' && (
-        <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
-      )}
-      <TaskEditControl task={query.data.task} canManage={canManage} />
-      <TaskAssignControl
-        taskId={taskId}
-        groupId={query.data.task.group_id}
-        status={task.status}
-        kind={task.kind}
-        assignmentMode={task.assignmentMode}
-        hasExecutor={task.executor !== null}
-        canManage={canManage}
-      />
-      <TaskCancelControl
-        taskId={taskId}
-        status={task.status}
-        kind={task.kind}
-        canManage={canManage}
-      />
-      <TaskReopenControl
-        taskId={taskId}
-        status={task.status}
-        kind={task.kind}
-      />
-      <TaskFeedbackControl
-        taskId={taskId}
-        status={task.status}
-        kind={task.kind}
-      />
-      {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}
-      <TaskEvaluationControl
-        taskId={taskId}
-        status={task.status}
-        kind={task.kind}
-        overdue={task.overdue}
-        hasExecutor={task.executor !== null}
-        executorName={query.data.executorName}
-      />
-      <dl className="grid gap-3 text-sm">
-        {task.kind === 'task' && (
-          <>
-            <div>
-              <dt className="font-semibold">Dificultate</dt>
-              <dd>
-                {task.difficulty === null ? (
-                  'Neevaluat'
-                ) : (
-                  <DifficultyStars value={task.difficulty} />
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-semibold">Nota</dt>
-              <dd className="tabular-nums">{task.rating ?? 'Neevaluat'}</dd>
-            </div>
-          </>
-        )}
-        {/* A direct Task is local only (R26): its Audience says nothing. */}
-        {task.assignmentMode === 'public' && (
-          <div>
-            <dt className="font-semibold">Audiență</dt>
-            <dd>{task.audienceLabel}</dd>
-          </div>
-        )}
-        <div>
+      <dl
+        data-slot="task-facts"
+        className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm"
+      >
+        <div className="min-w-0">
           <dt className="font-semibold">Atribuire</dt>
           <dd>
             {task.assignmentMode === 'direct'
@@ -145,47 +99,87 @@ function TaskDetails({
                 : 'Indisponibilă'}
           </dd>
         </div>
-        {task.kind === 'task' && (
-          <div>
-            <dt className="font-semibold">Executor</dt>
-            <dd>
-              {task.executor?.name ? (
-                <MemberName
-                  memberId={task.executor.memberId}
-                  nickname={task.executor.nickname}
-                  fullName={task.executor.name}
-                />
-              ) : (
-                'Indisponibil'
-              )}
-            </dd>
+        {/* A direct Task is local only (R26): its Audience says nothing. */}
+        {task.assignmentMode === 'public' && (
+          <div className="min-w-0">
+            <dt className="font-semibold">Audiență</dt>
+            <dd>{task.audienceLabel}</dd>
           </div>
         )}
-        <div>
-          <dt className="font-semibold">Rundă de verificare</dt>
-          <dd>{task.reviewRound}</dd>
-        </div>
+        {showReviewRound && (
+          <div className="min-w-0">
+            <dt className="font-semibold">Rundă de verificare</dt>
+            <dd className="tabular-nums">{task.reviewRound}</dd>
+          </div>
+        )}
       </dl>
-      {parentId !== undefined && (
-        <Button
-          variant="outline"
-          className="min-h-11 min-w-11 whitespace-normal text-foreground"
-          onClick={() => onNavigate(parentId)}
-        >
-          Deschide taskul-umbrelă
-        </Button>
+      {(parentId !== undefined || sourceId !== null) && (
+        <div className="flex flex-wrap gap-2">
+          {parentId !== undefined && (
+            <Button
+              variant="outline"
+              className="whitespace-normal"
+              onClick={() => onNavigate(parentId)}
+            >
+              Deschide taskul-umbrelă
+            </Button>
+          )}
+          {sourceId !== null && (
+            <Button
+              variant="outline"
+              className="whitespace-normal"
+              onClick={() => onNavigate(sourceId)}
+            >
+              Duplicat din #{task.duplicatedFromTaskId}
+            </Button>
+          )}
+        </div>
       )}
-      {sourceId !== null && (
-        <p>
-          <Button
-            variant="link"
-            className="min-h-11 min-w-11 whitespace-normal text-foreground"
-            onClick={() => onNavigate(sourceId)}
-          >
-            Duplicat din #{task.duplicatedFromTaskId}
-          </Button>
-        </p>
-      )}
+      {/* The commands in one wrapping row (layout T5). A control that opens
+          an inline form or leaves a receipt takes the full row. */}
+      <div
+        data-slot="task-actions"
+        className="flex flex-wrap items-start gap-2 empty:hidden [&>*:has(form)]:basis-full [&>*:has([role=status])]:basis-full [&>[role=status]]:basis-full"
+      >
+        {canManage && task.kind === 'task' && (
+          <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
+        )}
+        <TaskEditControl task={query.data.task} canManage={canManage} />
+        <TaskAssignControl
+          taskId={taskId}
+          groupId={query.data.task.group_id}
+          status={task.status}
+          kind={task.kind}
+          assignmentMode={task.assignmentMode}
+          hasExecutor={task.executor !== null}
+          canManage={canManage}
+        />
+        <TaskCancelControl
+          taskId={taskId}
+          status={task.status}
+          kind={task.kind}
+          canManage={canManage}
+        />
+        <TaskReopenControl
+          taskId={taskId}
+          status={task.status}
+          kind={task.kind}
+        />
+        <TaskFeedbackControl
+          taskId={taskId}
+          status={task.status}
+          kind={task.kind}
+        />
+        <TaskEvaluationControl
+          taskId={taskId}
+          status={task.status}
+          kind={task.kind}
+          overdue={task.overdue}
+          hasExecutor={task.executor !== null}
+          executorName={query.data.executorName}
+        />
+      </div>
+      {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}
       {task.kind === 'umbrella' && (
         <UmbrellaTaskSection
           taskId={taskId}
@@ -203,15 +197,15 @@ function TaskDetails({
         !(task.status === 'in_review' && task.assignmentMode !== 'public') && (
           <section
             aria-labelledby={`task-${taskId}-candidate-heading`}
-            className="space-y-3 rounded-lg border border-border p-4"
+            className="flex flex-col gap-3 rounded-md border border-border p-4"
           >
-            <div className="space-y-1">
-              <h3
+            <div className="flex flex-col gap-1">
+              <SubHeading
                 id={`task-${taskId}-candidate-heading`}
-                className="font-semibold"
+                variant="label"
               >
                 Coada taskului
-              </h3>
+              </SubHeading>
               <p className="text-sm text-muted-foreground">
                 Poți înlocui executorul numai cu o persoană înscrisă în coadă.
               </p>
@@ -229,7 +223,12 @@ function TaskDetails({
           </section>
         )}
       <details>
-        <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">
+        <summary
+          className={cn(
+            'min-h-11 cursor-pointer rounded-sm py-3 font-semibold',
+            focusRingClass,
+          )}
+        >
           Istoricul taskului
         </summary>
         <TaskHistory taskId={taskId} />
@@ -237,6 +236,7 @@ function TaskDetails({
     </div>
   );
 }
+
 export function TaskDetailsSheet({
   taskId,
   managedTaskIds = new Set<number>(),
@@ -250,13 +250,26 @@ export function TaskDetailsSheet({
   onClose: () => void;
 }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const [relatedId, setRelatedId] = useState<number | null>(null);
+  const [trail, setTrail] = useState<SheetTrail | null>(null);
+  // A new Task opened from the list starts a new trail.
+  const current =
+    taskId === null
+      ? null
+      : trail && trail.opened === taskId
+        ? trail
+        : { opened: taskId, visited: [] };
+  const shownId = current ? sheetTrailCurrent(current) : null;
+  const previousId = current ? sheetTrailPrevious(current) : null;
+  function go(next: SheetTrail) {
+    setTrail(next);
+    titleRef.current?.focus();
+  }
   return (
     <Sheet
       open={taskId !== null}
       onOpenChange={(open) => {
         if (!open) {
-          setRelatedId(null);
+          setTrail(null);
           onClose();
         }
       }}
@@ -264,35 +277,38 @@ export function TaskDetailsSheet({
       <SheetPortal>
         <SheetBackdrop />
         <SheetPopup
-          className="right-0 left-auto w-full max-w-2xl overflow-y-auto p-4 sm:p-6"
+          side="right"
+          className="max-w-2xl gap-5 p-4 sm:p-6"
           aria-describedby={undefined}
         >
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <SheetTitle
-              ref={titleRef}
-              tabIndex={-1}
-              className="text-xl font-semibold"
-            >
+          <SheetHeader>
+            <SheetTitle ref={titleRef} tabIndex={-1} className="outline-none">
               Detalii task
             </SheetTitle>
-            <SheetClose className="min-h-11 min-w-11 rounded-md border border-input px-3 focus-visible:outline-2 focus-visible:outline-ring">
-              Închide
-            </SheetClose>
-          </div>
-          {taskId !== null && notice && relatedId === null && (
-            <div className="mb-5">
-              <TaskActionSuccess>{notice}</TaskActionSuccess>
-            </div>
+          </SheetHeader>
+          {current && previousId !== null && (
+            <button
+              type="button"
+              data-slot="sheet-back"
+              onClick={() => go(sheetTrailBack(current))}
+              className={cn(
+                'inline-flex min-h-11 items-center gap-1.5 self-start rounded-sm text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
+                focusRingClass,
+              )}
+            >
+              <ArrowLeft aria-hidden="true" className="size-4 shrink-0" />
+              Înapoi la #{previousId}
+            </button>
           )}
-          {taskId !== null && (
+          {current && notice && current.visited.length === 0 && (
+            <TaskActionSuccess>{notice}</TaskActionSuccess>
+          )}
+          {current && shownId !== null && (
             <TaskDetails
-              key={relatedId ?? taskId}
-              taskId={relatedId ?? taskId}
-              canManage={managedTaskIds.has(relatedId ?? taskId)}
-              onNavigate={(id) => {
-                setRelatedId(id);
-                titleRef.current?.focus();
-              }}
+              key={shownId}
+              taskId={shownId}
+              canManage={managedTaskIds.has(shownId)}
+              onNavigate={(id) => go(sheetTrailPush(current, id))}
             />
           )}
         </SheetPopup>
