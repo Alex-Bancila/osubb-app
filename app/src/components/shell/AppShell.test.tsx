@@ -471,6 +471,75 @@ describe('AppShell', () => {
     );
   });
 
+  it('names the Role in the sidebar footer, never its level (#844, B44)', () => {
+    renderShell();
+    expect(screen.getByTitle('Voluntar')).toHaveTextContent(/^Voluntar$/);
+    expect(screen.queryByText(/nivel/)).toBeNull();
+  });
+
+  it('marks Clasament, not Taskuri, on a member history (#844, D17)', () => {
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
+    renderShell('/tracker/membru/35400000-0000-0000-0000-000000000001');
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', { name: 'Clasament' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      within(primary).getByRole('link', { name: 'Taskuri' }),
+    ).not.toHaveAttribute('aria-current');
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(
+      within(quick).getByRole('link', { name: 'Taskuri' }),
+    ).not.toHaveAttribute('aria-current');
+  });
+
+  it('keeps Taskuri marked on the Tracker itself (#844)', () => {
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
+    renderShell('/tracker');
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', { name: 'Taskuri' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      within(primary).getByRole('link', { name: 'Clasament' }),
+    ).not.toHaveAttribute('aria-current');
+  });
+
+  it.each([
+    [{ denied: true }, 'Nu ai acces la pagina cerută.'],
+    [
+      { leadershipDenied: true },
+      'Clasamentul și istoricul membrilor sunt disponibile doar conducerii OSUBB.',
+    ],
+  ])(
+    'says why a refused route landed here (%o, #844 D21)',
+    (state, message) => {
+      render(
+        <MemoryRouter initialEntries={[{ pathname: '/', state }]}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="*" element={<h1>Conținut</h1>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(screen.getByRole('alert')).toHaveTextContent(message);
+    },
+  );
+
+  it('shows no refusal line on an ordinary visit (#844)', () => {
+    renderShell('/');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('keeps sign-out failures in the shell and unlocks retry', async () => {
     const user = userEvent.setup();
     auth.signOut.mockRejectedValueOnce(new Error('private provider error'));

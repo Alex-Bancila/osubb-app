@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
@@ -94,9 +94,17 @@ vi.mock('./screens/groups/MemberGroupScreen', () => ({
 vi.mock('./screens/administrare/MemberScreen', () => ({
   default: () => <h1>Membru screen</h1>,
 }));
-vi.mock('./screens/administrare/GroupScreen', () => ({
-  default: () => <h1>Grup screen</h1>,
-}));
+/* Counts mounts: moving between Groups must start a fresh screen (#844). */
+const groupScreen = vi.hoisted(() => ({ mounts: 0 }));
+vi.mock('./screens/administrare/GroupScreen', async () => {
+  const { useState } = await vi.importActual<typeof import('react')>('react');
+  return {
+    default: function GroupScreenStub() {
+      useState(() => (groupScreen.mounts += 1));
+      return <h1>Grup screen</h1>;
+    },
+  };
+});
 vi.mock('./screens/administrare/RoleEvaluationsScreen', () => ({
   default: () => <h2>Evaluări de rol tab</h2>,
 }));
@@ -410,6 +418,14 @@ describe('route guards', () => {
     ).toBe('/cereri?source=test#requests');
   });
 
+  it('sends a Member who just signed out to a bare /login, forgetting the page (#844, D25)', async () => {
+    auth.useAuth.mockReturnValue({ ...signedOut, signedOut: true });
+    window.history.pushState({}, '', '/cereri?source=test');
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Login screen' });
+    expect(window.location.pathname + window.location.search).toBe('/login');
+  });
+
   it('redirects a signed-out visitor from /no-profile to login', async () => {
     auth.useAuth.mockReturnValue(signedOut);
     window.history.pushState({}, '', '/no-profile');
@@ -497,7 +513,7 @@ describe('route guards', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/login'));
   });
 
-  it('redirects a member who lacks a route capability to the dashboard', async () => {
+  it('redirects a member who lacks a route capability to the dashboard, saying why (#844)', async () => {
     auth.useAuth.mockReturnValue(ordinaryMember);
     grant();
     window.history.pushState({}, '', '/voluntari');
@@ -506,6 +522,77 @@ describe('route guards', () => {
 
     await screen.findByRole('heading', { name: 'Dashboard' });
     expect(window.location.pathname).toBe('/');
+    // AppShell reads this flag and shows "Nu ai acces la pagina cerută."
+    expect(window.history.state.usr).toEqual({ denied: true });
+  });
+
+  it('keeps a member history on its own route, not the Task alias (#844)', async () => {
+    auth.useAuth.mockReturnValue(member);
+    const path = '/tracker/membru/35400000-0000-0000-0000-000000000001';
+    window.history.pushState({}, '', path);
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Member history screen' });
+    expect(window.location.pathname).toBe(path);
+  });
+
+  it('sends a non-numeric /tracker/<x> to Acasă (#844)', async () => {
+    auth.useAuth.mockReturnValue(member);
+    window.history.pushState({}, '', '/tracker/abc');
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    expect(window.location.pathname + window.location.search).toBe('/');
+  });
+
+  it('keeps an old Task link through sign-in as /tracker?task=<id> (#844)', async () => {
+    auth.useAuth.mockReturnValue(signedOut);
+    window.history.pushState({}, '', '/tracker/11');
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Login screen' });
+    expect(new URLSearchParams(window.location.search).get('next')).toBe(
+      '/tracker?task=11',
+    );
+  });
+
+  it.each([
+    ['/grupuri/1', 'Member Group screen'],
+    ['/clasament?vedere=cupa', 'Clasament screen'],
+    ['/administrare/grupuri/3', 'Grup screen'],
+    ['/administrare/evaluari', 'Evaluări de rol tab'],
+    [
+      '/tracker/membru/35400000-0000-0000-0000-000000000001',
+      'Member history screen',
+    ],
+  ])(
+    'lands on %s after sign-in, not on Acasă (#844, D3)',
+    async (path, heading) => {
+      auth.useAuth.mockReturnValue(signedOut);
+      window.history.pushState({}, '', path);
+      const view = render(<App />);
+      await screen.findByRole('heading', { name: 'Login screen' });
+      expect(new URLSearchParams(window.location.search).get('next')).toBe(
+        path,
+      );
+      auth.useAuth.mockReturnValue(member);
+      view.rerender(<App />);
+      await screen.findByRole('heading', { name: heading });
+      expect(window.location.pathname + window.location.search).toBe(path);
+    },
+  );
+
+  it('starts a fresh Group screen when moving to another Group (#844, D18)', async () => {
+    auth.useAuth.mockReturnValue(member);
+    groupScreen.mounts = 0;
+    window.history.pushState({}, '', '/administrare/grupuri/2');
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Grup screen' });
+    expect(groupScreen.mounts).toBe(1);
+
+    act(() => {
+      window.history.pushState({}, '', '/administrare/grupuri/3');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await screen.findByRole('heading', { name: 'Grup screen' });
+    expect(groupScreen.mounts).toBe(2);
   });
 
   it('renders a capability route for a member at the required level', () => {
@@ -719,3 +806,24 @@ it('opens the leadership page for BCE', () => {
     screen.getByRole('heading', { name: 'Clasament screen' }),
   ).toBeInTheDocument();
 });
+
+// After the "Task nou" block: that block's loader test needs the Tracker chunk
+// still unloaded, and this one loads it.
+it('forwards an old /tracker/<id> Task link to /tracker?task=<id> (#844, D1)', async () => {
+  auth.useAuth.mockReturnValue(member);
+  grant();
+  window.history.pushState({}, '', '/tracker/12');
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <App />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole(
+    'heading',
+    { name: 'Tracker screen' },
+    { timeout: 10_000 },
+  );
+  expect(window.location.pathname + window.location.search).toBe(
+    '/tracker?task=12',
+  );
+}, 15_000);

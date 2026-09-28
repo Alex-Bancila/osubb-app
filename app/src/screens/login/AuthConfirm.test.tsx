@@ -213,6 +213,14 @@ describe('AuthConfirm', () => {
       screen.getByRole('link', { name: 'Trimite alt link' }),
     ).toHaveAttribute('href', '/login');
     expect(mocks.verifyOtp).not.toHaveBeenCalled();
+    // The error takes the instruction's place (#844, layout S1).
+    expect(screen.queryByText(/Apasă butonul/)).toBeNull();
+  });
+
+  it('shows the instruction until something goes wrong (#844)', () => {
+    renderConfirm(inviteLink);
+    expect(screen.getByText(/Apasă butonul/)).toBeVisible();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('asks for the second address when an email change is half confirmed', async () => {
