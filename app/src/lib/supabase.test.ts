@@ -32,11 +32,12 @@ function acceptingFetch() {
 }
 
 let clientAuthOptions: typeof import('./supabase').clientAuthOptions;
+let clientDbOptions: typeof import('./supabase').clientDbOptions;
 
 beforeAll(async () => {
   vi.stubEnv('VITE_SUPABASE_URL', 'http://127.0.0.1:54321');
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test-anon-key');
-  ({ clientAuthOptions } = await import('./supabase'));
+  ({ clientAuthOptions, clientDbOptions } = await import('./supabase'));
 });
 
 afterEach(() => {
@@ -50,6 +51,29 @@ describe('the shared Supabase client', () => {
       flowType: 'pkce',
       detectSessionInUrl: false,
     });
+  });
+
+  /* Audit D-8: postgrest-js's own retries (1 s + 2 s + 4 s per GET) stacked
+     under TanStack's, so a failed list kept "Se încarcă…" on screen for
+     tens of seconds. A failed read now answers at once. */
+  it('answers a failed read at once, leaving the retry to TanStack Query', async () => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL): Promise<Response> => {
+      throw new TypeError('Failed to fetch');
+    });
+    const client = createClient('http://127.0.0.1:54321', 'test-anon-key', {
+      auth: { ...clientAuthOptions, storageKey: 'test-retry' },
+      db: clientDbOptions,
+      global: { fetch },
+    });
+
+    const started = Date.now();
+    const { error } = await client.from('tasks').select('id');
+
+    expect(error).not.toBeNull();
+    expect(Date.now() - started).toBeLessThan(900);
+    expect(
+      fetch.mock.calls.filter(([url]) => String(url).includes('/rest/v1/')),
+    ).toHaveLength(1);
   });
 
   it('never signs in from tokens in the URL fragment', async () => {

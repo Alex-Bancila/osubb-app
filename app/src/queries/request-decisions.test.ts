@@ -42,7 +42,7 @@ it('rejects blank or long notes and invalid scoring before a request', async () 
       rating: 5,
       note: 'N',
     }),
-  ).rejects.toThrow('Dificultate între 1 și 5');
+  ).rejects.toThrow('Alege Dificultatea.');
   expect(api.rpc).not.toHaveBeenCalled();
 });
 it('maps already-decided errors safely', async () => {

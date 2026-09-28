@@ -125,6 +125,40 @@ describe('normalized My tasks reads', () => {
     expect(api.orderId).toHaveBeenCalledWith('id', { ascending: false });
   });
 
+  /* Audit D-3: a Task given up (or handed to someone else) is no longer the
+     Member's, while evaluated and cancelled work stays. The latest own
+     Assignment decides: a rejoin after a give-up brings the Task back. */
+  it('drops a Task whose latest own Assignment was given up or replaced', async () => {
+    api.orderId.mockResolvedValue({
+      data: [
+        { end_reason: 'gave_up', task: taskRow({ id: 1, deadline: null }) },
+        { end_reason: 'replaced', task: taskRow({ id: 2, deadline: null }) },
+        {
+          end_reason: 'completed',
+          task: taskRow({ id: 3, status: 'completed', deadline: null }),
+        },
+        {
+          end_reason: 'failed',
+          task: taskRow({ id: 4, status: 'unfulfilled', deadline: null }),
+        },
+        {
+          end_reason: 'cancelled',
+          task: taskRow({ id: 5, status: 'cancelled', deadline: null }),
+        },
+        { end_reason: null, task: taskRow({ id: 6, deadline: null }) },
+        { end_reason: 'gave_up', task: taskRow({ id: 6, deadline: null }) },
+        { end_reason: 'gave_up', task: taskRow({ id: 7, deadline: null }) },
+        { end_reason: null, task: taskRow({ id: 7, deadline: null }) },
+      ],
+      error: null,
+    });
+
+    const result = await fetchMyTasks('member');
+
+    expect(result.map((task) => task.id).sort()).toEqual([3, 4, 5, 6]);
+    expect(api.select.mock.lastCall?.[0]).toMatch(/^end_reason, /);
+  });
+
   it('batches parent titles and retains a fallback for RLS-hidden parents', async () => {
     const child = taskRow({ parent_task_id: 10 });
     const hiddenChild = taskRow({ id: 2, parent_task_id: 11 });

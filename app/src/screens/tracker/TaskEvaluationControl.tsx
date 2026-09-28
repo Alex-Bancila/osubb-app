@@ -1,4 +1,5 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
+import { useReceiptTurn } from './receipt-turn';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
 import {
@@ -27,6 +28,8 @@ export function TaskEvaluationControl({
   const capability = useTaskEvaluationCapability(taskId);
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
+  // Only the latest receipt in the sheet shows (Audit D-16).
+  const turn = useReceiptTurn();
   const canUnfulfilled =
     overdue &&
     hasExecutor &&
@@ -40,7 +43,7 @@ export function TaskEvaluationControl({
     if (status !== outcome) setDone(false);
   }
   if (done)
-    return (
+    return !turn.current ? null : (
       <TaskActionSuccess>
         Evaluarea a fost salvată. Punctele Executorului au fost actualizate.
       </TaskActionSuccess>
@@ -62,6 +65,7 @@ export function TaskEvaluationControl({
           onSuccess={() => {
             setOpen(false);
             setDone(true);
+            turn.claim();
           }}
         />
       ) : (

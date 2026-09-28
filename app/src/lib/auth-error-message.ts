@@ -120,6 +120,21 @@ export function toAuthErrorMessage(error: unknown): string {
   return MESSAGES[kindFrom(detailsFrom(error))];
 }
 
+/** A six-digit code GoTrue refused as expired or invalid: it is a code, not a link. */
+const CODE_REFUSED =
+  'Codul este greșit sau a expirat. Verifică-l sau cere unul nou.';
+
+/**
+ * The sign-in code's own message (Audit D-14): a wrong or stale code is named
+ * as a code; rate limits, network and the rest keep the shared copy.
+ */
+export function toAuthCodeErrorMessage(error: unknown): string {
+  const kind = kindFrom(detailsFrom(error));
+  return kind === 'expired' || kind === 'invalid'
+    ? CODE_REFUSED
+    : MESSAGES[kind];
+}
+
 /* ---- Changing the sign-in address from Profil (#632) ---- */
 
 /** GoTrue's `email_exists`: another account already signs in there. */

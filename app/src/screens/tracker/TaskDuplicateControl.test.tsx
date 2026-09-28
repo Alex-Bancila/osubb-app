@@ -22,7 +22,7 @@ describe('Duplicate task', () => {
     render(<TaskDuplicateControl taskId={1} onDuplicated={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: 'Duplică' }));
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));
-    const date = screen.getByLabelText('Termen nou (ora Bucureștiului)');
+    const date = screen.getByLabelText('Termen nou (ora României)');
     // The rule is shown under the field, which takes focus (ruling R8).
     expect(date).toHaveAccessibleDescription('Alege termenul taskului.');
     expect(date).toHaveFocus();
@@ -52,7 +52,7 @@ describe('Duplicate task', () => {
     const dialog = await screen.findByRole('dialog', {
       name: 'Duplică taskul',
     });
-    const date = screen.getByLabelText('Termen nou (ora Bucureștiului)');
+    const date = screen.getByLabelText('Termen nou (ora României)');
     fireEvent.change(date, { target: { value: '2030-12-20T12:30' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Duplică taskul' }));
     fireEvent.submit(screen.getByRole('form', { name: 'Duplică taskul' }));

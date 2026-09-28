@@ -166,3 +166,36 @@ it('shows the CSV import only to whoever may provision Members', () => {
   show();
   expect(screen.queryByRole('heading', { name: 'Import CSV' })).toBeNull();
 });
+
+/* Audit D-13: Rol sorts by rank, not alphabetically (BC, BCE, Moderator…). */
+it('sorts Rol by the Role level, then by name, both ways', async () => {
+  const user = userEvent.setup();
+  api.members.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: [
+      member('bc', 'Bogdan BC', { roleLabel: 'BC', level: 6 }),
+      member('bce', 'Bianca BCE', { roleLabel: 'BCE', level: 5 }),
+      member('rec', 'Radu Recrut', { roleLabel: 'Recrut', level: 0 }),
+      member('vb', 'Vlad Voluntar', { roleLabel: 'Voluntar', level: 1 }),
+      member('va', 'Ana Voluntar', { roleLabel: 'Voluntar', level: 1 }),
+    ],
+  });
+  show();
+  const names = () =>
+    screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => within(row).getAllByRole('cell')[1]?.textContent);
+
+  await user.click(
+    screen.getByRole('button', { name: 'Sortează Rol crescător' }),
+  );
+  expect(names()).toEqual(['Recrut', 'Voluntar', 'Voluntar', 'BCE', 'BC']);
+  expect(screen.getAllByRole('row')[2]).toHaveTextContent('Ana Voluntar');
+
+  await user.click(
+    screen.getByRole('button', { name: 'Sortează Rol descrescător' }),
+  );
+  expect(names()).toEqual(['BC', 'BCE', 'Voluntar', 'Voluntar', 'Recrut']);
+});

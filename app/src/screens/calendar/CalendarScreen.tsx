@@ -9,7 +9,11 @@ import {
   type SegmentedOption,
 } from '../../components/layout';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
-import { bucharestDayKey } from '../../lib/calendar-time';
+import {
+  bucharestDayKey,
+  formatBucharestDay,
+  formatBucharestTime,
+} from '../../lib/calendar-time';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { useCampaigns } from '../../queries/campaigns';
 import { useGoingEventIds } from '../../queries/event-rsvp';
@@ -27,7 +31,7 @@ import {
   type EventRelevance,
 } from './calendar-presentation';
 import { useCalendarView, type CalendarView } from './calendar-view';
-import { NewEventControl } from './NewEventControl';
+import { NewEventControl, type CreatedEvent } from './NewEventControl';
 
 const VIEWS: ReadonlyArray<SegmentedOption<CalendarView>> = [
   { value: 'month', label: 'Lună', icon: CalendarDays },
@@ -79,7 +83,22 @@ export default function CalendarScreen() {
     [relevant, goingIds],
   );
 
+  // The receipt of a new Event (Audit D-11); the Agendă opens on it.
+  const [created, setCreated] = useState<CreatedEvent | null>(null);
+  function showCreated(event: CreatedEvent) {
+    setCreated(event);
+    setParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        nextParams.set('event', String(event.id));
+        return nextParams;
+      },
+      { replace: true },
+    );
+  }
+
   function chooseView(next: CalendarView) {
+    setCreated(null);
     storeView(next);
     if (linkedId !== null)
       setParams(
@@ -119,10 +138,18 @@ export default function CalendarScreen() {
               value={view}
               onChange={chooseView}
             />
-            <NewEventControl />
+            <NewEventControl onCreated={showCreated} />
           </>
         }
       />
+
+      {created && (
+        <p role="status" className="m-0 -mt-3 text-sm">
+          Evenimentul „{created.title}” a fost creat:{' '}
+          {formatBucharestDay(created.startsAt)}, ora{' '}
+          {formatBucharestTime(created.startsAt)}.
+        </p>
+      )}
 
       <WorkFilter
         label="Filtre calendar"

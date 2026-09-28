@@ -24,6 +24,7 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
   onOpenTask,
   highlightedId = null,
   card,
+  onGaveUp,
 }: {
   rows: readonly Row[];
   now: Date;
@@ -31,6 +32,8 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
   highlightedId?: number | null;
   /** Per-row card options: interest controls, heading level. */
   card?: (row: Row) => CardOptions;
+  /** Taskurile mele: the give-up receipt outlives the card (Audit D-3). */
+  onGaveUp?: (taskId: number) => void;
 }) {
   const progress = useTaskProgress();
   const { session } = useAuth();
@@ -48,6 +51,7 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
             }
             onProgress={(input) => progress.mutateAsync(input)}
             highlighted={row.id === highlightedId}
+            onGaveUp={onGaveUp}
           />
         </li>
       ))}

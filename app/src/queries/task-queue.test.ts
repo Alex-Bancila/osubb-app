@@ -26,7 +26,17 @@ describe('Own queue reads', () => {
     });
     expect(reads.fetchOwnCandidature).toHaveBeenCalledWith(1, 'member');
   });
-  it.each(['selected', 'withdrawn', 'closed'])(
+  /* Audit D-3: after a give-up the Candidature still says `selected`, but the
+     Member holds no Assignment — "Ai fost selectat" would be untrue. */
+  it('reads a selected Candidature without an open Assignment as no candidature', async () => {
+    reads.hasOwnActiveAssignment.mockResolvedValueOnce(false);
+    reads.fetchOwnCandidature.mockResolvedValue({ status: 'selected' });
+    await expect(fetchTaskQueue(1, 'member')).resolves.toEqual({
+      status: null,
+      position: null,
+    });
+  });
+  it.each(['withdrawn', 'closed'])(
     'does not display a stale position after %s',
     async (status) => {
       reads.fetchOwnCandidature.mockResolvedValue({ status });

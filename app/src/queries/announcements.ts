@@ -140,6 +140,10 @@ export function useAnnouncementReaders(
       announcementId !== null && memberId && enabled
         ? () => fetchAnnouncementReaders(announcementId)
         : skipToken,
+    // Other Members read while this one watches: every opening asks again
+    // (Audit D-4), never the half-minute cache.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }
 
@@ -207,10 +211,14 @@ export function markAnnouncementReadMutationOptions(
         memberId,
       });
     },
+    // The feed, the badge and the readers list (all under
+    // `['announcements']`), and the notifications: reading an Announcement
+    // reads its "Anunț nou" notification too (#861, Audit D-4/D-20).
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: keys.announcements.all,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.announcements.all }),
+        queryClient.invalidateQueries({ queryKey: keys.notifications.all }),
+      ]);
     },
   } as const;
 }

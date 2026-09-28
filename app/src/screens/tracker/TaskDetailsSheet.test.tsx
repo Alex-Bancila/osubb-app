@@ -414,7 +414,7 @@ describe('Task details sheet', () => {
     );
     await user.click(await screen.findByRole('button', { name: 'Duplică' }));
     await user.type(
-      screen.getByLabelText('Termen nou (ora Bucureștiului)'),
+      screen.getByLabelText('Termen nou (ora României)'),
       '2030-10-20T12:30',
     );
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));

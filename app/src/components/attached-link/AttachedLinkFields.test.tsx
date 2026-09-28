@@ -124,7 +124,9 @@ describe('AttachedLinkFields', () => {
 
   it('shows the https hint under the address field', () => {
     render(<Harness />);
-    expect(screen.getByText('Adresa începe cu https://')).toBeInTheDocument();
+    expect(
+      screen.getByText('Adresa începe cu http:// sau https://'),
+    ).toBeInTheDocument();
   });
 
   it('puts a server reason under the field it names', async () => {

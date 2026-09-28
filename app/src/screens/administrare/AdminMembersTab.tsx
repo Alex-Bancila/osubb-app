@@ -75,6 +75,13 @@ const roleColumn: DataTableColumn<AppointableMember> = {
   id: 'role',
   accessorFn: (row) => row.roleLabel,
   header: 'Rol',
+  // By rank, not alphabet (Audit D-13): Recrut … BC, then the name.
+  sortFn: (left, right) =>
+    left.original.level - right.original.level ||
+    memberDisplayName(left.original.nickname, left.original.name).localeCompare(
+      memberDisplayName(right.original.nickname, right.original.name),
+      'ro',
+    ),
 };
 
 const statusColumn: DataTableColumn<AppointableMember> = {

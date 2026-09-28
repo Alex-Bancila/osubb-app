@@ -14,6 +14,18 @@ export const noteText = requiredText({
 export const noteSchema = z.object({ note: noteText });
 
 /**
+ * Rejecting a Completed Work Request: the same note, asked for by its name
+ * under "Motivul respingerii" (Audit D-15).
+ */
+export const rejectionNoteSchema = z.object({
+  note: requiredText({
+    required: 'rejection_reason_required',
+    max: 1000,
+    tooLong: 'note_too_long',
+  }),
+});
+
+/**
  * An optional note (#724, ruling R8): blank is no note, otherwise at most 1000
  * characters -- `apply_to_group` and `decide_group_application`.
  */
@@ -24,5 +36,6 @@ export const optionalNoteSchema = z.object({
 /** Where each reason about a note is shown. */
 export const fieldForReason: Readonly<Record<string, 'note'>> = {
   note_required: 'note',
+  rejection_reason_required: 'note',
   note_too_long: 'note',
 };

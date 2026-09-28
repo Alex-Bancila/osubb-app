@@ -19,7 +19,11 @@ export async function fetchTaskQueue(
   if (await hasOwnActiveAssignment(taskId, memberId))
     return { status: 'selected', position: null };
   const candidate = await fetchOwnCandidature(taskId, memberId);
-  if (!candidate) return { status: null, position: null };
+  // A `selected` Candidature without an open Assignment is history: the Member
+  // gave the Task up or was replaced, so "Ai fost selectat" would be untrue
+  // (Audit D-3). They may join the queue again.
+  if (!candidate || candidate.status === 'selected')
+    return { status: null, position: null };
   const status = candidate.status;
   if (
     status !== 'pending' &&

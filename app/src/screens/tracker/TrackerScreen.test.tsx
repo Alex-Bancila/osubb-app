@@ -217,6 +217,42 @@ describe('My tasks screen', () => {
     ).toBeInTheDocument();
   });
 
+  /* Audit D-3: the given-up Task leaves Taskurile mele on the refetch, so the
+     receipt lives on the list, not on the card that disappears. */
+  it('keeps the give-up receipt after the card leaves the list', async () => {
+    const user = userEvent.setup();
+    hooks.useTaskQueue.mockReturnValue({
+      data: { status: null, position: null },
+      isPending: false,
+      isError: false,
+    });
+    query({
+      data: [
+        taskRow({
+          id: 8,
+          title: 'Stand la târg',
+          status: 'todo',
+          visibleExecutor: { memberId: 'member', fullName: 'Membru' },
+        }),
+      ],
+    });
+    const { rerender } = render(<TrackerScreen />, { wrapper: Router });
+
+    await user.click(screen.getByRole('button', { name: 'Renunță la task' }));
+    await user.type(screen.getByLabelText('Motivul renunțării'), 'Examen');
+    // The refetch after the command no longer lists the Task.
+    query({ data: [] });
+    await user.click(
+      screen.getByRole('button', { name: 'Confirmă renunțarea' }),
+    );
+    rerender(<TrackerScreen />);
+
+    expect(screen.queryByText('Stand la târg')).toBeNull();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Ai renunțat la task.',
+    );
+  });
+
   it('retries errors without showing private server text', async () => {
     const user = userEvent.setup();
     const refetch = query({

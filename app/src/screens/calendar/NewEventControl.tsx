@@ -63,8 +63,16 @@ const initialValues: EventFormValues = {
   campaignId: null,
 };
 
+/** What the Calendar needs to confirm a new Event and bring it into view. */
+export type CreatedEvent = { id: number; title: string; startsAt: string };
+
 /** Calendar's kind gate. The command remains the authorization boundary. */
-export function NewEventControl() {
+export function NewEventControl({
+  onCreated,
+}: {
+  /** The Calendar confirms the Event and shows it (Audit D-11). */
+  onCreated?: (event: CreatedEvent) => void;
+} = {}) {
   const { claims } = useAuth();
   const options = useEventFormOptions();
   const actorLevel = claims?.member_level ?? 0;
@@ -79,6 +87,7 @@ export function NewEventControl() {
     <NewEventDialog
       options={{ ...options.data, groups: available }}
       actorLevel={actorLevel}
+      onCreated={onCreated}
     />
   );
 }
@@ -86,9 +95,11 @@ export function NewEventControl() {
 function NewEventDialog({
   options,
   actorLevel,
+  onCreated,
 }: {
   options: EventFormOptions;
   actorLevel: number;
+  onCreated?: (event: CreatedEvent) => void;
 }) {
   const create = useCreateEvent();
   const [open, setOpen] = useState(false);
@@ -128,8 +139,13 @@ function NewEventDialog({
           pending={create.isPending}
           onCancel={() => setOpen(false)}
           onCreate={async (draft) => {
-            await create.mutateAsync(draft);
+            const event = await create.mutateAsync(draft);
             setOpen(false);
+            onCreated?.({
+              id: event.id,
+              title: event.title,
+              startsAt: event.starts_at,
+            });
           }}
         />
       </DialogContent>

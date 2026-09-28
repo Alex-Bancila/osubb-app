@@ -56,8 +56,30 @@ vi.mock('../../queries/task-tabs', () => ({
 vi.mock('../../queries/work-filter-options', () => ({
   useCalendarWork: hooks.useCalendarWork,
 }));
+// "Eveniment nou" has its own suite; here it only reports a created Event.
 vi.mock('./NewEventControl', () => ({
-  NewEventControl: () => <button type="button">Eveniment nou</button>,
+  NewEventControl: ({
+    onCreated,
+  }: {
+    onCreated?: (event: {
+      id: number;
+      title: string;
+      startsAt: string;
+    }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onCreated?.({
+          id: 9,
+          title: 'Ședință de septembrie',
+          startsAt: '2026-10-15T15:00:00.000Z',
+        })
+      }
+    >
+      Eveniment nou
+    </button>
+  ),
 }));
 
 import CalendarScreen from './CalendarScreen';
@@ -570,6 +592,26 @@ describe('CalendarScreen', () => {
       renderCalendar('/calendar?event=9');
 
       expect(storage.setItem).not.toHaveBeenCalled();
+    });
+
+    /* Audit D-11: a created Event confirms itself and comes into view. */
+    it('confirms a new Event and opens the Agendă on it', async () => {
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      const user = userEvent.setup();
+      renderCalendar();
+
+      hooks.useEvent.mockReturnValue(query(pastEvent));
+      setEvents([pastEvent]);
+      await user.click(screen.getByRole('button', { name: 'Eveniment nou' }));
+
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Evenimentul „Ședință de septembrie” a fost creat: joi, 15 octombrie 2026, ora 18:00.',
+      );
+      expect(hooks.useEvent).toHaveBeenLastCalledWith(9);
+      expect(screen.getByRole('button', { name: 'Agendă' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
     });
 
     it('says so when RLS hides the Event', () => {

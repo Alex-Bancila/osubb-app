@@ -1,4 +1,6 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { supabase } from '../lib/supabase';
 import {
@@ -10,9 +12,13 @@ import {
   fetchUnreadAnnouncementsCount,
   markAnnouncementReadMutationOptions,
   unreadAnnouncementsCountQueryOptions,
+  useAnnouncementReaders,
 } from './announcements';
 import { keys } from './keys';
 
+vi.mock('../lib/auth', () => ({
+  useAuth: () => ({ session: { user: { id: 'm1' } } }),
+}));
 vi.mock('../lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
@@ -266,5 +272,44 @@ describe('announcements query layer', () => {
         { member: { memberId: 'b', fullName: 'Membru OSUBB' }, readAt: null },
       ]);
     });
+  });
+});
+
+/* Audit D-4: the readers list stayed "Citit de 0 din 3" all session. */
+describe('the readers list stays current', () => {
+  it('asks again every time the list is opened, whatever the cache holds', async () => {
+    const rpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+    rpc.mockReset().mockResolvedValue({ data: [], error: null });
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: 30_000, retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+
+    const first = renderHook(() => useAnnouncementReaders(7, true), {
+      wrapper,
+    });
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+    first.unmount();
+    const second = renderHook(() => useAnnouncementReaders(7, true), {
+      wrapper,
+    });
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
+    second.unmount();
+  });
+
+  it('marking read refreshes the readers list and the notifications', async () => {
+    const client = new QueryClient();
+    client.setQueryData(keys.announcements.readers(7, 'm1'), []);
+    client.setQueryData(keys.notifications.list('m1'), []);
+    client.setQueryData(keys.notifications.unread('m1'), 2);
+    await markAnnouncementReadMutationOptions(client, 'm1').onSuccess();
+
+    for (const key of [
+      keys.announcements.readers(7, 'm1'),
+      keys.notifications.list('m1'),
+      keys.notifications.unread('m1'),
+    ])
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   });
 });

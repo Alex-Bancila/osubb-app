@@ -34,6 +34,13 @@ export const clientAuthOptions = {
   detectSessionInUrl: false,
 } as const;
 
+/* One retry policy, TanStack Query's (`queries/client.ts`: once, never after
+   the database's verdict). postgrest-js retries a failed GET three more times
+   on its own (1 s, 2 s, 4 s) inside every request, so a list built from
+   several reads spun "Se încarcă…" for 15–70 s during a backend blip before
+   its error and retry showed (Audit D-8). */
+export const clientDbOptions = { retry: false } as const;
+
 /* Typed with the generated `Database`, so `.from('taskss')` and
    `.select('titel')` are build errors rather than empty results at the demo.
    `database.types.ts` is generated — never edit it by hand; run
@@ -41,6 +48,7 @@ export const clientAuthOptions = {
    regenerates it and fails if the committed copy has drifted. */
 export const supabase = createClient<Database>(url, anonKey, {
   auth: clientAuthOptions,
+  db: clientDbOptions,
 });
 
 /* Dev convenience: poke at the client from the browser console —

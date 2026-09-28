@@ -13,6 +13,7 @@ import {
   useTaskAssignment,
 } from '../../queries/task-assignment';
 import { DirectExecutorSelector } from './DirectExecutorSelector';
+import { useReceiptTurn } from './receipt-turn';
 import { isTerminalTask, type TaskStatus } from './task-presentation';
 
 export function TaskAssignControl({
@@ -37,6 +38,8 @@ export function TaskAssignControl({
   const [memberId, setMemberId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // Only the latest receipt in the sheet shows (Audit D-16).
+  const turn = useReceiptTurn();
   const submitting = useRef(false);
   const receipt = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -50,7 +53,12 @@ export function TaskAssignControl({
     !isTerminalTask(status);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!canAssign || !memberId || submitting.current) return;
+    if (!canAssign || submitting.current) return;
+    // Never a silent confirm (Audit D-16).
+    if (!memberId) {
+      setError('Alege un membru.');
+      return;
+    }
     submitting.current = true;
     setError(null);
     try {
@@ -58,6 +66,7 @@ export function TaskAssignControl({
       setOpen(false);
       setMemberId(null);
       setSuccess(true);
+      turn.claim();
     } catch (failure) {
       setError(
         failure instanceof TaskAssignmentError
@@ -71,7 +80,7 @@ export function TaskAssignControl({
   if (!canAssign && !success) return null;
   return (
     <section aria-label="Atribuirea executorului" className="space-y-3">
-      {success && (
+      {success && turn.current && (
         <p ref={receipt} role="status" tabIndex={-1}>
           Executorul a fost atribuit.
         </p>
@@ -105,7 +114,10 @@ export function TaskAssignControl({
                 <DirectExecutorSelector
                   originGroupId={groupId}
                   value={memberId}
-                  onChange={setMemberId}
+                  onChange={(next) => {
+                    setMemberId(next);
+                    setError(null);
+                  }}
                   disabled={mutation.isPending}
                 />
                 {error && (
@@ -122,10 +134,7 @@ export function TaskAssignControl({
                   >
                     Renunță
                   </Button>
-                  <Button
-                    type="submit"
-                    disabled={!memberId || mutation.isPending}
-                  >
+                  <Button type="submit" disabled={mutation.isPending}>
                     {mutation.isPending
                       ? 'Se atribuie…'
                       : 'Confirmă atribuirea'}

@@ -164,6 +164,8 @@ const REASON_COPY = new Map<string, string>([
   ['body_required', 'Scrie mesajul.'],
   ['body_too_long', 'Mesajul are cel mult 2000 de caractere.'],
   ['note_required', 'Scrie o notă.'],
+  // Client-side only: the rejection form names what is missing (D-15).
+  ['rejection_reason_required', 'Scrie motivul respingerii.'],
   ['note_too_long', 'Nota are cel mult 1000 de caractere.'],
   ['reason_required', 'Scrie motivul.'],
   ['reason_too_long', 'Motivul are cel mult 1000 de caractere.'],
@@ -274,8 +276,9 @@ const REASON_COPY = new Map<string, string>([
   ],
 
   /* ---- Evaluations and Completed Work Requests ---- */
-  ['invalid_difficulty', 'Alege o Dificultate între 1 și 5.'],
-  ['invalid_rating', 'Alege o Notă între 1 și 5.'],
+  // The "între 1 și 5" hint sits right above the control (Audit D-17).
+  ['invalid_difficulty', 'Alege Dificultatea.'],
+  ['invalid_rating', 'Alege Nota.'],
   ['evaluation_note_required', 'Scrie observațiile evaluării.'],
   ['evaluation_note_too_long', 'Observațiile au cel mult 1000 de caractere.'],
   [

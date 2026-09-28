@@ -303,3 +303,43 @@ describe('NewEventControl', () => {
     expect(screen.getByLabelText('Titlu')).toHaveValue('');
   });
 });
+
+/* Audit D-11: the Calendar learns what was created, to confirm and show it. */
+describe('NewEventControl receipt', () => {
+  beforeEach(() => {
+    state.options.mockReturnValue({ data: formOptions });
+    state.create.mockReturnValue({
+      mutateAsync: state.mutateAsync,
+      isPending: false,
+    });
+    state.auth.mockReturnValue({
+      session: { user: { id: 'manager-1' } },
+      claims: { member_level: 6 },
+    });
+    state.mutateAsync.mockReset();
+  });
+
+  it('hands the created Event to the Calendar', async () => {
+    state.mutateAsync.mockResolvedValue({
+      id: 44,
+      title: 'Ședință de toamnă',
+      starts_at: '2030-10-01T15:00:00+00:00',
+    });
+    const onCreated = vi.fn();
+    const user = userEvent.setup();
+    render(<NewEventControl onCreated={onCreated} />);
+    await open(user);
+    await fillRequired(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    await waitFor(() =>
+      expect(onCreated).toHaveBeenCalledWith({
+        id: 44,
+        title: 'Ședință de toamnă',
+        startsAt: '2030-10-01T15:00:00+00:00',
+      }),
+    );
+  });
+});

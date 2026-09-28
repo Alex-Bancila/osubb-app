@@ -21,6 +21,8 @@ import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskDuplicateControl } from './TaskDuplicateControl';
 import { TaskActionSuccess } from './TaskActionSuccess';
+import { useReceiptTurn } from './receipt-turn';
+import { ReceiptTurnScope } from './ReceiptTurnScope';
 import { TaskCard } from './TaskCard';
 import { SubmissionNote } from './SubmissionNote';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
@@ -239,6 +241,14 @@ function TaskDetails({
   );
 }
 
+/** The opener's notice ("Taskul a fost creat.") until a command answers. */
+function SheetNotice({ children }: { children: string }) {
+  const turn = useReceiptTurn();
+  return turn.current ? (
+    <TaskActionSuccess>{children}</TaskActionSuccess>
+  ) : null;
+}
+
 export function TaskDetailsSheet({
   taskId,
   managedTaskIds = new Set<number>(),
@@ -302,17 +312,19 @@ export function TaskDetailsSheet({
               Înapoi la #{previousId}
             </button>
           )}
-          {current && notice && current.visited.length === 0 && (
-            <TaskActionSuccess>{notice}</TaskActionSuccess>
-          )}
-          {current && shownId !== null && (
-            <TaskDetails
-              key={shownId}
-              taskId={shownId}
-              canManage={managedTaskIds.has(shownId)}
-              onNavigate={(id) => go(sheetTrailPush(current, id))}
-            />
-          )}
+          {/* One receipt at a time: the latest command's (Audit D-16). */}
+          <ReceiptTurnScope key={shownId ?? 'none'}>
+            {current && notice && current.visited.length === 0 && (
+              <SheetNotice>{notice}</SheetNotice>
+            )}
+            {current && shownId !== null && (
+              <TaskDetails
+                taskId={shownId}
+                canManage={managedTaskIds.has(shownId)}
+                onNavigate={(id) => go(sheetTrailPush(current, id))}
+              />
+            )}
+          </ReceiptTurnScope>
         </SheetPopup>
       </SheetPortal>
     </Sheet>
