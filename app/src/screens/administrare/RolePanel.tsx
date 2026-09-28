@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { UserCog } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
-import { PageGrid, Panel } from '../../components/layout';
+import { Panel, SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
 import { useAuth } from '../../lib/auth';
 import { commandErrorMessage } from '../../lib/command-reasons';
 import { isUuid } from '../../lib/ids';
@@ -18,11 +22,14 @@ import {
 } from '../../queries/member-role-management';
 import { statusLabel, statusLabels } from '../volunteers/directory-filters';
 import type { Database } from '../../lib/database.types';
+import { MemberPicker } from './MemberPicker';
 
 type MemberRole = Database['public']['Enums']['member_role'];
 type MemberStatus = Database['public']['Enums']['member_status'];
 const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
+  'min-h-11 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm dark:border-input dark:bg-input/30';
+/** Ranks only the Moderator may give, and whose holders only it may change. */
+const PROTECTED_ROLES: ReadonlySet<string> = new Set(['bc', 'moderator']);
 /** `member_status` enum values, in the reference list's canonical order. */
 const statusOptions = Object.keys(statusLabels);
 
@@ -91,20 +98,32 @@ export function RolePanel({
   const actor = members.data?.find((row) => row.memberId === session?.user.id);
   const actorRole = actor?.roleId;
   const self = memberId !== '' && memberId === session?.user.id;
-  const protectedMember =
-    member?.roleId === 'bc' || member?.roleId === 'moderator';
+  const protectedMember = PROTECTED_ROLES.has(member?.roleId ?? '');
   const canEditMember = Boolean(
     member &&
     actor?.status === 'activ' &&
     !self &&
     (actorRole === 'moderator' || (actorRole === 'bc' && !protectedMember)),
   );
+  // Only what the viewer can save (B57): a BC's lists stop at BCE and never
+  // name a BC or Moderator holder; the Moderator sees every rank and member.
+  const moderator = actorRole === 'moderator';
   const roleOptions = useMemo(
     () =>
       [...(roles.data?.entries() ?? [])]
-        .filter(([id]) => id !== 'responsabil')
+        .filter(
+          ([id]) =>
+            id !== 'responsabil' && (moderator || !PROTECTED_ROLES.has(id)),
+        )
         .sort((a, b) => a[1].level - b[1].level),
-    [roles.data],
+    [roles.data, moderator],
+  );
+  const pickable = useMemo(
+    () =>
+      (members.data ?? [])
+        .filter((row) => moderator || !PROTECTED_ROLES.has(row.roleId ?? ''))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ro')),
+    [members.data, moderator],
   );
   const nextRole = roleDraft || member?.roleId || '';
   const nextLevel = roles.data?.get(nextRole)?.level;
@@ -129,8 +148,7 @@ export function RolePanel({
     canEditMember &&
     nextRole !== member?.roleId &&
     roleOptions.some(([id]) => id === nextRole) &&
-    (actorRole === 'moderator' ||
-      (nextRole !== 'bc' && nextRole !== 'moderator')) &&
+    (moderator || !PROTECTED_ROLES.has(nextRole)) &&
     groups.isSuccess &&
     groupIds.isSuccess &&
     !change.isPending;
@@ -160,6 +178,11 @@ export function RolePanel({
     }
   }
 
+  const pickerId = useId();
+  const roleId = useId();
+  const statusId = useId();
+  const reasonId = useId();
+
   return (
     // The wrapper is what `?membru=` scrolls to; the Panel has no ref.
     <div ref={panel} className="h-full min-w-0 scroll-mt-4">
@@ -171,78 +194,92 @@ export function RolePanel({
         stack={4}
       >
         {members.isPending || roles.isPending ? (
-          <p role="status">Se încarcă membrii și rolurile…</p>
+          <p role="status" className="m-0">
+            Se încarcă membrii și rolurile…
+          </p>
         ) : members.isError || roles.isError ? (
-          <p role="alert">Nu am putut încărca membrii și rolurile.</p>
+          <p role="alert" className="m-0">
+            Nu am putut încărca membrii și rolurile.
+          </p>
         ) : (
           <>
             {!selectedMemberId && (
-              <label className="block max-w-xl space-y-1">
-                <span>Membru</span>
-                <select
-                  className={control}
-                  value={memberId}
-                  disabled={change.isPending}
-                  onChange={(event) => {
-                    setMemberId(event.target.value);
-                    setRoleDraft('');
-                    setStatusDraft('');
-                    setReason('');
-                    setError(null);
-                    setMessage(null);
-                  }}
-                >
-                  <option value="">Alege un membru</option>
-                  {members.data?.map((row) => (
-                    <option key={row.memberId} value={row.memberId}>
-                      {row.name} · {row.roleLabel}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
+                <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-md">
+                  <SubHeading as="p" id={pickerId}>
+                    Membru
+                  </SubHeading>
+                  <MemberPicker
+                    ariaLabelledBy={pickerId}
+                    members={pickable}
+                    value={
+                      pickable.find((row) => row.memberId === memberId) ?? null
+                    }
+                    disabled={change.isPending}
+                    onValueChange={(next) => {
+                      setMemberId(next?.memberId ?? '');
+                      setRoleDraft('');
+                      setStatusDraft('');
+                      setReason('');
+                      setError(null);
+                      setMessage(null);
+                    }}
+                  />
+                </div>
+                {member && (
+                  <Link
+                    className="inline-flex min-h-11 shrink-0 items-center self-start text-sm font-medium underline underline-offset-4 sm:self-auto"
+                    to={`/administrare/membri/${member.memberId}`}
+                    // Back from the member page lands here, on this Member.
+                    state={{
+                      from: {
+                        to: `/administrare/roluri?${ROLE_PANEL_MEMBER_PARAM}=${member.memberId}`,
+                        label: 'Înapoi la Roluri',
+                      },
+                    }}
+                  >
+                    Vezi detaliile membrului
+                  </Link>
+                )}
+              </div>
             )}
-            {member && !selectedMemberId && (
-              <Link
-                className="inline-flex min-h-11 items-center self-start underline"
-                to={`/administrare/membri/${member.memberId}`}
-              >
-                Vezi detaliile membrului
-              </Link>
+            {member && !canEditMember && (
+              // Only what the viewer can save (B57): no disabled fields.
+              <p className="m-0 text-sm text-muted-foreground">
+                {self
+                  ? 'Nu îți poți schimba propriul rol sau status.'
+                  : protectedMember && !moderator
+                    ? 'Numai un Moderator poate modifica un membru BC sau Moderator.'
+                    : 'Nu poți modifica acest membru acum.'}
+              </p>
             )}
-            {member && (
-              <PageGrid columns={2}>
-                <div className="space-y-3 rounded-lg border p-4">
-                  <h3 className="font-semibold">Rol organizațional</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Rol actual: {member.roleLabel}
-                  </p>
-                  <label className="block space-y-1">
-                    <span>Rol organizațional</span>
-                    <select
-                      className={control}
-                      value={nextRole}
-                      disabled={!canEditMember || change.isPending}
-                      onChange={(event) => setRoleDraft(event.target.value)}
-                    >
-                      {!roleOptions.some(([id]) => id === nextRole) && (
-                        <option value={nextRole}>Alege un rol</option>
-                      )}
-                      {roleOptions.map(([id, role]) => (
-                        <option
-                          key={id}
-                          value={id}
-                          disabled={
-                            actorRole !== 'moderator' &&
-                            (id === 'bc' || id === 'moderator')
-                          }
-                        >
-                          {role.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+            {member && canEditMember && (
+              // Two field groups side by side, the reason under both, and
+              // each save button under its own group (layout AD2).
+              <div className="grid min-w-0 gap-x-6 gap-y-4 sm:grid-cols-2">
+                <div className="flex min-w-0 flex-col gap-2">
+                  <SubHeading>
+                    <label htmlFor={roleId}>Rol organizațional</label>
+                  </SubHeading>
+                  <NativeSelect
+                    id={roleId}
+                    value={nextRole}
+                    disabled={change.isPending}
+                    onChange={(event) => setRoleDraft(event.target.value)}
+                  >
+                    {!roleOptions.some(([id]) => id === nextRole) && (
+                      <NativeSelectOption value={nextRole}>
+                        Alege un rol
+                      </NativeSelectOption>
+                    )}
+                    {roleOptions.map(([id, role]) => (
+                      <NativeSelectOption key={id} value={id}>
+                        {role.name}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
                   {nextRole === 'vot' && nextRole !== member.roleId && (
-                    <p className="text-sm">
+                    <p className="m-0 text-sm">
                       Confirmi Drept de Vot pentru acest membru. Decizia va fi
                       atribuită contului tău.
                     </p>
@@ -250,7 +287,7 @@ export function RolePanel({
                   {member.roleId === 'vot' &&
                     nextLevel !== undefined &&
                     nextLevel < (roles.data?.get('vot')?.level ?? -1) && (
-                      <p className="text-sm">
+                      <p className="m-0 text-sm">
                         Retragi Drept de Vot. Decizia va fi atribuită contului
                         tău.
                       </p>
@@ -258,14 +295,14 @@ export function RolePanel({
                   {roleDraft &&
                     roleDraft !== member.roleId &&
                     (groups.isPending || groupIds.isPending) && (
-                      <p role="status" className="text-sm">
+                      <p role="status" className="m-0 text-sm">
                         Se verifică Grupurile afectate…
                       </p>
                     )}
                   {roleDraft &&
                     roleDraft !== member.roleId &&
                     (groups.isError || groupIds.isError) && (
-                      <p role="alert" className="text-sm">
+                      <p role="alert" className="m-0 text-sm">
                         Nu am putut verifica Grupurile afectate.
                       </p>
                     )}
@@ -274,12 +311,12 @@ export function RolePanel({
                     groups.isSuccess &&
                     groupIds.isSuccess && (
                       <div className="text-sm">
-                        <p>
+                        <p className="m-0">
                           Grupuri părăsite după schimbare:{' '}
                           {leavingGroups.length === 0 ? 'niciunul' : ''}
                         </p>
                         {leavingGroups.length > 0 && (
-                          <ul className="list-disc pl-5">
+                          <ul className="m-0 list-disc pl-5">
                             {leavingGroups.map((group) => (
                               <li key={group.id}>{group.name}</li>
                             ))}
@@ -287,8 +324,48 @@ export function RolePanel({
                         )}
                       </div>
                     )}
+                </div>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <SubHeading>
+                    <label htmlFor={statusId}>Status</label>
+                  </SubHeading>
+                  <NativeSelect
+                    id={statusId}
+                    value={nextStatus}
+                    disabled={change.isPending}
+                    onChange={(event) => setStatusDraft(event.target.value)}
+                  >
+                    {statusOptions.map((status) => (
+                      <NativeSelectOption key={status} value={status}>
+                        {statusLabel(status)}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                  {nextStatus === 'inactiv' && nextStatus !== member.status && (
+                    <p className="m-0 text-sm">
+                      Dezactivarea revocă sesiunile de reîmprospătare. Un token
+                      deja emis poate rămâne valabil cel mult o oră.
+                    </p>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-col gap-2 sm:col-span-2">
+                  {/* Labelled in the sub-head style of the two groups above. */}
+                  <SubHeading as="p">
+                    <label htmlFor={reasonId}>Motiv (opțional)</label>
+                  </SubHeading>
+                  <textarea
+                    id={reasonId}
+                    className={control}
+                    rows={2}
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    disabled={change.isPending}
+                  />
+                </div>
+                <div className="min-w-0">
                   <Button
                     type="button"
+                    block
                     disabled={!canSaveRole}
                     onClick={() =>
                       void save({
@@ -302,35 +379,10 @@ export function RolePanel({
                     Salvează rolul
                   </Button>
                 </div>
-                <div className="space-y-3 rounded-lg border p-4">
-                  <h3 className="font-semibold">Status</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Status actual: {statusLabel(member.status)}
-                  </p>
-                  <label className="block space-y-1">
-                    <span>Status</span>
-                    <select
-                      className={control}
-                      value={nextStatus}
-                      disabled={!canEditMember || change.isPending}
-                      onChange={(event) => setStatusDraft(event.target.value)}
-                    >
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {statusLabel(status)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {nextStatus === 'inactiv' && nextStatus !== member.status && (
-                    <p className="text-sm">
-                      Dezactivarea revocă sesiunile de reîmprospătare. Un token
-                      deja emis poate rămâne valabil cel mult o oră.
-                    </p>
-                  )}
+                <div className="min-w-0">
                   <Button
                     type="button"
-                    variant="outline"
+                    block
                     disabled={!canSaveStatus}
                     onClick={() =>
                       void save({
@@ -350,30 +402,15 @@ export function RolePanel({
                           : 'Salvează statusul'}
                   </Button>
                 </div>
-              </PageGrid>
+              </div>
             )}
-            {member && (
-              <label className="block max-w-xl space-y-1">
-                <span>Motiv (opțional)</span>
-                <textarea
-                  className={control}
-                  rows={2}
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  disabled={!canEditMember || change.isPending}
-                />
-              </label>
-            )}
-            {member && !canEditMember && (
-              <p className="text-sm text-muted-foreground">
-                {self
-                  ? 'Nu îți poți schimba propriul rol sau status.'
-                  : 'Numai un Moderator poate modifica un membru BC sau Moderator.'}
+            {message && (
+              <p role="status" className="m-0">
+                {message}
               </p>
             )}
-            {message && <p role="status">{message}</p>}
             {error && (
-              <p role="alert" className="text-destructive">
+              <p role="alert" className="m-0 text-destructive">
                 {error}
               </p>
             )}

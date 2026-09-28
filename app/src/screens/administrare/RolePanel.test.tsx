@@ -20,7 +20,8 @@ vi.mock('../../queries/member-role-management', () => ({
   useMemberGroupIds: state.groupIds,
   useMemberChange: () => ({ mutateAsync: state.mutate, isPending: false }),
 }));
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { BackLink } from '../../components/layout';
 import { RolePanel } from './RolePanel';
 
 function renderPanel(url = '/administrare/roluri') {
@@ -29,6 +30,19 @@ function renderPanel(url = '/administrare/roluri') {
       <RolePanel />
     </MemoryRouter>,
   );
+}
+
+/** Picks a Member in the searchable picker (#842: members are a Combobox). */
+async function pick(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(screen.getByRole('combobox', { name: 'Membru' }));
+  await user.click(
+    await screen.findByRole('option', { name: new RegExp(name) }),
+  );
+}
+
+/** The Member the picker shows as chosen. */
+function picked() {
+  return screen.getByRole('combobox', { name: 'Membru' });
 }
 
 const roles = new Map([
@@ -122,42 +136,82 @@ beforeEach(() => {
     .mockResolvedValue({ id: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d' });
 });
 
-it('offers seven reference ranks, excludes responsabil, and blocks self and BC targets for a BC', async () => {
+it('offers a BC only what it can save: no BC or Moderator holders, ranks up to BCE (B57)', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
-  const select = screen.getByLabelText('Rol organizațional');
-  const options = within(select).getAllByRole('option');
-  expect(options.map((option) => option.getAttribute('value'))).toEqual([
-    'recrut',
-    'voluntar',
-    'activ',
-    'vot',
-    'bce',
-    'bc',
-    'moderator',
+  await user.click(screen.getByRole('combobox', { name: 'Membru' }));
+  const options = await screen.findAllByRole('option');
+  // Herself (BC) and the other BC holder are not offered.
+  expect(options.map((option) => option.textContent)).toEqual([
+    expect.stringContaining('Ana Pop'),
   ]);
+  await user.click(options[0] as HTMLElement);
+  const select = screen.getByLabelText('Rol organizațional');
+  expect(
+    within(select)
+      .getAllByRole('option')
+      .map((option) => option.getAttribute('value')),
+  ).toEqual(['recrut', 'voluntar', 'activ', 'vot', 'bce']);
   expect(
     within(select).queryByRole('option', { name: 'Responsabil' }),
   ).toBeNull();
-  expect(within(select).getByRole('option', { name: 'BC' })).toBeDisabled();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'bc');
-  expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'protected');
-  expect(screen.getByLabelText('Status')).toBeDisabled();
+  // Current values live in the page header, not in the panel (B60).
+  expect(screen.queryByText(/Rol actual|Status actual/)).toBeNull();
+});
+
+it('shows a BC no fields for a BC or Moderator target it cannot change', () => {
+  render(
+    <MemoryRouter>
+      <RolePanel selectedMemberId="protected" />
+    </MemoryRouter>,
+  );
   expect(screen.getByText(/Numai un Moderator/)).toBeVisible();
+  expect(screen.queryByLabelText('Rol organizațional')).toBeNull();
+  expect(screen.queryByLabelText('Status')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+});
+
+it("shows no fields on the viewer's own page", () => {
+  render(
+    <MemoryRouter>
+      <RolePanel selectedMemberId="bc" />
+    </MemoryRouter>,
+  );
+  expect(
+    screen.getByText('Nu îți poți schimba propriul rol sau status.'),
+  ).toBeVisible();
+  expect(screen.queryByLabelText('Rol organizațional')).toBeNull();
+});
+
+it('puts the two field groups, the reason and the two save buttons in one style (AD2)', async () => {
+  const user = userEvent.setup();
+  renderPanel();
+  await pick(user, 'Ana Pop');
+  // Sub-heads on the kit, never a 22 px h3 inside a 19 px section (X10).
+  for (const name of ['Rol organizațional', 'Status'])
+    expect(screen.getByRole('heading', { level: 3, name })).toHaveAttribute(
+      'data-slot',
+      'sub-heading',
+    );
+  // The shared select (#842), no bordered sub-boxes.
+  expect(screen.getByLabelText('Rol organizațional')).toHaveAttribute(
+    'data-slot',
+    'native-select',
+  );
+  expect(document.querySelector('.rounded-lg.border.p-4')).toBeNull();
+  const role = screen.getByRole('button', { name: 'Salvează rolul' });
+  const status = screen.getByRole('button', { name: 'Salvează statusul' });
+  expect(role.className).toBe(status.className);
+  expect(role).toHaveClass('sm:w-auto');
+  expect(screen.getByLabelText('Motiv (opțional)').parentElement).toHaveClass(
+    'sm:col-span-2',
+  );
 });
 
 it('shows explicit archived and automatic Groups before a demotion and sends the audited Role command', async () => {
   const user = userEvent.setup();
   const { container } = renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'vot');
   expect(screen.getByText(/Confirmi Drept de Vot/)).toBeVisible();
   expect(screen.getByText('Explicit')).toBeVisible();
@@ -200,10 +254,7 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'bce');
   expect(screen.queryByText(/Retragi Drept de Vot/)).toBeNull();
   await user.selectOptions(
@@ -223,10 +274,7 @@ it('names a Drept de Vot withdrawal only when the new reference rank is lower', 
 it('deactivates through the atomic Status command and explains the token window', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   expect(screen.getByText(/cel mult o oră/)).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
@@ -241,10 +289,7 @@ it('deactivates through the atomic Status command and explains the token window'
 it('offers all three reference statuses', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   const select = screen.getByLabelText('Status');
   const options = within(select).getAllByRole('option');
   expect(options.map((option) => option.getAttribute('value'))).toEqual([
@@ -271,21 +316,14 @@ it('opens on the matching option for a Member already marked alumni', async () =
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   expect(screen.getByLabelText('Status')).toHaveValue('alumni');
-  expect(screen.getByText('Status actual: Alumni')).toBeVisible();
 });
 
 it('sends the atomic Status command with alumni and the reason', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   await user.selectOptions(screen.getByLabelText('Status'), 'alumni');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Absolvent');
   await user.click(screen.getByRole('button', { name: 'Salvează statusul' }));
@@ -316,7 +354,7 @@ it('lets only the live Moderator edit a BC target', async () => {
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'protected');
+  await pick(user, 'BC Țintă');
   expect(screen.getByLabelText('Rol organizațional')).toBeEnabled();
   expect(
     within(screen.getByLabelText('Rol organizațional')).getByRole('option', {
@@ -332,9 +370,18 @@ it('fails closed when live actor row is absent despite stale moderator claims', 
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(screen.getByLabelText('Membru'), 'protected');
-  expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
-  expect(screen.getByLabelText('Status')).toBeDisabled();
+  // Without a live Moderator row the picker offers no BC target at all…
+  await user.click(screen.getByRole('combobox', { name: 'Membru' }));
+  expect(screen.queryByRole('option', { name: /BC Țintă/ })).toBeNull();
+  cleanup();
+  // …and a BC target named directly gets no fields.
+  render(
+    <MemoryRouter>
+      <RolePanel selectedMemberId="protected" />
+    </MemoryRouter>,
+  );
+  expect(screen.queryByLabelText('Rol organizațional')).toBeNull();
+  expect(screen.queryByLabelText('Status')).toBeNull();
 });
 
 it('disables edits when the live actor is inactive', async () => {
@@ -347,30 +394,23 @@ it('disables edits when the live actor is inactive', async () => {
   });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
-  expect(screen.getByLabelText('Rol organizațional')).toBeDisabled();
+  await pick(user, 'Ana Pop');
+  expect(screen.queryByLabelText('Rol organizațional')).toBeNull();
+  expect(screen.getByText('Nu poți modifica acest membru acum.')).toBeVisible();
 });
 
 it('keeps the target and reason on a refused command', async () => {
   state.mutate.mockRejectedValueOnce({ message: 'member_manage_forbidden' });
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Verificare');
   await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Nu mai ai permisiunea',
   );
-  expect(screen.getByLabelText('Membru')).toHaveValue(
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  expect(picked()).toHaveTextContent('Ana Pop');
   expect(screen.getByLabelText('Motiv (opțional)')).toHaveValue('Verificare');
 });
 
@@ -378,15 +418,13 @@ it('opens on the Member a Retention Signal links to (?membru=, #702)', () => {
   renderPanel(
     '/administrare/roluri?membru=7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
   );
-  expect(screen.getByLabelText('Membru')).toHaveValue(
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
-  expect(screen.getByText('Rol actual: BCE')).toBeVisible();
+  expect(picked()).toHaveTextContent('Ana Pop');
+  expect(screen.getByLabelText('Rol organizațional')).toHaveValue('bce');
 });
 
 it('ignores a ?membru= that is not a Member id and queries nothing for it', () => {
   renderPanel('/administrare/roluri?membru=target%27%20or%201%3D1');
-  expect(screen.getByLabelText('Membru')).toHaveValue('');
+  expect(picked()).toHaveTextContent('Alege un membru');
   expect(state.groupIds).not.toHaveBeenCalledWith("target' or 1=1");
   expect(state.groupIds).toHaveBeenLastCalledWith(null);
 });
@@ -413,8 +451,7 @@ it('preselects Voluntar Activ and the reason a Promotion Candidate arrives with 
   renderPanel(
     `/administrare/roluri?membru=${candidate}&rol=activ&motiv=${encodeURIComponent('Evaluarea de rol „Semestrul I”')}`,
   );
-  expect(screen.getByLabelText('Membru')).toHaveValue(candidate);
-  expect(screen.getByText('Rol actual: Voluntar')).toBeVisible();
+  expect(picked()).toHaveTextContent('Vlad Candidat');
   expect(screen.getByLabelText('Rol organizațional')).toHaveValue('activ');
   expect(screen.getByLabelText('Motiv (opțional)')).toHaveValue(
     'Evaluarea de rol „Semestrul I”',
@@ -432,7 +469,7 @@ it('preselects Voluntar Activ and the reason a Promotion Candidate arrives with 
 
 it('ignores ?rol= and ?motiv= without a Member, and a malformed Role', () => {
   renderPanel('/administrare/roluri?rol=activ&motiv=Ceva');
-  expect(screen.getByLabelText('Membru')).toHaveValue('');
+  expect(picked()).toHaveTextContent('Alege un membru');
   expect(screen.queryByLabelText('Motiv (opțional)')).toBeNull();
   cleanup();
   renderPanel(
@@ -444,15 +481,37 @@ it('ignores ?rol= and ?motiv= without a Member, and a malformed Role', () => {
 it('links the chosen Member to their Administrare page (#103)', async () => {
   const user = userEvent.setup();
   renderPanel();
-  await user.selectOptions(
-    screen.getByLabelText('Membru'),
-    '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
-  );
+  await pick(user, 'Ana Pop');
   expect(
     screen.getByRole('link', { name: 'Vezi detaliile membrului' }),
   ).toHaveAttribute(
     'href',
     '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
+});
+
+it('sends the member page back to Roluri, on the same Member (D4)', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/administrare/roluri']}>
+      <Routes>
+        <Route path="/administrare/roluri" element={<RolePanel />} />
+        <Route
+          path="/administrare/membri/:id"
+          element={<BackLink to="/administrare/membri" label="Implicit" />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await pick(user, 'Ana Pop');
+  await user.click(
+    screen.getByRole('link', { name: 'Vezi detaliile membrului' }),
+  );
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Roluri' }),
+  ).toHaveAttribute(
+    'href',
+    '/administrare/roluri?membru=7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
   );
 });
 
@@ -466,5 +525,5 @@ it('edits only the given Member on their own page, without the picker (#103)', (
   expect(
     screen.queryByRole('link', { name: 'Vezi detaliile membrului' }),
   ).toBeNull();
-  expect(screen.getByText('Rol actual: BCE')).toBeVisible();
+  expect(screen.getByLabelText('Rol organizațional')).toHaveValue('bce');
 });

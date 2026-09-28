@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import * as axe from 'axe-core';
-import { MemoryRouter } from 'react-router';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
@@ -32,6 +33,7 @@ vi.mock(
   '../../queries/member-card',
   () => import('../../test/member-card-mock'),
 );
+import { BackLink } from '../../components/layout';
 import { formatMemberCount } from '../../lib/format';
 import { PrivacyPanel } from './PrivacyPanel';
 
@@ -93,7 +95,8 @@ it('lists the Members without the current version, with a count', async () => {
   // (each row starts with the avatar's initials).
   expect(items.map((item) => item.textContent)).toEqual([
     'CDAdaCarmen Danultima confirmare: v1.0 · 20 septembrie 2026Pagina membrului',
-    'BIBogdan IonescuneconfirmatăPagina membrului',
+    // Never confirmed: the heading says so, the row adds nothing (B62).
+    'BIBogdan IonescuPagina membrului',
   ]);
   // The name opens the Member Card; the page link sits beside it.
   expect(
@@ -105,12 +108,55 @@ it('lists the Members without the current version, with a count', async () => {
     within(bogdan).getByRole('link', { name: 'Pagina membrului' }),
   ).toHaveAttribute('href', '/administrare/membri/bogdan');
   expect(identities).toHaveBeenLastCalledWith(['bogdan', 'carmen']);
+  expect(screen.queryByText('neconfirmată')).toBeNull();
   // Ana acknowledged 1.1, the current version: not on the list.
   expect(screen.queryByText('Ana Pop')).toBeNull();
   expect(screen.getByText(/\(v1\.1\)/)).toBeVisible();
 
   const results = await axe.run(container);
   expect(results.violations).toEqual([]);
+});
+
+it('brings the member page and the notice back to Confidențialitate (D4, D15)', async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={['/administrare/confidentialitate']}>
+        <Routes>
+          <Route
+            path="/administrare/confidentialitate"
+            element={<PrivacyPanel />}
+          />
+          <Route
+            path="*"
+            element={<BackLink to="/profil" label="Înapoi la Profil" />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await user.click(
+    within(await screen.findByRole('list'))
+      .getAllByRole('link', { name: 'Pagina membrului' })
+      .at(0) as HTMLElement,
+  );
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Confidențialitate' }),
+  ).toHaveAttribute('href', '/administrare/confidentialitate');
+  await user.click(
+    screen.getByRole('link', { name: 'Înapoi la Confidențialitate' }),
+  );
+  await user.click(
+    await screen.findByRole('link', {
+      name: 'politicii de confidențialitate',
+    }),
+  );
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Administrare' }),
+  ).toHaveAttribute('href', '/administrare/confidentialitate');
 });
 
 it('says so when every active Member acknowledged the current version', async () => {

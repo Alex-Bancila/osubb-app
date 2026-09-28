@@ -9,6 +9,10 @@ import { PageGrid, Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
 import { describeFailure } from '../../lib/command-reasons';
 import { safeHttpUrl } from '../../lib/links';
 import {
@@ -16,7 +20,7 @@ import {
   adherenceFormSchema,
 } from '../../lib/schemas/org-settings';
 import { useFormValidation } from '../../lib/use-form-validation';
-import { useAdminGroups } from '../../queries/groups-admin';
+import { useAdminGroups, type AdminGroup } from '../../queries/groups-admin';
 import {
   useOrgSettingChange,
   useOrgSettings,
@@ -24,7 +28,7 @@ import {
 } from '../../queries/org-settings';
 
 const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+  'h-11 w-full min-w-0 rounded-lg border border-border bg-background px-4 text-sm dark:border-input dark:bg-input/30';
 
 type Save = (change: OrgSettingChange) => Promise<void>;
 
@@ -75,50 +79,48 @@ function AdherenceFormPanel({
       icon={FileSignature}
       title="Formular de adeziune"
       description="Linkul pe care îl primește un membru promovat Voluntar Activ."
-      stack={3}
     >
-      <p className="m-0 break-all">
-        {currentUrl ? (
-          <a
-            href={currentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-4"
-          >
-            {current}
-          </a>
-        ) : current ? (
-          // Not http(s): shown as text so BC can see and replace it, never as a link.
-          <span>{current}</span>
-        ) : (
-          <span className="text-muted-foreground">Niciun formular setat</span>
-        )}
-      </p>
-      <form onSubmit={submit} noValidate className="grid max-w-xl gap-1.5">
+      {/* The saved address is the field's value: shown once (AD4). */}
+      <form onSubmit={submit} noValidate className="flex flex-col gap-2">
         <label htmlFor={inputId} className="text-sm font-medium">
           Adresa formularului
         </label>
+        <input
+          id={inputId}
+          type="url"
+          inputMode="url"
+          className={control}
+          value={url}
+          disabled={disabled}
+          onChange={(event) => setUrl(event.target.value)}
+          {...form.field('url', hintId)}
+        />
         <p id={hintId} className="m-0 text-sm text-muted-foreground">
           Începe cu http:// sau https://. Lasă gol ca să ștergi adresa.
+          {currentUrl && (
+            <>
+              {' '}
+              <a
+                href={currentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline underline-offset-4"
+              >
+                Deschide formularul salvat
+              </a>
+            </>
+          )}
         </p>
-        <div className="flex gap-2">
-          <input
-            id={inputId}
-            type="url"
-            inputMode="url"
-            className={control}
-            value={url}
-            disabled={disabled}
-            onChange={(event) => setUrl(event.target.value)}
-            {...form.field('url', hintId)}
-          />
-          <Button type="submit" className="min-h-11" disabled={disabled}>
-            Salvează
-          </Button>
-        </div>
         <FieldError {...form.errorProps('url')} />
         <FieldError>{form.formError}</FieldError>
-        {message && <p role="status">{message}</p>}
+        <Button type="submit" block className="self-start" disabled={disabled}>
+          Salvează
+        </Button>
+        {message && (
+          <p role="status" className="m-0">
+            {message}
+          </p>
+        )}
       </form>
     </Panel>
   );
@@ -137,8 +139,8 @@ type GroupSetting = {
   label: string;
   saved: string;
   cleared: string;
-  /** The Adunarea Generală is a public Group; the board a Private one. */
-  privateGroups: boolean;
+  /** Which active Groups can hold the setting at all (B59). */
+  fits: (group: AdminGroup) => boolean;
 };
 
 const ADUNAREA_GENERALA: GroupSetting = {
@@ -150,7 +152,15 @@ const ADUNAREA_GENERALA: GroupSetting = {
   label: 'Grupul Adunării Generale',
   saved: 'Grupul Adunării Generale a fost salvat.',
   cleared: 'Grupul Adunării Generale a fost șters din setări.',
-  privateGroups: false,
+  // The Adunarea Generală's shape: a public top-level Team whose membership
+  // follows a Minimum Level automatically — not OSUBB, a Department or a
+  // Project, which the list used to offer too.
+  fits: (group) =>
+    group.category === 'team' &&
+    group.parent_id === null &&
+    group.automatic_membership &&
+    !group.is_organization &&
+    !group.is_private,
 };
 
 const BOARD: GroupSetting = {
@@ -162,7 +172,7 @@ const BOARD: GroupSetting = {
   label: 'Grupul Biroului de Conducere',
   saved: 'Grupul Biroului de Conducere a fost salvat.',
   cleared: 'Grupul Biroului de Conducere a fost șters din setări.',
-  privateGroups: true,
+  fits: (group) => group.is_private,
 };
 
 function GroupSettingPanel({
@@ -189,13 +199,9 @@ function GroupSettingPanel({
   const choices = useMemo(
     () =>
       (groups.data ?? [])
-        .filter(
-          (group) =>
-            group.status === 'active' &&
-            group.is_private === setting.privateGroups,
-        )
+        .filter((group) => group.status === 'active' && setting.fits(group))
         .sort((a, b) => a.name.localeCompare(b.name, 'ro')),
-    [groups.data, setting.privateGroups],
+    [groups.data, setting],
   );
   const chosen = draft ?? current ?? '';
 
@@ -223,67 +229,60 @@ function GroupSettingPanel({
       icon={setting.icon}
       title={setting.title}
       description={setting.description}
-      stack={3}
     >
-      <p className="m-0">
-        {current === null ? (
-          <span className="text-muted-foreground">Niciun grup setat</span>
-        ) : (
-          <span className="font-semibold">
-            {currentGroup?.name ?? `Grupul #${current}`}
-          </span>
-        )}
-      </p>
       {groups.isPending ? (
         <Loading label="Se încarcă grupurile…" />
       ) : groups.isError ? (
         <ErrorState text="Nu am putut încărca grupurile." />
       ) : (
-        <form onSubmit={submit} className="grid max-w-xl gap-1.5">
+        // The Group in force is the select's value: named once (B59).
+        <form onSubmit={submit} className="flex flex-col gap-2">
           <label htmlFor={selectId} className="text-sm font-medium">
             {setting.label}
           </label>
-          <div className="flex gap-2">
-            <select
-              id={selectId}
-              className={control}
-              value={chosen}
-              disabled={disabled}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                setMessage(null);
-                setError(null);
-              }}
-            >
-              <option value="">
-                {current === null ? 'Alege un grup' : 'Niciun grup'}
-              </option>
-              {current !== null &&
-                !choices.some((group) => String(group.id) === current) && (
-                  <option value={current}>
-                    {currentGroup?.name ?? 'Grupul actual'}
-                  </option>
-                )}
-              {choices.map((group) => (
-                <option key={group.id} value={String(group.id)}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-            <Button
-              type="submit"
-              className="min-h-11"
-              disabled={disabled || chosen === (current ?? '')}
-            >
-              Salvează
-            </Button>
-          </div>
+          <NativeSelect
+            id={selectId}
+            value={chosen}
+            disabled={disabled}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setMessage(null);
+              setError(null);
+            }}
+          >
+            <NativeSelectOption value="">
+              {current === null ? 'Alege un grup' : 'Niciun grup'}
+            </NativeSelectOption>
+            {current !== null &&
+              !choices.some((group) => String(group.id) === current) && (
+                <NativeSelectOption value={current}>
+                  {currentGroup?.name ?? 'Grupul actual'}
+                </NativeSelectOption>
+              )}
+            {choices.map((group) => (
+              <NativeSelectOption key={group.id} value={String(group.id)}>
+                {group.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
           {error && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="m-0 text-sm text-destructive">
               {error}
             </p>
           )}
-          {message && <p role="status">{message}</p>}
+          <Button
+            type="submit"
+            block
+            className="self-start"
+            disabled={disabled || chosen === (current ?? '')}
+          >
+            Salvează
+          </Button>
+          {message && (
+            <p role="status" className="m-0">
+              {message}
+            </p>
+          )}
         </form>
       )}
     </Panel>
@@ -313,7 +312,9 @@ export default function AdminSettingsTab() {
       />
     );
   return (
-    <PageGrid columns={3}>
+    // One column at reading width: a select or an address needs the room a
+    // third of the page never gave it (AD4).
+    <PageGrid columns={1} className="max-w-3xl">
       <AdherenceFormPanel
         current={settings.data.get('adherence_form_url') ?? null}
         disabled={change.isPending}

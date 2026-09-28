@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Users } from 'lucide-react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import {
   DataTable,
   type DataTableColumn,
@@ -22,25 +22,22 @@ function memberPagePath(memberId: string) {
   return `/administrare/membri/${encodeURIComponent(memberId)}`;
 }
 
-const columns: DataTableColumn<AppointableMember>[] = [
-  {
-    id: 'name',
-    accessorFn: (row) => memberDisplayName(row.nickname, row.name),
-    header: 'Membru',
-    // Case- and diacritic-blind, so "stefan" finds "Ștefan".
-    filterFn: (row, _columnId, value: string) =>
-      normalizeSearch(
-        `${memberDisplayName(row.original.nickname, row.original.name)} ${row.original.name}`,
-      ).includes(normalizeSearch(value.trim())),
-    sortFn: (left, right) =>
-      memberDisplayName(
-        left.original.nickname,
-        left.original.name,
-      ).localeCompare(
-        memberDisplayName(right.original.nickname, right.original.name),
-        'ro',
-      ),
-    cell: ({ row }) => (
+const nameColumn: DataTableColumn<AppointableMember> = {
+  id: 'name',
+  accessorFn: (row) => memberDisplayName(row.nickname, row.name),
+  header: 'Membru',
+  // Case- and diacritic-blind, so "stefan" finds "Ștefan".
+  filterFn: (row, _columnId, value: string) =>
+    normalizeSearch(
+      `${memberDisplayName(row.original.nickname, row.original.name)} ${row.original.name}`,
+    ).includes(normalizeSearch(value.trim())),
+  sortFn: (left, right) =>
+    memberDisplayName(left.original.nickname, left.original.name).localeCompare(
+      memberDisplayName(right.original.nickname, right.original.name),
+      'ro',
+    ),
+  cell: ({ row }) => (
+    <div className="grid min-w-0 justify-items-start">
       <MemberName
         memberId={row.original.memberId}
         nickname={row.original.nickname}
@@ -49,38 +46,51 @@ const columns: DataTableColumn<AppointableMember>[] = [
         showFullName
         size="sm"
       />
-    ),
-  },
-  {
-    id: 'role',
-    accessorFn: (row) => row.roleLabel,
-    header: 'Rol',
-  },
-  {
-    id: 'status',
-    accessorFn: (row) => statusLabel(row.status),
-    header: 'Status',
-  },
-  {
-    id: 'page',
-    header: 'Pagina membrului',
-    enableSorting: false,
-    cell: ({ row }) => (
-      <Link
-        to={memberPagePath(row.original.memberId)}
-        aria-label={`Pagina membrului: ${memberDisplayName(row.original.nickname, row.original.name)}`}
-        className="inline-flex min-h-11 items-center font-medium underline underline-offset-4"
-      >
-        Pagina membrului
-      </Link>
-    ),
-  },
-];
+      {/* Under `sm` the Rol column folds in here, under the name (AD1). */}
+      <span className="-mt-1 pl-7.5 text-xs text-muted-foreground sm:hidden">
+        {row.original.roleLabel}
+      </span>
+    </div>
+  ),
+};
+
+const roleColumn: DataTableColumn<AppointableMember> = {
+  id: 'role',
+  accessorFn: (row) => row.roleLabel,
+  header: 'Rol',
+};
+
+const statusColumn: DataTableColumn<AppointableMember> = {
+  id: 'status',
+  accessorFn: (row) => statusLabel(row.status),
+  header: 'Status',
+};
+
+/**
+ * One affordance per row: the row opens the member page, the name the
+ * Member Card (B62). Status only when a Member who is not active is listed —
+ * a column of "Activ" says nothing.
+ */
+function memberColumns(
+  members: readonly AppointableMember[],
+): DataTableColumn<AppointableMember>[] {
+  return members.some((member) => member.status !== 'activ')
+    ? [nameColumn, roleColumn, statusColumn]
+    : [nameColumn, roleColumn];
+}
+
+/** Rol and Status fold under the name on a phone (layout AD1). */
+const columnClassName = {
+  name: 'min-w-40 whitespace-normal',
+  role: 'max-sm:hidden',
+  status: 'max-sm:hidden',
+};
 
 function MembersPanel() {
   const members = useAppointableMembers();
   const navigate = useNavigate();
   const data = useMemo(() => members.data ?? [], [members.data]);
+  const columns = useMemo(() => memberColumns(data), [data]);
   return (
     <Panel eyebrow="Membri" icon={Users} title="Membri">
       {members.isPending ? (
@@ -97,6 +107,7 @@ function MembersPanel() {
           filters={[{ columnId: 'name', label: 'Caută un membru' }]}
           initialSorting={[{ id: 'name', desc: false }]}
           emptyTitle="Niciun membru găsit."
+          columnClassName={columnClassName}
           onRowClick={(row) => void navigate(memberPagePath(row.memberId))}
         />
       )}

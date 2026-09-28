@@ -29,6 +29,8 @@ export type LedgerRow = {
   reason: string;
   created_at: string;
   task_id: number | null;
+  /** The Task's title, or null when the Task is not readable to the viewer. */
+  task_title: string | null;
 };
 
 export type AdminMemberRows = MemberCardRows & {
@@ -54,7 +56,9 @@ export async function fetchAdminMember(
     readAllRows((from, to) =>
       supabase
         .from('points_ledger')
-        .select('id, delta, reason, created_at, task_id')
+        // The embedded Task answers only what `tasks` RLS lets the viewer
+        // read: null for anything else, and the page shows the id (B61).
+        .select('id, delta, reason, created_at, task_id, tasks(title)')
         .eq('member_id', memberId)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
@@ -62,7 +66,14 @@ export async function fetchAdminMember(
     ),
   ]);
   if (profile.error) throw profile.error;
-  return { ...rows, status: profile.data?.status ?? null, points };
+  return {
+    ...rows,
+    status: profile.data?.status ?? null,
+    points: points.map(({ tasks, ...row }) => ({
+      ...row,
+      task_title: tasks?.title ?? null,
+    })),
+  };
 }
 
 export function useAdminMember(memberId: string | undefined) {
