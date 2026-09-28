@@ -37,7 +37,7 @@ export function MemberName({
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
         className={cn(
-          'group/member inline-flex max-w-full min-w-0 items-center rounded-md text-left align-middle outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+          'group/member inline-flex max-w-full min-w-0 items-center rounded-md text-left align-middle outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring',
           size === 'sm'
             ? 'min-h-9 gap-1.5 text-sm pointer-coarse:min-h-11'
             : 'min-h-11 gap-2',

@@ -90,7 +90,9 @@ it('shows BC and the Moderator all seven tabs, in the order Alex listed', async 
   expect(
     screen.getByRole('heading', { level: 1, name: 'Administrare' }),
   ).toBeVisible();
-  expect(screen.getByText('OSUBB · Administrare')).toBeVisible();
+  expect(
+    document.querySelector('[data-slot="page-eyebrow"]'),
+  ).toHaveTextContent(/^Administrare$/);
   expect(
     screen.getByText(
       'Grupurile OSUBB, membrii, rolurile și setările organizației.',

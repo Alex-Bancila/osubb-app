@@ -100,7 +100,7 @@ export default function GroupsScreen() {
                       style={{ backgroundColor: group.color ?? '#5C5C61' }}
                     />
                     <Link
-                      className="min-w-0 underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      className="min-w-0 underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring"
                       to={`/grupuri/${group.id}`}
                     >
                       {group.name}

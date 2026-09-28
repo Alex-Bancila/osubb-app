@@ -24,6 +24,22 @@ describe('Page', () => {
     expect(page).not.toHaveClass('max-w-3xl');
   });
 
+  it('stacks its blocks with a flex gap, so a child m-0 cannot cancel it (X2)', () => {
+    render(
+      <Page>
+        <PageHeader title="Membru" />
+        <dl className="m-0">
+          <dt>Rol</dt>
+          <dd>Voluntar</dd>
+        </dl>
+        <section aria-label="Cont">Cont</section>
+      </Page>,
+    );
+    const page = screen.getByRole('region', { name: 'Membru' });
+    expect(page).toHaveClass('flex', 'flex-col', 'gap-6');
+    expect(page.className).not.toMatch(/space-y-/);
+  });
+
   it('narrows to the reading width', () => {
     render(
       <Page width="reading">
@@ -37,23 +53,23 @@ describe('Page', () => {
 });
 
 describe('PageHeader', () => {
-  it('always has an eyebrow — OSUBB unless the page names its area', () => {
+  it('shows an eyebrow only when the page names its section (ruling 2)', () => {
     const { rerender } = render(
       <Page>
-        <PageHeader title="Grupuri" />
+        <PageHeader title="Taskuri" />
       </Page>,
     );
-    expect(screen.getByText('OSUBB')).toHaveAttribute(
+    expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
+    expect(screen.queryByText('OSUBB')).toBeNull();
+    rerender(
+      <Page>
+        <PageHeader eyebrow="Calendar" title="Agendă" />
+      </Page>,
+    );
+    expect(screen.getByText('Calendar')).toHaveAttribute(
       'data-slot',
       'page-eyebrow',
     );
-    rerender(
-      <Page>
-        <PageHeader eyebrow="Calendar OSUBB" title="Agendă" />
-      </Page>,
-    );
-    expect(screen.getByText('Calendar OSUBB')).toBeInTheDocument();
-    expect(screen.queryByText('OSUBB')).toBeNull();
   });
 
   it('renders one h1 at the page-title size, the description and the actions slot', () => {
@@ -80,10 +96,9 @@ describe('PageHeader', () => {
       .closest('[data-slot="page-actions"]');
     // Full width and stacked under 640 px, on the right from 640 px.
     expect(actions).toHaveClass('w-full', 'sm:w-auto');
-    expect(heading.closest('header')).toHaveClass(
-      'mb-6',
-      'flex-col',
-      'sm:flex-row',
-    );
+    const header = heading.closest('header');
+    expect(header).toHaveClass('flex-col', 'sm:flex-row');
+    // The Page's gap spaces it; a margin of its own would double it.
+    expect(header?.className).not.toMatch(/(^| )mb-/);
   });
 });

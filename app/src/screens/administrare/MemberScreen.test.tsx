@@ -124,7 +124,9 @@ beforeEach(() => {
 it('BC sees the Nickname over the full name, every Group Role and both editors', async () => {
   const { container } = show();
   expect(screen.getByRole('heading', { level: 1, name: 'Nana' })).toBeVisible();
-  expect(screen.getByText('OSUBB · Administrare · Membru')).toBeVisible();
+  expect(
+    document.querySelector('[data-slot="page-eyebrow"]'),
+  ).toHaveTextContent(/^Administrare$/);
   expect(
     screen.getByRole('link', { name: 'Înapoi la Administrare' }),
   ).toHaveAttribute('href', '/administrare/membri');

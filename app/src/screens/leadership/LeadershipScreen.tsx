@@ -129,7 +129,7 @@ function BoardRow({
           <Link
             to={trackerPath(row.member_id)}
             aria-label={`Vezi trackerul membrului ${name}`}
-            className="inline-flex min-h-11 min-w-11 items-center justify-end gap-1 rounded-md text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:px-2"
+            className="inline-flex min-h-11 min-w-11 items-center justify-end gap-1 rounded-md text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring sm:px-2"
           >
             <span className="hidden sm:inline">Vezi trackerul</span>
             <ChevronRight aria-hidden="true" className="size-4" />
@@ -358,7 +358,7 @@ function LeadershipContent() {
   return (
     <Page>
       <PageHeader
-        eyebrow="OSUBB · Conducere"
+        eyebrow="Conducere"
         title="Clasament"
         description="Punctele taskurilor, pe membri și pe departamente."
         actions={

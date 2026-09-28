@@ -29,8 +29,22 @@ describe('SegmentedToggle', () => {
       'aria-pressed',
       'false',
     );
-    for (const button of screen.getAllByRole('button'))
-      expect(button).toHaveClass('min-h-11', 'min-w-11');
+    // 44 px in all (X5): 36 px segments in a 3 px track with a 1 px
+    // border; each segment's hit area reaches the track's edge.
+    expect(group).toHaveClass('p-[3px]', 'border');
+    for (const button of screen.getAllByRole('button')) {
+      expect(button).toHaveClass(
+        'min-h-[36px]',
+        'min-w-11',
+        'after:-inset-y-1',
+      );
+      expect(button).not.toHaveClass('min-h-11');
+      // A visible focus ring (X1): the style is named, not left to outline-none.
+      expect(button).toHaveClass(
+        'focus-visible:outline-2',
+        'focus-visible:outline-solid',
+      );
+    }
   });
 
   it('calls back with the chosen value', async () => {

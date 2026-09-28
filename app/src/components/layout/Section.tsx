@@ -6,8 +6,9 @@ import { SectionHeader, type SectionHeaderAction } from './SectionHeader';
 
 /**
  * A band of the page: an optional `SectionHeader` (`h2`) over exactly one
- * `PageGrid`. A `Section` that follows another `Section` sits 32 px below it
- * (header → content inside a page is 24 px; band → band is 32 px). Panels in
+ * `PageGrid`. A `Section` that follows another `Section` in a `Page` sits
+ * 32 px below it (header → content inside a page is 24 px; band → band is
+ * 32 px). Panels in
  * a band take `level={3}` when the band has a title.
  */
 export function Section({
@@ -19,6 +20,7 @@ export function Section({
   control,
   columns = 1,
   as,
+  alignHeaders,
   className,
   children,
   'aria-label': ariaLabel,
@@ -31,6 +33,8 @@ export function Section({
   control?: ReactNode;
   columns?: PageGridColumns;
   as?: 'div' | 'ul' | 'ol';
+  /** `PageGrid`'s `alignHeaders`: the band's boxes start on one line. */
+  alignHeaders?: boolean;
   className?: string;
   children?: ReactNode;
   'aria-label'?: string;
@@ -44,7 +48,8 @@ export function Section({
       data-slot="page-section"
       aria-labelledby={title && !ariaLabel ? titleId : undefined}
       aria-label={ariaLabel}
-      className={cn('min-w-0 [[data-slot=page-section]+&]:mt-7', className)}
+      // The Page's 24 px gap plus 8 px: band → band is 32 px.
+      className={cn('min-w-0 [[data-slot=page-section]+&]:mt-2', className)}
     >
       {hasHeader && (
         <SectionHeader
@@ -57,7 +62,7 @@ export function Section({
           control={control}
         />
       )}
-      <PageGrid columns={columns} as={as}>
+      <PageGrid columns={columns} as={as} alignHeaders={alignHeaders}>
         {children}
       </PageGrid>
     </section>

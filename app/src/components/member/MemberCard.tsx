@@ -1,8 +1,15 @@
 import { useId } from 'react';
-import { Link } from 'react-router';
-import { HistoryIcon, MailIcon, PencilIcon, PhoneIcon } from 'lucide-react';
+import { Link, useLocation } from 'react-router';
+import {
+  HistoryIcon,
+  MailIcon,
+  PencilIcon,
+  PhoneIcon,
+  UserIcon,
+} from 'lucide-react';
 import { cn } from 'cn';
 import { PrivateGroupBadge } from '@/components/group/PrivateGroupBadge';
+import { backLinkState, SubHeading } from '@/components/layout';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { MemberAvatar } from '@/components/ui/combobox';
@@ -16,6 +23,7 @@ import {
 import { useCapability } from '@/lib/capabilities';
 import { formatDayMonthYear } from '@/lib/format';
 import { useMemberCard, type MemberCardData } from '@/queries/member-card';
+import { useMyGroupRoles } from '@/queries/my-groups';
 
 import { memberDisplayName, type MemberIdentity } from './member-identity';
 
@@ -35,15 +43,14 @@ export function MemberCard({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-5 sm:max-w-sm">
+      {/* One shrinkable column: a long Group Role label wraps or truncates
+          inside the dialog instead of widening it past 375 px (layout N3). */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] gap-5 sm:max-w-sm">
         <MemberCardBody {...identity} onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   );
 }
-
-const sectionHeading =
-  'mb-2 text-[0.7rem] font-semibold tracking-[0.08em] text-muted-foreground uppercase';
 
 // Mounted only while the Dialog is open, so a list of fifty names does not
 // read fifty cards.
@@ -77,7 +84,7 @@ function MemberCardBody({
 
   return (
     <>
-      <DialogHeader className="flex-row items-center gap-4">
+      <DialogHeader className="min-w-0 flex-row items-center gap-4">
         {/* The frame keeps its size when a photo replaces the initials (#629);
             its ring is the first Group's colour, named by the chip below. */}
         <span
@@ -92,9 +99,8 @@ function MemberCardBody({
           />
         </span>
         <div className="min-w-0 space-y-0.5">
-          <DialogTitle className="text-lg leading-tight font-bold wrap-anywhere">
-            {title}
-          </DialogTitle>
+          {/* The dialog's own title size (#842): no override here. */}
+          <DialogTitle className="wrap-anywhere">{title}</DialogTitle>
           {subtitle && (
             <p className="text-sm font-medium wrap-anywhere">{subtitle}</p>
           )}
@@ -124,6 +130,11 @@ function MemberCardBody({
   );
 }
 
+const actionClass = cn(
+  buttonVariants({ variant: 'outline', size: 'sm' }),
+  'min-w-0',
+);
+
 function CardSections({
   data,
   ids,
@@ -135,13 +146,14 @@ function CardSections({
 }) {
   const manageRoles = useCapability('manageRoles').data === true;
   const seeLeadership = useCapability('seeLeadership').data === true;
+  const administer = useCapability('administer').data === true;
   const { primaryGroup, otherMemberships } = data;
   return (
     <>
       {primaryGroup && (
-        <p className="-mt-1 flex flex-wrap items-center gap-2">
+        <p className="-mt-1 flex min-w-0 flex-wrap items-center gap-2">
           <span
-            className="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
+            className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
             style={{
               borderColor: primaryGroup.color ?? 'var(--border)',
               backgroundColor: primaryGroup.color
@@ -175,15 +187,15 @@ function CardSections({
       )}
 
       {data.groups.length > 0 && (
-        <section aria-labelledby={`${ids}-groups`}>
-          <h3 id={`${ids}-groups`} className={sectionHeading}>
+        <section aria-labelledby={`${ids}-groups`} className="min-w-0">
+          <SubHeading id={`${ids}-groups`} className="mb-2">
             Grupuri
-          </h3>
+          </SubHeading>
           <ul className="max-h-56 divide-y divide-border overflow-y-auto">
             {data.groups.map((group) => (
               <li
                 key={group.id}
-                className="flex items-center justify-between gap-3 py-1.5"
+                className="flex min-w-0 items-center justify-between gap-3 py-1.5"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span
@@ -193,11 +205,19 @@ function CardSections({
                       backgroundColor: group.color ?? 'var(--brand-red)',
                     }}
                   />
-                  <span className="truncate">{group.label}</span>
+                  <span className="truncate" title={group.label}>
+                    {group.label}
+                  </span>
                   <PrivateGroupBadge isPrivate={group.isPrivate} />
                 </span>
-                <Badge variant="outline" className="shrink-0">
-                  {group.roleLabel}
+                {/* A long position ("Responsabil logistică și voluntari")
+                    truncates at half the row, with the whole label on hover. */}
+                <Badge
+                  variant="outline"
+                  className="max-w-1/2 min-w-0 shrink-0 justify-start"
+                  title={group.roleLabel}
+                >
+                  <span className="truncate">{group.roleLabel}</span>
                 </Badge>
               </li>
             ))}
@@ -206,10 +226,10 @@ function CardSections({
       )}
 
       {data.contact && (
-        <section aria-labelledby={`${ids}-contact`}>
-          <h3 id={`${ids}-contact`} className={sectionHeading}>
+        <section aria-labelledby={`${ids}-contact`} className="min-w-0">
+          <SubHeading id={`${ids}-contact`} className="mb-2">
             Contact
-          </h3>
+          </SubHeading>
           <ul>
             {data.contact.email && (
               <li>
@@ -217,7 +237,7 @@ function CardSections({
                   href={`mailto:${data.contact.email}`}
                   className="inline-flex min-h-11 items-center gap-2 break-all underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                 >
-                  <MailIcon aria-hidden="true" className="size-4" />
+                  <MailIcon aria-hidden="true" className="size-4 shrink-0" />
                   {data.contact.email}
                 </a>
               </li>
@@ -228,7 +248,7 @@ function CardSections({
                   href={`tel:${data.contact.phone}`}
                   className="inline-flex min-h-11 items-center gap-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                 >
-                  <PhoneIcon aria-hidden="true" className="size-4" />
+                  <PhoneIcon aria-hidden="true" className="size-4 shrink-0" />
                   {data.contact.phone}
                 </a>
               </li>
@@ -237,39 +257,138 @@ function CardSections({
         </section>
       )}
 
-      {(seeLeadership || manageRoles) && (
-        <nav
-          aria-label="Acțiuni pentru membru"
-          className="flex flex-wrap gap-2 border-t pt-4"
-        >
-          {seeLeadership && (
-            <Link
-              to={`/tracker/membru/${data.memberId}`}
-              onClick={onClose}
-              className={cn(
-                buttonVariants({ variant: 'outline', size: 'sm' }),
-                'flex-1',
-              )}
-            >
-              <HistoryIcon aria-hidden="true" />
-              Vezi trackerul
-            </Link>
-          )}
-          {manageRoles && (
-            <Link
-              to={`/administrare/membri/${data.memberId}`}
-              onClick={onClose}
-              className={cn(
-                buttonVariants({ variant: 'outline', size: 'sm' }),
-                'flex-1',
-              )}
-            >
-              <PencilIcon aria-hidden="true" />
-              Editează
-            </Link>
-          )}
-        </nav>
+      {(seeLeadership || manageRoles || administer) && (
+        <CardActions
+          data={data}
+          seeLeadership={seeLeadership}
+          manageRoles={manageRoles}
+          administer={administer}
+          onClose={onClose}
+        />
       )}
     </>
   );
+}
+
+/**
+ * The card's links, in one grid inside the dialog's padding: two columns
+ * when both fit, one under the other on a narrow phone.
+ *
+ * - "Vezi trackerul" for leadership (BCE, BC, Moderator).
+ * - "Editează" for `manageRoles` (BC, Moderator): the member page.
+ * - "Pagina membrului" for a viewer who may open Administrare (`administer`)
+ *   and holds a Group Role (Coordonator or Responsabil) in a Group this member
+ *   belongs to — the member page is theirs to read for their Groups
+ *   (navigation D19). Never both: it is the same page as "Editează".
+ */
+function CardActions({
+  data,
+  seeLeadership,
+  manageRoles,
+  administer,
+  onClose,
+}: {
+  data: MemberCardData;
+  seeLeadership: boolean;
+  manageRoles: boolean;
+  administer: boolean;
+  onClose: () => void;
+}) {
+  const leads = useLeadsAGroupOf(data, administer && !manageRoles);
+  if (!seeLeadership && !manageRoles && !leads) return null;
+  return (
+    <CardLinks
+      data={data}
+      seeLeadership={seeLeadership}
+      manageRoles={manageRoles}
+      leads={leads}
+      onClose={onClose}
+    />
+  );
+}
+
+function CardLinks({
+  data,
+  seeLeadership,
+  manageRoles,
+  leads,
+  onClose,
+}: {
+  data: MemberCardData;
+  seeLeadership: boolean;
+  manageRoles: boolean;
+  leads: boolean;
+  onClose: () => void;
+}) {
+  const location = useLocation();
+  // The page that opens from here goes back here, not to its own parent
+  // (navigation D10).
+  const from = backLinkState(location);
+  const trackerPage = `/tracker/membru/${data.memberId}`;
+  const memberPage = `/administrare/membri/${data.memberId}`;
+  // A link to the page already open would only point that page's back link
+  // at itself: the card offers the other pages, not this one.
+  const tracker = seeLeadership && location.pathname !== trackerPage;
+  const page = (manageRoles || leads) && location.pathname !== memberPage;
+  if (!tracker && !page) return null;
+  return (
+    <nav
+      aria-label="Acțiuni pentru membru"
+      className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2 border-t pt-4"
+    >
+      {tracker && (
+        <Link
+          to={trackerPage}
+          state={from}
+          onClick={onClose}
+          className={actionClass}
+        >
+          <HistoryIcon aria-hidden="true" />
+          Vezi trackerul
+        </Link>
+      )}
+      {page &&
+        (manageRoles ? (
+          <Link
+            to={memberPage}
+            state={from}
+            onClick={onClose}
+            className={actionClass}
+          >
+            <PencilIcon aria-hidden="true" />
+            Editează
+          </Link>
+        ) : (
+          <Link
+            to={memberPage}
+            state={from}
+            onClick={onClose}
+            className={actionClass}
+          >
+            <UserIcon aria-hidden="true" />
+            Pagina membrului
+          </Link>
+        ))}
+    </nav>
+  );
+}
+
+/**
+ * Whether the viewer holds a Group Role — Coordonator (`manager`) or
+ * Responsabil (`responsible`), their own or inherited from an ancestor — in a
+ * Group the member belongs to. It reads the same cached, live `my_groups()`
+ * as the rest of the app (ruling R29), not the token's `group_ids`.
+ */
+function useLeadsAGroupOf(data: MemberCardData, enabled: boolean): boolean {
+  const mine = useMyGroupRoles();
+  if (!enabled || !mine.data) return false;
+  const led = new Set(
+    mine.data
+      .filter(
+        (group) =>
+          group.group_role === 'manager' || group.group_role === 'responsible',
+      )
+      .map((group) => group.id),
+  );
+  return data.groups.some((group) => led.has(group.id));
 }

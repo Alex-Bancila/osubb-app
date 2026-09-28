@@ -3,6 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const hook = vi.hoisted(() => vi.fn());
+// The Member Card reads the viewer's Group Roles for "Pagina membrului" (#841).
+vi.mock('@/queries/my-groups', () => ({
+  useMyGroupRoles: () => ({ data: [] }),
+}));
 vi.mock('@/queries/member-card', () => ({ useMemberCard: hook }));
 vi.mock('@/lib/capabilities', () => ({
   useCapability: () => ({ data: false }),
@@ -98,4 +102,11 @@ it('renders a stored avatar colour only when it is #rrggbb (security audit F1)',
     />,
   );
   expect(avatar()?.style.backgroundColor).toBe('var(--ink-700)');
+});
+
+it('shows a visible keyboard focus ring (X1)', () => {
+  render(<MemberName memberId="m-1" nickname="Ani" fullName="Ana Pop" />);
+  expect(
+    screen.getByRole('button', { name: 'Profilul membrului Ani' }),
+  ).toHaveClass('focus-visible:outline-2', 'focus-visible:outline-solid');
 });

@@ -25,6 +25,20 @@ const gridColumns: Record<PageGridColumns, string> = {
   collection: 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3',
 };
 
+/**
+ * `alignHeaders`, from the width where cells first sit side by side: rows
+ * alternate header (`auto`) and box (`1fr`); each cell spans a pair through
+ * a subgrid with no gap of its own (the header's `mb-3` spaces it), and its
+ * header keeps to the top of the header row.
+ */
+const alignedRows: Record<PageGridColumns, string | undefined> = {
+  1: undefined,
+  2: 'md:auto-rows-[auto_1fr] md:*:row-span-2 md:*:grid md:*:grid-rows-subgrid md:*:gap-y-0 md:*:*:data-[slot=section-header]:self-start',
+  3: 'xl:auto-rows-[auto_1fr] xl:*:row-span-2 xl:*:grid xl:*:grid-rows-subgrid xl:*:gap-y-0 xl:*:*:data-[slot=section-header]:self-start',
+  collection:
+    'md:auto-rows-[auto_1fr] md:*:row-span-2 md:*:grid md:*:grid-rows-subgrid md:*:gap-y-0 md:*:*:data-[slot=section-header]:self-start',
+};
+
 type GridElement = 'div' | 'ul' | 'ol';
 
 /**
@@ -38,16 +52,25 @@ type GridElement = 'div' | 'ul' | 'ol';
  * a cell that rendered nothing is reported with `console.warn`.
  *
  * `as="ul"` / `"ol"` for a list of like items — its children are then `li`s.
+ *
+ * `alignHeaders` (layout X9): once the cells sit side by side, each cell
+ * spans two grid rows — its header, then its box — through a subgrid, so a
+ * header that wraps or carries a description never pushes its box below the
+ * boxes next to it. Every box in a row starts and ends together, and each
+ * header keeps to the top of its row. Use it for rows of `Panel`s.
  */
 export function PageGrid({
   columns,
   as: Element = 'div',
+  alignHeaders = false,
   className,
   children,
   ...props
 }: {
   columns: PageGridColumns;
   as?: GridElement;
+  /** Line up the boxes of one row under headers of different heights. */
+  alignHeaders?: boolean;
   className?: string;
   children?: ReactNode;
 } & Omit<ComponentProps<'div'>, 'className' | 'children' | 'ref'>) {
@@ -69,9 +92,11 @@ export function PageGrid({
       ref: setNode,
       'data-slot': 'page-grid',
       'data-columns': columns,
+      'data-align-headers': alignHeaders || undefined,
       className: cn(
         'm-0 grid list-none items-stretch gap-4 p-0 md:gap-6 *:h-full *:min-w-0',
         gridColumns[columns],
+        alignHeaders && alignedRows[columns],
         className,
       ),
     },

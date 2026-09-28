@@ -75,7 +75,7 @@ function AdherenceFormPanel({
       icon={FileSignature}
       title="Formular de adeziune"
       description="Linkul pe care îl primește un membru promovat Voluntar Activ."
-      boxClassName="space-y-3"
+      stack={3}
     >
       <p className="m-0 break-all">
         {currentUrl ? (
@@ -223,7 +223,7 @@ function GroupSettingPanel({
       icon={setting.icon}
       title={setting.title}
       description={setting.description}
-      boxClassName="space-y-3"
+      stack={3}
     >
       <p className="m-0">
         {current === null ? (

@@ -168,7 +168,7 @@ export function RolePanel({
         icon={UserCog}
         title="Roluri și status"
         description="Schimbările sunt înregistrate cu autorul lor. Rolul organizațional este separat de rolul într-un Grup."
-        boxClassName="space-y-4"
+        stack={4}
       >
         {members.isPending || roles.isPending ? (
           <p role="status">Se încarcă membrii și rolurile…</p>
@@ -203,7 +203,7 @@ export function RolePanel({
             )}
             {member && !selectedMemberId && (
               <Link
-                className="inline-flex min-h-11 items-center underline"
+                className="inline-flex min-h-11 items-center self-start underline"
                 to={`/administrare/membri/${member.memberId}`}
               >
                 Vezi detaliile membrului

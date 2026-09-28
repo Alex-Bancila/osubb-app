@@ -19,8 +19,10 @@ const widths: Record<PageWidth, string> = {
  * - A screen never sets its own `max-w-*` or padding frame — it takes a
  *   `Page`. The shell scrolls the page; the page never sets its own height,
  *   and nothing in it may scroll the page sideways at 375 px (`min-w-0`).
- * - Blocks inside the page stack 24 px apart (`space-y-6`); a `Section`
- *   after a `Section` is 32 px below it.
+ * - Blocks inside the page stack 24 px apart through a flex `gap-6`, never
+ *   `space-y-*`, so a child's own `m-0` (a `dl`, a `PageGrid`) cannot cancel
+ *   the rhythm (layout X2). A `Section` after a `Section` is 32 px below it;
+ *   a `BackLink` sits 12 px above the `PageHeader`.
  * - The page is a `section` labelled by its `PageHeader`'s `h1`; a page that
  *   has no header yet (a loading or not-found state) passes `aria-label`.
  */
@@ -40,7 +42,7 @@ export function Page({
         data-width={width}
         aria-labelledby={props['aria-label'] ? undefined : titleId}
         className={cn(
-          'mx-auto w-full min-w-0 space-y-6 px-4 py-4 md:px-6 md:py-6',
+          'mx-auto flex w-full min-w-0 flex-col gap-6 px-4 py-4 md:px-6 md:py-6',
           widths[width],
           className,
         )}

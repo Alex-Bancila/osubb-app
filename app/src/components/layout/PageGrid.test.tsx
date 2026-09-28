@@ -60,6 +60,39 @@ describe('PageGrid', () => {
       expect(box).toHaveClass('flex-1');
   });
 
+  it('alignHeaders puts each panel on a two-row subgrid once cells sit side by side (X9)', () => {
+    const { container, rerender } = render(
+      <PageGrid columns={2} alignHeaders>
+        <Panel title="Formular de adeziune" description="Un rând lung.">
+          a
+        </Panel>
+        <Panel title="Adunarea Generală">b</Panel>
+      </PageGrid>,
+    );
+    expect(grid(container)).toHaveClass(
+      'md:auto-rows-[auto_1fr]',
+      'md:*:row-span-2',
+      'md:*:grid-rows-subgrid',
+      'md:*:gap-y-0',
+    );
+    // The box keeps to the second row even when a panel has no header.
+    for (const box of container.querySelectorAll('[data-slot="panel-box"]'))
+      expect(box).toHaveClass('row-start-2');
+    rerender(
+      <PageGrid columns={3} alignHeaders>
+        <Panel title="a">a</Panel>
+      </PageGrid>,
+    );
+    expect(grid(container)).toHaveClass('xl:*:grid-rows-subgrid');
+    expect(grid(container)).not.toHaveClass('md:*:grid-rows-subgrid');
+    rerender(
+      <PageGrid columns={2}>
+        <Panel title="a">a</Panel>
+      </PageGrid>,
+    );
+    expect(grid(container).className).not.toMatch(/subgrid/);
+  });
+
   it('renders as a list when asked', () => {
     render(
       <PageGrid columns="collection" as="ul" aria-label="Grupuri">
@@ -119,7 +152,7 @@ describe('Section', () => {
     ).toBeInTheDocument();
     expect(band.querySelectorAll('[data-slot="page-grid"]')).toHaveLength(1);
     expect(grid(container)).toHaveClass('md:grid-cols-2');
-    // Band after band: 32 px.
-    expect(band).toHaveClass('[[data-slot=page-section]+&]:mt-7');
+    // Band after band: the Page's 24 px gap plus 8 px = 32 px.
+    expect(band).toHaveClass('[[data-slot=page-section]+&]:mt-2');
   });
 });

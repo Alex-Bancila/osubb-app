@@ -105,7 +105,7 @@ export default function CalendarScreen() {
   return (
     <Page>
       <PageHeader
-        eyebrow="Calendar OSUBB"
+        eyebrow="Calendar"
         title={title}
         description="Întâlnirile, activitățile și termenele vizibile pentru tine."
         actions={

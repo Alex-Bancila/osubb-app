@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from 'cn';
+import { focusRingClass } from './focus';
 
 export type SegmentedOption<T extends string> = {
   value: T;
@@ -11,8 +12,13 @@ export type SegmentedOption<T extends string> = {
 /**
  * A choice between two or three views of the same content (Calendar's Lună /
  * Agendă): a `role="group"` of buttons on a pill track, the chosen one
- * `aria-pressed="true"` and inked. Every segment is a 44 px target. It is a
- * view switch, not navigation — routed choices are `PageTabs`.
+ * `aria-pressed="true"` and inked. It is a view switch, not navigation —
+ * routed choices are `PageTabs`.
+ *
+ * The whole toggle is 44 px tall, the height of every other control it sits
+ * beside (layout X5): 36 px segments in a 3 px track with a 1 px border. Each
+ * segment's hit area reaches 4 px above and below it (`after:-inset-y-1`),
+ * so every segment is still a 44 px target.
  */
 export function SegmentedToggle<T extends string>({
   label,
@@ -44,7 +50,10 @@ export function SegmentedToggle<T extends string>({
           type="button"
           aria-pressed={value === option}
           onClick={() => onChange(option)}
-          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-bold whitespace-nowrap text-muted-foreground outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-(--text) aria-pressed:text-(--surface) [&_svg]:size-4 [&_svg]:shrink-0"
+          className={cn(
+            'relative inline-flex min-h-[36px] min-w-11 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-bold whitespace-nowrap text-muted-foreground after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground aria-pressed:bg-(--text) aria-pressed:text-(--surface) [&_svg]:size-4 [&_svg]:shrink-0',
+            focusRingClass,
+          )}
         >
           {Icon && <Icon aria-hidden="true" />}
           {text}

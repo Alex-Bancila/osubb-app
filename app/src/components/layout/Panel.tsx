@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from 'cn';
 import { SectionHeader, type SectionHeaderAction } from './SectionHeader';
+import { stackClass, type PanelStack } from './stack';
 
 /**
  * The box classes: 16 px padding at every width (the `TaskCard` spacing, so
@@ -22,6 +23,13 @@ export const panelBoxClass =
  *   `ErrorState` or `EmptyState` in its box instead.
  * - `bare` drops the box, for a child that is itself a card (`TaskCard`,
  *   `EventCard`).
+ * - `stack` spaces the box's blocks with a flex gap (12 px for a line of text
+ *   over a form, 16 px between forms) — never `space-y-*`.
+ * - `flush` is for a box that holds one `ListRow` list: the box loses its
+ *   padding and the rows take `px-4`, so a row (its tint, its name) reaches
+ *   the frame instead of sitting inset in a second border (layout L1, O1).
+ * - In a `PageGrid` with `alignHeaders`, the box always sits in the second
+ *   row of the panel's subgrid, so a panel without a header still lines up.
  * - Labelled by its title when it has one; otherwise pass `aria-label`.
  */
 export function Panel({
@@ -34,6 +42,8 @@ export function Panel({
   action,
   control,
   bare = false,
+  flush = false,
+  stack,
   className,
   boxClassName,
   children,
@@ -48,6 +58,10 @@ export function Panel({
   action?: SectionHeaderAction;
   control?: ReactNode;
   bare?: boolean;
+  /** No box padding; the `ListRow`s inside carry `px-4`. */
+  flush?: boolean;
+  /** Stack the box's children in a flex column with this gap (× 4 px). */
+  stack?: PanelStack;
   className?: string;
   boxClassName?: string;
   children?: ReactNode;
@@ -80,12 +94,26 @@ export function Panel({
       {bare ? (
         <div
           data-slot="panel-body"
-          className={cn('flex min-w-0 flex-1 flex-col', boxClassName)}
+          className={cn(
+            'row-start-2 flex min-w-0 flex-1 flex-col',
+            stack && stackClass[stack],
+            boxClassName,
+          )}
         >
           {children}
         </div>
       ) : (
-        <div data-slot="panel-box" className={cn(panelBoxClass, boxClassName)}>
+        <div
+          data-slot="panel-box"
+          data-flush={flush || undefined}
+          className={cn(
+            panelBoxClass,
+            'row-start-2',
+            stack && stackClass[stack],
+            flush && 'p-0 [&_[data-slot=list-row]]:px-4',
+            boxClassName,
+          )}
+        >
           {children}
         </div>
       )}
