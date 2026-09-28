@@ -98,7 +98,15 @@ describe('Task details sheet', () => {
     // A direct Task is local only (R26): no Audiență row.
     expect(screen.queryByText('Audiență')).toBeNull();
     expect(screen.queryByText('În cadrul originii')).toBeNull();
-    expect(screen.getByText('Indisponibil')).toBeVisible();
+    // No second Executor row and no "Indisponibil" (B20, Audit D-2).
+    expect(screen.queryByText('Indisponibil')).toBeNull();
+    expect(screen.queryByText('Executor')).toBeNull();
+    // Before an Evaluation there is no Dificultate or Nota to show.
+    expect(screen.queryByText('Dificultate')).toBeNull();
+    expect(screen.queryByText('Nota')).toBeNull();
+    expect(screen.queryByText('Neevaluat')).toBeNull();
+    // The review round is a reviewer's fact: not for this non-manager.
+    expect(screen.queryByText('Rundă de verificare')).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Duplicat din #7' }),
     ).toBeVisible();
@@ -124,14 +132,79 @@ describe('Task details sheet', () => {
     await screen.findByRole('dialog', { name: 'Detalii task' });
     const row = screen.getByText('Audiență').closest('div') as HTMLElement;
     expect(within(row).getByText('În tot OSUBB')).toBeVisible();
+    // Once: the card copy in the sheet drops its OSUBB chip (B20).
+    expect(screen.queryByText('OSUBB')).toBeNull();
+  });
+  it('shows the review round only to a manager, and only from round 1 (B20)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ review_round: 0 }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    const { unmount } = render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(screen.queryByText('Rundă de verificare')).toBeNull();
+    unmount();
+
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ review_round: 2 }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        onClose={vi.fn()}
+      />,
+    );
+    const row = (await screen.findByText('Rundă de verificare')).closest(
+      'div',
+    ) as HTMLElement;
+    expect(within(row).getByText('2')).toBeVisible();
+  });
+  it('shows Dificultate and Nota once, on the card, after an Evaluation', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'completed',
+          assignments: [],
+          visibleExecutor: null,
+          evaluations: [
+            { id: 1, difficulty: 3, rating: 4, points: 9, reversed_at: null },
+          ],
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(
+      screen.getAllByRole('img', { name: 'Dificultate 3 din 5' }),
+    ).toHaveLength(1);
+    expect(screen.getByText(/9 puncte/)).toHaveTextContent('Nota 4');
+    // A finished Task never reads "Neatribuit" (Audit D-1).
+    expect(screen.queryByText('Neatribuit')).toBeNull();
   });
   it('names the Executor as a button that opens their Member Card', async () => {
     const user = userEvent.setup();
     useTaskDetails.mockReturnValue({
       data: {
         task: taskRow({
+          assignments: [{ id: 1, member_id: 'ioana', ended_at: null }],
           visibleExecutor: {
-            memberId: 'member',
+            memberId: 'ioana',
             fullName: 'Ioana Pop',
             nickname: null,
           },
@@ -142,7 +215,9 @@ describe('Task details sheet', () => {
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
     await screen.findByRole('dialog', { name: 'Detalii task' });
-    const executor = screen.getByText('Executor').closest('div') as HTMLElement;
+    // One Executor line: the card's (B20).
+    expect(screen.getAllByText(/^Executor/)).toHaveLength(1);
+    const executor = screen.getByText('Executor:').closest('p') as HTMLElement;
     await user.click(
       within(executor).getByRole('button', {
         name: 'Profilul membrului Ioana Pop',
@@ -297,6 +372,58 @@ describe('Task details sheet', () => {
     expect(await screen.findByText('Copia nouă')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Duplicat din #1' }));
     expect(await screen.findByText('Task sursă')).toBeVisible();
+  });
+  it('steps back through Umbrella and Subtask to the Task first opened (D20)', async () => {
+    const titles: Record<number, string> = {
+      1: 'Subtask deschis',
+      2: 'Umbrela festivalului',
+      3: 'Alt subtask',
+    };
+    useTaskDetails.mockImplementation((id: number) => ({
+      data: {
+        task:
+          id === 2
+            ? taskRow({
+                id,
+                title: titles[id],
+                kind: 'umbrella',
+                assignments: [],
+              })
+            : taskRow({
+                id,
+                title: titles[id],
+                parent_task_id: 2,
+                parent: { title: titles[2] as string },
+              }),
+        executorName: null,
+        subtasks:
+          id === 2
+            ? [taskRow({ id: 3, title: titles[3], parent_task_id: 2 })]
+            : [],
+      },
+    }));
+    const user = userEvent.setup();
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    expect(await screen.findByText('Subtask deschis')).toBeVisible();
+    // On the Task first opened there is nowhere to go back to.
+    expect(screen.queryByRole('button', { name: /Înapoi la/ })).toBeNull();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Deschide taskul-umbrelă' }),
+    );
+    expect(await screen.findByText('Umbrela festivalului')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Alt subtask' }));
+    expect(
+      await screen.findByText('Alt subtask', { selector: 'h2' }),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Înapoi la #2' }));
+    expect(await screen.findByText('Umbrela festivalului')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Înapoi la #1' }));
+    expect(await screen.findByText('Subtask deschis')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Înapoi la/ })).toBeNull();
+    // Focus returns to the sheet title, so the reader starts at the top.
+    expect(screen.getByRole('heading', { name: 'Detalii task' })).toHaveFocus();
   });
   it('never offers duplication for an Umbrella even to its manager', async () => {
     useTaskDetails.mockReturnValue({

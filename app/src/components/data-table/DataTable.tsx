@@ -53,6 +53,11 @@ type DataTableProps<TData extends RowData> = {
   initialSorting?: SortingState;
   prioritySort?: SortingState[number];
   rowClassName?: (row: TData) => string;
+  /**
+   * Classes for one column's header and cells, by column id — a column that
+   * hides under `sm` (`max-sm:hidden`) or a minimum width (`min-w-40`).
+   */
+  columnClassName?: Partial<Record<string, string>>;
   onRowClick?: (row: TData) => void;
 };
 
@@ -100,6 +105,7 @@ function DataTable<TData extends RowData>({
   initialSorting = [],
   prioritySort,
   rowClassName,
+  columnClassName,
   onRowClick,
 }: DataTableProps<TData>) {
   const filterId = useId();
@@ -142,13 +148,13 @@ function DataTable<TData extends RowData>({
               <label
                 key={columnId}
                 htmlFor={`${filterId}-${columnId}`}
-                className="grid gap-1 text-sm"
+                className="grid w-full gap-1 text-sm sm:max-w-sm"
               >
                 {label}
                 <input
                   id={`${filterId}-${columnId}`}
                   type="search"
-                  className="min-h-11 rounded-md border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                   value={String(column.getFilterValue() ?? '')}
                   onChange={(event) =>
                     column.setFilterValue(event.target.value)
@@ -169,6 +175,7 @@ function DataTable<TData extends RowData>({
                   <TableHead
                     key={header.id}
                     colSpan={header.colSpan}
+                    className={columnClassName?.[column.id]}
                     aria-sort={
                       column.getCanSort() ? sortDirection(column) : undefined
                     }
@@ -222,7 +229,10 @@ function DataTable<TData extends RowData>({
                 }
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell
+                    key={cell.id}
+                    className={columnClassName?.[cell.column.id]}
+                  >
                     <table.FlexRender cell={cell} />
                   </TableCell>
                 ))}

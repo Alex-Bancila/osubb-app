@@ -37,7 +37,7 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
         <Button
           type="button"
           variant="outline"
-          className="min-h-11 min-w-11 w-full whitespace-normal sm:w-auto"
+          className="min-h-11 w-full whitespace-normal"
           onClick={() => {
             form.reset();
             setMessage(null);

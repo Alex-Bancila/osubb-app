@@ -19,6 +19,22 @@ describe('Own Candidate Queue', () => {
       screen.getByText('Ești pe locul 3 în lista de așteptare.'),
     ).toBeVisible();
     expect(screen.queryByText('Taskul este de făcut.')).not.toBeInTheDocument();
+    // One sentence (B21): not "Te-ai înscris pe locul 3." as well.
+    expect(screen.queryByText('Te-ai înscris pe locul 3.')).toBeNull();
+  });
+  it('says nothing to a Member who is not enrolled (B12)', () => {
+    useTaskQueue.mockReturnValue({ data: { status: null, position: null } });
+    const { container } = render(
+      <TaskQueueStatus
+        taskId={1}
+        task={toTaskPresentation(
+          taskRow({ assignment_mode: 'public', assignments: [] }),
+          new Date('2026-09-01'),
+        )}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText(/Nu ești înscris/)).toBeNull();
   });
   it('updates positions and explicitly labels selected and closed states', () => {
     useTaskQueue.mockReturnValue({ data: { status: 'pending', position: 3 } });

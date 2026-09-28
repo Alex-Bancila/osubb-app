@@ -672,7 +672,11 @@ describe('My tasks screen', () => {
       const org = within(band()).getByRole('article', {
         name: 'Sondaj pentru membri',
       });
-      expect(within(org).getByText('Te-ai înscris pe locul 3.')).toBeVisible();
+      // One queue sentence (B21): the stage line names the place.
+      expect(
+        within(org).getByText('Ești pe locul 3 în lista de așteptare.'),
+      ).toBeVisible();
+      expect(within(org).queryByText('Te-ai înscris pe locul 3.')).toBeNull();
       expect(
         within(org).getByRole('button', { name: 'Retrage înscrierea' }),
       ).toBeVisible();

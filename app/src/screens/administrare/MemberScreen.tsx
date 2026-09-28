@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { cn } from 'cn';
 import { History, Pencil, Users } from 'lucide-react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import {
   BackLink,
+  backLinkState,
   ListRow,
   Page,
   PageHeader,
@@ -11,11 +13,12 @@ import {
   rowListClass,
 } from '../../components/layout';
 import { memberDisplayName } from '../../components/member/member-identity';
+import type { MemberCardGroup } from '../../queries/member-card';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { MemberAvatar } from '../../components/ui/combobox';
 import { FieldError } from '../../components/ui/field';
-import { useCapabilities } from '../../lib/capabilities';
+import { useCapabilities, type Capabilities } from '../../lib/capabilities';
 import { formatDayMonthYear, formatPoints } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
 import {
@@ -113,7 +116,12 @@ function IdentityEditor({ member }: { member: AdminMember }) {
           </label>
           <FieldError {...form.errorProps('fullName')} />
         </div>
-        <Button type="submit" disabled={change.isPending}>
+        <Button
+          type="submit"
+          block
+          className="sm:justify-self-start"
+          disabled={change.isPending}
+        >
           {change.isPending ? 'Se salvează…' : 'Salvează numele'}
         </Button>
         <FieldError>{form.formError}</FieldError>
@@ -123,30 +131,89 @@ function IdentityEditor({ member }: { member: AdminMember }) {
   );
 }
 
+/**
+ * A ledger row's source: the Task by its title (B61). The id stands in only
+ * when the Task itself is not readable to this viewer (RLS answers null).
+ */
 function LedgerSource({ row }: { row: LedgerRow }) {
   if (row.task_id !== null)
     return (
-      <Link className="underline" to={`/tracker?task=${row.task_id}`}>
-        Task #{row.task_id}
+      <Link
+        className="underline underline-offset-4"
+        to={`/tracker?task=${row.task_id}`}
+      >
+        {row.task_title?.trim() || `Task #${row.task_id}`}
       </Link>
     );
   return <>{row.reason === 'sanction' ? 'Sancțiune' : 'Ajustare'}</>;
 }
 
 /**
- * Back to the Membri tab this page sits under (#825), or to wherever the
- * member came from when the link that opened this page said (`state.from`).
+ * Where the back link goes when the link that opened this page did not say
+ * (`state.from` wins, navigation D4): the Membri tab for whoever may open it,
+ * else the Grupuri tab — a Group Manager or Responsible arrives from a Roster
+ * and must never be bounced to Acasă by a tab they cannot open.
  */
-function BackToMembers() {
-  return <BackLink to="/administrare/membri" label="Înapoi la Administrare" />;
+function memberBackTarget(capabilities: Capabilities | undefined) {
+  return capabilities?.manageRoles === true ||
+    capabilities?.provisionMembers === true
+    ? '/administrare/membri'
+    : '/administrare/grupuri';
+}
+
+function BackToAdministrare({
+  capabilities,
+}: {
+  capabilities: Capabilities | undefined;
+}) {
+  return (
+    <BackLink
+      to={memberBackTarget(capabilities)}
+      label="Înapoi la Administrare"
+    />
+  );
 }
 
 const EYEBROW = 'Administrare';
 
-function MemberUnavailable() {
+/** A Manager or Responsible row, not a plain membership. */
+function hasGroupRole(group: MemberCardGroup) {
+  return group.groupRole === 'manager' || group.groupRole === 'responsible';
+}
+
+/**
+ * One identity fact: a 13 px muted label over a 16 px value (layout AD2), so
+ * the label never reads as another value.
+ */
+function Fact({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid min-w-0 gap-0.5">
+      <dt className="text-[length:var(--fs-sm)] text-muted-foreground">
+        {label}
+      </dt>
+      <dd className={cn('m-0 text-[length:var(--fs-md)]', className)}>
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+function MemberUnavailable({
+  capabilities,
+}: {
+  capabilities: Capabilities | undefined;
+}) {
   return (
     <Page>
-      <BackToMembers />
+      <BackToAdministrare capabilities={capabilities} />
       <PageHeader eyebrow={EYEBROW} title="Membru indisponibil" />
     </Page>
   );
@@ -154,7 +221,12 @@ function MemberUnavailable() {
 
 function PointsPanel({ points }: { points: readonly LedgerRow[] }) {
   return (
-    <Panel eyebrow="Puncte" icon={History} title="Istoric puncte">
+    <Panel
+      eyebrow="Puncte"
+      icon={History}
+      title="Istoric puncte"
+      flush={points.length > 0}
+    >
       {!points.length ? (
         <Empty text="Nu există înregistrări pe care le poți vedea." />
       ) : (
@@ -194,12 +266,13 @@ export default function MemberScreen() {
   const capabilities = useCapabilities();
   const groups = useAdminGroups();
   const mine = useMyGroupRoles();
+  const location = useLocation();
   // #771: BC and the Moderator see the Member's Privacy Acknowledgement.
   const privacy = useMemberAcknowledgement(
     memberId,
     capabilities.data?.manageRoles === true,
   );
-  if (!memberId) return <MemberUnavailable />;
+  if (!memberId) return <MemberUnavailable capabilities={capabilities.data} />;
   if (
     member.isPending ||
     capabilities.isPending ||
@@ -214,12 +287,12 @@ export default function MemberScreen() {
   if (member.isError || capabilities.isError || groups.isError || mine.isError)
     return (
       <Page aria-label="Membru">
-        <BackToMembers />
+        <BackToAdministrare capabilities={capabilities.data} />
         <ErrorState text="Nu am putut încărca membrul. Reîncarcă pagina." />
       </Page>
     );
   const data = member.data;
-  if (!data) return <MemberUnavailable />;
+  if (!data) return <MemberUnavailable capabilities={capabilities.data} />;
 
   // BC and the Moderator see every membership; a Group Manager or
   // Responsible, only those in the Groups they lead and below.
@@ -237,10 +310,13 @@ export default function MemberScreen() {
     );
   });
   const name = memberDisplayName(data.nickname, data.fullName);
+  // A Group page opened from here comes back here (navigation D4, A63).
+  // A label, not the name: names render only through MemberName.
+  const fromHere = backLinkState(location, 'Înapoi la membru');
 
   return (
     <Page>
-      <BackToMembers />
+      <BackToAdministrare capabilities={capabilities.data} />
       <PageHeader
         eyebrow={EYEBROW}
         title={
@@ -255,49 +331,44 @@ export default function MemberScreen() {
         }
         description={name !== data.fullName ? data.fullName : undefined}
       />
-      <dl className={`${panelBoxClass} m-0 grid gap-3 sm:grid-cols-2`}>
-        <div>
-          <dt>Rol organizațional</dt>
-          <dd className="font-medium">{data.roleLabel ?? '—'}</dd>
-        </div>
-        <div>
-          <dt>Status</dt>
-          <dd>{data.status ? statusLabel(data.status) : '—'}</dd>
-        </div>
-        <div>
-          <dt>Membru din</dt>
-          <dd>{formatDayMonthYear(data.joinedAt) ?? '—'}</dd>
-        </div>
+      <dl className={`${panelBoxClass} grid gap-x-6 gap-y-4 sm:grid-cols-2`}>
+        <Fact label="Rol organizațional">
+          <span className="font-semibold">{data.roleLabel ?? '—'}</span>
+        </Fact>
+        <Fact label="Status">
+          {data.status ? statusLabel(data.status) : '—'}
+        </Fact>
+        <Fact label="Membru din">
+          {formatDayMonthYear(data.joinedAt) ?? '—'}
+        </Fact>
         {data.contact?.email && (
-          <div>
-            <dt>Email</dt>
-            <dd className="break-all">{data.contact.email}</dd>
-          </div>
+          <Fact label="Email" className="break-all">
+            {data.contact.email}
+          </Fact>
         )}
         {data.contact?.phone && (
-          <div>
-            <dt>Telefon</dt>
-            <dd>{data.contact.phone}</dd>
-          </div>
+          <Fact label="Telefon">{data.contact.phone}</Fact>
         )}
         {canEdit && (
-          <div>
-            <dt>Politica de confidențialitate</dt>
-            <dd>
-              {privacy.isPending
-                ? 'Se încarcă…'
-                : privacy.isError
-                  ? '—'
-                  : acknowledgementLabel(privacy.data)}
-            </dd>
-          </div>
+          <Fact label="Politica de confidențialitate">
+            {privacy.isPending
+              ? 'Se încarcă…'
+              : privacy.isError
+                ? '—'
+                : acknowledgementLabel(privacy.data)}
+          </Fact>
         )}
       </dl>
       {canEdit && <IdentityEditor key={data.memberId} member={data} />}
       {canEdit && (
         <ReinvitePanel key={data.memberId} memberId={data.memberId} />
       )}
-      <Panel eyebrow="Grupuri" icon={Users} title="Grupuri">
+      <Panel
+        eyebrow="Grupuri"
+        icon={Users}
+        title="Grupuri"
+        flush={visibleGroups.length > 0}
+      >
         {!visibleGroups.length ? (
           <Empty text="Nu există grupuri în aria ta de administrare." />
         ) : (
@@ -305,14 +376,18 @@ export default function MemberScreen() {
             {visibleGroups.map((group) => (
               <ListRow key={group.id}>
                 <Link
-                  className="font-medium underline"
+                  className="font-semibold underline-offset-4 hover:underline"
                   to={`/administrare/grupuri/${group.id}`}
+                  state={fromHere}
                 >
                   {group.label}
                 </Link>
-                <p className="m-0 text-sm text-muted-foreground">
-                  Rol în grup: {group.roleLabel}
-                </p>
+                {/* A plain membership says nothing the list does not (B60). */}
+                {hasGroupRole(group) && (
+                  <p className="m-0 text-sm text-muted-foreground">
+                    Rol în grup: {group.roleLabel}
+                  </p>
+                )}
               </ListRow>
             ))}
           </ul>

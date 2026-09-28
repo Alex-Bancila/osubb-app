@@ -12,6 +12,7 @@ import {
   PageGrid,
   Panel,
   SegmentedToggle,
+  SubHeading,
   rowListClass,
 } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
@@ -574,7 +575,7 @@ function ThresholdRow({
     <li className="grid gap-2 py-3 first:pt-0">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
-          <h3 className="m-0 text-sm font-semibold">{label}</h3>
+          <SubHeading variant="label">{label}</SubHeading>
           <p className="m-0 text-2xl leading-tight font-bold tabular-nums">
             {current === null ? (
               <span className="text-muted-foreground">Nesetat</span>
@@ -717,60 +718,60 @@ function ThresholdsPanel({
           />
         ))}
       </ul>
-      <div className="grid gap-2 border-t border-(--border-soft) pt-3">
-        <h3 className="m-0 text-sm font-semibold">Istoricul pragurilor</h3>
-        {changes.isPending ? (
-          <Loading label="Se încarcă istoricul pragurilor…" />
-        ) : changes.isError ? (
-          <ErrorState
-            text="Nu am putut încărca istoricul pragurilor."
-            onRetry={() => void changes.refetch()}
-          />
-        ) : changes.data.length === 0 ? (
-          <p className="m-0 text-sm text-muted-foreground">
-            Nicio schimbare încă.
-          </p>
-        ) : (
-          <ul
-            className={cn(rowListClass, 'max-h-80 overflow-y-auto text-sm')}
-            aria-label="Istoricul pragurilor"
-          >
-            {changes.data.map((change) => (
-              <li key={change.id} className="grid min-w-0 gap-0.5 py-2">
-                <span className="text-muted-foreground tabular-nums">
-                  {formatInstantDay(change.changed_at)} ·{' '}
-                  {KIND_LABEL[change.kind] ?? change.kind}
-                  {change.field === 'percent' && ' · procent'}
-                </span>
-                <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
-                  <span className="font-semibold tabular-nums">
-                    {change.field === 'percent'
-                      ? `${change.from_value ?? '—'} % → ${change.to_value} %`
-                      : `${
-                          change.from_value === null
-                            ? 'nesetat'
-                            : formatPoints(change.from_value)
-                        } → ${formatPoints(change.to_value)}`}
+      {/* The log appears with its first change (B58): an empty "Nicio
+          schimbare încă" block tells BC nothing before anything happened. */}
+      {!(changes.isSuccess && changes.data.length === 0) && (
+        <div className="grid gap-2 border-t border-(--border-soft) pt-3">
+          <SubHeading variant="label">Istoricul pragurilor</SubHeading>
+          {changes.isPending ? (
+            <Loading label="Se încarcă istoricul pragurilor…" />
+          ) : changes.isError ? (
+            <ErrorState
+              text="Nu am putut încărca istoricul pragurilor."
+              onRetry={() => void changes.refetch()}
+            />
+          ) : (
+            <ul
+              className={cn(rowListClass, 'max-h-80 overflow-y-auto text-sm')}
+              aria-label="Istoricul pragurilor"
+            >
+              {changes.data.map((change) => (
+                <li key={change.id} className="grid min-w-0 gap-0.5 py-2">
+                  <span className="text-muted-foreground tabular-nums">
+                    {formatInstantDay(change.changed_at)} ·{' '}
+                    {KIND_LABEL[change.kind] ?? change.kind}
+                    {change.field === 'percent' && ' · procent'}
                   </span>
-                  <span aria-hidden="true" className="text-muted-foreground">
-                    ·
-                  </span>
-                  {change.source === 'manual' && change.changed_by ? (
-                    <Name
-                      memberId={change.changed_by}
-                      identities={identities.data}
-                    />
-                  ) : (
-                    <span className="text-muted-foreground">
-                      evaluarea „{runName(change.role_evaluation_id)}”
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
+                    <span className="font-semibold tabular-nums">
+                      {change.field === 'percent'
+                        ? `${change.from_value ?? '—'} % → ${change.to_value} %`
+                        : `${
+                            change.from_value === null
+                              ? 'nesetat'
+                              : formatPoints(change.from_value)
+                          } → ${formatPoints(change.to_value)}`}
                     </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                    <span aria-hidden="true" className="text-muted-foreground">
+                      ·
+                    </span>
+                    {change.source === 'manual' && change.changed_by ? (
+                      <Name
+                        memberId={change.changed_by}
+                        identities={identities.data}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">
+                        evaluarea „{runName(change.role_evaluation_id)}”
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -1010,9 +1011,9 @@ function SignalsSection({
   return (
     <section aria-labelledby={titleId} className="grid min-w-0 content-start">
       <div className="grid min-w-0 gap-0.5 border-b border-(--border-soft) pb-2">
-        <h3 id={titleId} className="m-0 text-base font-semibold">
+        <SubHeading id={titleId} variant="label">
           {KIND_LABEL[kind]}
-        </h3>
+        </SubHeading>
         {run && (
           <p className="m-0 text-sm text-muted-foreground">
             {run.name} · {rangeText(run)} · pragul{' '}
@@ -1174,15 +1175,12 @@ function HistoryPanel({
       title="Istoricul evaluărilor"
       description="Fiecare evaluare rulată, cea mai recentă prima."
     >
-      {evaluations.length === 0 ? (
-        <EmptyState icon={History}>Nicio evaluare de rol încă.</EmptyState>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={rows}
-          emptyTitle="Nicio evaluare de rol încă."
-        />
-      )}
+      {/* Mounted only once a run exists (B58). */}
+      <DataTable
+        columns={columns}
+        data={rows}
+        emptyTitle="Nicio evaluare de rol încă."
+      />
     </Panel>
   );
 }
@@ -1213,9 +1211,12 @@ export default function RoleEvaluationsScreen() {
         }}
       />
     );
+  // Until the first run only Run and Praguri have anything to say (B58): the
+  // candidates, signals and history panels appear with their first row.
+  const hasRun = evaluations.data.length > 0;
   return (
-    <div className="grid gap-4 md:gap-6">
-      <PageGrid columns={2}>
+    <>
+      <PageGrid columns={2} alignHeaders>
         <RunPanel
           evaluations={evaluations.data}
           thresholds={thresholds.data}
@@ -1229,11 +1230,13 @@ export default function RoleEvaluationsScreen() {
           onRun={run}
         />
       </PageGrid>
-      <PageGrid columns={1}>
-        <CandidatesPanel disabled={command.isPending} onRun={run} />
-        <SignalsPanel evaluations={evaluations.data} />
-        <HistoryPanel evaluations={evaluations.data} />
-      </PageGrid>
-    </div>
+      {hasRun && (
+        <PageGrid columns={1}>
+          <CandidatesPanel disabled={command.isPending} onRun={run} />
+          <SignalsPanel evaluations={evaluations.data} />
+          <HistoryPanel evaluations={evaluations.data} />
+        </PageGrid>
+      )}
+    </>
   );
 }

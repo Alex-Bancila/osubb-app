@@ -177,10 +177,30 @@ beforeEach(() => {
   db.ranking = [];
   db.refuse = new Map();
   db.rpc.mockReset();
+  const team = {
+    category: 'team',
+    parent_id: null,
+    automatic_membership: true,
+    is_organization: false,
+    min_level: 3,
+  };
   db.groups.mockReturnValue({
     data: [
-      group(1, 'OSUBB'),
-      group(5, 'Adunarea Generală'),
+      group(1, 'OSUBB', {
+        category: 'organization',
+        is_organization: true,
+        automatic_membership: true,
+        parent_id: null,
+      }),
+      group(5, 'Adunarea Generală', team),
+      group(8, 'Educațional', {
+        category: 'department',
+        parent_id: null,
+        automatic_membership: false,
+      }),
+      group(9, 'Echipa IT', { ...team, parent_id: 8 }),
+      group(10, 'Echipa Logistică', { ...team, automatic_membership: false }),
+      group(11, 'Voluntari activi', { ...team, min_level: 2 }),
       group(6, 'Consiliu privat', { is_private: true }),
       group(7, 'Gala 2025', { status: 'archived' }),
     ],
@@ -205,7 +225,7 @@ function show() {
 const rpcCalls = (name: string) =>
   db.rpc.mock.calls.filter(([called]) => called === name).map(([, a]) => a);
 
-it('sets the three settings side by side, as panels', async () => {
+it('sets the three settings as panels, one column at reading width (AD4)', async () => {
   const { container } = show();
   expect(
     await screen.findByRole('region', { name: 'Formular de adeziune' }),
@@ -216,6 +236,12 @@ it('sets the three settings side by side, as panels', async () => {
   expect(
     screen.getByRole('region', { name: 'Biroul de Conducere' }),
   ).toBeVisible();
+  const grid = container.querySelector('[data-slot="page-grid"]');
+  expect(grid).toHaveAttribute('data-columns', '1');
+  expect(grid).toHaveClass('max-w-3xl');
+  // The shared select (#842, X12), never a raw native one.
+  for (const select of container.querySelectorAll('select'))
+    expect(select).toHaveAttribute('data-slot', 'native-select');
   expect((await axe.run(container)).violations).toEqual([]);
 });
 
@@ -223,9 +249,14 @@ it('links the adherence form only when its address is http(s)', async () => {
   db.settings.set('adherence_form_url', 'https://forms.example.org/adeziune');
   const view = show();
   const link = await screen.findByRole('link', {
-    name: 'https://forms.example.org/adeziune',
+    name: 'Deschide formularul salvat',
   });
+  expect(link).toHaveAttribute('href', 'https://forms.example.org/adeziune');
   expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  // The address itself is shown once, as the field's value.
+  expect(screen.getByLabelText('Adresa formularului')).toHaveValue(
+    'https://forms.example.org/adeziune',
+  );
   view.unmount();
 
   // A value written outside the server's guard is shown, never linked.
@@ -234,7 +265,9 @@ it('links the adherence form only when its address is http(s)', async () => {
   const section = (
     await screen.findByRole('heading', { name: 'Formular de adeziune' })
   ).closest('section') as HTMLElement;
-  expect(await within(section).findByText('javascript:alert(1)')).toBeVisible();
+  expect(
+    await within(section).findByDisplayValue('javascript:alert(1)'),
+  ).toBeVisible();
   expect(within(section).queryByRole('link')).toBeNull();
 });
 
@@ -244,7 +277,6 @@ it('sets, refuses and clears the adherence-form address', async () => {
   const section = (
     await screen.findByRole('heading', { name: 'Formular de adeziune' })
   ).closest('section') as HTMLElement;
-  expect(within(section).getByText('Niciun formular setat')).toBeVisible();
   const field = within(section).getByLabelText('Adresa formularului');
 
   // ftp:// is refused in the browser, in the kit's words, under the field.
@@ -277,7 +309,7 @@ it('sets, refuses and clears the adherence-form address', async () => {
   );
   expect(
     await within(section).findByRole('link', {
-      name: 'https://forms.example.org/adeziune',
+      name: 'Deschide formularul salvat',
     }),
   ).toBeVisible();
 
@@ -289,24 +321,23 @@ it('sets, refuses and clears the adherence-form address', async () => {
       p_value: '',
     }),
   );
-  expect(
-    await within(section).findByText('Niciun formular setat'),
-  ).toBeVisible();
+  await waitFor(() => expect(within(section).queryByRole('link')).toBeNull());
 });
 
-it('points the Adunarea Generală setting at an active, non-private Group', async () => {
+it('offers the Adunarea Generală only top-level Teams with automatic membership (B59)', async () => {
   const user = userEvent.setup();
   show();
   const section = (
     await screen.findByRole('heading', { name: 'Adunarea Generală' })
   ).closest('section') as HTMLElement;
-  expect(within(section).getByText('Niciun grup setat')).toBeVisible();
   const select = within(section).getByLabelText('Grupul Adunării Generale');
+  // Not OSUBB, a Department, a child Team, a Team with a roster or one at
+  // another Minimum Level than 3.
   expect(
     within(select)
       .getAllByRole('option')
       .map((option) => option.textContent),
-  ).toEqual(['Alege un grup', 'Adunarea Generală', 'OSUBB']);
+  ).toEqual(['Alege un grup', 'Adunarea Generală']);
   expect(
     within(section).getByRole('button', { name: 'Salvează' }),
   ).toBeDisabled();
@@ -322,9 +353,9 @@ it('points the Adunarea Generală setting at an active, non-private Group', asyn
   expect(
     await within(section).findByText('Grupul Adunării Generale a fost salvat.'),
   ).toBeVisible();
-  expect(
-    within(section).getByText('Adunarea Generală', { selector: 'span' }),
-  ).toBeVisible();
+  // The Group in force is named once: in the select, not above it too.
+  expect(select).toHaveValue('5');
+  expect(within(section).getAllByText('Adunarea Generală')).toHaveLength(2);
 });
 
 it('points the board setting at an active Private Group (#824)', async () => {
@@ -333,7 +364,6 @@ it('points the board setting at an active Private Group (#824)', async () => {
   const section = await screen.findByRole('region', {
     name: 'Biroul de Conducere',
   });
-  expect(within(section).getByText('Niciun grup setat')).toBeVisible();
   const select = within(section).getByLabelText('Grupul Biroului de Conducere');
   expect(
     within(select)
@@ -372,5 +402,8 @@ it('points the board setting at an active Private Group (#824)', async () => {
       'Grupul Biroului de Conducere a fost șters din setări.',
     ),
   ).toBeVisible();
-  expect(within(section).getByText('Niciun grup setat')).toBeVisible();
+  expect(select).toHaveValue('');
+  expect(
+    within(section).getByRole('option', { name: 'Alege un grup' }),
+  ).toBeInTheDocument();
 });
