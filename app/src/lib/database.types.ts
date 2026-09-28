@@ -5046,6 +5046,7 @@ export type Database = {
         Args: { p_task_ids: number[] }
         Returns: {
           full_name: string
+          is_current: boolean
           member_id: string
           nickname: string
           task_id: number

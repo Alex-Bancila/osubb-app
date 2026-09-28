@@ -8,10 +8,11 @@ import { isTerminalTask, type TaskPresentation } from './task-presentation';
  * - never on an Umbrella, which has no Executor of its own;
  * - never on the viewer's own Task (relevance B2): Începe / Trimite already
  *   say it is theirs;
- * - never on a finished Task (B13, Audit D-1): `visible_task_executors` names
- *   only an open Assignment, and an Evaluation ends it, so the line would read
- *   "Neatribuit". #861 makes the RPC return the finishing Executor and then
- *   shows it here for terminal Tasks (still never on the viewer's own card);
+ * - on a finished Task only when it names who finished it (B13, Audit D-1):
+ *   `visible_task_executors` returns the Executor of a completed or
+ *   unfulfilled Task (#861), so the manager who evaluated it still sees who
+ *   did the work; a cancelled Task names nobody, and "Neatribuit" is never
+ *   said of a finished Task;
  * - on a public Task (an Opportunity) only once someone holds it (B12): the
  *   join button already says it is open.
  */
@@ -23,9 +24,9 @@ export function showsExecutorLine(
   memberId: string | undefined,
 ): boolean {
   if (task.kind !== 'task') return false;
-  if (isTerminalTask(task.status)) return false;
   if (memberId !== undefined && task.executor?.memberId === memberId)
     return false;
+  if (isTerminalTask(task.status)) return task.executor !== null;
   if (task.assignmentMode === 'public' && task.executor === null) return false;
   return true;
 }

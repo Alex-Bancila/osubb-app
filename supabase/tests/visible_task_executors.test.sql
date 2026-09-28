@@ -1,12 +1,13 @@
--- visible_task_executors.test.sql — #499: expose only the active Executor's
--- safe identity for Tasks the live caller may already read.
+-- visible_task_executors.test.sql — #499: expose only the Executor's safe identity
+-- for Tasks the live caller may already read: the open Assignment's member, or
+-- (#861, Audit D-1) the member who finished a completed or unfulfilled Task.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(20);
 
 -- ==================== Fixtures — prefix 49900000-… ====================
 
@@ -60,10 +61,77 @@ select task.id,
   from public.tasks as task
  where task.title in ('Oportunitate vizibila 499', 'Task local ascuns 499');
 
+-- #861 (Audit D-1): finished Tasks. An Evaluation ends the Assignment
+-- (completed / failed), so none of these has an open one -- except the
+-- reopened Task, whose earlier finished Assignment is history.
+insert into public.tasks
+  (title, description, deadline, group_id, audience, assignment_mode, status,
+   difficulty, rating, completed_at, unfulfilled_at, cancelled_at, cancel_reason,
+   started_at, created_by)
+values
+  ('Task finalizat 861', null, '2027-09-03 09:00:00+00',
+   pg_temp.dept_group('fin'), 'local', 'direct', 'completed',
+   3, 4, now(), null, null, null, null, '49900000-0000-0000-0000-000000000007'),
+  ('Task neindeplinit 861', null, '2027-09-04 09:00:00+00',
+   pg_temp.dept_group('fin'), 'local', 'direct', 'unfulfilled',
+   3, 1, null, now(), null, null, null, '49900000-0000-0000-0000-000000000007'),
+  ('Task anulat 861', null, '2027-09-05 09:00:00+00',
+   pg_temp.dept_group('fin'), 'local', 'direct', 'cancelled',
+   null, null, null, null, now(), 'Nu mai e nevoie', null, '49900000-0000-0000-0000-000000000007'),
+  ('Task anulat deschis 861', null, '2027-09-05 10:00:00+00',
+   pg_temp.dept_group('fin'), 'local', 'direct', 'cancelled',
+   null, null, null, null, now(), 'Nu mai e nevoie', null, '49900000-0000-0000-0000-000000000007'),
+  ('Task redeschis 861', null, '2027-09-06 09:00:00+00',
+   pg_temp.dept_group('fin'), 'local', 'direct', 'in_progress',
+   3, null, null, null, null, null, now(), '49900000-0000-0000-0000-000000000007');
+
+insert into public.task_assignments
+  (task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
+select task.id, history.member_id::uuid, '49900000-0000-0000-0000-000000000007',
+       now() - history.assigned_ago, now() - history.ended_ago, history.end_reason
+  from (values
+    -- An earlier completion (later reversed), then the one that stands: the
+    -- latest finishing Assignment is the one returned.
+    ('Task finalizat 861',    '49900000-0000-0000-0000-000000000003', interval '3 days', interval '2 days', 'completed'),
+    ('Task finalizat 861',    '49900000-0000-0000-0000-000000000002', interval '1 day',  interval '1 hour', 'completed'),
+    ('Task neindeplinit 861', '49900000-0000-0000-0000-000000000003', interval '3 days', interval '2 days', 'gave_up'),
+    ('Task neindeplinit 861', '49900000-0000-0000-0000-000000000002', interval '1 day',  interval '1 hour', 'failed'),
+    -- A later row that did not finish the Task (no command writes one after
+    -- an Evaluation, but a direct write could): only a finishing end_reason
+    -- names the Executor, so the failing member above still stands.
+    ('Task neindeplinit 861', '49900000-0000-0000-0000-000000000003', interval '30 minutes', interval '10 minutes', 'task_updated'),
+    -- A cancelled Task names nobody, even with a finished Assignment in its history.
+    ('Task anulat 861',       '49900000-0000-0000-0000-000000000003', interval '3 days', interval '2 days', 'completed'),
+    ('Task anulat 861',       '49900000-0000-0000-0000-000000000002', interval '1 day',  interval '1 hour', 'cancelled'),
+    ('Task redeschis 861',    '49900000-0000-0000-0000-000000000002', interval '3 days', interval '2 days', 'completed')
+  ) as history (title, member_id, assigned_ago, ended_ago, end_reason)
+  join public.tasks as task on task.title = history.title;
+
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select task.id, '49900000-0000-0000-0000-000000000003', '49900000-0000-0000-0000-000000000007', now()
+  from public.tasks as task
+ where task.title = 'Task redeschis 861';
+
+-- No command leaves a finished Task with an open Assignment, but no
+-- constraint forbids a direct write from doing so. A cancelled Task still
+-- names nobody, and a completed one still names the member who finished it.
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select task.id, stray.member_id::uuid, '49900000-0000-0000-0000-000000000007', now()
+  from (values
+    ('Task anulat deschis 861', '49900000-0000-0000-0000-000000000002'),
+    ('Task finalizat 861',      '49900000-0000-0000-0000-000000000003')
+  ) as stray (title, member_id)
+  join public.tasks as task on task.title = stray.title;
+
 create temp table f499 as
 select
   (select id from public.tasks where title = 'Oportunitate vizibila 499') as visible_task_id,
-  (select id from public.tasks where title = 'Task local ascuns 499') as hidden_task_id;
+  (select id from public.tasks where title = 'Task local ascuns 499') as hidden_task_id,
+  (select id from public.tasks where title = 'Task finalizat 861') as completed_task_id,
+  (select id from public.tasks where title = 'Task neindeplinit 861') as unfulfilled_task_id,
+  (select id from public.tasks where title = 'Task anulat 861') as cancelled_task_id,
+  (select id from public.tasks where title = 'Task anulat deschis 861') as cancelled_open_task_id,
+  (select id from public.tasks where title = 'Task redeschis 861') as reopened_task_id;
 grant select on f499 to authenticated, anon;
 
 -- ==================== API shape and grants ====================
@@ -105,8 +173,8 @@ select is(
     where namespace.nspname = 'public'
       and procedure.proname = 'visible_task_executors'
       and procedure.proargtypes = '1016'::oidvector),
-  array['p_task_ids', 'task_id', 'member_id', 'full_name', 'nickname']::text[],
-  'the public API exposes only Task id, Member id, and the safe display names (full name and Nickname, #675)');
+  array['p_task_ids', 'task_id', 'member_id', 'full_name', 'nickname', 'is_current']::text[],
+  'the public API exposes only Task id, Member id, the safe display names (full name and Nickname, #675) and whether the Assignment is still open (#861)');
 
 select ok(
   has_function_privilege('authenticated', 'public.visible_task_executors(bigint[])', 'execute')
@@ -136,7 +204,7 @@ select pg_temp.test_login(
 
 select results_eq(
   $$
-    select task_id, member_id, full_name, nickname
+    select task_id, member_id, full_name, nickname, is_current
       from public.visible_task_executors(array[
         (select visible_task_id from f499),
         (select hidden_task_id from f499)
@@ -146,9 +214,19 @@ select results_eq(
     (select visible_task_id from f499),
     '49900000-0000-0000-0000-000000000002'::uuid,
     'Executor Curent 499'::text,
-    'Execu 499'::text
+    'Execu 499'::text,
+    true
   ) $$,
-  'an active caller receives the current Executor, with their Nickname, only for a readable Task');
+  'an active caller receives the current Executor (is_current true), with their Nickname, only for a readable Task');
+
+-- #861: a finished Task the caller cannot read names nobody either.
+select is(
+  (select count(*)
+     from public.visible_task_executors(array[
+       (select completed_task_id from f499),
+       (select unfulfilled_task_id from f499)])),
+  0::bigint,
+  '#861: a caller who cannot read a finished Task receives no finishing Executor');
 
 select is(
   (select count(*)
@@ -191,6 +269,34 @@ select is(
        union all select g::bigint from generate_series(-199, -1) as g))),
   1::bigint,
   '200 Task ids are accepted and still return the readable Executor');
+
+-- ==================== #861 (Audit D-1): finished Tasks ====================
+
+select pg_temp.test_login_leadership('49900000-0000-0000-0000-000000000007');
+
+select results_eq(
+  $$
+    select task_id, member_id, is_current
+      from public.visible_task_executors(array[
+        (select completed_task_id from f499),
+        (select unfulfilled_task_id from f499),
+        (select cancelled_task_id from f499),
+        (select cancelled_open_task_id from f499),
+        (select reopened_task_id from f499)
+      ])
+  $$,
+  $$ values
+    ((select completed_task_id from f499), '49900000-0000-0000-0000-000000000002'::uuid, false),
+    ((select unfulfilled_task_id from f499), '49900000-0000-0000-0000-000000000002'::uuid, false),
+    ((select reopened_task_id from f499), '49900000-0000-0000-0000-000000000003'::uuid, true)
+  $$,
+  '#861: a completed or unfulfilled Task names the member of its latest finishing Assignment (is_current false), a cancelled Task names nobody (even with an open row), a reopened Task names its open Assignment');
+
+select is(
+  (select count(*)
+     from public.visible_task_executors(array[(select completed_task_id from f499)])),
+  1::bigint,
+  '#861: one row per finished Task -- the earlier, reversed completion stays in the private history');
 
 select pg_temp.test_login(
   '49900000-0000-0000-0000-000000000005',

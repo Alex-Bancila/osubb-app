@@ -230,6 +230,7 @@ describe('TaskPresentation', () => {
       memberId: 'current',
       name: 'Ioana Pop',
       nickname: 'Ioana',
+      isCurrent: true,
     });
     expect(model.candidature).toEqual(candidature);
     expect(
@@ -254,6 +255,32 @@ describe('TaskPresentation', () => {
       memberId: 'current',
       name: null,
       nickname: null,
+      isCurrent: true,
+    });
+  });
+
+  it('keeps the Executor who finished a Task, marked not current (#861)', () => {
+    expect(
+      toTaskPresentation(
+        taskRow({
+          status: 'completed',
+          assignments: [
+            { id: 4, member_id: 'finisher', ended_at: '2026-09-14T00:00:00Z' },
+          ],
+          visibleExecutor: {
+            memberId: 'finisher',
+            fullName: 'Ioana Pop',
+            isCurrent: false,
+          },
+        }),
+        now,
+      ).executor,
+    ).toEqual({
+      assignmentId: null,
+      memberId: 'finisher',
+      name: 'Ioana Pop',
+      nickname: null,
+      isCurrent: false,
     });
   });
 

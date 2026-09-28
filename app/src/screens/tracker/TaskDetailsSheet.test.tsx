@@ -197,6 +197,59 @@ describe('Task details sheet', () => {
     // A finished Task never reads "Neatribuit" (Audit D-1).
     expect(screen.queryByText('Neatribuit')).toBeNull();
   });
+  it('names the Executor who finished an evaluated Task (Audit D-1, #861)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'completed',
+          assignments: [],
+          visibleExecutor: {
+            memberId: 'ioana',
+            fullName: 'Ioana Pop',
+            nickname: null,
+            isCurrent: false,
+          },
+          evaluations: [
+            { id: 1, difficulty: 3, rating: 4, points: 9, reversed_at: null },
+          ],
+        }),
+        executorName: 'Ioana Pop',
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    const executor = screen.getByText('Executor:').closest('p') as HTMLElement;
+    expect(
+      within(executor).getByRole('button', {
+        name: 'Profilul membrului Ioana Pop',
+      }),
+    ).toBeVisible();
+    expect(screen.queryByText('Neatribuit')).toBeNull();
+    expect(screen.queryByText('Indisponibil')).toBeNull();
+  });
+  it('names no Executor on the viewer’s own finished Task (B2, #861)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'unfulfilled',
+          assignments: [],
+          visibleExecutor: {
+            memberId: 'member',
+            fullName: 'Membrul Curent',
+            nickname: null,
+            isCurrent: false,
+          },
+        }),
+        executorName: 'Membrul Curent',
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(screen.queryByText('Executor:')).toBeNull();
+    expect(screen.queryByText('Neatribuit')).toBeNull();
+  });
   it('names the Executor as a button that opens their Member Card', async () => {
     const user = userEvent.setup();
     useTaskDetails.mockReturnValue({

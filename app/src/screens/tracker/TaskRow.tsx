@@ -3,7 +3,7 @@ import { CalendarClock } from 'lucide-react';
 import { ListRow } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { formatPoints } from '../../lib/format';
-import type { TaskPresentation } from './task-presentation';
+import { isTerminalTask, type TaskPresentation } from './task-presentation';
 import { TaskGroupChip, TaskStatusBadges } from './TaskCard';
 
 /**
@@ -77,24 +77,27 @@ export function TaskRow({
                   </span>
                 )}
               </p>
-              {task.kind === 'task' && (
-                <p className="m-0 flex min-w-0 items-center gap-1.5">
-                  <span className="text-muted-foreground">Executor:</span>
-                  {task.executor?.name ? (
-                    <MemberName
-                      size="sm"
-                      className="relative z-10"
-                      memberId={task.executor.memberId}
-                      nickname={task.executor.nickname}
-                      fullName={task.executor.name}
-                    />
-                  ) : (
-                    <span className="min-w-0">
-                      {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
-                    </span>
-                  )}
-                </p>
-              )}
+              {/* A finished Task names who finished it (#861), or nothing:
+                  a cancelled Task never reads "Neatribuit". */}
+              {task.kind === 'task' &&
+                !(isTerminalTask(task.status) && task.executor === null) && (
+                  <p className="m-0 flex min-w-0 items-center gap-1.5">
+                    <span className="text-muted-foreground">Executor:</span>
+                    {task.executor?.name ? (
+                      <MemberName
+                        size="sm"
+                        className="relative z-10"
+                        memberId={task.executor.memberId}
+                        nickname={task.executor.nickname}
+                        fullName={task.executor.name}
+                      />
+                    ) : (
+                      <span className="min-w-0">
+                        {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
+                      </span>
+                    )}
+                  </p>
+                )}
             </div>
           </div>
         }
