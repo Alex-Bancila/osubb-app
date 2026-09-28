@@ -59,6 +59,13 @@ vi.mock('../../queries/work-filter-options', () => ({
 vi.mock('./NewEventControl', () => ({
   NewEventControl: () => <button type="button">Eveniment nou</button>,
 }));
+// Who may manage an Event is EventManageControls' own suite; here a card only
+// has to ask for it.
+vi.mock('./EventManageControls', () => ({
+  EventManageControls: ({ event: shown }: { event: EventPresentation }) => (
+    <span data-testid={`manage-${shown.id}`} />
+  ),
+}));
 
 import CalendarScreen from './CalendarScreen';
 import { CALENDAR_VIEW_STORAGE_KEY } from './calendar-view';
@@ -156,6 +163,10 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     location: 'Sala 305',
     capacity: 30,
     description: 'Planificarea activităților lunii.',
+    minLevel: 0,
+    createdBy: null,
+    cancelledAt: null,
+    cancelReason: null,
     ...overrides,
   };
 }
@@ -425,6 +436,39 @@ describe('CalendarScreen', () => {
       expect(
         within(card).queryByRole('button', { name: 'Particip' }),
       ).not.toBeInTheDocument();
+    });
+
+    // #849: a cancelled Event stays as history — the badge, its reason, and
+    // no RSVP, even though it has not started yet.
+    it('shows a cancelled Event as Anulat with its reason and no RSVP', () => {
+      setEvents([
+        event({
+          title: 'Ședință anulată',
+          cancelledAt: '2026-10-19T10:00:00.000Z',
+          cancelReason: 'Sala nu mai este disponibilă.',
+        }),
+      ]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', { name: 'Ședință anulată' });
+      expect(within(card).getByText('Anulat')).toBeInTheDocument();
+      expect(
+        within(card).getByText('Sala nu mai este disponibilă.'),
+      ).toBeInTheDocument();
+      expect(within(card).queryByText('Participi?')).not.toBeInTheDocument();
+      expect(
+        within(card).queryByRole('button', { name: 'Particip' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('asks each Agendă card for its manage controls', () => {
+      setEvents([event({ id: 9, title: 'Ședință de gestionat' })]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', {
+        name: 'Ședință de gestionat',
+      });
+      expect(within(card).getByTestId('manage-9')).toBeInTheDocument();
     });
 
     // Mutation this catches: delete the ancestor walk in groupAccentColor and

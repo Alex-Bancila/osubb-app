@@ -159,6 +159,7 @@ export function CalendarAgenda({
                         relevance={relevanceOf(event)}
                         past={Date.parse(event.startsAt) < now}
                         highlighted={event.id === linkedId}
+                        manageable
                       />
                     </li>
                   ))}
