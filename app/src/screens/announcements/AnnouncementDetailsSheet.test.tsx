@@ -8,7 +8,8 @@ import { resetSupabaseMock, supabaseMock } from '../../test/supabase-mock';
 const viewer = vi.hoisted(() => ({
   id: 'd0000000-0000-0000-0000-000000000001',
   bcOrModerator: false,
-  groups: [] as { id: number; group_role: string }[],
+  managesAnyGroup: false,
+  groups: [] as { id: number; group_role: string; status: string }[],
 }));
 
 vi.mock('../../lib/supabase', async () => {
@@ -23,7 +24,12 @@ vi.mock('../../lib/auth', () => ({
   }),
 }));
 vi.mock('../../lib/capabilities', () => ({
-  useCapability: () => ({ data: viewer.bcOrModerator }),
+  useCapability: (name: string) => ({
+    data:
+      name === 'managesAnyGroup'
+        ? viewer.managesAnyGroup
+        : viewer.bcOrModerator,
+  }),
 }));
 vi.mock('../../queries/my-groups', () => ({
   useMyGroupRoles: () => ({ data: viewer.groups }),
@@ -47,6 +53,7 @@ function renderSheet(ui: ReactElement) {
 beforeEach(() => {
   resetSupabaseMock();
   viewer.bcOrModerator = false;
+  viewer.managesAnyGroup = false;
   viewer.groups = [];
 });
 import type { AnnouncementPresentation } from './announcements-presentation';
@@ -327,7 +334,7 @@ describe('AnnouncementDetailsSheet', () => {
     });
 
     it("asks for a Manager of a local Announcement's Origin", async () => {
-      viewer.groups = [{ id: 1, group_role: 'manager' }];
+      viewer.groups = [{ id: 1, group_role: 'manager', status: 'active' }];
       answerReaders();
       renderSheet(
         <AnnouncementDetailsSheet
@@ -355,6 +362,115 @@ describe('AnnouncementDetailsSheet', () => {
 
       expect(supabaseMock.rpc).not.toHaveBeenCalled();
       expect(screen.queryByText(/Citit de/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('pin and unpin (#857)', () => {
+    const local = (overrides: Partial<AnnouncementPresentation> = {}) =>
+      presentation({
+        groupId: 7,
+        group: { id: 7, name: 'Educațional' },
+        audience: 'local',
+        pinned: false,
+        ...overrides,
+      });
+    const org = (overrides: Partial<AnnouncementPresentation> = {}) =>
+      presentation({
+        group: { id: 1, name: 'OSUBB', isOrganization: true },
+        pinned: false,
+        ...overrides,
+      });
+    const pinButton = () =>
+      screen.queryByRole('button', { name: /Fixează anunțul/ });
+
+    it('shows no control to a Voluntar with no Group Role', () => {
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={org()} onClose={vi.fn()} />,
+      );
+      expect(pinButton()).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /Anulează fixarea/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows none to a Responsible on another Group's Announcement", () => {
+      viewer.managesAnyGroup = true;
+      viewer.groups = [{ id: 9, group_role: 'responsible', status: 'active' }];
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+      expect(pinButton()).not.toBeInTheDocument();
+    });
+
+    it("offers it to a Responsible of the Origin, and to any Group Role holder on the Organization Group's", () => {
+      viewer.managesAnyGroup = true;
+      viewer.groups = [{ id: 7, group_role: 'responsible', status: 'active' }];
+      const { unmount } = renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+      expect(pinButton()).toBeInTheDocument();
+      unmount();
+
+      viewer.groups = [{ id: 9, group_role: 'manager', status: 'active' }];
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={org()} onClose={vi.fn()} />,
+      );
+      expect(pinButton()).toBeInTheDocument();
+    });
+
+    it('offers BC/Moderator "Anulează fixarea" on a pinned Announcement of any Group', () => {
+      viewer.bcOrModerator = true;
+      renderSheet(
+        <AnnouncementDetailsSheet
+          announcement={local({ pinned: true })}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(
+        screen.getByRole('button', { name: /Anulează fixarea/ }),
+      ).toBeInTheDocument();
+    });
+
+    it('pins by sending { pinned: true } for the id and says so', async () => {
+      viewer.groups = [{ id: 7, group_role: 'manager', status: 'active' }];
+      supabaseMock.select.mockResolvedValueOnce({
+        data: [{ id: 1 }],
+        error: null,
+      });
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: /Fixează anunțul/ }),
+      );
+
+      expect(supabaseMock.from).toHaveBeenCalledWith('announcements');
+      expect(supabaseMock.update).toHaveBeenCalledWith({ pinned: true });
+      expect(supabaseMock.eq).toHaveBeenCalledWith('id', 1);
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'Anunțul a fost fixat.',
+      );
+    });
+
+    it('shows the refusal when the server updates no row', async () => {
+      viewer.groups = [{ id: 7, group_role: 'manager', status: 'active' }];
+      supabaseMock.select.mockResolvedValueOnce({ data: [], error: null });
+      renderSheet(
+        <AnnouncementDetailsSheet
+          announcement={local({ pinned: true })}
+          onClose={vi.fn()}
+        />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: /Anulează fixarea/ }),
+      );
+
+      expect(supabaseMock.update).toHaveBeenCalledWith({ pinned: false });
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Nu poți modifica acest anunț.',
+      );
     });
   });
 });
