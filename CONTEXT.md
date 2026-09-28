@@ -305,7 +305,7 @@ A Voluntar with the required tenure whose Task Points reach the Voluntar Activ P
 _Avoid_: Candidate alone, eligible, auto-promoted
 
 **Promotion Threshold**:
-A Task Points value kept per Role Evaluation kind: the Voluntar Activ threshold and the Adunarea Generală threshold. BC enters the first value by hand and may edit either at any time, every edit audited. Each Role Evaluation uses the threshold in force and computes a new one, the Task Points of the last Member inside its kind's top share, which is in force for that kind's next Role Evaluation unless BC edits it.
+A Task Points value kept per Role Evaluation kind: the Voluntar Activ threshold and the Adunarea Generală threshold. BC enters the first value by hand and may edit either at any time, every edit audited. Each Role Evaluation uses the threshold in force and computes a new one, the Task Points of the last Member inside its kind's top share (x % of the Voluntar Activ cohort, y % of the Voluntar cu Drept de Vot cohort; BC edits both shares, 1–100 %, every change audited, and a change applies from the next Role Evaluation), which is in force for that kind's next Role Evaluation unless BC edits it.
 _Avoid_: Cutoff, minimum points, prag alone
 
 **Retention Signal**:
@@ -317,7 +317,7 @@ The qualification every Voluntar Activ holds by Role, because that Role already 
 _Avoid_: Drept de Vot threshold
 
 **Vote Retention Threshold**:
-The top share of an Adunarea Generală Role Evaluation's ranking a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after that Role Evaluation; nobody is removed automatically.
+The top share (y %, BC-editable from 1 to 100 %) of an Adunarea Generală Role Evaluation's ranking a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after that Role Evaluation; nobody is removed automatically.
 _Avoid_: Quorum, Top 25%
 
 ## Access
