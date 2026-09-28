@@ -61,7 +61,7 @@ function presentation(
     groupId: 1,
     group: { id: 1, name: 'OSUBB', short: 'OSUBB' },
     audience: 'org',
-    audienceLabel: 'Toată organizația',
+    audienceLabel: null,
     author: 'BC',
     authorMember: null,
     priority: 'critical',
@@ -105,10 +105,16 @@ describe('AnnouncementDetailsSheet', () => {
       <AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />,
     );
 
+    // The sheet is titled by the Announcement itself (X11: one 19 px title).
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Detalii anunț' }),
+      screen.getByRole('dialog', { name: 'Ședință extraordinară BC' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Ședință extraordinară BC')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', {
+        level: 2,
+        name: 'Ședință extraordinară BC',
+      }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/Vineri la ora 18:00 în Aula Magna/),
     ).toBeInTheDocument();
@@ -150,6 +156,44 @@ describe('AnnouncementDetailsSheet', () => {
       expect(screen.queryByText('Formular asociat')).toBeNull();
     },
   );
+
+  it('shows the Group name, a local Audience and no Normal priority', () => {
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={presentation({
+          priority: 'normal',
+          group: { id: 2, name: 'Educațional', short: 'EDU' },
+          audience: 'local',
+          audienceLabel: 'Doar Educațional',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Educațional')).toBeInTheDocument();
+    expect(screen.getByText('Doar Educațional')).toBeInTheDocument();
+    expect(screen.queryByText('EDU')).not.toBeInTheDocument();
+    expect(screen.queryByText('Normal')).not.toBeInTheDocument();
+  });
+
+  it('says so when a link names an Announcement the member cannot read', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={null}
+        unavailable
+        onClose={onClose}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Anunț indisponibil' });
+    expect(dialog).toHaveTextContent(
+      'Acest anunț nu mai există sau nu îți este adresat.',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Închide' }));
+    expect(onClose).toHaveBeenCalled();
+  });
 
   it('calls onClose when close button is clicked', async () => {
     const user = userEvent.setup();

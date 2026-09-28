@@ -1,4 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { MemoryRouter, useLocation } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnnouncementFeedRow } from '../../queries/announcements';
@@ -39,6 +41,28 @@ vi.mock('../../queries/reference', () => ({
 vi.mock('./AnnouncementComposeSheet', () => ({ default: () => null }));
 
 import AnnouncementsScreen from './AnnouncementsScreen';
+
+/** The current query string, rendered so a test can read where the screen sent the URL. */
+function LocationProbe() {
+  return <span data-testid="location">{useLocation().search}</span>;
+}
+
+function currentSearch() {
+  return screen.getByTestId('location').textContent;
+}
+
+/** The screen under a router at `path`, with the URL's query string beside it. */
+function renderAt(path: string) {
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <MemoryRouter initialEntries={[path]}>
+        {children}
+        <LocationProbe />
+      </MemoryRouter>
+    );
+  }
+  return render(<AnnouncementsScreen />, { wrapper: Wrapper });
+}
 
 const mockGroup: Group = {
   id: 10,
@@ -106,7 +130,7 @@ describe('AnnouncementsScreen', () => {
       data: undefined,
     });
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
@@ -126,7 +150,7 @@ describe('AnnouncementsScreen', () => {
       refetch,
     });
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(
@@ -146,7 +170,7 @@ describe('AnnouncementsScreen', () => {
       data: [],
     });
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     expect(
       screen.getByText('Nu sunt anunțuri disponibile în acest moment.'),
@@ -190,7 +214,7 @@ describe('AnnouncementsScreen', () => {
       data: [rowNormalOld, rowCriticalNew, rowPinnedOlder],
     });
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Anunțuri' }),
@@ -225,7 +249,7 @@ describe('AnnouncementsScreen', () => {
       data: [row],
     });
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     // Click "Citește" button inside card
     const card = screen.getByRole('article', { name: 'Ședință Generală' });
@@ -233,7 +257,7 @@ describe('AnnouncementsScreen', () => {
     await user.click(readButton);
 
     // Details sheet dialog should be open
-    const dialog = screen.getByRole('dialog', { name: 'Detalii anunț' });
+    const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
     expect(
       within(dialog).getByText('Prezența este obligatorie.'),
@@ -259,7 +283,7 @@ describe('AnnouncementsScreen', () => {
       data: [row],
     });
 
-    const { rerender } = render(<AnnouncementsScreen />);
+    const { rerender } = renderAt('/anunturi');
 
     const card = screen.getByRole('article', { name: 'Anunț Unic' });
     const readButton = within(card).getByRole('button', { name: /Citește/ });
@@ -311,7 +335,7 @@ describe('AnnouncementsScreen', () => {
       },
     );
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     const card = screen.getByRole('article', { name: 'Anunț cu Eșec' });
     const readButton = within(card).getByRole('button', { name: /Citește/ });
@@ -362,7 +386,7 @@ describe('AnnouncementsScreen', () => {
       data: undefined,
     });
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
@@ -376,20 +400,123 @@ describe('AnnouncementsScreen', () => {
       priority: 'critical',
       announcement_reads: [], // unread critical
     });
+    // A pinned Announcement sits above it, so the banner has work to do.
+    const pinned = createRow({ id: 5, title: 'Regulament', pinned: true });
 
     hooks.useAnnouncementsFeed.mockReturnValue({
       isPending: false,
       isError: false,
-      data: [row],
+      data: [row, pinned],
     });
 
-    render(<AnnouncementsScreen />);
+    renderAt('/anunturi');
 
     const bannerButton = screen.getByRole('button', { name: 'Citește acum' });
     await user.click(bannerButton);
 
-    const dialog = screen.getByRole('dialog', { name: 'Detalii anunț' });
+    const dialog = screen.getByRole('dialog', {
+      name: 'Atenție Server Cazut',
+    });
     expect(dialog).toBeInTheDocument();
     expect(mutate).toHaveBeenCalledWith(99, expect.any(Object));
+  });
+
+  it('shows no critical banner when that Announcement is already the first card (B33)', () => {
+    hooks.useAnnouncementsFeed.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: [
+        createRow({
+          id: 1,
+          title: 'Ședință extraordinară',
+          priority: 'critical',
+          pinned: true,
+        }),
+        createRow({ id: 2, title: 'Altceva' }),
+      ],
+    });
+
+    renderAt('/anunturi');
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Citește acum' }),
+    ).not.toBeInTheDocument();
+    // It appears once: as the first card.
+    expect(screen.getAllByText(/Ședință extraordinară/)).toHaveLength(1);
+    expect(screen.getAllByRole('article')[0]).toHaveAccessibleName(
+      'Ședință extraordinară',
+    );
+  });
+
+  describe('?anunt= deep link (D14)', () => {
+    beforeEach(() => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [
+          createRow({ id: 1, title: 'Primul', pinned: true }),
+          createRow({ id: 42, title: 'Ședință Generală' }),
+        ],
+      });
+    });
+
+    it('opens the linked Announcement and marks it read', () => {
+      renderAt('/anunturi?anunt=42');
+
+      const dialog = screen.getByRole('dialog', { name: 'Ședință Generală' });
+      expect(dialog).toBeInTheDocument();
+      expect(mutate).toHaveBeenCalledTimes(1);
+      expect(mutate).toHaveBeenCalledWith(42, expect.any(Object));
+    });
+
+    it('drops the param when the sheet closes, and does not reopen it', async () => {
+      const user = userEvent.setup();
+      renderAt('/anunturi?anunt=42&x=1');
+
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Închide',
+        }),
+      );
+
+      await waitFor(() => expect(currentSearch()).toBe('?x=1'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mutate).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not open anything before the feed is in', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: true,
+        isError: false,
+        data: undefined,
+      });
+      renderAt('/anunturi?anunt=42');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it('opens the unavailable state for an Announcement the member cannot read', async () => {
+      const user = userEvent.setup();
+      renderAt('/anunturi?anunt=999');
+
+      const dialog = screen.getByRole('dialog', { name: 'Anunț indisponibil' });
+      expect(dialog).toBeInTheDocument();
+      expect(mutate).not.toHaveBeenCalled();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Închide' }));
+      await waitFor(() => expect(currentSearch()).toBe(''));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('treats a malformed id as unavailable', () => {
+      renderAt('/anunturi?anunt=abc');
+
+      expect(
+        screen.getByRole('dialog', { name: 'Anunț indisponibil' }),
+      ).toBeInTheDocument();
+      expect(mutate).not.toHaveBeenCalled();
+    });
   });
 });
