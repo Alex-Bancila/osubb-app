@@ -61,16 +61,16 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
+            aria-label="Închide"
             render={
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 className="absolute top-1 right-1"
               />
             }
           >
             <XIcon aria-hidden="true" />
-            <span className="sr-only">Închide</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -78,6 +78,8 @@ function DialogContent({
   );
 }
 
+// One header for every dialog and sheet (#842, X11): a 19 px bold title, a
+// 14 px muted description under it, and room on the right for the 44 px X.
 function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
@@ -88,6 +90,10 @@ function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
+// One footer for every dialog and sheet (#842, X11): put the secondary action
+// first and the primary last. From `sm` they sit right-aligned in a row with
+// the primary on the right; under `sm` they stack full-width with the
+// primary on top, nearest the thumb.
 function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
@@ -101,11 +107,17 @@ function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
+// 19 px bold (`--fs-lg`). `m-0` because the title is an `h2`, and the
+// unlayered heading reset in global.css gives every `h2` an 18 px top margin
+// that would push the title below the X.
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-base leading-snug font-semibold', className)}
+      className={cn(
+        'm-0 font-heading text-(length:--fs-lg) leading-snug font-bold',
+        className,
+      )}
       {...props}
     />
   );
