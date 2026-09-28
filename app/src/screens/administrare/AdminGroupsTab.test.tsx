@@ -369,3 +369,84 @@ it('says so, once, when the tree cannot be read', () => {
     'Nu am putut încărca grupurile.',
   );
 });
+
+const LADDER_WITH_MODERATOR = new Map([
+  ['recrut', { name: 'Recrut', level: 0 }],
+  ['voluntar', { name: 'Voluntar', level: 1 }],
+  ['activ', { name: 'Voluntar Activ', level: 2 }],
+  ['vot', { name: 'Voluntar cu Drept de Vot', level: 3 }],
+  ['bce', { name: 'BCE', level: 5 }],
+  ['bc', { name: 'BC', level: 6 }],
+  ['moderator', { name: 'Moderator', level: 9 }],
+]);
+
+it('offers the Minimum Level of a new Group by Role name, the six rungs only (R29b)', async () => {
+  const user = userEvent.setup();
+  api.roles.mockReturnValue({ data: LADDER_WITH_MODERATOR });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
+  const field = within(dialog).getByLabelText('Nivel minim');
+  expect(
+    within(field)
+      .getAllByRole('option')
+      .map((option) => option.textContent),
+  ).toEqual([
+    'Recrut',
+    'Voluntar',
+    'Voluntar Activ',
+    'Voluntar cu Drept de Vot',
+    'BCE',
+    'BC',
+  ]);
+});
+
+it('shows each Minimum Level in the tree by its Role name, never the number (R29b)', () => {
+  api.groups.mockReturnValue({
+    data: [
+      group(1, 'Educațional', [1], null, { min_level: 3 }),
+      group(3, 'Balul Bobocilor', [3], null, { min_level: 6 }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  const row = screen.getByRole('link', { name: 'Educațional' }).closest('tr');
+  expect(row).not.toBeNull();
+  expect(
+    within(row as HTMLElement).getByText('Voluntar cu Drept de Vot'),
+  ).toBeVisible();
+  const project = screen
+    .getByRole('link', { name: 'Balul Bobocilor' })
+    .closest('tr');
+  expect(within(project as HTMLElement).getByText('BC')).toBeVisible();
+  expect(within(project as HTMLElement).queryByText('6')).toBeNull();
+});
+
+it("shows a Manager's own Groups' Minimum Level by Role name (R29b)", () => {
+  capabilities({ createTopLevelGroups: false });
+  api.myGroups.mockReturnValue({
+    data: [
+      {
+        id: 2,
+        name: 'Logistică',
+        short: '',
+        color: '',
+        category: 'team',
+        path: [1, 2],
+        min_level: 2,
+        status: 'active',
+        is_organization: false,
+        group_role: 'manager',
+        explicit: true,
+        automatic: false,
+      },
+    ] satisfies MyGroup[],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  const row = screen.getByRole('link', { name: 'Logistică' }).closest('tr');
+  expect(within(row as HTMLElement).getByText('Voluntar Activ')).toBeVisible();
+  expect(within(row as HTMLElement).queryByText('2')).toBeNull();
+});

@@ -297,6 +297,23 @@ it("bounds a Child Group's Minimum Level by its parent below and the caller abov
   // 0..5 from the parent's Minimum Level up to the Manager's own Level; never
   // 6 — group_min_level_above_actor would refuse it.
   expect(offered).toEqual(['0', '1', '2', '3', '5']);
+  // …each named by its Role, never the number (R29b).
+  expect(
+    within(field)
+      .getAllByRole('option')
+      .map((option) => option.textContent),
+  ).toEqual([
+    'Recrut',
+    'Voluntar',
+    'Voluntar Activ',
+    'Voluntar cu Drept de Vot',
+    'BCE',
+  ]);
+});
+
+it("names the Group's Minimum Level by Role in its header (R29b)", () => {
+  show();
+  expect(screen.getByText(/^Nivel minim: Voluntar ·/)).toBeVisible();
 });
 
 it('names who leaves before it raises the Minimum Level, and only then confirms', async () => {

@@ -1,38 +1,74 @@
-import { useState, type MouseEvent } from 'react';
+import { useState, type CSSProperties, type MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ChevronRight, Trophy } from 'lucide-react';
+import { Award, ChevronRight, ListFilter, Trophy } from 'lucide-react';
 import { cn } from 'cn';
+import {
+  EmptyState,
+  ListRow,
+  Page,
+  PageHeader,
+  Panel,
+  SegmentedToggle,
+  rowListClass,
+  type SegmentedOption,
+} from '../../components/layout';
 import { MemberCard } from '../../components/member/MemberCard';
 import { MemberName } from '../../components/member/MemberName';
 import { memberDisplayName } from '../../components/member/member-identity';
+import { ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { useAuth } from '../../lib/auth';
 import { formatDayMonthYear, formatPoints } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
-import { withoutGroup, type WorkFilterValue } from '../../lib/work-filter';
+import {
+  withoutGroup,
+  type WorkFilterLevels,
+  type WorkFilterValue,
+} from '../../lib/work-filter';
 import {
   useLeaderboardIdentities,
   useLeadershipLeaderboard,
   useLeadershipCup,
   useLeadershipFilters,
+  type CupRow,
   type LeaderboardIdentity,
   type LeaderboardRow,
 } from '../../queries/leadership';
+import { useGroups } from '../../queries/reference';
 import { MemberGroups } from '../volunteers/MemberGroups';
 import { LeadershipAccess } from './LeadershipAccess';
+import { useClasamentView, type ClasamentView } from './clasament-view';
 
 const trackerPath = (memberId: string) => `/tracker/membru/${memberId}`;
 
+const VIEWS: ReadonlyArray<SegmentedOption<ClasamentView>> = [
+  { value: 'members', label: 'Clasament' },
+  { value: 'cup', label: 'Cupa Departamentelor' },
+];
+
 /**
- * One Clasament row (R11), Voluntari-style: rank, the Member's name button
- * (avatar, Nickname) and their first Department chip with "+n" — both open
- * the Member Card, whose main link is "Vezi trackerul" — then the points and
- * the row's own link to the tracker. A click anywhere else on the row opens
- * the tracker too. The chip is the Member's own Group: someone who earned
- * points in the filtered Group without belonging to it shows where they do
- * belong (the ranking counts the Task's Group, never the Member's).
+ * The Work Filter levels each board reads: the members' board takes them all;
+ * the Cup ranks Groups, so its view hides Grup principal and Subgrup (the URL
+ * keeps them for the way back).
+ */
+const LEVELS: Record<ClasamentView, WorkFilterLevels> = {
+  members: {},
+  cup: { group: false },
+};
+
+const memberCount = (n: number) => `${n} ${n === 1 ? 'membru' : 'membri'}`;
+
+/**
+ * One Clasament row (R11, R27) on the shared `ListRow`: rank (the top three
+ * in red), the Member's name button (avatar, Nickname) and their first Group
+ * chip with "+n" — both open the Member Card, whose main link is "Vezi
+ * trackerul" — then the points and the row's own link to the tracker. A click
+ * anywhere else on the row opens the tracker too. The chip is the Member's
+ * own Group: someone who earned points in the filtered Group without
+ * belonging to it shows where they do belong (the ranking counts the Task's
+ * Group, never the Member's).
  */
 function BoardRow({
   row,
@@ -62,58 +98,72 @@ function BoardRow({
     void navigate(trackerPath(row.member_id));
   }
   return (
-    <li
-      onClick={openFromRow}
-      data-self={self || undefined}
-      className={cn(
-        'grid cursor-pointer grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/60 sm:grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] sm:px-3',
-        self && 'bg-primary/5 ring-1 ring-primary/30 hover:bg-primary/10',
-      )}
-    >
-      <span
+    <li onClick={openFromRow} data-self={self || undefined}>
+      <ListRow
+        as="div"
+        mine={self}
         className={cn(
-          'text-center text-lg font-extrabold tabular-nums',
-          rank <= 3 ? 'text-primary' : 'text-muted-foreground',
+          'cursor-pointer rounded-sm transition-colors max-sm:gap-2 max-sm:px-1',
+          self ? 'hover:bg-primary/10' : 'hover:bg-muted/60',
         )}
+        leading={
+          <span
+            className={cn(
+              'text-lg font-extrabold tabular-nums',
+              rank <= 3 ? 'text-primary' : 'text-muted-foreground',
+            )}
+          >
+            <span className="sr-only">Locul </span>
+            {rank}
+          </span>
+        }
+        value={
+          <span className="font-bold">
+            {formatPoints(row.points)}{' '}
+            <span className="text-xs font-medium text-muted-foreground">
+              pct.
+            </span>
+          </span>
+        }
+        action={
+          <Link
+            to={trackerPath(row.member_id)}
+            aria-label={`Vezi trackerul membrului ${name}`}
+            className="inline-flex min-h-11 min-w-11 items-center justify-end gap-1 rounded-md text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:px-2"
+          >
+            <span className="hidden sm:inline">Vezi trackerul</span>
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </Link>
+        }
       >
-        <span className="sr-only">Locul </span>
-        {rank}
-      </span>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <MemberName
-            memberId={row.member_id}
-            nickname={row.nickname}
-            fullName={row.full_name}
-            avatarColor={identity?.avatarColor}
-          />
-          {self && (
-            <Badge variant="secondary" className="shrink-0">
-              tu
-            </Badge>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <MemberName
+              memberId={row.member_id}
+              nickname={row.nickname}
+              fullName={row.full_name}
+              avatarColor={identity?.avatarColor}
+            />
+            {self && (
+              <Badge variant="secondary" className="shrink-0">
+                tu
+              </Badge>
+            )}
+          </span>
+          {/* Under 640 px the row keeps rank, name, points and the chevron;
+              the Groups stay one tap away, on the Member Card. */}
+          {identity && (
+            <span className="hidden min-w-0 sm:contents">
+              <MemberGroups
+                primaryGroup={identity.primaryGroup}
+                otherMemberships={identity.otherMemberships}
+                memberName={name}
+                onOpen={onOpenCard}
+              />
+            </span>
           )}
-        </span>
-        {identity && (
-          <MemberGroups
-            primaryGroup={identity.primaryGroup}
-            otherMemberships={identity.otherMemberships}
-            memberName={name}
-            onOpen={onOpenCard}
-          />
-        )}
-      </div>
-      <span className="text-right font-bold whitespace-nowrap tabular-nums">
-        {formatPoints(row.points)}{' '}
-        <span className="text-xs font-medium text-muted-foreground">pct.</span>
-      </span>
-      <Link
-        to={trackerPath(row.member_id)}
-        aria-label={`Vezi trackerul membrului ${name}`}
-        className="col-start-3 inline-flex min-h-11 min-w-11 items-center justify-end gap-1 justify-self-end rounded-md text-sm font-medium text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:col-start-4 sm:row-start-1 sm:px-2"
-      >
-        <span className="hidden sm:inline">Vezi trackerul</span>
-        <ChevronRight aria-hidden="true" className="size-4" />
-      </Link>
+        </div>
+      </ListRow>
     </li>
   );
 }
@@ -124,12 +174,12 @@ function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
   const [card, setCard] = useState<LeaderboardRow | null>(null);
   if (!rows.length)
     return (
-      <div className="rounded-lg border border-dashed border-border p-6 text-center">
-        <p className="font-semibold">Nu există puncte pentru filtrele alese</p>
-        <p className="text-sm text-muted-foreground">
-          Încearcă alt grup, altă campanie sau altă perioadă.
-        </p>
-      </div>
+      <EmptyState>
+        <span className="block font-semibold text-foreground">
+          Nu există puncte pentru filtrele alese
+        </span>
+        Încearcă alt grup, altă campanie sau altă perioadă.
+      </EmptyState>
     );
   return (
     <>
@@ -137,9 +187,9 @@ function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
         // A failed lookup is not "no Group": say so, and offer the read again.
         <div
           role="alert"
-          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/60 p-3 text-sm"
+          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm bg-muted/60 p-3 text-sm"
         >
-          <p>Nu am putut încărca grupurile membrilor.</p>
+          <p className="m-0">Nu am putut încărca grupurile membrilor.</p>
           <Button
             variant="outline"
             size="sm"
@@ -149,7 +199,7 @@ function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
           </Button>
         </div>
       )}
-      <ol aria-labelledby="members-title" className="space-y-1">
+      <ol aria-label="Clasamentul membrilor" className={rowListClass}>
         {rows.map((row, index) => (
           <BoardRow
             key={row.member_id}
@@ -174,6 +224,94 @@ function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
         />
       )}
     </>
+  );
+}
+
+/**
+ * The Cup's rows (R27), Acasă's look: the competing Group's short tag in its
+ * colour, its name over a bar scaled against the leader (no bar under zero —
+ * the number is the honest part), then the points and the Group's member
+ * count, which drops under the bar below 640 px. Name, tag and colour come
+ * from the Group, so a new competing Group needs no code.
+ */
+function CupBoard({ rows }: { rows: CupRow[] }) {
+  const groups = useGroups();
+  // Wait for the Groups too, so no row is painted before its tag and colour.
+  if (groups.isPending) return <Loading label="Se încarcă Cupa…" />;
+  // A failed read is not "a Group you cannot see": say so, never '—' rows.
+  if (groups.isError)
+    return (
+      <ErrorState
+        error={groups.error}
+        text="Nu am putut încărca grupurile Cupei."
+        retryLabel="Reîncarcă grupurile"
+        onRetry={() => void groups.refetch()}
+      />
+    );
+  if (!rows.length)
+    return <EmptyState>Nu există grupuri înscrise în Cupă.</EmptyState>;
+  const max = Math.max(1, ...rows.map((row) => row.points ?? 0));
+  return (
+    <ol aria-label="Cupa Departamentelor" className={rowListClass}>
+      {rows.map((row) => {
+        const group =
+          row.group_id === null ? undefined : groups.data?.get(row.group_id);
+        const points = row.points ?? 0;
+        const width = `${Math.round((Math.max(0, points) / max) * 100)}%`;
+        const members = memberCount(row.members ?? 0);
+        return (
+          <ListRow
+            key={row.group_id ?? row.name}
+            value={
+              <span className="flex items-baseline justify-end gap-4">
+                <span className="font-bold">
+                  {formatPoints(points)}{' '}
+                  <span className="text-xs font-medium text-muted-foreground">
+                    pct.
+                  </span>
+                </span>
+                <span className="hidden w-20 text-xs text-muted-foreground sm:inline">
+                  {members}
+                </span>
+              </span>
+            }
+          >
+            <div
+              className="flex min-w-0 items-center gap-3"
+              style={
+                {
+                  '--dept': group?.color ?? 'var(--ink-400)',
+                } as CSSProperties
+              }
+            >
+              {/* A Group the viewer cannot read has no tag: '—' in the
+                  neutral ink, never a raw id. The brand colours are chosen
+                  for white paper, so the dark theme lightens the label. */}
+              <span className="w-[4.5rem] shrink-0 truncate rounded-xs bg-[color-mix(in_srgb,var(--dept)_13%,transparent)] px-2 py-0.5 text-center text-[length:var(--fs-xs)] font-extrabold tracking-[0.04em] text-(--dept) dark:bg-[color-mix(in_srgb,var(--dept)_24%,transparent)] dark:text-[color-mix(in_srgb,var(--dept)_52%,white)]">
+                {group?.short ?? '—'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="m-0 truncate text-sm font-semibold">
+                  {group?.name ?? row.name}
+                </p>
+                <div
+                  aria-hidden="true"
+                  className="mt-2 h-[7px] overflow-hidden rounded-full bg-(--surface-3)"
+                >
+                  <div
+                    className="h-full rounded-full bg-(--dept) transition-[width]"
+                    style={{ width }}
+                  />
+                </div>
+                <p className="m-0 mt-1 text-xs text-muted-foreground tabular-nums sm:hidden">
+                  {members}
+                </p>
+              </div>
+            </div>
+          </ListRow>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -202,126 +340,111 @@ function cupScope(
 // An inverted range sends nothing (#678): the reads wait for a valid one.
 const RANGE_FIRST = 'Corectează perioada din filtre ca să vezi rezultatele.';
 
+/**
+ * Clasament (R27): one board at a time, at full width. The segmented toggle
+ * in the header chooses the members' Clasament or the Cupa Departamentelor
+ * (`useClasamentView`); the Work Filter below applies to both, and only the
+ * shown board is read.
+ */
 function LeadershipContent() {
-  const { value, params } = useWorkFilter();
+  const [view, chooseView] = useClasamentView();
+  const levels = LEVELS[view];
+  const { value, params } = useWorkFilter(levels);
   const options = useLeadershipFilters();
-  const board = useLeadershipLeaderboard(params);
-  const cup = useLeadershipCup(params && withoutGroup(params));
+  const board = useLeadershipLeaderboard(view === 'members' ? params : null);
+  const cup = useLeadershipCup(
+    view === 'cup' && params ? withoutGroup(params) : null,
+  );
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-8">
-      <header className="space-y-2">
-        <p className="text-sm font-semibold text-muted-foreground">
-          OSUBB · Conducere
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight">Clasament</h1>
-        <p className="text-muted-foreground">
-          Punctele taskurilor, pe membri și grupuri. Un membru apare sub grupul
-          în care a lucrat taskul, chiar dacă nu îi aparține. Alege un rând
-          pentru trackerul membrului.
-        </p>
-      </header>
-      <section
-        aria-label="Filtre clasament"
-        className="space-y-3 rounded-xl border border-border bg-card p-4"
-      >
+    <Page>
+      <PageHeader
+        eyebrow="OSUBB · Conducere"
+        title="Clasament"
+        description="Punctele taskurilor, pe membri și pe departamente."
+        actions={
+          <SegmentedToggle
+            label="Vizualizare"
+            options={VIEWS}
+            value={view}
+            onChange={chooseView}
+            className="max-sm:w-full max-sm:*:flex-auto max-sm:*:px-3"
+          />
+        }
+      />
+      <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre clasament">
         {options.isPending ? (
-          <p role="status">Se încarcă filtrele…</p>
+          <Loading label="Se încarcă filtrele…" />
         ) : options.isError ? (
-          <div role="alert">
-            <p>Nu am putut încărca filtrele.</p>
-            <Button variant="outline" onClick={() => options.refetch()}>
-              Reîncarcă filtrele
-            </Button>
-          </div>
+          <ErrorState
+            error={options.error}
+            text="Nu am putut încărca filtrele."
+            retryLabel="Reîncarcă filtrele"
+            onRetry={() => void options.refetch()}
+          />
         ) : (
           <WorkFilter
             groups={options.data.groups}
             campaigns={options.data.campaigns}
-            hint="Grupul include toate subgrupurile sale și filtrează doar clasamentul membrilor. Campania și perioada, după data acordării punctelor, filtrează și Cupa."
+            levels={levels}
           />
         )}
-      </section>
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section
-          aria-labelledby="members-title"
-          className="min-w-0 rounded-xl border border-border bg-card p-4 md:p-6"
+      </Panel>
+      {view === 'members' ? (
+        <Panel
+          eyebrow="Clasament"
+          icon={Trophy}
+          title="Clasamentul membrilor"
+          description={
+            params && board.data ? memberCount(board.data.length) : null
+          }
         >
-          <h2 id="members-title" className="mb-4 text-xl font-semibold">
-            Clasamentul membrilor
-          </h2>
           {!params ? (
-            <p>{RANGE_FIRST}</p>
+            <EmptyState>{RANGE_FIRST}</EmptyState>
           ) : board.isPending ? (
-            <p role="status">Se încarcă clasamentul…</p>
+            <Loading label="Se încarcă clasamentul…" />
           ) : board.isError ? (
-            <div role="alert">
-              <p>Nu am putut încărca clasamentul.</p>
-              <Button onClick={() => board.refetch()}>
-                Reîncarcă clasamentul
-              </Button>
-            </div>
+            <ErrorState
+              error={board.error}
+              text="Nu am putut încărca clasamentul."
+              retryLabel="Reîncarcă clasamentul"
+              onRetry={() => void board.refetch()}
+            />
           ) : (
             <Leaderboard rows={board.data} />
           )}
-        </section>
-        <section
-          aria-labelledby="cup-title"
-          className="min-w-0 rounded-xl border border-border bg-card p-4 md:p-6"
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <Trophy className="size-5 text-primary" aria-hidden="true" />
-            <h2 id="cup-title" className="text-xl font-semibold">
-              Cupa Departamentelor
-            </h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Grupurile înscrise în competiție și punctele care le revin.
-          </p>
-          <p className="mb-5 text-sm font-medium">
-            {cupScope(
-              value,
-              options.data?.campaigns.find(
-                (campaign) => campaign.id === value.campaignId,
-              )?.name,
-            )}
-          </p>
-          {!params ? (
-            <p>{RANGE_FIRST}</p>
-          ) : cup.isPending ? (
-            <p role="status">Se încarcă Cupa…</p>
-          ) : cup.isError ? (
-            <div role="alert">
-              <p>Nu am putut încărca Cupa.</p>
-              <Button onClick={() => cup.refetch()}>Reîncarcă Cupa</Button>
-            </div>
-          ) : !cup.data.length ? (
-            <p>Nu există grupuri înscrise în Cupă.</p>
-          ) : (
-            <ol className="space-y-3">
-              {cup.data.map((group) => (
-                <li
-                  key={group.group_id}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="font-semibold wrap-anywhere">{group.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {group.members} membri activi
-                    </p>
-                  </div>
-                  <span className="shrink-0 font-bold tabular-nums">
-                    {formatPoints(group.points)}{' '}
-                    <span className="text-sm font-normal">pct.</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
+        </Panel>
+      ) : (
+        <Panel
+          eyebrow="Cupa"
+          icon={Award}
+          title="Cupa Departamentelor"
+          description={cupScope(
+            value,
+            options.data?.campaigns.find(
+              (campaign) => campaign.id === value.campaignId,
+            )?.name,
           )}
-        </section>
-      </div>
-    </div>
+        >
+          {!params ? (
+            <EmptyState>{RANGE_FIRST}</EmptyState>
+          ) : cup.isPending ? (
+            <Loading label="Se încarcă Cupa…" />
+          ) : cup.isError ? (
+            <ErrorState
+              error={cup.error}
+              text="Nu am putut încărca Cupa."
+              retryLabel="Reîncarcă Cupa"
+              onRetry={() => void cup.refetch()}
+            />
+          ) : (
+            <CupBoard rows={cup.data} />
+          )}
+        </Panel>
+      )}
+    </Page>
   );
 }
+
 export default function LeadershipScreen() {
   return (
     <LeadershipAccess>

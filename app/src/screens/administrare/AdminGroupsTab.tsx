@@ -13,6 +13,7 @@ import { Button } from '../../components/ui/button';
 import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
 import { useAuth } from '../../lib/auth';
+import { minimumLevelText } from '../../lib/minimum-level';
 import { useRoles } from '../../queries/reference';
 import type { MyGroup } from '../../queries/my-groups';
 import {
@@ -124,7 +125,7 @@ function treeColumns(
     },
     {
       id: 'min_level',
-      accessorFn: (row) => row.group.min_level,
+      accessorFn: (row) => minimumLevelText(row.group.min_level),
       header: 'Nivel minim',
       enableSorting: false,
     },
@@ -196,8 +197,11 @@ function myGroupColumns(
     },
     {
       id: 'min_level',
-      accessorFn: (row) => row.min_level,
+      accessorFn: (row) => minimumLevelText(row.min_level),
       header: 'Nivel minim',
+      // Ladder order, not alphabetical: BC ranks above Recrut.
+      sortFn: (left, right) =>
+        left.original.min_level - right.original.min_level,
     },
   ];
 }

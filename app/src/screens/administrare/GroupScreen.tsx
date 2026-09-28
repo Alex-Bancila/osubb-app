@@ -15,6 +15,7 @@ import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
 import { parsePositiveInt } from '../../lib/ids';
 import { Loading } from '../../components/states';
+import { minimumLevelText } from '../../lib/minimum-level';
 import { useRoles } from '../../queries/reference';
 import {
   groupAuthority,
@@ -241,7 +242,7 @@ export default function GroupScreen() {
         }
         description={
           <>
-            Nivel minim {group.min_level}
+            Nivel minim: {minimumLevelText(group.min_level)}
             {group.automatic_membership
               ? ' · membri adăugați automat'
               : ` · ${group.memberCount} membri`}

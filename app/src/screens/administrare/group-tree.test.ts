@@ -104,8 +104,15 @@ it('bounds a Minimum Level by the parent below and the caller above', () => {
   expect(minLevelChoices([0, 1, 2, 3, 5, 6, 9], 1, 5)).toEqual([1, 2, 3, 5]);
   expect(minLevelChoices([0, 1, 2, 3, 5, 6, 9], 3, 1)).toEqual([]);
   expect(minLevelChoices([0, 1, 2, 3, 5, 6, 9], 0, 9)).toEqual([
-    0, 1, 2, 3, 5, 6, 9,
+    0, 1, 2, 3, 5, 6,
   ]);
+});
+
+it('never offers a Minimum Level off the ladder: no Responsabil 4, no Moderator 9 (R29b)', () => {
+  expect(minLevelChoices([9, 4, 6, 0, 3, 1, 5, 2], 0, 9)).toEqual([
+    0, 1, 2, 3, 5, 6,
+  ]);
+  expect(minLevelChoices([4, 9], 0, 9)).toEqual([]);
 });
 
 it('names exactly the members a raised Minimum Level would remove', () => {
