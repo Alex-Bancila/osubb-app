@@ -97,7 +97,7 @@ vi.mock('./screens/administrare/MemberScreen', () => ({
 vi.mock('./screens/administrare/GroupScreen', () => ({
   default: () => <h1>Grup screen</h1>,
 }));
-vi.mock('./screens/administrare/PeriodsScreen', () => ({
+vi.mock('./screens/administrare/RoleEvaluationsScreen', () => ({
   default: () => <h2>Evaluări de rol tab</h2>,
 }));
 vi.mock('./screens/dashboard/DashboardScreen', () => ({

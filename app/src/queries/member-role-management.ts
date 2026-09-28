@@ -50,6 +50,8 @@ export function useMemberChange() {
         client.invalidateQueries({ queryKey: ['member-role-groups'] }),
         client.invalidateQueries({ queryKey: keys.members.all }),
         client.invalidateQueries({ queryKey: keys.points.all }),
+        // Leaving Voluntar closes an open Promotion Candidate (#826's trigger).
+        client.invalidateQueries({ queryKey: keys.evaluation.all }),
       ]);
     },
   });

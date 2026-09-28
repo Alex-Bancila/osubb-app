@@ -60,8 +60,8 @@ const AdminRolesTab = lazy(() =>
 const AdminApplicationsTab = lazy(
   () => import('./screens/administrare/AdminApplicationsTab'),
 );
-const PeriodsScreen = lazy(
-  () => import('./screens/administrare/PeriodsScreen'),
+const RoleEvaluationsScreen = lazy(
+  () => import('./screens/administrare/RoleEvaluationsScreen'),
 );
 const AdminPrivacyTab = lazy(() =>
   import('./screens/administrare/PrivacyPanel').then((module) => ({
@@ -399,7 +399,7 @@ export default function App() {
               path="evaluari"
               element={
                 <AdministrareTabRoute path="/administrare/evaluari">
-                  <PeriodsScreen />
+                  <RoleEvaluationsScreen />
                 </AdministrareTabRoute>
               }
             />

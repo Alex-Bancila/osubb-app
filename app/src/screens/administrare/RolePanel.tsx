@@ -36,12 +36,21 @@ function changeError(error: unknown) {
 
 /** The query parameter that opens the panel on one Member (#702). */
 export const ROLE_PANEL_MEMBER_PARAM = 'membru';
+/** Preselects the new Role beside `membru` (#827: a Promotion Candidate). */
+export const ROLE_PANEL_ROLE_PARAM = 'rol';
+/** Prefills the reason beside `membru` (#827: the Role Evaluation's name). */
+export const ROLE_PANEL_REASON_PARAM = 'motiv';
+/** `set_member_role`'s reason limit; a longer prefill is cut, never sent. */
+const REASON_MAX = 1000;
 
 /**
  * The Role and Status management surface; the server capability gates mount.
- * `?membru=<id>` pre-selects a Member — the Perioade de evaluare panel's
+ * `?membru=<id>` pre-selects a Member — the Evaluări de rol tab's
  * **Editează rolul** links here from a Retention Signal — and scrolls the
- * panel into view. On a Member's own page (#103) `selectedMemberId` fixes the
+ * panel into view. Beside it, `rol` preselects the new Role and `motiv`
+ * prefills the reason: a Promotion Candidate's **Promovează** (#827) arrives
+ * with `rol=activ` and the Role Evaluation's name. Both only prefill; BC
+ * still saves. On a Member's own page (#103) `selectedMemberId` fixes the
  * Member and the picker is not shown.
  */
 export function RolePanel({
@@ -61,9 +70,20 @@ export function RolePanel({
   useEffect(() => {
     if (requested) panel.current?.scrollIntoView?.({ block: 'start' });
   }, [requested]);
-  const [roleDraft, setRoleDraft] = useState('');
+  // `rol` and `motiv` only travel with a Member; a malformed Role is ignored.
+  const roleParam = searchParams.get(ROLE_PANEL_ROLE_PARAM) ?? '';
+  const reasonParam = searchParams.get(ROLE_PANEL_REASON_PARAM) ?? '';
+  const [roleDraft, setRoleDraft] = useState(
+    requested && !selectedMemberId && /^[a-z_]+$/.test(roleParam)
+      ? roleParam
+      : '',
+  );
   const [statusDraft, setStatusDraft] = useState('');
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(
+    requested && !selectedMemberId
+      ? reasonParam.trim().slice(0, REASON_MAX)
+      : '',
+  );
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const groupIds = useMemberGroupIds(memberId || null);

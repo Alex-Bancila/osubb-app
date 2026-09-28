@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -389,6 +389,56 @@ it('ignores a ?membru= that is not a Member id and queries nothing for it', () =
   expect(screen.getByLabelText('Membru')).toHaveValue('');
   expect(state.groupIds).not.toHaveBeenCalledWith("target' or 1=1");
   expect(state.groupIds).toHaveBeenLastCalledWith(null);
+});
+
+it('preselects Voluntar Activ and the reason a Promotion Candidate arrives with (?rol=, ?motiv=, #827)', async () => {
+  const candidate = '0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9';
+  state.members.mockReturnValue({
+    data: [
+      ...people,
+      {
+        memberId: candidate,
+        name: 'Vlad Candidat',
+        roleId: 'voluntar',
+        roleLabel: 'Voluntar',
+        level: 1,
+        status: 'activ',
+        avatarColor: null,
+      },
+    ],
+    isPending: false,
+    isError: false,
+  });
+  const user = userEvent.setup();
+  renderPanel(
+    `/administrare/roluri?membru=${candidate}&rol=activ&motiv=${encodeURIComponent('Evaluarea de rol „Semestrul I”')}`,
+  );
+  expect(screen.getByLabelText('Membru')).toHaveValue(candidate);
+  expect(screen.getByText('Rol actual: Voluntar')).toBeVisible();
+  expect(screen.getByLabelText('Rol organizațional')).toHaveValue('activ');
+  expect(screen.getByLabelText('Motiv (opțional)')).toHaveValue(
+    'Evaluarea de rol „Semestrul I”',
+  );
+  // It only prefills: BC still saves.
+  expect(state.mutate).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Salvează rolul' }));
+  expect(state.mutate).toHaveBeenCalledWith({
+    kind: 'role',
+    memberId: candidate,
+    role: 'activ',
+    reason: 'Evaluarea de rol „Semestrul I”',
+  });
+});
+
+it('ignores ?rol= and ?motiv= without a Member, and a malformed Role', () => {
+  renderPanel('/administrare/roluri?rol=activ&motiv=Ceva');
+  expect(screen.getByLabelText('Membru')).toHaveValue('');
+  expect(screen.queryByLabelText('Motiv (opțional)')).toBeNull();
+  cleanup();
+  renderPanel(
+    '/administrare/roluri?membru=7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d&rol=%3Cbc%3E',
+  );
+  expect(screen.getByLabelText('Rol organizațional')).toHaveValue('bce');
 });
 
 it('links the chosen Member to their Administrare page (#103)', async () => {
