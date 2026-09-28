@@ -5,6 +5,7 @@ import {
   Route,
   Routes,
   useLocation,
+  useParams,
 } from 'react-router';
 import { useAuth } from './lib/auth';
 import {
@@ -99,6 +100,28 @@ function DeferredRoute({ children }: { children: ReactElement }) {
 }
 
 /**
+ * Where a guard sends a visitor without a session: back to this page after
+ * sign-in, unless the Member just signed out here — then a bare `/login`, so
+ * the next account on the device starts on Acasă (#844, D25).
+ */
+function SignInRedirect() {
+  const { signedOut } = useAuth();
+  const location = useLocation();
+  return (
+    <Navigate
+      to={
+        signedOut
+          ? '/login'
+          : loginDestination(
+              location.pathname + location.search + location.hash,
+            )
+      }
+      replace
+    />
+  );
+}
+
+/**
  * The three session states, decided in one place (mini-spec §3).
  *
  * This is navigation, not security. Every redirect here is cosmetic: the
@@ -109,35 +132,17 @@ function DeferredRoute({ children }: { children: ReactElement }) {
  */
 function RequireSession({ children }: { children: ReactElement }) {
   const { session, loading } = useAuth();
-  const location = useLocation();
 
   if (loading) return <Splash />;
-  if (!session)
-    return (
-      <Navigate
-        to={loginDestination(
-          location.pathname + location.search + location.hash,
-        )}
-        replace
-      />
-    );
+  if (!session) return <SignInRedirect />;
   return <AccountConfirmGate session={session}>{children}</AccountConfirmGate>;
 }
 
 function RequireMember({ children }: { children: ReactElement }) {
   const { session, claims, loading } = useAuth();
-  const location = useLocation();
 
   if (loading) return <Splash />;
-  if (!session)
-    return (
-      <Navigate
-        to={loginDestination(
-          location.pathname + location.search + location.hash,
-        )}
-        replace
-      />
-    );
+  if (!session) return <SignInRedirect />;
   if (!claims) return <Navigate to="/no-profile" replace />;
   return <AccountConfirmGate session={session}>{children}</AccountConfirmGate>;
 }
@@ -168,8 +173,12 @@ function RequireNamedCapability({
     <Navigate
       to="/"
       replace
+      // The shell says why the Member is on Acasă (#844, D21); Clasament keeps
+      // its own, more specific line.
       state={
-        capability === 'seeLeadership' ? { leadershipDenied: true } : undefined
+        capability === 'seeLeadership'
+          ? { leadershipDenied: true }
+          : { denied: true }
       }
     />
   );
@@ -219,6 +228,33 @@ function LoginRoute() {
   return <LoginScreen initialEmail={loginEmailFrom(state)} />;
 }
 
+/**
+ * Task links sent before #843 carried `/tracker/<id>`, which no route ever
+ * answered. Pushes and emails already delivered still do, so a numeric id opens
+ * the Task the way every link now does; anything else is an unknown route.
+ * Unguarded on purpose: the Tracker route it forwards to is guarded, so a
+ * signed-out Member keeps `/tracker?task=<id>` through sign-in.
+ */
+function TaskAlias() {
+  const { taskId = '' } = useParams();
+  return (
+    <Navigate
+      to={/^[0-9]+$/.test(taskId) ? `/tracker?task=${taskId}` : '/'}
+      replace
+    />
+  );
+}
+
+/**
+ * One Group page per Group: keyed by the id, so moving to another Group (the
+ * breadcrumb, a child Group) starts on its default tab with no message carried
+ * over from the previous one (#844, D18).
+ */
+function GroupRoute() {
+  const { groupId } = useParams();
+  return <GroupScreen key={groupId} />;
+}
+
 /** Keeps a signed-in member off the front door. */
 function FrontDoor({ children }: { children: ReactElement }) {
   const { session, claims, loading } = useAuth();
@@ -253,6 +289,10 @@ export default function App() {
         {/* Public: the login screen links here before there is a session,
               and Profil after (#771). It reads nothing. */}
         <Route path="/confidentialitate" element={<PrivacyNoticeScreen />} />
+
+        {/* Task links sent before #843 (D1). `/tracker/membru/:id` still
+              wins: a static segment outranks a parameter. */}
+        <Route path="/tracker/:taskId" element={<TaskAlias />} />
 
         <Route
           path="/no-profile"
@@ -440,7 +480,7 @@ export default function App() {
             element={
               <RequireCapability capability="administer">
                 <DeferredRoute>
-                  <GroupScreen />
+                  <GroupRoute />
                 </DeferredRoute>
               </RequireCapability>
             }

@@ -280,6 +280,45 @@ describe('AuthProvider cache hygiene', () => {
     );
   });
 
+  it('marks a session ended by signOut() here, and only that one (#844, D25)', async () => {
+    function SignedOutProbe() {
+      const { signedOut, signOut } = useAuth();
+      return (
+        <>
+          <p data-testid="signed-out">{String(signedOut)}</p>
+          <button onClick={() => void signOut()}>Sign out</button>
+        </>
+      );
+    }
+    // The real client announces SIGNED_OUT from inside signOut().
+    auth.signOut.mockImplementationOnce(async () => {
+      notifyListener()('SIGNED_OUT', null);
+      return { error: null };
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <SignedOutProbe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+    const flag = screen.getByTestId('signed-out');
+
+    // A session that ends elsewhere (expiry, another tab) keeps its `next`.
+    act(() => notifyListener()('SIGNED_IN', sessionFor('a')));
+    act(() => notifyListener()('SIGNED_OUT', null));
+    expect(flag).toHaveTextContent('false');
+
+    act(() => notifyListener()('SIGNED_IN', sessionFor('a')));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(flag).toHaveTextContent('true'));
+
+    // The next sign-in clears it.
+    act(() => notifyListener()('SIGNED_IN', sessionFor('b')));
+    expect(flag).toHaveTextContent('false');
+  });
+
   it('preserves member state when sign-out fails', async () => {
     auth.signOut.mockResolvedValueOnce({
       error: new Error('provider details that must stay private'),

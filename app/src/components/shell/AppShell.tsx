@@ -37,6 +37,20 @@ import {
   type NavItem,
 } from './navItems';
 
+/**
+ * The one line the shell shows above a page it was sent to instead of the one
+ * asked for: a capability guard's refusal (#844, D21), Clasament's in its own
+ * words. Router state, so a reload or the next navigation drops it.
+ */
+function deniedMessage(state: unknown): string | null {
+  if (typeof state !== 'object' || state === null) return null;
+  const flags = state as Record<string, unknown>;
+  if (flags.leadershipDenied === true)
+    return 'Clasamentul și istoricul membrilor sunt disponibile doar conducerii OSUBB.';
+  if (flags.denied === true) return 'Nu ai acces la pagina cerută.';
+  return null;
+}
+
 /** The unread counts the shell badges, by the path whose entry carries them. */
 type NavBadges = Partial<Record<string, { count: number; label: string }>>;
 
@@ -64,7 +78,6 @@ type SidebarContentProps = {
   memberEmail: string | undefined;
   avatarColor: string | null | undefined;
   roleLabel: string;
-  level: number | undefined;
   signOutAction: ReturnType<typeof useSignOutAction>;
   onNavigate?: () => void;
 };
@@ -91,7 +104,6 @@ function SidebarContent({
   memberEmail,
   avatarColor,
   roleLabel,
-  level,
   signOutAction,
   onNavigate,
 }: SidebarContentProps) {
@@ -146,13 +158,9 @@ function SidebarContent({
             <span className="block truncate text-sm font-semibold">
               {memberName ?? memberEmail}
             </span>
-            <Badge
-              className="mt-1 max-w-full"
-              title={`${roleLabel} · nivel ${level}`}
-            >
-              <span className="truncate">
-                {roleLabel} · nivel {level}
-              </span>
+            {/* The Role's name, never its level: a system number (#844, B44). */}
+            <Badge className="mt-1 max-w-full" title={roleLabel}>
+              <span className="truncate">{roleLabel}</span>
             </Badge>
           </span>
         </div>
@@ -213,6 +221,7 @@ export default function AppShell() {
   const current = visible.find((item) =>
     isNavItemActive(item, location.pathname),
   );
+  const denied = deniedMessage(location.state);
   const isNotificationsActive =
     location.pathname.startsWith(NOTIFICATIONS_PATH);
 
@@ -235,7 +244,6 @@ export default function AppShell() {
     memberEmail: session?.user.email,
     avatarColor: profile.data?.avatar_color,
     roleLabel,
-    level: claims?.member_level,
     signOutAction,
     badges,
   };
@@ -325,14 +333,16 @@ export default function AppShell() {
 
       <main className="relative min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain [grid-area:main] [scrollbar-gutter:stable]">
         <>
-          {location.state?.leadershipDenied === true && (
-            <p
-              role="alert"
-              className="m-4 rounded-lg border border-border bg-card p-4"
-            >
-              Clasamentul și istoricul membrilor sunt disponibile doar
-              conducerii OSUBB.
-            </p>
+          {denied && (
+            // On the page's own frame, so it lines up with the header below.
+            <div className="mx-auto w-full max-w-(--content-max) px-4 pt-4 md:px-6 md:pt-6">
+              <p
+                role="alert"
+                className="rounded-lg border border-border bg-card p-4"
+              >
+                {denied}
+              </p>
+            </div>
           )}
           <Outlet />
         </>
