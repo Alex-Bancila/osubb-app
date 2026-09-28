@@ -17,7 +17,10 @@ import {
   PageHeader,
   tabClass,
   tabListClass,
+  useActiveTabInView,
 } from '../../components/layout';
+import { useAuth } from '../../lib/auth';
+import { useCapability } from '../../lib/capabilities';
 import { ErrorState, Loading } from '../../components/states';
 import { parsePositiveInt } from '../../lib/ids';
 import { AvailableOpportunities } from './AvailableOpportunities';
@@ -87,6 +90,58 @@ function linkedTaskId(value: string | null): number | null {
   return parsePositiveInt(value);
 }
 
+type TrackerTab = 'mine' | 'available' | 'managed' | 'all';
+
+const TRACKER_TABS: readonly unknown[] = [
+  'mine',
+  'available',
+  'managed',
+  'all',
+];
+
+function isTrackerTab(value: unknown): value is TrackerTab {
+  return TRACKER_TABS.includes(value);
+}
+
+/**
+ * `?lista=`: the tab a link asks for (#846, D9) — De gestionat from a Group's
+ * "Vezi taskurile neterminate" (#853), Disponibile from Acasă (#859). A tab
+ * the viewer does not have is ignored.
+ */
+const LIST_PARAM = new Map<string, TrackerTab>([
+  ['gestionat', 'managed'],
+  ['toate', 'all'],
+  ['disponibile', 'available'],
+]);
+
+/**
+ * From BC (level 6) De gestionat already holds every Task, so Toate would be
+ * the same list twice (B16): it is shown only below that, to BCE today.
+ */
+const MANAGES_ALL_LEVEL = 6;
+
+type TaskList = {
+  isError: boolean;
+  data?: readonly { id: number }[] | undefined;
+};
+
+/**
+ * Asks `test` of a list: `undefined` while the answer is unknown (the tab's
+ * access or its list is still loading). A list that failed, or a tab the
+ * viewer does not have, answers `false`.
+ */
+function ask(
+  list: TaskList,
+  shown: boolean | undefined,
+  test: (rows: readonly { id: number }[]) => boolean,
+): boolean | undefined {
+  if (shown === undefined) return undefined;
+  if (!shown || list.isError) return false;
+  return list.data === undefined ? undefined : test(list.data);
+}
+
+const nonEmpty = (rows: readonly { id: number }[]) => rows.length > 0;
+
 const HIGHLIGHT_MS = 4000;
 
 export default function TrackerScreen() {
@@ -95,65 +150,135 @@ export default function TrackerScreen() {
   const management = useTaskManagement();
   const managed = useManagedTasks(management.data === true);
   const leadership = useTaskLeadership();
-  const all = useAllTasks(leadership.data === true);
+  const level = useAuth().claims?.member_level ?? 0;
+  const showAll = leadership.data === true && level < MANAGES_ALL_LEVEL;
+  const all = useAllTasks(showAll);
+  // Leadership does not work by points (R27): no Personal Score above
+  // Taskurile mele, the same test as Acasă (B15).
+  const leader = useCapability('seeLeadership').data === true;
   const [detailId, setDetailId] = useState<number | null>(null);
   const [createdId, setCreatedId] = useState<number | null>(null);
-  const [tab, setTab] = useState('mine');
-  // The deep link Acasă and the notifications use (#685): `/tracker?task=<id>`
-  // opens Taskurile mele on that card, or De gestionat with the Task's sheet
-  // when it is not mine but I manage it (#822). Only `task` is read here.
+  // `null` until the page has chosen its opening tab; a click sets it.
+  const [tab, setTab] = useState<TrackerTab | null>(null);
+  // The deep links (#685, #822, #846): `/tracker?task=<id>` lands on the
+  // Task, `/tracker?lista=<tab>` opens that tab. `task` wins over `lista`.
   const [params] = useSearchParams();
   const linkedId = linkedTaskId(params.get('task'));
-  const [linkFor, setLinkFor] = useState<number | null>(null);
+  const listParam = LIST_PARAM.get(params.get('lista') ?? '') ?? null;
+  const link = `${linkedId ?? ''}|${listParam ?? ''}`;
+  const [linkFor, setLinkFor] = useState<string | null>(null);
   const [expiredFor, setExpiredFor] = useState<number | null>(null);
   // Counts link changes, so a later link back to the same card lands afresh.
   const [linkVisit, setLinkVisit] = useState(0);
-  if (linkedId !== linkFor) {
-    // A new link: open Taskurile mele and allow a fresh highlight.
-    setLinkFor(linkedId);
+  if (link !== linkFor) {
+    // A new link: choose the tab afresh and allow a fresh highlight.
+    setLinkFor(link);
     setExpiredFor(null);
     setLinkVisit((visit) => visit + 1);
-    if (linkedId !== null) setTab('mine');
+    setTab(null);
   }
-  // A Task that is not one of mine but is in De gestionat (Acasă's De evaluat,
-  // #822) opens De gestionat and that Task's details sheet — where the
-  // Evaluation control is — once per link, after both lists have loaded (a
-  // failed Taskurile mele read never routes a Task of mine to De gestionat).
-  const managedLanding =
-    linkedId !== null &&
-    management.data === true &&
-    mine.isSuccess &&
-    !mine.data.some((task) => task.id === linkedId) &&
-    managed.data?.some((task) => task.id === linkedId)
-      ? linkedId
-      : null;
-  const [openedVisit, setOpenedVisit] = useState<number | null>(null);
-  if (managedLanding !== null && openedVisit !== linkVisit) {
-    setOpenedVisit(linkVisit);
-    setTab('managed');
-    setDetailId(managedLanding);
+  const managedShown = management.isError
+    ? false
+    : (management.data ?? undefined);
+  const allShown =
+    level >= MANAGES_ALL_LEVEL || leadership.isError
+      ? false
+      : leadership.data === undefined
+        ? undefined
+        : showAll;
+
+  // Where `?task=` lands, once every list that could hold it has answered:
+  // a Task of mine is highlighted on Taskurile mele; any other Task opens its
+  // details sheet on De gestionat, else Toate, else Disponibile — whichever
+  // holds it (D2) — or on the opening tab with the sheet's unavailable state.
+  // A failed Taskurile mele read never routes a Task of mine elsewhere.
+  const holdsLinked = (rows: readonly { id: number }[]) =>
+    rows.some((task) => task.id === linkedId);
+  let landing: { tab: TrackerTab | null; open: boolean } | undefined;
+  if (linkedId !== null) {
+    const inMine = mine.isError ? true : ask(mine, true, holdsLinked);
+    const inManaged = ask(managed, managedShown, holdsLinked);
+    const inAll = ask(all, allShown, holdsLinked);
+    const inAvailable = ask(available, true, holdsLinked);
+    if (inMine) landing = { tab: 'mine', open: false };
+    else if (inMine === false && inManaged)
+      landing = { tab: 'managed', open: true };
+    else if (
+      inMine === false &&
+      inManaged === false &&
+      inAll !== undefined &&
+      inAvailable !== undefined
+    )
+      landing = {
+        tab: inAll ? 'all' : inAvailable ? 'available' : null,
+        open: true,
+      };
   }
+  const [landedVisit, setLandedVisit] = useState<number | null>(null);
+  if (landing && landedVisit !== linkVisit) {
+    setLandedVisit(linkVisit);
+    if (landing.tab) setTab(landing.tab);
+    if (landing.open) setDetailId(linkedId);
+  }
+
+  // The opening tab (B17): `?lista=` when the viewer has that tab, else the
+  // first list with something in it — Taskurile mele, De gestionat,
+  // Disponibile — else Taskurile mele. A failed Taskurile mele read opens it,
+  // so its retry is what the Member sees.
+  const firstNonEmpty = (): TrackerTab | undefined => {
+    if (mine.isError) return 'mine';
+    const order: [TrackerTab, TaskList, boolean | undefined][] = [
+      ['mine', mine, true],
+      ['managed', managed, managedShown],
+      ['available', available, true],
+    ];
+    for (const [value, list, shown] of order) {
+      const has = ask(list, shown, nonEmpty);
+      if (has === undefined) return undefined;
+      if (has) return value;
+    }
+    return 'mine';
+  };
+  const listShown =
+    listParam === 'managed'
+      ? managedShown
+      : listParam === 'all'
+        ? allShown
+        : true;
+  const opening =
+    listParam && listShown
+      ? listParam
+      : listParam && listShown === undefined
+        ? undefined
+        : firstNonEmpty();
+  if (
+    tab === null &&
+    opening !== undefined &&
+    (linkedId === null || landedVisit === linkVisit)
+  )
+    setTab(opening);
+
   // The card is highlighted once the list has loaded with it in it, until
   // the highlight expires. An id that is not one of mine leaves the plain list.
-  const landing =
+  const highlightTarget =
     linkedId !== null && mine.data?.some((task) => task.id === linkedId)
       ? linkedId
       : null;
-  const highlightedId = landing !== expiredFor ? landing : null;
+  const highlightedId = highlightTarget !== expiredFor ? highlightTarget : null;
   const landed = useRef<string | null>(null);
   useEffect(() => {
     // Once per link: a refetch must not pull the page back, but every new
     // link lands, even on a card an earlier link landed on.
-    const visit = `${linkVisit}:${landing}`;
-    if (landing === null || landed.current === visit) return;
+    const visit = `${linkVisit}:${highlightTarget}`;
+    if (highlightTarget === null || landed.current === visit) return;
     landed.current = visit;
-    const card = document.getElementById(`task-${landing}`);
+    const card = document.getElementById(`task-${highlightTarget}`);
     card?.scrollIntoView({ block: 'center' });
     const title = card?.querySelector<HTMLElement>('[data-slot="task-title"]');
     (title?.querySelector<HTMLElement>('button') ?? title)?.focus({
       preventScroll: true,
     });
-  }, [landing, linkVisit]);
+  }, [highlightTarget, linkVisit]);
   useEffect(() => {
     if (highlightedId === null) return;
     const timer = window.setTimeout(
@@ -167,12 +292,15 @@ export default function TrackerScreen() {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
-  const showAll = leadership.data === true;
   const managedTaskIds = new Set((managed.data ?? []).map((task) => task.id));
+  const current = tab ?? 'mine';
   const selected =
-    (tab === 'managed' && !management.data) || (tab === 'all' && !showAll)
+    (current === 'managed' && !management.data) ||
+    (current === 'all' && !showAll)
       ? 'mine'
-      : tab;
+      : current;
+  const tabStrip = useRef<HTMLDivElement>(null);
+  useActiveTabInView(tabStrip, selected);
   return (
     <Page>
       <PageHeader
@@ -221,10 +349,14 @@ export default function TrackerScreen() {
         className="flex flex-col gap-6"
         value={selected}
         onValueChange={(value) => {
-          if (typeof value === 'string') setTab(value);
+          if (isTrackerTab(value)) setTab(value);
         }}
       >
-        <Tabs.List aria-label="Liste de taskuri" className={tabListClass}>
+        <Tabs.List
+          ref={tabStrip}
+          aria-label="Liste de taskuri"
+          className={tabListClass}
+        >
           <Tabs.Tab value="mine" className={tabClass}>
             Taskurile mele
           </Tabs.Tab>
@@ -243,7 +375,7 @@ export default function TrackerScreen() {
           )}
         </Tabs.List>
         <Tabs.Panel value="mine" className="space-y-6">
-          <PersonalScoreHeader />
+          {!leader && <PersonalScoreHeader />}
           <TaskQueryPanel
             query={mine}
             empty="Nu ai niciun task atribuit încă."

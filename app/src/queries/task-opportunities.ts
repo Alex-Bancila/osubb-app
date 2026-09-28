@@ -61,30 +61,48 @@ export function compareByDeadline(
   );
 }
 
-/** The Member's own Candidatures, by Task id. */
-export type OpportunityCandidatures = {
+/** A Task still open to Candidates: neither finished, cancelled nor unfulfilled. */
+export const OPEN_TASK_STATUSES = ['todo', 'in_progress', 'in_review'] as const;
+
+function isOpen(task: TaskPresentationRow): boolean {
+  return (OPEN_TASK_STATUSES as readonly string[]).includes(task.status);
+}
+
+/** The Member is this Task's current Executor (an assignment not yet ended). */
+function executes(task: TaskPresentationRow, memberId: string): boolean {
+  return (task.assignments ?? []).some(
+    (assignment) =>
+      assignment.member_id === memberId && assignment.ended_at === null,
+  );
+}
+
+/** What Disponibile needs to know about the viewer beyond their Groups. */
+export type OpportunityViewer = {
   /** Tasks the Member is a pending Candidate on. */
   pending?: ReadonlySet<number>;
-  /** Tasks the Member has any Candidature on, whatever its status. */
-  participated?: ReadonlySet<number>;
+  /** The viewer: a Task they execute is theirs, not an Opportunity. */
+  memberId?: string;
 };
 
 /**
- * Disponibile is one band (ruling R26): what the Member can join, plus what
- * they have taken part in, in deadline order. The server returns the Member's
- * own Groups' Opportunities and every Group's org-Audience ones (#794); a row
- * that leadership can read but not join (R1/R3) belongs to the management
- * tabs, so it is dropped here unless the Member holds a Candidature on it.
+ * Disponibile is one band (ruling R26): what the Member can join or withdraw
+ * from now, in deadline order (#846, B10/B11). The server returns the
+ * Member's own Groups' Opportunities and every Group's org-Audience ones
+ * (#794); a row that leadership can read but not join (R1/R3) belongs to the
+ * management tabs, so it is dropped here unless the Member is a pending
+ * Candidate on it. A finished, cancelled or unfulfilled Task, and a Task the
+ * Member executes, live in Taskurile mele — never here.
  */
 export function orderOpportunities(
   rows: TaskPresentationRow[],
   memberships: TaskMemberships,
-  {
-    pending = new Set(),
-    participated = new Set(),
-  }: OpportunityCandidatures = {},
+  { pending = new Set(), memberId }: OpportunityViewer = {},
 ): Opportunity[] {
   return rows
+    .filter(
+      (task) =>
+        isOpen(task) && (memberId === undefined || !executes(task, memberId)),
+    )
     .map((task) => {
       const relevant = hasOwnOrigin(task, memberships);
       return {
@@ -95,7 +113,7 @@ export function orderOpportunities(
         joinable: relevant || task.audience === 'org' || pending.has(task.id),
       };
     })
-    .filter((task) => task.joinable || participated.has(task.id))
+    .filter((task) => task.joinable)
     .sort(compareByDeadline);
 }
 
@@ -111,9 +129,6 @@ export async function fetchTaskOpportunities(
   ]);
   if (candidatures.error) throw candidatures.error;
 
-  const participatedTaskIds = new Set(
-    (candidatures.data ?? []).map((candidate) => candidate.task_id),
-  );
   const pendingTaskIds = new Set(
     (candidatures.data ?? [])
       .filter((candidate) => candidate.status === 'pending')
@@ -125,31 +140,38 @@ export async function fetchTaskOpportunities(
     .eq('kind', 'task')
     .eq('assignment_mode', 'public')
     .is('queue_closed_at', null)
-    .in('status', ['todo', 'in_progress', 'in_review']);
+    .in('status', [...OPEN_TASK_STATUSES]);
   const openResult = await openTasks;
   if (openResult.error) throw openResult.error;
-  const participatedTasks: TaskPresentationRow[] = [];
-  const participatedIds = [...participatedTaskIds];
-  for (let offset = 0; offset < participatedIds.length; offset += 100) {
-    const result = await latestSubmissionOnly(
-      supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
-    )
-      .eq('kind', 'task')
-      .eq('assignment_mode', 'public')
-      .in('id', participatedIds.slice(offset, offset + 100));
+  const pendingIds = [...pendingTaskIds];
+  const batches: number[][] = [];
+  for (let offset = 0; offset < pendingIds.length; offset += 100)
+    batches.push(pendingIds.slice(offset, offset + 100));
+  const queuedResults = await Promise.all(
+    batches.map((ids) =>
+      latestSubmissionOnly(
+        supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+      )
+        .eq('kind', 'task')
+        .eq('assignment_mode', 'public')
+        .in('id', ids),
+    ),
+  );
+  const queuedTasks: TaskPresentationRow[] = [];
+  for (const result of queuedResults) {
     if (result.error) throw result.error;
-    participatedTasks.push(...result.data);
+    queuedTasks.push(...result.data);
   }
 
-  // The server remains authoritative for both sets. The second query retains
-  // an existing participant's state after the queue or Task becomes terminal.
+  // The server remains authoritative for both sets. The second query keeps a
+  // pending Candidate's Task after its queue closes, so they can withdraw.
   const tasks = new Map<number, TaskPresentationRow>();
-  for (const task of [...openResult.data, ...participatedTasks])
+  for (const task of [...openResult.data, ...queuedTasks])
     tasks.set(task.id, task);
   return attachVisibleTaskExecutors(
     orderOpportunities([...tasks.values()], scopes, {
       pending: pendingTaskIds,
-      participated: participatedTaskIds,
+      memberId,
     }),
   );
 }

@@ -20,6 +20,13 @@ const hooks = vi.hoisted(() => ({
   useTaskQueue: vi.fn(),
   join: vi.fn(),
   level: 1,
+  seeLeadership: false,
+}));
+vi.mock('../../lib/capabilities', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/capabilities')>()),
+  useCapability: (capability: string) => ({
+    data: capability === 'seeLeadership' ? hooks.seeLeadership : false,
+  }),
 }));
 vi.mock('../../queries/task-queue', () => ({
   useTaskQueue: hooks.useTaskQueue,
@@ -155,6 +162,7 @@ function query(overrides: Record<string, unknown> = {}) {
 describe('My tasks screen', () => {
   beforeEach(() => {
     hooks.level = 1;
+    hooks.seeLeadership = false;
     hooks.useTaskOpportunities.mockReturnValue({
       data: [],
       isPending: false,
@@ -523,7 +531,7 @@ describe('My tasks screen', () => {
           group: group('Resurse Umane', [20], { color: '#b8412c' }),
           deadline: '2026-10-03T09:00:00Z',
         }),
-        // Another Group's local Task the Member once took part in.
+        // Another Group's local Task the Member is still queued on.
         publicTask({
           id: 15,
           title: 'Arhivă de interviuri',
@@ -534,7 +542,7 @@ describe('My tasks screen', () => {
         }),
       ],
       new Set([5, 10]),
-      { participated: new Set([15]) },
+      { pending: new Set([15]) },
     );
     beforeEach(() => {
       query();
@@ -628,17 +636,22 @@ describe('My tasks screen', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('keeps a local row the Member took part in, without a join button', async () => {
+    it('keeps another Group’s local row the Member is queued on, so they can withdraw', async () => {
+      hooks.useTaskQueue.mockImplementation((taskId: number) => ({
+        data:
+          taskId === 15
+            ? { status: 'pending', position: 2 }
+            : { status: null, position: null },
+        isPending: false,
+        isError: false,
+      }));
       await openAvailable();
       const local = screen.getByRole('article', {
         name: 'Arhivă de interviuri',
       });
       expect(
-        within(local).getByText('Doar pentru membrii grupului'),
+        within(local).getByRole('button', { name: 'Retrage înscrierea' }),
       ).toBeVisible();
-      expect(within(local).queryByRole('button', { name: /particip/ })).toBe(
-        null,
-      );
     });
 
     it('confirms a join with the queue place, never an Executor selection', async () => {
@@ -892,14 +905,292 @@ describe('My tasks screen', () => {
       expect(scrollIntoView).toHaveBeenCalledOnce();
     });
 
-    it.each(['/tracker?task=99', '/tracker?task=abc'])(
-      'shows the plain list for %s',
-      (url) => {
-        renderAt(url);
-        expect(screen.getAllByRole('article')).toHaveLength(2);
-        expect(scrollIntoView).not.toHaveBeenCalled();
-        for (const card of screen.getAllByRole('article'))
-          expect(card).not.toHaveAttribute('data-highlighted');
+    it('shows the plain list for a malformed id', () => {
+      renderAt('/tracker?task=abc');
+      expect(screen.getAllByRole('article')).toHaveLength(2);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      for (const card of screen.getAllByRole('article'))
+        expect(card).not.toHaveAttribute('data-highlighted');
+    });
+
+    it('opens the details sheet — its unavailable state — for an id no list holds (D2)', () => {
+      renderAt('/tracker?task=99');
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #99');
+      expect(
+        screen.getByRole('tab', { name: 'Taskurile mele' }),
+      ).toHaveAttribute('aria-selected', 'true');
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it('opens Toate with the sheet for a Task only BCE reads there (D2)', () => {
+      hooks.level = 5;
+      hooks.useTaskLeadership.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
+      hooks.useAllTasks.mockReturnValue({
+        data: [taskRow({ id: 4, title: 'Al altui grup' })],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?task=4');
+      expect(screen.getByRole('tab', { name: 'Toate' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #4');
+    });
+
+    it('opens Disponibile with the sheet for an Opportunity (D2, D-5)', () => {
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: orderOpportunities(
+          [
+            taskRow({
+              id: 15,
+              title: 'Distribuie story-ul',
+              assignment_mode: 'public',
+              assignments: [],
+            }),
+          ],
+          new Set([1]),
+        ),
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?task=15');
+      expect(screen.getByRole('tab', { name: 'Disponibile' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #15');
+    });
+
+    it('waits for every list before opening a Task that is not mine', () => {
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: undefined,
+        isPending: true,
+        isError: false,
+      });
+      const { rerender } = renderAt('/tracker?task=15');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: [taskRow({ id: 15, assignments: [] })],
+        isPending: false,
+        isError: false,
+      });
+      rerender(tree('/tracker?task=15'));
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #15');
+    });
+
+    it('lets ?task= win over ?lista=', () => {
+      renderAt('/tracker?lista=disponibile&task=2');
+      expect(
+        screen.getByRole('tab', { name: 'Taskurile mele' }),
+      ).toHaveAttribute('aria-selected', 'true');
+      expect(scrollIntoView).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('the opening tab', () => {
+    const manager = (rows: ReturnType<typeof taskRow>[]) => {
+      hooks.useTaskManagement.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+      });
+      hooks.useManagedTasks.mockReturnValue({
+        data: rows,
+        isPending: false,
+        isError: false,
+      });
+    };
+    const selected = () =>
+      screen
+        .getAllByRole('tab')
+        .find((tab) => tab.getAttribute('aria-selected') === 'true')
+        ?.textContent;
+
+    it.each([
+      ['gestionat', 'De gestionat'],
+      ['disponibile', 'Disponibile'],
+    ])('opens ?lista=%s on its tab (D9)', (lista, name) => {
+      query({ data: [taskRow()] });
+      manager([]);
+      renderAt('/tracker?lista=' + lista);
+      expect(selected()).toBe(name);
+    });
+
+    it('opens a Group’s unfinished Tasks from its page on De gestionat, filtered to that Group (#853)', () => {
+      query({ data: [taskRow()] });
+      const inGroup = (id: number, title: string, path: number[]) =>
+        taskRow({
+          id,
+          title,
+          group_id: path[path.length - 1],
+          group: {
+            name: title,
+            short: null,
+            color: '#1f6feb',
+            category: 'team',
+            path,
+            is_organization: false,
+          },
+          deadline: '2099-01-01T00:00:00Z',
+        });
+      manager([
+        inGroup(31, 'Interviuri', [20, 21]),
+        inGroup(32, 'Buget', [20]),
+        inGroup(33, 'Afișe', [10]),
+      ]);
+      renderAt('/tracker?lista=gestionat&grup=20&subgrup=21');
+      expect(selected()).toBe('De gestionat');
+      const listed = within(
+        screen.getByRole('region', { name: 'Lista taskurilor' }),
+      ).getAllByRole('article');
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toHaveAccessibleName('Interviuri');
+    });
+
+    it('opens Acasă’s Următorul task link on Disponibile (#859)', () => {
+      query({ data: [taskRow()] });
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: orderOpportunities(
+          [
+            taskRow({
+              id: 40,
+              title: 'Deschis pentru toți',
+              assignment_mode: 'public',
+              audience: 'org',
+              assignments: [],
+            }),
+          ],
+          new Set([1]),
+        ),
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?lista=disponibile');
+      expect(selected()).toBe('Disponibile');
+      expect(
+        within(
+          screen.getByRole('region', { name: 'Oportunități deschise' }),
+        ).getByRole('article', { name: 'Deschis pentru toți' }),
+      ).toBeVisible();
+    });
+
+    it('ignores ?lista= for a tab the viewer does not have', () => {
+      query({ data: [taskRow()] });
+      renderAt('/tracker?lista=gestionat');
+      expect(selected()).toBe('Taskurile mele');
+      expect(screen.queryByRole('tab', { name: 'De gestionat' })).toBeNull();
+    });
+
+    it('ignores ?lista=toate for BC, who has no Toate tab', () => {
+      query({ data: [taskRow()] });
+      hooks.level = 6;
+      hooks.useTaskLeadership.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
+      manager([taskRow({ id: 3, title: 'Al grupului' })]);
+      renderAt('/tracker?lista=toate');
+      expect(selected()).toBe('Taskurile mele');
+    });
+
+    it('waits for the access check before honouring ?lista=gestionat', () => {
+      query({ data: [taskRow()] });
+      hooks.useTaskManagement.mockReturnValue({
+        data: undefined,
+        isPending: true,
+        isError: false,
+      });
+      const { rerender } = renderAt('/tracker?lista=gestionat');
+      manager([]);
+      rerender(tree('/tracker?lista=gestionat'));
+      expect(selected()).toBe('De gestionat');
+    });
+
+    it('opens Taskurile mele when it has work', () => {
+      query({ data: [taskRow()] });
+      manager([taskRow({ id: 3, title: 'Al grupului' })]);
+      renderAt('/tracker');
+      expect(selected()).toBe('Taskurile mele');
+    });
+
+    it('opens De gestionat when Taskurile mele is empty and it has work (B17)', () => {
+      query();
+      manager([taskRow({ id: 3, title: 'Al grupului' })]);
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: [taskRow({ id: 4, assignments: [] })],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker');
+      expect(selected()).toBe('De gestionat');
+    });
+
+    it('opens Disponibile when neither own list has work', () => {
+      query();
+      manager([]);
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: [taskRow({ id: 4, assignments: [] })],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker');
+      expect(selected()).toBe('Disponibile');
+    });
+
+    it('stays on Taskurile mele when every list is empty, and on the tab chosen once it loads', async () => {
+      const user = userEvent.setup();
+      query();
+      const { rerender } = renderAt('/tracker');
+      expect(selected()).toBe('Taskurile mele');
+      await user.click(screen.getByRole('tab', { name: 'Disponibile' }));
+      query({ data: [taskRow()] });
+      rerender(tree('/tracker'));
+      expect(selected()).toBe('Disponibile');
+    });
+  });
+
+  describe('leadership (R27, B15, B16)', () => {
+    it('shows no Personal Score to BCE, BC and the Moderator', () => {
+      query({ data: [taskRow()] });
+      hooks.seeLeadership = true;
+      render(<TrackerScreen />, { wrapper: Router });
+      expect(
+        screen.queryByRole('region', { name: 'Punctajul meu' }),
+      ).toBeNull();
+      expect(screen.getByRole('article')).toBeVisible();
+    });
+
+    it.each([6, 7])(
+      'shows no Toate at level %i, where De gestionat already holds every Task',
+      (level) => {
+        query();
+        hooks.level = level;
+        hooks.useTaskLeadership.mockReturnValue({
+          data: true,
+          isPending: false,
+          isError: false,
+          refetch: vi.fn(),
+        });
+        render(<TrackerScreen />, { wrapper: Router });
+        expect(screen.queryByRole('tab', { name: 'Toate' })).toBeNull();
+        expect(hooks.useAllTasks).toHaveBeenLastCalledWith(false);
       },
     );
   });
