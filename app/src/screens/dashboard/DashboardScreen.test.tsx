@@ -175,6 +175,10 @@ function event(overrides: Partial<EventPresentation>): EventPresentation {
     location: null,
     capacity: null,
     description: null,
+    minLevel: 0,
+    createdBy: null,
+    cancelledAt: null,
+    cancelReason: null,
     ...overrides,
   };
 }
@@ -617,6 +621,25 @@ describe('Următorul eveniment', () => {
     expect(hooks.useEventsInRange).toHaveBeenCalledWith({
       from: '2026-01-14T22:00:00.000Z',
     });
+  });
+
+  // #849: a cancelled Event is not the next thing to go to.
+  it('skips a cancelled Event', () => {
+    hooks.useEventsInRange.mockReturnValue(
+      query([
+        { ...parents, cancelledAt: '2026-01-14T10:00:00.000Z' },
+        organization,
+      ]),
+    );
+    renderDashboard();
+
+    const next = slot('Următorul eveniment');
+    expect(
+      within(next).getByRole('article', { name: 'Adunare OSUBB' }),
+    ).toBeInTheDocument();
+    expect(within(next).queryByText('Ședință Educațional')).toBeNull();
+    // Acasă previews the Event; managing it is the Calendar's.
+    expect(within(next).queryByRole('button', { name: 'Editează' })).toBeNull();
   });
 
   it("picks an Organization Group Event whatever the member's Groups", () => {

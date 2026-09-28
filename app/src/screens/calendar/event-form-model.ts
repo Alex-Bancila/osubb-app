@@ -37,6 +37,23 @@ export type EventFormValues = {
   campaignId: number | null;
 };
 
+/** The Event dialog: a full screen on a phone, a wide dialog above it. */
+export const eventDialogContentClass =
+  'max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none';
+
+export const emptyEventFormValues: EventFormValues = {
+  title: '',
+  type: 'sedinta',
+  groupId: null,
+  startsAt: '',
+  endsAt: '',
+  location: '',
+  capacity: '',
+  description: '',
+  minLevel: 0,
+  campaignId: null,
+};
+
 export type EventDraft = {
   title: string;
   type: EventType;

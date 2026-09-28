@@ -19,7 +19,7 @@ import { keys } from './keys';
 // One string literal, not a concatenation: supabase-js parses this at the type
 // level to give `data` its shape, and a `+` defeats that.
 const EVENT_FIELDS =
-  'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)';
+  'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, group:groups(name, short, color, category, path, is_organization)';
 
 type EventTableRow = Database['public']['Tables']['events']['Row'];
 type GroupRow = Database['public']['Tables']['groups']['Row'];
@@ -41,6 +41,10 @@ type EventRow = Pick<
   | 'location'
   | 'capacity'
   | 'description'
+  | 'min_level'
+  | 'created_by'
+  | 'cancelled_at'
+  | 'cancel_reason'
 > & {
   /** Optional so a row read before #691 still maps; absent means none. */
   campaign_id?: EventTableRow['campaign_id'];
@@ -65,6 +69,13 @@ export type EventPresentation = {
   location: string | null;
   capacity: number | null;
   description: string | null;
+  /** "Cine îl vede": the Minimum Level, which the edit form starts from. */
+  minLevel: number;
+  /** The creator: an Organization Event is edited by them or by BC/Moderator. */
+  createdBy: string | null;
+  /** Set once the Event is cancelled (ADR-0008): the card says so, no RSVP. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 /** Convert database naming and instants once, before any calendar UI sees it. */
@@ -90,6 +101,10 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
     location: row.location,
     capacity: row.capacity,
     description: row.description,
+    minLevel: row.min_level,
+    createdBy: row.created_by,
+    cancelledAt: row.cancelled_at,
+    cancelReason: row.cancel_reason,
   };
 }
 

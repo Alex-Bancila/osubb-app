@@ -215,6 +215,15 @@
   color: var(--text-muted);
 }
 
+/* A cancelled Event keeps its day, struck through like its card (#849). */
+.calendar-chip.is-cancelled {
+  color: var(--text-muted);
+}
+
+.calendar-chip.is-cancelled .calendar-chip-text {
+  text-decoration: line-through;
+}
+
 .calendar-chip-icon {
   width: 11px;
   height: 11px;
@@ -572,6 +581,87 @@
   font-weight: var(--fw-semibold);
 }
 
+/* A cancelled Event (#849) stays as history: its stripe and title go quiet,
+   the title is struck through in the danger colour, and the reason takes the
+   place of the RSVP strip. The badge says it in words, not colour alone. */
+.event-card.is-cancelled {
+  background: var(--surface-2);
+}
+
+.event-card.is-cancelled::before {
+  background: var(--text-faint);
+}
+
+.event-card.is-cancelled .event-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
+}
+
+.event-cancelled-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-cancelled {
+  margin: var(--s-5) 0 0;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border-soft);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.event-cancelled-label {
+  display: block;
+  margin-bottom: var(--s-1);
+  color: var(--danger);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-cancelled-reason {
+  display: block;
+  max-width: 62ch;
+}
+
+/* The managers' strip: below the member's own answer, same thin rule. */
+.event-manage {
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.event-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.event-manage-receipt {
+  margin: var(--s-3) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.event-manage-receipt:first-child {
+  margin-top: 0;
+}
+
 /* RSVP is a response strip, not a second card. Keeping it inside the event
    boundary makes the choice unambiguous while the thin rule preserves the
    agenda's visual hierarchy. */
@@ -733,6 +823,12 @@
 
   .event-rsvp-actions > * {
     flex: 1 1 8rem;
+  }
+
+  /* Each manage button as wide as its words, then sharing the row; one that
+     does not fit takes its own row rather than clipping its label. */
+  .event-manage-actions > * {
+    flex: 1 1 auto;
   }
 
   .calendar-task-row {

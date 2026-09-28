@@ -76,6 +76,8 @@ export function nextRelevantEvent(
   for (const event of events) {
     const at = Date.parse(event.startsAt);
     if (!Number.isFinite(at) || at < now || at >= nextAt) continue;
+    // A cancelled Event is not the next thing to go to (#849).
+    if (event.cancelledAt !== null) continue;
     if (eventRelevance(event, relevant, none) === 'other') continue;
     next = event;
     nextAt = at;

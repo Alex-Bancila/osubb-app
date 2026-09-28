@@ -11,6 +11,7 @@ import {
   relevanceColor,
   type EventRelevance,
 } from './calendar-presentation';
+import { EventManageControls } from './EventManageControls';
 import EventRsvpControls from './EventRsvpControls';
 
 type EventCardProps = {
@@ -27,6 +28,11 @@ type EventCardProps = {
    * under a day heading, so there the card shows only the time.
    */
   showDay?: boolean;
+  /**
+   * Offer **Editează** / **Anulează evenimentul** to those the commands accept
+   * (#849): on the Calendar's cards, not on Acasă's preview.
+   */
+  manageable?: boolean;
 };
 
 export default function EventCard({
@@ -36,6 +42,7 @@ export default function EventCard({
   past = false,
   highlighted = false,
   showDay = false,
+  manageable = false,
 }: EventCardProps) {
   // Colour follows the relevance rule, then the Group chain (eventAccentColor).
   // The category icon is painted from the same variable.
@@ -46,6 +53,8 @@ export default function EventCard({
     : event.startTime;
   // Nobody answers a deadline (B25): it is a date to keep, not a gathering.
   const takesRsvp = event.type !== 'deadline';
+  // A cancelled Event stays readable history (ADR-0008): no RSVP, its reason.
+  const cancelled = event.cancelledAt !== null;
 
   return (
     <article
@@ -55,6 +64,7 @@ export default function EventCard({
         'event-card',
         relevance === 'other' && 'is-other',
         highlighted && 'is-highlighted',
+        cancelled && 'is-cancelled',
       )}
       aria-labelledby={titleId}
       aria-current={highlighted ? 'true' : undefined}
@@ -62,6 +72,7 @@ export default function EventCard({
     >
       <header className="event-card-head">
         <span className="event-type">{eventTypeLabel(event.type)}</span>
+        {cancelled && <span className="event-cancelled-badge">Anulat</span>}
         {/* The Group's name, never a category (ruling of 2026-09-28): it is
             also what tells an Other OSUBB Event apart besides its grey. */}
         <span className="event-scope">
@@ -115,12 +126,21 @@ export default function EventCard({
         <p className="event-description">{event.description}</p>
       )}
 
-      {takesRsvp &&
+      {cancelled ? (
+        <p className="event-cancelled">
+          <span className="event-cancelled-label">Motivul anulării</span>
+          <span className="event-cancelled-reason">{event.cancelReason}</span>
+        </p>
+      ) : (
+        takesRsvp &&
         (past ? (
           <p className="event-past">Evenimentul a avut loc.</p>
         ) : (
           <EventRsvpControls eventId={event.id} eventTitle={event.title} />
-        ))}
+        ))
+      )}
+
+      {manageable && <EventManageControls event={event} groups={groups} />}
     </article>
   );
 }
