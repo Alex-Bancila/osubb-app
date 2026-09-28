@@ -1,4 +1,3 @@
-import { CheckCheck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import {
@@ -13,7 +12,6 @@ import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { cn } from '../../lib/utils';
 import {
-  useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
   useUnreadNotificationCount,
@@ -104,15 +102,14 @@ export default function NotificationsScreen() {
   const feed = useNotifications(memberId);
   const unread = useUnreadNotificationCount(memberId);
   const markRead = useMarkNotificationRead(memberId);
-  const markAllRead = useMarkAllNotificationsRead(memberId);
 
   const notifications = (feed.data?.pages ?? [])
     .flatMap((page) => page.rows)
     .map((row) => toNotificationPresentation(row));
 
   /* The count is `undefined` while it loads or after it fails: the header
-     then says nothing rather than claiming everything is read. The button
-     also trusts an unread row already on screen. */
+     then says nothing rather than claiming everything is read. A zero is also
+     not trusted while an unread row is already on screen. */
   const unreadCount = unread.data;
   const hasUnread =
     (unreadCount ?? 0) > 0 || notifications.some((row) => !row.isRead);
@@ -128,8 +125,9 @@ export default function NotificationsScreen() {
 
   return (
     <Page width="reading">
-      {/* B35: no "Necitite: 0" — a zero says it in words, as Anunțuri does,
-          and the button that would do nothing is not offered. */}
+      {/* B35: no "Necitite: 0" — a zero says it in words, as Anunțuri does.
+          R16: there is no mark-all control; a notification becomes read only
+          when it is opened. */}
       <PageHeader
         title="Notificări"
         description={
@@ -142,24 +140,7 @@ export default function NotificationsScreen() {
                 ? undefined
                 : 'Toate notificările sunt citite'
         }
-        actions={
-          hasUnread && (
-            <Button
-              variant="outline"
-              disabled={markAllRead.isPending}
-              onClick={() => markAllRead.mutate()}
-            >
-              <CheckCheck aria-hidden="true" />
-              Marchează toate ca citite
-            </Button>
-          )
-        }
       />
-      {markAllRead.isError && (
-        <p role="alert" className="m-0 text-sm text-destructive">
-          Nu am putut marca notificările ca citite. Încearcă din nou.
-        </p>
-      )}
 
       {feed.isPending ? (
         <Loading label="Se încarcă notificările…" />
