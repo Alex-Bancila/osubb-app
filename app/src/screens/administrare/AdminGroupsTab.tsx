@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, Network } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   DataTable,
   type DataTableColumn,
@@ -33,9 +33,26 @@ import {
   expandableIds,
   groupRoleLabel,
   groupStatusLabel,
+  varies,
   visibleRows,
   type TreeRow,
 } from './group-tree';
+
+/* The name link fills the row's height (layout AD6), and the row itself opens
+   the Group on a click, so the 20 px name is no longer the only target. */
+const nameLinkClass =
+  'inline-flex min-h-11 min-w-0 items-center font-medium wrap-break-word text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring';
+const rowLinkClass = 'cursor-pointer';
+
+function groupPath(id: number) {
+  return `/administrare/grupuri/${id}`;
+}
+
+/** An archived Group is marked beside its name, not in a column of its own. */
+function StatusBadge({ status }: { status: string }) {
+  if (status === 'active') return null;
+  return <Badge variant="secondary">{groupStatusLabel(status)}</Badge>;
+}
 
 function GroupDot({ color }: { color: string | null }) {
   return (
@@ -81,24 +98,27 @@ function TreeName({
         <span aria-hidden="true" className="inline-block size-11" />
       )}
       <GroupDot color={row.group.color} />
-      <Link
-        to={`/administrare/grupuri/${row.group.id}`}
-        className="truncate font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-      >
+      <Link to={groupPath(row.group.id)} className={nameLinkClass}>
         {row.group.name}
       </Link>
       <PrivateGroupBadge isPrivate={row.group.is_private} />
+      <StatusBadge status={row.group.status} />
     </span>
   );
 }
 
 /* Tree order is the point of this table, so no column sorts: sorting by
-   member count would scatter every Child Group away from its parent. */
+   member count would scatter every Child Group away from its parent. A
+   column shows only when its values differ across the Groups (relevance
+   B48): a Nivel minim column that reads "Recrut" on every row says nothing. */
 function treeColumns(
+  rows: readonly TreeRow[],
   expanded: ReadonlySet<number>,
   toggle: (id: number) => void,
 ): DataTableColumn<TreeRow>[] {
-  return [
+  const members = (row: TreeRow) =>
+    row.group.automatic_membership ? 'Automat' : row.group.memberCount;
+  const columns: DataTableColumn<TreeRow>[] = [
     {
       id: 'name',
       accessorFn: (row) => row.group.name,
@@ -112,7 +132,9 @@ function treeColumns(
         />
       ),
     },
-    {
+  ];
+  if (varies(rows, (row) => row.group.category))
+    columns.push({
       id: 'category',
       accessorFn: (row) => categoryLabel(row.group.category),
       header: 'Categorie',
@@ -122,38 +144,31 @@ function treeColumns(
           {categoryLabel(row.original.group.category)}
         </Badge>
       ),
-    },
-    {
+    });
+  if (varies(rows, (row) => row.group.min_level))
+    columns.push({
       id: 'min_level',
       accessorFn: (row) => minimumLevelText(row.group.min_level),
       header: 'Nivel minim',
       enableSorting: false,
-    },
-    {
+    });
+  if (varies(rows, members))
+    columns.push({
       id: 'members',
-      accessorFn: (row) => row.group.memberCount,
+      accessorFn: members,
       header: 'Membri',
       enableSorting: false,
-      cell: ({ row }) =>
-        row.original.group.automatic_membership
-          ? 'Automat'
-          : row.original.group.memberCount,
-    },
-    {
-      id: 'status',
-      accessorFn: (row) => groupStatusLabel(row.group.status),
-      header: 'Stare',
-      enableSorting: false,
-    },
-  ];
+    });
+  return columns;
 }
 
 /* `my_groups()` carries no privacy column, so the Private Group mark comes
    from the Group rows the caller can read (`groups_read`, the same filter). */
 function myGroupColumns(
+  groups: readonly MyGroup[],
   privateIds: ReadonlySet<number>,
 ): DataTableColumn<MyGroup>[] {
-  return [
+  const columns: DataTableColumn<MyGroup>[] = [
     {
       id: 'name',
       accessorFn: (row) => row.name,
@@ -161,49 +176,52 @@ function myGroupColumns(
       cell: ({ row }) => (
         <span className="flex min-w-0 items-center gap-2">
           <GroupDot color={row.original.color} />
-          <Link
-            to={`/administrare/grupuri/${row.original.id}`}
-            className="truncate font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-          >
+          <Link to={groupPath(row.original.id)} className={nameLinkClass}>
             {row.original.name}
           </Link>
           <PrivateGroupBadge isPrivate={privateIds.has(row.original.id)} />
+          <StatusBadge status={row.original.status} />
         </span>
       ),
       sortFn: (left, right) =>
         left.original.name.localeCompare(right.original.name, 'ro'),
     },
-    {
+  ];
+  // Only the columns whose values differ (relevance B48); the viewer's own
+  // function always shows, since it is why the Group is listed.
+  if (varies(groups, (row) => row.category))
+    columns.push({
       id: 'category',
       accessorFn: (row) => categoryLabel(row.category),
       header: 'Categorie',
-    },
-    {
-      id: 'group_role',
-      accessorFn: (row) => groupRoleLabel(row.group_role),
-      header: 'Rolul tău',
-      cell: ({ row }) => (
-        <span className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">
-            {groupRoleLabel(row.original.group_role)}
-          </Badge>
-          {!row.original.explicit && !row.original.automatic && (
-            <span className="text-xs text-muted-foreground">
-              din grupul de deasupra
-            </span>
-          )}
-        </span>
-      ),
-    },
-    {
+    });
+  columns.push({
+    id: 'group_role',
+    accessorFn: (row) => groupRoleLabel(row.group_role),
+    header: 'Funcția ta',
+    cell: ({ row }) => (
+      <span className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">
+          {groupRoleLabel(row.original.group_role)}
+        </Badge>
+        {!row.original.explicit && !row.original.automatic && (
+          <span className="text-xs text-muted-foreground">
+            din grupul de deasupra
+          </span>
+        )}
+      </span>
+    ),
+  });
+  if (varies(groups, (row) => row.min_level))
+    columns.push({
       id: 'min_level',
       accessorFn: (row) => minimumLevelText(row.min_level),
       header: 'Nivel minim',
       // Ladder order, not alphabetical: BC ranks above Recrut.
       sortFn: (left, right) =>
         left.original.min_level - right.original.min_level,
-    },
-  ];
+    });
+  return columns;
 }
 
 function GroupTree({ groups }: { groups: AdminGroup[] }) {
@@ -220,7 +238,8 @@ function GroupTree({ groups }: { groups: AdminGroup[] }) {
       return next;
     });
   const allOpen = expandable.length > 0 && expanded.size === expandable.length;
-  const columns = treeColumns(expanded, toggle);
+  const columns = treeColumns(rows, expanded, toggle);
+  const navigate = useNavigate();
 
   return (
     <Panel
@@ -252,9 +271,20 @@ function GroupTree({ groups }: { groups: AdminGroup[] }) {
         columns={columns}
         data={shown}
         emptyTitle="Niciun grup."
+        // Under 640 px the tree is the names: a long one wraps, and the
+        // detail columns wait for the Group page.
+        columnClassName={{
+          name: 'whitespace-normal',
+          category: 'max-sm:hidden',
+          min_level: 'max-sm:hidden',
+          members: 'max-sm:hidden',
+        }}
         rowClassName={(row) =>
-          row.group.status === 'active' ? '' : 'text-muted-foreground'
+          row.group.status === 'active'
+            ? rowLinkClass
+            : `${rowLinkClass} text-muted-foreground`
         }
+        onRowClick={(row) => void navigate(groupPath(row.group.id))}
       />
     </Panel>
   );
@@ -267,14 +297,21 @@ function MyGroupsTable({
   groups: MyGroup[];
   privateIds: ReadonlySet<number>;
 }) {
-  const columns = useMemo(() => myGroupColumns(privateIds), [privateIds]);
+  const columns = useMemo(
+    () => myGroupColumns(groups, privateIds),
+    [groups, privateIds],
+  );
+  const navigate = useNavigate();
   return (
     <DataTable
       columns={columns}
       data={groups}
       initialSorting={[{ id: 'name', desc: false }]}
-      emptyTitle="Nu coordonezi niciun grup."
-      emptyDescription="Grupurile pe care le coordonezi apar aici."
+      columnClassName={{ name: 'whitespace-normal' }}
+      emptyTitle="Nu ai nicio funcție într-un grup."
+      emptyDescription="Grupurile în care ai o funcție apar aici."
+      rowClassName={() => rowLinkClass}
+      onRowClick={(row) => void navigate(groupPath(row.id))}
     />
   );
 }
@@ -284,8 +321,10 @@ function MyGroupsTable({
  * #825). BC and Moderator see the whole Group tree and create a top-level
  * Group from the page header; a Group Manager or Responsible sees the Groups
  * they hold a position in — including the Child Groups they reach only
- * through an ancestor (ruling R14). The same Group screen opens from either
- * list, so there is one flow and one command set.
+ * through an ancestor (ruling R14) — and never a Group they are only a
+ * Member of (relevance B47): that one has nothing here to manage. The same
+ * Group screen opens from either list, so there is one flow and one command
+ * set.
  */
 export default function AdminGroupsTab() {
   const capabilities = useCapabilities();
@@ -308,6 +347,15 @@ export default function AdminGroupsTab() {
   const groupsById = useMemo(
     () => new Map(groups.map((group) => [group.id, { name: group.name }])),
     [groups],
+  );
+  // A Group Role, held here or inherited from above; plain membership is not
+  // one (relevance B47).
+  const withRole = useMemo(
+    () =>
+      (myGroupsQuery.data ?? []).filter(
+        (group) => group.group_role !== 'member',
+      ),
+    [myGroupsQuery.data],
   );
   const privateIds = useMemo(
     () => new Set(groups.filter((group) => group.is_private).map((g) => g.id)),
@@ -395,10 +443,7 @@ export default function AdminGroupsTab() {
         <GroupTree groups={groups} />
       ) : (
         <Panel eyebrow="Grupuri" icon={Network} title={title}>
-          <MyGroupsTable
-            groups={myGroupsQuery.data ?? []}
-            privateIds={privateIds}
-          />
+          <MyGroupsTable groups={withRole} privateIds={privateIds} />
         </Panel>
       )}
     </>

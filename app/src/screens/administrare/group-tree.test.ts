@@ -6,9 +6,14 @@ import {
   expandableIds,
   groupPathNames,
   groupRoleLabel,
+  currentGroupTab,
   groupStatusLabel,
+  groupTabs,
   membersBelowLevel,
   minLevelChoices,
+  rosterBackState,
+  unfinishedTasksPath,
+  varies,
   visibleRows,
 } from './group-tree';
 
@@ -148,4 +153,78 @@ it('builds the breadcrumb from the Groups the caller can actually read', () => {
     { id: 5, name: 'Foto' },
   ]);
   expect(groupPathNames(group(9, 'Necunoscut', [99, 9], 99), byId)).toEqual([]);
+});
+
+it('links the unfinished work of a root without a Subgrup, and of a child with one (D9)', () => {
+  expect(unfinishedTasksPath({ id: 1, path: [1] })).toBe(
+    '/tracker?lista=gestionat&grup=1',
+  );
+  expect(unfinishedTasksPath({ id: 5, path: [1, 2, 5] })).toBe(
+    '/tracker?lista=gestionat&grup=1&subgrup=5',
+  );
+});
+
+const none = {
+  manageGroup: false,
+  editStructure: false,
+  appointManager: false,
+};
+const facts = {
+  hasChildren: false,
+  canCreateChild: false,
+  acceptsApplications: false,
+  pendingApplications: 0,
+};
+const ids = (tabs: readonly { id: string }[]) => tabs.map((tab) => tab.id);
+
+it('shows each Group tab only to the authority that can use it (B49)', () => {
+  expect(ids(groupTabs(none, facts))).toEqual(['roster', 'campanii']);
+  expect(ids(groupTabs({ ...none, editStructure: true }, facts))).toEqual([
+    'setari',
+    'roster',
+    'campanii',
+  ]);
+  expect(
+    ids(
+      groupTabs(
+        { ...none, manageGroup: true },
+        { ...facts, canCreateChild: true },
+      ),
+    ),
+  ).toEqual(['setari', 'roster', 'roluri', 'copii', 'campanii']);
+  // Appointing the Manager one level up opens Roluri on its own.
+  expect(ids(groupTabs({ ...none, appointManager: true }, facts))).toEqual([
+    'roster',
+    'roluri',
+    'campanii',
+  ]);
+  expect(ids(groupTabs(none, { ...facts, hasChildren: true }))).toContain(
+    'copii',
+  );
+  expect(
+    ids(groupTabs(none, { ...facts, acceptsApplications: true })),
+  ).toContain('cereri');
+  expect(ids(groupTabs(none, { ...facts, pendingApplications: 2 }))).toContain(
+    'cereri',
+  );
+});
+
+it('opens the requested tab when it is shown, else the first (D6)', () => {
+  const tabs = groupTabs(none, facts);
+  expect(currentGroupTab('campanii', tabs)).toBe('campanii');
+  expect(currentGroupTab('setari', tabs)).toBe('roster');
+  expect(currentGroupTab('nimic', tabs)).toBe('roster');
+  expect(currentGroupTab(null, tabs)).toBe('roster');
+});
+
+it('calls a column worth showing only when its values differ (B48)', () => {
+  expect(varies([1, 1, 1], (value) => value)).toBe(false);
+  expect(varies([], (value) => value)).toBe(false);
+  expect(varies([0, 1], (value) => value)).toBe(true);
+});
+
+it('sends the member page back to the Roster tab (D4)', () => {
+  expect(rosterBackState(7)).toEqual({
+    from: { to: '/administrare/grupuri/7?tab=roster', label: 'Înapoi la grup' },
+  });
 });

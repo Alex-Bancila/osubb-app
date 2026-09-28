@@ -77,7 +77,11 @@ vi.mock('./screens/administrare/RolePanel', () => ({
   RolePanel: () => <h2>Roluri tab</h2>,
 }));
 vi.mock('./screens/administrare/AdminApplicationsTab', () => ({
-  default: () => <h2>Cereri tab</h2>,
+  default: () => <h2>Cereri de aderare tab</h2>,
+}));
+// Whether Cereri de aderare can hold anything reads Groups; routing does not.
+vi.mock('./screens/administrare/applications-tab', () => ({
+  useApplicationsTabShown: () => true,
 }));
 vi.mock('./screens/administrare/PrivacyPanel', () => ({
   PrivacyPanel: () => <h2>Confidențialitate tab</h2>,
@@ -331,7 +335,7 @@ describe('route guards', () => {
     ['/administrare/membri', 'Membri tab', ['provisionMembers']],
     ['/administrare/grupuri', 'Grupuri tab', []],
     ['/administrare/roluri', 'Roluri tab', ['manageRoles']],
-    ['/administrare/cereri', 'Cereri tab', []],
+    ['/administrare/cereri', 'Cereri de aderare tab', []],
     ['/administrare/evaluari', 'Evaluări de rol tab', ['manageRoles']],
     [
       '/administrare/confidentialitate',

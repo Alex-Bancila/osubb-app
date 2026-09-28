@@ -18,6 +18,9 @@ export type AdministrareTab = {
 
 export const ADMINISTRARE_PATH = '/administrare';
 
+/** The Group Applications queue: shown only when it can hold something. */
+export const APPLICATIONS_TAB_PATH = '/administrare/cereri';
+
 /** The tabs, in the order Alex listed them (R27). */
 export const ADMINISTRARE_TABS = [
   {
@@ -37,8 +40,9 @@ export const ADMINISTRARE_TABS = [
     capabilities: ['manageRoles'],
   },
   {
-    path: '/administrare/cereri',
-    label: 'Cereri',
+    // "de aderare": the nav's Cereri are Completed-work Requests (B55).
+    path: APPLICATIONS_TAB_PATH,
+    label: 'Cereri de aderare',
     capabilities: ['administer'],
   },
   {

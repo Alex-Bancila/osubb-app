@@ -1,5 +1,6 @@
 import { isMinimumLevel } from '../../lib/minimum-level';
-import type { AdminGroup } from '../../queries/groups-admin';
+import type { BackLinkState } from '../../components/layout';
+import type { AdminGroup, GroupAuthority } from '../../queries/groups-admin';
 
 /**
  * Turning the flat `groups` rows into the tree the panel shows, and the small
@@ -161,3 +162,98 @@ export function membersBelowLevel<T extends { level: number }>(
 /** The one line the Grup privat setting carries (ruling R25). */
 export const PRIVATE_GROUP_HINT =
   'Vizibil doar membrilor, coordonatorilor de pe traseu și BC. Fără cereri de înscriere; intrarea se face prin adăugare directă.';
+
+/**
+ * The Group's unfinished Tasks, where an archive refusal sends its manager
+ * (navigation D9): Taskuri → De gestionat, filtered to this Group — the root
+ * as **Grup principal** and, below a root, the Group itself as **Subgrup**.
+ */
+export function unfinishedTasksPath(
+  group: Pick<AdminGroup, 'id' | 'path'>,
+): string {
+  const root = group.path[0] ?? group.id;
+  const params = new URLSearchParams({
+    lista: 'gestionat',
+    grup: String(root),
+  });
+  if (root !== group.id) params.set('subgrup', String(group.id));
+  return `/tracker?${params.toString()}`;
+}
+
+/** The Group page's tabs, in their order; each is `?tab=<id>` (navigation D6). */
+export const GROUP_TABS = [
+  { id: 'setari', label: 'Setări' },
+  { id: 'roster', label: 'Roster' },
+  { id: 'roluri', label: 'Roluri' },
+  { id: 'copii', label: 'Grupuri copil' },
+  { id: 'campanii', label: 'Campanii' },
+  { id: 'cereri', label: 'Cereri' },
+] as const;
+
+export type GroupTabId = (typeof GROUP_TABS)[number]['id'];
+
+/**
+ * The tabs a viewer can use on one Group (relevance B49): Setări for whoever
+ * edits its settings or structure, Roluri for whoever appoints to a position,
+ * Grupuri copil when the Group has Child Groups or the viewer may create one,
+ * Cereri when the Group takes Applications or still has pending ones. Roster
+ * and Campanii are always there.
+ */
+export function groupTabs(
+  authority: Pick<
+    GroupAuthority,
+    'manageGroup' | 'editStructure' | 'appointManager'
+  >,
+  facts: {
+    hasChildren: boolean;
+    canCreateChild: boolean;
+    acceptsApplications: boolean;
+    pendingApplications: number;
+  },
+): (typeof GROUP_TABS)[number][] {
+  const shown: Record<GroupTabId, boolean> = {
+    setari: authority.manageGroup || authority.editStructure,
+    roster: true,
+    roluri: authority.appointManager || authority.manageGroup,
+    copii: facts.hasChildren || facts.canCreateChild,
+    campanii: true,
+    cereri: facts.acceptsApplications || facts.pendingApplications > 0,
+  };
+  return GROUP_TABS.filter((tab) => shown[tab.id]);
+}
+
+/**
+ * The tab `?tab=` names when it is one the viewer can use; otherwise the
+ * first they can (an unknown or hidden value is ignored, never an error).
+ */
+export function currentGroupTab(
+  requested: string | null,
+  tabs: readonly { id: GroupTabId }[],
+): GroupTabId {
+  return (
+    tabs.find((tab) => tab.id === requested)?.id ?? tabs[0]?.id ?? 'roster'
+  );
+}
+
+/**
+ * Whether a column says anything: at least two different values across the
+ * rows (relevance B48). A column where every row reads "Recrut" is noise.
+ */
+export function varies<T>(rows: readonly T[], value: (row: T) => unknown) {
+  const seen = new Set(rows.map(value));
+  return seen.size > 1;
+}
+
+/**
+ * The `state` a Roster name passes to the member page, so its back link
+ * returns to this Group's Roster (navigation D4) rather than to a Membri tab
+ * the viewer may not be able to open.
+ */
+export function rosterBackState(groupId: number): BackLinkState {
+  return {
+    from: {
+      to: `/administrare/grupuri/${groupId}?tab=roster`,
+      label: 'Înapoi la grup',
+    },
+  };
+}

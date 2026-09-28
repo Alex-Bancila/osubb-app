@@ -1,4 +1,11 @@
 import { useState } from 'react';
+import {
+  EmptyState,
+  ListRow,
+  PageGrid,
+  Panel,
+  rowListClass,
+} from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { MemberAvatar } from '../../components/ui/combobox';
 import {
@@ -71,8 +78,10 @@ function AppointDialog({
         if (next) reset();
       }}
     >
+      {/* Outline: a panel of positions has no primary action (layout AD5). */}
       <Button
         type="button"
+        variant="outline"
         disabled={busy}
         onClick={() => {
           reset();
@@ -162,41 +171,39 @@ function PositionList({
   busy: boolean;
   onWithdraw: (entry: RosterEntry) => void;
 }) {
-  if (!entries.length)
-    return <p className="text-muted-foreground">Nimeni deocamdată.</p>;
+  if (!entries.length) return <EmptyState>Nimeni deocamdată.</EmptyState>;
   return (
-    <ul className="space-y-2" aria-label={label}>
+    <ul className={rowListClass} aria-label={label}>
       {entries.map((entry) => (
-        <li
+        <ListRow
           key={entry.memberId}
-          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-        >
-          <span className="flex min-w-0 items-center gap-2">
+          leading={
             <MemberAvatar name={entry.name} avatarColor={entry.avatarColor} />
-            <span className="grid min-w-0">
-              <span className="truncate font-medium">{entry.name}</span>
-              <span className="truncate text-sm text-muted-foreground">
-                {groupRoleLabel(
-                  entry.groupRole,
-                  group.manager_title,
-                  entry.positionTitle,
-                )}
-              </span>
-            </span>
-          </span>
-          {canChange && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              aria-label={`Retrage funcția lui ${entry.name}`}
-              onClick={() => onWithdraw(entry)}
-            >
-              Retrage funcția
-            </Button>
-          )}
-        </li>
+          }
+          action={
+            canChange && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                aria-label={`Retrage funcția lui ${entry.name}`}
+                onClick={() => onWithdraw(entry)}
+              >
+                Retrage funcția
+              </Button>
+            )
+          }
+        >
+          <p className="m-0 truncate font-medium">{entry.name}</p>
+          <p className="m-0 truncate text-sm text-muted-foreground">
+            {groupRoleLabel(
+              entry.groupRole,
+              group.manager_title,
+              entry.positionTitle,
+            )}
+          </p>
+        </ListRow>
       ))}
     </ul>
   );
@@ -237,14 +244,16 @@ export function GroupRolesTab({
       positionTitle: null,
     });
 
+  // Two panels side by side from 768 px, each with its own appointment and
+  // its rows flush in the box — no bordered row inside a bordered box
+  // (layout AD5).
   return (
-    <div className="space-y-8">
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold">
-            {group.manager_title?.trim() || 'Coordonatori'}
-          </h3>
-          {authority.appointManager && (
+    <PageGrid columns={2} alignHeaders>
+      <Panel
+        title={group.manager_title?.trim() || 'Coordonatori'}
+        flush={managers.length > 0}
+        control={
+          authority.appointManager && (
             <AppointDialog
               trigger="Numește un coordonator"
               title={`Coordonator pentru ${group.name}`}
@@ -264,8 +273,9 @@ export function GroupRolesTab({
                 })
               }
             />
-          )}
-        </div>
+          )
+        }
+      >
         <PositionList
           label="Coordonatorii grupului"
           entries={managers}
@@ -274,12 +284,13 @@ export function GroupRolesTab({
           busy={busy}
           onWithdraw={withdraw}
         />
-      </section>
+      </Panel>
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold">Responsabili</h3>
-          {authority.manageGroup && (
+      <Panel
+        title="Responsabili"
+        flush={responsibles.length > 0}
+        control={
+          authority.manageGroup && (
             <AppointDialog
               trigger="Numește un responsabil"
               title={`Responsabil în ${group.name}`}
@@ -299,8 +310,9 @@ export function GroupRolesTab({
                 })
               }
             />
-          )}
-        </div>
+          )
+        }
+      >
         <PositionList
           label="Responsabilii grupului"
           entries={responsibles}
@@ -309,7 +321,7 @@ export function GroupRolesTab({
           busy={busy}
           onWithdraw={withdraw}
         />
-      </section>
-    </div>
+      </Panel>
+    </PageGrid>
   );
 }
