@@ -78,7 +78,6 @@ export function TaskAssignControl({
       )}
       {canAssign && (
         <div className="space-y-2">
-          <p className="text-sm">Taskul nu are un executor.</p>
           <Dialog
             open={open}
             onOpenChange={(next) => {

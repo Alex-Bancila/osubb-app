@@ -18,15 +18,22 @@ vi.mock('./ManagedTaskForm', () => ({
   ManagedTaskForm: ({
     parentTaskId,
     onDraft,
+    onCancel,
+    cancelLabel,
   }: {
     parentTaskId: number;
     onDraft: (draft: object) => void;
+    onCancel?: () => void;
+    cancelLabel?: string;
   }) => {
     form.onDraft = onDraft;
     return (
-      <button onClick={() => onDraft({ parentTaskId, title: 'Copil nou' })}>
-        Trimite subtask pentru #{parentTaskId}
-      </button>
+      <>
+        <button onClick={() => onDraft({ parentTaskId, title: 'Copil nou' })}>
+          Trimite subtask pentru #{parentTaskId}
+        </button>
+        {onCancel && <button onClick={onCancel}>{cancelLabel}</button>}
+      </>
     );
   },
 }));
@@ -47,7 +54,9 @@ describe('Umbrella progress and actions', () => {
     const { rerender, container } = render(
       <UmbrellaTaskSection {...common} subtasks={rows} />,
     );
-    expect(screen.getByText('1 / 2 finalizate')).toBeVisible();
+    // The count is the Umbrella card's; a finished Subtask names no
+    // Executor it no longer has (Audit D-1): only the one in review does.
+    expect(screen.getAllByText(/^Executor:/)).toHaveLength(1);
     expect(
       screen.getByRole('button', { name: 'Finalizează umbrela' }),
     ).toBeDisabled();
@@ -62,7 +71,7 @@ describe('Umbrella progress and actions', () => {
         ]}
       />,
     );
-    expect(screen.getByText('3 / 3 finalizate')).toBeVisible();
+    expect(screen.queryByText(/^Executor:/)).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Finalizează umbrela' }),
     ).toBeEnabled();

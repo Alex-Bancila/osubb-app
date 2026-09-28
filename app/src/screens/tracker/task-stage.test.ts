@@ -15,36 +15,16 @@ function stage(overrides: Partial<TaskStage> = {}): TaskStage {
   };
 }
 
+const executor = {
+  memberId: 'member',
+  assignmentId: 2,
+  name: null,
+  nickname: null,
+};
+
 describe('Romanian current-stage summary', () => {
   it.each<[Partial<TaskStage>, string]>([
-    [{}, 'Taskul este de făcut.'],
-    [
-      {
-        executor: {
-          memberId: 'member',
-          assignmentId: 2,
-          name: null,
-          nickname: null,
-        },
-      },
-      'Taskul este atribuit și așteaptă să fie început.',
-    ],
-    [{ status: 'in_progress' }, 'Lucrul la task a început.'],
-    [
-      { status: 'in_review' },
-      'Lucrarea a fost trimisă și așteaptă verificarea.',
-    ],
-    [
-      { status: 'in_progress', feedbackPending: true },
-      'Lucrarea a fost returnată pentru modificări.',
-    ],
-    [{ status: 'completed' }, 'Taskul a fost finalizat.'],
-    [
-      { status: 'completed', completedLate: true },
-      'Taskul a fost finalizat cu întârziere.',
-    ],
-    [{ status: 'unfulfilled' }, 'Taskul a fost evaluat ca nerealizat.'],
-    [{ status: 'cancelled' }, 'Taskul a fost anulat.'],
+    [{ executor }, 'Taskul este atribuit și așteaptă să fie început.'],
     [
       { candidature: { status: 'pending', position: 3 } },
       'Ești pe locul 3 în lista de așteptare.',
@@ -54,15 +34,7 @@ describe('Romanian current-stage summary', () => {
       'Ești pe lista de așteptare.',
     ],
     [
-      {
-        candidature: { status: 'selected', position: null },
-        executor: {
-          memberId: 'member',
-          assignmentId: 2,
-          name: null,
-          nickname: null,
-        },
-      },
+      { candidature: { status: 'selected', position: null }, executor },
       'Taskul este atribuit și așteaptă să fie început.',
     ],
     [
@@ -70,17 +42,31 @@ describe('Romanian current-stage summary', () => {
       '2 din 3 subtaskuri sunt încheiate.',
     ],
     [{ kind: 'umbrella' }, 'Taskul grupează subtaskuri.'],
-  ])('summarizes %j', (input, expected) => {
+  ])('says what the badges do not: %j', (input, expected) => {
     expect(summarizeTaskStage(stage(input))).toBe(expected);
   });
 
-  it('keeps overdue and feedback pending visible together', () => {
-    expect(
-      summarizeTaskStage(
-        stage({ status: 'in_progress', feedbackPending: true, overdue: true }),
-      ),
-    ).toBe(
-      'Lucrarea a fost returnată pentru modificări. Termenul a fost depășit.',
+  // Relevance B9: the status badge (De făcut, În lucru, În verificare,
+  // Finalizat, Nerealizat, Anulat) and the Termen depășit, Modificări cerute
+  // and Finalizat cu întârziere badges already say these.
+  it.each<Partial<TaskStage>>([
+    {},
+    { status: 'in_progress', executor },
+    { status: 'in_review', executor },
+    { status: 'in_progress', feedbackPending: true, executor },
+    { status: 'in_progress', feedbackPending: true, overdue: true, executor },
+    { status: 'todo', overdue: true },
+    { status: 'completed' },
+    { status: 'completed', completedLate: true },
+    { status: 'unfulfilled' },
+    { status: 'cancelled' },
+  ])('says nothing the badges already say: %j', (input) => {
+    expect(summarizeTaskStage(stage(input))).toBeNull();
+  });
+
+  it('keeps the overdue badge alone: no appended "Termenul a fost depășit"', () => {
+    expect(summarizeTaskStage(stage({ executor, overdue: true }))).toBe(
+      'Taskul este atribuit și așteaptă să fie început.',
     );
   });
 
@@ -92,6 +78,15 @@ describe('Romanian current-stage summary', () => {
           candidature: { status: 'pending', position: 2 },
         }),
       ),
-    ).toBe('Taskul a fost anulat.');
+    ).toBeNull();
+    expect(
+      summarizeTaskStage(
+        stage({
+          status: 'completed',
+          kind: 'umbrella',
+          subtaskProgress: { terminal: 3, total: 3 },
+        }),
+      ),
+    ).toBeNull();
   });
 });

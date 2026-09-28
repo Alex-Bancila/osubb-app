@@ -71,6 +71,9 @@ function NewTaskDialog({ onCreated }: { onCreated: (taskId: number) => void }) {
           heading={null}
           submitLabel="Creează taskul"
           pendingLabel="Se creează taskul…"
+          onCancel={() => {
+            if (!create.isPending) setOpen(false);
+          }}
           onDraft={async (draft) => {
             const task = await create.mutateAsync(draft);
             created.current = true;

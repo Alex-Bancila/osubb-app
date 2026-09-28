@@ -63,7 +63,10 @@ export function TaskInterestControls({
     );
   return (
     <div className="space-y-3">
-      {task && (
+      {/* One queue sentence (B21): right after a join or a withdrawal the
+          receipt says it; otherwise the stage sentence names the place and
+          the queue line adds only what it does not. */}
+      {task && !message && (
         <TaskStageSummary
           task={{
             ...task,
@@ -73,7 +76,9 @@ export function TaskInterestControls({
           }}
         />
       )}
-      <QueuePosition queue={queue.data} />
+      {!message && (
+        <QueuePosition queue={queue.data} stageShown={task !== undefined} />
+      )}
       {queue.data.status !== 'selected' && (
         <Button
           variant="outline"
