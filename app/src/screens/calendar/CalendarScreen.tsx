@@ -132,11 +132,12 @@ export default function CalendarScreen() {
         label="Filtre calendar"
         status={{
           pending: !groups.data || !campaigns.data || !calendarWork.ready,
-          failed: groups.isError || campaigns.isError,
-          error: groups.error ?? campaigns.error,
+          failed: groups.isError || campaigns.isError || calendarWork.failed,
+          error: groups.error ?? campaigns.error ?? calendarWork.error,
           onRetry: () => {
-            void groups.refetch();
-            void campaigns.refetch();
+            if (groups.isError) void groups.refetch();
+            if (campaigns.isError) void campaigns.refetch();
+            calendarWork.retry();
           },
         }}
         groups={filterGroups}

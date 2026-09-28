@@ -251,7 +251,13 @@ describe('CalendarScreen', () => {
     stubStorage();
     Element.prototype.scrollIntoView = vi.fn();
     hooks.useGroups.mockReturnValue(query(groups));
-    hooks.useCalendarWork.mockReturnValue({ ready: true, work: undefined });
+    hooks.useCalendarWork.mockReturnValue({
+      ready: true,
+      work: undefined,
+      failed: false,
+      error: undefined,
+      retry: vi.fn(),
+    });
     hooks.useCampaigns.mockReturnValue(
       query([{ id: 3, name: 'Bun venit', group_id: 7, is_active: true }]),
     );
@@ -729,6 +735,23 @@ describe('CalendarScreen', () => {
       expect(
         screen.getByText('Grupul include subgrupurile sale.'),
       ).toBeVisible();
+    });
+
+    it('shows a retry when the Events or deadlines behind the filter fail', async () => {
+      const user = userEvent.setup();
+      const retry = vi.fn();
+      hooks.useCalendarWork.mockReturnValue({
+        ready: true,
+        work: undefined,
+        failed: true,
+        error: new Error('network'),
+        retry,
+      });
+      renderCalendar();
+      await user.click(
+        screen.getByRole('button', { name: 'Reîncarcă filtrele' }),
+      );
+      expect(retry).toHaveBeenCalled();
     });
 
     it('hides the managed toggle from a member without management', () => {

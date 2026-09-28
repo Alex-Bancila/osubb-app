@@ -93,12 +93,15 @@ export function useEventWork() {
  * member's own and pending-candidature Task deadlines, and — while
  * **Taskurile gestionate** is on — the managed Tasks' deadlines. Not `ready`
  * until every read in use has settled, so the filter never offers a partial list;
- * when one of them failed, `work` is `undefined` and the filter offers every
- * option rather than hiding the page's own.
+ * when one of them failed, `failed` says so, `error` is the first failure and
+ * `retry` asks again for what failed, so the filter shows its retry.
  */
 export function useCalendarWork(showManaged: boolean): {
   ready: boolean;
   work: WorkItem[] | undefined;
+  failed: boolean;
+  error: unknown;
+  retry: () => void;
 } {
   const events = useEventWork();
   const mine = useMyTasks();
@@ -130,7 +133,11 @@ export function useCalendarWork(showManaged: boolean): {
       withManaged,
     ],
   );
-  return { ready, work };
+  const error = reads.find((read) => read.isError)?.error;
+  const retry = () => {
+    for (const read of reads) if (read.isError) void read.refetch();
+  };
+  return { ready, work, failed, error, retry };
 }
 
 /**

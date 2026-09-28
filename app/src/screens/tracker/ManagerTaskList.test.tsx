@@ -250,6 +250,22 @@ describe('ManagerTaskList', () => {
     ).toBeVisible();
   });
 
+  it('drops a chosen Stare the list no longer holds instead of emptying it', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderList('', vi.fn(), sixRows);
+    await user.selectOptions(screen.getByLabelText('Stare'), 'completed');
+    expect(titles()).toEqual(['Bilanț vechi']);
+    const open = sixRows.filter((row) => row.status !== 'completed');
+    const more = [...open, taskRow({ id: 9, title: 'Nou', group: edu })];
+    rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={more} now={now} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByLabelText('Stare')).toHaveValue('');
+    expect(titles()).toHaveLength(more.length);
+  });
+
   it('shows Stare, Caută and Ordonează only from six Tasks', () => {
     renderList();
     expect(screen.queryByLabelText('Stare')).toBeNull();

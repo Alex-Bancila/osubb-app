@@ -62,7 +62,6 @@ export function ManagerTaskList({
   }, [search]);
 
   const listControls = rows.length >= LIST_CONTROLS_FROM;
-  const state = listControls ? chosenState : '';
   const sort = listControls ? chosenSort : 'deadline';
   const query = listControls ? needle : '';
 
@@ -70,16 +69,19 @@ export function ManagerTaskList({
     () => rows.map((row) => ({ row, task: toTaskPresentation(row, now) })),
     [rows, now],
   );
-  // Stare offers the states the list holds, and the one already chosen.
+  // Stare offers only the states the list holds; a chosen state the list
+  // no longer holds is dropped rather than emptying the list.
   const states = useMemo(
     () =>
-      MANAGER_TASK_STATES.filter(
-        ([value]) =>
-          value === state ||
-          presented.some(({ task }) => matchesTaskState(task, value)),
+      MANAGER_TASK_STATES.filter(([value]) =>
+        presented.some(({ task }) => matchesTaskState(task, value)),
       ),
-    [presented, state],
+    [presented],
   );
+  const state =
+    listControls && states.some(([value]) => value === chosenState)
+      ? chosenState
+      : '';
 
   const tasks = useMemo(
     () =>
