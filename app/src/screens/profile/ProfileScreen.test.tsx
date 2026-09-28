@@ -914,6 +914,8 @@ describe('ProfileScreen', () => {
           group_role: 'responsible',
           position_title: 'Coordonator Tehnic',
         },
+        // Only a Responsible row on the board carries a board title.
+        { group_id: 99, group_role: 'member', position_title: 'Casier' },
       ];
       render(<ProfileScreen />, { wrapper: wrapper() });
 
@@ -922,7 +924,9 @@ describe('ProfileScreen', () => {
       expect(
         within(panel).getByText('Funcția nu este setată încă.'),
       ).toBeInTheDocument();
-      expect(within(panel).queryByText(/Coordonator/)).not.toBeInTheDocument();
+      expect(
+        within(panel).queryByText(/Coordonator|Casier/),
+      ).not.toBeInTheDocument();
     });
 
     it('Funcția în OSUBB falls back to the Role when the board setting is unset', () => {

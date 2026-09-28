@@ -161,7 +161,11 @@ export function boardTitleFrom(
 ): string | null {
   if (!membershipRows || !boardGroupId) return null;
   const id = Number(boardGroupId);
-  const row = membershipRows.find((candidate) => candidate.group_id === id);
+  // Only a Group Responsible carries a display name (the Appointment rule).
+  const row = membershipRows.find(
+    (candidate) =>
+      candidate.group_id === id && candidate.group_role === 'responsible',
+  );
   return row?.position_title?.trim() || null;
 }
 
