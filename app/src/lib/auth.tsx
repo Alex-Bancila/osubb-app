@@ -39,6 +39,13 @@ export type AuthState = {
   claims: MemberClaims | null;
   /** True until the stored session has been read; render nothing decisive yet. */
   loading: boolean;
+  /**
+   * True when the session ended through `signOut()` in this tab, false once
+   * one exists again. The guards then send to a bare `/login`: the next
+   * account on the device must not land on the previous Member's page
+   * (#844, D25). A session that ended any other way keeps its `next`.
+   */
+  signedOut: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -111,6 +118,10 @@ function decodeClaims(accessToken: string): MemberClaims | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signedOut, setSignedOut] = useState(false);
+  // Set for the length of an explicit signOut(): the SIGNED_OUT event it
+  // causes arrives through the listener, which reads this to tell it apart.
+  const signingOut = useRef(false);
   const queryClient = useQueryClient();
 
   // Everything cached belongs to one member. When the member changes — sign-out,
@@ -183,6 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       lastUserId.current = nextUserId;
       lastEmail.current = nextEmail;
+      // Same batch as the session, so no guard ever renders the one without
+      // the other.
+      setSignedOut(next === null && signingOut.current);
       setSession(next);
       setLoading(false);
     });
@@ -238,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       claims,
       loading,
+      signedOut,
       signOut: async () => {
         // A shared device must not keep receiving this member's pushes
         // (#704). Best-effort and bounded: the row can only be deleted while
@@ -250,12 +265,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             SIGN_OUT_PUSH_TIMEOUT_MS,
           ).catch(() => undefined);
         }
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        signingOut.current = true;
+        try {
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+        } finally {
+          signingOut.current = false;
+        }
         queryClient.clear();
       },
     }),
-    [session, claims, loading, queryClient],
+    [session, claims, loading, signedOut, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
