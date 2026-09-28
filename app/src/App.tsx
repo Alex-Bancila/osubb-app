@@ -12,7 +12,11 @@ import {
   loginDestination,
   loginEmailFrom,
 } from './lib/auth-destination';
-import { useCapability, type Capability } from './lib/capabilities';
+import { useCapabilities, type Capability } from './lib/capabilities';
+import {
+  administrareTab,
+  type AdministrareTabPath,
+} from './screens/administrare/administrare-tabs';
 import LeadershipScreen from './screens/leadership/LeadershipScreen';
 import MemberTrackerScreen from './screens/leadership/MemberTrackerScreen';
 import AppShell from './components/shell/AppShell';
@@ -31,6 +35,7 @@ import PrivacyNoticeScreen from './screens/privacy/PrivacyNoticeScreen';
 import { PrivacyGate } from './components/shell/PrivacyGate';
 import { AccountConfirmGate } from './components/shell/AccountConfirmGate';
 import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
+import { Loading } from './components/states';
 
 const GroupsScreen = lazy(() => import('./screens/groups/GroupsScreen'));
 const MemberGroupScreen = lazy(
@@ -38,14 +43,36 @@ const MemberGroupScreen = lazy(
 );
 const TrackerScreen = lazy(() => import('./screens/tracker/TrackerScreen'));
 const CalendarScreen = lazy(() => import('./screens/calendar/CalendarScreen'));
-const AdministrareScreen = lazy(
-  () => import('./screens/administrare/AdministrareScreen'),
+const AdministrareLayout = lazy(
+  () => import('./screens/administrare/AdministrareLayout'),
 );
-const MemberScreen = lazy(() => import('./screens/administrare/MemberScreen'));
-const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
+const AdminMembersTab = lazy(
+  () => import('./screens/administrare/AdminMembersTab'),
+);
+const AdminGroupsTab = lazy(
+  () => import('./screens/administrare/AdminGroupsTab'),
+);
+const AdminRolesTab = lazy(() =>
+  import('./screens/administrare/RolePanel').then((module) => ({
+    default: module.RolePanel,
+  })),
+);
+const AdminApplicationsTab = lazy(
+  () => import('./screens/administrare/AdminApplicationsTab'),
+);
 const PeriodsScreen = lazy(
   () => import('./screens/administrare/PeriodsScreen'),
 );
+const AdminPrivacyTab = lazy(() =>
+  import('./screens/administrare/PrivacyPanel').then((module) => ({
+    default: module.PrivacyPanel,
+  })),
+);
+const AdminSettingsTab = lazy(
+  () => import('./screens/administrare/AdminSettingsTab'),
+);
+const MemberScreen = lazy(() => import('./screens/administrare/MemberScreen'));
+const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
 
 /* Shown while the stored session is being read — a beat, not a screen. It
    matters that this is not a redirect: `loading` is true for a moment on every
@@ -115,6 +142,9 @@ function RequireMember({ children }: { children: ReactElement }) {
   return <AccountConfirmGate session={session}>{children}</AccountConfirmGate>;
 }
 
+/** One capability, or any one of several. */
+type CapabilityGate = Capability | readonly Capability[];
+
 /**
  * Waits for the one capability row (`my_capabilities()`), then admits or sends
  * home. Cosmetic: the server decides every read and command again.
@@ -123,10 +153,14 @@ function RequireNamedCapability({
   capability,
   children,
 }: {
-  capability: Capability;
+  capability: CapabilityGate;
   children: ReactElement;
 }) {
-  const allowed = useCapability(capability);
+  const names: readonly Capability[] =
+    typeof capability === 'string' ? [capability] : capability;
+  const allowed = useCapabilities((row) =>
+    names.some((name) => row[name] === true),
+  );
   if (allowed.isPending) return null;
   return allowed.data === true ? (
     children
@@ -146,7 +180,7 @@ function RequireCapability({
   capability,
   children,
 }: {
-  capability: Capability;
+  capability: CapabilityGate;
   children: ReactElement;
 }) {
   return (
@@ -155,6 +189,27 @@ function RequireCapability({
         {children}
       </RequireNamedCapability>
     </RequireMember>
+  );
+}
+
+/**
+ * One Administrare tab's page, behind the capabilities its tab is shown for
+ * (`administrare-tabs.ts`), so the tab bar and the guard read one list.
+ */
+function AdministrareTabRoute({
+  path,
+  children,
+}: {
+  path: AdministrareTabPath;
+  children: ReactElement;
+}) {
+  return (
+    <RequireCapability capability={administrareTab(path).capabilities}>
+      {/* Inside the area's frame: a plain loader, not a second page frame. */}
+      <Suspense fallback={<Loading label="Se încarcă pagina" />}>
+        {children}
+      </Suspense>
+    </RequireCapability>
   );
 }
 
@@ -295,26 +350,81 @@ export default function App() {
             }
           />
           <Route path="/profil" element={<ProfileScreen />} />
+          {/* Administrare: routed tabs under one header (ruling R27, #825).
+                The layout lands /administrare on the first tab the viewer may
+                open; each tab is gated again on its own capability. */}
           <Route
             path="/administrare"
             element={
               <RequireCapability capability="administer">
                 <DeferredRoute>
-                  <AdministrareScreen />
+                  <AdministrareLayout />
                 </DeferredRoute>
               </RequireCapability>
             }
-          />
-          <Route
-            path="/administrare/perioade"
-            element={
-              <RequireCapability capability="manageRoles">
-                <DeferredRoute>
+          >
+            <Route
+              path="membri"
+              element={
+                <AdministrareTabRoute path="/administrare/membri">
+                  <AdminMembersTab />
+                </AdministrareTabRoute>
+              }
+            />
+            <Route
+              path="grupuri"
+              element={
+                <AdministrareTabRoute path="/administrare/grupuri">
+                  <AdminGroupsTab />
+                </AdministrareTabRoute>
+              }
+            />
+            <Route
+              path="roluri"
+              element={
+                <AdministrareTabRoute path="/administrare/roluri">
+                  <AdminRolesTab />
+                </AdministrareTabRoute>
+              }
+            />
+            <Route
+              path="cereri"
+              element={
+                <AdministrareTabRoute path="/administrare/cereri">
+                  <AdminApplicationsTab />
+                </AdministrareTabRoute>
+              }
+            />
+            <Route
+              path="evaluari"
+              element={
+                <AdministrareTabRoute path="/administrare/evaluari">
                   <PeriodsScreen />
-                </DeferredRoute>
-              </RequireCapability>
-            }
-          />
+                </AdministrareTabRoute>
+              }
+            />
+            {/* Ruling R28 renamed the tab; old links still arrive. */}
+            <Route
+              path="perioade"
+              element={<Navigate to="/administrare/evaluari" replace />}
+            />
+            <Route
+              path="confidentialitate"
+              element={
+                <AdministrareTabRoute path="/administrare/confidentialitate">
+                  <AdminPrivacyTab />
+                </AdministrareTabRoute>
+              }
+            />
+            <Route
+              path="setari"
+              element={
+                <AdministrareTabRoute path="/administrare/setari">
+                  <AdminSettingsTab />
+                </AdministrareTabRoute>
+              }
+            />
+          </Route>
           <Route
             path="/administrare/membri/:memberId"
             element={

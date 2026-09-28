@@ -23,7 +23,7 @@ vi.mock('../../queries/member-role-management', () => ({
 import { MemoryRouter } from 'react-router';
 import { RolePanel } from './RolePanel';
 
-function renderPanel(url = '/administrare') {
+function renderPanel(url = '/administrare/roluri') {
   return render(
     <MemoryRouter initialEntries={[url]}>
       <RolePanel />
@@ -375,7 +375,9 @@ it('keeps the target and reason on a refused command', async () => {
 });
 
 it('opens on the Member a Retention Signal links to (?membru=, #702)', () => {
-  renderPanel('/administrare?membru=7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d');
+  renderPanel(
+    '/administrare/roluri?membru=7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+  );
   expect(screen.getByLabelText('Membru')).toHaveValue(
     '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
   );
@@ -383,7 +385,7 @@ it('opens on the Member a Retention Signal links to (?membru=, #702)', () => {
 });
 
 it('ignores a ?membru= that is not a Member id and queries nothing for it', () => {
-  renderPanel('/administrare?membru=target%27%20or%201%3D1');
+  renderPanel('/administrare/roluri?membru=target%27%20or%201%3D1');
   expect(screen.getByLabelText('Membru')).toHaveValue('');
   expect(state.groupIds).not.toHaveBeenCalledWith("target' or 1=1");
   expect(state.groupIds).toHaveBeenLastCalledWith(null);

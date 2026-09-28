@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import { Bell, LogOut, Menu, X } from 'lucide-react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { Link, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
@@ -33,6 +33,7 @@ import {
   NAV_ITEMS,
   NOTIFICATIONS_PATH,
   TAB_ORDER,
+  isNavItemActive,
   type NavItem,
 } from './navItems';
 
@@ -95,6 +96,7 @@ function SidebarContent({
   onNavigate,
 }: SidebarContentProps) {
   const signOutErrorId = useId();
+  const { pathname } = useLocation();
   return (
     <>
       <Brand />
@@ -105,19 +107,18 @@ function SidebarContent({
         {items.map((item, index) => {
           const Icon = item.icon;
           const badge = badges[item.path];
+          const isActive = isNavItemActive(item, pathname);
           return (
-            <NavLink
+            <Link
               key={item.path}
               ref={index === 0 ? firstLinkRef : undefined}
               to={item.path}
-              end={item.path === '/' || item.exact}
-              className={({ isActive }) =>
-                cn(
-                  'relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
-                  isActive &&
-                    'bg-accent text-accent-foreground before:absolute before:inset-y-2 before:-left-3 before:w-1 before:rounded-r-full before:bg-primary',
-                )
-              }
+              aria-current={isActive ? 'page' : undefined}
+              className={cn(
+                'relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+                isActive &&
+                  'bg-accent text-accent-foreground before:absolute before:inset-y-2 before:-left-3 before:w-1 before:rounded-r-full before:bg-primary',
+              )}
               onClick={onNavigate}
             >
               <Icon className="size-5 shrink-0" aria-hidden="true" />
@@ -128,7 +129,7 @@ function SidebarContent({
                   <span className="sr-only">{badge.label}</span>
                 </Badge>
               )}
-            </NavLink>
+            </Link>
           );
         })}
       </nav>
@@ -210,9 +211,7 @@ export default function AppShell() {
     visible.find((item) => item.path === path),
   ).filter((item) => item !== undefined);
   const current = visible.find((item) =>
-    item.path === '/'
-      ? location.pathname === '/'
-      : location.pathname.startsWith(item.path),
+    isNavItemActive(item, location.pathname),
   );
   const isNotificationsActive =
     location.pathname.startsWith(NOTIFICATIONS_PATH);
@@ -346,17 +345,16 @@ export default function AppShell() {
         {tabs.map((item) => {
           const Icon = item.icon;
           const badge = badges[item.path];
+          const isActive = isNavItemActive(item, location.pathname);
           return (
-            <NavLink
+            <Link
               key={item.path}
               to={item.path}
-              end={item.path === '/' || item.exact}
-              className={({ isActive }) =>
-                cn(
-                  'flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10.5px] font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-                  isActive && 'text-red-700',
-                )
-              }
+              aria-current={isActive ? 'page' : undefined}
+              className={cn(
+                'flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10.5px] font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                isActive && 'text-red-700',
+              )}
             >
               <span className="relative">
                 <Icon className="size-[22px]" aria-hidden="true" />
@@ -371,7 +369,7 @@ export default function AppShell() {
               </span>
               {item.label}
               {badge && <span className="sr-only">, {badge.label}</span>}
-            </NavLink>
+            </Link>
           );
         })}
       </nav>

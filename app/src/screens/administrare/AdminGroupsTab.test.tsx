@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as axe from 'axe-core';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { AdminGroup } from '../../queries/groups-admin';
 import type { MyGroup } from '../../queries/my-groups';
@@ -33,13 +33,8 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useAppointableMembers: api.members,
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
 }));
-vi.mock('./RolePanel', () => ({
-  RolePanel: () => <section aria-label="Role panel" />,
-}));
-vi.mock('./PrivacyPanel', () => ({
-  PrivacyPanel: () => <section aria-label="Privacy panel" />,
-}));
-import AdministrareScreen from './AdministrareScreen';
+import AdminGroupsTab from './AdminGroupsTab';
+import AdministrareLayout from './AdministrareLayout';
 
 vi.setConfig({ testTimeout: 15_000 });
 
@@ -114,38 +109,28 @@ beforeEach(() => {
   capabilities({ createTopLevelGroups: true });
 });
 
-it('mounts the Role and Confidențialitate panels only from the live server capability', () => {
-  capabilities({ manageRoles: false });
-  const view = show();
-  expect(screen.queryByRole('region', { name: 'Role panel' })).toBeNull();
-  expect(screen.queryByRole('region', { name: 'Privacy panel' })).toBeNull();
-  capabilities({ manageRoles: true });
-  view.rerender(
-    <MemoryRouter>
-      <AdministrareScreen />
-    </MemoryRouter>,
-  );
-  expect(screen.getByRole('region', { name: 'Role panel' })).toBeVisible();
-  expect(screen.getByRole('region', { name: 'Privacy panel' })).toBeVisible();
-});
-
+/** The tab inside the Administrare layout, whose header carries its action. */
 function show() {
   const client = new QueryClient();
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <AdministrareScreen />
+      <MemoryRouter initialEntries={['/administrare/grupuri']}>
+        <Routes>
+          <Route path="/administrare" element={<AdministrareLayout />}>
+            <Route path="grupuri" element={<AdminGroupsTab />} />
+          </Route>
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-it('shows CSV provisioning only when the server capability allows it', () => {
+it('puts the whole tree in the Structura grupurilor panel for BC', () => {
   show();
-  expect(screen.queryByRole('heading', { name: 'Import CSV' })).toBeNull();
-  capabilities({ provisionMembers: true });
-  show();
-  expect(screen.getByRole('heading', { name: 'Import CSV' })).toBeVisible();
+  expect(
+    screen.getByRole('region', { name: 'Structura grupurilor' }),
+  ).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent('3 grupuri');
 });
 
 it('shows BC the whole tree, collapsed, and expands one Group at a time', async () => {
@@ -219,7 +204,8 @@ it('shows a Group Manager their own Groups instead, with the inherited role mark
   });
   show();
 
-  expect(screen.getByRole('heading', { name: 'Grupurile mele' })).toBeVisible();
+  expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
+  expect(screen.getByText('Grupurile pe care le coordonezi.')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Logistică' })).toHaveAttribute(
     'href',
     '/administrare/grupuri/2',
@@ -239,7 +225,13 @@ it('offers "Creează Grup" only with the capability, and creates through the com
   const user = userEvent.setup();
   capabilities({ createTopLevelGroups: true });
   show();
-  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  // The action sits in the page header, beside the title.
+  const header = screen
+    .getByRole('heading', { level: 1, name: 'Administrare' })
+    .closest('header') as HTMLElement;
+  await user.click(
+    within(header).getByRole('button', { name: 'Creează Grup' }),
+  );
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   await user.type(within(dialog).getByLabelText('Numele grupului'), 'Interne');
   await user.selectOptions(
@@ -376,22 +368,6 @@ it('says so, once, when the tree cannot be read', () => {
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Nu am putut încărca grupurile.',
   );
-});
-
-it('offers the Perioade de evaluare entry only with manageRoles (#702)', () => {
-  // A Group Manager or a BCE administers Groups but does not manage Roles.
-  capabilities({ createTopLevelGroups: true, manageRoles: false });
-  const view = show();
-  expect(
-    screen.queryByRole('link', { name: 'Perioade de evaluare' }),
-  ).toBeNull();
-  view.unmount();
-
-  capabilities({ createTopLevelGroups: true, manageRoles: true });
-  show();
-  expect(
-    screen.getByRole('link', { name: 'Perioade de evaluare' }),
-  ).toHaveAttribute('href', '/administrare/perioade');
 });
 
 const LADDER_WITH_MODERATOR = new Map([

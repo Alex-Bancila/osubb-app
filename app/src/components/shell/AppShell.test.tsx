@@ -331,6 +331,45 @@ describe('AppShell', () => {
     ).not.toHaveAttribute('aria-current');
   });
 
+  it.each([
+    ['/administrare/membri', 'Administrare'],
+    [
+      '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+      'Administrare',
+    ],
+    ['/administrare/grupuri', 'Administrare'],
+    ['/administrare/grupuri/2', 'Administrare'],
+    ['/administrare/evaluari', 'Administrare'],
+    ['/administrare/setari', 'Administrare'],
+    ['/administrare/campanii', 'Campanii'],
+    ['/administrare/grupuri/2/campanii', 'Campanii'],
+  ])(
+    'on %s marks only %s, never both Administrare and Campanii (#825)',
+    (path, active) => {
+      queries.useCapabilities.mockReturnValue({
+        data: capabilities({
+          managesAnyGroup: true,
+          manageTasks: true,
+          manageRoles: true,
+          provisionMembers: true,
+          createTopLevelGroups: true,
+          administer: true,
+        }),
+      });
+      renderShell(path);
+      const primary = screen.getByRole('navigation', {
+        name: 'Navigare principală',
+      });
+      const other = active === 'Campanii' ? 'Administrare' : 'Campanii';
+      expect(
+        within(primary).getByRole('link', { name: active }),
+      ).toHaveAttribute('aria-current', 'page');
+      expect(
+        within(primary).getByRole('link', { name: other }),
+      ).not.toHaveAttribute('aria-current');
+    },
+  );
+
   it('offers Administrare to a level-1 Group Manager and not to a BCE without a Group Role', () => {
     queries.useCapabilities.mockReturnValue({
       data: capabilities({

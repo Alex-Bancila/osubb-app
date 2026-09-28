@@ -10,13 +10,23 @@ const capabilities = vi.hoisted(() => ({
   granted: new Set<string>(),
   pending: false,
 }));
-vi.mock('./lib/capabilities', () => ({
-  useCapability: (name: string) =>
-    capabilities.pending
-      ? { isPending: true, data: undefined }
-      : { isPending: false, data: capabilities.granted.has(name) },
-}));
-const EVERY_CAPABILITY = [
+vi.mock('./lib/capabilities', () => {
+  const row = () =>
+    Object.fromEntries(
+      EVERY_CAPABILITY.map((name) => [name, capabilities.granted.has(name)]),
+    );
+  return {
+    useCapability: (name: string) =>
+      capabilities.pending
+        ? { isPending: true, data: undefined }
+        : { isPending: false, data: capabilities.granted.has(name) },
+    useCapabilities: (select?: (row: Record<string, boolean>) => unknown) =>
+      capabilities.pending
+        ? { isPending: true, data: undefined }
+        : { isPending: false, data: select ? select(row()) : row() },
+  };
+});
+const EVERY_CAPABILITY = vi.hoisted(() => [
   'managesAnyGroup',
   'manageTasks',
   'seeDirectory',
@@ -25,7 +35,7 @@ const EVERY_CAPABILITY = [
   'provisionMembers',
   'createTopLevelGroups',
   'administer',
-];
+]);
 function grant(...names: string[]) {
   capabilities.granted = new Set(names);
 }
@@ -55,8 +65,25 @@ vi.mock('./screens/no-profile/NoProfileScreen', () => ({
 vi.mock('./screens/volunteers/VolunteersScreen', () => ({
   default: () => <h1>Voluntari</h1>,
 }));
-vi.mock('./screens/administrare/AdministrareScreen', () => ({
-  default: () => <h1>Administrare</h1>,
+// The Administrare layout is real: its tab bar and its landing redirect are
+// what these routes test. Each tab page is a stand-in.
+vi.mock('./screens/administrare/AdminMembersTab', () => ({
+  default: () => <h2>Membri tab</h2>,
+}));
+vi.mock('./screens/administrare/AdminGroupsTab', () => ({
+  default: () => <h2>Grupuri tab</h2>,
+}));
+vi.mock('./screens/administrare/RolePanel', () => ({
+  RolePanel: () => <h2>Roluri tab</h2>,
+}));
+vi.mock('./screens/administrare/AdminApplicationsTab', () => ({
+  default: () => <h2>Cereri tab</h2>,
+}));
+vi.mock('./screens/administrare/PrivacyPanel', () => ({
+  PrivacyPanel: () => <h2>Confidențialitate tab</h2>,
+}));
+vi.mock('./screens/administrare/AdminSettingsTab', () => ({
+  default: () => <h2>Setări tab</h2>,
 }));
 vi.mock('./screens/groups/GroupsScreen', () => ({
   default: () => <h1>Grupuri screen</h1>,
@@ -71,7 +98,7 @@ vi.mock('./screens/administrare/GroupScreen', () => ({
   default: () => <h1>Grup screen</h1>,
 }));
 vi.mock('./screens/administrare/PeriodsScreen', () => ({
-  default: () => <h1>Perioade screen</h1>,
+  default: () => <h2>Evaluări de rol tab</h2>,
 }));
 vi.mock('./screens/dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
@@ -229,6 +256,11 @@ describe('route guards', () => {
     expect(
       await screen.findByRole('heading', { name: 'Administrare' }),
     ).toBeInTheDocument();
+    // A Group Manager lands on the first tab they may open: Grupuri.
+    expect(
+      await screen.findByRole('heading', { name: 'Grupuri tab' }),
+    ).toBeVisible();
+    expect(window.location.pathname).toBe('/administrare/grupuri');
     view.unmount();
 
     // A level-1 Group Manager has it; a BCE without a Group Role does not.
@@ -265,15 +297,15 @@ describe('route guards', () => {
     expect(screen.queryByRole('heading', { name: 'Grup screen' })).toBeNull();
   });
 
-  it('opens Perioade de evaluare only for BC and the Moderator (manageRoles, #702)', async () => {
+  it('opens Evaluări de rol only for BC and the Moderator (manageRoles, #702), and /administrare/perioade still arrives there (R28)', async () => {
     // A BCE administers a Group but does not manage Roles: sent home.
     auth.useAuth.mockReturnValue(member);
     grant('administer', 'seeDirectory', 'seeLeadership');
-    window.history.pushState({}, '', '/administrare/perioade');
+    window.history.pushState({}, '', '/administrare/evaluari');
     const denied = render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
     expect(
-      screen.queryByRole('heading', { name: 'Perioade screen' }),
+      screen.queryByRole('heading', { name: 'Evaluări de rol tab' }),
     ).toBeNull();
     denied.unmount();
 
@@ -281,8 +313,57 @@ describe('route guards', () => {
     window.history.pushState({}, '', '/administrare/perioade');
     render(<App />);
     expect(
-      await screen.findByRole('heading', { name: 'Perioade screen' }),
+      await screen.findByRole('heading', { name: 'Evaluări de rol tab' }),
     ).toBeVisible();
+    expect(window.location.pathname).toBe('/administrare/evaluari');
+  });
+
+  it.each([
+    ['/administrare/membri', 'Membri tab', ['manageRoles']],
+    ['/administrare/membri', 'Membri tab', ['provisionMembers']],
+    ['/administrare/grupuri', 'Grupuri tab', []],
+    ['/administrare/roluri', 'Roluri tab', ['manageRoles']],
+    ['/administrare/cereri', 'Cereri tab', []],
+    ['/administrare/evaluari', 'Evaluări de rol tab', ['manageRoles']],
+    [
+      '/administrare/confidentialitate',
+      'Confidențialitate tab',
+      ['manageRoles'],
+    ],
+    ['/administrare/setari', 'Setări tab', ['manageRoles']],
+  ])(
+    'renders %s as its own tab page (%s), and only with its capability',
+    async (path, page, needs) => {
+      auth.useAuth.mockReturnValue(member);
+      grant('administer', ...needs);
+      window.history.pushState({}, '', path);
+      const view = render(<App />);
+      expect(await screen.findByRole('heading', { name: page })).toBeVisible();
+      expect(window.location.pathname).toBe(path);
+      expect(
+        screen.getByRole('link', { name: page.replace(' tab', '') }),
+      ).toHaveAttribute('aria-current', 'page');
+      view.unmount();
+      if (needs.length === 0) return;
+
+      // Without it the route refuses, even typed into the address bar.
+      grant('administer');
+      window.history.pushState({}, '', path);
+      render(<App />);
+      await waitFor(() => expect(window.location.pathname).toBe('/'));
+      expect(screen.queryByRole('heading', { name: page })).toBeNull();
+    },
+  );
+
+  it('lands /administrare on the first tab BC may open: Membri', async () => {
+    auth.useAuth.mockReturnValue(member);
+    grant(...EVERY_CAPABILITY);
+    window.history.pushState({}, '', '/administrare');
+    render(<App />);
+    expect(
+      await screen.findByRole('heading', { name: 'Membri tab' }),
+    ).toBeVisible();
+    expect(window.location.pathname).toBe('/administrare/membri');
   });
 
   it('opens a Member screen behind the same capability as the panel', async () => {

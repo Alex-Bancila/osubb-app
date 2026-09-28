@@ -222,6 +222,9 @@ it.each(['2.0', '0x2', '2e0', '02', 'abc'])(
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Nu ai acces la acest grup sau grupul nu există.',
     );
+    expect(
+      screen.getByRole('link', { name: 'Înapoi la Administrare' }),
+    ).toHaveAttribute('href', '/administrare/grupuri');
     expect(screen.queryByRole('heading', { name: 'Logistică' })).toBeNull();
     expect(api.roster).toHaveBeenLastCalledWith(null);
   },
@@ -230,6 +233,10 @@ it.each(['2.0', '0x2', '2e0', '02', 'abc'])(
 it('heads the Group with its place in the tree and offers the five built tabs', async () => {
   const { container } = show();
   expect(screen.getByRole('heading', { name: 'Logistică' })).toBeVisible();
+  // Back to the Grupuri tab the page sits under (#825).
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Administrare' }),
+  ).toHaveAttribute('href', '/administrare/grupuri');
   expect(screen.getByRole('link', { name: 'Educațional' })).toHaveAttribute(
     'href',
     '/administrare/grupuri/1',

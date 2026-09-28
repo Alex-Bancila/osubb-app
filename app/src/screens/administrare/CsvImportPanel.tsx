@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Upload } from 'lucide-react';
+import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { supabase } from '../../lib/supabase';
 import { keys } from '../../queries/keys';
@@ -87,27 +89,20 @@ export function CsvImportPanel() {
   }
 
   return (
-    <section
-      className="min-w-0 space-y-4 rounded-lg border p-4"
-      aria-labelledby="csv-import-title"
+    <Panel
+      eyebrow="Membri"
+      icon={Upload}
+      title="Import CSV"
+      description="Adaugă membri dintr-un fișier cu coloanele name,email,dept,team. Pentru dept și team, folosește numele scurt sau numele afișat al Grupului; literele mari și diacriticele nu contează."
+      boxClassName="space-y-4"
     >
-      <div className="space-y-1">
-        <h2 id="csv-import-title" className="text-xl font-semibold">
-          Import CSV
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Adaugă membri dintr-un fișier cu coloanele name,email,dept,team.
-          Pentru dept și team, folosește numele scurt sau numele afișat al
-          Grupului; literele mari și diacriticele nu contează.
-        </p>
-        <a
-          className="text-sm font-medium underline underline-offset-4"
-          href="/model-import-membri.csv"
-          download="model-import-membri.csv"
-        >
-          Descarcă șablon
-        </a>
-      </div>
+      <a
+        className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
+        href="/model-import-membri.csv"
+        download="model-import-membri.csv"
+      >
+        Descarcă șablon
+      </a>
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
@@ -207,6 +202,6 @@ export function CsvImportPanel() {
           )}
         </div>
       )}
-    </section>
+    </Panel>
   );
 }

@@ -1,4 +1,6 @@
+import { ListRow, rowListClass } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
+import { Empty, ErrorState, Loading } from '../../components/states';
 import { useGroupApplications } from '../../queries/group-applications';
 import { ApplicationAction } from '../groups/ApplicationAction';
 
@@ -10,46 +12,56 @@ export function GroupApplicationsTab({
   canDecide: boolean;
 }) {
   const applications = useGroupApplications(groupId);
-  if (applications.isPending) return <p role="status">Se încarcă cererile…</p>;
+  if (applications.isPending) return <Loading label="Se încarcă cererile…" />;
   if (applications.isError)
-    return <p role="alert">Nu am putut încărca cererile. Reîncarcă pagina.</p>;
-  if (!applications.data.length) return <p>Nu sunt cereri în așteptare.</p>;
+    return (
+      <ErrorState text="Nu am putut încărca cererile. Reîncarcă pagina." />
+    );
+  if (!applications.data.length)
+    return <Empty text="Nu sunt cereri în așteptare." />;
   return (
-    <ul className="space-y-4">
+    <ul className={rowListClass}>
       {applications.data.map((row) => (
-        <li key={row.id} className="space-y-3 rounded-xl border p-4">
-          <h3>
-            <MemberName {...row.member} showFullName />
+        <ListRow
+          key={row.id}
+          stackAction
+          action={
+            canDecide && (
+              <>
+                <ApplicationAction
+                  label="Acceptă"
+                  command={{
+                    kind: 'decide',
+                    applicationId: row.id,
+                    accept: true,
+                    note: '',
+                  }}
+                />
+                <ApplicationAction
+                  label="Respinge"
+                  command={{
+                    kind: 'decide',
+                    applicationId: row.id,
+                    accept: false,
+                    note: '',
+                  }}
+                />
+              </>
+            )
+          }
+        >
+          <h3 className="m-0 text-base font-normal">
+            <MemberName {...row.member} showFullName size="sm" />
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="m-0 text-sm text-muted-foreground">
             {new Date(row.created_at).toLocaleDateString('ro-RO')}
           </p>
           {row.note && (
-            <p className="whitespace-pre-wrap break-words">{row.note}</p>
+            <p className="m-0 mt-1 text-sm whitespace-pre-wrap break-words">
+              {row.note}
+            </p>
           )}
-          {canDecide && (
-            <div className="flex flex-wrap gap-3">
-              <ApplicationAction
-                label="Acceptă"
-                command={{
-                  kind: 'decide',
-                  applicationId: row.id,
-                  accept: true,
-                  note: '',
-                }}
-              />
-              <ApplicationAction
-                label="Respinge"
-                command={{
-                  kind: 'decide',
-                  applicationId: row.id,
-                  accept: false,
-                  note: '',
-                }}
-              />
-            </div>
-          )}
-        </li>
+        </ListRow>
       ))}
     </ul>
   );

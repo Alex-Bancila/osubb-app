@@ -202,6 +202,8 @@ export function useGroupRoster(groupId: number | null) {
 export type AppointableMember = {
   memberId: string;
   name: string;
+  /** Shown before the full name wherever the Member is named (R5). */
+  nickname?: string | null;
   avatarColor: string | null;
   status: string;
   roleId: string | null;
@@ -214,7 +216,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
     readAllRows((from, to) =>
       supabase
         .from('profiles_directory')
-        .select('id, full_name, status, avatar_color, role')
+        .select('id, full_name, nickname, status, avatar_color, role')
         .order('id')
         .range(from, to),
     ),
@@ -235,6 +237,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
         {
           memberId: profile.id,
           name: profile.full_name ?? 'Membru',
+          nickname: profile.nickname,
           avatarColor: profile.avatar_color,
           status: profile.status ?? '—',
           roleId: profile.role,

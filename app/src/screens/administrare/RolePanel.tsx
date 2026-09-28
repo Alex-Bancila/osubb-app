@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { UserCog } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
+import { PageGrid, Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { commandErrorMessage } from '../../lib/command-reasons';
@@ -55,7 +57,7 @@ export function RolePanel({
   const param = searchParams.get(ROLE_PANEL_MEMBER_PARAM);
   const requested = isUuid(param) ? param : '';
   const [memberId, setMemberId] = useState(selectedMemberId ?? requested);
-  const panel = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (requested) panel.current?.scrollIntoView?.({ block: 'start' });
   }, [requested]);
@@ -139,229 +141,225 @@ export function RolePanel({
   }
 
   return (
-    <section
-      ref={panel}
-      aria-labelledby="roles-title"
-      className="space-y-4 rounded-xl border bg-card p-4 md:p-5"
-    >
-      <div>
-        <h2 id="roles-title" className="text-xl font-semibold">
-          Roluri și status
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Schimbările sunt înregistrate cu autorul lor. Rolul organizațional
-          este separat de rolul într-un Grup.
-        </p>
-      </div>
-      {members.isPending || roles.isPending ? (
-        <p role="status">Se încarcă membrii și rolurile…</p>
-      ) : members.isError || roles.isError ? (
-        <p role="alert">Nu am putut încărca membrii și rolurile.</p>
-      ) : (
-        <>
-          {!selectedMemberId && (
-            <label className="block max-w-xl space-y-1">
-              <span>Membru</span>
-              <select
-                className={control}
-                value={memberId}
-                disabled={change.isPending}
-                onChange={(event) => {
-                  setMemberId(event.target.value);
-                  setRoleDraft('');
-                  setStatusDraft('');
-                  setReason('');
-                  setError(null);
-                  setMessage(null);
-                }}
+    // The wrapper is what `?membru=` scrolls to; the Panel has no ref.
+    <div ref={panel} className="h-full min-w-0 scroll-mt-4">
+      <Panel
+        eyebrow="Roluri"
+        icon={UserCog}
+        title="Roluri și status"
+        description="Schimbările sunt înregistrate cu autorul lor. Rolul organizațional este separat de rolul într-un Grup."
+        boxClassName="space-y-4"
+      >
+        {members.isPending || roles.isPending ? (
+          <p role="status">Se încarcă membrii și rolurile…</p>
+        ) : members.isError || roles.isError ? (
+          <p role="alert">Nu am putut încărca membrii și rolurile.</p>
+        ) : (
+          <>
+            {!selectedMemberId && (
+              <label className="block max-w-xl space-y-1">
+                <span>Membru</span>
+                <select
+                  className={control}
+                  value={memberId}
+                  disabled={change.isPending}
+                  onChange={(event) => {
+                    setMemberId(event.target.value);
+                    setRoleDraft('');
+                    setStatusDraft('');
+                    setReason('');
+                    setError(null);
+                    setMessage(null);
+                  }}
+                >
+                  <option value="">Alege un membru</option>
+                  {members.data?.map((row) => (
+                    <option key={row.memberId} value={row.memberId}>
+                      {row.name} · {row.roleLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {member && !selectedMemberId && (
+              <Link
+                className="inline-flex min-h-11 items-center underline"
+                to={`/administrare/membri/${member.memberId}`}
               >
-                <option value="">Alege un membru</option>
-                {members.data?.map((row) => (
-                  <option key={row.memberId} value={row.memberId}>
-                    {row.name} · {row.roleLabel}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {member && !selectedMemberId && (
-            <Link
-              className="inline-flex min-h-11 items-center underline"
-              to={`/administrare/membri/${member.memberId}`}
-            >
-              Vezi detaliile membrului
-            </Link>
-          )}
-          {member && (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-3 rounded-lg border p-4">
-                <h3 className="font-semibold">Rol organizațional</h3>
-                <p className="text-sm text-muted-foreground">
-                  Rol actual: {member.roleLabel}
-                </p>
-                <label className="block space-y-1">
-                  <span>Rol organizațional</span>
-                  <select
-                    className={control}
-                    value={nextRole}
-                    disabled={!canEditMember || change.isPending}
-                    onChange={(event) => setRoleDraft(event.target.value)}
-                  >
-                    {!roleOptions.some(([id]) => id === nextRole) && (
-                      <option value={nextRole}>Alege un rol</option>
-                    )}
-                    {roleOptions.map(([id, role]) => (
-                      <option
-                        key={id}
-                        value={id}
-                        disabled={
-                          actorRole !== 'moderator' &&
-                          (id === 'bc' || id === 'moderator')
-                        }
-                      >
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {nextRole === 'vot' && nextRole !== member.roleId && (
-                  <p className="text-sm">
-                    Confirmi Drept de Vot pentru acest membru. Decizia va fi
-                    atribuită contului tău.
+                Vezi detaliile membrului
+              </Link>
+            )}
+            {member && (
+              <PageGrid columns={2}>
+                <div className="space-y-3 rounded-lg border p-4">
+                  <h3 className="font-semibold">Rol organizațional</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Rol actual: {member.roleLabel}
                   </p>
-                )}
-                {member.roleId === 'vot' &&
-                  nextLevel !== undefined &&
-                  nextLevel < (roles.data?.get('vot')?.level ?? -1) && (
-                    <p className="text-sm">
-                      Retragi Drept de Vot. Decizia va fi atribuită contului
-                      tău.
-                    </p>
-                  )}
-                {roleDraft &&
-                  roleDraft !== member.roleId &&
-                  (groups.isPending || groupIds.isPending) && (
-                    <p role="status" className="text-sm">
-                      Se verifică Grupurile afectate…
-                    </p>
-                  )}
-                {roleDraft &&
-                  roleDraft !== member.roleId &&
-                  (groups.isError || groupIds.isError) && (
-                    <p role="alert" className="text-sm">
-                      Nu am putut verifica Grupurile afectate.
-                    </p>
-                  )}
-                {roleDraft &&
-                  roleDraft !== member.roleId &&
-                  groups.isSuccess &&
-                  groupIds.isSuccess && (
-                    <div className="text-sm">
-                      <p>
-                        Grupuri părăsite după schimbare:{' '}
-                        {leavingGroups.length === 0 ? 'niciunul' : ''}
-                      </p>
-                      {leavingGroups.length > 0 && (
-                        <ul className="list-disc pl-5">
-                          {leavingGroups.map((group) => (
-                            <li key={group.id}>{group.name}</li>
-                          ))}
-                        </ul>
+                  <label className="block space-y-1">
+                    <span>Rol organizațional</span>
+                    <select
+                      className={control}
+                      value={nextRole}
+                      disabled={!canEditMember || change.isPending}
+                      onChange={(event) => setRoleDraft(event.target.value)}
+                    >
+                      {!roleOptions.some(([id]) => id === nextRole) && (
+                        <option value={nextRole}>Alege un rol</option>
                       )}
-                    </div>
+                      {roleOptions.map(([id, role]) => (
+                        <option
+                          key={id}
+                          value={id}
+                          disabled={
+                            actorRole !== 'moderator' &&
+                            (id === 'bc' || id === 'moderator')
+                          }
+                        >
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {nextRole === 'vot' && nextRole !== member.roleId && (
+                    <p className="text-sm">
+                      Confirmi Drept de Vot pentru acest membru. Decizia va fi
+                      atribuită contului tău.
+                    </p>
                   )}
-                <Button
-                  type="button"
-                  disabled={!canSaveRole}
-                  onClick={() =>
-                    void save({
-                      kind: 'role',
-                      memberId,
-                      role: nextRole as MemberRole,
-                      reason: reason.trim() || null,
-                    })
-                  }
-                >
-                  Salvează rolul
-                </Button>
-              </div>
-              <div className="space-y-3 rounded-lg border p-4">
-                <h3 className="font-semibold">Status</h3>
-                <p className="text-sm text-muted-foreground">
-                  Status actual: {statusLabel(member.status)}
-                </p>
-                <label className="block space-y-1">
-                  <span>Status</span>
-                  <select
-                    className={control}
-                    value={nextStatus}
-                    disabled={!canEditMember || change.isPending}
-                    onChange={(event) => setStatusDraft(event.target.value)}
+                  {member.roleId === 'vot' &&
+                    nextLevel !== undefined &&
+                    nextLevel < (roles.data?.get('vot')?.level ?? -1) && (
+                      <p className="text-sm">
+                        Retragi Drept de Vot. Decizia va fi atribuită contului
+                        tău.
+                      </p>
+                    )}
+                  {roleDraft &&
+                    roleDraft !== member.roleId &&
+                    (groups.isPending || groupIds.isPending) && (
+                      <p role="status" className="text-sm">
+                        Se verifică Grupurile afectate…
+                      </p>
+                    )}
+                  {roleDraft &&
+                    roleDraft !== member.roleId &&
+                    (groups.isError || groupIds.isError) && (
+                      <p role="alert" className="text-sm">
+                        Nu am putut verifica Grupurile afectate.
+                      </p>
+                    )}
+                  {roleDraft &&
+                    roleDraft !== member.roleId &&
+                    groups.isSuccess &&
+                    groupIds.isSuccess && (
+                      <div className="text-sm">
+                        <p>
+                          Grupuri părăsite după schimbare:{' '}
+                          {leavingGroups.length === 0 ? 'niciunul' : ''}
+                        </p>
+                        {leavingGroups.length > 0 && (
+                          <ul className="list-disc pl-5">
+                            {leavingGroups.map((group) => (
+                              <li key={group.id}>{group.name}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  <Button
+                    type="button"
+                    disabled={!canSaveRole}
+                    onClick={() =>
+                      void save({
+                        kind: 'role',
+                        memberId,
+                        role: nextRole as MemberRole,
+                        reason: reason.trim() || null,
+                      })
+                    }
                   >
-                    {statusOptions.map((status) => (
-                      <option key={status} value={status}>
-                        {statusLabel(status)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {nextStatus === 'inactiv' && nextStatus !== member.status && (
-                  <p className="text-sm">
-                    Dezactivarea revocă sesiunile de reîmprospătare. Un token
-                    deja emis poate rămâne valabil cel mult o oră.
+                    Salvează rolul
+                  </Button>
+                </div>
+                <div className="space-y-3 rounded-lg border p-4">
+                  <h3 className="font-semibold">Status</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Status actual: {statusLabel(member.status)}
                   </p>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!canSaveStatus}
-                  onClick={() =>
-                    void save({
-                      kind: 'status',
-                      memberId,
-                      status: nextStatus as MemberStatus,
-                      reason: reason.trim() || null,
-                    })
-                  }
-                >
-                  {nextStatus === member.status
-                    ? 'Salvează statusul'
-                    : nextStatus === 'inactiv'
-                      ? 'Dezactivează'
-                      : nextStatus === 'activ'
-                        ? 'Reactivează'
-                        : 'Salvează statusul'}
-                </Button>
-              </div>
-            </div>
-          )}
-          {member && (
-            <label className="block max-w-xl space-y-1">
-              <span>Motiv (opțional)</span>
-              <textarea
-                className={control}
-                rows={2}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                disabled={!canEditMember || change.isPending}
-              />
-            </label>
-          )}
-          {member && !canEditMember && (
-            <p className="text-sm text-muted-foreground">
-              {self
-                ? 'Nu îți poți schimba propriul rol sau status.'
-                : 'Numai un Moderator poate modifica un membru BC sau Moderator.'}
-            </p>
-          )}
-          {message && <p role="status">{message}</p>}
-          {error && (
-            <p role="alert" className="text-destructive">
-              {error}
-            </p>
-          )}
-        </>
-      )}
-    </section>
+                  <label className="block space-y-1">
+                    <span>Status</span>
+                    <select
+                      className={control}
+                      value={nextStatus}
+                      disabled={!canEditMember || change.isPending}
+                      onChange={(event) => setStatusDraft(event.target.value)}
+                    >
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {statusLabel(status)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {nextStatus === 'inactiv' && nextStatus !== member.status && (
+                    <p className="text-sm">
+                      Dezactivarea revocă sesiunile de reîmprospătare. Un token
+                      deja emis poate rămâne valabil cel mult o oră.
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!canSaveStatus}
+                    onClick={() =>
+                      void save({
+                        kind: 'status',
+                        memberId,
+                        status: nextStatus as MemberStatus,
+                        reason: reason.trim() || null,
+                      })
+                    }
+                  >
+                    {nextStatus === member.status
+                      ? 'Salvează statusul'
+                      : nextStatus === 'inactiv'
+                        ? 'Dezactivează'
+                        : nextStatus === 'activ'
+                          ? 'Reactivează'
+                          : 'Salvează statusul'}
+                  </Button>
+                </div>
+              </PageGrid>
+            )}
+            {member && (
+              <label className="block max-w-xl space-y-1">
+                <span>Motiv (opțional)</span>
+                <textarea
+                  className={control}
+                  rows={2}
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  disabled={!canEditMember || change.isPending}
+                />
+              </label>
+            )}
+            {member && !canEditMember && (
+              <p className="text-sm text-muted-foreground">
+                {self
+                  ? 'Nu îți poți schimba propriul rol sau status.'
+                  : 'Numai un Moderator poate modifica un membru BC sau Moderator.'}
+              </p>
+            )}
+            {message && <p role="status">{message}</p>}
+            {error && (
+              <p role="alert" className="text-destructive">
+                {error}
+              </p>
+            )}
+          </>
+        )}
+      </Panel>
+    </div>
   );
 }

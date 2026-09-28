@@ -123,7 +123,11 @@ beforeEach(() => {
 
 it('BC sees the Nickname over the full name, every Group Role and both editors', async () => {
   const { container } = show();
-  expect(screen.getByRole('heading', { name: 'Nana' })).toBeVisible();
+  expect(screen.getByRole('heading', { level: 1, name: 'Nana' })).toBeVisible();
+  expect(screen.getByText('OSUBB · Administrare · Membru')).toBeVisible();
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Administrare' }),
+  ).toHaveAttribute('href', '/administrare/membri');
   expect(screen.getByText('Ana Pop')).toBeVisible();
   expect(screen.getByText('Rol în grup: Director comunicare')).toBeVisible();
   expect(screen.getByText('Rol în grup: Responsabil logistică')).toBeVisible();
@@ -308,6 +312,10 @@ it('says the Member is unavailable when the server returns no card', () => {
   expect(
     screen.getByRole('heading', { name: 'Membru indisponibil' }),
   ).toBeVisible();
+  // Back to the Membri tab the page sits under (#825).
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Administrare' }),
+  ).toHaveAttribute('href', '/administrare/membri');
 });
 
 it.each(['target', '7a3c1e2b', 'not-a-uuid-at-all-0000000000000000'])(

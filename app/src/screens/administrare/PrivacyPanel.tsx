@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router';
+import { ListRow, Panel, rowListClass } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { memberDisplayName } from '../../components/member/member-identity';
 import { Button } from '../../components/ui/button';
@@ -43,23 +45,22 @@ export function PrivacyPanel() {
   const namesPending = unacknowledged.length > 0 && members.isPending;
 
   return (
-    <section
-      aria-labelledby="privacy-title"
-      className="space-y-4 rounded-xl border bg-card p-4 md:p-5"
-    >
-      <div>
-        <h2 id="privacy-title" className="text-xl font-semibold">
-          Confidențialitate
-        </h2>
-        <p className="text-sm text-muted-foreground">
+    <Panel
+      eyebrow="Membri"
+      icon={ShieldCheck}
+      title="Confidențialitate"
+      description={
+        <>
           Membrii activi care nu au confirmat că au citit versiunea curentă a{' '}
           <Link className="underline" to="/confidentialitate">
             politicii de confidențialitate
           </Link>
           {version ? ` (v${version})` : ''}. Confirmarea nu este un
           consimțământ: arată doar că au fost informați.
-        </p>
-      </div>
+        </>
+      }
+      boxClassName="space-y-4"
+    >
       {status.isPending || namesPending ? (
         <p role="status">Se încarcă confirmările…</p>
       ) : status.isError || members.isError ? (
@@ -83,11 +84,19 @@ export function PrivacyPanel() {
             {formatMemberCount(missing.length)} fără confirmarea versiunii
             curente
           </p>
-          <ul className="divide-y">
+          <ul className={rowListClass}>
             {missing.map((row) => (
-              <li
+              <ListRow
                 key={row.memberId}
-                className="flex flex-wrap items-center justify-between gap-2 py-2"
+                stackAction
+                action={
+                  <Link
+                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4"
+                    to={`/administrare/membri/${row.memberId}`}
+                  >
+                    Pagina membrului
+                  </Link>
+                }
               >
                 <MemberName
                   {...(members.data?.get(row.memberId) ?? {
@@ -97,24 +106,16 @@ export function PrivacyPanel() {
                   showFullName
                   size="sm"
                 />
-                <span className="flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
-                  <span>
-                    {row.noticeVersion
-                      ? `ultima confirmare: ${acknowledgementLabel(row)}`
-                      : 'neconfirmată'}
-                  </span>
-                  <Link
-                    className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4"
-                    to={`/administrare/membri/${row.memberId}`}
-                  >
-                    Pagina membrului
-                  </Link>
-                </span>
-              </li>
+                <p className="m-0 text-sm text-muted-foreground">
+                  {row.noticeVersion
+                    ? `ultima confirmare: ${acknowledgementLabel(row)}`
+                    : 'neconfirmată'}
+                </p>
+              </ListRow>
             ))}
           </ul>
         </>
       )}
-    </section>
+    </Panel>
   );
 }
