@@ -32,7 +32,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(87);
+select plan(88);
 
 -- ==================== Fixtures ====================
 
@@ -250,8 +250,8 @@ select is(
   (select link from public.notifications
     where member_id = pg_temp.g584_uid(3)
       and dedupe_key = 'application:' || (select first_id from fx584)::text),
-  '/administrare/grupuri/' || pg_temp.g584_group('Deschis #584')::text,
-  'the filing Notification links to Administrare, where the Cereri tab lives');
+  '/administrare/grupuri/' || pg_temp.g584_group('Deschis #584')::text || '?tab=cereri',
+  'the filing Notification links to Administrare, opened on the Cereri tab (#843, D6)');
 select is(
   (select count(*) from public.notifications
     where member_id = pg_temp.g584_uid(4)
@@ -640,12 +640,44 @@ select ok(
   (select decided_by = pg_temp.g584_uid(1) and decision_note = 'Grup arhivat' and decided_at is not null
      from public.group_applications where id = (select arch_id from fx584_arch)),
   'ruling R30: the archiver is the decider and the decision note says why');
+-- #843 (D23): an archived Group's page is unavailable, so the Notification
+-- carries no link. coalesce inside the subquery keeps a missing row (NULL)
+-- apart from a row without a link ('<none>').
 select is(
-  (select link from public.notifications
+  (select coalesce(link, '<none>') from public.notifications
     where member_id = pg_temp.g584_uid(10)
       and dedupe_key = 'application:' || (select arch_id from fx584_arch)::text),
-  '/grupuri/' || pg_temp.g584_group('Arhivabil #584')::text,
-  'ruling R30: the applicant is told, and the link is the member-facing Group page');
+  '<none>',
+  'ruling R30: the applicant is told, without a link -- the archived Group has no page to open (#843)');
+
+-- #843 (D23): the rows sent before the fix are rewritten by the migration's
+-- data update, replayed here from the migration record: an archive refusal
+-- that still links the archived Group loses the link.
+update public.notifications
+   set link = '/grupuri/' || pg_temp.g584_group('Arhivabil #584')::text
+ where member_id = pg_temp.g584_uid(10)
+   and dedupe_key = 'application:' || (select arch_id from fx584_arch)::text;
+do $replay$
+declare v_statement text;
+begin
+  for v_statement in
+    select statement
+      from supabase_migrations.schema_migrations as migration,
+           unnest(migration.statements) as statement
+     where migration.version = '20260928100000'
+       and statement ~* 'update public\.notifications'
+       and statement !~* 'create or replace function'
+  loop
+    execute v_statement;
+  end loop;
+end;
+$replay$;
+select is(
+  (select coalesce(link, '<none>') from public.notifications
+    where member_id = pg_temp.g584_uid(10)
+      and dedupe_key = 'application:' || (select arch_id from fx584_arch)::text),
+  '<none>',
+  'the #843 data update drops the link of an archive refusal sent before the fix');
 
 -- ==================== 14 · #724 (ruling R8): notes at most 1000 characters ====================
 -- Both notes are measured as they are stored -- trimmed -- at step 1, so a

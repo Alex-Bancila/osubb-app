@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(70);
+select plan(74);
 create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
 returns bigint language sql stable as $$
   select coalesce((select id from public.groups where id = pg_temp.dept_group(p_dept) or id = pg_temp.team_group(p_team) or id = pg_temp.project_group(p_project)),-1)
@@ -82,7 +82,8 @@ insert into auth.users (id, email) values
   ('25800000-0000-0000-0000-000000000009', 'moderator258@example.test'),
   ('25800000-0000-0000-0000-000000000010', 'independenta258@example.test'),
   ('25800000-0000-0000-0000-000000000011', 'negativ258@example.test'),
-  ('25800000-0000-0000-0000-000000000012', 'diversa258@example.test');
+  ('25800000-0000-0000-0000-000000000012', 'diversa258@example.test'),
+  ('25800000-0000-0000-0000-000000000020', 'renumerotat258@example.test');
 
 insert into public.profiles (id, full_name, email, role, status) values
   ('25800000-0000-0000-0000-000000000001', 'BCE 258', 'bce258@example.test', 'bce', 'activ'),
@@ -114,7 +115,11 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('25800000-0000-0000-0000-000000000011', 'Nicu Negativ 258', 'negativ258@example.test', 'activ', 'activ'),
   -- Earns on `diverse` (kind = 'coordination'): a valid Leaderboard filter
   -- that the Department Cup never competes.
-  ('25800000-0000-0000-0000-000000000012', 'Dana Diversa 258', 'diversa258@example.test', 'activ', 'activ');
+  ('25800000-0000-0000-0000-000000000012', 'Dana Diversa 258', 'diversa258@example.test', 'activ', 'activ'),
+  -- #843 (ruling 2026-09-28): earns on the board's own Project beside BC,
+  -- the Moderator and BCE, and moves up to rank 1 once BC and the Moderator
+  -- are left out.
+  ('25800000-0000-0000-0000-000000000020', 'Radu Renumerotat 258', 'renumerotat258@example.test', 'activ', 'activ');
 
 -- A Department of this suite's own, so the Department filter below returns
 -- exactly these fixtures and never a seeded Task on `edu`. `departments.kind`
@@ -148,6 +153,11 @@ overriding system value values
   -- A Project of its own for the negative-net member, so his rows reach no
   -- Department filter and no Campaign, and disturb none of the counts above.
   (2580004, 'Project Negativ 258', 'active', '25800000-0000-0000-0000-000000000001',
+   '25800000-0000-0000-0000-000000000001'),
+  -- #843: a Project of its own where BC, the Moderator, BCE and one Voluntar
+  -- Activ earn, so the ranking without BC and the Moderator is read in
+  -- isolation from every count above.
+  (2580006, 'Project Conducere 258', 'active', '25800000-0000-0000-0000-000000000001',
    '25800000-0000-0000-0000-000000000001');
 select pg_temp.materialize_legacy_groups();
 
@@ -192,7 +202,12 @@ select fixture.title, 'Fixture', now() - interval '2 days',
     ('LB Negative Reversed Task 258', null,           null,            2580004,      null,            3, 5),
     -- Dana, on a coordination Department: 2 x 3 = 6. A legal Leaderboard
     -- filter; never a Department Cup row.
-    ('LB Diverse Task 258',         'diverse',        null,            null,         null,            2, 5)
+    ('LB Diverse Task 258',         'diverse',        null,            null,         null,            2, 5),
+    -- #843: BC 15, Moderator 12, Radu 9, BCE 6 on Project Conducere 258.
+    ('LB BC Task 258',              null,             null,            2580006,      null,            5, 5),
+    ('LB Moderator Task 258',       null,             null,            2580006,      null,            4, 5),
+    ('LB Renumbered Task 258',      null,             null,            2580006,      null,            3, 5),
+    ('LB BCE Task 258',             null,             null,            2580006,      null,            2, 5)
   ) as fixture (title, dept_id, team_id, project_id, campaign_id, difficulty, rating);
 
 select pg_temp.test_credit_task(task.id, credit.member_id,
@@ -207,7 +222,11 @@ select pg_temp.test_credit_task(task.id, credit.member_id,
     ('LB Independent Team Task 258', '25800000-0000-0000-0000-000000000010'),
     ('LB Negative Kept Task 258',   '25800000-0000-0000-0000-000000000011'),
     ('LB Negative Reversed Task 258', '25800000-0000-0000-0000-000000000011'),
-    ('LB Diverse Task 258',         '25800000-0000-0000-0000-000000000012')
+    ('LB Diverse Task 258',         '25800000-0000-0000-0000-000000000012'),
+    ('LB BC Task 258',              '25800000-0000-0000-0000-000000000005'),
+    ('LB Moderator Task 258',       '25800000-0000-0000-0000-000000000009'),
+    ('LB Renumbered Task 258',      '25800000-0000-0000-0000-000000000020'),
+    ('LB BCE Task 258',             '25800000-0000-0000-0000-000000000001')
   ) as credit (title, member_id)
   join public.tasks as task on task.title = credit.title
  order by task.id;
@@ -255,6 +274,12 @@ select is((select array_agg(entry.delta order by entry.delta)
               and evaluation.reversal_reason = 'fixture reversal 258'),
   array[-9, -9],
   'both reversal ledger rows exist and are negative -- the netting assertions below are not vacuous');
+select is((select sum(entry.delta)::int
+             from public.points_ledger as entry
+            where entry.reason = 'task'
+              and entry.member_id in ('25800000-0000-0000-0000-000000000005',
+                                      '25800000-0000-0000-0000-000000000009')), 27,
+  'BC 258 and Moderator 258 really hold Task Points (15 + 12) -- their absence below is not vacuous');
 
 -- ==================== 3. The unfiltered board ====================
 
@@ -383,6 +408,24 @@ select results_eq(
 select is((select count(*) from public.leadership_leaderboard(null, -1)), 0::bigint,
   'an unknown Campaign id yields an empty board, not the unfiltered one');
 
+-- ==================== 7b. BC and the Moderator are not ranked (#843) ====================
+-- Alex's ruling of 2026-09-28: the Clasament ranks neither BC nor the
+-- Moderator; BCE stays. rank() runs after the filter, so the ranks renumber.
+select results_eq(
+  $$ select full_name, points, rank
+       from public.leadership_leaderboard(pg_temp.g523_group(p_project => 2580006)) $$,
+  $$ values ('Radu Renumerotat 258'::text, 9, 1),
+            ('BCE 258',                    6, 2) $$,
+  'on a Project where BC (15) and the Moderator (12) out-earn everyone, the board ranks only the Voluntar Activ and BCE -- 1 and 2, renumbered without them');
+select is((select count(*)
+             from public.leadership_leaderboard() as board
+             join public.profiles as member on member.id = board.member_id
+            where member.role in ('bc', 'moderator')), 0::bigint,
+  'the unfiltered board has no BC or Moderator row at all -- the seeded BC''s points included');
+select is((select points from public.leadership_leaderboard()
+            where member_id = '25800000-0000-0000-0000-000000000001'), 6,
+  'BCE stays ranked with its Task Points');
+
 -- ==================== 8. Agreement with the Department Cup ====================
 -- The independent attribution query below must see every owned fixture row,
 -- including the Department-Team Task that ordinary table RLS hides from this
@@ -404,15 +447,29 @@ select set_eq(
        join public.groups origin on origin.path @> array[grp.id]
        join public.tasks task on task.group_id=origin.id
        join public.points_ledger entry on entry.task_id=task.id
+       -- #843: BC and the Moderator are off the Leaderboard (not the Cup).
+       join public.profiles member on member.id=entry.member_id
       where grp.competes_in_cup and entry.reason in ('task','task_reversal')
+        and member.role not in ('bc','moderator')
       group by grp.id,entry.member_id $$,
-  'each competing Group subtree includes the same members and net Task points');
+  'each competing Group subtree includes the same members and net Task points, BC and the Moderator aside');
+-- #843: the Cup still counts BC's and the Moderator's Task Points, which the
+-- Leaderboard leaves out, so it equals the subtree board plus theirs.
 select set_eq(
-  $$ select grp.id,coalesce(sum(board.points),0)::int
-       from public.groups grp left join lateral public.leadership_leaderboard(grp.id) board on true
-      where grp.competes_in_cup group by grp.id $$,
+  $$ select grp.id,
+            (coalesce((select sum(board.points) from public.leadership_leaderboard(grp.id) board), 0)
+             + coalesce((select sum(entry.delta)
+                           from public.groups origin
+                           join public.tasks task on task.group_id=origin.id
+                           join public.points_ledger entry on entry.task_id=task.id
+                           join public.profiles member on member.id=entry.member_id
+                          where origin.path @> array[grp.id]
+                            and entry.reason in ('task','task_reversal')
+                            and member.role in ('bc','moderator')), 0))::int
+       from public.groups grp
+      where grp.competes_in_cup $$,
   $$ select group_id,points from public.department_cup() $$,
-  'Cup equals subtree Leaderboard totals when every link counts');
+  'Cup equals the subtree Leaderboard totals plus the BC and Moderator points the board leaves out, when every link counts');
 
 select is((select points from public.leadership_leaderboard(pg_temp.g523_group('diverse'))
             where member_id = '25800000-0000-0000-0000-000000000012'), 6,

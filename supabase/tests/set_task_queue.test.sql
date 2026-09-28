@@ -488,7 +488,7 @@ select extensions.dblink_exec('stq_setup', $$
   delete from public.notifications
    where task_id in (select id from public.tasks where title like '%#331 committed%')
       or member_id in ('33100000-0000-0000-0000-000000000021', '33100000-0000-0000-0000-000000000022')
-      or link in (select '/tracker/' || id::text from public.tasks
+      or link in (select '/tracker?task=' || id::text from public.tasks
                    where title like '%#331 committed%');
   delete from public.task_candidates
    where task_id in (select id from public.tasks where title like '%#331 committed%');
@@ -507,7 +507,7 @@ select is((select count(*) from auth.users
                          '33100000-0000-0000-0000-000000000022')), 0::bigint,
   'the two committed lock-probe fixture accounts are removed too, not just their Task');
 select is((select count(*) from public.notifications
-            where link = format('/tracker/%s', (select probe_task_id from r331))), 0::bigint,
+            where link = format('/tracker?task=%s', (select probe_task_id from r331))), 0::bigint,
   'no notification survives with a nulled task_id after the committed Task is deleted');
 
 

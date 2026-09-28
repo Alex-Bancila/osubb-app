@@ -743,7 +743,7 @@ select extensions.dblink_exec('stc_setup', $$
                        '33300000-0000-0000-0000-000000000028',
                        '33300000-0000-0000-0000-000000000029',
                        '33300000-0000-0000-0000-000000000030')
-      or link in (select '/tracker/' || id::text from public.tasks
+      or link in (select '/tracker?task=' || id::text from public.tasks
                    where title like '%#333 committed%');
   delete from public.task_candidates
    where task_id in (select id from public.tasks where title like '%#333 committed%');
@@ -1103,7 +1103,7 @@ select extensions.dblink_exec('stc_setup', $$
                        '33300000-0000-0000-0000-000000000028',
                        '33300000-0000-0000-0000-000000000029',
                        '33300000-0000-0000-0000-000000000030')
-      or link in (select '/tracker/' || id::text from public.tasks
+      or link in (select '/tracker?task=' || id::text from public.tasks
                    where title like '%#333 committed%');
   delete from public.task_candidates
    where task_id in (select id from public.tasks where title like '%#333 committed%');
@@ -1139,7 +1139,7 @@ select is((select count(*) from auth.users
 -- cascade, so this is the assertion that would actually catch it.
 select is((select count(*) from public.notifications
             where link in (
-              select '/tracker/' || task_id::text from (
+              select '/tracker?task=' || task_id::text from (
                 select probe_task_id as task_id from r333
                 union all select conflict_task_id from r333
                 union all select bystander_task_id from r333

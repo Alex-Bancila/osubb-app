@@ -28,7 +28,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(56);
 
 -- ==================== Fixtures ====================
 
@@ -57,6 +57,10 @@ values ('Rădăcină #583', 'department', 0, pg_temp.g583_uid(1)),
 insert into public.groups (name, category, min_level, automatic_membership, created_by)
 values ('Automat #583', 'department', 0, true, pg_temp.g583_uid(1));
 update public.groups set status = 'archived' where name = 'Arhivată #583';
+-- #843 (D23): a Private Group whose only tie for the Recrut is the roster row
+-- removed in section 7.
+insert into public.groups (name, category, min_level, is_private, created_by)
+values ('Privat #583', 'team', 0, true, pg_temp.g583_uid(1));
 
 create function pg_temp.g583_group(p_name text) returns bigint
 language sql stable security definer set search_path = '' as $$
@@ -74,7 +78,8 @@ values (pg_temp.g583_group('Rădăcină #583'), pg_temp.g583_uid(3), 'manager', 
        (pg_temp.g583_group('Copil #583'),    pg_temp.g583_uid(7), 'member',      null),
        (pg_temp.g583_group('Automat #583'),  pg_temp.g583_uid(3), 'manager',     null),
        (pg_temp.g583_group('Automat #583'),  pg_temp.g583_uid(8), 'responsible', 'Responsabil automat #583'),
-       (pg_temp.g583_group('Nivel #583'),    pg_temp.g583_uid(3), 'manager',     null);
+       (pg_temp.g583_group('Nivel #583'),    pg_temp.g583_uid(3), 'manager',     null),
+       (pg_temp.g583_group('Privat #583'),   pg_temp.g583_uid(6), 'member',      null);
 
 create function pg_temp.g583_bc() returns void language sql as $$
   select pg_temp.test_login(pg_temp.g583_uid(1), '{"member_role":"bc","member_level":6}'::jsonb) $$;
@@ -336,8 +341,9 @@ select ok(
   exists (select 1 from public.notifications
            where member_id = pg_temp.g583_uid(5)
              and title = 'Ai fost adăugat în Copil #583'
+             and body is null
              and link = '/grupuri/' || pg_temp.g583_group('Copil #583')::text),
-  'add_group_member: the added Member is told, with the member-facing Group link');
+  'add_group_member: the added Member is told, with the member-facing Group link and no body repeating the title (#843, B36)');
 select is(pg_temp.g583_notifications(4), 0,
   'and the appointing Group Responsible is told nothing about their own action');
 
@@ -388,7 +394,22 @@ select ok(
            where member_id = pg_temp.g583_uid(5)
              and title = 'Nu mai faci parte din Copil #583'
              and link = '/grupuri/' || pg_temp.g583_group('Copil #583')::text),
-  'remove_group_member: the removed Member is told directly');
+  'remove_group_member: the removed Member is told directly, linked to a Group they still see');
+
+-- #843 (D23): removed from a Private Group they no longer see, the Member is
+-- told without a link -- /grupuri/<id> would only answer "Grup indisponibil".
+select pg_temp.g583_bc();
+select lives_ok(
+  format($$select public.remove_group_member(%s, %L)$$,
+         pg_temp.g583_group('Privat #583'), pg_temp.g583_uid(6)),
+  'remove_group_member: BC removes the Recrut from a Private Group');
+reset role;
+select is(
+  (select coalesce(link, '<none>') from public.notifications
+    where member_id = pg_temp.g583_uid(6)
+      and title = 'Nu mai faci parte din Privat #583'),
+  '<none>',
+  'remove_group_member: out of a Private Group they no longer see, the Member is told without a link (#843, D23)');
 
 -- ==================== 8 · the one insert path (rulings R6/R27) ====================
 -- This is the mutation #583 asks for: a write to public.group_members outside

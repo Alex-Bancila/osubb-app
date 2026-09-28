@@ -53,7 +53,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(57);
+select plan(58);
 
 -- ==================== 1. The lock ====================
 -- A held-lock probe, as #52's suite probes (52, 1): a run must wait on
@@ -188,9 +188,15 @@ insert into public.profiles (id, full_name, nickname, email, role, status, joine
 insert into public.groups (name, category, min_level) values
   ('Grup Evaluări 826', 'department', 0),
   ('Adunarea Generală 826', 'department', 3);
+-- #843 (D11): two Adunarea Generală Responsibles -- a Voluntar cu Drept de
+-- Vot (level 3) and BCE (level 5). Only BCE can open /tracker/membru/<id>, so
+-- only BCE hears a Retention Signal.
 insert into public.group_members (group_id, member_id, group_role)
-select id, '82600000-0000-0000-0000-000000000031', 'responsible'
-  from public.groups where name = 'Adunarea Generală 826';
+select id, responsible.member_id, 'responsible'
+  from public.groups
+ cross join (values ('82600000-0000-0000-0000-000000000031'::uuid),
+                    ('82600000-0000-0000-0000-000000000003'::uuid)) as responsible (member_id)
+ where name = 'Adunarea Generală 826';
 update public.org_settings
    set value = (select id::text from public.groups where name = 'Adunarea Generală 826')
  where key = 'adunarea_generala_group_id';
@@ -390,8 +396,14 @@ select results_eq(
                          || ':82600000-0000-0000-0000-000000000023' $$,
   $$ select array_agg(recipient order by recipient)
        from (select unnest(leaders) from fx826
-             union select '82600000-0000-0000-0000-000000000031'::uuid) as r (recipient) $$,
-  'the Retention Signal goes to every live BC and Moderator and the Adunarea Generală''s Group Responsible');
+             union select '82600000-0000-0000-0000-000000000003'::uuid) as r (recipient) $$,
+  'the Retention Signal goes to every live BC and Moderator and the Adunarea Generală''s Group Responsible at level 5 (BCE)');
+select is(
+  (select count(*) from public.notifications
+    where member_id = '82600000-0000-0000-0000-000000000031'
+      and dedupe_key like 'retention_signal:%'),
+  0::bigint,
+  '#843 (D11): an Adunarea Generală Responsible below level 5 gets no Retention Signal -- /tracker/membru/<id> would turn them away');
 select results_eq(
   $$ select title, body, link from public.notifications
       where member_id = '82600000-0000-0000-0000-000000000001'

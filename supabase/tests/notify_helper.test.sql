@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(57);
+select plan(74);
 
 -- ==================== Definition and privileges ====================
 select is(
@@ -320,8 +320,8 @@ select is(
 );
 select is(
   (select link from public.notifications where title = 'NH link title'),
-  '/tracker/' || (select dept_task_id from fx)::text,
-  'notify: link is derived from p_task_id (''/tracker/<id>'')'
+  '/tracker?task=' || (select dept_task_id from fx)::text,
+  'notify: link is derived from p_task_id (''/tracker?task=<id>'', #843 D1 -- /tracker/<id> has no route)'
 );
 
 -- ==================== notify: dedupe key upserts while unread ====================
@@ -582,6 +582,123 @@ select pg_temp.g521_task('ind','ind',7);
 select results_eq($$select private.task_managers((select id from g521_tasks where name='project'),pg_temp.g521_uid(5)) order by 1$$,$$select pg_temp.g521_uid(1)$$,'live creator remains the first recipient');
 select results_eq($$select private.task_managers((select id from g521_tasks where name='project'),pg_temp.g521_uid(1)) order by 1$$,$$select pg_temp.g521_uid(2)$$,'creator acting falls back to Group Manager, excluding Responsibles');
 select results_eq($$select private.task_managers((select id from g521_tasks where name='ind'),pg_temp.g521_uid(1)) order by 1$$,$$select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and p.id<>pg_temp.g521_uid(1) and (r.level>=6 or p.id in (pg_temp.g521_uid(6),pg_temp.g521_uid(7))) order by 1$$,'Manager-less chain notifies peers and BC without echo');
+
+-- ==================== #843: the data update of rows already delivered ====================
+-- The migration rewrites the Notifications already sent to the links the
+-- commands now write. Its statements are replayed here from the migration
+-- record itself (supabase_migrations.schema_migrations keeps every statement
+-- of every applied migration), so reverting any of them in the migration
+-- fails the matching assertion below. One fixture row per shape, plus the
+-- look-alikes each update must leave alone.
+create function pg_temp.replay_843_backfill() returns integer
+language plpgsql as $fn$
+declare
+  v_statement text;
+  v_count     integer := 0;
+begin
+  for v_statement in
+    select statement
+      from supabase_migrations.schema_migrations as migration,
+           unnest(migration.statements) as statement
+     where migration.version = '20260928100000'
+       and statement ~* 'update public\.notifications'
+       and statement !~* 'create or replace function'
+  loop
+    execute v_statement;
+    v_count := v_count + 1;
+  end loop;
+  return v_count;
+end;
+$fn$;
+
+alter table public.announcements disable trigger announcements_fan_out;
+insert into public.announcements (title, body, author, priority, category, published_at, created_by, group_id, audience)
+values ('NH anunț #843', 'Corp #843', 'BC', 'normal', 'organizatoric', now() - interval '1 hour',
+        '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org');
+-- Two Announcements sharing a title: a Notification written at one's
+-- published_at is that one's; a Notification matching neither instant is
+-- ambiguous and keeps the feed link.
+insert into public.announcements (title, body, author, priority, category, published_at, created_by, group_id, audience)
+values ('NH dublu #843', 'Corp A', 'BC', 'normal', 'organizatoric', now() - interval '3 hours',
+        '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org'),
+       ('NH dublu #843', 'Corp B', 'BC', 'normal', 'organizatoric', now() - interval '2 hours',
+        '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org');
+alter table public.announcements enable trigger announcements_fan_out;
+
+insert into public.notifications (member_id, kind, title, body, link, dedupe_key, created_at) values
+  ('32000000-0000-0000-0000-000000000602', 'task',     'BF843 task',      null, '/tracker/843', null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'BF843 member page', null, '/tracker/membru/32000000-0000-0000-0000-000000000602', null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'event',    'BF843 event',     'Noua locație: X', '/calendar', 'event:8431:location', now()),
+  ('32000000-0000-0000-0000-000000000602', 'event',    'BF843 bare event', null, '/calendar', null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'BF843 filing',    null, '/administrare/grupuri/8432', 'application:8433', now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'BF843 answer',    null, '/grupuri/8432', 'application:8434', now()),
+  ('32000000-0000-0000-0000-000000000602', 'task',     'Cerere nouă: BF843', null, null, 'request:8435', now()),
+  ('32000000-0000-0000-0000-000000000602', 'task',     'Cerere respinsă: BF843', 'Motiv', null, null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'Cerere respinsă: Grup BF843', null, '/grupuri/8436', 'application:8437', now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'Rol actualizat',  'Rolul tău BF843', null, null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'Ai fost adăugat în Echipa BF843', 'Faci parte din grupul Echipa BF843.', '/grupuri/8438', null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'announce', 'Anunț nou: NH anunț #843', 'Corp #843', '/anunturi', null,
+   (select published_at from public.announcements where title = 'NH anunț #843')),
+  ('32000000-0000-0000-0000-000000000602', 'announce', 'Anunț nou: NH dublu #843', 'Corp A', '/anunturi', null,
+   (select published_at from public.announcements where title = 'NH dublu #843' and body = 'Corp A')),
+  ('32000000-0000-0000-0000-000000000602', 'announce', 'Anunț nou: NH dublu #843', 'Corp ?', '/anunturi', null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'Nu mai faci parte din Grup privat BF843', null,
+   '/grupuri/' || (select id from public.groups where is_private order by id limit 1)::text, null, now()),
+  ('32000000-0000-0000-0000-000000000602', 'system',   'Nu mai faci parte din Grup public BF843', null,
+   '/grupuri/' || (select id from public.groups where is_organization)::text, null, now());
+
+select ok(
+  (select count(*) from public.groups where is_private) > 0
+    and not private.can_see_group((select id from public.groups where is_private order by id limit 1),
+                                  '32000000-0000-0000-0000-000000000602'),
+  '#843 backfill fixture: a Private Group exists that the recipient cannot see -- the removal case below is not vacuous');
+select is(pg_temp.replay_843_backfill(), 9,
+  '#843 backfill: the migration recorded its nine notification updates, and they replay');
+
+create function pg_temp.bf843(p_title text) returns text language sql stable as $fn$
+  select coalesce(link, '<none>') from public.notifications
+   where member_id = '32000000-0000-0000-0000-000000000602' and title = p_title
+$fn$;
+
+select is(pg_temp.bf843('BF843 task'), '/tracker?task=843',
+  '#843 D1 backfill: /tracker/<id> becomes /tracker?task=<id>');
+select is((select count(*) from public.notifications where link ~ '^/tracker/[0-9]+$'), 0::bigint,
+  '#843 D1 backfill: no row anywhere still links /tracker/<id>');
+select is(pg_temp.bf843('BF843 member page'), '/tracker/membru/32000000-0000-0000-0000-000000000602',
+  '#843 D1 backfill: the member page /tracker/membru/<id> is not a Task link and is left alone');
+select is(pg_temp.bf843('BF843 event'), '/calendar?event=8431',
+  '#843 D5 backfill: an Event change (dedupe event:<id>:<field>) links its Event');
+select is(pg_temp.bf843('BF843 bare event'), '/calendar',
+  '#843 D5 backfill: a /calendar row without an Event key is left alone');
+select is(pg_temp.bf843('BF843 filing'), '/administrare/grupuri/8432?tab=cereri',
+  '#843 D6 backfill: the deciders'' "Cerere de înscriere" opens the Cereri tab');
+select is(pg_temp.bf843('BF843 answer'), '/grupuri/8432',
+  '#843 D6 backfill: the applicant''s answer keeps the member-facing Group page');
+select is(pg_temp.bf843('Cerere nouă: BF843') || '|' || pg_temp.bf843('Cerere respinsă: BF843'), '/cereri|/cereri',
+  '#843 D7 backfill: "Cerere nouă" and "Cerere respinsă" of a Completed Work Request link /cereri');
+select is(pg_temp.bf843('Cerere respinsă: Grup BF843'), '/grupuri/8436',
+  '#843 D7 backfill: a Group application''s refusal (system kind) is not a Completed Work Request');
+select is(pg_temp.bf843('Rol actualizat'), '/profil',
+  '#843 D24 backfill: "Rol actualizat" links Profil');
+select is((select coalesce(body, '<none>') from public.notifications
+            where member_id = '32000000-0000-0000-0000-000000000602' and title = 'Ai fost adăugat în Echipa BF843'),
+  '<none>', '#843 B36 backfill: the body that only repeated the title is gone');
+select is(pg_temp.bf843('Anunț nou: NH anunț #843'),
+  '/anunturi?anunt=' || (select id from public.announcements where title = 'NH anunț #843')::text,
+  '#843 D14 backfill: "Anunț nou" links its Announcement');
+select is((select coalesce(link, '<none>') from public.notifications
+            where member_id = '32000000-0000-0000-0000-000000000602'
+              and title = 'Anunț nou: NH dublu #843' and body = 'Corp A'),
+  '/anunturi?anunt=' || (select id from public.announcements where title = 'NH dublu #843' and body = 'Corp A')::text,
+  '#843 D14 backfill: of two same-title Announcements, the one published at the Notification''s instant is linked');
+select is((select coalesce(link, '<none>') from public.notifications
+            where member_id = '32000000-0000-0000-0000-000000000602'
+              and title = 'Anunț nou: NH dublu #843' and body = 'Corp ?'),
+  '/anunturi',
+  '#843 D14 backfill: an ambiguous match keeps the feed link rather than guess');
+select is(pg_temp.bf843('Nu mai faci parte din Grup privat BF843') || '|' || pg_temp.bf843('Nu mai faci parte din Grup public BF843'),
+  '<none>|/grupuri/' || (select id from public.groups where is_organization)::text,
+  '#843 D23 backfill: a removal from a Private Group the Member no longer sees loses its link; a visible Group keeps it');
 
 select * from finish();
 rollback;
