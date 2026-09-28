@@ -301,11 +301,13 @@ export default function GroupScreen() {
 
       {/* The one refusal line (relevance B49): a viewer who can change
           nothing here is told once, not once per tab. */}
-      {!authority.manageWork && !authority.manageGroup && (
-        <p className="m-0 -mt-3 text-sm text-muted-foreground">
-          Vezi grupul, dar schimbările îi revin coordonatorului lui.
-        </p>
-      )}
+      {!authority.manageWork &&
+        !authority.manageGroup &&
+        !authority.appointManager && (
+          <p className="m-0 -mt-3 text-sm text-muted-foreground">
+            Vezi grupul, dar schimbările îi revin coordonatorului lui.
+          </p>
+        )}
 
       {message && <p role="status">{message}</p>}
       {error && (

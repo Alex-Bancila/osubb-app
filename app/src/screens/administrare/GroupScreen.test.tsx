@@ -1104,3 +1104,12 @@ it('puts the Group tabs in one strip that keeps a single row at 375 px (X7)', ()
   expect(tabBar().className).toContain('max-sm:overflow-x-auto');
   expect(tabBar().className).not.toContain('max-sm:flex-wrap');
 });
+
+it("gives the parent's Manager, who appoints this Group's coordinator, Roluri and no refusal line", () => {
+  capabilities(false);
+  // Manager of Logistică, looking at its Child Group Foto.
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
+  show(5);
+  expect(tabNames()).toContain('Roluri');
+  expect(screen.queryByText(/schimbările îi revin/)).toBeNull();
+});
