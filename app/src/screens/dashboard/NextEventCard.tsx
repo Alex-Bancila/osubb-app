@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { CalendarDays } from 'lucide-react';
 import { EmptyState, Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { bucharestDayKey } from '../../lib/calendar-time';
@@ -26,7 +25,11 @@ import { nextRelevantEvent } from './next-items';
  *
  * The Calendar's card shows only the time (the Agendă prints the day above
  * it); here the card prints the day itself (`showDay`), so the box starts
- * level with its row neighbour.
+ * level with its row neighbour, and fills the box (`*:flex-1`) so it ends
+ * level with Următorul task's card in their `equalHeights` row.
+ *
+ * No eyebrow: "Calendar" above "Următorul eveniment" says the title twice,
+ * as "Taskuri" did above "Următorul task" (B7).
  */
 export default function NextEventCard({
   now,
@@ -58,8 +61,6 @@ export default function NextEventCard({
 
   return (
     <Panel
-      eyebrow="Calendar"
-      icon={CalendarDays}
       title="Următorul eveniment"
       className={className}
       action={
@@ -68,6 +69,7 @@ export default function NextEventCard({
           : undefined
       }
       bare={Boolean(shown)}
+      boxClassName={shown ? '*:flex-1' : undefined}
     >
       {failed ? (
         <ErrorState

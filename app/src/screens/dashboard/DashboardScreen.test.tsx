@@ -601,7 +601,13 @@ describe('Următorul eveniment', () => {
     expect(
       within(card).getByText('sâmbătă, 17 ianuarie 2026'),
     ).toBeInTheDocument();
-    expect(card.parentElement).toHaveAttribute('data-slot', 'panel-body');
+    const body = card.parentElement;
+    expect(body).toHaveAttribute('data-slot', 'panel-body');
+    // The card fills the box, so it ends level with Următorul task's card in
+    // their equal-height row.
+    expect(body).toHaveClass('*:flex-1');
+    // No "Calendar" eyebrow above "Următorul eveniment" (B7).
+    expect(next.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
     for (const skipped of ['Festival', 'Ședință de azi', 'Adunare OSUBB'])
       expect(within(next).queryByText(skipped)).toBeNull();
     expect(
