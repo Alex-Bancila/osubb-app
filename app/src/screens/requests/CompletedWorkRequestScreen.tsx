@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { RequestDecisionQueue } from './RequestDecisionQueue';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, ClipboardPlus, History } from 'lucide-react';
 import { TaskDetailsSheet } from '../tracker/TaskDetailsSheet';
 import { RequestStatusBadge } from './RequestStatusBadge';
 import { Button } from '../../components/ui/button';
@@ -40,6 +40,29 @@ import { useGroups, type Group } from '../../queries/reference';
 // Parent names come from the Groups this Member may read; until they load, a
 // Child Group is shown by its own name.
 const NO_GROUPS: ReadonlyMap<number, Group> = new Map();
+
+/**
+ * The Group a Request was filed for, above its description (#855, B32);
+ * nothing while the Group is not (or no longer) readable.
+ */
+function RequestGroup({
+  groupId,
+  groupsById,
+}: {
+  groupId: number;
+  groupsById: ReadonlyMap<number, Group>;
+}) {
+  const group = groupsById.get(groupId);
+  if (!group) return null;
+  return (
+    <p
+      data-slot="request-group"
+      className="m-0 text-sm text-muted-foreground wrap-anywhere"
+    >
+      {groupOptionLabel(group, groupsById)}
+    </p>
+  );
+}
 
 /** A refused Request, in the shared copy of `command-reasons.ts`. */
 function safeSubmitError(error: unknown) {
@@ -82,19 +105,22 @@ export default function CompletedWorkRequestScreen() {
   return (
     <Page width="reading">
       <PageHeader
-        title="Cerere pentru activitate realizată"
+        title="Cereri"
         description={
           canSubmitRequests
             ? 'Descrie contribuția, iar coordonatorii grupului o vor evalua.'
-            : undefined
+            : 'Cererile de activitate realizată pe care le poți aproba sau respinge.'
         }
       />
-      {/* Outside the grid: the queue renders nothing for a Member with no
-          Request to decide (it is not a panel that may go missing). */}
-      <RequestDecisionQueue />
+      {/* Outside the grid: for a Member who files Requests the queue renders
+          nothing until there is one to decide (it is not a panel that may go
+          missing). For one who only decides it is the page, empty or not. */}
+      <RequestDecisionQueue showEmpty={!canSubmitRequests} />
       <PageGrid columns={1}>
         {canSubmitRequests && (
           <Panel
+            eyebrow="Cerere nouă"
+            icon={ClipboardPlus}
             title="Activitatea ta"
             description="Alege grupul pentru care ai lucrat: departamentul, echipa sau proiectul."
             descriptionId="request-origin-help"
@@ -202,7 +228,7 @@ export default function CompletedWorkRequestScreen() {
                   </p>
                 )}
                 <Button
-                  className="min-h-11 min-w-11"
+                  block
                   type="submit"
                   disabled={submit.isPending || !origin || !description.trim()}
                 >
@@ -213,7 +239,12 @@ export default function CompletedWorkRequestScreen() {
           </Panel>
         )}
         {canSubmitRequests && (
-          <Panel title="Cererile mele">
+          <Panel
+            eyebrow="Trimise"
+            icon={History}
+            title="Cererile mele"
+            flush={Boolean(myRequests.data?.length)}
+          >
             {myRequests.isPending ? (
               <Loading label="Se încarcă cererile…" />
             ) : myRequests.isError ? (
@@ -223,13 +254,17 @@ export default function CompletedWorkRequestScreen() {
                 onRetry={() => void myRequests.refetch()}
               />
             ) : myRequests.data?.length ? (
-              <ul className={`${rowListClass} -mx-3`}>
+              <ul className={rowListClass}>
                 {myRequests.data.map((request) => (
                   <ListRow
                     key={request.id}
                     value={<RequestStatusBadge status={request.status} />}
                   >
-                    <p className="wrap-anywhere">{request.description}</p>
+                    <RequestGroup
+                      groupId={request.group_id}
+                      groupsById={groupsById}
+                    />
+                    <p className="m-0 wrap-anywhere">{request.description}</p>
                     {request.decision_note && (
                       <p className="mt-2 text-sm wrap-anywhere">
                         <span className="font-semibold">
