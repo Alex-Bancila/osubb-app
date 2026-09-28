@@ -53,12 +53,20 @@ export const ANNOUNCEMENTS_PATH = '/anunturi';
  */
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Acasă', icon: LayoutDashboard, onTabBar: true },
-  { path: '/tracker', label: 'Taskuri', icon: ListTodo, onTabBar: true },
+  {
+    path: '/tracker',
+    label: 'Taskuri',
+    icon: ListTodo,
+    onTabBar: true,
+    // A member's history below it is Clasament's page (#844, D17).
+    activeOn: ['/tracker'],
+  },
   {
     path: '/clasament',
     label: 'Clasament',
     icon: Trophy,
     capability: 'seeLeadership',
+    activeOn: ['/clasament', '/tracker/membru/:id'],
   },
   { path: '/grupuri', label: 'Grupuri', icon: Users },
   { path: '/cereri', label: 'Cereri', icon: ClipboardPlus },

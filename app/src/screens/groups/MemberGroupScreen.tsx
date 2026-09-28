@@ -1,16 +1,21 @@
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { CalendarDays, Users } from 'lucide-react';
+import { cn } from 'cn';
 import {
   BackLink,
   EmptyState,
+  ListRow,
   Page,
   PageGrid,
   PageHeader,
   Panel,
+  backLinkState,
+  rowListClass,
 } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
+import { buttonVariants } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { parsePositiveInt } from '../../lib/ids';
@@ -41,7 +46,10 @@ export default function MemberGroupScreen() {
   const capabilities = useCapabilities();
   const auth = useAuth();
   const level = auth.claims?.member_level ?? 0;
-  const back = <BackLink to="/grupuri" label="Înapoi la grupuri" />;
+  const location = useLocation();
+  // `state.from` first (the page that opened this one); otherwise Grupuri,
+  // which lists the member's own Groups (navigation D8, A33).
+  const back = <BackLink to="/grupuri" label="Înapoi la Grupuri" />;
   if (groups.isPending || mine.isPending || applications.isPending)
     return (
       <Page aria-label="Grup">
@@ -55,11 +63,18 @@ export default function MemberGroupScreen() {
       </Page>
     );
   const group = groups.data.find((row) => row.id === id);
+  // An archived Group, a Private Group the member has left, or an id that was
+  // never a Group: a notification link can end here, so say why and lead on
+  // (navigation D23).
   if (!group)
     return (
       <Page>
         {back}
-        <PageHeader eyebrow="Grupuri" title="Grup indisponibil" />
+        <PageHeader
+          eyebrow="Grupuri"
+          title="Grup indisponibil"
+          description="Grupul a fost arhivat sau nu mai ai acces la el."
+        />
       </Page>
     );
   const role = mine.data.find((row) => row.id === id);
@@ -78,6 +93,12 @@ export default function MemberGroupScreen() {
             ?.positionTitle ?? 'Responsabil')
         : 'Membru'
     : null;
+  // Coordonare only when someone holds a position (relevance B29); while it
+  // loads or fails the panel keeps its place.
+  const coordinators =
+    roster.data?.filter((row) => row.groupRole !== 'member') ?? [];
+  const showCoordination =
+    roster.isPending || roster.isError || coordinators.length > 0;
   const apply = pending ? (
     <div className="flex flex-wrap items-center gap-3">
       <Badge variant="secondary">Cerere în așteptare</Badge>
@@ -131,8 +152,10 @@ export default function MemberGroupScreen() {
               {apply}
               {authority.manageWork && (
                 <Link
-                  className="inline-flex min-h-11 items-center rounded-sm underline outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className={cn(buttonVariants({ variant: 'outline' }))}
                   to={`/administrare/grupuri/${id}`}
+                  // Its back link returns here, not to Administrare (D10).
+                  state={backLinkState(location, `Înapoi la ${group.name}`)}
                 >
                   Administrare
                 </Link>
@@ -141,24 +164,27 @@ export default function MemberGroupScreen() {
           )
         }
       />
-      <PageGrid columns={2}>
-        <Panel eyebrow="Grup" icon={Users} title="Coordonare">
-          {roster.isPending ? (
-            <Loading />
-          ) : roster.isError ? (
-            <ErrorState text="Nu am putut încărca funcțiile din grup." />
-          ) : !roster.data.some((row) => row.groupRole !== 'member') ? (
-            <EmptyState>
-              Nu sunt numite funcții de coordonare în acest grup.
-            </EmptyState>
-          ) : (
-            <ul className="space-y-2">
-              {roster.data
-                .filter((row) => row.groupRole !== 'member')
-                .map((row) => (
-                  <li
+      <PageGrid columns={showCoordination ? 2 : 1} alignHeaders>
+        {showCoordination && (
+          <Panel eyebrow="Grup" icon={Users} title="Coordonare" flush>
+            {roster.isPending ? (
+              <Loading />
+            ) : roster.isError ? (
+              <ErrorState text="Nu am putut încărca funcțiile din grup." />
+            ) : (
+              <ul className={rowListClass}>
+                {coordinators.map((row) => (
+                  <ListRow
                     key={row.memberId}
-                    className="flex flex-wrap items-center gap-x-2"
+                    value={
+                      // A long title wraps under 640 px rather than cutting
+                      // the name short.
+                      <span className="block max-w-28 text-sm whitespace-normal text-muted-foreground sm:max-w-none">
+                        {row.groupRole === 'manager'
+                          ? (group.manager_title ?? 'Coordonator')
+                          : (row.positionTitle ?? 'Responsabil')}
+                      </span>
+                    }
                   >
                     <MemberName
                       memberId={row.memberId}
@@ -166,20 +192,17 @@ export default function MemberGroupScreen() {
                       nickname={row.nickname}
                       size="sm"
                     />
-                    <span className="text-muted-foreground">
-                      {row.groupRole === 'manager'
-                        ? (group.manager_title ?? 'Coordonator')
-                        : (row.positionTitle ?? 'Responsabil')}
-                    </span>
-                  </li>
+                  </ListRow>
                 ))}
-            </ul>
-          )}
-        </Panel>
+              </ul>
+            )}
+          </Panel>
+        )}
         <Panel
           eyebrow="Calendar"
           icon={CalendarDays}
           title="Evenimente viitoare"
+          flush={Boolean(events.data?.length)}
         >
           {events.isPending ? (
             <Loading />
@@ -188,13 +211,20 @@ export default function MemberGroupScreen() {
           ) : !events.data?.length ? (
             <EmptyState>Nu sunt evenimente viitoare.</EmptyState>
           ) : (
-            <ul className="space-y-3">
+            <ul className={rowListClass}>
               {events.data.map((event) => (
-                <li key={event.id}>
-                  <Link to="/calendar" className="font-medium underline">
+                <ListRow key={event.id} className="relative">
+                  <Link
+                    // The Calendar opens on this Event (navigation D5).
+                    to={`/calendar?event=${event.id}`}
+                    className={cn(
+                      'block font-semibold text-foreground underline-offset-4 after:absolute after:inset-0 after:rounded-sm hover:underline',
+                      'outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-ring focus-visible:after:outline-solid',
+                    )}
+                  >
                     {event.title}
                   </Link>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="m-0 text-sm text-muted-foreground">
                     {event.starts_at &&
                       new Date(event.starts_at).toLocaleString('ro-RO', {
                         timeZone: 'Europe/Bucharest',
@@ -203,7 +233,7 @@ export default function MemberGroupScreen() {
                       })}
                     {event.location && ` · ${event.location}`}
                   </p>
-                </li>
+                </ListRow>
               ))}
             </ul>
           )}
