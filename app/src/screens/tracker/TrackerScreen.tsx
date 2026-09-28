@@ -100,7 +100,8 @@ export default function TrackerScreen() {
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [tab, setTab] = useState('mine');
   // The deep link Acasă and the notifications use (#685): `/tracker?task=<id>`
-  // opens Taskurile mele on that card. Only `task` is read here.
+  // opens Taskurile mele on that card, or De gestionat with the Task's sheet
+  // when it is not mine but I manage it (#822). Only `task` is read here.
   const [params] = useSearchParams();
   const linkedId = linkedTaskId(params.get('task'));
   const [linkFor, setLinkFor] = useState<number | null>(null);
@@ -113,6 +114,24 @@ export default function TrackerScreen() {
     setExpiredFor(null);
     setLinkVisit((visit) => visit + 1);
     if (linkedId !== null) setTab('mine');
+  }
+  // A Task that is not one of mine but is in De gestionat (Acasă's De evaluat,
+  // #822) opens De gestionat and that Task's details sheet — where the
+  // Evaluation control is — once per link, after both lists have loaded (a
+  // failed Taskurile mele read never routes a Task of mine to De gestionat).
+  const managedLanding =
+    linkedId !== null &&
+    management.data === true &&
+    mine.isSuccess &&
+    !mine.data.some((task) => task.id === linkedId) &&
+    managed.data?.some((task) => task.id === linkedId)
+      ? linkedId
+      : null;
+  const [openedVisit, setOpenedVisit] = useState<number | null>(null);
+  if (managedLanding !== null && openedVisit !== linkVisit) {
+    setOpenedVisit(linkVisit);
+    setTab('managed');
+    setDetailId(managedLanding);
   }
   // The card is highlighted once the list has loaded with it in it, until
   // the highlight expires. An id that is not one of mine leaves the plain list.

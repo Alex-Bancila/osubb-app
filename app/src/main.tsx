@@ -10,7 +10,6 @@ import './theme/tokens.css';
 import './theme/tailwind.css';
 import './theme/global.css';
 import './theme/screens.css';
-import './theme/dashboard.css';
 import './theme/calendar.css';
 
 import { createQueryClient } from './queries/client';

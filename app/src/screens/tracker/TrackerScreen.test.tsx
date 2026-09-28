@@ -145,6 +145,7 @@ function query(overrides: Record<string, unknown> = {}) {
     data: [],
     isPending: false,
     isError: false,
+    isSuccess: !overrides.isPending && !overrides.isError,
     refetch,
     ...overrides,
   });
@@ -807,6 +808,83 @@ describe('My tasks screen', () => {
       );
       await user.click(screen.getByRole('link', { name: 'Deschide taskul 2' }));
       expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    });
+
+    it('opens De gestionat and the details sheet for a managed Task that is not mine (#822)', async () => {
+      const user = userEvent.setup();
+      hooks.useTaskManagement.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+      });
+      hooks.useManagedTasks.mockReturnValue({
+        data: [
+          taskRow({
+            id: 7,
+            title: 'De evaluat',
+            status: 'in_review',
+            assignments: [{ id: 9, member_id: 'other', ended_at: null }],
+          }),
+        ],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?task=7');
+
+      expect(screen.getByRole('tab', { name: 'De gestionat' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #7');
+      expect(scrollIntoView).not.toHaveBeenCalled();
+
+      // Closed once, it stays closed: a later render never reopens it.
+      await user.click(
+        screen.getByRole('button', { name: 'Închide detaliile' }),
+      );
+      expect(screen.queryByRole('dialog')).toBeNull();
+      await user.click(screen.getByRole('tab', { name: 'Taskurile mele' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('never opens De gestionat while Taskurile mele failed to load', () => {
+      query({ isError: true, data: undefined, error: new Error('boom') });
+      hooks.useTaskManagement.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+      });
+      hooks.useManagedTasks.mockReturnValue({
+        data: [taskRow({ id: 2, title: 'Al doilea task' })],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?task=2');
+      expect(
+        screen.getByRole('tab', { name: 'Taskurile mele' }),
+      ).toHaveAttribute('aria-selected', 'true');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('prefers Taskurile mele when the linked Task is also managed', () => {
+      hooks.useTaskManagement.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+      });
+      hooks.useManagedTasks.mockReturnValue({
+        data: [taskRow({ id: 2, title: 'Al doilea task' })],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?task=2');
+      expect(
+        screen.getByRole('tab', { name: 'Taskurile mele' }),
+      ).toHaveAttribute('aria-selected', 'true');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(scrollIntoView).toHaveBeenCalledOnce();
     });
 
     it.each(['/tracker?task=99', '/tracker?task=abc'])(

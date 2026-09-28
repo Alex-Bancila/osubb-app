@@ -78,12 +78,6 @@
   gap: var(--s-2);
   margin: 0;
 }
-.card-title-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  color: var(--text-faint);
-}
 
 /* The Profile screen's points total (main, after #376 was written). */
 .bignum {
@@ -91,79 +85,6 @@
   font-size: var(--fs-3xl);
   font-weight: var(--fw-extrabold);
   letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ---------- leaderboard ---------- */
-.rank-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-.rank-list li {
-  display: grid;
-  grid-template-columns: 1.6rem auto 1fr auto;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-2) var(--s-2);
-  border-bottom: 1px solid var(--border-soft);
-}
-.rank-list li:last-child {
-  border-bottom: 0;
-}
-
-/* My own row, wherever it lands. Losing the rule under it as well as gaining
-   the tint is what makes it read as one block rather than a coloured row in a
-   table. */
-.rank-list li.is-me {
-  background: var(--red-050);
-  border-radius: var(--r-sm);
-  border-bottom-color: transparent;
-}
-
-.rank {
-  font-weight: var(--fw-bold);
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-/* The podium, in brand red — three positions, not a gradient of importance. */
-.rank--top {
-  color: var(--red);
-}
-
-/* The Member's name button (avatar + Nickname) spans the avatar and name
-   columns; the "tu" tag stays beside it. */
-.rank-member {
-  grid-column: 2 / 4;
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-width: 0;
-}
-
-/* Marks the jump from the top ten down to my own row. */
-.rank-break {
-  text-align: center;
-  color: var(--text-faint);
-  letter-spacing: 0.35em;
-  line-height: 1;
-  padding: var(--s-2) 0;
-}
-
-.tag--me {
-  margin-left: var(--s-2);
-  padding: 1px 7px;
-  border-radius: var(--r-pill);
-  background: var(--red);
-  color: var(--white);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
-}
-.rank-points {
-  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -225,4 +146,23 @@
 .chip--cancelled {
   background: var(--danger-050);
   color: var(--danger);
+}
+
+/* The Role chip on Profil (moved from the retired dashboard.css, #822). */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px 4px 9px;
+  border-radius: var(--r-pill);
+  background: var(--ink-900);
+  color: var(--white);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+}
+.role-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
 }
