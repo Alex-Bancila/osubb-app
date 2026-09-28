@@ -4,6 +4,7 @@ import {
   BackLink,
   EmptyState,
   Page,
+  PageGrid,
   PageHeader,
   Panel,
 } from '../../components/layout';
@@ -291,7 +292,9 @@ function MemberHistory({ memberId }: { memberId: string }) {
             perioada.
           </EmptyState>
         ) : (
-          <ul className="m-0 list-none space-y-4 p-0">
+          // Taskuri's collection grid (layout L3). Cards keep to their own
+          // height: an opened evaluation record never stretches its row.
+          <PageGrid as="ul" columns="collection" data-grid="assignments">
             {rows.map((task) => (
               <li key={task.assignment_id}>
                 <TaskCard
@@ -301,7 +304,7 @@ function MemberHistory({ memberId }: { memberId: string }) {
                 />
               </li>
             ))}
-          </ul>
+          </PageGrid>
         )}
       </Panel>
     </Page>

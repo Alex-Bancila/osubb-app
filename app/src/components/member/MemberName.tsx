@@ -14,6 +14,7 @@ import { memberDisplayName, type MemberIdentity } from './member-identity';
 export function MemberName({
   showFullName = false,
   size = 'default',
+  wrap = false,
   avatarFallback,
   className,
   ...identity
@@ -27,6 +28,11 @@ export function MemberName({
    * app's spacing scale, so no step of it is used here.)
    */
   size?: 'default' | 'sm';
+  /**
+   * Let the name wrap onto more lines instead of cutting it with "…", for a
+   * ranked row where the name is the thing read (layout L1).
+   */
+  wrap?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -55,7 +61,13 @@ export function MemberName({
           className={size === 'sm' ? 'size-6 text-[0.6rem]' : undefined}
         />
         <span className="grid min-w-0">
-          <span className="truncate font-semibold underline-offset-4 decoration-foreground/30 group-hover/member:underline">
+          <span
+            data-slot="member-name-text"
+            className={cn(
+              'font-semibold underline-offset-4 decoration-foreground/30 group-hover/member:underline',
+              wrap ? 'wrap-break-word' : 'truncate',
+            )}
+          >
             {name}
           </span>
           {fullNameLine && (

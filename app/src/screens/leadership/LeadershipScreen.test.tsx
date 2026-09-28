@@ -47,6 +47,19 @@ function Search() {
 function search() {
   return new URLSearchParams(screen.getByTestId('search').textContent ?? '');
 }
+/** The tracker page's stand-in: what it was opened with. */
+function Tracker() {
+  const location = useLocation();
+  return (
+    <>
+      <h1>Istoric membru</h1>
+      <span data-testid="tracker-url">
+        {location.pathname + location.search}
+      </span>
+      <span data-testid="tracker-state">{JSON.stringify(location.state)}</span>
+    </>
+  );
+}
 function renderPage(query = '') {
   return render(
     <MemoryRouter initialEntries={[`/clasament${query}`]}>
@@ -61,7 +74,7 @@ function renderPage(query = '') {
               </>
             }
           />
-          <Route path="/tracker/membru/:id" element={<h1>Istoric membru</h1>} />
+          <Route path="/tracker/membru/:id" element={<Tracker />} />
           <Route path="/" element={<h1>Acasă</h1>} />
         </Routes>
       </main>
@@ -471,12 +484,66 @@ it('mounts no metric queries when the live leadership gate denies stale claims',
   expect(state.cup).not.toHaveBeenCalled();
 });
 
-it('opens the same member from the non-link portion of a row', async () => {
+it('makes the whole row one link to the tracker, under the name and chip buttons (B66)', () => {
+  boardWithIdentities();
   renderPage();
-  await userEvent.click(screen.getByText('−1.234'));
-  expect(
-    screen.getByRole('heading', { name: 'Istoric membru' }),
-  ).toBeInTheDocument();
+  const rows = within(
+    screen.getByRole('list', { name: 'Clasamentul membrilor' }),
+  ).getAllByRole('listitem');
+  for (const row of rows) {
+    // One link per row, no separate "Vezi trackerul" control.
+    const links = within(row).getAllByRole('link');
+    expect(links).toHaveLength(1);
+    const [link] = links as [HTMLElement];
+    expect(link).toHaveAccessibleName(/^Vezi trackerul membrului /);
+    expect(link).toBeEmptyDOMElement();
+    // Stretched over the row, first in the tab order; the buttons that
+    // open the Member Card paint above it.
+    expect(link).toHaveClass('absolute', 'inset-0');
+    expect(row).toHaveClass('relative');
+    expect(row.firstElementChild).toBe(link);
+    expect(row.querySelector('[data-slot=member-name]')).toHaveClass(
+      'relative',
+    );
+  }
+  expect(screen.queryByText('Vezi trackerul')).toBeNull();
+  // The chevron says the row opens only from 640 px, inside the points cell:
+  // no chevron column under it, so the name keeps the width (layout L1).
+  const [first] = rows as [HTMLElement];
+  const chevron = first.querySelector('[data-slot=row-chevron]');
+  expect(chevron).toHaveClass('hidden', 'sm:block');
+  expect(chevron?.closest('[data-slot=list-row-value]')).not.toBeNull();
+  expect(first.querySelector('[data-slot=list-row-action]')).toBeNull();
+});
+
+it('lets a name wrap instead of cutting it, in a flush list (L1)', () => {
+  boardWithIdentities();
+  renderPage();
+  const list = screen.getByRole('list', { name: 'Clasamentul membrilor' });
+  const names = list.querySelectorAll('[data-slot=member-name-text]');
+  expect(names).toHaveLength(3);
+  for (const name of names) {
+    expect(name).not.toHaveClass('truncate');
+    expect(name).toHaveClass('wrap-break-word');
+  }
+  expect(list.closest('[data-slot=panel-box]')).toHaveAttribute(
+    'data-flush',
+    'true',
+  );
+});
+
+it('draws the Group chip 24 px tall inside a 44 px button (L2)', () => {
+  boardWithIdentities();
+  renderPage();
+  const button = screen.getByRole('button', {
+    name: 'Grupul Educație. Vezi profilul membrului Ioana',
+  });
+  expect(button).toHaveClass('min-h-11');
+  const chip = button.querySelector('[data-slot=group-chip]');
+  expect(chip).toHaveClass('h-6', 'rounded-full', 'border');
+  expect(button).not.toHaveClass('border');
+  // The focus ring follows the chip, not the invisible hit area.
+  expect(chip).toHaveClass('group-focus-visible/chip:outline-solid');
 });
 
 it('offers the filters again when they fail to load', async () => {
@@ -641,6 +708,35 @@ it('gives every row its own keyboard link to the Member tracker', async () => {
   expect(
     screen.getByRole('heading', { name: 'Istoric membru' }),
   ).toBeInTheDocument();
+});
+
+it('opens the tracker under the same Work Filter and passes the way back (D10)', async () => {
+  const user = userEvent.setup();
+  boardWithIdentities();
+  const query =
+    '?grup=7&subgrup=9&campanie=3&de_la=2026-01-01&pana_la=2026-09-30';
+  renderPage(query);
+  const link = screen.getByRole('link', {
+    name: 'Vezi trackerul membrului Anuța',
+  });
+  expect(link).toHaveAttribute('href', `/tracker/membru/${ana}${query}`);
+  await user.click(link);
+  expect(screen.getByTestId('tracker-url')).toHaveTextContent(
+    `/tracker/membru/${ana}${query}`,
+  );
+  expect(
+    JSON.parse(screen.getByTestId('tracker-state').textContent ?? ''),
+  ).toEqual({
+    from: { to: `/clasament${query}`, label: 'Înapoi la clasament' },
+  });
+});
+
+it('carries only the Work Filter levels to the tracker, never vedere', () => {
+  boardWithIdentities();
+  renderPage('?vedere=membri&grup=7&altceva=1');
+  expect(
+    screen.getByRole('link', { name: 'Vezi trackerul membrului Ioana' }),
+  ).toHaveAttribute('href', `/tracker/membru/${uid}?grup=7`);
 });
 
 it('opens the Member Card from the chip, not the tracker', async () => {
