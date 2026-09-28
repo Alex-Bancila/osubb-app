@@ -36,7 +36,11 @@ export type DirectoryMember = {
   primaryGroup: PrimaryGroup | null;
   /** The "+n" beside the chip: the Member's other explicit memberships. */
   otherMemberships: number;
-  points: number;
+  /**
+   * Task points; `null` for BC and the Moderator, who are hidden from the
+   * points column (ruling 1, 2026-09-28) — never a fabricated 0.
+   */
+  points: number | null;
   contact: { email: string | null; phone: string | null } | undefined;
 };
 
@@ -73,6 +77,13 @@ export function primaryGroupOf(rows: MembershipCandidate[]): {
     otherMemberships: rows.length - (primary ? 1 : 0),
   };
 }
+
+/**
+ * The Roles that show no Task points (ruling 1, 2026-09-28): BC and the
+ * Moderator are off the Clasament and the Voluntari points column; BCE keeps
+ * its points.
+ */
+const rolesWithoutPoints = new Set(['bc', 'moderator']);
 
 // Supabase caps each response at 1,000 rows. Memberships can exceed that
 // before the directory does, so every projection is read in stable pages.
@@ -194,7 +205,9 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
           (a, b) =>
             a.path.length - b.path.length || a.name.localeCompare(b.name, 'ro'),
         ),
-        points: pointsById.get(profile.id) ?? 0,
+        points: rolesWithoutPoints.has(profile.role ?? '')
+          ? null
+          : (pointsById.get(profile.id) ?? 0),
         contact: contactById.get(profile.id),
       },
     ];

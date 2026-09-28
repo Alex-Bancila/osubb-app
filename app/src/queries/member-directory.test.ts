@@ -119,7 +119,8 @@ describe('directory reads', () => {
       contact: { email: 'ana@example.test' },
     });
     expect(members[1]).toMatchObject({
-      points: 0,
+      // Bogdan is BC: no points, not a fabricated 0 (ruling 1).
+      points: null,
       contact: undefined,
       primaryGroup: null,
       otherMemberships: 0,
@@ -150,15 +151,46 @@ describe('directory reads', () => {
         member_id: `other-${index}`,
         points: 1,
       })),
-      { member_id: 'b', points: 42 },
+      { member_id: 'a', points: 42 },
     ]);
     mocks.rpc.mockReturnValue(ranking);
     const members = await fetchMemberDirectory();
+    expect(members[0]).toMatchObject({ points: 42 });
     expect(members[1]).toMatchObject({
       groups: [{ label: 'Logistică · Educațional' }],
-      points: 42,
     });
     expect(pages.range).toHaveBeenCalledWith(500, 999);
     expect(ranking.range).toHaveBeenCalledWith(500, 999);
+  });
+  it('shows no points for BC and the Moderator whatever the ranking returns, and keeps BCE’s (ruling 1)', async () => {
+    mocks.from.mockImplementation((name: string) =>
+      name === 'profiles_directory'
+        ? query([
+            { id: 'bc', full_name: 'Cristina', role: 'bc', status: 'activ' },
+            {
+              id: 'mod',
+              full_name: 'Mihai',
+              role: 'moderator',
+              status: 'activ',
+            },
+            { id: 'bce', full_name: 'Alex', role: 'bce', status: 'activ' },
+            { id: 'v', full_name: 'Vlad', role: 'voluntar', status: 'activ' },
+          ])
+        : query(fixtures[name] ?? []),
+    );
+    mocks.rpc.mockImplementation(() =>
+      query([
+        { member_id: 'bc', points: 8 },
+        { member_id: 'mod', points: 10 },
+        { member_id: 'bce', points: 5 },
+      ]),
+    );
+    const members = await fetchMemberDirectory();
+    expect(members.map((member) => [member.id, member.points])).toEqual([
+      ['bc', null],
+      ['mod', null],
+      ['bce', 5],
+      ['v', 0],
+    ]);
   });
 });
