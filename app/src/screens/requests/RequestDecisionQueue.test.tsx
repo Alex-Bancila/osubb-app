@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
@@ -114,6 +114,41 @@ it('requires a rejection note, calls rejection only, and has no axe violations',
   });
   expect(await screen.findByRole('status')).toHaveTextContent('respinsă');
 });
+it('evaluates in a dialog with the dialog header, listing the Request once (#855, R1)', async () => {
+  const user = userEvent.setup();
+  render(<RequestDecisionQueue />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Evaluează cererea',
+  });
+  expect(
+    dialog.querySelector(
+      '[data-slot="dialog-header"] [data-slot="dialog-title"]',
+    ),
+  ).toHaveTextContent('Evaluează cererea');
+  // The form is not a second box with its own title inside the dialog.
+  expect(within(dialog).queryByRole('heading', { level: 3 })).toBeNull();
+  expect(
+    within(dialog)
+      .getByRole('button', { name: 'Aprobă cererea' })
+      .closest('[data-slot="dialog-footer"]'),
+  ).not.toBeNull();
+  // The Request under decision shows once in the dialog, and the list keeps
+  // its one row instead of gaining a copy.
+  expect(within(dialog).getAllByText(request.description)).toHaveLength(1);
+  expect(screen.getAllByRole('listitem', { hidden: true })).toHaveLength(1);
+  expect(screen.getAllByText(request.description)).toHaveLength(2);
+  await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
+  expect(state.mutate).not.toHaveBeenCalled();
+});
+it('says there is nothing to decide when the queue is the page (#855, B30)', () => {
+  state.queue.mockReturnValue({ data: [] });
+  render(<RequestDecisionQueue showEmpty />);
+  expect(
+    screen.getByRole('heading', { name: 'Cereri de evaluat' }),
+  ).toBeVisible();
+  expect(screen.getByText('Nicio cerere de evaluat.')).toBeVisible();
+});
 it('stays hidden for a member with nothing to decide, including while it loads', () => {
   state.queue.mockReturnValue({ data: [] });
   const view = render(<RequestDecisionQueue />);
@@ -157,7 +192,13 @@ it('names the Requester by Nickname as a button that opens their Member Card', a
   });
   render(<RequestDecisionQueue />);
   const name = screen.getByRole('button', { name: 'Profilul membrului Ani' });
-  expect(name.closest('p')).toHaveTextContent(/Ani\s*·\s*Ateliere$/);
+  // Name and Group on their own lines: no separator left at a line's end (R2).
+  expect(name.closest('p')).toHaveTextContent(/Ani$/);
+  expect(screen.getByText('Ateliere')).toHaveAttribute(
+    'data-slot',
+    'request-group',
+  );
+  expect(screen.getByRole('listitem')).not.toHaveTextContent('·');
   expect(name).not.toHaveTextContent('Ana Pop');
   await userEvent.click(name);
   expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();

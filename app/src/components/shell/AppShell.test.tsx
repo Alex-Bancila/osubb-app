@@ -10,9 +10,13 @@ const queries = vi.hoisted(() => ({
   useUnreadNotificationCount: vi.fn(),
   useUnreadAnnouncementsCount: vi.fn(),
   useCapabilities: vi.fn(),
+  usePendingDecisions: vi.fn(),
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
+// The real `submitsWorkRequests` rule is read from capabilities.ts, whose
+// module also builds the shared client.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: queries.useMyProfile,
 }));
@@ -24,8 +28,14 @@ vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
 }));
 
-vi.mock('../../lib/capabilities', () => ({
+vi.mock('../../lib/capabilities', async (original) => ({
+  submitsWorkRequests: (
+    await original<typeof import('../../lib/capabilities')>()
+  ).submitsWorkRequests,
   useCapabilities: queries.useCapabilities,
+}));
+vi.mock('../../queries/request-decisions', () => ({
+  usePendingDecisions: queries.usePendingDecisions,
 }));
 vi.mock('../../queries/notifications-realtime', () => ({
   useNotificationRealtime: vi.fn(),
@@ -89,6 +99,7 @@ describe('AppShell', () => {
     queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
     queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
     queries.useCapabilities.mockReturnValue({ data: capabilities() });
+    queries.usePendingDecisions.mockReturnValue({ data: [] });
   });
 
   it('keeps ordinary navigation gated and marks the current route in both menus', () => {
@@ -404,19 +415,53 @@ describe('AppShell', () => {
     ).toBeVisible();
   });
 
-  it('keeps the Cereri nav item at level 5, where the submission form is hidden (#631)', () => {
-    auth.useAuth.mockReturnValue({
-      claims: { ...ordinaryClaims, member_role: 'bce', member_level: 5 },
-      session: { user: { email: 'mara@osubb.ro' } },
-      signOut: auth.signOut,
+  describe('Cereri at level 5, where nobody files a Request (#855, B30)', () => {
+    beforeEach(() => {
+      auth.useAuth.mockReturnValue({
+        claims: { ...ordinaryClaims, member_role: 'bce', member_level: 5 },
+        session: { user: { email: 'mara@osubb.ro' } },
+        signOut: auth.signOut,
+      });
     });
-    renderShell();
+    const cereri = () =>
+      within(
+        screen.getByRole('navigation', { name: 'Navigare principală' }),
+      ).queryByRole('link', { name: 'Cereri' });
 
-    const primary = screen.getByRole('navigation', {
-      name: 'Navigare principală',
+    it('hides the item with nothing to decide, and while the queue loads', () => {
+      const view = renderShell();
+      expect(cereri()).toBeNull();
+      queries.usePendingDecisions.mockReturnValue({ isPending: true });
+      view.rerender(
+        <MemoryRouter initialEntries={['/calendar']}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="*" element={<h1>Conținut</h1>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      );
+      expect(cereri()).toBeNull();
     });
+
+    it('shows the item with one Request to decide', () => {
+      queries.usePendingDecisions.mockReturnValue({ data: [{ id: 7 }] });
+      renderShell();
+      expect(cereri()).toHaveAttribute('href', '/cereri');
+    });
+
+    it('keeps the item while the viewer is on the page', () => {
+      renderShell('/cereri');
+      expect(cereri()).toHaveAttribute('aria-current', 'page');
+    });
+  });
+
+  it('shows Cereri below level 5 with nothing to decide', () => {
+    renderShell();
     expect(
-      within(primary).getByRole('link', { name: 'Cereri' }),
+      within(
+        screen.getByRole('navigation', { name: 'Navigare principală' }),
+      ).getByRole('link', { name: 'Cereri' }),
     ).toHaveAttribute('href', '/cereri');
   });
 

@@ -4,7 +4,7 @@ import { Link, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
-import { useCapabilities } from '../../lib/capabilities';
+import { submitsWorkRequests, useCapabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
@@ -15,6 +15,7 @@ import { useNotificationRealtime } from '../../queries/notifications-realtime';
 import { useMyProfile } from '../../queries/profile';
 import { usePushSelfRepair } from '../../queries/push-subscription';
 import { useRoles } from '../../queries/reference';
+import { usePendingDecisions } from '../../queries/request-decisions';
 import { unreadAnnouncementsLabel } from '../../screens/announcements/announcements-presentation';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
@@ -35,6 +36,7 @@ import {
   TAB_ORDER,
   isNavItemActive,
   type NavItem,
+  type NavViewer,
 } from './navItems';
 
 /**
@@ -207,13 +209,23 @@ export default function AppShell() {
   // The one cached my_capabilities() row the route guards and the Tracker
   // share: live rank and Group Roles, which the token cannot carry.
   const capabilities = useCapabilities();
+  // The same query the Cereri page reads, so opening it costs no request.
+  const requestsToDecide = usePendingDecisions();
+  const viewer: NavViewer = {
+    submitsWorkRequests: submitsWorkRequests(claims),
+    hasRequestsToDecide: (requestsToDecide.data?.length ?? 0) > 0,
+  };
   const roleLabel =
     (claims && roles.data?.get(claims.member_role)?.name) ??
     claims?.member_role ??
     '';
 
   const visible = NAV_ITEMS.filter(
-    (item) => !item.capability || capabilities.data?.[item.capability] === true,
+    (item) =>
+      (!item.capability || capabilities.data?.[item.capability] === true) &&
+      (!item.showWhen ||
+        item.showWhen(viewer) ||
+        isNavItemActive(item, location.pathname)),
   );
   const tabs = TAB_ORDER.map((path) =>
     visible.find((item) => item.path === path),
