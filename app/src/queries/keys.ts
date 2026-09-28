@@ -44,11 +44,12 @@ export const keys = {
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
       ['points', 'standing', { memberId }] as const,
-    /* #634: the open Evaluation Period, the Promotion Rules' tenure, the
-       Promotion Threshold in force and my own row of the Period's ranking.
-       Under `points` so an Evaluation's invalidation moves the bar too. */
-    promotionProgress: (memberId: string | undefined) =>
-      ['points', 'promotion-progress', { memberId }] as const,
+    /* #634, #828: the Promotion Rules' tenure and my own standing for one
+       Role Evaluation kind (points since its last run, its threshold in
+       force). Under `points` so an Evaluation's invalidation moves the bar
+       too. */
+    promotionProgress: (memberId: string | undefined, kind: string) =>
+      ['points', 'promotion-progress', { memberId, kind }] as const,
     /* Every viewer's bar: a threshold change moves them all (#827). */
     promotionProgressAll: ['points', 'promotion-progress'] as const,
   },

@@ -9,20 +9,27 @@ import {
 } from './promotion-state';
 
 /**
- * #634 — where a Member stands on the automatic ladder (ADR-0004 amended
- * 2026-09-21; rulings R9, R13, R18).
+ * #634, #828 — where a Member stands before the next Role Evaluation
+ * (ADR-0004 amended 2026-09-21; rulings R9, R13, R18, R28).
+ *
+ * Only the Recrut → Voluntar step is a date the tenure job keeps. Every other
+ * step is BC's decision at a Role Evaluation: reaching the Promotion
+ * Threshold makes a tenured Voluntar a Promotion Candidate at the next Voluntar
+ * Activ Role Evaluation, and nothing here promises a Role.
  *
  * Six states, one per rung:
  * - Recrut: the date the `time` rule makes them Voluntar. No bar.
  * - Voluntar before the tenure date: the date they can become Voluntar Activ.
  *   Nothing about points (R18).
  * - Voluntar with tenure: a bar from 0 to the Voluntar Activ Promotion
- *   Threshold in force (#826), points counted since the last Role Evaluation.
- * - Voluntar Activ and Voluntar cu Drept de Vot: their points beside the
- *   threshold, the reference the Retention Signal will use. No bar.
+ *   Threshold in force, points counted since the last Voluntar Activ Role
+ *   Evaluation (or in total before any); past it, BC is told at the next one.
+ * - Voluntar Activ: their points beside the Voluntar Activ threshold; a
+ *   Voluntar cu Drept de Vot: beside the Adunarea Generală threshold — the
+ *   reference the Retention Signal uses. No bar.
  * - Level ≥ 5: nothing at all (R13).
- * - No threshold in force: the tenure lines only; the bar is hidden,
- *   never faked.
+ * - No threshold in force for the kind: the tenure lines only; the bar and
+ *   the reference are hidden, never faked.
  *
  * #824 lifts the gate to the page: `usePromotionProgressState` says whether
  * the panel exists at all (`hidden`, in `promotion-state.ts`), and `PromotionPanel` renders one that
@@ -136,7 +143,7 @@ function ThresholdBar({
       </div>
       <div
         role="progressbar"
-        aria-label="Progres spre Voluntar Activ"
+        aria-label="Progres spre pragul Voluntar Activ"
         aria-valuemin={0}
         aria-valuemax={max}
         aria-valuenow={shown}
@@ -151,7 +158,7 @@ function ThresholdBar({
       <p className="text-sm font-medium text-foreground">
         {reached
           ? 'Ai depășit pragul — BC va fi anunțat la următoarea evaluare'
-          : `Mai ai ${pointCount(threshold - points)} până la Voluntar Activ`}
+          : `Mai ai ${pointCount(threshold - points)} până la pragul Voluntar Activ`}
       </p>
     </div>
   );

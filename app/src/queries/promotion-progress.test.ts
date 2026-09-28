@@ -1,3 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Result = { data: unknown; error: unknown };
@@ -35,7 +38,15 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-import { fetchPromotionProgress } from './promotion-progress';
+vi.mock('../lib/auth', () => ({
+  useAuth: () => ({ session: { user: { id: 'm1' } } }),
+}));
+
+import {
+  fetchPromotionProgress,
+  roleEvaluationKindFor,
+  usePromotionProgress,
+} from './promotion-progress';
 
 const RULES = [
   {
@@ -54,7 +65,18 @@ const RULES = [
   },
 ];
 
-describe('fetchPromotionProgress (#634, #826)', () => {
+describe('roleEvaluationKindFor (#828, R28)', () => {
+  it.each([
+    ['recrut', 'voluntar_activ'],
+    ['voluntar', 'voluntar_activ'],
+    ['activ', 'voluntar_activ'],
+    ['vot', 'adunarea_generala'],
+  ])('%s reads the %s kind', (role, kind) => {
+    expect(roleEvaluationKindFor(role)).toBe(kind);
+  });
+});
+
+describe('fetchPromotionProgress (#634, #826, #828)', () => {
   beforeEach(() => {
     db.rules = { data: RULES, error: null };
     db.standing = {
@@ -65,7 +87,7 @@ describe('fetchPromotionProgress (#634, #826)', () => {
   });
 
   it('reads both rules and my own Voluntar Activ standing', async () => {
-    await expect(fetchPromotionProgress()).resolves.toEqual({
+    await expect(fetchPromotionProgress('voluntar_activ')).resolves.toEqual({
       voluntarTenureMonths: 6,
       activTenureMonths: 4,
       threshold: 30,
@@ -82,10 +104,42 @@ describe('fetchPromotionProgress (#634, #826)', () => {
     );
   });
 
+  it('a Voluntar cu Drept de Vot reads the Adunarea Generală standing', async () => {
+    db.standing = {
+      data: { since: '2026-06-01', task_points: 40, threshold: 55 },
+      error: null,
+    };
+
+    await expect(
+      fetchPromotionProgress('adunarea_generala'),
+    ).resolves.toMatchObject({
+      threshold: 55,
+      since: '2026-06-01',
+      points: 40,
+    });
+    expect(db.calls).toContainEqual([
+      'rpc',
+      'my_role_evaluation_standing',
+      { p_kind: 'adunarea_generala' },
+    ]);
+    expect(db.calls).not.toContainEqual([
+      'rpc',
+      'my_role_evaluation_standing',
+      { p_kind: 'voluntar_activ' },
+    ]);
+  });
+
+  it('no request reads an Evaluation Period any more', async () => {
+    await fetchPromotionProgress('voluntar_activ');
+    expect(db.calls).not.toContainEqual(['from', 'evaluation_periods']);
+  });
+
   it('no standing row is zero points, no threshold and no start day', async () => {
     db.standing = { data: null, error: null };
 
-    await expect(fetchPromotionProgress()).resolves.toMatchObject({
+    await expect(
+      fetchPromotionProgress('voluntar_activ'),
+    ).resolves.toMatchObject({
       threshold: null,
       since: null,
       points: 0,
@@ -100,7 +154,7 @@ describe('fetchPromotionProgress (#634, #826)', () => {
       error: null,
     };
 
-    const result = await fetchPromotionProgress();
+    const result = await fetchPromotionProgress('voluntar_activ');
     expect(result.voluntarTenureMonths).toBe(6);
     expect(result.activTenureMonths).toBeNull();
   });
@@ -111,7 +165,7 @@ describe('fetchPromotionProgress (#634, #826)', () => {
       error: null,
     };
 
-    const result = await fetchPromotionProgress();
+    const result = await fetchPromotionProgress('voluntar_activ');
     expect(result.threshold).toBeNull();
     expect(result.points).toBe(3);
   });
@@ -120,6 +174,42 @@ describe('fetchPromotionProgress (#634, #826)', () => {
     const error = { message: 'denied', code: '42501' };
     db.rules = { data: null, error };
 
-    await expect(fetchPromotionProgress()).rejects.toBe(error);
+    await expect(fetchPromotionProgress('voluntar_activ')).rejects.toBe(error);
+  });
+});
+
+describe('usePromotionProgress (#828)', () => {
+  beforeEach(() => {
+    db.rules = { data: RULES, error: null };
+    db.standing = {
+      data: { since: null, task_points: 0, threshold: 50 },
+      error: null,
+    };
+    db.calls = [];
+  });
+
+  function wrapper({ children }: { children: ReactNode }) {
+    return createElement(
+      QueryClientProvider,
+      { client: new QueryClient() },
+      children,
+    );
+  }
+
+  it.each([
+    ['voluntar', 'voluntar_activ'],
+    ['activ', 'voluntar_activ'],
+    ['vot', 'adunarea_generala'],
+  ])('a %s holder reads the %s standing', async (role, kind) => {
+    const { result } = renderHook(() => usePromotionProgress({ role }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(db.calls).toContainEqual([
+      'rpc',
+      'my_role_evaluation_standing',
+      { p_kind: kind },
+    ]);
   });
 });
