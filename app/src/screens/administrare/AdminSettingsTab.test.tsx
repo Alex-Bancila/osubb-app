@@ -354,4 +354,23 @@ it('points the board setting at an active Private Group (#824)', async () => {
       'Grupul Biroului de Conducere a fost salvat.',
     ),
   ).toBeVisible();
+
+  // … and back to no Group: a blank choice clears it on the server.
+  expect(
+    within(section).getByRole('option', { name: 'Niciun grup' }),
+  ).toBeInTheDocument();
+  await user.selectOptions(select, '');
+  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  await waitFor(() =>
+    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
+      p_key: 'board_group_id',
+      p_value: '',
+    }),
+  );
+  expect(
+    await within(section).findByText(
+      'Grupul Biroului de Conducere a fost șters din setări.',
+    ),
+  ).toBeVisible();
+  expect(within(section).getByText('Niciun grup setat')).toBeVisible();
 });

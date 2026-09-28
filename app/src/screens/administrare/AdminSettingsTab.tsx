@@ -136,6 +136,7 @@ type GroupSetting = {
   description: string;
   label: string;
   saved: string;
+  cleared: string;
   /** The Adunarea Generală is a public Group; the board a Private one. */
   privateGroups: boolean;
 };
@@ -148,6 +149,7 @@ const ADUNAREA_GENERALA: GroupSetting = {
     'Managerii și responsabilii acestui grup văd clasamentele complete ale perioadelor și semnalele de retenție.',
   label: 'Grupul Adunării Generale',
   saved: 'Grupul Adunării Generale a fost salvat.',
+  cleared: 'Grupul Adunării Generale a fost șters din setări.',
   privateGroups: false,
 };
 
@@ -159,6 +161,7 @@ const BOARD: GroupSetting = {
     'Titlul fiecărui responsabil din acest grup privat apare pe Profil, la Funcția în OSUBB.',
   label: 'Grupul Biroului de Conducere',
   saved: 'Grupul Biroului de Conducere a fost salvat.',
+  cleared: 'Grupul Biroului de Conducere a fost șters din setări.',
   privateGroups: true,
 };
 
@@ -175,7 +178,9 @@ function GroupSettingPanel({
 }) {
   const selectId = useId();
   const groups = useAdminGroups();
-  const [draft, setDraft] = useState('');
+  // null = untouched, so an explicit blank choice ("Niciun grup") is not
+  // mistaken for "keep the current Group".
+  const [draft, setDraft] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const currentGroup = groups.data?.find(
@@ -192,17 +197,18 @@ function GroupSettingPanel({
         .sort((a, b) => a.name.localeCompare(b.name, 'ro')),
     [groups.data, setting.privateGroups],
   );
-  const chosen = draft || current || '';
+  const chosen = draft ?? current ?? '';
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
     setError(null);
     try {
-      await onSave({ key: setting.key, value: chosen });
+      // A blank choice clears the setting on the server.
+      await onSave({ key: setting.key, value: chosen === '' ? null : chosen });
       // The saved value comes back as `current`; a stale draft must not win.
-      setDraft('');
-      setMessage(setting.saved);
+      setDraft(null);
+      setMessage(chosen === '' ? setting.cleared : setting.saved);
     } catch (failure) {
       setError(
         describeFailure(failure, 'Nu am putut salva setarea. Reîncearcă.')
@@ -249,13 +255,15 @@ function GroupSettingPanel({
                 setError(null);
               }}
             >
-              {!choices.some((group) => String(group.id) === chosen) && (
-                <option value={chosen}>
-                  {chosen === ''
-                    ? 'Alege un grup'
-                    : (currentGroup?.name ?? 'Grupul actual')}
-                </option>
-              )}
+              <option value="">
+                {current === null ? 'Alege un grup' : 'Niciun grup'}
+              </option>
+              {current !== null &&
+                !choices.some((group) => String(group.id) === current) && (
+                  <option value={current}>
+                    {currentGroup?.name ?? 'Grupul actual'}
+                  </option>
+                )}
               {choices.map((group) => (
                 <option key={group.id} value={String(group.id)}>
                   {group.name}
@@ -265,7 +273,7 @@ function GroupSettingPanel({
             <Button
               type="submit"
               className="min-h-11"
-              disabled={disabled || chosen === '' || chosen === current}
+              disabled={disabled || chosen === (current ?? '')}
             >
               Salvează
             </Button>

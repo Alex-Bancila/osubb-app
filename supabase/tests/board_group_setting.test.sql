@@ -18,6 +18,7 @@
 --     the ::bigint cast, and the BCE's step-1 assertion becomes 42501;
 --   * drop 'board_group_id' from the active-Group check -> "a board_group_id
 --     naming no Group" and "an archived Group" are stored instead of refused;
+--   * drop the is_private limb -> "an active public Group" is stored;
 --   * drop the level check -> "a BCE (level 5) cannot set board_group_id"
 --     succeeds;
 --   * drop the seed row -> "the board_group_id key is seeded" fails and the
@@ -28,7 +29,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(20);
+select plan(21);
 
 -- ==================== Fixtures ====================
 
@@ -52,10 +53,13 @@ insert into public.groups (name, category, min_level, is_private)
 values ('Biroul 824', 'team', 5, true);
 insert into public.groups (name, category, min_level, status)
 values ('Arhivat 824', 'team', 0, 'archived');
+insert into public.groups (name, category, min_level)
+values ('Public 824', 'team', 0);
 
 create temp table fx824 as
   select (select id from public.groups where name = 'Biroul 824')  as board,
-         (select id from public.groups where name = 'Arhivat 824') as archived;
+         (select id from public.groups where name = 'Arhivat 824') as archived,
+         (select id from public.groups where name = 'Public 824')  as public_group;
 grant select on fx824 to authenticated, anon;
 
 insert into public.group_members (group_id, member_id, group_role, position_title)
@@ -130,6 +134,10 @@ select throws_ok(
   format('select public.set_org_setting(%L, %L)', 'board_group_id', (select archived from fx824)::text),
   'PT400', 'invalid_org_setting_value',
   'BC: a board_group_id naming an archived Group is invalid_org_setting_value');
+select throws_ok(
+  format('select public.set_org_setting(%L, %L)', 'board_group_id', (select public_group from fx824)::text),
+  'PT400', 'invalid_org_setting_value',
+  'BC: a board_group_id naming an active public Group is invalid_org_setting_value -- the board is Private');
 select results_eq(
   format('select value, updated_by from public.set_org_setting(%L, %L)',
          'board_group_id', ' ' || (select board from fx824)::text || ' '),

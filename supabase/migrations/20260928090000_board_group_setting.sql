@@ -12,7 +12,9 @@
 -- This migration adds only the pointer: org_settings.board_group_id, the id
 -- of that Group, found by row and never by name, set by BC or the Moderator
 -- through public.set_org_setting and validated exactly like #512's
--- adunarea_generala_group_id (a positive integer naming an active Group). The
+-- adunarea_generala_group_id (a positive integer naming an active Group),
+-- and additionally a Private one, so a board title is never read off a
+-- public roster. The
 -- Group itself is created in the app (Administrare -> Grupuri, Private) and
 -- the titles are typed with the existing set_group_role; the demo seed does
 -- both for the demo BC and BCE.
@@ -41,7 +43,8 @@ comment on table public.org_settings is
 -- 2. set_org_setting learns the new key. Rebuilt from #775's body
 -- (20260927200000_email_digest.sql, the latest definition on main); what is
 -- new is board_group_id beside adunarea_generala_group_id in step 1 and in
--- the active-Group check after the gate.
+-- the active-Group check after the gate, which for the board also demands a
+-- Private Group.
 -- ---------------------------------------------------------------------------
 create or replace function private.set_org_setting_impl(p_key text, p_value text)
 returns public.org_settings
@@ -113,7 +116,7 @@ begin
     raise sqlstate 'PT404' using message = 'org_setting_not_found';
   end if;
   -- #512, #824: the Adunarea Generală and the board are existing, active
-  -- Groups. `for key share` keeps the row from being deleted under the write
+  -- Groups, and the board a Private one. `for key share` keeps the row from being deleted under the write
   -- without blocking the `for no key update` every Group command takes on a
   -- Group row.
   if p_key in ('adunarea_generala_group_id', 'board_group_id') and v_value is not null then
@@ -121,6 +124,7 @@ begin
       from public.groups as grp
      where grp.id = v_value::bigint
        and grp.status = 'active'
+       and (p_key <> 'board_group_id' or grp.is_private)
        for key share;
     if not found then
       raise sqlstate 'PT400' using message = 'invalid_org_setting_value';
@@ -144,7 +148,7 @@ end;
 $$;
 
 comment on function private.set_org_setting_impl(text, text) is
-  '#681, extended by #512, #48, #771, #775 and #824: body of public.set_org_setting. Step 1 trims the value (blank -> null), PT400 value_too_long above 2048 characters, PT400 invalid_org_setting_value for an adherence_form_url that is not http(s), an adunarea_generala_group_id or board_group_id that is not a positive integer, a vote_retention_percent that is not a whole number 1-100 (blank included: y is never cleared), a privacy_notice_version that is not dotted numbers (1.0, 1.1, 2.0.1; blank included: the version is never cleared), or an email_daily_quota that is not a whole number 0-99999 (blank included: the quota is never cleared); then 42501 org_settings_manage_forbidden unless the caller is a live active BC or Moderator (level >= 6, Profile held for share); PT404 org_setting_not_found for an unseeded key; PT400 invalid_org_setting_value for an adunarea_generala_group_id or board_group_id naming no active Group (checked after the gate, so nobody below BC probes Group ids); PT409 nothing_to_update for an unchanged value.';
+  '#681, extended by #512, #48, #771, #775 and #824: body of public.set_org_setting. Step 1 trims the value (blank -> null), PT400 value_too_long above 2048 characters, PT400 invalid_org_setting_value for an adherence_form_url that is not http(s), an adunarea_generala_group_id or board_group_id that is not a positive integer, a vote_retention_percent that is not a whole number 1-100 (blank included: y is never cleared), a privacy_notice_version that is not dotted numbers (1.0, 1.1, 2.0.1; blank included: the version is never cleared), or an email_daily_quota that is not a whole number 0-99999 (blank included: the quota is never cleared); then 42501 org_settings_manage_forbidden unless the caller is a live active BC or Moderator (level >= 6, Profile held for share); PT404 org_setting_not_found for an unseeded key; PT400 invalid_org_setting_value for an adunarea_generala_group_id naming no active Group or a board_group_id naming no active Private Group (checked after the gate, so nobody below BC probes Group ids); PT409 nothing_to_update for an unchanged value.';
 
 comment on function public.set_org_setting(text, text) is
-  '#681 (ruling R20), extended by #512, #48, #771, #775 and #824: BC or the Moderator sets one organization setting. The value is trimmed and a blank value clears it (null). adherence_form_url must be an http(s) address of at most 2048 characters; #52''s promotion notification reads it. adunarea_generala_group_id must be the id of an active Group -- the Adunarea Generală, whose Group Managers and Group Responsibles (and those of its ancestors) then read the full Evaluation Period ranking. vote_retention_percent must be a whole percentage 1-100 and cannot be cleared -- y, the share of the Voluntar cu Drept de Vot cohort public.retention_ranking marks inside. privacy_notice_version must be dotted numbers (1.0, 1.1) and cannot be cleared; raising it makes every Member acknowledge the Privacy Notice again (#771). email_daily_quota must be a whole number 0-99999 and cannot be cleared: how many Email Digests go out per UTC day (#775; 0 pauses them). board_group_id must be the id of an active Group -- the Private Group "Biroul de Conducere", whose Group Responsibles'' position_title Profil shows as their board title (#824); it confers nothing. Records updated_by; the trigger moves updated_at. The Administrare "Perioade de evaluare" panel (#702) calls it. Keys are seeded by migrations: an unknown key is PT404 org_setting_not_found.';
+  '#681 (ruling R20), extended by #512, #48, #771, #775 and #824: BC or the Moderator sets one organization setting. The value is trimmed and a blank value clears it (null). adherence_form_url must be an http(s) address of at most 2048 characters; #52''s promotion notification reads it. adunarea_generala_group_id must be the id of an active Group -- the Adunarea Generală, whose Group Managers and Group Responsibles (and those of its ancestors) then read the full Evaluation Period ranking. vote_retention_percent must be a whole percentage 1-100 and cannot be cleared -- y, the share of the Voluntar cu Drept de Vot cohort public.retention_ranking marks inside. privacy_notice_version must be dotted numbers (1.0, 1.1) and cannot be cleared; raising it makes every Member acknowledge the Privacy Notice again (#771). email_daily_quota must be a whole number 0-99999 and cannot be cleared: how many Email Digests go out per UTC day (#775; 0 pauses them). board_group_id must be the id of an active Private Group -- the Private Group "Biroul de Conducere", whose Group Responsibles'' position_title Profil shows as their board title (#824); it confers nothing. Records updated_by; the trigger moves updated_at. The Administrare "Perioade de evaluare" panel (#702) calls it. Keys are seeded by migrations: an unknown key is PT404 org_setting_not_found.';
