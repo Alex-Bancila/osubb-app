@@ -570,10 +570,13 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   );
   const dialog = await screen.findByRole('dialog');
   expect(
-    within(dialog).getByRole('heading', {
-      name: 'Respingi candidatul Dănuț?',
-    }),
+    within(dialog).getByRole('heading', { name: 'Respingi candidatul?' }),
   ).toBeVisible();
+  // The name renders through MemberName, like every Member's name.
+  expect(
+    within(dialog).getByRole('button', { name: 'Profilul membrului Dănuț' }),
+  ).toBeVisible();
+  expect(dialog).toHaveTextContent('31 puncte · pragul 30');
   const reason = within(dialog).getByLabelText('Motivul respingerii');
   await user.click(
     within(dialog).getByRole('button', { name: 'Respinge candidatul' }),

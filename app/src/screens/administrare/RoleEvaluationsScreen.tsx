@@ -622,6 +622,7 @@ function RejectDialog({
   disabled,
   onRun,
   onStale,
+  identities,
 }: {
   candidate: PromotionCandidate;
   name: string;
@@ -629,6 +630,7 @@ function RejectDialog({
   onRun: Run;
   /** The candidate left the list meanwhile; the dialog closes with its row. */
   onStale: (message: string) => void;
+  identities: Identities;
 }) {
   const reasonId = useId();
   const [open, setOpen] = useState(false);
@@ -682,13 +684,20 @@ function RejectDialog({
       <DialogContent>
         <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Respingi candidatul {name}?</DialogTitle>
+            <DialogTitle>Respingi candidatul?</DialogTitle>
             <DialogDescription>
-              {name} rămâne Voluntar. Respingerea ține doar pentru evaluarea „
-              {candidate.evaluationName}”: dacă la o evaluare viitoare are din
+              Candidatul rămâne Voluntar. Respingerea ține doar pentru evaluarea
+              „{candidate.evaluationName}”: dacă la o evaluare viitoare are din
               nou cel puțin pragul, reapare în listă.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-sm">
+            <Name memberId={candidate.memberId} identities={identities} />
+            <span className="text-muted-foreground tabular-nums">
+              {formatPoints(candidate.taskPoints)} puncte · pragul{' '}
+              {formatPoints(candidate.thresholdUsed)}
+            </span>
+          </div>
           <div className="grid gap-1.5">
             <label htmlFor={reasonId} className="text-sm font-medium">
               Motivul respingerii
@@ -783,6 +792,7 @@ function CandidatesPanel({
                       disabled={disabled}
                       onRun={onRun}
                       onStale={setNotice}
+                      identities={identities.data}
                     />
                   </>
                 }
