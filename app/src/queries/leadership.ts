@@ -68,8 +68,14 @@ export function fetchLeadershipMemberTasks(
       .range(from, to),
   );
 }
+/**
+ * The Work Filter's choices on Clasament and Tracker membru, plus `work`:
+ * the Group and Campaign of every Task that carries Task Points — completed
+ * or unfulfilled, never an Umbrella (it has none) — which Rule W (#845)
+ * offers from. BCE, BC and Moderator read every Task.
+ */
 export async function fetchLeadershipFilters() {
-  const [groups, campaigns] = await Promise.all([
+  const [groups, campaigns, work] = await Promise.all([
     pages((from, to) =>
       supabase
         .from('groups')
@@ -84,8 +90,17 @@ export async function fetchLeadershipFilters() {
         .order('id')
         .range(from, to),
     ),
+    pages((from, to) =>
+      supabase
+        .from('tasks')
+        .select('group_id,campaign_id')
+        .in('status', ['completed', 'unfulfilled'])
+        .eq('kind', 'task')
+        .order('id')
+        .range(from, to),
+    ),
   ]);
-  return { groups, campaigns };
+  return { groups, campaigns, work };
 }
 /** `null` filters (an inverted date range) send nothing. */
 export function useLeadershipLeaderboard(filters: LeadershipFilters | null) {

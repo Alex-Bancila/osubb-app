@@ -297,7 +297,7 @@ describe('My tasks screen', () => {
     ['De gestionat', 'useManagedTasks', 'useTaskManagement'],
     ['Toate', 'useAllTasks', 'useTaskLeadership'],
   ] as const)(
-    'shows %s as dense rows with Stare, search and the Work Filter — no table',
+    'shows %s as dense rows under the Work Filter — no table, no Stare or search under six Tasks',
     async (tab, list, capability) => {
       const user = userEvent.setup();
       query();
@@ -331,10 +331,11 @@ describe('My tasks screen', () => {
       // Overdue pinned first.
       expect(rows[0]).toHaveAccessibleName('Întârziat');
       expect(screen.queryByRole('table')).toBeNull();
-      expect(screen.getByLabelText('Stare')).toBeVisible();
+      // Two Tasks fit on one screen: Stare, Caută and Ordonează wait for six.
+      expect(screen.queryByLabelText('Stare')).toBeNull();
       expect(
-        screen.getByRole('searchbox', { name: 'Caută după titlu' }),
-      ).toBeVisible();
+        screen.queryByRole('searchbox', { name: 'Caută după titlu' }),
+      ).toBeNull();
       expect(
         screen.getByRole('region', { name: 'Filtre taskuri' }),
       ).toBeVisible();

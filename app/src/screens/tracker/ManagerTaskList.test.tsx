@@ -13,8 +13,13 @@ vi.mock('../../queries/work-filter-options', () => ({
         { id: 1, name: 'Educațional', path: [1], status: 'active' },
         { id: 2, name: 'Mentorat', path: [1, 2], status: 'active' },
         { id: 30, name: 'Gala', path: [30], status: 'active' },
+        // Readable, but owns no Task on this list (Rule W).
+        { id: 40, name: 'Adunarea Generală', path: [40], status: 'active' },
       ],
-      campaigns: [{ id: 7, name: 'Toamnă', group_id: 1 }],
+      campaigns: [
+        { id: 7, name: 'Toamnă', group_id: 1 },
+        { id: 8, name: 'Primăvară', group_id: 1 },
+      ],
     },
   }),
 }));
@@ -80,10 +85,23 @@ const rows = [
   }),
 ];
 
-function renderList(search = '', onOpenTask = vi.fn()) {
+/** Six Tasks: the list controls (Stare, Caută, Ordonează) appear. */
+const sixRows = [
+  ...rows,
+  taskRow({
+    id: 6,
+    title: 'Cerere sală',
+    deadline: '2026-09-25T10:00:00Z',
+    campaign_id: 8,
+    campaign: { name: 'Primăvară' },
+    group: edu,
+  }),
+];
+
+function renderList(search = '', onOpenTask = vi.fn(), list = rows) {
   const view = render(
     <MemoryRouter initialEntries={[`/tracker${search}`]}>
-      <ManagerTaskList rows={rows} now={now} onOpenTask={onOpenTask} />
+      <ManagerTaskList rows={list} now={now} onOpenTask={onOpenTask} />
     </MemoryRouter>,
   );
   return { ...view, onOpenTask };
@@ -114,20 +132,21 @@ describe('ManagerTaskList', () => {
 
   it('keeps overdue first when ordered by title', async () => {
     const user = userEvent.setup();
-    renderList();
+    renderList('', vi.fn(), sixRows);
     await user.selectOptions(screen.getByLabelText('Ordonează după'), 'title');
     expect(titles()).toEqual([
       'Z urgent',
       'Afișe pentru gală',
       'Bilanț vechi',
+      'Cerere sală',
       'Ședință de mentorat',
       'Viitor fără termen',
     ]);
   });
 
-  it('filters by Stare, including the three derived states', async () => {
+  it('filters by Stare, offering only the states the list holds', async () => {
     const user = userEvent.setup();
-    renderList();
+    renderList('', vi.fn(), sixRows);
     const stare = screen.getByLabelText('Stare');
     expect(
       within(stare)
@@ -137,10 +156,7 @@ describe('ManagerTaskList', () => {
       'Toate stările',
       'De făcut',
       'În lucru',
-      'În verificare',
       'Finalizat',
-      'Nerealizat',
-      'Anulat',
       'Termen depășit',
       'Modificări cerute',
       'Finalizat cu întârziere',
@@ -153,14 +169,15 @@ describe('ManagerTaskList', () => {
     expect(titles()).toEqual([
       'Afișe pentru gală',
       'Ședință de mentorat',
+      'Cerere sală',
       'Viitor fără termen',
     ]);
-    expect(within(list()).getByRole('status')).toHaveTextContent('3 taskuri');
+    expect(within(list()).getByRole('status')).toHaveTextContent('4 taskuri');
   });
 
   it('searches titles without case or diacritics, after a short pause', async () => {
     const user = userEvent.setup();
-    renderList();
+    renderList('', vi.fn(), sixRows);
     await user.type(
       screen.getByRole('searchbox', { name: 'Caută după titlu' }),
       'SEDINTA',
@@ -170,7 +187,9 @@ describe('ManagerTaskList', () => {
     expect(
       screen.getByText('Niciun task nu corespunde filtrelor.'),
     ).toBeVisible();
-    expect(within(list()).getByRole('status')).toHaveTextContent('0 taskuri');
+    // Said once: no '0 taskuri' count line above the empty state (B19).
+    expect(within(list()).queryByRole('status')).toBeNull();
+    expect(list()).not.toHaveTextContent('0 taskuri');
   });
 
   it.each([
@@ -187,8 +206,8 @@ describe('ManagerTaskList', () => {
     expect(titles()).toEqual(expected);
   });
 
-  it('replaces the Origine and Campanie selects with the Work Filter', () => {
-    const { container } = renderList();
+  it('puts Stare and the order inside the one Filtre panel, on the #842 select', () => {
+    const { container } = renderList('', vi.fn(), sixRows);
     expect(screen.queryByLabelText('Origine')).toBeNull();
     // The only native selects left are Stare and the order.
     const selects = container.querySelectorAll('select');
@@ -196,12 +215,41 @@ describe('ManagerTaskList', () => {
     expect(screen.getByLabelText('Stare')).toBe(selects[0]);
     expect(screen.getByLabelText('Ordonează după')).toBe(selects[1]);
     const filter = screen.getByRole('region', { name: 'Filtre taskuri' });
+    // One filter band (layout T4): the list controls sit on the panel's grid.
+    const grid = filter.querySelector('[data-slot=work-filter-grid]');
+    expect(grid).toContainElement(screen.getByLabelText('Stare'));
+    expect(grid).toContainElement(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    );
+    expect(screen.getByLabelText('Stare')).toHaveAttribute(
+      'data-slot',
+      'native-select',
+    );
     expect(
       within(filter).getByRole('combobox', { name: 'Grup principal' }),
     ).toBeVisible();
     expect(
       within(filter).getByRole('combobox', { name: 'Campanie' }),
     ).toBeVisible();
+  });
+
+  it('shows Stare, Caută and Ordonează only from six Tasks', () => {
+    renderList();
+    expect(screen.queryByLabelText('Stare')).toBeNull();
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    expect(screen.queryByLabelText('Ordonează după')).toBeNull();
+  });
+
+  it('offers only the Groups and Campaigns of the managed Tasks (Rule W)', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
+    // The Adunarea Generală is readable but owns no Task here.
+    expect(
+      (await screen.findAllByRole('option')).map((o) => o.textContent),
+    ).toEqual(['Educațional', 'Gala']);
+    // Only Toamnă labels a Task: a one-option level is not drawn.
+    expect(screen.queryByRole('combobox', { name: 'Campanie' })).toBeNull();
   });
 
   it('asks for a valid range while the dates are inverted', () => {

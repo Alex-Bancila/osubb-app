@@ -21,6 +21,7 @@ const hooks = vi.hoisted(() => ({
   usePendingCandidatureTasks: vi.fn(),
   useTaskManagement: vi.fn(),
   useManagedTasks: vi.fn(),
+  useCalendarWork: vi.fn(),
 }));
 
 // The membership rule (isMemberOf) lives beside the my_groups() read; no
@@ -51,6 +52,9 @@ vi.mock('../../queries/calendar-tasks', () => ({
 vi.mock('../../queries/task-tabs', () => ({
   useTaskManagement: hooks.useTaskManagement,
   useManagedTasks: hooks.useManagedTasks,
+}));
+vi.mock('../../queries/work-filter-options', () => ({
+  useCalendarWork: hooks.useCalendarWork,
 }));
 vi.mock('./NewEventControl', () => ({
   NewEventControl: () => <button type="button">Eveniment nou</button>,
@@ -247,6 +251,7 @@ describe('CalendarScreen', () => {
     stubStorage();
     Element.prototype.scrollIntoView = vi.fn();
     hooks.useGroups.mockReturnValue(query(groups));
+    hooks.useCalendarWork.mockReturnValue({ ready: true, work: undefined });
     hooks.useCampaigns.mockReturnValue(
       query([{ id: 3, name: 'Bun venit', group_id: 7, is_active: true }]),
     );
@@ -690,11 +695,37 @@ describe('CalendarScreen', () => {
 
       expect(toggle).toHaveAttribute('aria-pressed', 'true');
       expect(hooks.useManagedTasks).toHaveBeenLastCalledWith(true);
+      // The Work Filter offers the managed deadlines' Groups too (Rule W).
+      expect(hooks.useCalendarWork).toHaveBeenLastCalledWith(true);
       expect(
         screen.getByRole('button', {
           name: 'joi, 22 octombrie 2026: 1 termen de task',
         }),
       ).toBeInTheDocument();
+    });
+
+    it('offers only the Groups and Campaigns with Events or deadlines (Rule W)', async () => {
+      const user = userEvent.setup();
+      hooks.useCalendarWork.mockReturnValue({
+        ready: true,
+        work: [
+          { group_id: 12, campaign_id: 3 },
+          { group_id: 20, campaign_id: null },
+        ],
+      });
+      renderCalendar();
+      await user.click(
+        screen.getByRole('combobox', { name: 'Grup principal' }),
+      );
+      // OSUBB owns nothing here; Educațional is Social Media's parent.
+      expect(
+        (await screen.findAllByRole('option')).map((o) => o.textContent),
+      ).toEqual(['Educațional', 'Festival']);
+      // One Campaign only: the level is not drawn.
+      expect(screen.queryByRole('combobox', { name: 'Campanie' })).toBeNull();
+      expect(
+        screen.getByText('Grupul include subgrupurile sale.'),
+      ).toBeVisible();
     });
 
     it('hides the managed toggle from a member without management', () => {

@@ -12,6 +12,10 @@ import {
   hiddenWorkFilter,
   visibleWorkFilter,
   workFilterParams,
+  campaignsWithWork,
+  groupsWithWork,
+  itemsInGroup,
+  workFilterChoices,
   type WorkFilterCampaign,
   type WorkFilterGroup,
 } from './work-filter';
@@ -183,6 +187,104 @@ describe('campaignsFor', () => {
   it('offers every Campaign with no Group chosen', () => {
     expect(ids(campaignsFor(campaigns, groups, undefined))).toEqual([
       10, 11, 12, 13, 14,
+    ]);
+  });
+});
+
+describe('Rule W', () => {
+  // A level-3 viewer reads the Adunarea Generală (9), which owns nothing.
+  const withAg: WorkFilterGroup[] = [
+    ...groups,
+    { id: 9, name: 'Adunarea Generală', path: [9], status: 'active' },
+  ];
+  // One Task deep under Educațional (Grupa A), one in Comunicare.
+  const work = [
+    { group_id: 3, campaign_id: 12 },
+    { group_id: 8, campaign_id: null },
+  ];
+
+  it('offers a Group with an item deep below it, with every ancestor, and never one with none', () => {
+    expect(ids(groupsWithWork(withAg, [3, 8]))).toEqual([2, 3, 1, 8]);
+    expect(ids(groupsWithWork(withAg, [3, 8]))).not.toContain(9);
+  });
+
+  it('keeps a Group the URL already carries, with its ancestors, though it owns nothing', () => {
+    expect(ids(groupsWithWork(withAg, [8], [9, undefined]))).toEqual([8, 9]);
+    expect(ids(groupsWithWork(withAg, [], [4]))).toEqual([1, 4]);
+  });
+
+  it('offers a Campaign that labels an item, or that the URL carries', () => {
+    expect(ids(campaignsWithWork(campaigns, [12, null]))).toEqual([12]);
+    expect(ids(campaignsWithWork(campaigns, [12], [14]))).toEqual([12, 14]);
+  });
+
+  it('reads the items under a chosen Group through the tree', () => {
+    expect(itemsInGroup(work, groups, 1)).toEqual([work[0]]);
+    expect(itemsInGroup(work, groups, undefined)).toEqual(work);
+  });
+
+  it('offers the roots with work, never the Adunarea Generală with none', () => {
+    const choices = workFilterChoices(withAg, campaigns, {}, { work });
+    expect(ids(choices.roots)).toEqual([8, 1]);
+    expect(choices.showRoot).toBe(true);
+    // No root chosen: nothing below to offer yet.
+    expect(choices.showSub).toBe(false);
+    // One Campaign labels an item: the level is hidden.
+    expect(ids(choices.campaigns)).toEqual([12]);
+    expect(choices.showCampaign).toBe(false);
+  });
+
+  it('hides a one-option level and hangs the Subgrup from its only root', () => {
+    const deep = [
+      { group_id: 3, campaign_id: 11 },
+      { group_id: 4, campaign_id: 13 },
+    ];
+    const choices = workFilterChoices(withAg, campaigns, {}, { work: deep });
+    expect(ids(choices.roots)).toEqual([1]);
+    expect(choices.showRoot).toBe(false);
+    expect(choices.rootId).toBe(1);
+    // Mentorat, Grupa A and Traineri: the Subgrup level stays.
+    expect(ids(choices.below)).toEqual([2, 3, 4]);
+    expect(choices.showSub).toBe(true);
+    expect(ids(choices.campaigns)).toEqual([11, 13]);
+    expect(choices.showCampaign).toBe(true);
+  });
+
+  it('narrows the Campaigns to the items under the chosen Group', () => {
+    const both = [
+      { group_id: 3, campaign_id: 11 },
+      { group_id: 4, campaign_id: 13 },
+      { group_id: 8, campaign_id: null },
+    ];
+    expect(
+      ids(
+        workFilterChoices(
+          groups,
+          campaigns,
+          { rootGroupId: 1, groupId: 4 },
+          { work: both },
+        ).campaigns,
+      ),
+    ).toEqual([13]);
+  });
+
+  it('keeps a URL-chosen Group with no item among the options', () => {
+    const choices = workFilterChoices(
+      withAg,
+      campaigns,
+      { rootGroupId: 9 },
+      { work },
+    );
+    expect(ids(choices.roots)).toEqual([9, 8, 1]);
+  });
+
+  it('offers every given option and draws every level without work (Campanii)', () => {
+    const choices = workFilterChoices(withAg, campaigns, {});
+    expect(ids(choices.roots)).toEqual([5, 9, 8, 1]);
+    expect([choices.showRoot, choices.showSub, choices.showCampaign]).toEqual([
+      true,
+      true,
+      true,
     ]);
   });
 });

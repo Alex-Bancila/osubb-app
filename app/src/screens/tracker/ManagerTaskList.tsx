@@ -1,5 +1,13 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../../components/layout';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
+import {
+  workFilterCellClass,
+  workFilterFieldClass,
+} from '../../components/work-filter/field-class';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
@@ -19,13 +27,17 @@ import {
 
 const SEARCH_DELAY_MS = 200;
 
-const control =
-  'min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring';
+/**
+ * Stare, Caută and Ordonează appear from this many Tasks up: below it the
+ * whole list fits on one screen (relevance B18).
+ */
+export const LIST_CONTROLS_FROM = 6;
 
 /**
- * De gestionat and Toate (#687): the Work Filter, then Stare, the title
- * search and the order, then the Tasks as dense rows — no table, so nothing
- * scrolls sideways at any width.
+ * De gestionat and Toate (#687): one Filtre panel — the Work Filter, then,
+ * on the same grid, Stare (only the states the list holds), the title search
+ * and the order (#845, layout T4) — then the Tasks as dense rows, no table,
+ * so nothing scrolls sideways at any width.
  */
 export function ManagerTaskList({
   rows,
@@ -36,12 +48,11 @@ export function ManagerTaskList({
   now: Date;
   onOpenTask?: (id: number) => void;
 }) {
-  const id = useId();
   const { params } = useWorkFilter();
-  const [state, setState] = useState('');
+  const [chosenState, setState] = useState('');
   const [search, setSearch] = useState('');
   const [needle, setNeedle] = useState('');
-  const [sort, setSort] = useState<ManagerTaskSort>('deadline');
+  const [chosenSort, setSort] = useState<ManagerTaskSort>('deadline');
   useEffect(() => {
     const timer = window.setTimeout(
       () => setNeedle(searchableTitle(search.trim())),
@@ -50,85 +61,115 @@ export function ManagerTaskList({
     return () => window.clearTimeout(timer);
   }, [search]);
 
+  const listControls = rows.length >= LIST_CONTROLS_FROM;
+  const state = listControls ? chosenState : '';
+  const sort = listControls ? chosenSort : 'deadline';
+  const query = listControls ? needle : '';
+
+  const presented = useMemo(
+    () => rows.map((row) => ({ row, task: toTaskPresentation(row, now) })),
+    [rows, now],
+  );
+  // Stare offers the states the list holds, and the one already chosen.
+  const states = useMemo(
+    () =>
+      MANAGER_TASK_STATES.filter(
+        ([value]) =>
+          value === state ||
+          presented.some(({ task }) => matchesTaskState(task, value)),
+      ),
+    [presented, state],
+  );
+
   const tasks = useMemo(
     () =>
       params
-        ? rows
-            .filter((row) => matchesWorkFilter(row, params))
-            .map((row) => toTaskPresentation(row, now))
+        ? presented
             .filter(
-              (task) =>
+              ({ row, task }) =>
+                matchesWorkFilter(row, params) &&
                 matchesTaskState(task, state) &&
-                (!needle || searchableTitle(task.title).includes(needle)),
+                (!query || searchableTitle(task.title).includes(query)),
             )
+            .map(({ task }) => task)
             .sort(compareManagedTasks(sort))
         : [],
-    [rows, params, now, state, needle, sort],
+    [presented, params, state, query, sort],
   );
+
+  const fields = listControls
+    ? (id: string) => (
+        <>
+          <label className={workFilterCellClass} htmlFor={`${id}-state`}>
+            <span className="text-sm font-medium">Stare</span>
+            <NativeSelect
+              id={`${id}-state`}
+              value={state}
+              onChange={(event) => setState(event.target.value)}
+            >
+              <NativeSelectOption value="">Toate stările</NativeSelectOption>
+              {states.map(([value, label]) => (
+                <NativeSelectOption key={value} value={value}>
+                  {label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </label>
+          <label className={workFilterCellClass} htmlFor={`${id}-search`}>
+            <span className="text-sm font-medium">Caută după titlu</span>
+            <input
+              id={`${id}-search`}
+              type="search"
+              className={workFilterFieldClass}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <label className={workFilterCellClass} htmlFor={`${id}-sort`}>
+            <span className="text-sm font-medium">Ordonează după</span>
+            <NativeSelect
+              id={`${id}-sort`}
+              value={sort}
+              onChange={(event) =>
+                setSort(event.target.value as ManagerTaskSort)
+              }
+            >
+              <NativeSelectOption value="deadline">Termen</NativeSelectOption>
+              <NativeSelectOption value="title">Titlu</NativeSelectOption>
+            </NativeSelect>
+          </label>
+        </>
+      )
+    : undefined;
 
   return (
     <div className="min-w-0 space-y-4">
-      <TrackerWorkFilter hint="Grupul include toate subgrupurile sale; perioada se aplică termenului taskului." />
-      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-        <label className="grid min-w-0 gap-1 text-sm" htmlFor={`${id}-state`}>
-          Stare
-          <select
-            id={`${id}-state`}
-            className={control}
-            value={state}
-            onChange={(event) => setState(event.target.value)}
-          >
-            <option value="">Toate stările</option>
-            {MANAGER_TASK_STATES.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid min-w-0 gap-1 text-sm" htmlFor={`${id}-search`}>
-          Caută după titlu
-          <input
-            id={`${id}-search`}
-            type="search"
-            className={control}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        <label className="grid min-w-0 gap-1 text-sm" htmlFor={`${id}-sort`}>
-          Ordonează după
-          <select
-            id={`${id}-sort`}
-            className={control}
-            value={sort}
-            onChange={(event) => setSort(event.target.value as ManagerTaskSort)}
-          >
-            <option value="deadline">Termen</option>
-            <option value="title">Titlu</option>
-          </select>
-        </label>
-      </div>
+      <TrackerWorkFilter
+        rows={rows}
+        hint="Grupul include toate subgrupurile sale; perioada se aplică termenului taskului."
+        fields={fields}
+        fieldsActive={Number(Boolean(state)) + Number(Boolean(search.trim()))}
+      />
       {!params ? (
         <p>{RANGE_FIRST}</p>
       ) : (
         <section aria-label="Lista taskurilor" className="min-w-0 space-y-2">
-          <p
-            role="status"
-            className="text-sm text-muted-foreground tabular-nums"
-          >
-            {tasks.length
-              ? formatTaskCount(tasks.length)
-              : `${formatTaskCount(0)} — niciun task nu corespunde filtrelor.`}
-          </p>
           {tasks.length ? (
-            <ul data-slot="task-row-list" className="grid min-w-0 gap-2 p-0">
-              {tasks.map((task) => (
-                <li key={task.id} className="min-w-0">
-                  <TaskRow task={task} onOpenTask={onOpenTask} />
-                </li>
-              ))}
-            </ul>
+            <>
+              <p
+                role="status"
+                className="text-sm text-muted-foreground tabular-nums"
+              >
+                {formatTaskCount(tasks.length)}
+              </p>
+              <ul data-slot="task-row-list" className="grid min-w-0 gap-2 p-0">
+                {tasks.map((task) => (
+                  <li key={task.id} className="min-w-0">
+                    <TaskRow task={task} onOpenTask={onOpenTask} />
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : (
             <EmptyState bare>Niciun task nu corespunde filtrelor.</EmptyState>
           )}
