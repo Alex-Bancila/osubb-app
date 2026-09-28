@@ -1,3 +1,4 @@
+import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { formatPoints } from '../../lib/format';
 import { useMyPoints } from '../../queries/points';
@@ -8,31 +9,14 @@ import { useRoles } from '../../queries/reference';
  * The Member's Personal Score (CONTEXT.md) above Taskurile mele, ruling R10:
  * the `my_points` total and the Role label, as Acasă shows them. No rank —
  * ranking is a leadership view (ADR-0007), so nothing here asks for one.
+ *
+ * A `Panel` stat (layout T6): the kit's 19 px title above one box, the total
+ * on the left and the Role chip on the right, like Acasă's Punctajul meu.
  */
 export function PersonalScoreHeader() {
   const points = useMyPoints();
   const profile = useMyProfile();
   const roles = useRoles();
-
-  if (points.isPending)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Se încarcă punctajul…
-      </p>
-    );
-  if (points.isError)
-    return (
-      <div role="alert" className="space-y-2 text-sm">
-        <p>Nu am putut încărca punctajul.</p>
-        <Button
-          variant="outline"
-          className="min-h-11 min-w-11"
-          onClick={() => void points.refetch()}
-        >
-          Reîncarcă punctajul
-        </Button>
-      </div>
-    );
 
   /* The label comes from `roles` ("Membru cu Drept de Vot"), with the enum
      value as the fallback while it loads — never a blank chip. */
@@ -40,36 +24,46 @@ export function PersonalScoreHeader() {
   const roleLabel = (role && roles.data?.get(role)?.name) ?? role ?? '';
 
   return (
-    <section
-      aria-labelledby="personal-score-title"
-      data-slot="personal-score"
-      className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-border pb-4"
-    >
-      <div className="min-w-0">
-        <h2
-          id="personal-score-title"
-          className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase"
-        >
-          <span
-            aria-hidden="true"
-            className="h-3 w-1 rounded-full bg-primary"
-          />
-          Punctajul meu
-        </h2>
-        <p className="mt-1 flex items-baseline gap-2 leading-none">
-          <span className="text-4xl font-extrabold tracking-tight tabular-nums sm:text-5xl">
-            {formatPoints(points.data)}
-          </span>
-          <span className="text-base font-semibold text-muted-foreground">
-            puncte
-          </span>
-        </p>
+    <Panel title="Punctajul meu" className="h-auto">
+      <div
+        data-slot="personal-score"
+        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
+      >
+        {points.isPending ? (
+          <p role="status" className="m-0 text-sm text-muted-foreground">
+            Se încarcă punctajul…
+          </p>
+        ) : points.isError ? (
+          <div role="alert" className="flex flex-col gap-2 text-sm">
+            <p className="m-0">Nu am putut încărca punctajul.</p>
+            <Button
+              variant="outline"
+              className="self-start"
+              onClick={() => void points.refetch()}
+            >
+              Reîncarcă punctajul
+            </Button>
+          </div>
+        ) : (
+          <p className="m-0 flex items-baseline gap-2 leading-none">
+            <span className="text-[length:var(--fs-3xl)] font-extrabold tracking-[-0.03em] tabular-nums">
+              {formatPoints(points.data)}
+            </span>
+            <span className="text-[length:var(--fs-md)] font-semibold text-muted-foreground">
+              puncte
+            </span>
+          </p>
+        )}
+        {roleLabel && (
+          <p className="m-0 inline-flex max-w-full items-center gap-1.5 rounded-full bg-(--ink-900) py-1 pr-3 pl-2.5 text-[length:var(--fs-xs)] font-bold wrap-anywhere text-(--white)">
+            <span
+              aria-hidden="true"
+              className="size-[7px] shrink-0 rounded-full bg-(--red)"
+            />
+            {roleLabel}
+          </p>
+        )}
       </div>
-      {roleLabel && (
-        <p className="inline-flex max-w-full items-center rounded-full border border-border px-3 py-1 text-xs font-medium wrap-anywhere">
-          {roleLabel}
-        </p>
-      )}
-    </section>
+    </Panel>
   );
 }

@@ -52,31 +52,54 @@ function card(
 }
 
 describe('Member Task cards', () => {
-  it.each([
-    { status: 'todo' as const, queue_closed_at: '2026-09-15T10:00:00Z' },
-    { status: 'completed' as const, queue_closed_at: null },
-  ])(
-    'keeps participation visible without actions for closed/terminal work',
-    (overrides) => {
-      const task = toTaskPresentation(
-        taskRow({ ...overrides, assignment_mode: 'public' }),
-        new Date('2026-09-15'),
-      );
-      render(
-        <TaskCard
-          task={task}
-          allowInterest
-          memberId="member"
-          pending={false}
-          onProgress={vi.fn()}
-        />,
-      );
-      expect(screen.getByText('Stare înscriere')).toBeVisible();
+  function opportunityCard(
+    overrides: Partial<TaskPresentationRow>,
+    memberId = 'candidate',
+  ) {
+    const task = toTaskPresentation(
+      taskRow({ ...overrides, assignment_mode: 'public' }),
+      new Date('2026-09-15'),
+    );
+    return render(
+      <TaskCard
+        task={task}
+        allowInterest
+        memberId={memberId}
+        pending={false}
+        onProgress={vi.fn()}
+      />,
+    );
+  }
+  it('keeps a Candidate’s queue line without actions once the queue closes', () => {
+    opportunityCard({
+      status: 'todo',
+      queue_closed_at: '2026-09-15T10:00:00Z',
+    });
+    expect(screen.getByText('Stare înscriere')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Participă' }),
+    ).not.toBeInTheDocument();
+  });
+  it.each(['completed', 'unfulfilled', 'cancelled'] as const)(
+    'shows no queue line on a finished Task (%s): it is history (Audit D-1)',
+    (status) => {
+      opportunityCard({ status, assignments: [], visibleExecutor: null });
+      expect(screen.queryByText('Stare înscriere')).toBeNull();
       expect(
         screen.queryByRole('button', { name: 'Participă' }),
       ).not.toBeInTheDocument();
     },
   );
+  it('shows no queue line on the Executor’s own card, only its stage (B14)', () => {
+    opportunityCard({ status: 'todo' }, 'member');
+    expect(screen.queryByText('Stare înscriere')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Participă' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Taskul este atribuit și așteaptă să fie început.'),
+    ).toBeVisible();
+  });
   it('shows a named Origin, Bucharest deadline and the current stage', () => {
     card();
     expect(
@@ -138,9 +161,13 @@ describe('Member Task cards', () => {
   });
 
   it('shows the active Executor name on an ordinary Task', () => {
-    card({
-      visibleExecutor: { memberId: 'member', fullName: 'Ioana Executor' },
-    });
+    card(
+      {
+        visibleExecutor: { memberId: 'member', fullName: 'Ioana Executor' },
+      },
+      vi.fn(),
+      'someone-else',
+    );
 
     expect(screen.getByText('Executor:')).toBeInTheDocument();
     expect(screen.getByText('Ioana Executor')).toBeInTheDocument();
@@ -151,10 +178,54 @@ describe('Member Task cards', () => {
     expect(screen.getByText('Neatribuit')).toBeInTheDocument();
     unmount();
 
-    card({
-      visibleExecutor: { memberId: 'member', fullName: null },
-    });
+    card(
+      { visibleExecutor: { memberId: 'member', fullName: null } },
+      vi.fn(),
+      'someone-else',
+    );
     expect(screen.getByText('Nume indisponibil')).toBeInTheDocument();
+  });
+
+  it('omits the Executor line on the viewer’s own card (B2)', () => {
+    card({
+      visibleExecutor: { memberId: 'member', fullName: 'Ioana Popescu' },
+    });
+    expect(screen.queryByText('Executor:')).toBeNull();
+    expect(screen.queryByText('Ioana Popescu')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Începe taskul' })).toBeVisible();
+  });
+
+  it.each(['completed', 'unfulfilled', 'cancelled'] as const)(
+    'never reads "Neatribuit" on a finished Task (%s, B13, Audit D-1)',
+    (status) => {
+      // The RPC names only an open Assignment; an Evaluation ends it.
+      card({ status, assignments: [], visibleExecutor: null }, vi.fn(), 'x');
+      expect(screen.queryByText('Executor:')).toBeNull();
+      expect(screen.queryByText('Neatribuit')).toBeNull();
+    },
+  );
+
+  it('shows an Opportunity’s Executor line only once someone holds it (B12)', () => {
+    const open = card(
+      { assignment_mode: 'public', assignments: [], visibleExecutor: null },
+      vi.fn(),
+      'candidate',
+    );
+    expect(screen.queryByText('Executor:')).toBeNull();
+    expect(screen.queryByText('Neatribuit')).toBeNull();
+    open.unmount();
+
+    card(
+      {
+        assignment_mode: 'public',
+        status: 'in_progress',
+        visibleExecutor: { memberId: 'member', fullName: 'Ioana Popescu' },
+      },
+      vi.fn(),
+      'candidate',
+    );
+    expect(screen.getByText('Executor:')).toBeVisible();
+    expect(screen.getByText('Ioana Popescu')).toBeVisible();
   });
 
   it('does not show an Executor row for an Umbrella Task', () => {
@@ -486,5 +557,69 @@ describe('Member Task cards', () => {
       rules: { 'color-contrast': { enabled: false } },
     });
     expect(result.violations).toEqual([]);
+  });
+
+  it('keeps the chips on one line and folds the overflow into "+n" (T2)', () => {
+    // jsdom has no layout: give every chip 120 px and the line 250 px.
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ width: 120 } as DOMRect);
+    const width = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockReturnValue(250);
+    try {
+      const { container } = card({
+        parent_task_id: 2,
+        parent: { title: 'Recrutare' },
+        campaign_id: 3,
+        campaign: { name: 'Toamnă' },
+      });
+      const line = container.querySelector('[data-slot="task-chips"]');
+      expect(line).toHaveClass('flex-nowrap', 'overflow-hidden');
+      expect(
+        within(line as HTMLElement).getByText('Departament · Educațional'),
+      ).toBeInTheDocument();
+      const more = container.querySelector('[data-slot="task-chips-more"]');
+      expect(more).toHaveTextContent('+2');
+      // Nothing is lost: the folded chips are named to a screen reader.
+      expect(more).toHaveTextContent(
+        'Campanie: Toamnă, Subtask din: Recrutare',
+      );
+      expect(screen.queryByText('Campanie: Toamnă')).toBeNull();
+    } finally {
+      rect.mockRestore();
+      width.mockRestore();
+    }
+  });
+
+  it('shows every chip, wrapped, in the details sheet, without the Audience chip (B20)', () => {
+    const task = toTaskPresentation(
+      taskRow({
+        assignment_mode: 'public',
+        audience: 'org',
+        campaign_id: 3,
+        campaign: { name: 'Toamnă' },
+      }),
+      new Date('2026-09-15T12:00:00Z'),
+    );
+    const { container } = render(
+      <TaskCard task={task} memberId="member" anchor={false} inSheet />,
+    );
+    expect(container.querySelector('[data-slot="task-chips"]')).toBeNull();
+    expect(screen.getByText('Campanie: Toamnă')).toBeVisible();
+    // The sheet’s Audiență row says it once.
+    expect(screen.queryByText('OSUBB')).toBeNull();
+  });
+
+  it('stacks the footer actions full-width in one column (T3)', () => {
+    const { container } = card({ status: 'in_progress' });
+    const footer = container.querySelector('[data-slot="card-footer"]');
+    expect(footer).toHaveClass('mt-auto', 'grid', 'grid-cols-1');
+    expect(
+      screen.getByRole('button', { name: 'Trimite la verificare' }),
+    ).toHaveClass('w-full');
+    expect(screen.getByRole('button', { name: 'Renunță la task' })).toHaveClass(
+      'w-full',
+    );
   });
 });

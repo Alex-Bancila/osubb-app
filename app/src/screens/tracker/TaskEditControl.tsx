@@ -10,6 +10,10 @@ import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkF
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -71,6 +75,8 @@ export function TaskEditControl({
     if (saved) receipt.current?.focus();
   }, [saved]);
   const canEdit = canManage && isEditable(task.status);
+  // Nothing to offer: no empty item in the sheet's action row.
+  if (!canEdit && !saved) return null;
   return (
     <section aria-label="Editarea taskului" className="space-y-3">
       {saved && (
@@ -355,7 +361,7 @@ function TaskEditForm({
   return (
     <form
       onSubmit={submit}
-      className="space-y-3 rounded-lg border p-4"
+      className="space-y-3 rounded-md border border-border p-4"
       aria-label="Editează taskul"
       noValidate
     >
@@ -440,40 +446,42 @@ function TaskEditForm({
         {!umbrella && (
           <>
             <div className="space-y-1">
-              <label className="block space-y-1">
-                <span>Mod de atribuire</span>
-                <select
-                  className={control}
-                  value={assignmentMode}
-                  onChange={(event) => setAssignmentMode(event.target.value)}
-                  {...form.field('assignmentMode')}
-                >
-                  <option value="direct">Direct</option>
-                  <option value="public">
-                    Public — înscriere prin lista de candidați
-                  </option>
-                </select>
+              <label htmlFor={`${id}-mode`} className="block">
+                Mod de atribuire
               </label>
+              <NativeSelect
+                id={`${id}-mode`}
+                value={assignmentMode}
+                onChange={(event) => setAssignmentMode(event.target.value)}
+                {...form.field('assignmentMode')}
+              >
+                <NativeSelectOption value="direct">Direct</NativeSelectOption>
+                <NativeSelectOption value="public">
+                  Public — înscriere prin lista de candidați
+                </NativeSelectOption>
+              </NativeSelect>
               <FieldError {...form.errorProps('assignmentMode')} />
             </div>
             {/* Hidden while Direct (R26): switching to Public is how a
                 direct Task is opened, starting from its stored Audience. */}
             {assignmentMode === 'public' && (
               <div className="space-y-1">
-                <label className="block space-y-1">
-                  <span>Audiență</span>
-                  <select
-                    className={control}
-                    value={localOnly ? 'local' : audience}
-                    onChange={(event) => setAudience(event.target.value)}
-                    {...form.field('audience', `${id}-audience-hint`)}
-                  >
-                    <option value="local">{AUDIENCE_LABELS.local}</option>
-                    <option value="org" disabled={localOnly}>
-                      {AUDIENCE_LABELS.org}
-                    </option>
-                  </select>
+                <label htmlFor={`${id}-audience`} className="block">
+                  Audiență
                 </label>
+                <NativeSelect
+                  id={`${id}-audience`}
+                  value={localOnly ? 'local' : audience}
+                  onChange={(event) => setAudience(event.target.value)}
+                  {...form.field('audience', `${id}-audience-hint`)}
+                >
+                  <NativeSelectOption value="local">
+                    {AUDIENCE_LABELS.local}
+                  </NativeSelectOption>
+                  <NativeSelectOption value="org" disabled={localOnly}>
+                    {AUDIENCE_LABELS.org}
+                  </NativeSelectOption>
+                </NativeSelect>
                 <FieldError {...form.errorProps('audience')} />
                 <p
                   id={`${id}-audience-hint`}
@@ -485,9 +493,8 @@ function TaskEditForm({
             )}
             <div className="space-y-1">
               <label htmlFor={`${id}-campaign`}>Campanie (opțional)</label>
-              <select
+              <NativeSelect
                 id={`${id}-campaign`}
-                className={control}
                 value={campaignId ?? ''}
                 onChange={(event) =>
                   setCampaignId(
@@ -496,19 +503,19 @@ function TaskEditForm({
                 }
                 {...form.field('campaignId', `${id}-campaign-hint`)}
               >
-                <option value="">Fără campanie</option>
+                <NativeSelectOption value="">Fără campanie</NativeSelectOption>
                 {task.campaign_id !== null &&
                   !campaigns.some((row) => row.id === task.campaign_id) && (
-                    <option value={task.campaign_id}>
+                    <NativeSelectOption value={task.campaign_id}>
                       {task.campaign?.name ?? 'Campania existentă'} (actuală)
-                    </option>
+                    </NativeSelectOption>
                   )}
                 {campaigns.map((row) => (
-                  <option key={row.id} value={row.id}>
+                  <NativeSelectOption key={row.id} value={row.id}>
                     {row.name}
-                  </option>
+                  </NativeSelectOption>
                 ))}
-              </select>
+              </NativeSelect>
               <FieldError {...form.errorProps('campaignId')} />
               <p
                 id={`${id}-campaign-hint`}
@@ -541,17 +548,17 @@ function TaskEditForm({
         </div>
       )}
       <FieldError>{form.formError}</FieldError>
-      <div className="flex flex-wrap gap-2">
+      <DialogFooter>
+        <Button variant="outline" disabled={pending} onClick={onCancel}>
+          Înapoi
+        </Button>
         <Button
           type="submit"
           disabled={!changed || pending || options.isPending || options.isError}
         >
           Salvează modificările
         </Button>
-        <Button variant="outline" disabled={pending} onClick={onCancel}>
-          Înapoi
-        </Button>
-      </div>
+      </DialogFooter>
       <Dialog
         open={confirming !== null && confirming.consequences.length > 0}
         onOpenChange={(next) => {
