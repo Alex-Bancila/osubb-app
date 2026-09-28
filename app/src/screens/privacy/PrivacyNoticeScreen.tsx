@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { BackLink } from '../../components/layout';
 import { SessionScreen } from '../../components/shell/SessionScreen';
 import { useAuth } from '../../lib/auth';
 import { PrivacyNoticeContent } from './PrivacyNoticeContent';
@@ -15,12 +15,7 @@ export default function PrivacyNoticeScreen() {
     : { to: '/login', label: 'Înapoi la conectare' };
   return (
     <SessionScreen wide>
-      <Link
-        to={back.to}
-        className="self-start text-sm font-medium underline underline-offset-4"
-      >
-        {back.label}
-      </Link>
+      <BackLink to={back.to} label={back.label} />
       <PrivacyNoticeContent />
     </SessionScreen>
   );

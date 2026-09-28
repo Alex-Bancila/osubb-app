@@ -180,6 +180,7 @@ export default function VolunteersScreen() {
   return (
     <Page>
       <PageHeader
+        eyebrow="Conducere"
         title="Membri OSUBB"
         description="Caută un membru și vezi rolul, grupurile și punctele sale din taskuri."
         actions={

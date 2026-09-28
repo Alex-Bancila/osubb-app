@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowRight, type LucideIcon } from 'lucide-react';
 import { cn } from 'cn';
+import { focusRingClass } from './focus';
 
 export type SectionHeaderAction = {
   /** The link's words ("Vezi toate"). */
@@ -17,7 +18,9 @@ export type SectionHeaderAction = {
  * - Eyebrow: 11.5 px, 800, uppercase, `tracking-[0.08em]`, muted, led by a
  *   16 px lucide icon in `--red-600`. A panel's eyebrow names where its data
  *   lives — usually the page its action opens (`Taskuri`, `Calendar`).
- * - Title: 19 px, 700, an `h2` (or `h3` inside an `h2` band). No other size.
+ * - Title: 19 px, 700, an `h2` (or `h3` inside an `h2` band). No other size,
+ *   and nothing inside the section is larger: a block inside a panel is
+ *   titled by `SubHeading`.
  * - Description: optional, 13 px, muted.
  * - Right side: either `action` — a red 14 px/700 link with an arrow and a
  *   44 px target — or a `control` (a toggle, a button).
@@ -61,7 +64,10 @@ export function SectionHeader({
         className,
       )}
     >
-      <div className="min-w-0 flex-1 basis-64">
+      {/* basis-40, not 64: at 375 px a ~110 px action still fits beside
+          160 px of title, so the title wraps before the action drops to a
+          row of its own (layout X8). */}
+      <div className="min-w-0 flex-1 basis-40">
         {eyebrow && (
           <p
             data-slot="section-eyebrow"
@@ -97,7 +103,10 @@ export function SectionHeader({
         <Link
           to={action.to}
           data-slot="section-action"
-          className="inline-flex min-h-11 min-w-11 shrink-0 items-center gap-1 rounded-sm text-sm font-bold text-(--red-600) underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className={cn(
+            'inline-flex min-h-11 min-w-11 shrink-0 items-center gap-1 rounded-sm text-sm font-bold text-(--red-600) underline-offset-4 hover:underline',
+            focusRingClass,
+          )}
         >
           {action.label}
           <ArrowRight aria-hidden="true" className="size-4" />

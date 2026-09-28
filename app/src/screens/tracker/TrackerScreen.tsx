@@ -217,6 +217,8 @@ export default function TrackerScreen() {
         </div>
       )}
       <Tabs.Root
+        // The tab strip has no margin of its own: this stack spaces it (#841).
+        className="flex flex-col gap-6"
         value={selected}
         onValueChange={(value) => {
           if (typeof value === 'string') setTab(value);

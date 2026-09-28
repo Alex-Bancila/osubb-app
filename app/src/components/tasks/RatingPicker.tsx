@@ -77,7 +77,7 @@ export function RatingPicker({
   }
 
   const button =
-    'grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
+    'grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
 
   return (
     <div className="space-y-1.5">
@@ -123,7 +123,7 @@ export function RatingPicker({
                 : String(value)
           }
           onKeyDown={keys}
-          className="flex min-h-11 min-w-24 items-baseline justify-center gap-1.5 rounded-md px-2 outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+          className="flex min-h-11 min-w-24 items-baseline justify-center gap-1.5 rounded-md px-2 outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         >
           <span aria-hidden="true" className="text-sm text-muted-foreground">
             Nota

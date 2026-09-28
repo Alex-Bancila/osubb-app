@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { ArrowLeft, ListFilter } from 'lucide-react';
-import { EmptyState, Page, PageHeader, Panel } from '../../components/layout';
+import { useParams } from 'react-router';
+import { ListFilter } from 'lucide-react';
+import {
+  BackLink,
+  EmptyState,
+  Page,
+  PageHeader,
+  Panel,
+} from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { ErrorState, Loading } from '../../components/states';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
@@ -229,7 +235,7 @@ function MemberHistory({ memberId }: { memberId: string }) {
     <Page>
       <BackToClasament />
       <PageHeader
-        eyebrow="OSUBB · Conducere"
+        eyebrow="Conducere"
         title="Trackerul membrului"
         description="Toate atribuirile membrului, inclusiv cele încheiate și evaluările anulate."
       />
@@ -308,16 +314,12 @@ function MemberHistory({ memberId }: { memberId: string }) {
   );
 }
 
+/**
+ * Back to the Clasament, or — when the Member Card or a Clasament row passed
+ * `state.from` — to exactly where the member came from (navigation D10).
+ */
 function BackToClasament() {
-  return (
-    <Link
-      className="inline-flex min-h-11 items-center gap-1.5 rounded-sm text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      to="/clasament"
-    >
-      <ArrowLeft aria-hidden="true" className="size-4" />
-      Înapoi la clasament
-    </Link>
-  );
+  return <BackLink to="/clasament" label="Înapoi la clasament" />;
 }
 
 export default function MemberTrackerScreen() {
@@ -328,8 +330,8 @@ export default function MemberTrackerScreen() {
         <MemberHistory memberId={id} />
       ) : (
         <Page>
-          <PageHeader eyebrow="OSUBB · Conducere" title="Membru indisponibil" />
           <BackToClasament />
+          <PageHeader eyebrow="Conducere" title="Membru indisponibil" />
         </Page>
       )}
     </LeadershipAccess>

@@ -42,7 +42,7 @@ export default function AdministrareLayout() {
   return (
     <Page>
       <PageHeader
-        eyebrow="OSUBB · Administrare"
+        eyebrow="Administrare"
         title="Administrare"
         description={
           capabilities.data?.createTopLevelGroups === true

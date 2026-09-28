@@ -44,6 +44,7 @@ export default function CampaignsScreen() {
   return (
     <Page width="reading">
       <PageHeader
+        eyebrow="Administrare"
         title="Campanii"
         description="O campanie este o etichetă pentru taskurile unui grup și ale subgrupurilor lui. Raportul campaniei arată punctele obținute și cine a lucrat. Campaniile inactive nu mai pot fi alese pentru taskuri noi, dar rămân pe taskurile existente."
       />

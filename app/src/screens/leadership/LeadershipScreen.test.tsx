@@ -11,6 +11,10 @@ const state = vi.hoisted(() => ({
   identities: vi.fn(),
   groups: vi.fn(),
 }));
+// The Member Card reads the viewer's Group Roles for "Pagina membrului" (#841).
+vi.mock('@/queries/my-groups', () => ({
+  useMyGroupRoles: () => ({ data: [] }),
+}));
 vi.mock('../../queries/leadership', () => ({
   useLeadershipLeaderboard: state.board,
   useLeadershipCup: state.cup,

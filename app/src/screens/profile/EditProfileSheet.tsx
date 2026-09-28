@@ -230,7 +230,7 @@ export default function EditProfileSheet({
             <SheetTitle className="font-heading text-xl font-semibold">
               Editează profilul
             </SheetTitle>
-            <SheetClose className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+            <SheetClose className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring">
               Închide
             </SheetClose>
           </div>

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowLeft, History, Pencil, Users } from 'lucide-react';
+import { History, Pencil, Users } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import {
+  BackLink,
   ListRow,
   Page,
   PageHeader,
@@ -132,25 +133,20 @@ function LedgerSource({ row }: { row: LedgerRow }) {
   return <>{row.reason === 'sanction' ? 'Sancțiune' : 'Ajustare'}</>;
 }
 
-/** Back to the Membri tab this page sits under (#825). */
-function BackLink() {
-  return (
-    <Link
-      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-      to="/administrare/membri"
-    >
-      <ArrowLeft aria-hidden="true" className="size-4" />
-      Înapoi la Administrare
-    </Link>
-  );
+/**
+ * Back to the Membri tab this page sits under (#825), or to wherever the
+ * member came from when the link that opened this page said (`state.from`).
+ */
+function BackToMembers() {
+  return <BackLink to="/administrare/membri" label="Înapoi la Administrare" />;
 }
 
-const EYEBROW = 'OSUBB · Administrare · Membru';
+const EYEBROW = 'Administrare';
 
 function MemberUnavailable() {
   return (
     <Page>
-      <BackLink />
+      <BackToMembers />
       <PageHeader eyebrow={EYEBROW} title="Membru indisponibil" />
     </Page>
   );
@@ -218,7 +214,7 @@ export default function MemberScreen() {
   if (member.isError || capabilities.isError || groups.isError || mine.isError)
     return (
       <Page aria-label="Membru">
-        <BackLink />
+        <BackToMembers />
         <ErrorState text="Nu am putut încărca membrul. Reîncarcă pagina." />
       </Page>
     );
@@ -244,7 +240,7 @@ export default function MemberScreen() {
 
   return (
     <Page>
-      <BackLink />
+      <BackToMembers />
       <PageHeader
         eyebrow={EYEBROW}
         title={

@@ -13,6 +13,10 @@ const mock = vi.hoisted(() => ({
   useGroups: vi.fn(),
   useMemberCard: vi.fn(),
 }));
+// The Member Card reads the viewer's Group Roles for "Pagina membrului" (#841).
+vi.mock('@/queries/my-groups', () => ({
+  useMyGroupRoles: () => ({ data: [] }),
+}));
 vi.mock('../../queries/member-directory', () => ({
   useMemberDirectory: mock.useMemberDirectory,
 }));

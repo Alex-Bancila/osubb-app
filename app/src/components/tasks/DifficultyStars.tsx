@@ -144,7 +144,7 @@ export function DifficultyStarPicker({
               value={step}
               aria-label={name(step)}
               onPointerEnter={() => !disabled && setPreview(step)}
-              className="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
+              className="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
             >
               <Star
                 aria-hidden="true"

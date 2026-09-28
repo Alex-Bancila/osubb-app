@@ -198,7 +198,7 @@ export function TaskCard({
             id={titleId}
             data-slot="task-title"
             tabIndex={-1}
-            className="text-lg leading-snug font-semibold wrap-anywhere outline-none focus-visible:outline-2 focus-visible:outline-ring"
+            className="text-lg leading-snug font-semibold wrap-anywhere outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring"
           >
             {onOpenTask ? (
               <Button

@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router';
 import { CalendarDays, Users } from 'lucide-react';
 import {
+  BackLink,
   EmptyState,
   Page,
   PageGrid,
@@ -40,14 +41,7 @@ export default function MemberGroupScreen() {
   const capabilities = useCapabilities();
   const auth = useAuth();
   const level = auth.claims?.member_level ?? 0;
-  const back = (
-    <Link
-      to="/grupuri"
-      className="inline-flex min-h-11 items-center rounded-sm underline outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-    >
-      Înapoi la grupuri
-    </Link>
-  );
+  const back = <BackLink to="/grupuri" label="Înapoi la grupuri" />;
   if (groups.isPending || mine.isPending || applications.isPending)
     return (
       <Page aria-label="Grup">
@@ -64,8 +58,8 @@ export default function MemberGroupScreen() {
   if (!group)
     return (
       <Page>
-        <PageHeader title="Grup indisponibil" />
         {back}
+        <PageHeader eyebrow="Grupuri" title="Grup indisponibil" />
       </Page>
     );
   const role = mine.data.find((row) => row.id === id);
@@ -109,6 +103,7 @@ export default function MemberGroupScreen() {
     <Page>
       {back}
       <PageHeader
+        eyebrow="Grupuri"
         title={
           <span className="inline-flex items-center gap-3">
             <span
@@ -136,7 +131,7 @@ export default function MemberGroupScreen() {
               {apply}
               {authority.manageWork && (
                 <Link
-                  className="inline-flex min-h-11 items-center rounded-sm underline outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="inline-flex min-h-11 items-center rounded-sm underline outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring"
                   to={`/administrare/grupuri/${id}`}
                 >
                   Administrare

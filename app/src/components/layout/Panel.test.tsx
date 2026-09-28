@@ -107,3 +107,52 @@ describe('SectionHeader', () => {
     expect(screen.queryByRole('link')).toBeNull();
   });
 });
+
+describe('Panel stack and flush', () => {
+  it('stack spaces the box with a flex gap, so an m-0 child keeps it (X2)', () => {
+    const { container } = render(
+      <Panel title="Formular de adeziune" stack={3}>
+        <p className="m-0">Niciun formular setat</p>
+        <form>…</form>
+      </Panel>,
+    );
+    const box = container.querySelector('[data-slot="panel-box"]');
+    expect(box).toHaveClass('flex', 'flex-col', 'gap-3');
+    expect(box?.className).not.toMatch(/space-y-/);
+  });
+
+  it('flush drops the box padding and gives the rows px-4 (L1, O1)', () => {
+    const { container } = render(
+      <Panel title="Clasament" flush>
+        <ul>
+          <li data-slot="list-row">Ana</li>
+        </ul>
+      </Panel>,
+    );
+    const box = container.querySelector('[data-slot="panel-box"]');
+    expect(box).toHaveAttribute('data-flush', 'true');
+    expect(box).toHaveClass('p-0', '[&_[data-slot=list-row]]:px-4');
+    expect(box).not.toHaveClass('p-4');
+  });
+});
+
+describe('SectionHeader at 375 px and on focus', () => {
+  it('lets the title wrap before the action leaves the title row (X8)', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <SectionHeader
+          title="De evaluat"
+          action={{ label: 'Evaluează', to: '/tracker' }}
+        />
+      </MemoryRouter>,
+    );
+    const text = container.querySelector('[data-slot="section-header"] > div');
+    expect(text).toHaveClass('basis-40');
+    expect(text).not.toHaveClass('basis-64');
+    expect(screen.getByRole('link', { name: 'Evaluează' })).toHaveClass(
+      'shrink-0',
+      'focus-visible:outline-2',
+      'focus-visible:outline-solid',
+    );
+  });
+});

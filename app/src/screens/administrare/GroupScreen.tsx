@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import {
+  BackLink,
   Page,
   PageHeader,
   panelBoxClass,
@@ -86,19 +86,11 @@ function Breadcrumb({
 }
 
 /** Back to the Grupuri tab this page sits under (#825). */
-function BackLink() {
-  return (
-    <Link
-      to="/administrare/grupuri"
-      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-    >
-      <ArrowLeft aria-hidden="true" className="size-4" />
-      Înapoi la Administrare
-    </Link>
-  );
+function BackToGroups() {
+  return <BackLink to="/administrare/grupuri" label="Înapoi la Administrare" />;
 }
 
-const EYEBROW = 'OSUBB · Administrare · Grup';
+const EYEBROW = 'Administrare';
 
 /**
  * One Group, with everything its Managers decide about it: settings, roster,
@@ -202,7 +194,7 @@ export default function GroupScreen() {
   if (!group)
     return (
       <Page>
-        <BackLink />
+        <BackToGroups />
         <PageHeader eyebrow={EYEBROW} title="Grup" />
         <p role="alert">Nu ai acces la acest grup sau grupul nu există.</p>
       </Page>
@@ -213,8 +205,8 @@ export default function GroupScreen() {
 
   return (
     <Page>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <BackLink />
+      <div className="-mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <BackToGroups />
         <Breadcrumb group={group} byId={byId} />
       </div>
       <PageHeader
