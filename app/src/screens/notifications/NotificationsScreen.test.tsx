@@ -10,7 +10,6 @@ const hooks = vi.hoisted(() => ({
   useNotifications: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
   useMarkNotificationRead: vi.fn(),
-  useMarkAllNotificationsRead: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -23,7 +22,6 @@ vi.mock('../../queries/notifications', () => ({
   useNotifications: hooks.useNotifications,
   useUnreadNotificationCount: hooks.useUnreadNotificationCount,
   useMarkNotificationRead: hooks.useMarkNotificationRead,
-  useMarkAllNotificationsRead: hooks.useMarkAllNotificationsRead,
 }));
 
 import NotificationsScreen from './NotificationsScreen';
@@ -52,7 +50,6 @@ function notificationRow(
 }
 
 const markRead = vi.fn();
-const markAllRead = vi.fn();
 
 function feed(
   rows: NotificationRow[],
@@ -89,11 +86,6 @@ describe('NotificationsScreen', () => {
     hooks.useMarkNotificationRead.mockReturnValue({
       mutate: markRead,
       isPending: false,
-    });
-    hooks.useMarkAllNotificationsRead.mockReturnValue({
-      mutate: markAllRead,
-      isPending: false,
-      isError: false,
     });
     hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
     hooks.useNotifications.mockReturnValue(feed([]));
@@ -207,26 +199,25 @@ describe('NotificationsScreen', () => {
     ).toBeInTheDocument();
   });
 
-  describe('Marchează toate ca citite (#858)', () => {
-    it('marks every unread notification read with one click', async () => {
-      const user = userEvent.setup();
-      hooks.useUnreadNotificationCount.mockReturnValue({ data: 2 });
-      hooks.useNotifications.mockReturnValue(
-        feed([notificationRow({ id: 2 }), notificationRow({ id: 1 })]),
-      );
+  it('has no mark-all control: a notification is read only when opened (R16, #695, #886)', () => {
+    hooks.useUnreadNotificationCount.mockReturnValue({ data: 2 });
+    hooks.useNotifications.mockReturnValue(
+      feed([notificationRow({ id: 2 }), notificationRow({ id: 1 })]),
+    );
 
-      renderScreen();
+    renderScreen();
 
-      await user.click(
-        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
-      );
+    expect(
+      screen.queryByRole('button', { name: /Marchează/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Marchează/)).not.toBeInTheDocument();
+    expect(screen.getByText('Necitite: 2')).toBeInTheDocument();
+    // Showing the list writes nothing; only opening a row does.
+    expect(markRead).not.toHaveBeenCalled();
+  });
 
-      expect(markAllRead).toHaveBeenCalledTimes(1);
-      // The bulk write replaces the per-row one: nothing is opened.
-      expect(markRead).not.toHaveBeenCalled();
-    });
-
-    it('is not offered when everything is read, and the header says so (B35)', () => {
+  describe('header counter (B35)', () => {
+    it('says everything is read instead of "Necitite: 0"', () => {
       hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
       hooks.useNotifications.mockReturnValue(
         feed([notificationRow({ id: 1, read: true })]),
@@ -235,15 +226,12 @@ describe('NotificationsScreen', () => {
       renderScreen();
 
       expect(
-        screen.queryByRole('button', { name: 'Marchează toate ca citite' }),
-      ).not.toBeInTheDocument();
-      expect(
         screen.getByText('Toate notificările sunt citite'),
       ).toBeInTheDocument();
       expect(screen.queryByText('Necitite: 0')).not.toBeInTheDocument();
     });
 
-    it('claims nothing while the count is unknown, and trusts an unread row on screen', () => {
+    it('claims nothing while the count is unknown', () => {
       hooks.useUnreadNotificationCount.mockReturnValue({ data: undefined });
       hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
 
@@ -253,9 +241,6 @@ describe('NotificationsScreen', () => {
         screen.queryByText('Toate notificările sunt citite'),
       ).not.toBeInTheDocument();
       expect(screen.queryByText(/Necitite:/)).not.toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
-      ).toBeInTheDocument();
     });
 
     it('does not call a stale zero "all read" while a row on screen is unread', () => {
@@ -267,41 +252,6 @@ describe('NotificationsScreen', () => {
       expect(
         screen.queryByText('Toate notificările sunt citite'),
       ).not.toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
-      ).toBeInTheDocument();
-    });
-
-    it('cannot be sent twice while the first write is on its way', () => {
-      hooks.useMarkAllNotificationsRead.mockReturnValue({
-        mutate: markAllRead,
-        isPending: true,
-        isError: false,
-      });
-      hooks.useUnreadNotificationCount.mockReturnValue({ data: 1 });
-      hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
-
-      renderScreen();
-
-      expect(
-        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
-      ).toBeDisabled();
-    });
-
-    it('says so when the write is refused', () => {
-      hooks.useMarkAllNotificationsRead.mockReturnValue({
-        mutate: markAllRead,
-        isPending: false,
-        isError: true,
-      });
-      hooks.useUnreadNotificationCount.mockReturnValue({ data: 1 });
-      hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
-
-      renderScreen();
-
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Nu am putut marca notificările ca citite.',
-      );
     });
   });
 
