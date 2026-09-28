@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
+import { Checkbox } from '../../components/ui/checkbox';
 import { FieldError } from '../../components/ui/field';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '../../components/ui/native-select';
+import { ChoiceRow } from '../../components/ui/radio-group';
 import {
   Dialog,
   DialogContent,
@@ -185,19 +191,18 @@ export function GroupCreateDialog({
           <div className="grid gap-1.5">
             <label className="grid gap-1.5">
               <span className="text-sm font-medium">Categorie</span>
-              <select
-                className={control}
+              <NativeSelect
                 value={category}
                 disabled={disabled}
                 onChange={(event) => setCategory(event.target.value)}
                 {...form.field('category')}
               >
                 {GROUP_CATEGORIES.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <NativeSelectOption key={option.value} value={option.value}>
                     {option.label}
-                  </option>
+                  </NativeSelectOption>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <FieldError {...form.errorProps('category')} />
           </div>
@@ -221,27 +226,26 @@ export function GroupCreateDialog({
           <div className="grid gap-1.5">
             <label className="grid gap-1.5">
               <span className="text-sm font-medium">Nivel minim</span>
-              <select
-                className={control}
+              <NativeSelect
                 value={minLevel}
                 disabled={disabled}
                 onChange={(event) => setMinLevel(event.target.value)}
                 {...form.field('minLevel')}
               >
-                <option value="">
+                <NativeSelectOption value="">
                   {effectiveParent
                     ? `Ca grupul părinte (${minimumLevelText(effectiveParent.min_level)})`
                     : minimumLevelText(0)}
-                </option>
+                </NativeSelectOption>
                 {choices
                   // A top-level Group's default is Recrut already: one option.
                   .filter((level) => effectiveParent || level !== 0)
                   .map((level) => (
-                    <option key={level} value={level}>
+                    <NativeSelectOption key={level} value={level}>
                       {minimumLevelText(level)}
-                    </option>
+                    </NativeSelectOption>
                   ))}
-              </select>
+              </NativeSelect>
             </label>
             <FieldError {...form.errorProps('minLevel')} />
           </div>
@@ -261,13 +265,12 @@ export function GroupCreateDialog({
           </div>
 
           {(choosePrivate || inheritsPrivate) && (
-            <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-1 size-5 shrink-0"
+            <ChoiceRow className="items-start">
+              <Checkbox
+                className="mt-0.5"
                 checked={privateChoice}
                 disabled={disabled || inheritsPrivate}
-                onChange={(event) => setIsPrivate(event.target.checked)}
+                onCheckedChange={(checked) => setIsPrivate(checked)}
               />
               <span className="grid gap-0.5">
                 <span className="text-sm font-medium">Grup privat</span>
@@ -277,7 +280,7 @@ export function GroupCreateDialog({
                     : PRIVATE_GROUP_HINT}
                 </span>
               </span>
-            </label>
+            </ChoiceRow>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">

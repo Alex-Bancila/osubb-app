@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
+import {
+  EmptyState,
+  ListRow,
+  Panel,
+  rowListClass,
+} from '../../components/layout';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -18,7 +24,12 @@ import type {
   RunGroupCommand,
 } from '../../queries/groups-admin';
 import { GroupCreateDialog } from './GroupCreateDialog';
-import { categoryLabel, groupStatusLabel } from './group-tree';
+import {
+  categoryLabel,
+  groupStatusLabel,
+  unfinishedTasksPath,
+  varies,
+} from './group-tree';
 
 function ArchiveChildDialog({
   child,
@@ -67,7 +78,7 @@ function ArchiveChildDialog({
           <div role="alert" className="space-y-2 text-sm text-destructive">
             <p>{error}</p>
             <Link
-              to="/tracker"
+              to={unfinishedTasksPath(child)}
               className="inline-flex min-h-11 items-center underline"
             >
               Vezi taskurile neterminate
@@ -128,17 +139,16 @@ export function GroupChildrenTab({
   error: string | null;
   onRun: RunGroupCommand;
 }) {
+  // A category badge says something only when the children differ in it
+  // (relevance B48).
+  const showCategory = varies(childGroups, (child) => child.category);
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p role="status" className="text-sm text-muted-foreground">
-          {childGroups.length === 0
-            ? 'Grupul nu are subgrupuri.'
-            : childGroups.length === 1
-              ? '1 subgrup'
-              : `${childGroups.length} subgrupuri`}
-        </p>
-        {authority.manageGroup && group.status === 'active' && (
+    <Panel
+      title="Subgrupuri"
+      flush={childGroups.length > 0}
+      control={
+        authority.manageGroup &&
+        group.status === 'active' && (
           <GroupCreateDialog
             trigger="Subgrup nou"
             title={`Subgrup al ${group.name}`}
@@ -152,45 +162,58 @@ export function GroupChildrenTab({
             choosePrivate={authority.editStructure}
             onCreate={onRun}
           />
-        )}
-      </div>
-      <ul className="space-y-2" aria-label="Subgrupuri">
-        {childGroups.map((child) => (
-          <li
-            key={child.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: child.color ?? 'var(--brand-red)' }}
-              />
-              <Link
-                to={`/administrare/grupuri/${child.id}`}
-                className="truncate font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                {child.name}
-              </Link>
-              <Badge variant="outline">{categoryLabel(child.category)}</Badge>
-              <PrivateGroupBadge isPrivate={child.is_private} />
-              {child.status !== 'active' && (
-                <Badge variant="secondary">
-                  {groupStatusLabel(child.status)}
-                </Badge>
-              )}
-            </span>
-            {child.status === 'active' && authorityFor(child).archive && (
-              <ArchiveChildDialog
-                child={child}
-                busy={busy}
-                error={error}
-                onArchive={() => onRun({ kind: 'archive', groupId: child.id })}
-              />
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
+        )
+      }
+    >
+      {childGroups.length === 0 ? (
+        <EmptyState>Grupul nu are subgrupuri.</EmptyState>
+      ) : (
+        <ul className={rowListClass} aria-label="Subgrupuri">
+          {childGroups.map((child) => (
+            <ListRow
+              key={child.id}
+              action={
+                child.status === 'active' &&
+                authorityFor(child).archive && (
+                  <ArchiveChildDialog
+                    child={child}
+                    busy={busy}
+                    error={error}
+                    onArchive={() =>
+                      onRun({ kind: 'archive', groupId: child.id })
+                    }
+                  />
+                )
+              }
+            >
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2">
+                <span
+                  aria-hidden="true"
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: child.color ?? 'var(--brand-red)' }}
+                />
+                <Link
+                  to={`/administrare/grupuri/${child.id}`}
+                  className="inline-flex min-h-11 min-w-0 items-center truncate font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  {child.name}
+                </Link>
+                {showCategory && (
+                  <Badge variant="outline">
+                    {categoryLabel(child.category)}
+                  </Badge>
+                )}
+                <PrivateGroupBadge isPrivate={child.is_private} />
+                {child.status !== 'active' && (
+                  <Badge variant="secondary">
+                    {groupStatusLabel(child.status)}
+                  </Badge>
+                )}
+              </span>
+            </ListRow>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }

@@ -4,9 +4,11 @@ import { Page, PageHeader, PageTabs } from '../../components/layout';
 import { useCapabilities } from '../../lib/capabilities';
 import {
   ADMINISTRARE_PATH,
+  APPLICATIONS_TAB_PATH,
   allowedTabs,
   type AdministrareOutletContext,
 } from './administrare-tabs';
+import { useApplicationsTabShown } from './applications-tab';
 
 /**
  * The Administrare area (ruling R27, #825): one header, the routed tabs the
@@ -16,13 +18,23 @@ import {
  * Mounted behind `administer`; each tab's route is gated again on its own
  * capability, and the server decides every read and command a third time.
  * The Group and Member pages are sub-pages outside this frame (back link,
- * no tab bar).
+ * no tab bar). Cereri de aderare is the one tab shown by data, not only by
+ * capability: it appears when one of the viewer's Groups takes Applications
+ * or still has one pending.
  */
 export default function AdministrareLayout() {
   const capabilities = useCapabilities();
   const { pathname } = useLocation();
   const [actionSlot, setActionSlot] = useState<HTMLDivElement | null>(null);
-  const tabs = allowedTabs(capabilities.data);
+  const applicationsShown = useApplicationsTabShown(capabilities.data);
+  // Cereri de aderare shows when it can hold something (relevance B55) —
+  // and always while it is the page open, so a link to it keeps its tab.
+  const tabs = allowedTabs(capabilities.data).filter(
+    (tab) =>
+      tab.path !== APPLICATIONS_TAB_PATH ||
+      applicationsShown === true ||
+      pathname.startsWith(APPLICATIONS_TAB_PATH),
+  );
 
   // No capability row yet: decide nothing (the route guard waits the same way).
   if (capabilities.data === undefined) return null;
@@ -47,7 +59,7 @@ export default function AdministrareLayout() {
         description={
           capabilities.data?.createTopLevelGroups === true
             ? 'Grupurile OSUBB, membrii, rolurile și setările organizației.'
-            : 'Grupurile pe care le coordonezi.'
+            : 'Grupurile în care ai o funcție.'
         }
         actions={
           hasAction ? (

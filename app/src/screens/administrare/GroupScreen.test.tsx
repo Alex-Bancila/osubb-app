@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { BackLink } from '../../components/layout';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CommandError } from '../../lib/command-reasons';
 import type {
@@ -191,20 +192,55 @@ beforeEach(() => {
   capabilities(true);
 });
 
-function show(id = 2) {
+function Where() {
+  const { pathname, search } = useLocation();
+  return <p data-testid="where">{pathname + search}</p>;
+}
+
+/** The member page's back link, as the real page draws it. */
+function MemberPage() {
+  return <BackLink to="/administrare/membri" label="Înapoi la Administrare" />;
+}
+
+function show(id: number | string = 2, state?: unknown) {
+  const at =
+    typeof id === 'number'
+      ? `/administrare/grupuri/${id}`
+      : `/administrare/grupuri/${id}`;
   return render(
-    <MemoryRouter initialEntries={[`/administrare/grupuri/${id}`]}>
+    <MemoryRouter
+      initialEntries={[
+        {
+          pathname: at.split('?')[0],
+          search: at.includes('?') ? `?${at.split('?')[1]}` : '',
+          state,
+        },
+      ]}
+    >
       <Routes>
         <Route
           path="/administrare/grupuri/:groupId"
-          element={<GroupScreen />}
+          element={
+            <>
+              <GroupScreen />
+              <Where />
+            </>
+          }
         />
+        <Route path="/administrare/membri/:memberId" element={<MemberPage />} />
       </Routes>
     </MemoryRouter>,
   );
 }
 
-const tab = (name: string) => screen.getByRole('tab', { name });
+const tabBar = () =>
+  screen.getByRole('navigation', { name: 'Secțiunile grupului' });
+const tab = (name: string) => within(tabBar()).getByRole('link', { name });
+const tabNames = () =>
+  within(tabBar())
+    .getAllByRole('link')
+    .map((link) => link.textContent);
+const where = () => screen.getByTestId('where').textContent;
 
 it.each(['2.0', '0x2', '2e0', '02', 'abc'])(
   'shows the not-found state for the malformed id %s and never queries it',
@@ -230,7 +266,7 @@ it.each(['2.0', '0x2', '2e0', '02', 'abc'])(
   },
 );
 
-it('heads the Group with its place in the tree and offers the five built tabs', async () => {
+it('heads the Group with its place in the tree and offers BC every tab it can use', async () => {
   const { container } = show();
   expect(screen.getByRole('heading', { name: 'Logistică' })).toBeVisible();
   // Back to the Grupuri tab the page sits under (#825).
@@ -241,17 +277,21 @@ it('heads the Group with its place in the tree and offers the five built tabs', 
     'href',
     '/administrare/grupuri/1',
   );
-  for (const name of [
+  // No Cereri: Logistică takes no Applications and has none pending.
+  expect(tabNames()).toEqual([
     'Setări',
     'Roster',
     'Roluri',
     'Grupuri copil',
     'Campanii',
-  ])
-    expect(tab(name)).toBeVisible();
-  // The Applications tab's commands are tested with #589's screens.
-  await userEvent.click(tab('Cereri'));
-  expect(screen.getByText('Nu sunt cereri în așteptare.')).toBeVisible();
+  ]);
+  // The first tab opens, marked as the current one.
+  expect(tab('Setări')).toHaveAttribute('aria-current', 'page');
+  expect(
+    screen.getByRole('region', { name: 'Setările grupului' }),
+  ).toBeVisible();
+  // The member count once, in the header, with the plural (B51).
+  expect(screen.getByText(/· 3 membri$/)).toBeVisible();
   expect(
     (
       await axe.run(container, {
@@ -472,9 +512,10 @@ it('archives through the command and explains unfinished work in the Group', asy
   expect(within(dialog).getByRole('alert')).toHaveTextContent(
     'Grupul are lucru neterminat.',
   );
+  // Straight to that work: De gestionat, filtered to this Group (D9).
   expect(
     within(dialog).getByRole('link', { name: 'Vezi taskurile neterminate' }),
-  ).toBeVisible();
+  ).toHaveAttribute('href', '/tracker?lista=gestionat&grup=1&subgrup=2');
 });
 
 it('lists the roster with each Member Status and appoints through add_group_member', async () => {
@@ -489,6 +530,8 @@ it('lists the roster with each Member Status and appoints through add_group_memb
     'href',
     '/administrare/membri/a',
   );
+  // The count is the header's, never repeated above the roster (B51).
+  expect(screen.getAllByText(/3 membri/)).toHaveLength(1);
   // A Manager's roster row is not removed here: the position ends first.
   expect(within(table).getByText('Retrage întâi funcția')).toBeVisible();
 
@@ -681,7 +724,7 @@ it('creates a Child Group of a Private Group private, with the switch on and loc
     name: /Grup privat/,
   });
   expect(privacy).toBeChecked();
-  expect(privacy).toBeDisabled();
+  expect(privacy).toHaveAttribute('aria-disabled', 'true');
   expect(create).toHaveTextContent(
     'Logistică este privat, deci și grupul nou va fi privat.',
   );
@@ -717,7 +760,7 @@ it('offers a private Child under a public parent only to BC and the Moderator', 
     name: 'Subgrup al Logistică',
   });
   const privacy = within(bc).getByRole('checkbox', { name: /Grup privat/ });
-  expect(privacy).toBeEnabled();
+  expect(privacy).not.toHaveAttribute('aria-disabled', 'true');
   await user.click(privacy);
   await user.type(within(bc).getByLabelText('Numele grupului'), 'Audit');
   await user.click(within(bc).getByRole('button', { name: 'Creează' }));
@@ -787,13 +830,13 @@ it("locks a Private Group's Applications and a private parent's Child Group, wit
   const applications = await screen.findByRole('checkbox', {
     name: /Primește cereri de înscriere/,
   });
-  expect(applications).toBeDisabled();
+  expect(applications).toHaveAttribute('aria-disabled', 'true');
   expect(applications).toHaveAccessibleName(
     /Un grup privat nu primește cereri de înscriere/,
   );
   const privacy = screen.getByRole('checkbox', { name: /Grup privat/ });
   expect(privacy).toBeChecked();
-  expect(privacy).toBeDisabled();
+  expect(privacy).toHaveAttribute('aria-disabled', 'true');
   expect(privacy).toHaveAccessibleName(
     /rămâne privat cât timp grupul părinte e privat/,
   );
@@ -816,8 +859,8 @@ it('notes on the Cereri tab that a Group with a form link takes sign-ups by form
   const note =
     'Grupul primește înscrieri prin formular; adaugă membrii din Roster.';
   const first = show();
-  await user.click(tab('Cereri'));
-  expect(screen.queryByText(note)).toBeNull();
+  // Neither taking Applications nor holding one: no Cereri tab at all (B49).
+  expect(within(tabBar()).queryByRole('link', { name: 'Cereri' })).toBeNull();
   first.unmount();
 
   api.groups.mockReturnValue({
@@ -864,14 +907,19 @@ it('notes on the Cereri tab that a Group with a form link takes sign-ups by form
 it("resets the settings form to the Group it now shows, so one Group's form link is never saved onto another (#698)", async () => {
   const user = userEvent.setup();
   api.groups.mockReturnValue({
+    // Both take Applications, so both show the form link's fields (B54).
     data: tree.map((row) =>
       row.id === 2
         ? {
             ...row,
+            accepts_applications: true,
+            application_level: 1,
             application_form_label: 'Formular Logistică',
             application_form_url: 'https://forms.example.org/logistica',
           }
-        : row,
+        : row.id === 1
+          ? { ...row, accepts_applications: true, application_level: 0 }
+          : row,
     ),
     isPending: false,
     isError: false,
@@ -888,4 +936,180 @@ it("resets the settings form to the Group it now shows, so one Group's form link
   expect(screen.getByLabelText('Numele grupului')).toHaveValue('Educațional');
   expect(screen.getByLabelText('Eticheta butonului')).toHaveValue('');
   expect(screen.getByLabelText('Adresa formularului')).toHaveValue('');
+});
+
+/* ------------------------------ Tabs by authority, in the URL (B49, D6) */
+
+it("shows a Group's Responsible only the Roster and Campanii, opening on the Roster, with no refusal", () => {
+  capabilities(false);
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'responsible')] });
+  show();
+  // Logistică has a Child Group, so Grupuri copil stays, read-only.
+  expect(tabNames()).toEqual(['Roster', 'Grupuri copil', 'Campanii']);
+  expect(tab('Roster')).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('table')).toBeVisible();
+  expect(screen.queryByText(/nu îi poți schimba setările/)).toBeNull();
+  expect(screen.queryByText(/schimbările îi revin/)).toBeNull();
+});
+
+it('tells a viewer with no Group Role once that the changes are not theirs', () => {
+  capabilities(false);
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'member')] });
+  show();
+  expect(tabNames()).toEqual(['Roster', 'Grupuri copil', 'Campanii']);
+  expect(
+    screen.getAllByText(
+      /Poți vedea grupul|schimbările îi revin coordonatorului lui/,
+    ),
+  ).toHaveLength(1);
+  // A plain Member has no action column.
+  expect(screen.queryByRole('columnheader', { name: 'Acțiuni' })).toBeNull();
+});
+
+it("shows a Child Group's Manager Setări, Roluri and Grupuri copil", () => {
+  capabilities(false);
+  api.myGroups.mockReturnValue({ data: [myGroup(5, 'manager')] });
+  show(5);
+  // Foto has no Child Groups, but its Manager may create one.
+  expect(tabNames()).toEqual([
+    'Setări',
+    'Roster',
+    'Roluri',
+    'Grupuri copil',
+    'Campanii',
+  ]);
+});
+
+it('hides Grupuri copil when there are none and the viewer may not create one', () => {
+  capabilities(false);
+  api.myGroups.mockReturnValue({ data: [myGroup(5, 'responsible')] });
+  show(5);
+  expect(tabNames()).toEqual(['Roster', 'Campanii']);
+});
+
+it('shows Cereri while an Application is pending, even with Applications off', () => {
+  api.applications.mockReturnValue({
+    data: [
+      {
+        id: 7,
+        group_id: 2,
+        member_id: 'd',
+        member: { memberId: 'd', fullName: 'Dana Ionescu' },
+        status: 'pending',
+        note: null,
+        created_at: '2026-09-24T12:00:00Z',
+      },
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(tabNames()).toContain('Cereri');
+});
+
+it('opens the tab ?tab= names, and writes the tab to the URL on a switch', async () => {
+  const user = userEvent.setup();
+  show('2?tab=roluri');
+  expect(tab('Roluri')).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('region', { name: 'Responsabili' })).toBeVisible();
+
+  await user.click(tab('Roster'));
+  expect(where()).toBe('/administrare/grupuri/2?tab=roster');
+  expect(tab('Roster')).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByRole('table')).toBeVisible();
+  // Each tab is a link to its own address, so a reload keeps it.
+  expect(tab('Campanii')).toHaveAttribute(
+    'href',
+    '/administrare/grupuri/2?tab=campanii',
+  );
+});
+
+it('opens Cereri from ?tab=cereri when the Group takes Applications', () => {
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? { ...row, accepts_applications: true, application_level: 1 }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  show('2?tab=cereri');
+  expect(tab('Cereri')).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByText('Nu sunt cereri în așteptare.')).toBeVisible();
+});
+
+it.each(['necunoscut', 'cereri'])(
+  'ignores ?tab=%s when it is no tab the viewer can use, and opens the first',
+  (value) => {
+    show(`2?tab=${value}`);
+    expect(tab('Setări')).toHaveAttribute('aria-current', 'page');
+  },
+);
+
+it('keeps the Roster as the way back from a member page (D4)', async () => {
+  const user = userEvent.setup();
+  show('2?tab=roster');
+  await user.click(screen.getByRole('link', { name: 'Ana Pop' }));
+  const back = screen.getByRole('link', { name: 'Înapoi la grup' });
+  expect(back).toHaveAttribute('href', '/administrare/grupuri/2?tab=roster');
+  await user.click(back);
+  expect(tab('Roster')).toHaveAttribute('aria-current', 'page');
+});
+
+it('goes back to the member page it was opened from, across tab changes', async () => {
+  const user = userEvent.setup();
+  show(2, {
+    from: { to: '/administrare/membri/a', label: 'Înapoi la membru' },
+  });
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la membru' }),
+  ).toHaveAttribute('href', '/administrare/membri/a');
+  await user.click(tab('Roster'));
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la membru' }),
+  ).toHaveAttribute('href', '/administrare/membri/a');
+});
+
+it("hints 'Retrage întâi funcția' only where the viewer may withdraw that position (B50)", () => {
+  // A Responsible cannot end the Manager's position.
+  capabilities(false);
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'responsible')] });
+  show('2?tab=roster');
+  expect(screen.queryByText('Retrage întâi funcția')).toBeNull();
+  // …but may still take an ordinary Member out.
+  expect(
+    screen.getByRole('button', { name: 'Scoate pe Ana Pop din grup' }),
+  ).toBeVisible();
+});
+
+it('links a top-level Group’s unfinished work without a Subgrup', async () => {
+  const user = userEvent.setup();
+  api.mutate.mockRejectedValue(
+    new CommandError({ code: 'PT409', message: 'group_has_open_work' }, 'nope'),
+  );
+  show(1);
+  await user.click(screen.getByRole('button', { name: 'Arhivează grupul' }));
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Arhivează Educațional',
+  });
+  await user.click(within(dialog).getByRole('button', { name: 'Arhivează' }));
+  expect(
+    within(dialog).getByRole('link', { name: 'Vezi taskurile neterminate' }),
+  ).toHaveAttribute('href', '/tracker?lista=gestionat&grup=1');
+});
+
+it('puts the Group tabs in one strip that keeps a single row at 375 px (X7)', () => {
+  show();
+  expect(tabBar().className).toContain('max-sm:overflow-x-auto');
+  expect(tabBar().className).not.toContain('max-sm:flex-wrap');
+});
+
+it("gives the parent's Manager, who appoints this Group's coordinator, Roluri and no refusal line", () => {
+  capabilities(false);
+  // Manager of Logistică, looking at its Child Group Foto.
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
+  show(5);
+  expect(tabNames()).toContain('Roluri');
+  expect(screen.queryByText(/schimbările îi revin/)).toBeNull();
 });

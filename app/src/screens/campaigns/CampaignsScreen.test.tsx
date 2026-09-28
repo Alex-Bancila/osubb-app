@@ -127,9 +127,16 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
 });
 it('explains that a Campaign is a reporting label and asks for a Group first', () => {
   show('/administrare/campanii');
-  expect(screen.getByText(/etichetă pentru taskurile unui grup/)).toBeVisible();
+  // The header is one sentence (K1); the explanation lives in the empty state.
   expect(
-    screen.getByText('Alege un grup ca să-i vezi campaniile.'),
+    screen.getByText(
+      'Campaniile grupurilor pe care le gestionezi, cu raportul fiecăreia.',
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByText(
+      /^Alege un grup ca să-i vezi campaniile\. O campanie etichetează taskurile unui grup/,
+    ),
   ).toBeVisible();
   expect(
     screen.queryByRole('button', { name: 'Campanie nouă' }),
@@ -174,7 +181,7 @@ it('restores the cascade and the dates from the URL, and clearing the root leave
   );
   expect(where()).toBe('/administrare/campanii?de_la=2026-09-01');
   expect(
-    screen.getByText('Alege un grup ca să-i vezi campaniile.'),
+    screen.getByText(/^Alege un grup ca să-i vezi campaniile\./),
   ).toBeVisible();
 });
 it('dates the report with the range, and reads nothing while it is inverted', async () => {
@@ -252,4 +259,23 @@ it('names each contributor in the report as a button that opens their Member Car
   const card = await screen.findByRole('dialog', { name: 'Ani' });
   // The report row shows points; the Member Card never does.
   expect(card).not.toHaveTextContent('12');
+});
+it('opens the one topmost managed Group directly, keeping the query (D22)', async () => {
+  api.options.mockReturnValue({
+    isSuccess: true,
+    data: {
+      // A Manager of Echipa only; Subechipa sits below it.
+      groups: [
+        { id: 2, name: 'Echipa', path: [1, 2], min_level: 1 },
+        { id: 3, name: 'Subechipa', path: [1, 2, 3], min_level: 1 },
+      ],
+      groupNames: [{ id: 1, name: 'Educațional' }],
+      campaigns: [],
+      umbrellas: [],
+    },
+  });
+  show('/administrare/campanii?stare=inactive');
+  expect(where()).toBe('/administrare/grupuri/2/campanii?stare=inactive');
+  expect(await screen.findByRole('heading', { name: /^Echipa/ })).toBeVisible();
+  expect(screen.queryByText(/Alege un grup/)).toBeNull();
 });
