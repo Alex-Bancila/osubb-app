@@ -5,6 +5,7 @@ import {
   formatAnnouncementDate,
   getUnreadCriticalAnnouncement,
   mayAskForReaders,
+  mayPinAnnouncement,
   originLabel,
   priorityMeta,
   readersSummary,
@@ -498,6 +499,43 @@ describe('announcements-presentation', () => {
         'b',
         'c',
       ]);
+    });
+  });
+
+  describe('mayPinAnnouncement (#857, announcements_update)', () => {
+    const origin = { groupId: 7, group: { id: 7, name: 'Educațional' } };
+    const orgWide = {
+      groupId: 1,
+      group: { id: 1, name: 'OSUBB', isOrganization: true },
+    };
+    const none = { bcOrModerator: false, managesAnyGroup: false, groups: [] };
+
+    it('lets BC/Moderator pin anything', () => {
+      expect(mayPinAnnouncement(origin, { ...none, bcOrModerator: true })).toBe(
+        true,
+      );
+    });
+
+    it("lets a Manager or Responsible of an active Origin pin, not a plain member or another Group's", () => {
+      const role = (group_role: string, id = 7, status = 'active') => ({
+        ...none,
+        managesAnyGroup: group_role !== 'member',
+        groups: [{ id, group_role, status }],
+      });
+      expect(mayPinAnnouncement(origin, role('responsible'))).toBe(true);
+      expect(mayPinAnnouncement(origin, role('manager'))).toBe(true);
+      expect(mayPinAnnouncement(origin, role('member'))).toBe(false);
+      expect(mayPinAnnouncement(origin, role('manager', 9))).toBe(false);
+      expect(mayPinAnnouncement(origin, role('manager', 7, 'archived'))).toBe(
+        false,
+      );
+    });
+
+    it('lets any Group Role holder pin an Organization Group Announcement', () => {
+      expect(
+        mayPinAnnouncement(orgWide, { ...none, managesAnyGroup: true }),
+      ).toBe(true);
+      expect(mayPinAnnouncement(orgWide, none)).toBe(false);
     });
   });
 });
