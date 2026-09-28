@@ -702,6 +702,9 @@ describe('CalendarScreen', () => {
           name: 'joi, 22 octombrie 2026: 1 termen de task',
         }),
       ).toBeInTheDocument();
+      // The Agendă draws no managed deadline, so it offers none of their Groups.
+      await user.click(screen.getByRole('button', { name: 'Agendă' }));
+      expect(hooks.useCalendarWork).toHaveBeenLastCalledWith(false);
     });
 
     it('offers only the Groups and Campaigns with Events or deadlines (Rule W)', async () => {

@@ -63,10 +63,10 @@ export default function CalendarScreen() {
 
   const groups = useGroups();
   const campaigns = useCampaigns();
-  // Taskurile gestionate: the month grid draws them, and Rule W offers
-  // their Groups while they are on (#845).
+  // Taskurile gestionate: only the month grid draws them, so Rule W offers
+  // their Groups only there, while they are on (#845).
   const [showManaged, setShowManaged] = useState(false);
-  const calendarWork = useCalendarWork(showManaged);
+  const calendarWork = useCalendarWork(view === 'month' && showManaged);
   const filterGroups = useMemo(
     () => [...(groups.data?.values() ?? [])],
     [groups.data],
