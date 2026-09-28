@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   mutate: vi.fn(),
   roster: vi.fn(),
   events: vi.fn(),
+  rosterRows: vi.fn(),
   level: 1,
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -29,6 +30,7 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useAdminGroups: api.groups,
   useMyGroupRoles: api.mine,
 }));
+vi.mock('../../queries/reference', () => ({ useMyGroups: api.rosterRows }));
 vi.mock('../../queries/group-applications', () => ({
   useGroupApplications: api.applications,
   useGroupCoordination: api.roster,
@@ -96,6 +98,7 @@ beforeEach(() => {
     ]),
   );
   api.mine.mockReturnValue(ready([]));
+  api.rosterRows.mockReturnValue({ ...ready([]), membershipRows: [] });
   api.applications.mockReturnValue(ready([]));
   api.roster.mockReturnValue(
     ready([{ memberId: 'manager', fullName: 'Ioana', groupRole: 'manager' }]),
@@ -137,11 +140,17 @@ it.each(['2.0', '0x2', '2e0', '02'])(
   },
 );
 it('lists only eligible active Groups and searches by name, with their first ancestor', async () => {
+  api.groups.mockReturnValue(
+    ready([
+      ...api.groups().data,
+      group(7, 'Echipa Media', { parent_id: 1, path: [1, 7] }),
+    ]),
+  );
   list();
   expect(
     screen.getByRole('link', { name: 'Echipa Evenimente' }),
   ).toHaveAttribute('href', '/grupuri/2');
-  expect(screen.getByText(/Echipă · Educațional/)).toBeInTheDocument();
+  expect(screen.getAllByText(/Echipă · Educațional/)).toHaveLength(2);
   expect(screen.queryByText('Doar AG')).not.toBeInTheDocument();
   expect(screen.queryByText('Arhivat')).not.toBeInTheDocument();
   expect(screen.queryByText('Automat')).not.toBeInTheDocument();
@@ -381,4 +390,196 @@ it('the form link passes the accessibility check', async () => {
   withFormLink();
   const { container } = list();
   expect((await axe.run(container)).violations).toEqual([]);
+});
+
+/* ---- #852: Grupurile tale, an honest empty state, Event links ---- */
+function myGroup(
+  id: number,
+  name: string,
+  extra: Partial<{
+    group_role: string;
+    explicit: boolean;
+    automatic: boolean;
+    is_organization: boolean;
+    status: string;
+  }> = {},
+) {
+  return {
+    id,
+    name,
+    group_role: 'member',
+    explicit: true,
+    automatic: false,
+    is_organization: false,
+    status: 'active',
+    category: 'team',
+    color: '#284C93',
+    min_level: 0,
+    path: [id],
+    short: '',
+    ...extra,
+  };
+}
+it("lists the member's own Groups first, as links, with a position's display name", () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(5, 'OSUBB', { is_organization: true, accepts_applications: false }),
+      group(8, 'Educațional', { accepts_applications: false }),
+      group(58, 'Echipa Recruți', { accepts_applications: false }),
+      group(60, 'Festivalul Studențesc 2026', { category: 'project' }),
+      group(62, 'Echipa Logistică'),
+    ]),
+  );
+  api.mine.mockReturnValue(
+    ready([
+      myGroup(5, 'OSUBB', {
+        explicit: false,
+        automatic: true,
+        is_organization: true,
+      }),
+      myGroup(8, 'Educațional'),
+      myGroup(58, 'Echipa Recruți'),
+      myGroup(60, 'Festivalul Studențesc 2026', { group_role: 'responsible' }),
+      // Archived: no page to open.
+      myGroup(61, 'Gala Voluntarilor 2025', { status: 'archived' }),
+      // Authority inherited from an ancestor is not membership (R31).
+      myGroup(70, 'Subechipa', {
+        group_role: 'manager',
+        explicit: false,
+        automatic: false,
+      }),
+    ]),
+  );
+  api.rosterRows.mockReturnValue({
+    ...ready([]),
+    membershipRows: [
+      {
+        group_id: 60,
+        group_role: 'responsible',
+        position_title: 'Responsabil proiect',
+      },
+    ],
+  });
+  list();
+  const own = screen.getByRole('region', { name: 'Grupurile tale' });
+  const links = within(own).getAllByRole('link');
+  expect(links.map((link) => link.textContent)).toEqual([
+    'Echipa Recruți',
+    'Educațional',
+    'Festivalul Studențesc 2026',
+  ]);
+  expect(links.map((link) => link.getAttribute('href'))).toEqual([
+    '/grupuri/58',
+    '/grupuri/8',
+    '/grupuri/60',
+  ]);
+  // Only a position is labelled; plain membership is the section itself.
+  expect(within(own).getByText('Responsabil proiect')).toBeInTheDocument();
+  expect(within(own).queryByText('Membru')).toBeNull();
+  // A Group the member is in is not offered again under "Poți aplica la".
+  const apply = screen.getByRole('region', { name: 'Poți aplica la' });
+  expect(within(apply).queryByText('Festivalul Studențesc 2026')).toBeNull();
+  expect(
+    within(apply).getByRole('link', { name: 'Echipa Logistică' }),
+  ).toBeInTheDocument();
+  // One Group to apply to: nothing to search.
+  expect(screen.queryByRole('searchbox')).toBeNull();
+});
+it('says no Group accepts Applications, with no search box and no "căutare" (B28, D-18)', () => {
+  api.groups.mockReturnValue(
+    ready([group(8, 'Educațional', { accepts_applications: false })]),
+  );
+  api.mine.mockReturnValue(ready([myGroup(8, 'Educațional')]));
+  list();
+  expect(
+    screen.getByText('Niciun grup nu primește acum cereri de înscriere.'),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('searchbox')).toBeNull();
+  expect(screen.queryByText(/pentru această căutare/)).toBeNull();
+  expect(screen.getByRole('link', { name: 'Educațional' })).toHaveAttribute(
+    'href',
+    '/grupuri/8',
+  );
+});
+it('a Group page Event title opens the Calendar on that Event (D5)', () => {
+  api.events.mockReturnValue(
+    ready([
+      {
+        id: 41,
+        title: 'Ședință de echipă',
+        starts_at: '2026-10-05T15:00:00Z',
+        location: 'Sala 2',
+      },
+    ]),
+  );
+  detail();
+  expect(
+    screen.getByRole('link', { name: 'Ședință de echipă' }),
+  ).toHaveAttribute('href', '/calendar?event=41');
+});
+it('hides Coordonare when nobody holds a position (B29)', () => {
+  api.roster.mockReturnValue(
+    ready([{ memberId: 'x', fullName: 'Ana', groupRole: 'member' }]),
+  );
+  detail();
+  expect(screen.queryByRole('heading', { name: 'Coordonare' })).toBeNull();
+  expect(
+    screen.getByRole('heading', { name: 'Evenimente viitoare' }),
+  ).toBeInTheDocument();
+});
+it('lists the positions of Coordonare as rows with the title as the value', () => {
+  detail();
+  const panel = screen.getByRole('region', { name: 'Coordonare' });
+  const row = within(panel).getByRole('listitem');
+  expect(row).toHaveAttribute('data-slot', 'list-row');
+  expect(
+    within(row).getByText('Coordonator').closest('[data-slot]'),
+  ).toHaveAttribute('data-slot', 'list-row-value');
+});
+it('the back link falls back to Grupuri, and prefers state.from (A33)', () => {
+  const view = detail();
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Grupuri' }),
+  ).toHaveAttribute('href', '/grupuri');
+  view.unmount();
+  render(
+    <MemoryRouter
+      initialEntries={[
+        {
+          pathname: '/grupuri/2',
+          state: { from: { to: '/notificari', label: 'Înapoi la Notificări' } },
+        },
+      ]}
+    >
+      <Routes>
+        <Route path="/grupuri/:groupId" element={<MemberGroupScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Notificări' }),
+  ).toHaveAttribute('href', '/notificari');
+});
+it('an unavailable Group says why and leads back to Grupuri (D23)', () => {
+  detail(4040);
+  expect(screen.getAllByRole('link')).toHaveLength(1);
+  expect(
+    screen.getByRole('heading', { name: 'Grup indisponibil' }),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Grupul a fost arhivat sau nu mai ai acces la el.'),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('link', { name: 'Înapoi la Grupuri' }),
+  ).toHaveAttribute('href', '/grupuri');
+});
+it('Administrare is an outline button in the header, not a text link (G1)', () => {
+  api.mine.mockReturnValue(
+    ready([{ id: 2, group_role: 'manager', explicit: true, automatic: false }]),
+  );
+  detail();
+  const link = screen.getByRole('link', { name: 'Administrare' });
+  expect(link.closest('[data-slot=page-actions]')).not.toBeNull();
+  expect(link).toHaveClass('border-border', 'min-h-11');
+  expect(link).not.toHaveClass('underline');
 });
