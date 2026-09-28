@@ -5,9 +5,9 @@ import { useCapabilities } from '../../lib/capabilities';
 import { firstName, formatLongDate } from '../../lib/format';
 import { useMyProfile } from '../../queries/profile';
 import AwaitingReviewCard from './AwaitingReviewCard';
-import MyPointsCard from './MyPointsCard';
 import NextEventCard from './NextEventCard';
 import NextTaskCard from './NextTaskCard';
+import PointsStat from './PointsStat';
 
 /** "sâmbătă, 27 septembrie 2026" → "Sâmbătă, 27 septembrie 2026". */
 function capitalised(text: string): string {
@@ -18,30 +18,33 @@ function capitalised(text: string): string {
  * Headers and boxes on shared rows. Once panels sit side by side, each spans
  * two grid rows — its header, then its box — through a subgrid, so a header
  * that wraps its link or carries a description never pushes its box below
- * the boxes next to it: the boxes in a row start together, each as tall as
- * its content (#876), and every header keeps to the top of its row.
+ * the boxes next to it. Two cards are like items, so the row has
+ * `equalHeights` (#876) and their boxes start and end together. Headers
+ * keep to the bottom of their row, so the titles share one line whether or
+ * not a panel carries an eyebrow (Următorul eveniment keeps 'Calendar'; the
+ * Task panels drop theirs, B7).
  */
 const twoColumnPanel =
-  'md:row-span-2 md:grid md:grid-rows-subgrid md:gap-y-0 md:*:first:self-start';
-const threeColumnPanel =
-  'xl:row-span-2 xl:grid xl:grid-rows-subgrid xl:gap-y-0 xl:*:first:self-start';
-function twoColumnRows(rows: 1 | 2) {
-  return rows === 1
-    ? 'md:grid-rows-[auto_1fr]'
-    : // auto, not 1fr: two 1fr rows would both take the taller one's height.
-      'md:grid-rows-[auto_auto_auto_auto]';
-}
+  'md:row-span-2 md:grid md:grid-rows-subgrid md:gap-y-0 md:*:first:self-end ' +
+  // A box holding only an empty state keeps its own height beside a card:
+  // equal heights are for two cards, never for a mostly empty box (Alex,
+  // 2026-09-28). The tops still line up.
+  'md:[&:has([data-slot=empty-state])>[data-slot=panel-box]]:self-start';
+/** One row: each panel spans its header row and its box row. */
+const panelRow = 'md:grid-rows-[auto_1fr]';
 
 /**
- * Acasă (#822, ruling R27): one row of equal boxes that answers "what next".
+ * Acasă (#822, ruling R27; #859): equal boxes that answer "what next".
  *
  * The page decides which panels exist before it renders the grid, from the
  * server's capability row (`my_capabilities()`):
- * - below BCE (`seeLeadership` false): **Punctajul meu**, **Următorul task**
- *   and **Următorul eveniment** in three columns — plus **De evaluat** in a
- *   2 × 2 for a Group Responsible or Coordonator (`manageTasks`, plan D2);
+ * - below BCE (`seeLeadership` false): the points and Role as a stat on the
+ *   greeting line (`PointsStat`, no panel — Alex, 2026-09-28), then
+ *   **Următorul task** and **Următorul eveniment** in two columns from `md`;
+ *   a Group Responsible or Coordonator (`manageTasks`, plan D2) has
+ *   **De evaluat** in its own row above them;
  * - BC / BCE: **De evaluat** (or **Următorul task** without `manageTasks`)
- *   and **Următorul eveniment**. They do not work by points, so no score.
+ *   and **Următorul eveniment**. They do not work by points, so no stat.
  *
  * The Clasament and the Cupa Departamentelor live on Clasament, not here.
  * Each panel owns its query and its loading, empty and error states, so a
@@ -70,6 +73,7 @@ export default function DashboardScreen() {
       <PageHeader
         eyebrow={capitalised(formatLongDate(now))}
         title={`Salut${name ? `, ${name}` : ''} 👋`}
+        actions={capabilities.data && !leader ? <PointsStat /> : undefined}
       />
       {capabilities.isPending ? (
         <Loading />
@@ -79,7 +83,7 @@ export default function DashboardScreen() {
           onRetry={() => void capabilities.refetch()}
         />
       ) : leader ? (
-        <PageGrid columns={2} className={twoColumnRows(1)}>
+        <PageGrid columns={2} equalHeights className={panelRow}>
           {reviewer ? (
             <AwaitingReviewCard now={now} className={twoColumnPanel} />
           ) : (
@@ -88,17 +92,19 @@ export default function DashboardScreen() {
           <NextEventCard now={now} className={twoColumnPanel} />
         </PageGrid>
       ) : reviewer ? (
-        <PageGrid columns={2} className={twoColumnRows(2)}>
-          <MyPointsCard className={twoColumnPanel} />
-          <AwaitingReviewCard now={now} className={twoColumnPanel} />
+        <>
+          {/* Its own row, as tall as what it holds: the row below shares one
+              height between two cards, which this one should not dictate. */}
+          <AwaitingReviewCard now={now} />
+          <PageGrid columns={2} equalHeights className={panelRow}>
+            <NextTaskCard now={now} className={twoColumnPanel} />
+            <NextEventCard now={now} className={twoColumnPanel} />
+          </PageGrid>
+        </>
+      ) : (
+        <PageGrid columns={2} equalHeights className={panelRow}>
           <NextTaskCard now={now} className={twoColumnPanel} />
           <NextEventCard now={now} className={twoColumnPanel} />
-        </PageGrid>
-      ) : (
-        <PageGrid columns={3} className="xl:grid-rows-[auto_1fr]">
-          <MyPointsCard className={threeColumnPanel} />
-          <NextTaskCard now={now} className={threeColumnPanel} />
-          <NextEventCard now={now} className={threeColumnPanel} />
         </PageGrid>
       )}
     </Page>

@@ -1,4 +1,3 @@
-import { ClipboardCheck } from 'lucide-react';
 import { EmptyState, Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { formatTaskCount } from '../../lib/format';
@@ -11,7 +10,8 @@ import { toTaskPresentation } from '../tracker/task-presentation';
  * that the viewer may evaluate, and how many are waiting. Rendered only for
  * a viewer with `manageTasks` — the page decides. `Evaluează` opens Taskuri
  * on De gestionat with the Task's details sheet, where the Evaluation
- * control is; the card itself only reads.
+ * control is; the card itself only reads. No eyebrow: the title and its
+ * link already say where it lives (B7).
  */
 export default function AwaitingReviewCard({
   now,
@@ -26,8 +26,6 @@ export default function AwaitingReviewCard({
 
   return (
     <Panel
-      eyebrow="Taskuri"
-      icon={ClipboardCheck}
       title="De evaluat"
       className={className}
       description={

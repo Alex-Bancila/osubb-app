@@ -1,5 +1,4 @@
-import { useId } from 'react';
-import { Switch } from '../../components/ui/switch';
+import { SwitchRow } from '../../components/ui/switch';
 import { usePushSubscription } from '../../queries/push-subscription';
 import { PushPreferences } from './PushPreferences';
 
@@ -11,7 +10,6 @@ import { PushPreferences } from './PushPreferences';
  */
 export function PushDeviceCard() {
   const push = usePushSubscription();
-  const statusId = useId();
 
   const unsupported = !push.supported;
   const denied = !unsupported && push.permission === 'denied';
@@ -30,24 +28,16 @@ export function PushDeviceCard() {
 
   return (
     <div data-testid="push-device-card">
-      <div className="flex items-center justify-between gap-4">
-        <p id={statusId} className="text-sm text-muted-foreground">
-          {status}
-        </p>
-        <Switch
-          aria-label="Notificări pe acest dispozitiv"
-          aria-describedby={statusId}
-          checked={checked}
-          disabled={
-            unsupported ||
-            denied ||
-            unconfigured ||
-            push.loading ||
-            push.pending
-          }
-          onCheckedChange={(next) => (next ? push.enable() : push.disable())}
-        />
-      </div>
+      {/* One 44 px row: the label, the state, and the switch (X13). */}
+      <SwitchRow
+        label="Notificări push"
+        description={status}
+        checked={checked}
+        disabled={
+          unsupported || denied || unconfigured || push.loading || push.pending
+        }
+        onCheckedChange={(next) => (next ? push.enable() : push.disable())}
+      />
 
       {push.error && (
         <p role="alert" className="mt-3 text-sm text-destructive">

@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
-import { Switch } from '../../components/ui/switch';
+import { SwitchRow } from '../../components/ui/switch';
 import { useEmailDigest } from '../../queries/email-digest';
 
 /** The anchor every digest's opt-out line links to (`/profil#rezumat-email`). */
@@ -16,7 +16,6 @@ export const EMAIL_DIGEST_ANCHOR = 'rezumat-email';
  */
 export function EmailDigestCard() {
   const digest = useEmailDigest();
-  const statusId = useId();
   const sectionRef = useRef<HTMLDivElement>(null);
   const { hash } = useLocation();
 
@@ -33,22 +32,20 @@ export function EmailDigestCard() {
       id={EMAIL_DIGEST_ANCHOR}
       data-testid="email-digest-card"
     >
-      <div className="flex items-center justify-between gap-4">
-        <p id={statusId} className="text-sm text-muted-foreground">
-          {digest.enabled
+      {/* One 44 px row: the label, what is on now, and the switch (X13). */}
+      <SwitchRow
+        label="Rezumat zilnic pe email"
+        description={
+          digest.enabled
             ? 'Primești dimineața, la 7, un email cu notificările necitite.'
-            : 'Nu primești emailuri cu notificările necitite.'}
-        </p>
-        <Switch
-          aria-label="Rezumat zilnic pe email"
-          aria-describedby={statusId}
-          checked={digest.enabled}
-          disabled={digest.loading || digest.pending}
-          onCheckedChange={(next) => digest.setEnabled(next)}
-        />
-      </div>
+            : 'Nu primești emailuri cu notificările necitite.'
+        }
+        checked={digest.enabled}
+        disabled={digest.loading || digest.pending}
+        onCheckedChange={(next) => digest.setEnabled(next)}
+      />
 
-      <p className="mt-3 text-sm text-muted-foreground">
+      <p className="mt-2 text-sm text-muted-foreground">
         Doar în zilele în care ai ceva necitit. Lista din aplicație rămâne
         completă.
       </p>

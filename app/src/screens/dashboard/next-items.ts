@@ -1,13 +1,20 @@
 import type { EventPresentation } from '../../queries/events';
 import { eventRelevance } from '../calendar/calendar-presentation';
-import {
-  isTerminalTask,
-  type TaskPresentationRow,
+import type {
+  TaskPresentationRow,
+  TaskStatus,
 } from '../tracker/task-presentation';
 
+/** De făcut or În lucru: the statuses in which the Executor has work to do. */
+function inWork(status: TaskStatus): boolean {
+  return status === 'todo' || status === 'in_progress';
+}
+
 /**
- * **Următorul task** (ruling R4): the Task with the soonest deadline that is
- * still in work and whose current Executor is this Member. Overdue is simply
+ * **Următorul task** (ruling R4, #859 B1): the Task with the soonest deadline
+ * that the Member can still work on — De făcut or În lucru, which includes a
+ * Task returned for changes — and whose current Executor is this Member. A
+ * Task În verificare waits on its reviewer, not on them, so it is skipped. Overdue is simply
  * the soonest. `useMyTasks()` keeps every Assignment the Member ever held, so
  * "current Executor" is read from the Assignment rows: one of theirs that has
  * not ended. A Task they gave up (or were replaced on) is skipped, and so is a
@@ -20,7 +27,7 @@ export function nextOwnTask<Row extends TaskPresentationRow>(
   let next: Row | null = null;
   let nextAt = Infinity;
   for (const row of rows) {
-    if (isTerminalTask(row.status) || row.deadline === null) continue;
+    if (!inWork(row.status) || row.deadline === null) continue;
     const at = Date.parse(row.deadline);
     if (!Number.isFinite(at) || at >= nextAt) continue;
     const executor = row.assignments?.some(
@@ -32,6 +39,24 @@ export function nextOwnTask<Row extends TaskPresentationRow>(
     nextAt = at;
   }
   return next;
+}
+
+/**
+ * Whether the Member executes any Task still in work, dated or not: with no
+ * dated one next, Următorul task then says so rather than "nothing in work".
+ */
+export function hasOwnTaskInWork(
+  rows: readonly TaskPresentationRow[],
+  memberId: string,
+): boolean {
+  return rows.some(
+    (row) =>
+      inWork(row.status) &&
+      row.assignments?.some(
+        (assignment) =>
+          assignment.member_id === memberId && assignment.ended_at === null,
+      ),
+  );
 }
 
 /**

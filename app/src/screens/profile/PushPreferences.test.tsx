@@ -68,6 +68,15 @@ describe('PushPreferences', () => {
     expect((await axe.run(container)).violations).toEqual([]);
   });
 
+  it('puts each switch in a 44 px row with its label, so the whole row toggles (X13)', async () => {
+    renderPreferences();
+    await ready('Evenimente');
+
+    const row = theSwitch('Evenimente').closest('[data-slot="switch-row"]');
+    expect(row).toHaveClass('min-h-11');
+    expect(row?.tagName).toBe('LABEL');
+  });
+
   it('offers no switch for Tasks or system Notifications', async () => {
     renderPreferences();
     await waitFor(() => expect(theSwitch('Evenimente')).not.toBeChecked());
