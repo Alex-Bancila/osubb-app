@@ -308,6 +308,11 @@ const REASON_COPY = new Map<string, string>([
   ],
   ['invalid_event_min_level', 'Alege un nivel minim valid.'],
   ['event_group_required', 'Alege grupul evenimentului.'],
+  ['event_not_found', 'Evenimentul nu mai este disponibil. Reîncarcă pagina.'],
+  [
+    'event_cancelled',
+    'Evenimentul a fost deja anulat și nu mai poate fi modificat.',
+  ],
   [
     'calendar_manage_forbidden',
     'Nu mai ai permisiunea să gestionezi evenimentele acestui grup. Reîncarcă pagina și încearcă din nou.',

@@ -77,6 +77,27 @@ describe('event presentation', () => {
       location: 'Sala 1',
       capacity: 30,
       description: 'Planificarea semestrului',
+      minLevel: 0,
+      createdBy: null,
+      cancelledAt: null,
+      cancelReason: null,
+    });
+  });
+
+  it('carries the cancellation and the creator the manage controls read (#849)', () => {
+    const event = toEventPresentation(
+      eventRow({
+        created_by: 'd0000000-0000-0000-0000-000000000006',
+        min_level: 3,
+        cancelled_at: '2026-08-21T10:00:00.000Z',
+        cancel_reason: 'Sala nu mai este disponibilă.',
+      }),
+    );
+    expect(event).toMatchObject({
+      createdBy: 'd0000000-0000-0000-0000-000000000006',
+      minLevel: 3,
+      cancelledAt: '2026-08-21T10:00:00.000Z',
+      cancelReason: 'Sala nu mai este disponibilă.',
     });
   });
 
@@ -108,7 +129,7 @@ describe('events range query', () => {
 
     expect(supabaseMock.from).toHaveBeenCalledWith('events');
     expect(supabaseMock.select).toHaveBeenCalledWith(
-      'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, group:groups(name, short, color, category, path, is_organization)',
+      'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, group:groups(name, short, color, category, path, is_organization)',
     );
     expect(supabaseMock.gte).toHaveBeenCalledWith('starts_at', range.from);
     expect(supabaseMock.lt).toHaveBeenCalledWith('starts_at', range.to);

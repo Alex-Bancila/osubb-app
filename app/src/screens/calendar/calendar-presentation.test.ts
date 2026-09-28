@@ -96,6 +96,10 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     location: null,
     capacity: null,
     description: null,
+    minLevel: 0,
+    createdBy: null,
+    cancelledAt: null,
+    cancelReason: null,
     ...overrides,
   };
 }

@@ -27,6 +27,7 @@ import {
   type EventRelevance,
 } from './calendar-presentation';
 import { useCalendarView, type CalendarView } from './calendar-view';
+import { clearEventReceipts } from './event-receipts';
 import { NewEventControl } from './NewEventControl';
 
 const VIEWS: ReadonlyArray<SegmentedOption<CalendarView>> = [
@@ -54,6 +55,8 @@ export default function CalendarScreen() {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  // An edit or cancel receipt belongs to this visit (#849).
+  useEffect(() => clearEventReceipts, []);
   const todayKey = bucharestDayKey(new Date(now)) ?? '';
 
   const groups = useGroups();
