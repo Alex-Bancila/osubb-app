@@ -62,7 +62,7 @@ select is(private.remind_deadlines(), 0, 'Second run on the same day is idempote
 select is((select count(*) from notifications), 3::bigint, 'No terminal, late, overdue, inactive, unassigned, or Umbrella notification');
 select is((select count(*) from notifications where member_id = '06900000-0000-0000-0000-000000000001'), 2::bigint, 'Direct reminders reach BC despite broadcast suppression');
 select is((select count(*) from notifications where member_id = '06900000-0000-0000-0000-000000000002'), 1::bigint, 'Direct reminders reach BCE, but never the past Executor');
-select ok(not exists (select 1 from notifications where kind <> 'deadline' or link <> '/tracker/' || task_id::text), 'Reminders use deadline kind and Task detail link');
+select ok(not exists (select 1 from notifications where kind <> 'deadline' or link <> '/tracker?task=' || task_id::text), 'Reminders use deadline kind and Task detail link');
 select ok(not exists (select 1 from notifications where dedupe_key <> 'task:' || task_id::text || ':deadline:' || (now() at time zone 'UTC')::date::text), 'Daily key is stable in UTC');
 update notifications set read = true;
 select is(private.remind_deadlines(), 0, 'Read reminders are not sent again on the same day');

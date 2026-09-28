@@ -60,7 +60,8 @@ reset role;
 select ok((select cancelled_at is not null and cancel_reason='Vreme nefavorabilă' from public.events where id=(select id from ex where title='Event a #248')),'cancellation timestamp and normalized reason stored');
 select is((select count(*) from public.event_attendance where event_id=(select id from ex where title='Event a #248')),3::bigint,'attendance survives cancellation');
 select is((select count(*) from public.notifications where dedupe_key like 'event:%:cancelled' and member_id::text like '24800000-%'),3::bigint,'cancellation has exact deduplicated active nonactor recipients');
-select ok((select bool_and(body='Vreme nefavorabilă' and link='/calendar') from public.notifications where dedupe_key like 'event:%:cancelled' and member_id::text like '24800000-%'),'cancellation reason and route sent');
+-- #843 (D5): the route opens the Event itself.
+select ok((select bool_and(body='Vreme nefavorabilă' and link='/calendar?event=' || (select id from ex where title='Event a #248')::text) from public.notifications where dedupe_key like 'event:%:cancelled' and member_id::text like '24800000-%'),'cancellation reason and route (/calendar?event=<id>) sent');
 -- #248: the body is the reason, so the Event has to be named by the title -- a
 -- recipient on several Groups otherwise reads "Eveniment anulat" with no subject.
 select ok((select bool_and(title='Eveniment anulat: Event a #248') from public.notifications where dedupe_key like 'event:%:cancelled' and member_id::text like '24800000-%'),'the cancellation title names the Event');

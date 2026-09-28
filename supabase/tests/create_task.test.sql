@@ -445,7 +445,7 @@ select is((select format('%s|%s|%s|%s', notification.title, notification.kind,
              from public.notifications as notification
              join public.tasks as task on task.id = notification.task_id
             where task.title = 'Direct #327'),
-  format('Task nou: Direct #327|task|/tracker/%s|true', (select plain.id from public.tasks as plain
+  format('Task nou: Direct #327|task|/tracker?task=%s|true', (select plain.id from public.tasks as plain
     where plain.title = 'Direct #327')),
   'the Executor notification uses the pinned Romanian title, task kind and Task link');
 -- The exact string, not a `like` prefix probe: a wrong to_char mask or time

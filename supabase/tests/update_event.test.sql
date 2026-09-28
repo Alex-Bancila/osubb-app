@@ -94,7 +94,8 @@ select lives_ok($q$select public.update_event((select id from ex where title='Ev
 reset role;
 select is((select count(*) from public.notifications where member_id::text like '24800000-%'),6::bigint,'three distinct active nonactor recipients per changed field');
 select is((select count(*) from public.notifications where member_id in ('24800000-0000-0000-0000-000000000002','24800000-0000-0000-0000-000000000007','24800000-0000-0000-0000-000000000009')),0::bigint,'actor declined outsider and inactive attendee excluded');
-select ok((select bool_and(link='/calendar' and kind='event') from public.notifications where member_id::text like '24800000-%'),'Event notifications link to Calendar');
+-- #843 (D5): the link opens the changed Event, not the bare Calendar.
+select ok((select bool_and(link='/calendar?event=' || (select id from ex where title='Event a #248')::text and kind='event') from public.notifications where member_id::text like '24800000-%'),'Event notifications link to the Event in Calendar (/calendar?event=<id>)');
 -- #248: each important change carries its OWN dedupe key, and the text tells the
 -- reader which field moved and what it moved to -- a Notification whose body is
 -- only the Event's name cannot say anything a coalesced second change would update.

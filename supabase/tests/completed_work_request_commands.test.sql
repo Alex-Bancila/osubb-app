@@ -36,7 +36,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(116);
+select plan(117);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -246,6 +246,12 @@ select is((select notification.body from public.notifications as notification
               and notification.member_id = '34400000-0000-0000-0000-000000000002'),
   'Membru EDU 344 a trimis o cerere de muncă realizată.',
   'and its body names the requester');
+
+select is((select notification.link from public.notifications as notification
+            where notification.dedupe_key = 'request:' || (select dept_request_id from f344)::text
+              and notification.member_id = '34400000-0000-0000-0000-000000000002'),
+  '/cereri',
+  'and it links Cereri, where the decider acts on it (#843, D7)');
 
 select is((select count(distinct notification.task_id) from public.notifications as notification
             where notification.dedupe_key = 'request:' || (select dept_request_id from f344)::text), 0::bigint,
@@ -786,12 +792,12 @@ select is((select format('%s|%s|%s|%s',
   'rejected|34400000-0000-0000-0000-000000000002|Munca aceasta e deja punctata pe alt task.|-',
   'the rejected Request records its decider and reason and names no Task -- only approval creates one');
 
-select is((select format('%s|%s|%s', notification.member_id, notification.title, notification.body)
+select is((select format('%s|%s|%s|%s', notification.member_id, notification.title, notification.body, notification.link)
              from public.notifications as notification
             where notification.title like 'Cerere respinsă:%'),
-  format('34400000-0000-0000-0000-000000000014|Cerere respinsă: %s|Munca aceasta e deja punctata pe alt task.',
+  format('34400000-0000-0000-0000-000000000014|Cerere respinsă: %s|Munca aceasta e deja punctata pe alt task.|/cereri',
          left('Cerere care va fi respinsa #344', 60)),
-  'the requester alone is told, with the decider''s reason as the body');
+  'the requester alone is told, with the decider''s reason as the body and a link to Cereri (#843, D7)');
 
 select is((select count(*) from public.tasks where created_by = '34400000-0000-0000-0000-000000000002'
              and description = 'Cerere care va fi respinsa #344'), 0::bigint,

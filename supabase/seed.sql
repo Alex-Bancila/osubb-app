@@ -391,6 +391,23 @@ update public.org_settings
    set value = pg_temp.seed_group_id('Biroul de Conducere')::text
  where key = 'board_group_id';
 select public.archive_group(pg_temp.seed_group_id('Gala Voluntarilor 2025'));
+-- #843 (QA pass B28): one Group accepts Applications, so Grupuri has a Group
+-- to join and Cereri de aderare an Application to decide. Echipa Logistică
+-- takes them from level 1 with a form link; the Voluntar Activ persona has
+-- already applied (a pending row for its Responsibles), and the Voluntar
+-- persona can still apply from Grupuri.
+select public.update_group(grp.id, grp.name, grp.manager_title, true, 1,
+         grp.shared_work_visibility, grp.min_level,
+         'Formular de înscriere', 'https://forms.gle/exemplu-logistica')
+  from public.groups as grp
+ where grp.id = pg_temp.seed_group_id('Echipa Logistică');
+select set_config('request.jwt.claims',
+  jsonb_build_object('sub','d0000000-0000-0000-0000-000000000003',
+    'role','authenticated',
+    'app_metadata',jsonb_build_object('member_role','activ','member_level',2))::text,
+  true);
+select public.apply_to_group(pg_temp.seed_group_id('Echipa Logistică'),
+  'Am ajutat la standul de recrutare și aș vrea să continui.');
 select set_config('request.jwt.claims','',true);
 
 -- ==================== Demo work: campaigns, Tasks, evaluations, points ====================
@@ -1627,13 +1644,34 @@ select a.id, r.member_id
 -- is suppressed above: staging may already contain real Members.
 -- Note the suppression rule at work: BC and BCE get the announcement, never
 -- the task/deadline broadcasts.
-insert into notifications (member_id, kind, icon, title, body, critical, read, link, created_at) values
-  ('d0000000-0000-0000-0000-000000000002', 'announce', '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, '/anunturi', now() - interval '1 day'),
-  ('d0000000-0000-0000-0000-000000000002', 'event',    '📅', 'Ședință Educational',               'Poimâine, sala 305.',     false, true,  '/calendar', now() - interval '3 days'),
-  ('d0000000-0000-0000-0000-000000000001', 'announce', '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, '/anunturi', now() - interval '1 day'),
-  ('d0000000-0000-0000-0000-000000000001', 'event',    '📅', 'Training pentru recruți',           'Peste 6 zile, sala 210.', false, false, '/calendar', now() - interval '1 day'),
+-- #843: the links are the ones the commands write -- an Announcement opens at
+-- /anunturi?anunt=<id>, an Event at /calendar?event=<id> -- resolved to the
+-- demo cohort's own rows by title.
+insert into notifications (member_id, kind, icon, title, body, critical, read, link, created_at)
+select fixture.member_id, fixture.kind, fixture.icon, fixture.title, fixture.body,
+       fixture.critical, fixture.read,
+       case fixture.kind
+         when 'announce' then '/anunturi?anunt=' || (
+           select announcement.id from announcements as announcement
+             join profiles as author on author.id = announcement.created_by
+            where announcement.title = fixture.title and author.email like '%@demo.osubb'
+            order by announcement.id desc limit 1)::text
+         when 'event' then '/calendar?event=' || (
+           select event.id from events as event
+             join profiles as author on author.id = event.created_by
+            where event.title = fixture.title and author.email like '%@demo.osubb'
+            order by event.id desc limit 1)::text
+         else fixture.link
+       end,
+       fixture.created_at
+  from (values
+  ('d0000000-0000-0000-0000-000000000002'::uuid, 'announce'::public.noti_kind, '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, null::text, now() - interval '1 day'),
+  ('d0000000-0000-0000-0000-000000000002', 'event',    '📅', 'Ședință Educational',               'Poimâine, sala 305.',     false, true,  null, now() - interval '3 days'),
+  ('d0000000-0000-0000-0000-000000000001', 'announce', '📢', 'Ședință extraordinară BC — vineri', 'Aula Magna, ora 18:00.', true,  false, null, now() - interval '1 day'),
+  ('d0000000-0000-0000-0000-000000000001', 'event',    '📅', 'Training pentru recruți',           'Peste 6 zile, sala 210.', false, false, null, now() - interval '1 day'),
   ('d0000000-0000-0000-0000-000000000003', 'system',   '⚠️', 'Ai primit o sancțiune',             'Contactează BC pentru detalii.', true, false, '/profil', now() - interval '4 days'),
-  ('d0000000-0000-0000-0000-000000000007', 'announce', '📢', 'Recrutarea de toamnă începe luni',  'Standul are nevoie de voluntari.', false, false, '/anunturi', now() - interval '2 days');
+  ('d0000000-0000-0000-0000-000000000007', 'announce', '📢', 'Recrutarea de toamnă începe luni',  'Standul are nevoie de voluntari.', false, false, null, now() - interval '2 days')
+  ) as fixture (member_id, kind, icon, title, body, critical, read, link, created_at);
 
 -- The one Task-kind notification is rebuilt from its command source rather
 -- than hand-written (#296 fix round 1): `edu-in-progress` was created with an
@@ -1646,7 +1684,7 @@ select 'd0000000-0000-0000-0000-000000000002'::uuid, 'task'::public.noti_kind, '
        'Task nou: ' || task.title,
        'Ți-a fost atribuit acest task. Deadline: ' ||
          to_char(task.deadline at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI') || '.',
-       false, false, '/tracker/' || task.id::text, task.id,
+       false, false, '/tracker?task=' || task.id::text, task.id,
        now() - (interval '9 days' - interval '2 seconds')
   from tasks task
  where task.id = pg_temp.demo_task_id('edu-in-progress');

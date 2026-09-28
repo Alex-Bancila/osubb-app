@@ -533,7 +533,8 @@ select ok(
   exists (select 1 from public.notifications
            where member_id = pg_temp.g582_uid(8)
              and title = 'Eveniment anulat: Eveniment restricționat #582'
-             and link = '/calendar'),
+             and link = '/calendar?event=' || (select id from public.events
+                                                where title = 'Eveniment restricționat #582')::text),
   'and its audience is still notified through the shared cancellation effect');
 select is((select status from public.groups where name = 'Părinte viu #582'), 'active',
   'and archiving a child leaves its parent active');

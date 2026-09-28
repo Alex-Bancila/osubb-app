@@ -60,7 +60,7 @@ Device tests cannot run in CI. After the first deploy of this change to an envir
 - [ ] Chrome on Android, installed app or tab.
 - [ ] Chrome on desktop.
 - [ ] Firefox on desktop.
-- [ ] One Notification with a link (`/tracker/<id>`) and one without (opens **Notificări**), on the iPhone at least.
+- [ ] One Notification with a link (`/tracker?task=<id>`) and one without (opens **Notificări**), on the iPhone at least.
 - [ ] One critical Announcement with a body of about 2000 characters: it arrives, cut with `…`, and its row is `sent` (not `failed` with `HTTP 413`).
 
 ## Library

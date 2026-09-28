@@ -612,7 +612,7 @@ select extensions.dblink_exec('ti_setup', $$
       or member_id in ('33000000-0000-0000-0000-000000000021',
                        '33000000-0000-0000-0000-000000000022',
                        '33000000-0000-0000-0000-000000000023')
-      or link in (select '/tracker/' || id::text from public.tasks
+      or link in (select '/tracker?task=' || id::text from public.tasks
                    where title like '%#330 committed%');
   delete from public.task_candidates
    where task_id in (select id from public.tasks where title like '%#330 committed%');
@@ -853,7 +853,7 @@ select extensions.dblink_exec('ti_setup', $$
       or member_id in ('33000000-0000-0000-0000-000000000021',
                        '33000000-0000-0000-0000-000000000022',
                        '33000000-0000-0000-0000-000000000023')
-      or link in (select '/tracker/' || id::text from public.tasks
+      or link in (select '/tracker?task=' || id::text from public.tasks
                    where title like '%#330 committed%');
   delete from public.task_candidates
    where task_id in (select id from public.tasks where title like '%#330 committed%');
@@ -882,7 +882,7 @@ select is((select count(*) from auth.users
 -- table now, before the transaction rolls back and takes it with them.
 select is((select count(*) from public.notifications
             where link in (
-              select '/tracker/' || task_id::text from (
+              select '/tracker?task=' || task_id::text from (
                 select probe_task_id as task_id from r330
                 union all select race_task_id from r330
                 union all select local_probe_task_id from r330

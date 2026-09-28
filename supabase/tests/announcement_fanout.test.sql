@@ -45,9 +45,11 @@ select is((select count(*) from notifications where title='Anunț nou: Local #68
 'author receives no local Notification');
 select is((select count(*) from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(4)),0::bigint,
 'BCE is suppressed only because the lookup contains announce');
-select ok((select bool_and(kind='announce' and link='/anunturi' and body='Body #68')
+-- #843 (D14): the link opens the Announcement itself, not the feed.
+select ok((select bool_and(kind='announce' and body='Body #68'
+                          and link='/anunturi?anunt=' || (select id from announcements where title='Local #68')::text)
 from notifications where title='Anunț nou: Local #68'),
-'Notification kind, route and body point to the Announcement feed');
+'Notification kind, route and body point to the Announcement itself (/anunturi?anunt=<id>)');
 
 insert into announcements(title,body,group_id,audience,created_by)
 select 'Org #68','Org body',id,'org',pg_temp.u68(1)
