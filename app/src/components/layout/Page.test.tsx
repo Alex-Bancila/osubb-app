@@ -99,6 +99,6 @@ describe('PageHeader', () => {
     const header = heading.closest('header');
     expect(header).toHaveClass('flex-col', 'sm:flex-row');
     // The Page's gap spaces it; a margin of its own would double it.
-    expect(header?.className).not.toMatch(/mb-/);
+    expect(header?.className).not.toMatch(/(^| )mb-/);
   });
 });

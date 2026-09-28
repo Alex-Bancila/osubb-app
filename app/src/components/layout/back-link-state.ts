@@ -2,7 +2,7 @@ import type { Location } from 'react-router';
 
 /** Where a back link goes, and the words it says. */
 export type BackLinkTarget = {
-  /** An in-app path, with its search (`/clasament?grup=8`). */
+  /** An in-app path, with its search and hash (`/clasament?grup=8`). */
   to: string;
   label: string;
 };
@@ -15,10 +15,15 @@ export type BackLinkState = { from: BackLinkTarget };
  * here: `<Link to="/tracker/membru/1" state={backLinkState(location)}>`.
  */
 export function backLinkState(
-  location: Pick<Location, 'pathname' | 'search'>,
+  location: Pick<Location, 'pathname' | 'search'> & { hash?: string },
   label = 'Înapoi',
 ): BackLinkState {
-  return { from: { to: location.pathname + location.search, label } };
+  return {
+    from: {
+      to: location.pathname + location.search + (location.hash ?? ''),
+      label,
+    },
+  };
 }
 
 /** `state.from` when it is a well-formed in-app target, else `null`. */

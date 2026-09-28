@@ -320,18 +320,25 @@ function CardLinks({
   leads: boolean;
   onClose: () => void;
 }) {
+  const location = useLocation();
   // The page that opens from here goes back here, not to its own parent
   // (navigation D10).
-  const from = backLinkState(useLocation());
+  const from = backLinkState(location);
+  const trackerPage = `/tracker/membru/${data.memberId}`;
   const memberPage = `/administrare/membri/${data.memberId}`;
+  // A link to the page already open would only point that page's back link
+  // at itself: the card offers the other pages, not this one.
+  const tracker = seeLeadership && location.pathname !== trackerPage;
+  const page = (manageRoles || leads) && location.pathname !== memberPage;
+  if (!tracker && !page) return null;
   return (
     <nav
       aria-label="Acțiuni pentru membru"
       className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2 border-t pt-4"
     >
-      {seeLeadership && (
+      {tracker && (
         <Link
-          to={`/tracker/membru/${data.memberId}`}
+          to={trackerPage}
           state={from}
           onClick={onClose}
           className={actionClass}
@@ -340,18 +347,18 @@ function CardLinks({
           Vezi trackerul
         </Link>
       )}
-      {manageRoles ? (
-        <Link
-          to={memberPage}
-          state={from}
-          onClick={onClose}
-          className={actionClass}
-        >
-          <PencilIcon aria-hidden="true" />
-          Editează
-        </Link>
-      ) : (
-        leads && (
+      {page &&
+        (manageRoles ? (
+          <Link
+            to={memberPage}
+            state={from}
+            onClick={onClose}
+            className={actionClass}
+          >
+            <PencilIcon aria-hidden="true" />
+            Editează
+          </Link>
+        ) : (
           <Link
             to={memberPage}
             state={from}
@@ -361,8 +368,7 @@ function CardLinks({
             <UserIcon aria-hidden="true" />
             Pagina membrului
           </Link>
-        )
-      )}
+        ))}
     </nav>
   );
 }

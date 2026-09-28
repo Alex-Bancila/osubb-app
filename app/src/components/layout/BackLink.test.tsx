@@ -33,6 +33,20 @@ describe('BackLink', () => {
     expect(link).toHaveAttribute('href', '/voluntari?grup=8');
   });
 
+  it('keeps the search and the hash of where the member came from', () => {
+    expect(
+      backLinkState(
+        { pathname: '/tracker', search: '?lista=gestionat', hash: '#task-12' },
+        'Înapoi la Taskuri',
+      ),
+    ).toEqual({
+      from: {
+        to: '/tracker?lista=gestionat#task-12',
+        label: 'Înapoi la Taskuri',
+      },
+    });
+  });
+
   it('ignores a state.from that is not an in-app path', () => {
     for (const to of ['https://evil.example', '//evil.example', 'clasament'])
       expect(readBackLinkState({ from: { to, label: 'Înapoi' } })).toBeNull();

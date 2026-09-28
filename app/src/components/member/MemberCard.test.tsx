@@ -345,3 +345,21 @@ it('keeps a long Group Role inside the card: one shrinkable column, a truncated 
     'Responsabil logistică, sponsorizări și voluntari',
   );
 });
+
+it('does not link to the page already open, so its back link never points at itself', async () => {
+  capabilities.seeLeadership = true;
+  capabilities.manageRoles = true;
+  render(
+    <MemoryRouter initialEntries={['/tracker/membru/m-1']}>
+      <MemberName memberId="m-1" nickname="Ani" fullName="Ana Pop" />
+    </MemoryRouter>,
+  );
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Profilul membrului Ani' }),
+  );
+  const dialog = await screen.findByRole('dialog', { name: 'Ani' });
+  expect(
+    within(dialog).queryByRole('link', { name: 'Vezi trackerul' }),
+  ).toBeNull();
+  expect(within(dialog).getByRole('link', { name: 'Editează' })).toBeVisible();
+});
