@@ -243,6 +243,21 @@ describe('NotificationsScreen', () => {
       expect(screen.queryByText('Necitite: 0')).not.toBeInTheDocument();
     });
 
+    it('claims nothing while the count is unknown, and trusts an unread row on screen', () => {
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: undefined });
+      hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
+
+      renderScreen();
+
+      expect(
+        screen.queryByText('Toate notificările sunt citite'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/Necitite:/)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+      ).toBeInTheDocument();
+    });
+
     it('cannot be sent twice while the first write is on its way', () => {
       hooks.useMarkAllNotificationsRead.mockReturnValue({
         mutate: markAllRead,

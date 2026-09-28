@@ -110,7 +110,12 @@ export default function NotificationsScreen() {
     .flatMap((page) => page.rows)
     .map((row) => toNotificationPresentation(row));
 
-  const unreadCount = unread.data ?? 0;
+  /* The count is `undefined` while it loads or after it fails: the header
+     then says nothing rather than claiming everything is read. The button
+     also trusts an unread row already on screen. */
+  const unreadCount = unread.data;
+  const hasUnread =
+    (unreadCount ?? 0) > 0 || notifications.some((row) => !row.isRead);
 
   /* Opening is two independent acts: the read marker is written straight away
      under #65's self-scoped policy, and the link is followed without waiting
@@ -128,12 +133,14 @@ export default function NotificationsScreen() {
       <PageHeader
         title="Notificări"
         description={
-          unreadCount > 0
-            ? `Necitite: ${unreadCount}`
-            : 'Toate notificările sunt citite'
+          unreadCount === undefined
+            ? undefined
+            : unreadCount > 0
+              ? `Necitite: ${unreadCount}`
+              : 'Toate notificările sunt citite'
         }
         actions={
-          unreadCount > 0 && (
+          hasUnread && (
             <Button
               variant="outline"
               disabled={markAllRead.isPending}
