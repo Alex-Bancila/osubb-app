@@ -1,6 +1,7 @@
-import { ListTodo } from 'lucide-react';
+import { Link } from 'react-router';
 import { EmptyState, Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
+import { buttonVariants } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { useMyTasks } from '../../queries/tasks';
 import { TaskCard } from '../tracker/TaskCard';
@@ -13,7 +14,10 @@ import { nextOwnTask } from './next-items';
  * card here is for reading — acting on the Task happens in Taskuri, where the
  * link opens it (`/tracker?task=<id>`), so the card carries no actions and no
  * `task-<id>` anchor of its own. The link appears only with a Task, because
- * it opens that Task.
+ * it opens that Task. With none, the empty state is an invitation: it opens
+ * Taskuri on Disponibile (`?lista=disponibile`, #846), where work waits.
+ *
+ * No eyebrow: "Taskuri" above "Următorul task" says the title twice (B7).
  */
 export default function NextTaskCard({
   now,
@@ -29,8 +33,6 @@ export default function NextTaskCard({
 
   return (
     <Panel
-      eyebrow="Taskuri"
-      icon={ListTodo}
       title="Următorul task"
       className={className}
       action={
@@ -53,7 +55,18 @@ export default function NextTaskCard({
           memberId={memberId}
         />
       ) : (
-        <EmptyState>Niciun task cu termen în lucru.</EmptyState>
+        <EmptyState
+          action={
+            <Link
+              to="/tracker?lista=disponibile"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Vezi oportunitățile
+            </Link>
+          }
+        >
+          Niciun task în lucru.
+        </EmptyState>
       )}
     </Panel>
   );

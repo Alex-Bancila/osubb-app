@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberClaims } from '../../lib/auth';
 import type { PromotionProgress as Progress } from '../../queries/promotion-progress';
-import { PromotionProgress } from './PromotionProgress';
+import { PromotionPanel, PromotionProgress } from './PromotionProgress';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 
@@ -133,11 +133,34 @@ describe('PromotionProgress (#634)', () => {
     });
 
     it('keeps the tenure line when no threshold is in force', () => {
-      setup('recrut', progress({ threshold: null }));
+      setup('recrut', progress({ threshold: null }), {
+        today: DAY_BEFORE_TENURE,
+      });
 
       expect(
         screen.getByText('Devii Voluntar din 25 septembrie 2026'),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('Recrut past the tenure date (#859 B43, Audit D D-7)', () => {
+    it('says the tenure is met and the next run applies it — no date in the past', () => {
+      // Joined 1 January 2026, six months: tenure 1 July 2026; today is 28 September.
+      state.joinedAt = '2026-01-01';
+      setup('recrut', progress(), { today: new Date(2026, 8, 28, 10, 0) });
+
+      expect(
+        screen.getByText(
+          'Îndeplinești vechimea; promovarea se aplică la următoarea rulare.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/devii voluntar/i)).not.toBeInTheDocument();
+    });
+
+    it('the tenure day itself already counts as met', () => {
+      setup('recrut', progress(), { today: DAY_OF_TENURE });
+
+      expect(screen.getByText(/îndeplinești vechimea/i)).toBeInTheDocument();
     });
   });
 
@@ -149,7 +172,7 @@ describe('PromotionProgress (#634)', () => {
         screen.getByText('Poți deveni Voluntar Activ din 25 septembrie 2026'),
       ).toBeInTheDocument();
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-      expect(screen.queryByText(/punct/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/puncte?/i)).not.toBeInTheDocument();
       expect(screen.queryByText('12')).not.toBeInTheDocument();
     });
 
@@ -163,7 +186,9 @@ describe('PromotionProgress (#634)', () => {
       expect(bar).toHaveAttribute('aria-valuemax', '30');
       expect(bar).toHaveAttribute('aria-valuenow', '12');
       expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 de puncte');
-      expect(screen.getByText('de la 1 iulie 2026')).toBeInTheDocument();
+      expect(
+        screen.getByText('de la ultima evaluare (1 iulie 2026)'),
+      ).toBeInTheDocument();
       expect(
         screen.getByText('Mai ai 18 puncte până la pragul Voluntar Activ'),
       ).toBeInTheDocument();
@@ -268,21 +293,27 @@ describe('PromotionProgress (#634)', () => {
       setup(role);
 
       expect(screen.getByText('12')).toBeInTheDocument();
-      expect(screen.getByText('puncte de la 1 iulie 2026')).toBeInTheDocument();
+      expect(
+        screen.getByText('puncte de la ultima evaluare (1 iulie 2026)'),
+      ).toBeInTheDocument();
       expect(
         screen.getByText('Pragul în vigoare: 30 de puncte'),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('heading', { name: 'Punctaj de la ultima evaluare' }),
+        screen.getByRole('heading', { name: 'Punctaj' }),
       ).toBeInTheDocument();
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(screen.queryByText(/mai ai|depășit/i)).not.toBeInTheDocument();
     });
 
-    it('before any Role Evaluation the points are counted in total', () => {
+    it('before any Role Evaluation the figure is the total, never "în total"', () => {
       setup(role, progress({ since: null }));
 
-      expect(screen.getByText('puncte în total')).toBeInTheDocument();
+      expect(screen.getByText('12')).toBeInTheDocument();
+      expect(screen.getByText('puncte')).toBeInTheDocument();
+      expect(
+        screen.queryByText(/în total|ultima evaluare/),
+      ).not.toBeInTheDocument();
     });
 
     it('no threshold in force: nothing to show', () => {
@@ -338,5 +369,66 @@ describe('PromotionProgress (#634)', () => {
     setup('voluntar');
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+});
+
+// #859 (B38): Profil's one points panel carries the total, once.
+describe('PromotionPanel with the total', () => {
+  afterEach(cleanup);
+
+  it('after a Role Evaluation: the total leads, the bar reads "de la ultima evaluare"', () => {
+    render(
+      <PromotionPanel
+        state={{
+          kind: 'view',
+          view: {
+            kind: 'bar',
+            points: 5,
+            threshold: 30,
+            since: '1 iulie 2026',
+          },
+        }}
+        totalPoints={20}
+      />,
+    );
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(
+      screen.getByText('de la ultima evaluare (1 iulie 2026)'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/în total/)).not.toBeInTheDocument();
+  });
+
+  it("before any Role Evaluation the bar's figure is the total, so it is not printed twice", () => {
+    render(
+      <PromotionPanel
+        state={{
+          kind: 'view',
+          view: { kind: 'bar', points: 12, threshold: 30, since: null },
+        }}
+        totalPoints={12}
+      />,
+    );
+
+    expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+    expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
+    expect(screen.queryByText(/în total/)).not.toBeInTheDocument();
+  });
+
+  it('a tenure line still shows the total above it', () => {
+    render(
+      <PromotionPanel
+        state={{
+          kind: 'view',
+          view: { kind: 'tenure', text: 'Devii Voluntar din 1 iulie 2027' },
+        }}
+        totalPoints={1}
+      />,
+    );
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('1punct');
+    expect(
+      screen.getByRole('heading', { name: 'Punctaj și promovare' }),
+    ).toBeInTheDocument();
   });
 });

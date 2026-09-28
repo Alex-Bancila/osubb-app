@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { Switch } from '../../components/ui/switch';
+import { SwitchRow } from '../../components/ui/switch';
 import {
   MUTABLE_PUSH_KINDS,
   type MutablePushKind,
@@ -21,7 +21,6 @@ const KIND_COPY: Record<MutablePushKind, string> = {
 export function PushPreferences() {
   const push = usePushPreferences();
   const titleId = useId();
-  const baseId = useId();
 
   return (
     <div
@@ -37,26 +36,21 @@ export function PushPreferences() {
         Pe toate dispozitivele tale. Lista din aplicație rămâne completă.
       </p>
 
-      <ul className="mt-3 space-y-3">
-        {MUTABLE_PUSH_KINDS.map((kind) => {
-          const labelId = `${baseId}-${kind}`;
-          return (
-            <li key={kind} className="flex items-center justify-between gap-4">
-              <span id={labelId} className="text-sm">
-                {KIND_COPY[kind]}
-              </span>
-              <Switch
-                aria-labelledby={labelId}
-                checked={push.preferences[kind]}
-                disabled={push.loading || push.pending}
-                onCheckedChange={(next) => push.setPreference(kind, next)}
-              />
-            </li>
-          );
-        })}
+      {/* 44 px rows: a click anywhere on the row toggles it (X13). */}
+      <ul className="mt-2">
+        {MUTABLE_PUSH_KINDS.map((kind) => (
+          <li key={kind}>
+            <SwitchRow
+              label={KIND_COPY[kind]}
+              checked={push.preferences[kind]}
+              disabled={push.loading || push.pending}
+              onCheckedChange={(next) => push.setPreference(kind, next)}
+            />
+          </li>
+        ))}
       </ul>
 
-      <p className="mt-3 text-sm text-muted-foreground">
+      <p className="mt-2 text-sm text-muted-foreground">
         Ajung mereu: notificările despre Taskuri, cele de sistem și anunțurile
         critice.
       </p>

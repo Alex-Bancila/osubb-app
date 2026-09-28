@@ -2,10 +2,11 @@ import type { ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { Panel } from '../layout';
 import { ErrorState, Loading } from '../states';
-import { formatPoints } from '../../lib/format';
+import { formatPointCount, formatPoints, pointWord } from '../../lib/format';
 import {
   usePromotionProgressState,
   type PromotionState,
+  type View,
 } from './promotion-state';
 
 /**
@@ -18,12 +19,13 @@ import {
  * Activ Role Evaluation, and nothing here promises a Role.
  *
  * Six states, one per rung:
- * - Recrut: the date the `time` rule makes them Voluntar. No bar.
+ * - Recrut: the date the `time` rule makes them Voluntar; once that date has
+ *   passed, that the next run applies it (#859 B43). No bar.
  * - Voluntar before the tenure date: the date they can become Voluntar Activ.
- *   Nothing about points (R18).
+ *   Nothing about the threshold (R18).
  * - Voluntar with tenure: a bar from 0 to the Voluntar Activ Promotion
  *   Threshold in force, points counted since the last Voluntar Activ Role
- *   Evaluation (or in total before any); past it, BC is told at the next one.
+ *   Evaluation (the total before any); past it, BC is told at the next one.
  * - Voluntar Activ: their points beside the Voluntar Activ threshold; a
  *   Voluntar cu Drept de Vot: beside the Adunarea Generală threshold — the
  *   reference the Retention Signal uses. No bar.
@@ -31,10 +33,15 @@ import {
  * - No threshold in force for the kind: the tenure lines only; the bar and
  *   the reference are hidden, never faked.
  *
+ * #859 (B38): Profil's one points panel. Given the Member's total, the panel
+ * leads with it, once: before any Role Evaluation the bar's or the
+ * reference's figure *is* the total, so it is not printed twice; after one,
+ * the figure below reads "de la ultima evaluare", never "în total".
+ *
  * #824 lifts the gate to the page: `usePromotionProgressState` says whether
- * the panel exists at all (`hidden`, in `promotion-state.ts`), and `PromotionPanel` renders one that
- * does — its loading and error states inside the box — so a `PageGrid` cell
- * is never `null`.
+ * the panel exists at all (`hidden`, in `promotion-state.ts`), and
+ * `PromotionPanel` renders one that does — its loading and error states
+ * inside the box — so a `PageGrid` cell is never `null`.
  *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
  */
@@ -42,16 +49,30 @@ import {
 /** The panel for a state the page decided to show. */
 export function PromotionPanel({
   state,
+  totalPoints,
+  className,
 }: {
   state: Exclude<PromotionState, { kind: 'hidden' }>;
+  /** The Member's total (`my_points`); the panel then leads with it. */
+  totalPoints?: number;
+  className?: string;
 }) {
-  const title =
-    state.kind === 'view' && state.view.kind === 'reference'
-      ? 'Punctaj de la ultima evaluare'
-      : 'Promovare';
+  const view = state.kind === 'view' ? state.view : null;
+  // A Voluntar Activ or a Voluntar cu Drept de Vot has no promotion to show
+  // here, only their points against the reference threshold.
+  const title = view?.kind === 'reference' ? 'Punctaj' : 'Punctaj și promovare';
+  // Before any Role Evaluation the figure below is the total already.
+  const figureIsTotal = view !== null && view.kind !== 'tenure' && !view.since;
+  const showTotal = totalPoints !== undefined && !figureIsTotal;
   return (
-    <Panel eyebrow="Parcurs" icon={TrendingUp} title={title}>
-      <div data-testid="promotion-progress">
+    <Panel
+      eyebrow="Parcurs"
+      icon={TrendingUp}
+      title={title}
+      className={className}
+    >
+      <div data-testid="promotion-progress" className="flex flex-col gap-3">
+        {showTotal && <PointsTotal points={totalPoints} />}
         <PromotionBody state={state} />
       </div>
     </Panel>
@@ -62,6 +83,23 @@ export function PromotionPanel({
 export function PromotionProgress() {
   const state = usePromotionProgressState();
   return state.kind === 'hidden' ? null : <PromotionPanel state={state} />;
+}
+
+/** The Member's total, the page's one "points" figure. */
+export function PointsTotal({ points }: { points: number }) {
+  return (
+    <p
+      className="m-0 flex flex-wrap items-baseline gap-2 leading-none"
+      data-testid="points-total"
+    >
+      <span className="text-[length:var(--fs-2xl)] font-extrabold tracking-[-0.02em] text-foreground tabular-nums">
+        {formatPoints(points)}
+      </span>
+      <span className="text-base font-semibold text-muted-foreground">
+        {pointWord(points)}
+      </span>
+    </p>
+  );
 }
 
 function PromotionBody({
@@ -84,42 +122,64 @@ function PromotionBody({
   const { view } = state;
   switch (view.kind) {
     case 'tenure':
-      return <p className="text-sm font-medium text-foreground">{view.text}</p>;
+      return (
+        <p className="m-0 text-sm font-medium text-foreground">{view.text}</p>
+      );
     case 'bar':
       return (
         <ThresholdBar
           points={view.points}
           threshold={view.threshold}
-          sinceLabel={view.sinceLabel}
+          since={view.since}
         />
       );
     case 'reference':
-      return (
-        <>
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-2xl font-bold text-foreground">
-              {formatPoints(view.points)}
-            </span>
-            <span className="text-sm font-semibold text-muted-foreground">
-              {pointWord(view.points)} {view.sinceLabel}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Pragul în vigoare: {pointCount(view.threshold)}
-          </p>
-        </>
-      );
+      return <Reference view={view} />;
   }
+}
+
+/** "de la ultima evaluare (1 iulie 2026)" — the figure's period. */
+function sinceText(since: string): string {
+  return `de la ultima evaluare (${since})`;
+}
+
+function Reference({
+  view,
+}: {
+  view: Extract<NonNullable<View>, { kind: 'reference' }>;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="m-0 flex flex-wrap items-baseline gap-2">
+        <span
+          className={
+            view.since
+              ? 'text-lg font-bold text-foreground tabular-nums'
+              : 'text-[length:var(--fs-2xl)] leading-none font-extrabold tracking-[-0.02em] text-foreground tabular-nums'
+          }
+        >
+          {formatPoints(view.points)}
+        </span>
+        <span className="text-sm font-semibold text-muted-foreground">
+          {pointWord(view.points)}
+          {view.since && ` ${sinceText(view.since)}`}
+        </span>
+      </p>
+      <p className="m-0 text-sm text-muted-foreground">
+        Pragul în vigoare: {formatPointCount(view.threshold)}
+      </p>
+    </div>
+  );
 }
 
 function ThresholdBar({
   points,
   threshold,
-  sinceLabel,
+  since,
 }: {
   points: number;
   threshold: number;
-  sinceLabel: string;
+  since: string | null;
 }) {
   // Reaching the threshold makes a Promotion Candidate at the next Role
   // Evaluation (#826); BC decides. "At" counts as past it.
@@ -135,11 +195,13 @@ function ThresholdBar({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
         <span className="font-semibold text-foreground">
-          {formatPoints(points)} / {pointCount(threshold)}
+          {formatPoints(points)} / {formatPointCount(threshold)}
         </span>
-        <span className="text-muted-foreground">{sinceLabel}</span>
+        {since && (
+          <span className="text-muted-foreground">{sinceText(since)}</span>
+        )}
       </div>
       <div
         role="progressbar"
@@ -147,36 +209,19 @@ function ThresholdBar({
         aria-valuemin={0}
         aria-valuemax={max}
         aria-valuenow={shown}
-        aria-valuetext={`${formatPoints(points)} din ${pointCount(threshold)}`}
+        aria-valuetext={`${formatPoints(points)} din ${formatPointCount(threshold)}`}
         className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
       >
         <div
-          className="h-full rounded-full bg-primary transition-[width]"
+          className="h-full rounded-full bg-primary transition-[width] motion-reduce:transition-none"
           style={{ width: `${percent}%` }}
         />
       </div>
-      <p className="text-sm font-medium text-foreground">
+      <p className="m-0 text-sm font-medium text-foreground">
         {reached
           ? 'Ai depășit pragul — BC va fi anunțat la următoarea evaluare'
-          : `Mai ai ${pointCount(threshold - points)} până la pragul Voluntar Activ`}
+          : `Mai ai ${formatPointCount(threshold - points)} până la pragul Voluntar Activ`}
       </p>
     </div>
   );
-}
-
-/**
- * "1 punct", "5 puncte", "30 de puncte" — Romanian puts "de" before the noun
- * when the last two digits are 00 or 20–99, as `formatTaskCount` does.
- */
-function pointWord(points: number): string {
-  const count = Math.abs(points);
-  if (count === 1) return 'punct';
-  const lastTwo = count % 100;
-  return count >= 20 && (lastTwo === 0 || lastTwo >= 20)
-    ? 'de puncte'
-    : 'puncte';
-}
-
-function pointCount(points: number): string {
-  return `${formatPoints(points)} ${pointWord(points)}`;
 }

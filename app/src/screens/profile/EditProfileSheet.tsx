@@ -10,7 +10,8 @@ import {
 import {
   Sheet,
   SheetBackdrop,
-  SheetClose,
+  SheetFooter,
+  SheetHeader,
   SheetPopup,
   SheetPortal,
   SheetTitle,
@@ -21,6 +22,7 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import { cn } from '../../lib/utils';
 import { type MyProfile, useUpdateMyProfile } from '../../queries/profile';
 import ChangeEmailSection from './ChangeEmailSection';
+import { PHONE_HINT } from './profile-copy';
 
 const AVATAR_PALETTE = [
   { name: 'Roșu OSUBB', color: '#ED2025' },
@@ -148,15 +150,16 @@ function EditProfileForm({
           />
           <FieldError {...form.errorProps('phone')} />
           <FieldDescription id="edit-profile-phone-hint">
-            Numărul de telefon este vizibil doar pentru tine și membrii cu nivel
-            ≥5.
+            {PHONE_HINT}
           </FieldDescription>
         </Field>
 
         <Field {...form.slot('avatarColor')}>
           <FieldLabel>Culoare avatar</FieldLabel>
+          {/* One row of seven at every width (P4): 40 px discs in 44 px
+              targets, the selection a ring — never a size change. */}
           <div
-            className="flex flex-wrap gap-2 pt-1"
+            className="grid w-fit grid-cols-7 gap-1 pt-1"
             role="group"
             aria-label="Alege culoarea avatarului"
           >
@@ -170,17 +173,20 @@ function EditProfileForm({
                   onClick={() => setAvatarColor(swatch.color)}
                   aria-label={swatch.name}
                   aria-pressed={isSelected}
-                  style={{ backgroundColor: swatch.color }}
-                  className={cn(
-                    'grid size-11 place-items-center rounded-full text-white transition-transform motion-reduce:transition-none focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    isSelected
-                      ? 'scale-110 ring-2 ring-foreground ring-offset-2'
-                      : 'hover:scale-105',
-                  )}
+                  className="group grid size-11 place-items-center rounded-full outline-none"
                 >
-                  {isSelected && (
-                    <Check className="size-4 stroke-[3]" aria-hidden="true" />
-                  )}
+                  <span
+                    aria-hidden="true"
+                    style={{ backgroundColor: swatch.color }}
+                    className={cn(
+                      'grid size-10 place-items-center rounded-full text-white ring-offset-2 ring-offset-card transition-shadow motion-reduce:transition-none group-focus-visible:ring-3 group-focus-visible:ring-ring',
+                      isSelected
+                        ? 'ring-2 ring-foreground'
+                        : 'group-hover:ring-2 group-hover:ring-border',
+                    )}
+                  >
+                    {isSelected && <Check className="size-4 stroke-[3]" />}
+                  </span>
                 </button>
               );
             })}
@@ -188,7 +194,7 @@ function EditProfileForm({
           <FieldError {...form.errorProps('avatarColor')} />
         </Field>
 
-        <div className="mt-4 flex items-center justify-end gap-3 border-t border-border pt-4">
+        <SheetFooter className="mt-2">
           <Button
             type="button"
             variant="outline"
@@ -202,7 +208,7 @@ function EditProfileForm({
               ? 'Se salvează…'
               : 'Salvează modificările'}
           </Button>
-        </div>
+        </SheetFooter>
       </form>
     </>
   );
@@ -223,17 +229,13 @@ export default function EditProfileSheet({
       <SheetPortal>
         <SheetBackdrop />
         <SheetPopup
-          className="right-0 left-auto w-full max-w-md overflow-y-auto p-4 sm:p-6"
+          side="right"
+          className="max-w-md p-4 sm:p-6"
           aria-describedby={undefined}
         >
-          <div className="mb-5 flex items-center justify-between gap-3 border-b border-border pb-4">
-            <SheetTitle className="font-heading text-xl font-semibold">
-              Editează profilul
-            </SheetTitle>
-            <SheetClose className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring">
-              Închide
-            </SheetClose>
-          </div>
+          <SheetHeader className="mb-5">
+            <SheetTitle>Editează profilul</SheetTitle>
+          </SheetHeader>
 
           {open && (
             <>

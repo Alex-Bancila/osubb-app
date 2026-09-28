@@ -9,8 +9,8 @@ import {
   Moon,
   Pencil,
   ShieldCheck,
-  Sparkles,
   Sun,
+  TrendingUp,
   UserRound,
   Users,
 } from 'lucide-react';
@@ -22,17 +22,19 @@ import {
   PageHeader,
   Panel,
   rowListClass,
-  type PageGridColumns,
 } from '../../components/layout';
 import { memberDisplayName } from '../../components/member/member-identity';
-import { PromotionPanel } from '../../components/profile/PromotionProgress';
+import {
+  PointsTotal,
+  PromotionPanel,
+} from '../../components/profile/PromotionProgress';
 import { usePromotionProgressState } from '../../components/profile/promotion-state';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { safeHexColor } from '../../lib/color';
-import { formatLongDate, formatPoints, initials } from '../../lib/format';
+import { formatLongDate, initials } from '../../lib/format';
 import { useTheme } from '../../lib/theme';
 import { useOrgSettings } from '../../queries/org-settings';
 import { useMyPoints } from '../../queries/points';
@@ -47,8 +49,10 @@ import {
 import EditProfileSheet from './EditProfileSheet';
 import { EmailDigestCard } from './EmailDigestCard';
 import { JoiningSection } from './JoiningSection';
+import { PHONE_HINT } from './profile-copy';
 import { PushDeviceCard } from './PushDeviceCard';
 import { RoleTimeline } from './RoleTimeline';
+import { useRoleTimelineShown } from './role-timeline-shown';
 
 /**
  * R13/R18 and #824: from this Level a Member is on the board (BCE, BC) — no
@@ -56,16 +60,30 @@ import { RoleTimeline } from './RoleTimeline';
  */
 const BOARD_LEVEL = 5;
 
+/*
+ * Rows of unrelated panels (#859): each panel keeps its own height instead of
+ * stretching to the tallest one in its row, and small panels stack in one
+ * column beside a tall one. The stack is one grid cell; the panels in it keep
+ * the grid's gap between them.
+ */
+const contentSized = 'items-start *:h-auto';
+const stackClass = 'flex min-w-0 flex-col gap-4 md:gap-6';
+const inStack = 'h-auto';
+
 /**
- * Profilul meu (#824, ruling R27; pages-pass plan §4): three rows of equal
- * panels on the layout system.
+ * Profilul meu (#824, ruling R27; #859): three rows of two columns from
+ * `md`, on the layout system. Every panel is as tall as its content (Alex,
+ * 2026-09-28: symmetry is aligned edges, never equal boxes more than half
+ * empty): beside a tall panel, the small ones stack in one column.
  *
- * - Row 1: Identitate · Punctaj personal (level ≤ 4) or Funcția în OSUBB
- *   (level ≥ 5) · Date de contact.
- * - Row 2: Grupurile mele (below level 5) · Parcursul organizațional ·
- *   Promovare (only when there is something to show) — as many columns as
- *   panels present.
- * - Row 3: Notificări pe acest dispozitiv · Email zilnic · Confidențialitate.
+ * - Row 1: Identitate · Date de contact — a like pair, one height.
+ * - Row 2: Grupurile mele beside one column holding the points panel — the
+ *   Punctaj și promovare panel, which carries the total, or Punctaj personal
+ *   when there is no promotion to show (B38) — over Parcursul organizațional.
+ *   From level 5: Funcția în OSUBB beside Parcursul organizațional. The
+ *   timeline appears only from its second Role row (B39).
+ * - Row 3: Notificări pe acest dispozitiv beside Email zilnic over
+ *   Confidențialitate.
  *
  * Every edit of yourself — the profile form and the sign-in address — lives
  * in the Editează profilul sheet; the page shows the address read-only.
@@ -89,6 +107,7 @@ export default function ProfileScreen() {
   // D1: the board title's Group is named by an organization setting.
   const settingsQuery = useOrgSettings({ enabled: onBoard });
   const promotion = usePromotionProgressState();
+  const timelineShown = useRoleTimelineShown(profileQuery.data);
 
   const { theme, toggleTheme } = useTheme();
   const [editOpen, setEditOpen] = useState(false);
@@ -158,18 +177,18 @@ export default function ProfileScreen() {
       ? `Membru din ${profile.joined_year}`
       : 'Membru OSUBB';
 
-  // Row 2 has as many columns as panels: Groups below the board, the
-  // timeline always, Promovare only when it has something to show.
-  const rowTwoColumns = ((onBoard ? 0 : 1) +
-    1 +
-    (promotion.kind === 'hidden' ? 0 : 1)) as PageGridColumns;
   const openEdit = () => setEditOpen(true);
 
   return (
     <Page className="pb-12">
       <PageHeader
         title="Profilul meu"
-        description="Informații personale, punctaj și setări de cont"
+        description={
+          // BC and BCE have no Punctaj on their Profil (B45).
+          onBoard
+            ? 'Informații personale și setări de cont'
+            : 'Informații personale, punctaj și setări de cont'
+        }
         actions={
           <Button
             variant="outline"
@@ -195,7 +214,7 @@ export default function ProfileScreen() {
       {/* PageGrid is m-0, which cancels the Page's space-y between rows;
           the rows keep the grid's own gap between them instead. */}
       <div className="flex flex-col gap-4 md:gap-6">
-        <PageGrid columns={3}>
+        <PageGrid columns={2}>
           <Panel eyebrow="Cont" icon={UserRound} title="Identitate">
             <div className="flex h-full flex-col gap-4">
               <div className="flex min-w-0 items-start gap-4">
@@ -254,38 +273,6 @@ export default function ProfileScreen() {
             </div>
           </Panel>
 
-          {isPointsEligible ? (
-            <Panel eyebrow="Punctaj" icon={Sparkles} title="Punctaj personal">
-              <div
-                className="flex flex-wrap items-baseline gap-3"
-                data-testid="personal-points-card"
-              >
-                <span className="text-[length:var(--fs-2xl)] leading-none font-extrabold text-foreground tabular-nums">
-                  {formatPoints(pointsQuery.data ?? 0)}
-                </span>
-                <span className="text-base font-semibold text-muted-foreground">
-                  puncte
-                </span>
-              </div>
-            </Panel>
-          ) : (
-            <Panel
-              eyebrow={
-                profile.role === 'bce'
-                  ? 'Biroul de Conducere Extins'
-                  : 'Biroul de Conducere'
-              }
-              icon={Landmark}
-              title="Funcția în OSUBB"
-            >
-              <BoardTitle
-                roleLabel={roleLabel}
-                settings={settingsQuery}
-                membershipRows={groupsQuery.membershipRows}
-              />
-            </Panel>
-          )}
-
           <Panel eyebrow="Cont" icon={Contact} title="Date de contact">
             <div className="flex h-full flex-col gap-2">
               <ul className={rowListClass}>
@@ -316,10 +303,7 @@ export default function ProfileScreen() {
                   </p>
                 </ListRow>
               </ul>
-              <p className="text-xs text-muted-foreground">
-                Numărul de telefon este vizibil doar pentru tine și membrii cu
-                nivel ≥5.
-              </p>
+              <p className="text-xs text-muted-foreground">{PHONE_HINT}</p>
               {/* In the box, not the header: a header control would wrap under
               the title in a third of the row and push this box down. */}
               <Button
@@ -335,8 +319,27 @@ export default function ProfileScreen() {
           </Panel>
         </PageGrid>
 
-        <PageGrid columns={rowTwoColumns}>
-          {!onBoard && (
+        <PageGrid columns={2} className={contentSized}>
+          {onBoard ? (
+            <Panel
+              eyebrow={
+                profile.role === 'bce'
+                  ? 'Biroul de Conducere Extins'
+                  : 'Biroul de Conducere'
+              }
+              icon={Landmark}
+              title="Funcția în OSUBB"
+              // Alone in its row it takes the row: a half-width box with
+              // nothing beside it reads as a missing neighbour.
+              className={timelineShown ? undefined : 'md:col-span-2'}
+            >
+              <BoardTitle
+                roleLabel={roleLabel}
+                settings={settingsQuery}
+                membershipRows={groupsQuery.membershipRows}
+              />
+            </Panel>
+          ) : (
             <Panel eyebrow="Grupuri" icon={Users} title="Grupurile mele">
               <div data-testid="groups-card">
                 <MyGroupsList groups={groupsQuery.data ?? []} />
@@ -344,17 +347,42 @@ export default function ProfileScreen() {
               </div>
             </Panel>
           )}
-          <Panel
-            eyebrow="Parcurs"
-            icon={GraduationCap}
-            title="Parcursul organizațional"
-          >
-            <RoleTimeline profile={profile} />
-          </Panel>
-          {promotion.kind !== 'hidden' && <PromotionPanel state={promotion} />}
+          {(!onBoard || timelineShown) && (
+            <div className={stackClass}>
+              {!onBoard &&
+                (promotion.kind === 'hidden' ? (
+                  <Panel
+                    eyebrow="Parcurs"
+                    icon={TrendingUp}
+                    title="Punctaj personal"
+                    className={inStack}
+                  >
+                    <div data-testid="personal-points-card">
+                      <PointsTotal points={pointsQuery.data ?? 0} />
+                    </div>
+                  </Panel>
+                ) : (
+                  <PromotionPanel
+                    state={promotion}
+                    totalPoints={pointsQuery.data}
+                    className={inStack}
+                  />
+                ))}
+              {timelineShown && (
+                <Panel
+                  eyebrow="Parcurs"
+                  icon={GraduationCap}
+                  title="Parcursul organizațional"
+                  className={inStack}
+                >
+                  <RoleTimeline profile={profile} />
+                </Panel>
+              )}
+            </div>
+          )}
         </PageGrid>
 
-        <PageGrid columns={3}>
+        <PageGrid columns={2} className={contentSized}>
           <Panel
             eyebrow="Setări"
             icon={BellRing}
@@ -362,21 +390,33 @@ export default function ProfileScreen() {
           >
             <PushDeviceCard />
           </Panel>
-          <Panel eyebrow="Setări" icon={Mail} title="Email zilnic">
-            <EmailDigestCard />
-          </Panel>
-          {/* The Privacy Notice (#771): always one tap away. */}
-          <Panel eyebrow="Setări" icon={ShieldCheck} title="Confidențialitate">
-            <p className="text-sm text-muted-foreground">
-              Ce date folosește aplicația, cine le vede și ce drepturi ai.
-            </p>
-            <Link
-              to="/confidentialitate"
-              className="mt-3 inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4"
+          <div className={stackClass}>
+            <Panel
+              eyebrow="Setări"
+              icon={Mail}
+              title="Email zilnic"
+              className={inStack}
             >
-              Politica de confidențialitate
-            </Link>
-          </Panel>
+              <EmailDigestCard />
+            </Panel>
+            {/* The Privacy Notice (#771): always one tap away. */}
+            <Panel
+              eyebrow="Setări"
+              icon={ShieldCheck}
+              title="Confidențialitate"
+              className={inStack}
+            >
+              <p className="text-sm text-muted-foreground">
+                Ce date folosește aplicația, cine le vede și ce drepturi ai.
+              </p>
+              <Link
+                to="/confidentialitate"
+                className="mt-1 inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4"
+              >
+                Politica de confidențialitate
+              </Link>
+            </Panel>
+          </div>
         </PageGrid>
       </div>
 
@@ -421,9 +461,13 @@ function BoardTitle({
       <p className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground">
         {title ?? roleLabel}
       </p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {title ? `${roleLabel} · OSUBB` : 'Funcția nu este setată încă.'}
-      </p>
+      {/* The title is the information; the Role is on the Identitate chip
+          and in the eyebrow already (B46). */}
+      {!title && (
+        <p className="mt-1 text-sm text-muted-foreground">
+          Funcția nu este setată încă.
+        </p>
+      )}
     </div>
   );
 }
@@ -434,7 +478,14 @@ const GROUP_SECTIONS = [
   { category: 'project', heading: 'Proiecte' },
 ] as const;
 
-/** The Member's Departments, Teams and Projects, each with its Group Role. */
+/** The ring round the whole row, drawn by the link's stretched `::after`. */
+const focusRingAfterClass =
+  'outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-solid focus-visible:after:outline-ring';
+
+/**
+ * The Member's Departments, Teams and Projects, each a link to its Group
+ * page and, for a Group Role, its title.
+ */
 function MyGroupsList({ groups }: { groups: MemberGroup[] }) {
   const sections = GROUP_SECTIONS.map((section) => ({
     ...section,
@@ -455,8 +506,14 @@ function MyGroupsList({ groups }: { groups: MemberGroup[] }) {
             {section.groups.map((group) => (
               <ListRow
                 key={group.id}
-                className="min-h-11 px-0"
-                value={<Badge variant="outline">{group.role_label}</Badge>}
+                className="relative min-h-11 px-0"
+                value={
+                  // Plain membership is what the list already says; only a
+                  // Group Role earns a badge (B40).
+                  group.group_role === 'member' ? undefined : (
+                    <Badge variant="outline">{group.role_label}</Badge>
+                  )
+                }
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <span
@@ -466,9 +523,14 @@ function MyGroupsList({ groups }: { groups: MemberGroup[] }) {
                     }}
                     aria-hidden="true"
                   />
-                  <span className="truncate text-sm font-semibold text-foreground">
+                  {/* The whole row opens the Group (navigation D8); the name
+                      wraps rather than truncating (P3). */}
+                  <Link
+                    to={`/grupuri/${group.id}`}
+                    className={`min-w-0 text-sm font-semibold wrap-anywhere text-foreground underline-offset-4 after:absolute after:inset-0 after:rounded-sm hover:underline ${focusRingAfterClass}`}
+                  >
                     {group.name}
-                  </span>
+                  </Link>
                 </span>
               </ListRow>
             ))}
