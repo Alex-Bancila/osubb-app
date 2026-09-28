@@ -59,25 +59,27 @@ export default function EventRsvpControls({
     <section className="event-rsvp" aria-label={`Răspuns pentru ${eventTitle}`}>
       <div className="event-rsvp-head">
         <p className="event-rsvp-prompt">Participi?</p>
-        {/* The pressed button is the answer (B4): a line appears only while
-            something is in flight or has gone wrong. */}
-        {(mutation.isPending || rsvp.isPending || rsvp.isError) && (
-          <span className="event-rsvp-state">
-            {mutation.isPending ? (
-              <>
-                <LoaderCircle
-                  className="size-3.5 animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-                Se salvează…
-              </>
-            ) : rsvp.isPending ? (
-              'Se încarcă răspunsul…'
-            ) : (
-              'Răspuns indisponibil'
-            )}
-          </span>
-        )}
+        {/* The pressed button is the answer (B4): text shows here only while
+            something is in flight or has gone wrong. The live region stays
+            mounted, so a change of its words is announced; a saved answer
+            is announced here without being shown. */}
+        <span className="event-rsvp-state" role="status" aria-live="polite">
+          {mutation.isPending ? (
+            <>
+              <LoaderCircle
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              Se salvează…
+            </>
+          ) : rsvp.isPending ? (
+            'Se încarcă răspunsul…'
+          ) : rsvp.isError ? (
+            'Răspuns indisponibil'
+          ) : feedback?.kind === 'success' ? (
+            <span className="sr-only">{feedback.message}</span>
+          ) : null}
+        </span>
       </div>
 
       <div
@@ -112,17 +114,9 @@ export default function EventRsvpControls({
         </Button>
       </div>
 
-      {/* An error is seen and announced. A saved answer is only announced:
-          the pressed button already shows it (B4). */}
-      {feedback && (
-        <p
-          className={
-            feedback.kind === 'error'
-              ? 'event-rsvp-live is-error'
-              : 'event-rsvp-live sr-only'
-          }
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
-        >
+      {/* An error is seen and announced at once. */}
+      {feedback?.kind === 'error' && (
+        <p className="event-rsvp-live is-error" role="alert">
           {feedback.message}
         </p>
       )}

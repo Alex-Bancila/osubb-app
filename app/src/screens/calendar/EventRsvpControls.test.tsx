@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,10 +62,10 @@ describe('EventRsvpControls', () => {
 
   // B4: the pressed button is the answer; no "Ai răspuns" line beside it.
   it('shows no status line at rest, answered or not', () => {
-    const { container, unmount } = render(
+    const { unmount } = render(
       <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
     );
-    expect(container.querySelector('.event-rsvp-state')).toBeNull();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(screen.queryByText(/Ai răspuns/)).not.toBeInTheDocument();
     unmount();
 
@@ -79,7 +79,9 @@ describe('EventRsvpControls', () => {
     const unanswered = render(
       <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
     );
-    expect(unanswered.container.querySelector('.event-rsvp-state')).toBeNull();
+    expect(
+      within(unanswered.container).getByRole('status'),
+    ).toBeEmptyDOMElement();
     expect(screen.queryByText(/Nu ai răspuns/)).not.toBeInTheDocument();
   });
 
@@ -118,7 +120,9 @@ describe('EventRsvpControls', () => {
     // Announced, not shown: the pressed button already says it (B4).
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent('Răspuns salvat: nu participi.');
-    expect(status).toHaveClass('sr-only');
+    expect(screen.getByText('Răspuns salvat: nu participi.')).toHaveClass(
+      'sr-only',
+    );
   });
 
   it('says it is saving while the answer is sent', () => {
@@ -129,7 +133,7 @@ describe('EventRsvpControls', () => {
 
     render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
 
-    expect(screen.getByText('Se salvează…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Se salvează…');
     expect(
       screen.getByRole('group', { name: 'Alege răspunsul' }),
     ).toHaveAttribute('aria-busy', 'true');
