@@ -148,7 +148,7 @@ export function ManagerTaskList({
         rows={rows}
         hint="Grupul include toate subgrupurile sale; perioada se aplică termenului taskului."
         fields={fields}
-        fieldsActive={Number(Boolean(state)) + Number(Boolean(search.trim()))}
+        fieldsActive={Number(Boolean(state)) + Number(Boolean(query))}
       />
       {!params ? (
         <p>{RANGE_FIRST}</p>

@@ -183,6 +183,10 @@ describe('ManagerTaskList', () => {
       'SEDINTA',
     );
     await waitFor(() => expect(titles()).toEqual(['Ședință de mentorat']));
+    // The phone's Filtre button counts the applied search.
+    expect(
+      screen.getByRole('button', { name: 'Filtre (1)' }),
+    ).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Stare'), 'completed');
     expect(
       screen.getByText('Niciun task nu corespunde filtrelor.'),
