@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { buttonVariants } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
@@ -23,7 +23,7 @@ import { acceptsApplication } from '../groups/application-eligibility';
  *
  * A withdrawn Application leaves the list as soon as the refetch lands, taking
  * its button and dialog with it, so the confirmation lives here and focus moves
- * to the link that stays.
+ * to the link that stays (or to the confirmation, when there is no link).
  */
 export function JoiningSection() {
   const applications = useGroupApplications();
@@ -32,6 +32,7 @@ export function JoiningSection() {
   const memberships = useMyGroups().membershipRows;
   const level = useAuth().claims?.member_level ?? 0;
   const applyLink = useRef<HTMLAnchorElement>(null);
+  const statusRef = useRef<HTMLParagraphElement>(null);
   const [withdrawn, setWithdrawn] = useState<string | null>(null);
 
   const pending = applications.data ?? [];
@@ -44,9 +45,27 @@ export function JoiningSection() {
   );
   const showPending = applications.isError || pending.length > 0;
 
+  // After a withdrawal the dialog hands focus back to its button, which the
+  // refetch then removes: once that Application has left the list, move
+  // focus to the apply link, or to the confirmation when there is no link.
+  // Every render checks, so the move waits for the refetch, however long.
+  const focusAfter = useRef<number | null>(null);
+  useEffect(() => {
+    const id = focusAfter.current;
+    if (id === null || pending.some((application) => application.id === id))
+      return;
+    focusAfter.current = null;
+    (applyLink.current ?? statusRef.current)?.focus();
+  });
+
   // Always mounted, so the confirmation is announced when it appears.
   const status = (
-    <p role="status" className="m-0 text-sm text-muted-foreground empty:hidden">
+    <p
+      ref={statusRef}
+      tabIndex={-1}
+      role="status"
+      className="m-0 text-sm text-muted-foreground outline-none empty:hidden"
+    >
       {withdrawn && `Cererea pentru ${withdrawn} a fost retrasă.`}
     </p>
   );
@@ -97,8 +116,8 @@ export function JoiningSection() {
                           applicationId: application.id,
                         }}
                         onSuccess={() => {
+                          focusAfter.current = application.id;
                           setWithdrawn(groupName);
-                          applyLink.current?.focus();
                         }}
                       />
                     </div>

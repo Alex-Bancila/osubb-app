@@ -699,6 +699,26 @@ describe('ProfileScreen', () => {
       ).toHaveFocus();
     });
 
+    it('with no Group left to apply to, focus lands on the confirmation', async () => {
+      const user = userEvent.setup();
+      applicationMocks.withdraw.mockImplementationOnce(async () => {
+        applicationMocks.applicationsQuery.data = [];
+        return null;
+      });
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Retrage aplicația' }),
+      );
+      await user.click(screen.getByRole('button', { name: 'Confirmă' }));
+
+      await waitFor(() =>
+        expect(
+          screen.getByText('Cererea pentru Echipa Media a fost retrasă.'),
+        ).toHaveFocus(),
+      );
+    });
+
     it('hides an empty "Cereri în așteptare" (B41) and keeps the apply link while a Group accepts', () => {
       applicationMocks.applicationsQuery.data = [];
       adminGroupsMock.data = [openGroup(50)];

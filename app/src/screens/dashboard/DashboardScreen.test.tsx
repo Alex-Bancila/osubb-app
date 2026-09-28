@@ -263,7 +263,7 @@ describe('the panels each viewer sees', () => {
     expect(gridColumns()).toBe('2');
     // #859: no Punctaj panel — a compact stat on the greeting line, to Profil.
     expect(screen.queryByRole('region', { name: /punctaj/i })).toBeNull();
-    const stat = screen.getByRole('link', { name: /12s*puncte/ });
+    const stat = screen.getByRole('link', { name: /12\s*puncte/ });
     expect(stat).toHaveAttribute('href', '/profil');
     expect(stat.closest('[data-slot="page-header"]')).not.toBeNull();
     expect(stat.querySelector('[data-slot="points-value"]')).toHaveTextContent(
@@ -281,7 +281,7 @@ describe('the panels each viewer sees', () => {
     expect(slot('De evaluat').closest('[data-slot="page-grid"]')).toBeNull();
     expect(panels()).toEqual(['Următorul task', 'Următorul eveniment']);
     expect(gridColumns()).toBe('2');
-    expect(screen.getByRole('link', { name: /12s*puncte/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /12\s*puncte/ })).toHaveAttribute(
       'href',
       '/profil',
     );
@@ -485,10 +485,25 @@ describe('Următorul task', () => {
     ).toBeInTheDocument();
   });
 
-  it('skips undated Tasks; with nothing in work it invites to Disponibile', () => {
+  it('skips an undated Task but says no dated one is in work, and opens Taskuri', () => {
+    hooks.useMyTasks.mockReturnValue(
+      query([mine({ id: 5, title: 'Fără termen', deadline: null })]),
+    );
+    renderDashboard();
+
+    const next = slot('Următorul task');
+    expect(
+      within(next).getByText('Niciun task cu termen în lucru.'),
+    ).toBeInTheDocument();
+    expect(within(next).queryByRole('article')).toBeNull();
+    expect(
+      within(next).getByRole('link', { name: 'Vezi taskurile tale' }),
+    ).toHaveAttribute('href', '/tracker');
+  });
+
+  it('with nothing in work it invites to Disponibile', () => {
     hooks.useMyTasks.mockReturnValue(
       query([
-        mine({ id: 5, title: 'Fără termen', deadline: null }),
         mine({ id: 6, title: 'Anulat', status: 'cancelled' }),
         mine({
           id: 9,

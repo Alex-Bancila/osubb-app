@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/auth';
 import { useMyTasks } from '../../queries/tasks';
 import { TaskCard } from '../tracker/TaskCard';
 import { toTaskPresentation } from '../tracker/task-presentation';
-import { nextOwnTask } from './next-items';
+import { hasOwnTaskInWork, nextOwnTask } from './next-items';
 
 /**
  * **Următorul task** (#700, ruling R4): the Member's soonest-deadline Task in
@@ -15,7 +15,9 @@ import { nextOwnTask } from './next-items';
  * link opens it (`/tracker?task=<id>`), so the card carries no actions and no
  * `task-<id>` anchor of its own. The link appears only with a Task, because
  * it opens that Task. With none, the empty state is an invitation: it opens
- * Taskuri on Disponibile (`?lista=disponibile`, #846), where work waits.
+ * Taskuri on Disponibile (`?lista=disponibile`, #846), where work waits —
+ * unless the Member already executes a Task without a deadline: then it says
+ * no dated Task is in work and opens their Taskuri.
  *
  * No eyebrow: "Taskuri" above "Următorul task" says the title twice (B7).
  */
@@ -30,6 +32,10 @@ export default function NextTaskCard({
   const memberId = useAuth().session?.user.id;
   const next =
     tasks.data && memberId ? nextOwnTask(tasks.data, memberId) : null;
+  const undatedWork =
+    !next && tasks.data && memberId
+      ? hasOwnTaskInWork(tasks.data, memberId)
+      : false;
 
   return (
     <Panel
@@ -54,6 +60,20 @@ export default function NextTaskCard({
           anchor={false}
           memberId={memberId}
         />
+      ) : undatedWork ? (
+        // Work without a deadline is not "next", but it is still work.
+        <EmptyState
+          action={
+            <Link
+              to="/tracker"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Vezi taskurile tale
+            </Link>
+          }
+        >
+          Niciun task cu termen în lucru.
+        </EmptyState>
       ) : (
         <EmptyState
           action={

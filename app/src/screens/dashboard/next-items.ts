@@ -42,6 +42,24 @@ export function nextOwnTask<Row extends TaskPresentationRow>(
 }
 
 /**
+ * Whether the Member executes any Task still in work, dated or not: with no
+ * dated one next, Următorul task then says so rather than "nothing in work".
+ */
+export function hasOwnTaskInWork(
+  rows: readonly TaskPresentationRow[],
+  memberId: string,
+): boolean {
+  return rows.some(
+    (row) =>
+      inWork(row.status) &&
+      row.assignments?.some(
+        (assignment) =>
+          assignment.member_id === memberId && assignment.ended_at === null,
+      ),
+  );
+}
+
+/**
  * **Următorul eveniment** (ruling R4): the soonest Relevant Event that has not
  * started — one of the Organization Group, or of a Group whose Group Audience
  * holds the Member (`relevantGroupIds`). An Other OSUBB Event the Member said

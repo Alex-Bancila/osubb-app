@@ -111,7 +111,8 @@ describe('EditProfileSheet', () => {
     expect(group).toHaveClass('grid-cols-7');
     const swatches = within(group).getAllByRole('button');
     expect(swatches).toHaveLength(7);
-    for (const swatch of swatches) expect(swatch).toHaveClass('size-11');
+    for (const swatch of swatches)
+      expect(swatch).toHaveClass('aspect-square', 'max-w-11');
 
     const red = within(group).getByRole('button', { name: /roșu osubb/i });
     await user.click(red);

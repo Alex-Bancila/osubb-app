@@ -157,9 +157,11 @@ function EditProfileForm({
         <Field {...form.slot('avatarColor')}>
           <FieldLabel>Culoare avatar</FieldLabel>
           {/* One row of seven at every width (P4): 40 px discs in 44 px
-              targets, the selection a ring — never a size change. */}
+              targets, the selection a ring — never a size change. Under
+              about 364 px the seven cells share the row and shrink together
+              rather than overflow the sheet. */}
           <div
-            className="grid w-fit grid-cols-7 gap-1 pt-1"
+            className="grid w-full max-w-[20.75rem] grid-cols-7 gap-1 pt-1"
             role="group"
             aria-label="Alege culoarea avatarului"
           >
@@ -173,13 +175,13 @@ function EditProfileForm({
                   onClick={() => setAvatarColor(swatch.color)}
                   aria-label={swatch.name}
                   aria-pressed={isSelected}
-                  className="group grid size-11 place-items-center rounded-full outline-none"
+                  className="group grid aspect-square w-full max-w-11 min-w-0 place-items-center rounded-full outline-none"
                 >
                   <span
                     aria-hidden="true"
                     style={{ backgroundColor: swatch.color }}
                     className={cn(
-                      'grid size-10 place-items-center rounded-full text-white ring-offset-2 ring-offset-card transition-shadow motion-reduce:transition-none group-focus-visible:ring-3 group-focus-visible:ring-ring',
+                      'grid aspect-square w-[calc(100%-4px)] max-w-10 place-items-center rounded-full text-white ring-offset-2 ring-offset-card transition-shadow motion-reduce:transition-none group-focus-visible:ring-3 group-focus-visible:ring-ring',
                       isSelected
                         ? 'ring-2 ring-foreground'
                         : 'group-hover:ring-2 group-hover:ring-border',
