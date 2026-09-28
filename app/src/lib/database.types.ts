@@ -1714,6 +1714,7 @@ export type Database = {
         Row: {
           changed_at: string
           changed_by: string | null
+          field: string
           from_value: number | null
           id: number
           kind: string
@@ -1724,6 +1725,7 @@ export type Database = {
         Insert: {
           changed_at?: string
           changed_by?: string | null
+          field?: string
           from_value?: number | null
           id?: never
           kind: string
@@ -1734,6 +1736,7 @@ export type Database = {
         Update: {
           changed_at?: string
           changed_by?: string | null
+          field?: string
           from_value?: number | null
           id?: never
           kind?: string
@@ -3946,6 +3949,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      evaluation_percents: {
+        Args: never
+        Returns: {
+          changed_at: string
+          changed_by: string
+          kind: string
+          percent: number
+        }[]
+      }
       express_task_interest: {
         Args: { p_task_id: number }
         Returns: {
@@ -4493,6 +4505,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "campaigns"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_evaluation_percent: {
+        Args: { p_kind: string; p_percent: number }
+        Returns: {
+          changed_at: string
+          changed_by: string | null
+          field: string
+          from_value: number | null
+          id: number
+          kind: string
+          role_evaluation_id: number | null
+          source: string
+          to_value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "promotion_threshold_changes"
           isOneToOne: true
           isSetofReturn: false
         }

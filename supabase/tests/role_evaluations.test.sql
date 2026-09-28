@@ -371,8 +371,8 @@ select is(
   array['promotion_threshold_changes_read:SELECT'],
   'the only policy is promotion_threshold_changes_read, for select -- no client write policy exists');
 select columns_are('public', 'promotion_threshold_changes',
-  array['id', 'kind', 'from_value', 'to_value', 'source', 'changed_by', 'role_evaluation_id', 'changed_at'],
-  'promotion_threshold_changes carries the kind, the before/after values, its source and who or which run made it');
+  array['id', 'kind', 'from_value', 'to_value', 'source', 'changed_by', 'role_evaluation_id', 'changed_at', 'field'],
+  'promotion_threshold_changes carries the kind, the before/after values, its source and who or which run made it, and since #866 which value changed (field: threshold or percent)');
 
 select throws_ok(
   $$ insert into public.promotion_threshold_changes (kind, from_value, to_value, source, changed_by, role_evaluation_id)

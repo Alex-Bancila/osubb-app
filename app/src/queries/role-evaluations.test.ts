@@ -40,8 +40,9 @@ import {
   fetchRoleEvaluationRanking,
   fetchRoleEvaluations,
   fetchThresholdChanges,
-  fetchTopPercent,
+  fetchEvaluationPercents,
   latestRun,
+  percentText,
   retentionSignals,
   runRoleEvaluationCommand,
   type RankingRow,
@@ -79,9 +80,14 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     ]);
   });
 
-  it('reads the threshold log newest first', async () => {
+  it('reads the threshold log newest first, with which value changed', async () => {
     db.results.set('promotion_threshold_changes', { data: [], error: null });
     await fetchThresholdChanges();
+    expect(db.calls).toContainEqual([
+      'promotion_threshold_changes',
+      'select',
+      'id, kind, field, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
+    ]);
     expect(db.calls).toContainEqual([
       'promotion_threshold_changes',
       'order',
@@ -163,15 +169,43 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     ]);
   });
 
-  it('reads x from the top_percent rule', async () => {
-    db.results.set('promotion_rules', { data: { percent: 20 }, error: null });
-    expect(await fetchTopPercent()).toBe(20);
-    expect(db.calls).toContainEqual([
-      'promotion_rules',
-      'eq',
-      'kind',
-      'top_percent',
+  it('reads x and y, and who changed each last, from evaluation_percents (#866)', async () => {
+    db.results.set('evaluation_percents', {
+      data: [
+        {
+          kind: 'voluntar_activ',
+          percent: 35,
+          changed_at: '2026-09-28T09:00:00Z',
+          changed_by: 'bc',
+        },
+        {
+          kind: 'adunarea_generala',
+          percent: 25,
+          changed_at: null,
+          changed_by: null,
+        },
+      ],
+      error: null,
+    });
+    const percents = await fetchEvaluationPercents();
+    expect(percents).toEqual([
+      {
+        kind: 'voluntar_activ',
+        percent: 35,
+        changedAt: '2026-09-28T09:00:00Z',
+        changedBy: 'bc',
+      },
+      {
+        kind: 'adunarea_generala',
+        percent: 25,
+        changedAt: null,
+        changedBy: null,
+      },
     ]);
+    expect(db.calls).toContainEqual(['rpc', 'evaluation_percents', undefined]);
+    expect(percentText(percents, 'voluntar_activ')).toBe('35');
+    expect(percentText(percents, 'adunarea_generala')).toBe('25');
+    expect(percentText(undefined, 'voluntar_activ')).toBe('—');
   });
 
   it('throws a read error rather than showing an empty list', async () => {
@@ -251,11 +285,16 @@ describe('the commands', () => {
     ]);
   });
 
-  it('sets a threshold and rejects a candidate through their commands', async () => {
+  it('sets a threshold, a share and rejects a candidate through their commands', async () => {
     await runRoleEvaluationCommand({
       kind: 'threshold',
       evaluationKind: 'adunarea_generala',
       threshold: 12,
+    });
+    await runRoleEvaluationCommand({
+      kind: 'percent',
+      evaluationKind: 'voluntar_activ',
+      percent: 35,
     });
     await runRoleEvaluationCommand({
       kind: 'reject',
@@ -266,6 +305,11 @@ describe('the commands', () => {
       'rpc',
       'set_promotion_threshold',
       { p_kind: 'adunarea_generala', p_threshold: 12 },
+    ]);
+    expect(db.calls).toContainEqual([
+      'rpc',
+      'set_evaluation_percent',
+      { p_kind: 'voluntar_activ', p_percent: 35 },
     ]);
     expect(db.calls).toContainEqual([
       'rpc',

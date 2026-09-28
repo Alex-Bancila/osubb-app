@@ -401,6 +401,14 @@ const REASON_COPY = new Map<string, string>([
     'invalid_promotion_threshold',
     'Pragul este un număr întreg de cel puțin 1.',
   ],
+  /* The two shares x and y (#866, ruling R30). */
+  ['invalid_percent', 'Procentul trebuie să fie între 1 și 100.'],
+  [
+    'evaluation_percent_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba procentele.',
+  ],
+  // set_org_setting refuses y: only set_evaluation_percent writes it.
+  ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
   [
     'promotion_candidate_manage_forbidden',
     'Doar BC și Moderatorul pot decide asupra candidaților.',

@@ -234,6 +234,12 @@ it.each([
     'invalid_promotion_threshold',
     'Pragul este un număr întreg de cel puțin 1.',
   ],
+  ['invalid_percent', 'Procentul trebuie să fie între 1 și 100.'],
+  [
+    'evaluation_percent_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba procentele.',
+  ],
+  ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
   [
     'promotion_candidate_manage_forbidden',
     'Doar BC și Moderatorul pot decide asupra candidaților.',

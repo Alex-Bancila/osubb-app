@@ -108,6 +108,27 @@ export const thresholdFieldForReason: Readonly<Record<string, 'threshold'>> = {
 };
 
 /**
+ * A kind's top share as `set_evaluation_percent` (#866, ruling R30) takes it:
+ * a whole percentage from 1 to 100 — x for Voluntar Activ, y for the
+ * Adunarea Generală. The field is text, so the digits are checked first.
+ */
+export const percentSchema = z.object({
+  percent: z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (!/^\d{1,3}$/.test(value) || Number(value) < 1 || Number(value) > 100)
+        ctx.addIssue({ code: 'custom', message: 'invalid_percent' });
+    })
+    .transform(Number),
+});
+
+export const percentFieldForReason: Readonly<Record<string, 'percent'>> = {
+  invalid_percent: 'percent',
+  nothing_to_update: 'percent',
+};
+
+/**
  * The reason BC gives for rejecting a Promotion Candidate
  * (`reject_promotion_candidate`): required, trimmed, at most 500 characters.
  * The limit is half the shared 1000 of `reason_too_long`, so the browser says
