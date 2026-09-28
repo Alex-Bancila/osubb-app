@@ -562,6 +562,7 @@ it('the back link falls back to Grupuri, and prefers state.from (A33)', () => {
 });
 it('an unavailable Group says why and leads back to Grupuri (D23)', () => {
   detail(4040);
+  expect(screen.getAllByRole('link')).toHaveLength(1);
   expect(
     screen.getByRole('heading', { name: 'Grup indisponibil' }),
   ).toBeVisible();

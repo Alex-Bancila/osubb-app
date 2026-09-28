@@ -69,18 +69,11 @@ export default function MemberGroupScreen() {
   if (!group)
     return (
       <Page>
+        {back}
         <PageHeader
           eyebrow="Grupuri"
           title="Grup indisponibil"
           description="Grupul a fost arhivat sau nu mai ai acces la el."
-          actions={
-            <Link
-              to="/grupuri"
-              className={cn(buttonVariants({ variant: 'outline' }))}
-            >
-              Înapoi la Grupuri
-            </Link>
-          }
         />
       </Page>
     );
