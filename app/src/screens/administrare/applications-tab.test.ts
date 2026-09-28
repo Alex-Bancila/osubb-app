@@ -1,4 +1,6 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { applicationsTabShown } from './applications-tab';
 
 const group = (

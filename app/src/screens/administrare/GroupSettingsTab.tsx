@@ -1,8 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { cn } from 'cn';
 import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
-import { PageGrid, Panel, SubHeading } from '../../components/layout';
+import { Panel, SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { FieldError } from '../../components/ui/field';
@@ -275,8 +274,7 @@ function ArchiveGroupDialog({
 
 /**
  * A Group's settings, structure and archiving (layout AD3): three panels in
- * a reading-width column, or Setări beside Structura from 768 px when the
- * viewer edits both, with Arhivare below. Each form saves on its own, and
+ * a reading-width column, each as tall as its content. Each form saves on its own, and
  * each field shows once — a top-level Group's Minimum Level is structure
  * (BC's), a Child Group's is its Managers' setting (relevance B52).
  */
@@ -766,17 +764,13 @@ export function GroupSettingsTab({
     </Panel>
   );
 
-  const both = showSettings && showStructure;
+  // One reading-width column: the forms are unrelated and of different
+  // lengths, so each panel is as tall as its content rather than stretched
+  // to its neighbour (Alex, 2026-09-28: no half-empty boxes).
   return (
-    <div className={cn('flex flex-col gap-6', !both && 'max-w-2xl')}>
-      {both ? (
-        <PageGrid columns={2} alignHeaders>
-          {settingsPanel}
-          {structurePanel}
-        </PageGrid>
-      ) : (
-        settingsPanel || structurePanel
-      )}
+    <div className="flex max-w-2xl flex-col gap-6">
+      {settingsPanel}
+      {structurePanel}
 
       {showArchive && (
         <Panel title="Arhivare">
