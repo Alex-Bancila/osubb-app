@@ -538,7 +538,7 @@ it('draws the Group chip 24 px tall inside a 44 px button (L2)', () => {
   const button = screen.getByRole('button', {
     name: 'Grupul Educație. Vezi profilul membrului Ioana',
   });
-  expect(button).toHaveClass('min-h-11');
+  expect(button).toHaveClass('min-h-11', 'min-w-11');
   const chip = button.querySelector('[data-slot=group-chip]');
   expect(chip).toHaveClass('h-6', 'rounded-full', 'border');
   expect(button).not.toHaveClass('border');

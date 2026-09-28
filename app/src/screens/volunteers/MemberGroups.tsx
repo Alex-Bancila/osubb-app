@@ -28,7 +28,7 @@ export function MemberGroups({
         onClick={onOpen}
         aria-haspopup="dialog"
         aria-label={`Grupul ${primaryGroup.name}. Vezi profilul membrului ${memberName}`}
-        className="group/chip inline-flex min-h-11 max-w-32 min-w-0 shrink items-center outline-none"
+        className="group/chip inline-flex min-h-11 max-w-32 min-w-11 shrink items-center outline-none"
       >
         <span
           data-slot="group-chip"
