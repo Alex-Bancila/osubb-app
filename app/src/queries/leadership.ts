@@ -68,8 +68,14 @@ export function fetchLeadershipMemberTasks(
       .range(from, to),
   );
 }
+/**
+ * The Work Filter's choices on Clasament and Tracker membru, plus `work`:
+ * the Group and Campaign of every Task that has an Evaluation, so carries
+ * Task Points (a reopened one keeps its Evaluation and reversal; an Umbrella
+ * has none) — which Rule W (#845) offers from. BCE, BC and Moderator read every Task.
+ */
 export async function fetchLeadershipFilters() {
-  const [groups, campaigns] = await Promise.all([
+  const [groups, campaigns, work] = await Promise.all([
     pages((from, to) =>
       supabase
         .from('groups')
@@ -84,8 +90,20 @@ export async function fetchLeadershipFilters() {
         .order('id')
         .range(from, to),
     ),
+    pages((from, to) =>
+      supabase
+        .from('tasks')
+        // An Evaluation, through its Assignment: a reopened Task keeps its
+        // Evaluation and its reversal on the board, so it counts too.
+        .select(
+          'group_id,campaign_id,task_assignments!inner(task_evaluations!inner(id))',
+        )
+        .eq('kind', 'task')
+        .order('id')
+        .range(from, to),
+    ),
   ]);
-  return { groups, campaigns };
+  return { groups, campaigns, work };
 }
 /** `null` filters (an inverted date range) send nothing. */
 export function useLeadershipLeaderboard(filters: LeadershipFilters | null) {

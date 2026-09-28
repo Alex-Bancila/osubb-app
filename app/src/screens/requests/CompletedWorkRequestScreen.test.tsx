@@ -2,8 +2,12 @@ vi.mock('./RequestDecisionQueue', () => ({
   // A visible stub, not `null`: tests below need to see it render regardless
   // of whether the submission form is showing (#631's decision queue stays
   // untouched by the level gate).
-  RequestDecisionQueue: () => (
-    <div role="region" aria-label="Coadă decizii stub" />
+  RequestDecisionQueue: ({ showEmpty }: { showEmpty?: boolean }) => (
+    <div
+      role="region"
+      aria-label="Coadă decizii stub"
+      data-show-empty={String(Boolean(showEmpty))}
+    />
   ),
 }));
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -82,6 +86,7 @@ describe('CompletedWorkRequestScreen', () => {
       data: [
         {
           id: 1,
+          group_id: 21,
           description: 'Activitate în așteptare',
           status: 'pending',
           decision_note: null,
@@ -89,6 +94,7 @@ describe('CompletedWorkRequestScreen', () => {
         },
         {
           id: 2,
+          group_id: 30,
           description: 'Activitate aprobată',
           status: 'approved',
           decision_note: 'Mulțumim pentru contribuție.',
@@ -96,6 +102,7 @@ describe('CompletedWorkRequestScreen', () => {
         },
         {
           id: 3,
+          group_id: 99,
           description: 'Activitate respinsă',
           status: 'rejected',
           decision_note: 'Adaugă detalii despre rezultat.',
@@ -104,6 +111,14 @@ describe('CompletedWorkRequestScreen', () => {
       ],
     });
     render(<CompletedWorkRequestScreen />);
+    // Each row names the Group it was filed for (#855, B32), a Child Group
+    // with its parent; a Group no longer readable leaves no empty line.
+    const rows = screen.getAllByRole('listitem');
+    expect(
+      rows.map(
+        (row) => row.querySelector('[data-slot="request-group"]')?.textContent,
+      ),
+    ).toEqual(['Echipa Media · Educațional', 'OSUBB Fest', undefined]);
     expect(screen.getByText('În așteptare')).toBeVisible();
     expect(screen.getByText('Aprobată')).toBeVisible();
     expect(screen.getByText('Respinsă')).toBeVisible();
@@ -153,9 +168,10 @@ describe('CompletedWorkRequestScreen', () => {
     const user = userEvent.setup();
     render(<CompletedWorkRequestScreen />);
 
-    expect(
-      screen.getByRole('button', { name: 'Trimite cererea' }),
-    ).toBeDisabled();
+    const send = screen.getByRole('button', { name: 'Trimite cererea' });
+    expect(send).toBeDisabled();
+    // The #842 form submit: full width on a phone, its own width from sm.
+    expect(send).toHaveClass('w-full', 'sm:w-auto');
     await user.click(screen.getByRole('combobox', { name: 'Grup' }));
     await user.click(
       await screen.findByRole('option', { name: /^Echipa Media/ }),
@@ -210,10 +226,11 @@ describe('CompletedWorkRequestScreen', () => {
         screen.getByRole('heading', { name: 'Cererile mele' }),
       ).toBeInTheDocument();
       expect(screen.getByText(/Descrie contribuția/)).toBeInTheDocument();
-      // The decision queue is unrelated to the level gate and still renders.
+      // The decision queue is unrelated to the level gate and still renders,
+      // hidden while there is nothing to decide.
       expect(
         screen.getByRole('region', { name: 'Coadă decizii stub' }),
-      ).toBeInTheDocument();
+      ).toHaveAttribute('data-show-empty', 'false');
     },
   );
 
@@ -234,12 +251,19 @@ describe('CompletedWorkRequestScreen', () => {
       expect(
         screen.queryByRole('heading', { name: 'Cererile mele' }),
       ).not.toBeInTheDocument();
-      // No sentence invites a Request nobody at this level can submit.
+      // No sentence invites a Request nobody at this level can submit, and the
+      // title names the page, not the form it does not have.
       expect(screen.queryByText(/Descrie contribuția/)).not.toBeInTheDocument();
-      // The decision queue is unrelated to the level gate and still renders.
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Cereri' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/activitate realizată$/),
+      ).not.toBeInTheDocument();
+      // The decision queue is the page: it says so when it is empty (B30).
       expect(
         screen.getByRole('region', { name: 'Coadă decizii stub' }),
-      ).toBeInTheDocument();
+      ).toHaveAttribute('data-show-empty', 'true');
     },
   );
 });

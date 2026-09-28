@@ -1,36 +1,26 @@
-import {
-  AlertTriangle,
-  ChevronRight,
-  Pin,
-  Star,
-  UserRound,
-} from 'lucide-react';
+import { ChevronRight, UserRound } from 'lucide-react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
 import { MemberName } from '../../components/member/MemberName';
-import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '../../components/ui/card';
+import { Card, CardContent, CardFooter } from '../../components/ui/card';
 import { cn } from '../../lib/utils';
-import {
-  priorityMeta,
-  type AnnouncementPresentation,
-} from './announcements-presentation';
+import { AnnouncementMeta } from './AnnouncementMeta';
+import type { AnnouncementPresentation } from './announcements-presentation';
 
 type AnnouncementCardProps = {
   announcement: AnnouncementPresentation;
   onOpen: (announcement: AnnouncementPresentation) => void;
 };
 
+/**
+ * One Announcement in the feed (layout N1, N2): the meta line, 12 px, the
+ * title with its date under it, 8 px, the body, 16 px, and a one-row footer —
+ * the author on the left, "Citește" on the right.
+ */
 export default function AnnouncementCard({
   announcement,
   onOpen,
 }: AnnouncementCardProps) {
-  const meta = priorityMeta(announcement.priority);
   const titleId = `announcement-title-${announcement.id}`;
   const isCritical = announcement.priority === 'critical';
 
@@ -43,75 +33,41 @@ export default function AnnouncementCard({
           'border-destructive/60 bg-destructive/5 dark:bg-destructive/10',
       )}
     >
-      <CardHeader className="gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {announcement.pinned && (
-              <Badge variant="secondary" className="gap-1">
-                <Pin className="size-3" aria-hidden="true" />
-                <span>Fixat</span>
-              </Badge>
-            )}
-
-            <Badge variant={meta.variant} className="gap-1">
-              {isCritical ? (
-                <AlertTriangle className="size-3" aria-hidden="true" />
-              ) : announcement.priority === 'important' ? (
-                <Star className="size-3" aria-hidden="true" />
-              ) : null}
-              <span>{meta.label}</span>
-            </Badge>
-
-            <span
-              className={cn(
-                'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold',
-                announcement.group.color
-                  ? 'text-white'
-                  : 'bg-muted text-muted-foreground',
-              )}
-              style={
-                announcement.group.color
-                  ? { backgroundColor: announcement.group.color }
-                  : undefined
-              }
-            >
-              {announcement.group.short ?? announcement.group.name}
-            </span>
-            <Badge variant="outline">{announcement.audienceLabel}</Badge>
-
-            {announcement.category && (
-              <Badge variant="outline" className="text-muted-foreground">
-                {announcement.category}
-              </Badge>
-            )}
-          </div>
-
-          {!announcement.isRead && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive">
-              <span
-                className="size-2 rounded-full bg-destructive"
-                aria-hidden="true"
-              />
-              Necitit
-            </span>
-          )}
-        </div>
+      <CardContent>
+        <AnnouncementMeta
+          announcement={announcement}
+          trailing={
+            !announcement.isRead && (
+              <span className="ml-auto inline-flex shrink-0 items-center pl-1">
+                <span
+                  className="size-2 rounded-full bg-destructive"
+                  aria-hidden="true"
+                />
+                <span className="sr-only">Necitit</span>
+              </span>
+            )
+          }
+        />
 
         <h3
           id={titleId}
-          className="font-heading text-base font-semibold leading-snug tracking-tight text-foreground sm:text-lg"
+          className="m-0 mt-3 font-heading text-base leading-snug font-semibold tracking-tight text-foreground sm:text-lg"
         >
           {announcement.title}
         </h3>
-      </CardHeader>
+        <time
+          dateTime={announcement.publishedAt}
+          className="mt-0.5 block text-xs text-muted-foreground"
+        >
+          {announcement.publishedLabel}
+        </time>
 
-      <CardContent className="space-y-3">
-        <p className="line-clamp-3 text-sm text-muted-foreground">
+        <p className="m-0 mt-2 line-clamp-3 text-sm text-muted-foreground">
           {announcement.body}
         </p>
 
         {announcement.formLabel && announcement.formUrl && (
-          <div className="pt-1">
+          <div className="mt-3">
             <AttachedLinkButton
               label={announcement.formLabel}
               url={announcement.formUrl}
@@ -120,8 +76,8 @@ export default function AnnouncementCard({
         )}
       </CardContent>
 
-      <CardFooter className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-2">
+      <CardFooter className="justify-between gap-3 py-3 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center pointer-coarse:-my-1.5">
           {announcement.authorMember ? (
             <MemberName
               {...announcement.authorMember}
@@ -136,17 +92,13 @@ export default function AnnouncementCard({
               </span>
             )
           )}
-          <span aria-hidden="true">·</span>
-          <time dateTime={announcement.publishedAt}>
-            {announcement.publishedLabel}
-          </time>
         </div>
 
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onOpen(announcement)}
-          className="min-h-11 gap-1 text-xs text-primary"
+          className="-my-1.5 -mr-2 min-h-11 shrink-0 gap-1 text-xs text-primary"
         >
           <span>Citește</span>
           <ChevronRight className="size-3.5" aria-hidden="true" />

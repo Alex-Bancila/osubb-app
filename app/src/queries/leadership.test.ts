@@ -11,12 +11,13 @@ import {
 } from './leadership';
 const range = vi.fn();
 const order = vi.fn();
-const builder = { order, range, select: vi.fn(), in: vi.fn() };
+const builder = { order, range, select: vi.fn(), in: vi.fn(), eq: vi.fn() };
 beforeEach(() => {
   vi.clearAllMocks();
   order.mockReturnValue(builder);
   builder.select.mockReturnValue(builder);
   builder.in.mockReturnValue(builder);
+  builder.eq.mockReturnValue(builder);
   api.rpc.mockReturnValue(builder);
   api.from.mockReturnValue(builder);
   range.mockResolvedValue({ data: [], error: null });
@@ -73,14 +74,19 @@ it('Cup takes the Campaign and range but never the Group; member history takes t
   });
   expect(order).toHaveBeenCalledWith('assignment_id');
 });
-it('reads paged Group and Campaign options without category exclusions', async () => {
+it('reads paged Group and Campaign options without category exclusions, and the scored Tasks for Rule W', async () => {
   await fetchLeadershipFilters();
-  expect(api.from.mock.calls).toEqual([['groups'], ['campaigns']]);
+  expect(api.from.mock.calls).toEqual([['groups'], ['campaigns'], ['tasks']]);
   expect(builder.select.mock.calls).toEqual([
     ['id,name,path,status,is_organization,parent_id,color,category'],
     ['id,name,group_id'],
+    ['group_id,campaign_id,task_assignments!inner(task_evaluations!inner(id))'],
   ]);
-  expect(range).toHaveBeenCalledTimes(2);
+  // Only Tasks that carry Task Points: evaluated (a reopened one too), never
+  // an Umbrella — by the Evaluation, not by status.
+  expect(builder.in).not.toHaveBeenCalled();
+  expect(builder.eq).toHaveBeenCalledWith('kind', 'task');
+  expect(range).toHaveBeenCalledTimes(3);
 });
 
 it('batches the row identities by member id: avatar colour, first top-level Group, +n', async () => {

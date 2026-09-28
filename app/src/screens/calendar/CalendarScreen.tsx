@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ListFilter, ListIcon } from 'lucide-react';
+import { CalendarDays, ListIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 
 import {
   Page,
   PageHeader,
-  Panel,
   SegmentedToggle,
   type SegmentedOption,
 } from '../../components/layout';
-import { ErrorState, Loading } from '../../components/states';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { useWorkFilter } from '../../lib/use-work-filter';
@@ -18,6 +16,7 @@ import { useGoingEventIds } from '../../queries/event-rsvp';
 import type { EventPresentation } from '../../queries/events';
 import { useMyGroupRoles } from '../../queries/my-groups';
 import { useGroups } from '../../queries/reference';
+import { useCalendarWork } from '../../queries/work-filter-options';
 import { CalendarAgenda } from './CalendarAgenda';
 import { CalendarMonth } from './CalendarMonth';
 import {
@@ -64,6 +63,14 @@ export default function CalendarScreen() {
 
   const groups = useGroups();
   const campaigns = useCampaigns();
+  // Taskurile gestionate: only the month grid draws them, so Rule W offers
+  // their Groups only there, while they are on (#845).
+  const [showManaged, setShowManaged] = useState(false);
+  const calendarWork = useCalendarWork(view === 'month' && showManaged);
+  const filterGroups = useMemo(
+    () => [...(groups.data?.values() ?? [])],
+    [groups.data],
+  );
   const mine = useMyGroupRoles();
   const going = useGoingEventIds();
   const relevant = useMemo(
@@ -121,31 +128,23 @@ export default function CalendarScreen() {
         }
       />
 
-      <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre calendar">
-        {groups.isError || campaigns.isError ? (
-          <ErrorState
-            error={groups.error ?? campaigns.error}
-            text="Nu am putut încărca filtrele."
-            retryLabel="Reîncarcă filtrele"
-            onRetry={() => {
-              void groups.refetch();
-              void campaigns.refetch();
-            }}
-          />
-        ) : !groups.data || !campaigns.data ? (
-          <Loading label="Se încarcă filtrele…" />
-        ) : (
-          <WorkFilter
-            groups={[...groups.data.values()]}
-            campaigns={campaigns.data}
-            hint={
-              view === 'month'
-                ? 'Grupul include toate subgrupurile sale. Perioada citește începutul evenimentului și termenul taskului, iar luna afișată este cea a primei zile alese.'
-                : 'Grupul include toate subgrupurile sale. Perioada citește începutul evenimentului; fără perioadă, agenda începe azi.'
-            }
-          />
-        )}
-      </Panel>
+      <WorkFilter
+        label="Filtre calendar"
+        status={{
+          pending: !groups.data || !campaigns.data || !calendarWork.ready,
+          failed: groups.isError || campaigns.isError || calendarWork.failed,
+          error: groups.error ?? campaigns.error ?? calendarWork.error,
+          onRetry: () => {
+            if (groups.isError) void groups.refetch();
+            if (campaigns.isError) void campaigns.refetch();
+            calendarWork.retry();
+          },
+        }}
+        groups={filterGroups}
+        campaigns={campaigns.data ?? []}
+        work={calendarWork.work}
+        hint="Grupul include subgrupurile sale."
+      />
 
       {view === 'month' ? (
         <CalendarMonth
@@ -155,6 +154,8 @@ export default function CalendarScreen() {
           filter={filter}
           groups={groups.data}
           relevanceOf={relevanceOf}
+          showManaged={showManaged}
+          onShowManagedChange={setShowManaged}
         />
       ) : (
         <CalendarAgenda

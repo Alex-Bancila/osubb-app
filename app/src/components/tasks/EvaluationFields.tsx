@@ -1,5 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
+import { cn } from 'cn';
 import { Button } from '../ui/button';
+import { DialogFooter } from '../ui/dialog';
 import { FieldError } from '../ui/field';
 import { evaluationSchema, fieldForReason } from '../../lib/schemas/evaluation';
 import { useFormValidation } from '../../lib/use-form-validation';
@@ -18,6 +20,7 @@ export function EvaluationFields({
   isPending,
   request = false,
   outcome = 'completed',
+  inDialog = false,
 }: {
   executorName: string | null;
   onCancel: () => void;
@@ -31,6 +34,11 @@ export function EvaluationFields({
   request?: boolean;
   /** "unfulfilled" scores an overdue Task as Nerealizat instead of closing it as completed. */
   outcome?: 'completed' | 'unfulfilled';
+  /**
+   * Hosted in a dialog whose header already titles it: no box of its own, no
+   * title, and the buttons in the dialog footer (#842, X11; #855, R1).
+   */
+  inDialog?: boolean;
 }) {
   const id = useId();
   const scale = useEvaluationScale();
@@ -63,16 +71,45 @@ export function EvaluationFields({
       submitting.current = false;
     }
   }
+  const submitButton = (
+    <Button
+      type="submit"
+      className="min-h-11"
+      disabled={isPending || !scale.data}
+    >
+      {isPending
+        ? 'Se salvează…'
+        : request
+          ? 'Aprobă cererea'
+          : 'Confirmă evaluarea'}
+    </Button>
+  );
+  const cancelButton = (label: string) => (
+    <Button
+      type="button"
+      variant="outline"
+      className="min-h-11"
+      disabled={isPending}
+      onClick={onCancel}
+    >
+      {label}
+    </Button>
+  );
   return (
     <form
       onSubmit={submit}
-      className="space-y-4 rounded-lg border border-border p-4"
+      className={cn(
+        'space-y-4',
+        !inDialog && 'rounded-lg border border-border p-4',
+      )}
       aria-label="Evaluare finală"
       noValidate
     >
-      <h3 className="font-semibold">
-        {outcome === 'unfulfilled' ? 'Nerealizat' : 'Evaluare finală'}
-      </h3>
+      {!inDialog && (
+        <h3 className="font-semibold">
+          {outcome === 'unfulfilled' ? 'Nerealizat' : 'Evaluare finală'}
+        </h3>
+      )}
       <p className="text-sm">
         {request ? 'Solicitant' : 'Executor'}: {executorName ?? 'Membrul'}.{' '}
         {request
@@ -156,28 +193,17 @@ export function EvaluationFields({
         <FieldError {...form.errorProps('note')} />
       </fieldset>
       <FieldError>{form.formError}</FieldError>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="submit"
-          className="min-h-11"
-          disabled={isPending || !scale.data}
-        >
-          {isPending
-            ? 'Se salvează…'
-            : request
-              ? 'Aprobă cererea'
-              : 'Confirmă evaluarea'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-11"
-          disabled={isPending}
-          onClick={onCancel}
-        >
-          Înapoi
-        </Button>
-      </div>
+      {inDialog ? (
+        <DialogFooter>
+          {cancelButton('Renunță')}
+          {submitButton}
+        </DialogFooter>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {submitButton}
+          {cancelButton('Înapoi')}
+        </div>
+      )}
     </form>
   );
 }

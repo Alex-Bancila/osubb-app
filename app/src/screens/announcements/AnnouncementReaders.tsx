@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Eye } from 'lucide-react';
+import { SubHeading } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import {
@@ -20,9 +21,6 @@ import {
   type AnnouncementPresentation,
   type AnnouncementReader,
 } from './announcements-presentation';
-
-const sectionHeading =
-  'mb-1 text-[0.7rem] font-semibold tracking-[0.08em] text-muted-foreground uppercase';
 
 /**
  * "Citit de x din y" and the readers list (R15). Rendered only when the server
@@ -66,7 +64,7 @@ export default function AnnouncementReaders({
   const share = summary.read.length / readers.data.length;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-4">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <Eye className="size-4 shrink-0 text-foreground" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1.5">
@@ -128,10 +126,10 @@ function ReaderSection({
   empty?: string;
 }) {
   return (
-    <section aria-label={`${title} (${readers.length})`}>
-      <h3 className={sectionHeading}>
+    <section aria-label={`${title} (${readers.length})`} className="space-y-1">
+      <SubHeading>
         {title} · {readers.length}
-      </h3>
+      </SubHeading>
       {readers.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (

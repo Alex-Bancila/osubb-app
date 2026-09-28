@@ -178,6 +178,10 @@ export const keys = {
       ] as const,
     detail: (eventId: number, memberId: string) =>
       ['events', 'detail', { eventId, memberId }] as const,
+    /* Every readable Event's Group and Campaign, any date: the Calendar's
+       Work Filter offers only those (Rule W, #845). */
+    work: (memberId: string | undefined) =>
+      ['events', 'work', { memberId }] as const,
     rsvp: (eventId: number, memberId: string) =>
       ['events', 'rsvp', { eventId, memberId }] as const,
     /* The Events I answered "Vin" to: an Other OSUBB Event turns to colour. */

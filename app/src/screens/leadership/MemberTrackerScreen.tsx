@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
-import { ListFilter } from 'lucide-react';
 import {
   BackLink,
   EmptyState,
@@ -242,24 +241,19 @@ function MemberHistory({ memberId }: { memberId: string }) {
       <Panel aria-label="Membru">
         <MemberSummary memberId={memberId} />
       </Panel>
-      <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre tracker">
-        {options.isPending ? (
-          <Loading label="Se încarcă filtrele…" />
-        ) : options.isError ? (
-          <ErrorState
-            error={options.error}
-            text="Nu am putut încărca filtrele."
-            retryLabel="Reîncarcă filtrele"
-            onRetry={() => void options.refetch()}
-          />
-        ) : (
-          <WorkFilter
-            groups={options.data.groups}
-            campaigns={options.data.campaigns}
-            hint="Grupul include toate subgrupurile sale. Perioada citește termenul taskului, așa că un task fără termen apare doar când perioada e goală."
-          />
-        )}
-      </Panel>
+      <WorkFilter
+        label="Filtre tracker"
+        status={{
+          pending: options.isPending,
+          failed: options.isError,
+          error: options.error,
+          onRetry: () => void options.refetch(),
+        }}
+        groups={options.data?.groups ?? []}
+        campaigns={options.data?.campaigns ?? []}
+        work={options.data?.work}
+        hint="Grupul include toate subgrupurile sale. Perioada citește termenul taskului, așa că un task fără termen apare doar când perioada e goală."
+      />
       <Panel
         eyebrow="Taskuri"
         title="Atribuiri"

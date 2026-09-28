@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
-import { ListFilter } from 'lucide-react';
 import { Navigate, useLocation } from 'react-router';
-import { EmptyState, Page, PageHeader, Panel } from '../../components/layout';
+import { EmptyState, Page, PageHeader } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { groupOptionLabel } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
@@ -72,17 +71,16 @@ export default function CampaignsScreen() {
           Nu ai grupuri pentru care poți gestiona campanii.
         </EmptyState>
       ) : (
-        <Panel eyebrow="Filtre" icon={ListFilter} aria-label="Filtre campanii">
-          <WorkFilter
-            groups={groups}
-            groupNames={options.data?.groupNames}
-            campaigns={[]}
-            levels={CAMPAIGNS_FILTER_LEVELS}
-            roots="topmost"
-            state={filter}
-            hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
-          />
-        </Panel>
+        <WorkFilter
+          label="Filtre campanii"
+          groups={groups}
+          groupNames={options.data?.groupNames}
+          campaigns={[]}
+          levels={CAMPAIGNS_FILTER_LEVELS}
+          roots="topmost"
+          state={filter}
+          hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
+        />
       )}
       {filter.routeGroupId !== undefined && options.isSuccess && !group && (
         <p role="alert">

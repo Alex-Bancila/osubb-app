@@ -73,18 +73,36 @@ function myGroup(overrides: Partial<MyGroup>): MyGroup {
   };
 }
 
-it('offers exactly the active my_groups() rows the Member is a member of', async () => {
+it('offers the active Groups the Member works for, without the automatic ones but the Organization Group (#855, B31)', async () => {
   resetSupabaseMock();
   supabaseMock.rpc.mockResolvedValue({
     data: [
       myGroup({ id: 4, name: 'Educațional', path: [4] }),
       myGroup({ id: 21, name: 'Echipa Media', path: [4, 21] }),
-      // Automatic Membership of the Group itself counts as membership.
+      // Automatic Membership of the Organization Group: work for OSUBB itself.
+      myGroup({
+        id: 1,
+        name: 'OSUBB',
+        path: [1],
+        explicit: false,
+        automatic: true,
+        is_organization: true,
+      }),
+      // Automatic Membership elsewhere: nobody works "for" the assembly, not
+      // even a Member who also holds a roster row there.
       myGroup({
         id: 6,
         name: 'Adunarea Generală',
         path: [6],
         explicit: false,
+        automatic: true,
+      }),
+      myGroup({
+        id: 7,
+        name: 'Adunarea Generală bis',
+        path: [7],
+        group_role: 'responsible',
+        explicit: true,
         automatic: true,
       }),
       // Reached only through a managed ancestor: authority, not membership.
@@ -104,9 +122,9 @@ it('offers exactly the active my_groups() rows the Member is a member of', async
   expect(supabaseMock.rpc).toHaveBeenCalledWith('my_groups');
   expect(supabaseMock.from).not.toHaveBeenCalled();
   expect(origins).toEqual([
-    { id: 6, name: 'Adunarea Generală', path: [6] },
     { id: 21, name: 'Echipa Media', path: [4, 21] },
     { id: 4, name: 'Educațional', path: [4] },
+    { id: 1, name: 'OSUBB', path: [1] },
   ]);
 });
 

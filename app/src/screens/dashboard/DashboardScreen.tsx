@@ -18,8 +18,8 @@ function capitalised(text: string): string {
  * Headers and boxes on shared rows. Once panels sit side by side, each spans
  * two grid rows — its header, then its box — through a subgrid, so a header
  * that wraps its link or carries a description never pushes its box below
- * the boxes next to it: the boxes in a row start and end together, and every
- * header keeps to the top of its row.
+ * the boxes next to it: the boxes in a row start together, each as tall as
+ * its content (#876), and every header keeps to the top of its row.
  */
 const twoColumnPanel =
   'md:row-span-2 md:grid md:grid-rows-subgrid md:gap-y-0 md:*:first:self-start';
@@ -28,7 +28,8 @@ const threeColumnPanel =
 function twoColumnRows(rows: 1 | 2) {
   return rows === 1
     ? 'md:grid-rows-[auto_1fr]'
-    : 'md:grid-rows-[auto_1fr_auto_1fr]';
+    : // auto, not 1fr: two 1fr rows would both take the taller one's height.
+      'md:grid-rows-[auto_auto_auto_auto]';
 }
 
 /**
