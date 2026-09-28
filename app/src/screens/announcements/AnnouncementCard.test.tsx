@@ -19,9 +19,9 @@ function presentation(
     title: 'Ședință extraordinară BC',
     body: 'Vineri la ora 18:00 în Aula Magna. Prezența obligatorie.',
     groupId: 1,
-    group: { id: 1, name: 'OSUBB', short: 'OSUBB' },
+    group: { id: 1, name: 'OSUBB', short: 'OSUBB', isOrganization: true },
     audience: 'org',
-    audienceLabel: 'Toată organizația',
+    audienceLabel: null,
     author: 'BC',
     authorMember: null,
     priority: 'critical',
@@ -107,23 +107,93 @@ describe('AnnouncementCard', () => {
       />,
     );
 
-    const deptBadge = screen.getByText('EDU');
+    // B34: the Group's name, never its short code.
+    expect(screen.queryByText('EDU')).not.toBeInTheDocument();
+    const deptBadge = screen.getByText('Educațional');
     expect(deptBadge).toBeInTheDocument();
     expect(deptBadge).toHaveStyle({ backgroundColor: '#284C93' });
   });
 
-  it('renders OSUBB for org-wide announcements', () => {
+  it('names the Organization Group "OSUBB" and shows no organization-wide Audience', () => {
     render(
       <AnnouncementCard
         announcement={presentation({
+          group: {
+            id: 5,
+            name: 'Organizația',
+            short: 'ORG',
+            isOrganization: true,
+          },
           audience: 'org',
-          audienceLabel: 'Toată organizația',
+          audienceLabel: null,
         })}
         onOpen={vi.fn()}
       />,
     );
 
     expect(screen.getByText('OSUBB')).toBeInTheDocument();
+    expect(screen.queryByText('ORG')).not.toBeInTheDocument();
+    expect(screen.queryByText('Toată organizația')).not.toBeInTheDocument();
+  });
+
+  it('shows a local Audience by the Group name', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({
+          group: { id: 2, name: 'Educațional', short: 'EDU' },
+          audience: 'local',
+          audienceLabel: 'Doar Educațional',
+        })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Doar Educațional')).toBeInTheDocument();
+  });
+
+  it('shows no priority chip for a Normal Announcement', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({ priority: 'normal' })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Normal')).not.toBeInTheDocument();
+    expect(screen.queryByText('Critic')).not.toBeInTheDocument();
+  });
+
+  it('keeps one meta line before the title, the date under it and one footer row (N1)', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({ category: 'organizatoric' })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    const card = screen.getByRole('article');
+    const title = screen.getByRole('heading', {
+      name: 'Ședință extraordinară BC',
+    });
+    const content = title.parentElement as HTMLElement;
+    // Only the meta line comes before the title, and the date follows it.
+    expect(title.previousElementSibling).toHaveAttribute(
+      'data-slot',
+      'announcement-meta',
+    );
+    expect(title.previousElementSibling?.previousElementSibling).toBeNull();
+    expect(title.nextElementSibling?.tagName).toBe('TIME');
+    expect(
+      content.querySelectorAll('[data-slot=announcement-meta]'),
+    ).toHaveLength(1);
+    // The category stays in the details sheet.
+    expect(screen.queryByText('organizatoric')).not.toBeInTheDocument();
+    const footer = card.querySelector('[data-slot=card-footer]') as HTMLElement;
+    expect(footer).toHaveTextContent('BC');
+    expect(footer).toContainElement(
+      screen.getByRole('button', { name: /Citește/ }),
+    );
+    expect(footer).not.toHaveTextContent('18 septembrie');
   });
 
   it('renders neutral fallback badge when department is unresolved and does not label it OSUBB', () => {
@@ -137,7 +207,7 @@ describe('AnnouncementCard', () => {
       />,
     );
 
-    expect(screen.getByText('GRUP')).toBeInTheDocument();
+    expect(screen.getByText('Grup')).toBeInTheDocument();
     expect(screen.queryByText('OSUBB')).not.toBeInTheDocument();
   });
 

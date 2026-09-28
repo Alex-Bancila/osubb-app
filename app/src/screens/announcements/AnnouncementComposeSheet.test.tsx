@@ -72,6 +72,9 @@ const responsibleRoles = [
   role(child, 'responsible'),
 ];
 
+// Typing a whole draft with user-event takes seconds on a loaded runner.
+vi.setConfig({ testTimeout: 15_000 });
+
 describe('Announcement composer', () => {
   const mutateAsync = vi.fn();
   beforeEach(() => {

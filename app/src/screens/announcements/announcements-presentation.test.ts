@@ -5,8 +5,10 @@ import {
   formatAnnouncementDate,
   getUnreadCriticalAnnouncement,
   mayAskForReaders,
+  originLabel,
   priorityMeta,
   readersSummary,
+  showsPriority,
   sortAnnouncements,
   toAnnouncementPresentation,
   unreadAnnouncementsLabel,
@@ -27,6 +29,21 @@ const groupsById = new Map<number, Group>([
       min_level: 1,
       status: 'active',
       is_organization: false,
+    },
+  ],
+  [
+    5,
+    {
+      id: 5,
+      name: 'Organizația',
+      short: 'ORG',
+      color: '#D0021B',
+      category: 'organization',
+      path: [5],
+      parent_id: null,
+      min_level: 1,
+      status: 'active',
+      is_organization: true,
     },
   ],
   [
@@ -78,9 +95,11 @@ describe('announcements-presentation', () => {
         name: 'Educațional',
         short: 'EDU',
         color: '#284C93',
+        isOrganization: false,
       });
       expect(item.audience).toBe('org');
-      expect(item.audienceLabel).toBe('Toată organizația');
+      // B34: the Origin chip says whose it is; an organization Audience adds nothing.
+      expect(item.audienceLabel).toBeNull();
       expect(item.isRead).toBe(false);
     });
 
@@ -90,7 +109,29 @@ describe('announcements-presentation', () => {
         groupsById,
       );
       expect(item.group.name).toBe('Imagine & PR');
+      // B34: a local Audience names the Group ("Doar Educațional").
+      expect(item.audienceLabel).toBe('Doar Imagine & PR');
+    });
+
+    it('names the Organization Group "OSUBB" and never shows its local Audience', () => {
+      const item = toAnnouncementPresentation(
+        rawRow({ group_id: 5, audience: 'local' }),
+        groupsById,
+      );
+      expect(originLabel(item.group)).toBe('OSUBB');
+      expect(item.audienceLabel).toBeNull();
+      expect(
+        originLabel(toAnnouncementPresentation(rawRow(), groupsById).group),
+      ).toBe('Educațional');
+    });
+
+    it('keeps "Doar grupul" for a local Announcement whose Origin is unresolved', () => {
+      const item = toAnnouncementPresentation(
+        rawRow({ group_id: 99, audience: 'local' }),
+        groupsById,
+      );
       expect(item.audienceLabel).toBe('Doar grupul');
+      expect(originLabel(item.group)).toBe('Grup');
     });
 
     it('uses a neutral Group fallback when its reference row is unavailable', () => {
@@ -142,6 +183,12 @@ describe('announcements-presentation', () => {
       const meta = priorityMeta('normal');
       expect(meta.label).toBe('Normal');
       expect(meta.variant).toBe('outline');
+    });
+
+    it('marks only Important and Critic on the card (B34)', () => {
+      expect(showsPriority('critical')).toBe(true);
+      expect(showsPriority('important')).toBe(true);
+      expect(showsPriority('normal')).toBe(false);
     });
   });
 
