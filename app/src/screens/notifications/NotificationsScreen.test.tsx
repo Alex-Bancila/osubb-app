@@ -10,6 +10,7 @@ const hooks = vi.hoisted(() => ({
   useNotifications: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
   useMarkNotificationRead: vi.fn(),
+  useMarkAllNotificationsRead: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -22,6 +23,7 @@ vi.mock('../../queries/notifications', () => ({
   useNotifications: hooks.useNotifications,
   useUnreadNotificationCount: hooks.useUnreadNotificationCount,
   useMarkNotificationRead: hooks.useMarkNotificationRead,
+  useMarkAllNotificationsRead: hooks.useMarkAllNotificationsRead,
 }));
 
 import NotificationsScreen from './NotificationsScreen';
@@ -50,6 +52,7 @@ function notificationRow(
 }
 
 const markRead = vi.fn();
+const markAllRead = vi.fn();
 
 function feed(
   rows: NotificationRow[],
@@ -86,6 +89,11 @@ describe('NotificationsScreen', () => {
     hooks.useMarkNotificationRead.mockReturnValue({
       mutate: markRead,
       isPending: false,
+    });
+    hooks.useMarkAllNotificationsRead.mockReturnValue({
+      mutate: markAllRead,
+      isPending: false,
+      isError: false,
     });
     hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
     hooks.useNotifications.mockReturnValue(feed([]));
@@ -199,18 +207,109 @@ describe('NotificationsScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('has no "Marchează tot ca citit" control (#695)', () => {
-    hooks.useUnreadNotificationCount.mockReturnValue({ data: 2 });
+  describe('Marchează toate ca citite (#858)', () => {
+    it('marks every unread notification read with one click', async () => {
+      const user = userEvent.setup();
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: 2 });
+      hooks.useNotifications.mockReturnValue(
+        feed([notificationRow({ id: 2 }), notificationRow({ id: 1 })]),
+      );
+
+      renderScreen();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+      );
+
+      expect(markAllRead).toHaveBeenCalledTimes(1);
+      // The bulk write replaces the per-row one: nothing is opened.
+      expect(markRead).not.toHaveBeenCalled();
+    });
+
+    it('is not offered when everything is read, and the header says so (B35)', () => {
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+      hooks.useNotifications.mockReturnValue(
+        feed([notificationRow({ id: 1, read: true })]),
+      );
+
+      renderScreen();
+
+      expect(
+        screen.queryByRole('button', { name: 'Marchează toate ca citite' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Toate notificările sunt citite'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Necitite: 0')).not.toBeInTheDocument();
+    });
+
+    it('cannot be sent twice while the first write is on its way', () => {
+      hooks.useMarkAllNotificationsRead.mockReturnValue({
+        mutate: markAllRead,
+        isPending: true,
+        isError: false,
+      });
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: 1 });
+      hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
+
+      renderScreen();
+
+      expect(
+        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+      ).toBeDisabled();
+    });
+
+    it('says so when the write is refused', () => {
+      hooks.useMarkAllNotificationsRead.mockReturnValue({
+        mutate: markAllRead,
+        isPending: false,
+        isError: true,
+      });
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: 1 });
+      hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
+
+      renderScreen();
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Nu am putut marca notificările ca citite.',
+      );
+    });
+  });
+
+  it('labels Group membership notifications "Grupuri" (B37)', () => {
     hooks.useNotifications.mockReturnValue(
-      feed([notificationRow({ id: 2 }), notificationRow({ id: 1 })]),
+      feed([
+        notificationRow({
+          kind: 'system',
+          title: 'Ai fost adăugat în Echipa Logistică',
+          body: null,
+          link: '/grupuri/4',
+          task_id: null,
+        }),
+      ]),
     );
 
     renderScreen();
 
+    expect(screen.getByText('Grupuri')).toBeInTheDocument();
+    expect(screen.queryByText('Sistem')).not.toBeInTheDocument();
+  });
+
+  it('runs the rows to the box frame, with the focus ring drawn inside (O1)', () => {
+    hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
+
+    const { container } = renderScreen();
+
+    const box = container.querySelector('[data-slot="panel-box"]');
+    expect(box).toHaveAttribute('data-flush', 'true');
+    expect(box).toHaveClass('p-0', 'overflow-hidden');
+    expect(screen.getByRole('list')).not.toHaveClass('-mx-3');
     expect(
-      screen.queryByRole('button', { name: 'Marchează tot ca citit' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('Necitite: 2')).toBeInTheDocument();
+      screen.getByRole('button', { name: /Task nou: Afiș pentru AGO/ }),
+    ).toHaveClass(
+      'focus-visible:after:outline-solid',
+      'focus-visible:after:outline-offset-[-2px]',
+    );
   });
 
   it('pages through older notifications on request', async () => {

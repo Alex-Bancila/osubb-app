@@ -1,10 +1,11 @@
+import { CheckCheck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import {
   ListRow,
   Page,
   PageHeader,
-  panelBoxClass,
+  Panel,
   rowListClass,
 } from '../../components/layout';
 import { Badge } from '../../components/ui/badge';
@@ -12,6 +13,7 @@ import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
 import { cn } from '../../lib/utils';
 import {
+  useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
   useUnreadNotificationCount,
@@ -33,7 +35,7 @@ function NotificationListItem({
   return (
     <ListRow
       className={cn(
-        'relative rounded-sm has-[button:hover]:bg-muted',
+        'relative has-[button:hover]:bg-muted',
         !notification.isRead && 'bg-accent/40',
       )}
       leading={
@@ -46,11 +48,12 @@ function NotificationListItem({
       }
     >
       {/* The whole row opens the notification: the button's ::after covers
-          it, and carries the focus ring. */}
+          it, and carries the focus ring — drawn inside, because the rows run
+          to the box's frame (O1) and the box clips anything outside it. */}
       <button
         type="button"
         onClick={() => onOpen(notification)}
-        className="block w-full text-left outline-none after:absolute after:inset-0 after:rounded-sm focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
+        className="block w-full text-left outline-none after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-solid focus-visible:after:outline-ring"
       >
         <span className="flex flex-wrap items-center gap-2">
           <Badge variant={notification.critical ? 'destructive' : 'outline'}>
@@ -101,6 +104,7 @@ export default function NotificationsScreen() {
   const feed = useNotifications(memberId);
   const unread = useUnreadNotificationCount(memberId);
   const markRead = useMarkNotificationRead(memberId);
+  const markAllRead = useMarkAllNotificationsRead(memberId);
 
   const notifications = (feed.data?.pages ?? [])
     .flatMap((page) => page.rows)
@@ -119,7 +123,33 @@ export default function NotificationsScreen() {
 
   return (
     <Page width="reading">
-      <PageHeader title="Notificări" description={`Necitite: ${unreadCount}`} />
+      {/* B35: no "Necitite: 0" — a zero says it in words, as Anunțuri does,
+          and the button that would do nothing is not offered. */}
+      <PageHeader
+        title="Notificări"
+        description={
+          unreadCount > 0
+            ? `Necitite: ${unreadCount}`
+            : 'Toate notificările sunt citite'
+        }
+        actions={
+          unreadCount > 0 && (
+            <Button
+              variant="outline"
+              disabled={markAllRead.isPending}
+              onClick={() => markAllRead.mutate()}
+            >
+              <CheckCheck aria-hidden="true" />
+              Marchează toate ca citite
+            </Button>
+          )
+        }
+      />
+      {markAllRead.isError && (
+        <p role="alert" className="m-0 text-sm text-destructive">
+          Nu am putut marca notificările ca citite. Încearcă din nou.
+        </p>
+      )}
 
       {feed.isPending ? (
         <Loading label="Se încarcă notificările…" />
@@ -133,11 +163,14 @@ export default function NotificationsScreen() {
         <Empty bare text="Nu ai nicio notificare deocamdată." />
       ) : (
         <>
-          <div className={panelBoxClass}>
-            <ul
-              className={cn(rowListClass, '-mx-3 -my-2')}
-              aria-label="Lista de notificări"
-            >
+          {/* O1: a flush box — the rows carry the padding, so the unread tint
+              runs to the frame; the box clips it to its rounded corners. */}
+          <Panel
+            flush
+            aria-label="Notificările tale"
+            boxClassName="overflow-hidden"
+          >
+            <ul className={rowListClass} aria-label="Lista de notificări">
               {notifications.map((notification) => (
                 <NotificationListItem
                   key={notification.id}
@@ -146,7 +179,7 @@ export default function NotificationsScreen() {
                 />
               ))}
             </ul>
-          </div>
+          </Panel>
 
           {feed.hasNextPage && (
             <div className="flex justify-center">
