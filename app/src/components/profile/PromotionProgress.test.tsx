@@ -61,11 +61,11 @@ const LEVELS: Record<string, number> = {
 /** Joined 25 March 2026; both rules demand 6 months, so tenure is 25 September 2026. */
 function progress(overrides: Partial<Progress> = {}): Progress {
   return {
-    openPeriod: { id: 7, name: 'Semestrul I 2026–2027' },
+    since: '2026-07-01',
     voluntarTenureMonths: 6,
     activTenureMonths: 6,
     threshold: 30,
-    periodPoints: 12,
+    points: 12,
     ...overrides,
   };
 }
@@ -123,8 +123,8 @@ describe('PromotionProgress (#634)', () => {
       ).toBeInTheDocument();
     });
 
-    it('keeps the tenure line when no Period is open', () => {
-      setup('recrut', progress({ openPeriod: null, periodPoints: null }));
+    it('keeps the tenure line when no threshold is in force', () => {
+      setup('recrut', progress({ threshold: null }));
 
       expect(
         screen.getByText('Devii Voluntar din 25 septembrie 2026'),
@@ -154,6 +154,7 @@ describe('PromotionProgress (#634)', () => {
       expect(bar).toHaveAttribute('aria-valuemax', '30');
       expect(bar).toHaveAttribute('aria-valuenow', '12');
       expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 de puncte');
+      expect(screen.getByText('de la 1 iulie 2026')).toBeInTheDocument();
       expect(
         screen.getByText('Mai ai 18 puncte până la Voluntar Activ'),
       ).toBeInTheDocument();
@@ -163,50 +164,56 @@ describe('PromotionProgress (#634)', () => {
     });
 
     it('one point short says "1 punct"', () => {
-      setup('voluntar', progress({ periodPoints: 29 }));
+      setup('voluntar', progress({ points: 29 }));
 
       expect(
         screen.getByText('Mai ai 1 punct până la Voluntar Activ'),
       ).toBeInTheDocument();
     });
 
-    it('exactly at the threshold: past it, the role follows automatically', () => {
-      setup('voluntar', progress({ periodPoints: 30 }));
+    it('exactly at the threshold: past it, BC decides at the next evaluation', () => {
+      setup('voluntar', progress({ points: 30 }));
 
       expect(screen.getByRole('progressbar')).toHaveAttribute(
         'aria-valuenow',
         '30',
       );
       expect(
-        screen.getByText('Ai depășit pragul — rolul se acordă automat'),
+        screen.getByText(
+          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+        ),
       ).toBeInTheDocument();
       expect(screen.queryByText(/mai ai/i)).not.toBeInTheDocument();
     });
 
     it('above the threshold the bar stays full', () => {
-      setup('voluntar', progress({ periodPoints: 45 }));
+      setup('voluntar', progress({ points: 45 }));
 
       expect(screen.getByRole('progressbar')).toHaveAttribute(
         'aria-valuenow',
         '30',
       );
       expect(
-        screen.getByText('Ai depășit pragul — rolul se acordă automat'),
+        screen.getByText(
+          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+        ),
       ).toBeInTheDocument();
     });
 
     it('a threshold of 0 or below makes the bar full or empty, never NaN', () => {
-      setup('voluntar', progress({ threshold: 0, periodPoints: 0 }));
+      setup('voluntar', progress({ threshold: 0, points: 0 }));
 
       const full = screen.getByRole('progressbar');
       expect(full).toHaveAttribute('aria-valuemax', '1');
       expect(full).toHaveAttribute('aria-valuenow', '1');
       expect(
-        screen.getByText('Ai depășit pragul — rolul se acordă automat'),
+        screen.getByText(
+          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+        ),
       ).toBeInTheDocument();
       cleanup();
 
-      setup('voluntar', progress({ threshold: -2, periodPoints: -5 }));
+      setup('voluntar', progress({ threshold: -2, points: -5 }));
 
       const empty = screen.getByRole('progressbar');
       expect(empty).toHaveAttribute('aria-valuemax', '1');
@@ -217,15 +224,15 @@ describe('PromotionProgress (#634)', () => {
     });
 
     it('twenty or more points take "de"', () => {
-      setup('voluntar', progress({ threshold: 40, periodPoints: 5 }));
+      setup('voluntar', progress({ threshold: 40, points: 5 }));
 
       expect(
         screen.getByText('Mai ai 35 de puncte până la Voluntar Activ'),
       ).toBeInTheDocument();
     });
 
-    it('no open Period: the tenure line only, the bar hidden', () => {
-      setup('voluntar', progress({ openPeriod: null, periodPoints: null }));
+    it('no threshold in force: the tenure line only, nothing about the threshold', () => {
+      setup('voluntar', progress({ threshold: null }));
 
       expect(
         screen.getByText('Poți deveni Voluntar Activ din 25 septembrie 2026'),
@@ -248,25 +255,29 @@ describe('PromotionProgress (#634)', () => {
     ['activ', 'Voluntar Activ'],
     ['vot', 'Voluntar cu Drept de Vot'],
   ])('%s', (role) => {
-    it('shows Period points beside the semester threshold, no bar', () => {
+    it('shows points since the last Role Evaluation beside the threshold, no bar', () => {
       setup(role);
 
       expect(screen.getByText('12')).toBeInTheDocument();
+      expect(screen.getByText('puncte de la 1 iulie 2026')).toBeInTheDocument();
       expect(
-        screen.getByText('puncte în Semestrul I 2026–2027'),
+        screen.getByText('Pragul în vigoare: 30 de puncte'),
       ).toBeInTheDocument();
       expect(
-        screen.getByText('Pragul semestrului: 30 de puncte'),
+        screen.getByRole('heading', { name: 'Punctaj de la ultima evaluare' }),
       ).toBeInTheDocument();
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(screen.queryByText(/mai ai|depășit/i)).not.toBeInTheDocument();
     });
 
-    it('no open Period: nothing to show', () => {
-      const { container } = setup(
-        role,
-        progress({ openPeriod: null, periodPoints: null }),
-      );
+    it('before any Role Evaluation the points are counted in total', () => {
+      setup(role, progress({ since: null }));
+
+      expect(screen.getByText('puncte în total')).toBeInTheDocument();
+    });
+
+    it('no threshold in force: nothing to show', () => {
+      const { container } = setup(role, progress({ threshold: null }));
 
       expect(container).toBeEmptyDOMElement();
     });
