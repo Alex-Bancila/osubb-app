@@ -9,19 +9,16 @@ vi.mock('../lib/supabase', async () => {
   return { supabase: supabaseClientMock };
 });
 
-import { QueryClient } from '@tanstack/react-query';
-
 import {
   fetchNotificationsPage,
   fetchUnreadNotificationCount,
-  markAllNotificationsRead,
-  markAllNotificationsReadMutationOptions,
   markNotificationRead,
   notificationsQueryOptions,
   unreadNotificationCountQueryOptions,
   type NotificationRow,
 } from './notifications';
 import { keys } from './keys';
+import * as notificationsModule from './notifications';
 
 const MEMBER = '11111111-1111-4111-8111-111111111111';
 
@@ -173,63 +170,12 @@ describe('notifications query layer', () => {
     });
   });
 
-  describe('markAllNotificationsRead (#858)', () => {
-    it('sends one update: the read marker, on the caller’s own unread rows', async () => {
-      supabaseMock.eq
-        .mockReturnValueOnce(supabaseMock)
-        .mockResolvedValueOnce({ error: null });
-
-      await markAllNotificationsRead(MEMBER);
-
-      expect(supabaseMock.from).toHaveBeenCalledTimes(1);
-      expect(supabaseMock.from).toHaveBeenCalledWith('notifications');
-      expect(supabaseMock.update).toHaveBeenCalledTimes(1);
-      expect(supabaseMock.update).toHaveBeenCalledWith({ read: true });
-      expect(supabaseMock.eq).toHaveBeenNthCalledWith(1, 'member_id', MEMBER);
-      expect(supabaseMock.eq).toHaveBeenNthCalledWith(2, 'read', false);
-    });
-
-    it('throws when the update is refused', async () => {
-      supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockResolvedValueOnce({
-        error: { code: '42501', message: 'permission denied' },
-      });
-
-      await expect(markAllNotificationsRead(MEMBER)).rejects.toEqual({
-        code: '42501',
-        message: 'permission denied',
-      });
-    });
-
-    it('refreshes the list and the bell badge on success', async () => {
-      supabaseMock.eq
-        .mockReturnValueOnce(supabaseMock)
-        .mockResolvedValueOnce({ error: null });
-      const queryClient = new QueryClient();
-      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-      const options = markAllNotificationsReadMutationOptions(
-        queryClient,
-        MEMBER,
-      );
-
-      await options.mutationFn();
-      await options.onSuccess();
-
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: keys.notifications.list(MEMBER),
-      });
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: keys.notifications.unread(MEMBER),
-      });
-    });
-
-    it('refuses without a signed-in member, before any request', () => {
-      const options = markAllNotificationsReadMutationOptions(
-        new QueryClient(),
-      );
-
-      expect(() => options.mutationFn()).toThrow('Not authenticated');
-      expect(supabaseMock.from).not.toHaveBeenCalled();
-    });
+  it('exports no bulk mark-all-read mutation (R16, #695, #886)', () => {
+    expect('markAllNotificationsRead' in notificationsModule).toBe(false);
+    expect(
+      'markAllNotificationsReadMutationOptions' in notificationsModule,
+    ).toBe(false);
+    expect('useMarkAllNotificationsRead' in notificationsModule).toBe(false);
   });
 
   describe('query options', () => {
