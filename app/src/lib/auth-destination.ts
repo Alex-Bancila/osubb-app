@@ -1,18 +1,37 @@
+import { matchPath } from 'react-router';
 import { sameOriginPath } from './links';
 
-/** Only application routes may survive the trip through an email link. */
-const memberRoutes = new Set([
+/**
+ * Only application routes may survive the trip through an email link, and
+ * every one of them does, sub-pages included (#844): a Group, a member's
+ * history, an Administrare tab or page. They are React Router patterns, so a
+ * route and its allow-list entry read the same. Whether the Member may open
+ * the page is still the capability guard's decision after sign-in.
+ */
+const memberRoutes = [
   '/',
   '/tracker',
+  // Task links sent before #843 (`/tracker/<id>`); App.tsx forwards them.
+  '/tracker/:taskId',
+  '/tracker/membru/:id',
   '/calendar',
+  '/grupuri',
+  '/grupuri/:groupId',
   '/cereri',
   '/anunturi',
   // #775: the Email Digest's "Deschide notificările" button survives the login.
   '/notificari',
   '/voluntari',
+  '/clasament',
   '/profil',
-  '/administrare',
-]);
+  '/administrare/*',
+] as const;
+
+function isMemberRoute(pathname: string): boolean {
+  return memberRoutes.some(
+    (pattern) => matchPath({ path: pattern, end: true }, pathname) !== null,
+  );
+}
 
 /**
  * A `next` or `redirect_to` destination: a same-origin path (the shared rule,
@@ -24,7 +43,7 @@ export function safeAuthDestination(value: string | null): string {
   if (!value || value !== value.trim()) return '/';
   const path = sameOriginPath(value, 'https://app.invalid');
   const { pathname } = new URL(path, 'https://app.invalid');
-  return memberRoutes.has(pathname) ? path : '/';
+  return isMemberRoute(pathname) ? path : '/';
 }
 
 export function authDestination(): string {

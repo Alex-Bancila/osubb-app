@@ -233,10 +233,18 @@ export default function AuthConfirm() {
       <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
         Conectare la aplicația OSUBB
       </h1>
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        Apasă butonul ca să intri în aplicație pe acest dispozitiv. Linkul se
-        folosește o singură dată.
-      </p>
+      {/* The error takes the instruction's place (#844, layout S1): one
+          sentence says what happened, and the button under it is the way on. */}
+      {status.kind === 'error' ? (
+        <p className="text-sm leading-relaxed text-destructive" role="alert">
+          {status.message}
+        </p>
+      ) : (
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Apasă butonul ca să intri în aplicație pe acest dispozitiv. Linkul se
+          folosește o singură dată.
+        </p>
+      )}
 
       {link && (
         <Button
@@ -256,18 +264,13 @@ export default function AuthConfirm() {
       )}
 
       {status.kind === 'error' && (
-        <>
-          <p className="text-sm text-destructive" role="alert">
-            {status.message}
-          </p>
-          <Link
-            className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}
-            to={loginDestination(destination)}
-            state={handoff}
-          >
-            Trimite alt link
-          </Link>
-        </>
+        <Link
+          className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}
+          to={loginDestination(destination)}
+          state={handoff}
+        >
+          Trimite alt link
+        </Link>
       )}
     </SessionScreen>
   );

@@ -34,6 +34,45 @@ describe('safe authentication destinations', () => {
     expect(safeAuthDestination(callback.searchParams.get('next'))).toBe(next);
     window.history.replaceState({}, '', '/');
   });
+  it.each([
+    '/',
+    '/tracker',
+    '/tracker?task=11',
+    '/tracker/11',
+    '/tracker/membru/35400000-0000-0000-0000-000000000001',
+    '/calendar?event=4',
+    '/grupuri',
+    '/grupuri/1',
+    '/cereri',
+    '/anunturi',
+    '/notificari',
+    '/voluntari',
+    '/clasament',
+    '/clasament?vedere=cupa',
+    '/profil',
+    '/administrare',
+    '/administrare/membri',
+    '/administrare/membri/35400000-0000-0000-0000-000000000001',
+    '/administrare/grupuri/3',
+    '/administrare/grupuri/3/campanii?grup=3#lista',
+    '/administrare/evaluari',
+    '/administrare/campanii',
+  ])(
+    'keeps every member route through sign-in, sub-pages included: %s (#844)',
+    (path) => {
+      expect(safeAuthDestination(path)).toBe(path);
+    },
+  );
+  it.each([
+    '/grupuri/1/altceva',
+    '/tracker/11/altceva',
+    '/clasamente',
+    '/confidentialitate',
+    'https://evil.example/grupuri/1',
+    '//evil.example/administrare/grupuri/3',
+  ])('refuses a path outside the member routes: %s (#844)', (value) => {
+    expect(safeAuthDestination(value)).toBe('/');
+  });
   it('lets the Email Digest land on the notification list and the Profil switch (#775)', () => {
     expect(safeAuthDestination('/notificari')).toBe('/notificari');
     expect(safeAuthDestination('/profil#rezumat-email')).toBe(
