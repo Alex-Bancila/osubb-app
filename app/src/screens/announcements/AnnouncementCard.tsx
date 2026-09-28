@@ -77,12 +77,12 @@ export default function AnnouncementCard({
       </CardContent>
 
       <CardFooter className="justify-between gap-3 py-3 text-xs text-muted-foreground">
-        <div className="-my-1.5 flex min-w-0 items-center">
+        <div className="flex min-w-0 items-center pointer-coarse:-my-1.5">
           {announcement.authorMember ? (
             <MemberName
               {...announcement.authorMember}
               size="sm"
-              className="min-h-11 text-xs text-foreground"
+              className="text-xs text-foreground"
             />
           ) : (
             announcement.author && (
