@@ -61,24 +61,18 @@ vi.mock('./NewEventControl', () => ({
   NewEventControl: ({
     onCreated,
   }: {
-    onCreated?: (event: {
-      id: number;
-      title: string;
-      startsAt: string;
-    }) => void;
+    onCreated?: (eventId: number) => void;
   }) => (
-    <button
-      type="button"
-      onClick={() =>
-        onCreated?.({
-          id: 9,
-          title: 'Ședință de septembrie',
-          startsAt: '2026-10-15T15:00:00.000Z',
-        })
-      }
-    >
+    <button type="button" onClick={() => onCreated?.(9)}>
       Eveniment nou
     </button>
+  ),
+}));
+// Who may manage an Event is EventManageControls' own suite; here a card only
+// has to ask for it.
+vi.mock('./EventManageControls', () => ({
+  EventManageControls: ({ event: shown }: { event: EventPresentation }) => (
+    <span data-testid={`manage-${shown.id}`} />
   ),
 }));
 
@@ -178,6 +172,10 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     location: 'Sala 305',
     capacity: 30,
     description: 'Planificarea activităților lunii.',
+    minLevel: 0,
+    createdBy: null,
+    cancelledAt: null,
+    cancelReason: null,
     ...overrides,
   };
 }
@@ -449,6 +447,39 @@ describe('CalendarScreen', () => {
       ).not.toBeInTheDocument();
     });
 
+    // #849: a cancelled Event stays as history — the badge, its reason, and
+    // no RSVP, even though it has not started yet.
+    it('shows a cancelled Event as Anulat with its reason and no RSVP', () => {
+      setEvents([
+        event({
+          title: 'Ședință anulată',
+          cancelledAt: '2026-10-19T10:00:00.000Z',
+          cancelReason: 'Sala nu mai este disponibilă.',
+        }),
+      ]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', { name: 'Ședință anulată' });
+      expect(within(card).getByText('Anulat')).toBeInTheDocument();
+      expect(
+        within(card).getByText('Sala nu mai este disponibilă.'),
+      ).toBeInTheDocument();
+      expect(within(card).queryByText('Participi?')).not.toBeInTheDocument();
+      expect(
+        within(card).queryByRole('button', { name: 'Particip' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('asks each Agendă card for its manage controls', () => {
+      setEvents([event({ id: 9, title: 'Ședință de gestionat' })]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', {
+        name: 'Ședință de gestionat',
+      });
+      expect(within(card).getByTestId('manage-9')).toBeInTheDocument();
+    });
+
     // Mutation this catches: delete the ancestor walk in groupAccentColor and
     // a Department Team's card goes flat grey; stop passing the Groups into
     // EventCard and it loses its Department's name.
@@ -594,8 +625,9 @@ describe('CalendarScreen', () => {
       expect(storage.setItem).not.toHaveBeenCalled();
     });
 
-    /* Audit D-11: a created Event confirms itself and comes into view. */
-    it('confirms a new Event and opens the Agendă on it', async () => {
+    /* Audit D-11: a created Event comes into view (its card carries the
+       receipt, NewEventControl's suite). */
+    it('opens the Agendă on a newly created Event', async () => {
       stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
       const user = userEvent.setup();
       renderCalendar();
@@ -604,9 +636,6 @@ describe('CalendarScreen', () => {
       setEvents([pastEvent]);
       await user.click(screen.getByRole('button', { name: 'Eveniment nou' }));
 
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'Evenimentul „Ședință de septembrie” a fost creat: joi, 15 octombrie 2026, ora 18:00.',
-      );
       expect(hooks.useEvent).toHaveBeenLastCalledWith(9);
       expect(screen.getByRole('button', { name: 'Agendă' })).toHaveAttribute(
         'aria-pressed',

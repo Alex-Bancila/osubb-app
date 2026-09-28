@@ -240,6 +240,7 @@ export function CalendarMonth({
                           groups,
                         ),
                         other: relevanceOf(event) === 'other',
+                        cancelled: event.cancelledAt !== null,
                       })),
                       ...(items?.tasks ?? []).map((task) => ({
                         key: `t${task.id}`,
@@ -247,6 +248,7 @@ export function CalendarMonth({
                         title: task.title,
                         color: task.color,
                         other: false,
+                        cancelled: false,
                       })),
                     ];
                     const overflow = chips.length - CHIPS_PER_DAY;
@@ -276,6 +278,7 @@ export function CalendarMonth({
                                   'calendar-chip',
                                   chip.kind === 'task' && 'is-task',
                                   chip.other && 'is-other',
+                                  chip.cancelled && 'is-cancelled',
                                 )}
                                 style={
                                   {
@@ -372,6 +375,7 @@ export function CalendarMonth({
                           groups={groups}
                           relevance={relevanceOf(event)}
                           past={Date.parse(event.startsAt) < now}
+                          manageable
                         />
                       </li>
                     ))}

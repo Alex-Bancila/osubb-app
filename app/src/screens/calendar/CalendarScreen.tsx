@@ -9,11 +9,7 @@ import {
   type SegmentedOption,
 } from '../../components/layout';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
-import {
-  bucharestDayKey,
-  formatBucharestDay,
-  formatBucharestTime,
-} from '../../lib/calendar-time';
+import { bucharestDayKey } from '../../lib/calendar-time';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { useCampaigns } from '../../queries/campaigns';
 import { useGoingEventIds } from '../../queries/event-rsvp';
@@ -31,7 +27,8 @@ import {
   type EventRelevance,
 } from './calendar-presentation';
 import { useCalendarView, type CalendarView } from './calendar-view';
-import { NewEventControl, type CreatedEvent } from './NewEventControl';
+import { clearEventReceipts } from './event-receipts';
+import { NewEventControl } from './NewEventControl';
 
 const VIEWS: ReadonlyArray<SegmentedOption<CalendarView>> = [
   { value: 'month', label: 'Lună', icon: CalendarDays },
@@ -58,6 +55,8 @@ export default function CalendarScreen() {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  // An edit or cancel receipt belongs to this visit (#849).
+  useEffect(() => clearEventReceipts, []);
   const todayKey = bucharestDayKey(new Date(now)) ?? '';
 
   const groups = useGroups();
@@ -83,14 +82,12 @@ export default function CalendarScreen() {
     [relevant, goingIds],
   );
 
-  // The receipt of a new Event (Audit D-11); the Agendă opens on it.
-  const [created, setCreated] = useState<CreatedEvent | null>(null);
-  function showCreated(event: CreatedEvent) {
-    setCreated(event);
+  // A new Event: the Agendă opens on its card, its receipt on it (D-11).
+  function showCreated(eventId: number) {
     setParams(
       (current) => {
         const nextParams = new URLSearchParams(current);
-        nextParams.set('event', String(event.id));
+        nextParams.set('event', String(eventId));
         return nextParams;
       },
       { replace: true },
@@ -98,7 +95,6 @@ export default function CalendarScreen() {
   }
 
   function chooseView(next: CalendarView) {
-    setCreated(null);
     storeView(next);
     if (linkedId !== null)
       setParams(
@@ -142,14 +138,6 @@ export default function CalendarScreen() {
           </>
         }
       />
-
-      {created && (
-        <p role="status" className="m-0 -mt-3 text-sm">
-          Evenimentul „{created.title}” a fost creat:{' '}
-          {formatBucharestDay(created.startsAt)}, ora{' '}
-          {formatBucharestTime(created.startsAt)}.
-        </p>
-      )}
 
       <WorkFilter
         label="Filtre calendar"

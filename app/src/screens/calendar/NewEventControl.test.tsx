@@ -1,5 +1,11 @@
 import * as axe from 'axe-core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +27,7 @@ vi.mock('../../queries/event-creation', () => ({
 vi.mock('../../lib/auth', () => ({ useAuth: state.auth }));
 
 import { NewEventControl } from './NewEventControl';
+import { clearEventReceipts, useEventReceipt } from './event-receipts';
 
 const formOptions = {
   groups: [
@@ -304,7 +311,8 @@ describe('NewEventControl', () => {
   });
 });
 
-/* Audit D-11: the Calendar learns what was created, to confirm and show it. */
+/* Audit D-11: the new card confirms the create, as #849's edit and cancel
+   receipts do, and the Calendar learns which Event to show. */
 describe('NewEventControl receipt', () => {
   beforeEach(() => {
     state.options.mockReturnValue({ data: formOptions });
@@ -319,7 +327,7 @@ describe('NewEventControl receipt', () => {
     state.mutateAsync.mockReset();
   });
 
-  it('hands the created Event to the Calendar', async () => {
+  it('leaves a receipt on the new card and hands its id to the Calendar', async () => {
     state.mutateAsync.mockResolvedValue({
       id: 44,
       title: 'Ședință de toamnă',
@@ -334,12 +342,9 @@ describe('NewEventControl receipt', () => {
       screen.getByRole('button', { name: 'Creează evenimentul' }),
     );
 
-    await waitFor(() =>
-      expect(onCreated).toHaveBeenCalledWith({
-        id: 44,
-        title: 'Ședință de toamnă',
-        startsAt: '2030-10-01T15:00:00+00:00',
-      }),
-    );
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(44));
+    const receipt = renderHook(() => useEventReceipt(44));
+    expect(receipt.result.current).toBe('Evenimentul a fost creat.');
+    clearEventReceipts();
   });
 });
