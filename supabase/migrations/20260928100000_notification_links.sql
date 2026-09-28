@@ -1390,23 +1390,32 @@ update public.notifications
         or (dedupe_key is null and title like 'Cerere respinsă: %'));
 
 -- D14: an Announcement's Notification is written in the insert's own
--- transaction, so its created_at is the Announcement's published_at default;
--- the latest Announcement with that title published by then is the one.
+-- transaction, so its created_at is the Announcement's published_at default.
+-- A row is linked only when the match is unambiguous: the one Announcement
+-- with that title published at exactly that instant, else the one Announcement
+-- with that title published by then. Anything else keeps the feed link rather
+-- than risk opening the wrong Announcement.
 update public.notifications as notification
-   set link = '/anunturi?anunt=' || (
-         select announcement.id
-           from public.announcements as announcement
-          where left('Anunț nou: ' || announcement.title, 200) = notification.title
-            and announcement.published_at <= notification.created_at
-          order by announcement.published_at desc, announcement.id desc
-          limit 1)::text
- where notification.kind = 'announce'
-   and notification.link = '/anunturi'
-   and exists (
-         select 1
-           from public.announcements as announcement
-          where left('Anunț nou: ' || announcement.title, 200) = notification.title
-            and announcement.published_at <= notification.created_at);
+   set link = '/anunturi?anunt=' || matched.announcement_id::text
+  from (
+    select candidate.id as notification_id,
+           coalesce(
+             (select min(announcement.id)
+                from public.announcements as announcement
+               where left('Anunț nou: ' || announcement.title, 200) = candidate.title
+                 and announcement.published_at = candidate.created_at
+              having count(*) = 1),
+             (select min(announcement.id)
+                from public.announcements as announcement
+               where left('Anunț nou: ' || announcement.title, 200) = candidate.title
+                 and announcement.published_at <= candidate.created_at
+              having count(*) = 1)) as announcement_id
+      from public.notifications as candidate
+     where candidate.kind = 'announce'
+       and candidate.link = '/anunturi'
+  ) as matched
+ where notification.id = matched.notification_id
+   and matched.announcement_id is not null;
 
 -- D23: applications declined by an archive, and removals from a Private Group
 -- the Member no longer sees.

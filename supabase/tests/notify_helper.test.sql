@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(72);
+select plan(74);
 
 -- ==================== Definition and privileges ====================
 select is(
@@ -615,6 +615,14 @@ alter table public.announcements disable trigger announcements_fan_out;
 insert into public.announcements (title, body, author, priority, category, published_at, created_by, group_id, audience)
 values ('NH anunț #843', 'Corp #843', 'BC', 'normal', 'organizatoric', now() - interval '1 hour',
         '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org');
+-- Two Announcements sharing a title: a Notification written at one's
+-- published_at is that one's; a Notification matching neither instant is
+-- ambiguous and keeps the feed link.
+insert into public.announcements (title, body, author, priority, category, published_at, created_by, group_id, audience)
+values ('NH dublu #843', 'Corp A', 'BC', 'normal', 'organizatoric', now() - interval '3 hours',
+        '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org'),
+       ('NH dublu #843', 'Corp B', 'BC', 'normal', 'organizatoric', now() - interval '2 hours',
+        '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org');
 alter table public.announcements enable trigger announcements_fan_out;
 
 insert into public.notifications (member_id, kind, title, body, link, dedupe_key, created_at) values
@@ -631,6 +639,9 @@ insert into public.notifications (member_id, kind, title, body, link, dedupe_key
   ('32000000-0000-0000-0000-000000000602', 'system',   'Ai fost adăugat în Echipa BF843', 'Faci parte din grupul Echipa BF843.', '/grupuri/8438', null, now()),
   ('32000000-0000-0000-0000-000000000602', 'announce', 'Anunț nou: NH anunț #843', 'Corp #843', '/anunturi', null,
    (select published_at from public.announcements where title = 'NH anunț #843')),
+  ('32000000-0000-0000-0000-000000000602', 'announce', 'Anunț nou: NH dublu #843', 'Corp A', '/anunturi', null,
+   (select published_at from public.announcements where title = 'NH dublu #843' and body = 'Corp A')),
+  ('32000000-0000-0000-0000-000000000602', 'announce', 'Anunț nou: NH dublu #843', 'Corp ?', '/anunturi', null, now()),
   ('32000000-0000-0000-0000-000000000602', 'system',   'Nu mai faci parte din Grup privat BF843', null,
    '/grupuri/' || (select id from public.groups where is_private order by id limit 1)::text, null, now()),
   ('32000000-0000-0000-0000-000000000602', 'system',   'Nu mai faci parte din Grup public BF843', null,
@@ -675,6 +686,16 @@ select is((select coalesce(body, '<none>') from public.notifications
 select is(pg_temp.bf843('Anunț nou: NH anunț #843'),
   '/anunturi?anunt=' || (select id from public.announcements where title = 'NH anunț #843')::text,
   '#843 D14 backfill: "Anunț nou" links its Announcement');
+select is((select coalesce(link, '<none>') from public.notifications
+            where member_id = '32000000-0000-0000-0000-000000000602'
+              and title = 'Anunț nou: NH dublu #843' and body = 'Corp A'),
+  '/anunturi?anunt=' || (select id from public.announcements where title = 'NH dublu #843' and body = 'Corp A')::text,
+  '#843 D14 backfill: of two same-title Announcements, the one published at the Notification''s instant is linked');
+select is((select coalesce(link, '<none>') from public.notifications
+            where member_id = '32000000-0000-0000-0000-000000000602'
+              and title = 'Anunț nou: NH dublu #843' and body = 'Corp ?'),
+  '/anunturi',
+  '#843 D14 backfill: an ambiguous match keeps the feed link rather than guess');
 select is(pg_temp.bf843('Nu mai faci parte din Grup privat BF843') || '|' || pg_temp.bf843('Nu mai faci parte din Grup public BF843'),
   '<none>|/grupuri/' || (select id from public.groups where is_organization)::text,
   '#843 D23 backfill: a removal from a Private Group the Member no longer sees loses its link; a visible Group keeps it');
