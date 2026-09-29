@@ -354,6 +354,39 @@ const REASON_COPY = new Map<string, string>([
     'Nu mai ai permisiunea de a modifica acest membru. Reîncarcă pagina.',
   ],
   ['member_not_found', 'Membrul nu mai este disponibil. Reîncarcă pagina.'],
+  // #905 (ruling R31): the last Moderator or BC is replaced in the same save.
+  [
+    'last_moderator_needs_replacement',
+    'Este ultimul Moderator. Alege cine preia rolul de Moderator.',
+  ],
+  [
+    'last_bc_needs_replacement',
+    'Este ultimul membru BC. Alege cine preia rolul de BC.',
+  ],
+  [
+    'replacement_not_needed',
+    'Rolul are încă un alt deținător activ, deci nu trebuie ales un înlocuitor. Reîncarcă pagina.',
+  ],
+  [
+    'replacement_is_last_moderator',
+    'Înlocuitorul ales este ultimul Moderator. Alege pe altcineva.',
+  ],
+  [
+    'replacement_is_last_bc',
+    'Înlocuitorul ales este ultimul membru BC. Alege pe altcineva.',
+  ],
+  [
+    'replacement_not_found',
+    'Înlocuitorul ales nu mai este disponibil. Reîncarcă pagina.',
+  ],
+  [
+    'replacement_inactive',
+    'Înlocuitorul ales nu mai este activ. Alege un membru activ.',
+  ],
+  [
+    'replacement_is_target',
+    'Membrul care pierde rolul nu își poate fi propriul înlocuitor.',
+  ],
   // #675 (ruling R5): the Nickname guard on `profiles`.
   ['nickname_too_short', 'Pseudonimul are cel puțin 2 caractere.'],
   ['nickname_too_long', 'Pseudonimul are cel mult 24 de caractere.'],

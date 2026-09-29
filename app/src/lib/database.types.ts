@@ -4576,6 +4576,7 @@ export type Database = {
         Args: {
           p_member_id: string
           p_reason?: string
+          p_replacement_id?: string
           p_role: Database["public"]["Enums"]["member_role"]
         }
         Returns: {

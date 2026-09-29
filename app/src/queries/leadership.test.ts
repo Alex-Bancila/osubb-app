@@ -8,6 +8,7 @@ import {
   fetchLeadershipMemberTasks,
   fetchLeadershipFilters,
   fetchLeaderboardIdentities,
+  fetchLeadershipMemberTotal,
 } from './leadership';
 const range = vi.fn();
 const order = vi.fn();
@@ -31,7 +32,12 @@ it('sends the Work Filter arguments to the authoritative leaderboard', async () 
   };
   await fetchLeadershipLeaderboard(filters);
   expect(api.rpc).toHaveBeenCalledWith('leadership_leaderboard', filters);
-  expect(order).toHaveBeenCalledWith('member_id');
+  // Points, then name (#907: the Members on 0 share a rank), then the id.
+  expect(order.mock.calls).toEqual([
+    ['points', { ascending: false }],
+    ['full_name'],
+    ['member_id'],
+  ]);
 });
 it('pages all results with stable ordering and rejects a partial answer', async () => {
   range
@@ -180,4 +186,89 @@ it('splits a long board into id chunks so no request URL grows unbounded', async
     .filter(([column]) => column === 'id')
     .map(([, values]) => (values as string[]).length);
   expect(chunks).toEqual([100, 100, 50]);
+});
+
+/**
+ * A PostgREST builder that records every call and answers `data` whether it
+ * is awaited straight away (the leaderboard row) or after `.range()`.
+ */
+function answering(data: unknown[]) {
+  const calls: [string, unknown[]][] = [];
+  const chain: Record<string, unknown> = {};
+  for (const name of ['select', 'eq', 'in', 'gte', 'lt', 'contains', 'order'])
+    chain[name] = (...args: unknown[]) => {
+      calls.push([name, args]);
+      return chain;
+    };
+  chain.range = (...args: unknown[]) => {
+    calls.push(['range', args]);
+    return chain;
+  };
+  chain.overrideTypes = () => Promise.resolve({ data, error: null });
+  chain.then = (resolve: (value: unknown) => unknown) =>
+    resolve({ data, error: null });
+  return { chain, calls };
+}
+it("reads a Member's total from Clasament's own row under the same filter (#906)", async () => {
+  const board = answering([{ member_id: 'm', points: 32 }]);
+  api.rpc.mockReturnValue(board.chain);
+  const filters = {
+    p_group_id: 12,
+    p_campaign_id: 6,
+    p_from: '2026-08-31T21:00:00.000Z',
+  };
+  await expect(fetchLeadershipMemberTotal('m', filters)).resolves.toBe(32);
+  expect(api.rpc).toHaveBeenCalledWith('leadership_leaderboard', filters);
+  expect(board.calls).toEqual([['eq', ['member_id', 'm']]]);
+  expect(api.from).not.toHaveBeenCalled();
+});
+it('sums the ledger, reversal included, for a Member Clasament does not list (#906)', async () => {
+  api.rpc.mockReturnValue(answering([]).chain);
+  const ledger = answering([{ delta: 18 }, { delta: 12 }, { delta: -12 }]);
+  api.from.mockReturnValue(ledger.chain);
+  await expect(fetchLeadershipMemberTotal('m', {})).resolves.toBe(18);
+  expect(api.from).toHaveBeenCalledWith('points_ledger');
+  // No filter, no join: every Task row of the Member counts.
+  expect(ledger.calls).toEqual([
+    ['select', ['delta']],
+    ['eq', ['member_id', 'm']],
+    ['in', ['reason', ['task', 'task_reversal']]],
+    ['order', ['id']],
+    ['range', [0, 499]],
+  ]);
+});
+it('narrows the ledger sum exactly as the board does: Evaluation instant, Campaign, Group subtree (#906)', async () => {
+  api.rpc.mockReturnValue(answering([]).chain);
+  const ledger = answering([{ delta: 5 }]);
+  api.from.mockReturnValue(ledger.chain);
+  await fetchLeadershipMemberTotal('m', {
+    p_group_id: 7,
+    p_campaign_id: 3,
+    p_from: '2026-08-31T21:00:00.000Z',
+    p_to: '2026-09-30T21:00:00.000Z',
+  });
+  expect(ledger.calls).toEqual([
+    [
+      'select',
+      [
+        'delta,task_evaluations!inner(evaluated_at),tasks!inner(campaign_id,groups!inner(path))',
+      ],
+    ],
+    ['eq', ['member_id', 'm']],
+    ['in', ['reason', ['task', 'task_reversal']]],
+    ['gte', ['task_evaluations.evaluated_at', '2026-08-31T21:00:00.000Z']],
+    ['lt', ['task_evaluations.evaluated_at', '2026-09-30T21:00:00.000Z']],
+    ['eq', ['tasks.campaign_id', 3]],
+    ['contains', ['tasks.groups.path', [7]]],
+    ['order', ['id']],
+    ['range', [0, 499]],
+  ]);
+});
+it('fails the total when the board fails, rather than reading 0 (#906)', async () => {
+  const failed = answering([]);
+  failed.chain.then = (resolve: (value: unknown) => unknown) =>
+    resolve({ data: null, error: new Error('offline') });
+  api.rpc.mockReturnValue(failed.chain);
+  await expect(fetchLeadershipMemberTotal('m', {})).rejects.toThrow('offline');
+  expect(api.from).not.toHaveBeenCalled();
 });

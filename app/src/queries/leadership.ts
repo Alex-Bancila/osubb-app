@@ -37,14 +37,75 @@ async function pages<T>(
     if (page.data.length < 500) return rows;
   }
 }
+/**
+ * Every Member below BCE, 0 points included (#907): points descending, then
+ * by name as the server ranks them, so the many Members sharing the last
+ * rank read alphabetically; `member_id` keeps the pages stable.
+ */
 export function fetchLeadershipLeaderboard(filters: LeadershipFilters) {
   return pages<LeaderboardRow>((from, to) =>
     supabase
       .rpc('leadership_leaderboard', filters)
       .order('points', { ascending: false })
+      .order('full_name')
       .order('member_id')
       .range(from, to),
   );
+}
+/**
+ * One Member's Task points under the Work Filter (#906) — the figure
+ * Clasament shows on that Member's row for the same filter, read from the
+ * same server function rather than summed from the tracker's cards: the
+ * ledger's `task` and `task_reversal` rows, the Evaluation instant in
+ * `[from, to)`, the Group subtree, the Campaign.
+ *
+ * A Member the board does not list — a Role it does not rank (BC, the
+ * Moderator), or no ledger row in the filter — gets the sum of the same
+ * ledger rows read directly. Each join is added only for the level that
+ * needs it, so the sum is the board's own (0 where it would list 0).
+ */
+export async function fetchLeadershipMemberTotal(
+  memberId: string,
+  filters: LeadershipFilters,
+): Promise<number> {
+  const ranked = await supabase
+    .rpc('leadership_leaderboard', filters)
+    .eq('member_id', memberId);
+  if (ranked.error) throw ranked.error;
+  if (!ranked.data) throw new Error('Missing leadership response');
+  const [listed] = ranked.data;
+  if (listed) return listed.points;
+
+  const byGroup = filters.p_group_id !== undefined;
+  const byTask = byGroup || filters.p_campaign_id !== undefined;
+  const byInstant = filters.p_from !== undefined || filters.p_to !== undefined;
+  const select = [
+    'delta',
+    byInstant && 'task_evaluations!inner(evaluated_at)',
+    byTask && `tasks!inner(campaign_id${byGroup ? ',groups!inner(path)' : ''})`,
+  ]
+    .filter(Boolean)
+    .join(',');
+  const rows = await pages<{ delta: number }>((from, to) => {
+    let query = supabase
+      .from('points_ledger')
+      .select(select)
+      .eq('member_id', memberId)
+      .in('reason', ['task', 'task_reversal']);
+    if (filters.p_from !== undefined)
+      query = query.gte('task_evaluations.evaluated_at', filters.p_from);
+    if (filters.p_to !== undefined)
+      query = query.lt('task_evaluations.evaluated_at', filters.p_to);
+    if (filters.p_campaign_id !== undefined)
+      query = query.eq('tasks.campaign_id', filters.p_campaign_id);
+    if (filters.p_group_id !== undefined)
+      query = query.contains('tasks.groups.path', [filters.p_group_id]);
+    return query
+      .order('id')
+      .range(from, to)
+      .overrideTypes<{ delta: number }[], { merge: false }>();
+  });
+  return rows.reduce((total, row) => total + row.delta, 0);
 }
 export function fetchLeadershipCup(filters: CupFilters) {
   return pages<CupRow>((from, to) =>
@@ -113,6 +174,20 @@ export function useLeadershipLeaderboard(filters: LeadershipFilters | null) {
     queryFn:
       memberId && filters
         ? () => fetchLeadershipLeaderboard(filters)
+        : skipToken,
+  });
+}
+/** `null` filters (an inverted date range) send nothing. */
+export function useLeadershipMemberTotal(
+  targetId: string,
+  filters: LeadershipFilters | null,
+) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.points.leadershipMember(memberId, targetId, filters),
+    queryFn:
+      memberId && filters
+        ? () => fetchLeadershipMemberTotal(targetId, filters)
         : skipToken,
   });
 }

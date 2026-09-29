@@ -358,6 +358,56 @@ describe('AppShell', () => {
     ).not.toHaveAttribute('aria-current');
   });
 
+  it('lists Voluntari directly under Clasament in the sidebar and the phone menu (#910)', async () => {
+    const user = userEvent.setup();
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({
+        managesAnyGroup: true,
+        manageTasks: true,
+        seeDirectory: true,
+        seeLeadership: true,
+        manageRoles: true,
+        provisionMembers: true,
+        createTopLevelGroups: true,
+        administer: true,
+      }),
+    });
+    renderShell();
+
+    const order = [
+      'Acasă',
+      'Taskuri',
+      'Clasament',
+      'Voluntari',
+      'Grupuri',
+      'Cereri',
+      'Campanii',
+      'Calendar',
+      'Anunțuri',
+      'Notificări',
+      'Profil',
+      'Administrare',
+    ];
+    const labels = (nav: HTMLElement) =>
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent?.replace(/\d+$/, '').trim());
+
+    expect(
+      labels(screen.getByRole('navigation', { name: 'Navigare principală' })),
+    ).toEqual(order);
+
+    await user.click(screen.getByRole('button', { name: 'Deschide meniul' }));
+    expect(
+      labels(
+        within(screen.getByRole('dialog', { name: 'Meniu' })).getByRole(
+          'navigation',
+          { name: 'Meniu principal' },
+        ),
+      ),
+    ).toEqual(order);
+  });
+
   it.each([
     ['/administrare/membri', 'Administrare'],
     [

@@ -39,8 +39,17 @@ type MemberRole = Database['public']['Enums']['member_role'];
 type MemberStatus = Database['public']['Enums']['member_status'];
 const control =
   'min-h-11 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm dark:border-input dark:bg-input/30';
-/** Ranks only the Moderator may give, and whose holders only it may change. */
+/**
+ * The leadership ranks. Since ruling R31 (#905) every BC member grants and
+ * removes them, as the Moderator does; only the Moderator changes a holder's
+ * Status. Their live holders are the only viewers who change Roles at all.
+ */
 const PROTECTED_ROLES: ReadonlySet<string> = new Set(['bc', 'moderator']);
+/** How the panel names the one holder a leadership rank is left with. */
+const LAST_HOLDER: Record<string, string> = {
+  moderator: 'ultimul Moderator',
+  bc: 'ultimul membru BC',
+};
 /** `member_status` enum values, in the reference list's canonical order. */
 const statusOptions = Object.keys(statusLabels);
 
@@ -118,6 +127,102 @@ function DeactivateDialog({
   );
 }
 
+/**
+ * One line of the replacement dialog: whose Role goes from what to what. The
+ * viewer reads as "Tu"; anyone else is named through MemberName.
+ */
+type RoleMove = {
+  key: string;
+  who: MemberIdentity | 'self';
+  from: string;
+  to: string;
+};
+
+/** The identity MemberName needs, from a picker row. */
+function identityOf(row: {
+  memberId: string;
+  name: string;
+  nickname?: string | null;
+  avatarColor: string | null;
+}): MemberIdentity {
+  return {
+    memberId: row.memberId,
+    fullName: row.name,
+    nickname: row.nickname,
+    avatarColor: row.avatarColor,
+  };
+}
+
+/**
+ * Removing the last Moderator or BC asks first (#905): the dialog names both
+ * changes the one save makes, the replacement's first, as the server applies
+ * them.
+ */
+function ReplacementDialog({
+  open,
+  onOpenChange,
+  moves,
+  disabled,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  moves: RoleMove[];
+  disabled: boolean;
+  onConfirm: () => Promise<boolean>;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!disabled) onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirmi cele două schimbări?</DialogTitle>
+          <DialogDescription>
+            Se salvează împreună și apar în istoric cu numele tău.
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
+          {moves.map((move) => (
+            <li key={move.key}>
+              {move.who === 'self' ? (
+                <span className="font-medium">Tu</span>
+              ) : (
+                <MemberName size="sm" {...move.who} />
+              )}
+              : {move.from} → <span className="font-medium">{move.to}</span>
+            </li>
+          ))}
+        </ul>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => onOpenChange(false)}
+          >
+            Renunță
+          </Button>
+          <Button
+            type="button"
+            disabled={disabled}
+            onClick={async () => {
+              // A refusal closes it too: the panel shows the reason.
+              await onConfirm();
+              onOpenChange(false);
+            }}
+          >
+            Salvează ambele schimbări
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** The query parameter that opens the panel on one Member (#702). */
 export const ROLE_PANEL_MEMBER_PARAM = 'membru';
 /** Preselects the new Role beside `membru` (#827: a Promotion Candidate). */
@@ -163,6 +268,8 @@ export function RolePanel({
       : '',
   );
   const [statusDraft, setStatusDraft] = useState('');
+  const [replacementId, setReplacementId] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState(
     requested && !selectedMemberId
       ? reasonParam.trim().slice(0, REASON_MAX)
@@ -178,33 +285,89 @@ export function RolePanel({
   const actorRole = actor?.roleId;
   const self = memberId !== '' && memberId === session?.user.id;
   const protectedMember = PROTECTED_ROLES.has(member?.roleId ?? '');
-  const canEditMember = Boolean(
-    member &&
-    actor?.status === 'activ' &&
-    !self &&
-    (actorRole === 'moderator' || (actorRole === 'bc' && !protectedMember)),
-  );
-  // Only what the viewer can save (B57): a BC's lists stop at BCE and never
-  // name a BC or Moderator holder; the Moderator sees every rank and member.
-  const moderator = actorRole === 'moderator';
+  // A live active BC or Moderator: the only viewer the server lets re-rank
+  // anyone, leadership included (ruling R31).
+  const leader =
+    actor?.status === 'activ' && PROTECTED_ROLES.has(actorRole ?? '');
+  const moderator = leader && actorRole === 'moderator';
+  const canEditMember = Boolean(member && leader && !self);
+  // A BC or Moderator holder's Status stays the Moderator's alone.
+  const canEditStatusOf = canEditMember && (moderator || !protectedMember);
+  // Only what the viewer can save (B57): without live leadership the lists
+  // name no BC or Moderator holder and stop at BCE.
   const roleOptions = useMemo(
     () =>
       [...(roles.data?.entries() ?? [])]
         .filter(
           ([id]) =>
-            id !== 'responsabil' && (moderator || !PROTECTED_ROLES.has(id)),
+            id !== 'responsabil' && (leader || !PROTECTED_ROLES.has(id)),
         )
         .sort((a, b) => a[1].level - b[1].level),
-    [roles.data, moderator],
+    [roles.data, leader],
   );
   const pickable = useMemo(
     () =>
       (members.data ?? [])
-        .filter((row) => moderator || !PROTECTED_ROLES.has(row.roleId ?? ''))
+        .filter((row) => leader || !PROTECTED_ROLES.has(row.roleId ?? ''))
         .sort((a, b) => a.name.localeCompare(b.name, 'ro')),
-    [members.data, moderator],
+    [members.data, leader],
   );
   const nextRole = roleDraft || member?.roleId || '';
+  // Ruling R31: the change takes a leadership rank from its last live holder,
+  // so the same save must name who takes it. `null` when no guard applies.
+  const guardedRank = useMemo(() => {
+    const rank = member?.roleId ?? '';
+    if (!member || member.status !== 'activ' || !PROTECTED_ROLES.has(rank))
+      return null;
+    if (nextRole === rank) return null;
+    const others = (members.data ?? []).some(
+      (row) =>
+        row.memberId !== member.memberId &&
+        row.roleId === rank &&
+        row.status === 'activ',
+    );
+    return others ? null : rank;
+  }, [member, members.data, nextRole]);
+  const viewerId = session?.user.id;
+  // Who may take it: any active Member but the target, the viewer first as
+  // "Eu" — less the last holder of the other leadership rank, whom the server
+  // refuses unless the target takes that rank in the same save.
+  const replacementOptions = useMemo(() => {
+    if (!guardedRank || !member) return [];
+    const rows = members.data ?? [];
+    const other = guardedRank === 'moderator' ? 'bc' : 'moderator';
+    const soleOther = (id: string) =>
+      !rows.some(
+        (row) =>
+          row.memberId !== id && row.roleId === other && row.status === 'activ',
+      );
+    return rows
+      .filter(
+        (row) =>
+          row.status === 'activ' &&
+          row.memberId !== member.memberId &&
+          !(
+            row.roleId === other &&
+            nextRole !== other &&
+            soleOther(row.memberId)
+          ),
+      )
+      .map((row) =>
+        row.memberId === viewerId
+          ? { ...row, name: 'Eu', nickname: null }
+          : row,
+      )
+      .sort((a, b) =>
+        a.memberId === viewerId
+          ? -1
+          : b.memberId === viewerId
+            ? 1
+            : a.name.localeCompare(b.name, 'ro'),
+      );
+  }, [guardedRank, member, members.data, nextRole, viewerId]);
+  const replacement = replacementOptions.find(
+    (row) => row.memberId === replacementId,
+  );
   const nextLevel = roles.data?.get(nextRole)?.level;
   const memberships = groupIds.data;
   const leavingGroups = useMemo(() => {
@@ -227,12 +390,12 @@ export function RolePanel({
     canEditMember &&
     nextRole !== member?.roleId &&
     roleOptions.some(([id]) => id === nextRole) &&
-    (moderator || !PROTECTED_ROLES.has(nextRole)) &&
+    (!guardedRank || replacement !== undefined) &&
     groups.isSuccess &&
     groupIds.isSuccess &&
     !change.isPending;
   const canSaveStatus =
-    canEditMember &&
+    canEditStatusOf &&
     nextStatus !== member?.status &&
     statusOptions.includes(nextStatus) &&
     !change.isPending;
@@ -253,6 +416,7 @@ export function RolePanel({
       setReason('');
       setRoleDraft('');
       setStatusDraft('');
+      setReplacementId('');
       return true;
     } catch (failure) {
       setError(changeError(failure));
@@ -264,6 +428,39 @@ export function RolePanel({
   const roleId = useId();
   const statusId = useId();
   const reasonId = useId();
+  const replacementHeadingId = useId();
+  const roleChange: MemberChange = {
+    kind: 'role',
+    memberId,
+    role: nextRole as MemberRole,
+    reason: reason.trim() || null,
+    ...(guardedRank && replacement
+      ? { replacementId: replacement.memberId }
+      : {}),
+  };
+  const roleName = (id: string | null | undefined) =>
+    (id && roles.data?.get(id)?.name) || '—';
+  const moves: RoleMove[] =
+    guardedRank && replacement && member
+      ? [
+          {
+            key: 'replacement',
+            // The picker row reads "Eu"; the identity keeps the real name.
+            who:
+              replacement.memberId === viewerId
+                ? 'self'
+                : identityOf(replacement),
+            from: roleName(replacement.roleId),
+            to: roleName(guardedRank),
+          },
+          {
+            key: 'target',
+            who: identityOf(member),
+            from: roleName(member.roleId),
+            to: roleName(nextRole),
+          },
+        ]
+      : [];
 
   return (
     // The wrapper is what `?membru=` scrolls to; the Panel has no ref.
@@ -302,6 +499,7 @@ export function RolePanel({
                       setMemberId(next?.memberId ?? '');
                       setRoleDraft('');
                       setStatusDraft('');
+                      setReplacementId('');
                       setReason('');
                       setError(null);
                       setMessage(null);
@@ -330,9 +528,7 @@ export function RolePanel({
               <p className="m-0 text-sm text-muted-foreground">
                 {self
                   ? 'Nu îți poți schimba propriul rol sau status.'
-                  : protectedMember && !moderator
-                    ? 'Numai un Moderator poate modifica un membru BC sau Moderator.'
-                    : 'Nu poți modifica acest membru acum.'}
+                  : 'Nu poți modifica acest membru acum.'}
               </p>
             )}
             {member && canEditMember && (
@@ -347,7 +543,10 @@ export function RolePanel({
                     id={roleId}
                     value={nextRole}
                     disabled={change.isPending}
-                    onChange={(event) => setRoleDraft(event.target.value)}
+                    onChange={(event) => {
+                      setRoleDraft(event.target.value);
+                      setReplacementId('');
+                    }}
                   >
                     {!roleOptions.some(([id]) => id === nextRole) && (
                       <NativeSelectOption value={nextRole}>
@@ -407,26 +606,62 @@ export function RolePanel({
                       </div>
                     )}
                 </div>
-                <div className="flex min-w-0 flex-col gap-2">
-                  <SubHeading>
-                    <label htmlFor={statusId}>Status</label>
-                  </SubHeading>
-                  <NativeSelect
-                    id={statusId}
-                    value={nextStatus}
-                    disabled={change.isPending}
-                    onChange={(event) => setStatusDraft(event.target.value)}
-                  >
-                    {statusOptions.map((status) => (
-                      <NativeSelectOption key={status} value={status}>
-                        {statusLabel(status)}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                  {nextStatus === 'inactiv' && nextStatus !== member.status && (
-                    <p className="m-0 text-sm">{DEACTIVATION_WARNING}</p>
-                  )}
-                </div>
+                {canEditStatusOf ? (
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <SubHeading>
+                      <label htmlFor={statusId}>Status</label>
+                    </SubHeading>
+                    <NativeSelect
+                      id={statusId}
+                      value={nextStatus}
+                      disabled={change.isPending}
+                      onChange={(event) => setStatusDraft(event.target.value)}
+                    >
+                      {statusOptions.map((status) => (
+                        <NativeSelectOption key={status} value={status}>
+                          {statusLabel(status)}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                    {nextStatus === 'inactiv' &&
+                      nextStatus !== member.status && (
+                        <p className="m-0 text-sm">{DEACTIVATION_WARNING}</p>
+                      )}
+                  </div>
+                ) : (
+                  <p className="m-0 text-sm text-muted-foreground">
+                    Statusul unui membru BC sau Moderator îl schimbă numai
+                    Moderatorul.
+                  </p>
+                )}
+                {guardedRank && (
+                  <div className="flex min-w-0 flex-col gap-2 sm:col-span-2">
+                    <SubHeading as="p" id={replacementHeadingId}>
+                      Înlocuitor
+                    </SubHeading>
+                    <p className="m-0 text-sm">
+                      <MemberName size="sm" {...identityOf(member)} /> este{' '}
+                      {LAST_HOLDER[guardedRank]}. Alege cine preia rolul de{' '}
+                      {roleName(guardedRank)}; cele două schimbări se salvează
+                      împreună.
+                    </p>
+                    {/* On the grid of the two columns above: as wide as the Role select. */}
+                    <div className="grid min-w-0 gap-x-6 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <MemberPicker
+                          ariaLabelledBy={replacementHeadingId}
+                          members={replacementOptions}
+                          value={replacement ?? null}
+                          placeholder="Alege înlocuitorul"
+                          disabled={change.isPending}
+                          onValueChange={(next) =>
+                            setReplacementId(next?.memberId ?? '')
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex min-w-0 flex-col gap-2 sm:col-span-2">
                   {/* Labelled in the sub-head style of the two groups above. */}
                   <SubHeading as="p">
@@ -447,56 +682,61 @@ export function RolePanel({
                     block
                     disabled={!canSaveRole}
                     onClick={() =>
-                      void save({
-                        kind: 'role',
-                        memberId,
-                        role: nextRole as MemberRole,
-                        reason: reason.trim() || null,
-                      })
+                      guardedRank ? setConfirming(true) : void save(roleChange)
                     }
                   >
                     Salvează rolul
                   </Button>
+                  <ReplacementDialog
+                    open={confirming && moves.length > 0}
+                    onOpenChange={setConfirming}
+                    moves={moves}
+                    disabled={change.isPending}
+                    onConfirm={() => save(roleChange)}
+                  />
                 </div>
-                <div className="min-w-0">
-                  {nextStatus === 'inactiv' && nextStatus !== member.status ? (
-                    <DeactivateDialog
-                      member={{
-                        memberId: member.memberId,
-                        fullName: member.name,
-                        nickname: member.nickname,
-                        avatarColor: member.avatarColor,
-                      }}
-                      disabled={!canSaveStatus}
-                      onConfirm={() =>
-                        save({
-                          kind: 'status',
-                          memberId,
-                          status: 'inactiv',
-                          reason: reason.trim() || null,
-                        })
-                      }
-                    />
-                  ) : (
-                    <Button
-                      type="button"
-                      block
-                      disabled={!canSaveStatus}
-                      onClick={() =>
-                        void save({
-                          kind: 'status',
-                          memberId,
-                          status: nextStatus as MemberStatus,
-                          reason: reason.trim() || null,
-                        })
-                      }
-                    >
-                      {nextStatus !== member.status && nextStatus === 'activ'
-                        ? 'Reactivează'
-                        : 'Salvează statusul'}
-                    </Button>
-                  )}
-                </div>
+                {canEditStatusOf && (
+                  <div className="min-w-0">
+                    {nextStatus === 'inactiv' &&
+                    nextStatus !== member.status ? (
+                      <DeactivateDialog
+                        member={{
+                          memberId: member.memberId,
+                          fullName: member.name,
+                          nickname: member.nickname,
+                          avatarColor: member.avatarColor,
+                        }}
+                        disabled={!canSaveStatus}
+                        onConfirm={() =>
+                          save({
+                            kind: 'status',
+                            memberId,
+                            status: 'inactiv',
+                            reason: reason.trim() || null,
+                          })
+                        }
+                      />
+                    ) : (
+                      <Button
+                        type="button"
+                        block
+                        disabled={!canSaveStatus}
+                        onClick={() =>
+                          void save({
+                            kind: 'status',
+                            memberId,
+                            status: nextStatus as MemberStatus,
+                            reason: reason.trim() || null,
+                          })
+                        }
+                      >
+                        {nextStatus !== member.status && nextStatus === 'activ'
+                          ? 'Reactivează'
+                          : 'Salvează statusul'}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {message && turn.current && (
