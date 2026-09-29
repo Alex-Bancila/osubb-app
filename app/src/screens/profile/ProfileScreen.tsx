@@ -101,8 +101,8 @@ export default function ProfileScreen() {
   const onBoard = memberLevel >= BOARD_LEVEL;
   // F-7 (#893, Alex 2026-09-29): the Moderator is not a board position; the
   // function is the Role, with no board title to look up or miss.
-  const isModerator =
-    profile?.role === 'moderator' || claims?.member_role === 'moderator';
+  // The loaded Profile is current; a claim can lag a Role change.
+  const isModerator = profile?.role === 'moderator';
   // Points total applies only to level <= 4 (ruling R13)
   const isPointsEligible = !onBoard;
   const pointsQuery = useMyPoints({ enabled: isPointsEligible });
