@@ -332,6 +332,26 @@ describe('WorkFilter', () => {
       ).toBeNull();
     });
 
+    it('sets the only root with a Subgrup picked under it (#919)', async () => {
+      const user = userEvent.setup();
+      // Only Educațional has work: Grup principal is not drawn.
+      renderFilter('', undefined, [
+        { group_id: 3, campaign_id: 11 },
+        { group_id: 4, campaign_id: 13 },
+      ]);
+      const sheet = await openFilters(user);
+      expect(
+        within(sheet).queryByRole('combobox', { name: 'Grup principal' }),
+      ).toBeNull();
+      await user.click(
+        within(sheet).getByRole('combobox', { name: 'Subgrup' }),
+      );
+      await user.click(
+        await screen.findByRole('option', { name: /^Traineri/ }),
+      );
+      expect(search()).toBe('?grup=1&subgrup=4');
+    });
+
     it('keeps a Group the shared URL carries though it owns nothing', async () => {
       const user = userEvent.setup();
       renderFilter('?grup=5', undefined, work);

@@ -104,9 +104,10 @@ function WorkFilterFields({
             groupsById={groupsById}
             value={sub ?? null}
             onValueChange={(group) => {
-              // With no Grup principal (#919), the Subgrup brings its own.
+              // With no Grup principal in the URL (none chosen, or the only
+              // one inferred), the Subgrup brings its own (#919).
               const rootId =
-                group && choices.rootId === undefined
+                group && value.rootGroupId === undefined
                   ? rootOf(group, choices.roots)
                   : undefined;
               if (group && rootId !== undefined) setSubgroup(group.id, rootId);
