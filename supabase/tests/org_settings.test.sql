@@ -107,7 +107,7 @@ select throws_ok(
 -- the demo seed pointed it at, so only its presence and audit are pinned here
 -- (evaluation_rankings_read.test.sql owns its rules). #48 seeds a third,
 -- vote_retention_percent, at R20's placeholder 25 (role_evaluation_ranking.test.sql
--- owns its rules). #771 seeds a fourth, privacy_notice_version, at 1.0
+-- owns its rules). #771 seeds a fourth, privacy_notice_version, at 1.0, and #860 moves it to 1.1
 -- (privacy_notice_acknowledgements.test.sql owns its rules). #775 seeds a
 -- fifth, email_daily_quota, at 90 (email_digest.test.sql owns its rules). #824
 -- seeds a sixth, board_group_id, whose value is whatever the demo seed
@@ -117,7 +117,7 @@ select results_eq(
             case key when 'adunarea_generala_group_id' then true
                      when 'board_group_id' then true
                      when 'vote_retention_percent' then value = '25'
-                     when 'privacy_notice_version' then value = '1.0'
+                     when 'privacy_notice_version' then value = '1.1'
                      when 'email_daily_quota' then value = '90'
                      else value is null end,
             updated_by
@@ -128,7 +128,7 @@ select results_eq(
             ('email_daily_quota'::text, true, null::uuid),
             ('privacy_notice_version'::text, true, null::uuid),
             ('vote_retention_percent'::text, true, null::uuid) $$,
-  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id, #48''s vote_retention_percent at 25, #771''s privacy_notice_version at 1.0, #775''s email_daily_quota at 90 and #824''s board_group_id, none set through the command -- and no other key');
+  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id, #48''s vote_retention_percent at 25, #771''s privacy_notice_version at 1.1 (#860), #775''s email_daily_quota at 90 and #824''s board_group_id, none set through the command -- and no other key');
 
 -- ==================== 3. Grants ====================
 
@@ -184,7 +184,7 @@ select results_eq(
   $$ select key, case key when 'adunarea_generala_group_id' then true
                           when 'board_group_id' then true
                           when 'vote_retention_percent' then true
-                          when 'privacy_notice_version' then value = '1.0'
+                          when 'privacy_notice_version' then value = '1.1'
                           when 'email_daily_quota' then value = '90'
                           else value is null end
        from public.org_settings order by key $$,
