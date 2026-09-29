@@ -1,6 +1,6 @@
 -- #936: the retired backend surface stays gone, the surviving pieces of it the
 -- app still reads stay, and an Announcement keeps its Group and Audience.
--- Migration 20260930120000_retire_dead_surface.sql.
+-- Migration 20260929234000_retire_dead_surface.sql.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql

@@ -21,15 +21,22 @@ function DialogClose(props: DialogPrimitive.Close.Props) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
+// The dim layer under every dialog (#943). It renders for a nested dialog too
+// (`forceRender`: Base UI hides a nested backdrop by default), and it shares
+// the popup's `z-70`: layers then stack in the order they open, so a dialog
+// opened from a sheet dims the sheet beneath it, not only the page. Base UI
+// keeps focus in the top layer and Escape closes only that layer.
 function DialogOverlay({
   className,
+  forceRender = true,
   ...props
 }: DialogPrimitive.Backdrop.Props) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
+      forceRender={forceRender}
       className={cn(
-        'fixed inset-0 z-60 bg-black/40 transition-opacity motion-reduce:transition-none data-ending-style:opacity-0 data-starting-style:opacity-0',
+        'fixed inset-0 z-70 bg-black/40 transition-opacity motion-reduce:transition-none data-ending-style:opacity-0 data-starting-style:opacity-0',
         className,
       )}
       {...props}

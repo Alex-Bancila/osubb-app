@@ -156,6 +156,10 @@ export function eventRsvpMutationOptions(queryClient: QueryClient) {
         queryClient.invalidateQueries({
           queryKey: keys.events.going(rsvp.memberId),
         }),
+        // A manager answering their own Event sees Cine participă move (#934).
+        queryClient.invalidateQueries({
+          queryKey: keys.events.attendance(rsvp.eventId, rsvp.memberId),
+        }),
       ]);
     },
   } as const;

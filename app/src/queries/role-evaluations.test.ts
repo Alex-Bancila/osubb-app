@@ -41,6 +41,7 @@ import {
   fetchRoleEvaluations,
   fetchThresholdChanges,
   fetchEvaluationPercents,
+  fetchPromotionRules,
   latestRun,
   percentText,
   retentionSignals,
@@ -86,13 +87,60 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     expect(db.calls).toContainEqual([
       'promotion_threshold_changes',
       'select',
-      'id, kind, field, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
+      'id, kind, field, promotion_rule_id, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
     ]);
     expect(db.calls).toContainEqual([
       'promotion_threshold_changes',
       'order',
       'changed_at',
       { ascending: false },
+    ]);
+  });
+
+  it('reads both Promotion Rules, the ladder in order (#935)', async () => {
+    db.results.set('promotion_rules', {
+      data: [
+        {
+          id: 5,
+          kind: 'top_percent',
+          from_role: 'voluntar',
+          to_role: 'activ',
+          min_tenure_months: 12,
+          enabled: false,
+        },
+        {
+          id: 9,
+          kind: 'time',
+          from_role: 'recrut',
+          to_role: 'voluntar',
+          min_tenure_months: 6,
+          enabled: true,
+        },
+      ],
+      error: null,
+    });
+    expect(await fetchPromotionRules()).toEqual([
+      {
+        id: 9,
+        kind: 'time',
+        fromRole: 'recrut',
+        toRole: 'voluntar',
+        tenureMonths: 6,
+        enabled: true,
+      },
+      {
+        id: 5,
+        kind: 'top_percent',
+        fromRole: 'voluntar',
+        toRole: 'activ',
+        tenureMonths: 12,
+        enabled: false,
+      },
+    ]);
+    expect(db.calls).toContainEqual([
+      'promotion_rules',
+      'select',
+      'id, kind, from_role, to_role, min_tenure_months, enabled',
     ]);
   });
 
@@ -315,6 +363,20 @@ describe('the commands', () => {
       'rpc',
       'reject_promotion_candidate',
       { p_candidate_id: 7, p_reason: 'Motiv' },
+    ]);
+  });
+
+  it('edits a Promotion Rule through update_promotion_rule (#935)', async () => {
+    await runRoleEvaluationCommand({
+      kind: 'rule',
+      ruleId: 3,
+      tenureMonths: 0,
+      enabled: false,
+    });
+    expect(db.calls).toContainEqual([
+      'rpc',
+      'update_promotion_rule',
+      { p_rule_id: 3, p_min_tenure_months: 0, p_enabled: false },
     ]);
   });
 

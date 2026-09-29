@@ -36,14 +36,28 @@ type ManagedEvent = Pick<
  */
 export function canManageEvent(
   event: ManagedEvent,
-  viewer: {
-    memberId: string | undefined;
-    capabilities: Pick<Capabilities, 'createTopLevelGroups'>;
-    options: Pick<EventFormOptions, 'groups'>;
-  },
+  viewer: EventManagerViewer,
 ): boolean {
-  if (event.cancelledAt !== null || !viewer.memberId || !event.group)
-    return false;
+  return event.cancelledAt === null && managesEvent(event, viewer);
+}
+
+export type EventManagerViewer = {
+  memberId: string | undefined;
+  capabilities: Pick<Capabilities, 'createTopLevelGroups'>;
+  options: Pick<EventFormOptions, 'groups'>;
+};
+
+/**
+ * Whether the viewer is one of this Event's managers — who, never what state
+ * the Event is in. The server's `private.can_manage_event` (#934), which
+ * `update_event`, `cancel_event` and the RSVP read all ask. A cancelled Event
+ * keeps its managers, who still read its RSVP history (**Cine participă**).
+ */
+export function managesEvent(
+  event: Omit<ManagedEvent, 'cancelledAt'>,
+  viewer: EventManagerViewer,
+): boolean {
+  if (!viewer.memberId || !event.group) return false;
   if (viewer.capabilities.createTopLevelGroups) return true;
   if (event.group.is_organization)
     return event.createdBy !== null && event.createdBy === viewer.memberId;

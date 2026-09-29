@@ -13,6 +13,7 @@ import {
   editEventFormOptions,
   eventFormValuesFor,
   keepUntouchedTimes,
+  managesEvent,
   updateEvent,
 } from './event-edit';
 import type { EventPresentation } from './events';
@@ -201,6 +202,45 @@ describe('canManageEvent (the update_event / cancel_event gate)', () => {
         event({ cancelledAt: '2030-09-01T10:00:00Z' }),
         viewer([], { createTopLevelGroups: true }),
       ),
+    ).toBe(false);
+  });
+});
+
+describe('managesEvent (who reads the RSVPs, #934)', () => {
+  it('keeps a cancelled Event with its managers: its answers are history', () => {
+    const cancelled = event({ cancelledAt: '2030-09-01T10:00:00Z' });
+    expect(managesEvent(cancelled, viewer([role(7, 'manager')]))).toBe(true);
+    expect(
+      managesEvent(cancelled, viewer([], { createTopLevelGroups: true })),
+    ).toBe(true);
+  });
+
+  it('is the same rule as canManageEvent on a live Event', () => {
+    const viewers = [
+      viewer([role(7, 'member')]),
+      viewer([role(7, 'manager')]),
+      viewer([role(7, 'responsible')]),
+      viewer([], { createTopLevelGroups: true }),
+      viewer([]),
+    ];
+    const events = [
+      event(),
+      event({ groupId: 20 }),
+      orgEvent(MEMBER),
+      orgEvent('someone-else'),
+    ];
+    for (const who of viewers)
+      for (const shown of events)
+        expect(managesEvent(shown, who)).toBe(canManageEvent(shown, who));
+  });
+
+  it('never names a Voluntar with no Group Role, nor a signed-out viewer', () => {
+    expect(managesEvent(event(), viewer([role(7, 'member')]))).toBe(false);
+    expect(
+      managesEvent(event(), {
+        ...viewer([role(7, 'manager')]),
+        memberId: undefined,
+      }),
     ).toBe(false);
   });
 });
