@@ -1,5 +1,11 @@
 import * as axe from 'axe-core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +27,7 @@ vi.mock('../../queries/event-creation', () => ({
 vi.mock('../../lib/auth', () => ({ useAuth: state.auth }));
 
 import { NewEventControl } from './NewEventControl';
+import { clearEventReceipts, useEventReceipt } from './event-receipts';
 
 const formOptions = {
   groups: [
@@ -301,5 +308,43 @@ describe('NewEventControl', () => {
     await user.click(screen.getByRole('button', { name: 'Renunță' }));
     await open(user);
     expect(screen.getByLabelText('Titlu')).toHaveValue('');
+  });
+});
+
+/* Audit D-11: the new card confirms the create, as #849's edit and cancel
+   receipts do, and the Calendar learns which Event to show. */
+describe('NewEventControl receipt', () => {
+  beforeEach(() => {
+    state.options.mockReturnValue({ data: formOptions });
+    state.create.mockReturnValue({
+      mutateAsync: state.mutateAsync,
+      isPending: false,
+    });
+    state.auth.mockReturnValue({
+      session: { user: { id: 'manager-1' } },
+      claims: { member_level: 6 },
+    });
+    state.mutateAsync.mockReset();
+  });
+
+  it('leaves a receipt on the new card and hands its id to the Calendar', async () => {
+    state.mutateAsync.mockResolvedValue({
+      id: 44,
+      title: 'Ședință de toamnă',
+      starts_at: '2030-10-01T15:00:00+00:00',
+    });
+    const onCreated = vi.fn();
+    const user = userEvent.setup();
+    render(<NewEventControl onCreated={onCreated} />);
+    await open(user);
+    await fillRequired(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(44));
+    const receipt = renderHook(() => useEventReceipt(44));
+    expect(receipt.result.current).toBe('Evenimentul a fost creat.');
+    clearEventReceipts();
   });
 });

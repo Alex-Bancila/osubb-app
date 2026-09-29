@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   EmptyState,
   ListRow,
@@ -7,6 +7,9 @@ import {
   rowListClass,
 } from '../../components/layout';
 import { Button } from '../../components/ui/button';
+import { FieldError } from '../../components/ui/field';
+import { reasonCopy } from '../../lib/command-reasons';
+import { appointmentSchema } from '../../lib/schemas/group';
 import { MemberAvatar } from '../../components/ui/combobox';
 import {
   Dialog,
@@ -63,11 +66,18 @@ function AppointDialog({
   const [member, setMember] = useState<AppointableMember | null>(null);
   const [positionTitle, setPositionTitle] = useState('');
   const [attempted, setAttempted] = useState(false);
+  // What is missing, in Romanian, never the browser's tooltip (Audit D-16).
+  const [missing, setMissing] = useState<{
+    member?: string;
+    title?: string;
+  }>({});
   const fieldId = `appoint-${groupRole}`;
+  const titleErrorId = useId();
   function reset() {
     setMember(null);
     setPositionTitle('');
     setAttempted(false);
+    setMissing({});
   }
   return (
     <Dialog
@@ -103,23 +113,34 @@ function AppointDialog({
             ariaLabelledBy={fieldId}
             members={members}
             value={member}
-            onValueChange={setMember}
+            onValueChange={(next) => {
+              setMember(next);
+              setMissing((current) => ({ ...current, member: undefined }));
+            }}
             disabled={busy}
           />
+          <FieldError>{missing.member}</FieldError>
         </div>
         {withTitle && (
-          <label className="grid gap-1.5">
-            <span className="text-sm font-medium">Numele funcției</span>
-            <input
-              className={control}
-              value={positionTitle}
-              required
-              maxLength={80}
-              placeholder="Responsabil Logistică"
-              disabled={busy}
-              onChange={(event) => setPositionTitle(event.target.value)}
-            />
-          </label>
+          <div className="grid gap-1.5">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium">Numele funcției</span>
+              <input
+                className={control}
+                value={positionTitle}
+                maxLength={80}
+                placeholder="Responsabil Logistică"
+                disabled={busy}
+                aria-invalid={missing.title ? true : undefined}
+                aria-describedby={missing.title ? titleErrorId : undefined}
+                onChange={(event) => {
+                  setPositionTitle(event.target.value);
+                  setMissing((current) => ({ ...current, title: undefined }));
+                }}
+              />
+            </label>
+            <FieldError id={titleErrorId}>{missing.title}</FieldError>
+          </div>
         )}
         {attempted && error && (
           <p role="alert" className="text-sm text-destructive">
@@ -137,18 +158,113 @@ function AppointDialog({
           </Button>
           <Button
             type="button"
-            disabled={busy || !member || (withTitle && !positionTitle.trim())}
+            disabled={busy}
             onClick={async () => {
-              if (!member) return;
+              const parsed = appointmentSchema(withTitle).safeParse({
+                memberId: member?.memberId ?? null,
+                positionTitle,
+              });
+              const issue = (field: string) =>
+                reasonCopy(
+                  parsed.error?.issues.find((item) => item.path[0] === field)
+                    ?.message,
+                );
+              setMissing({
+                member: issue('memberId'),
+                title: issue('positionTitle'),
+              });
+              if (!parsed.success || !member) return;
               setAttempted(true);
               const done = await onAppoint(
                 member.memberId,
-                withTitle ? positionTitle : null,
+                parsed.data.positionTitle,
               );
               if (done) setOpen(false);
             }}
           >
             Numește
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Withdrawing a position asks first, like "Scoate" (Audit D-16). */
+function WithdrawDialog({
+  entry,
+  group,
+  busy,
+  error,
+  onWithdraw,
+}: {
+  entry: RosterEntry;
+  group: AdminGroup;
+  busy: boolean;
+  error: string | null;
+  onWithdraw: () => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const role = groupRoleLabel(
+    entry.groupRole,
+    group.manager_title,
+    entry.positionTitle,
+  );
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (busy) return;
+        setOpen(next);
+        if (next) setAttempted(false);
+      }}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={busy}
+        aria-label={`Retrage funcția lui ${entry.name}`}
+        onClick={() => {
+          setAttempted(false);
+          setOpen(true);
+        }}
+      >
+        Retrage funcția
+      </Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Retragi funcția lui {entry.name}?</DialogTitle>
+          <DialogDescription>
+            {entry.name} nu va mai fi {role} în {group.name}, dar rămâne membru
+            al grupului.
+          </DialogDescription>
+        </DialogHeader>
+        {attempted && error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => setOpen(false)}
+          >
+            Renunță
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={busy}
+            onClick={async () => {
+              setAttempted(true);
+              if (await onWithdraw()) setOpen(false);
+            }}
+          >
+            Retrage funcția
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -162,6 +278,7 @@ function PositionList({
   group,
   canChange,
   busy,
+  error,
   onWithdraw,
 }: {
   label: string;
@@ -169,7 +286,8 @@ function PositionList({
   group: AdminGroup;
   canChange: boolean;
   busy: boolean;
-  onWithdraw: (entry: RosterEntry) => void;
+  error: string | null;
+  onWithdraw: (entry: RosterEntry) => Promise<boolean>;
 }) {
   if (!entries.length) return <EmptyState>Nimeni deocamdată.</EmptyState>;
   return (
@@ -182,16 +300,13 @@ function PositionList({
           }
           action={
             canChange && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                aria-label={`Retrage funcția lui ${entry.name}`}
-                onClick={() => onWithdraw(entry)}
-              >
-                Retrage funcția
-              </Button>
+              <WithdrawDialog
+                entry={entry}
+                group={group}
+                busy={busy}
+                error={error}
+                onWithdraw={() => onWithdraw(entry)}
+              />
             )
           }
         >
@@ -236,7 +351,7 @@ export function GroupRolesTab({
     (entry) => entry.groupRole === 'responsible',
   );
   const withdraw = (entry: RosterEntry) =>
-    void onRun({
+    onRun({
       kind: 'setRole',
       groupId: group.id,
       memberId: entry.memberId,
@@ -282,6 +397,7 @@ export function GroupRolesTab({
           group={group}
           canChange={authority.appointManager}
           busy={busy}
+          error={error}
           onWithdraw={withdraw}
         />
       </Panel>
@@ -319,6 +435,7 @@ export function GroupRolesTab({
           group={group}
           canChange={authority.manageGroup}
           busy={busy}
+          error={error}
           onWithdraw={withdraw}
         />
       </Panel>

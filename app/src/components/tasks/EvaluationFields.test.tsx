@@ -172,10 +172,8 @@ it('refuses a missing choice under its control and focuses it', async () => {
   renderForm();
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   expect(onEvaluate).not.toHaveBeenCalled();
-  expect(
-    screen.getByText('Alege o Dificultate între 1 și 5.'),
-  ).toBeInTheDocument();
-  expect(screen.getByText('Alege o Notă între 1 și 5.')).toBeInTheDocument();
+  expect(screen.getByText('Alege Dificultatea.')).toBeInTheDocument();
+  expect(screen.getByText('Alege Nota.')).toBeInTheDocument();
   expect(
     screen.getByRole('radiogroup', { name: 'Dificultate (obligatoriu)' }),
   ).toHaveAttribute('aria-invalid', 'true');

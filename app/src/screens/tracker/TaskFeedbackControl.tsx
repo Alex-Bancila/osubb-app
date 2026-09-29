@@ -1,4 +1,5 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
+import { useReceiptTurn } from './receipt-turn';
 import { useState } from 'react';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
 import { useReturnTaskToProgress } from '../../queries/task-feedback';
@@ -16,20 +17,30 @@ export function TaskFeedbackControl({
 }) {
   const capability = useTaskEvaluationCapability(taskId);
   const [done, setDone] = useState(false);
+  // Only the latest receipt in the sheet shows (Audit D-16).
+  const turn = useReceiptTurn();
   const [previousStatus, setPreviousStatus] = useState(status);
   if (previousStatus !== status) {
     setPreviousStatus(status);
     if (status !== 'in_progress') setDone(false);
   }
   if (done)
-    return (
+    return !turn.current ? null : (
       <TaskActionSuccess>
         Taskul este în lucru, cu feedback de aplicat. Executorul primește nota.
       </TaskActionSuccess>
     );
   if (capability.data !== true || status !== 'in_review' || kind !== 'task')
     return null;
-  return <FeedbackDialog taskId={taskId} onSuccess={() => setDone(true)} />;
+  return (
+    <FeedbackDialog
+      taskId={taskId}
+      onSuccess={() => {
+        setDone(true);
+        turn.claim();
+      }}
+    />
+  );
 }
 
 function FeedbackDialog({

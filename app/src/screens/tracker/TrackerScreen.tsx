@@ -30,6 +30,8 @@ import { NewTaskControl } from './NewTaskControl';
 import { TaskCardGrid } from './TaskCardGrid';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
 import type { TaskPresentationRow } from './task-presentation';
+import { TaskActionSuccess } from './TaskActionSuccess';
+import { GAVE_UP_RECEIPT } from './TaskGiveUpControl';
 
 /** The loading and retry states every Tracker list shares. */
 function TaskQueryStates<Row>({
@@ -58,6 +60,7 @@ function TaskQueryPanel({
   now,
   onOpenTask,
   highlightedId = null,
+  onGaveUp,
 }: {
   query: UseQueryResult<TaskPresentationRow[], Error>;
   empty: string;
@@ -65,6 +68,7 @@ function TaskQueryPanel({
   now: Date;
   onOpenTask: (id: number) => void;
   highlightedId?: number | null;
+  onGaveUp?: (taskId: number) => void;
 }) {
   return (
     <TaskQueryStates query={query}>
@@ -79,6 +83,7 @@ function TaskQueryPanel({
             now={now}
             onOpenTask={onOpenTask}
             highlightedId={highlightedId}
+            onGaveUp={onGaveUp}
           />
         )
       }
@@ -158,6 +163,9 @@ export default function TrackerScreen() {
   const leader = useCapability('seeLeadership').data === true;
   const [detailId, setDetailId] = useState<number | null>(null);
   const [createdId, setCreatedId] = useState<number | null>(null);
+  // The give-up receipt lives on the list: the card leaves it (Audit D-3).
+  // Keyed by the Task, so a second give-up announces itself afresh.
+  const [gaveUpId, setGaveUpId] = useState<number | null>(null);
   // `null` until the page has chosen its opening tab; a click sets it.
   const [tab, setTab] = useState<TrackerTab | null>(null);
   // The deep links (#685, #822, #846): `/tracker?task=<id>` lands on the
@@ -350,6 +358,7 @@ export default function TrackerScreen() {
         value={selected}
         onValueChange={(value) => {
           if (isTrackerTab(value)) setTab(value);
+          setGaveUpId(null);
         }}
       >
         <Tabs.List
@@ -376,8 +385,14 @@ export default function TrackerScreen() {
         </Tabs.List>
         <Tabs.Panel value="mine" className="space-y-6">
           {!leader && <PersonalScoreHeader />}
+          {gaveUpId !== null && (
+            <TaskActionSuccess key={gaveUpId}>
+              {GAVE_UP_RECEIPT}
+            </TaskActionSuccess>
+          )}
           <TaskQueryPanel
             query={mine}
+            onGaveUp={setGaveUpId}
             empty="Nu ai niciun task atribuit încă."
             now={now}
             onOpenTask={setDetailId}

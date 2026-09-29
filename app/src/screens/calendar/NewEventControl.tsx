@@ -15,6 +15,7 @@ import {
   useEventFormOptions,
 } from '../../queries/event-creation';
 import { EventForm } from './EventForm';
+import { setEventReceipt } from './event-receipts';
 import {
   eventDialogContentClass,
   groupsAvailableAtLevel,
@@ -22,7 +23,12 @@ import {
 } from './event-form-model';
 
 /** Calendar's kind gate. The command remains the authorization boundary. */
-export function NewEventControl() {
+export function NewEventControl({
+  onCreated,
+}: {
+  /** The Calendar brings the new Event into view (Audit D-11). */
+  onCreated?: (eventId: number) => void;
+} = {}) {
   const { claims } = useAuth();
   const options = useEventFormOptions();
   const actorLevel = claims?.member_level ?? 0;
@@ -37,6 +43,7 @@ export function NewEventControl() {
     <NewEventDialog
       options={{ ...options.data, groups: available }}
       actorLevel={actorLevel}
+      onCreated={onCreated}
     />
   );
 }
@@ -44,9 +51,11 @@ export function NewEventControl() {
 function NewEventDialog({
   options,
   actorLevel,
+  onCreated,
 }: {
   options: EventFormOptions;
   actorLevel: number;
+  onCreated?: (eventId: number) => void;
 }) {
   const create = useCreateEvent();
   const [open, setOpen] = useState(false);
@@ -86,8 +95,12 @@ function NewEventDialog({
           pending={create.isPending}
           onCancel={() => setOpen(false)}
           onSubmit={async (draft) => {
-            await create.mutateAsync(draft);
+            const created = await create.mutateAsync(draft);
             setOpen(false);
+            // The create receipt sits on the new card, as #849's edit and
+            // cancel receipts do (Audit D-11).
+            setEventReceipt(created.id, 'Evenimentul a fost creat.');
+            onCreated?.(created.id);
           }}
         />
       </DialogContent>

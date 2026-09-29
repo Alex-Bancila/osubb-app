@@ -28,6 +28,7 @@ import {
   useGroupRoster,
   useMyGroupRoles,
   type AdminGroup,
+  type GroupAuthority,
   type GroupCommand,
 } from '../../queries/groups-admin';
 import { CampaignsPanel } from '../campaigns/CampaignsPanel';
@@ -136,6 +137,19 @@ function GroupTabs({
 const EYEBROW = 'Administrare';
 
 /**
+ * An archived Group is read-only for everyone (Audit D-10): the server refuses
+ * every change with `group_archived`, so the page offers none.
+ */
+const READ_ONLY: GroupAuthority = {
+  manageWork: false,
+  manageGroup: false,
+  editStructure: false,
+  appointManager: false,
+  archive: false,
+  editMinLevel: false,
+};
+
+/**
  * One Group, with everything its Managers decide about it: settings, roster,
  * positions, Child Groups and Campaigns. The same screen opens from the BC
  * tree and from a Manager's own list — one flow, one command set (ADR-0009
@@ -191,14 +205,17 @@ export default function GroupScreen() {
     [rolesQuery.data],
   );
   const createTopLevel = capabilities.data?.createTopLevelGroups === true;
+  const archived = group !== undefined && group.status !== 'active';
   const authority = useMemo(
     () =>
-      groupAuthority(
-        group ?? { id, parent_id: null },
-        myGroupsQuery.data,
-        createTopLevel,
-      ),
-    [group, id, myGroupsQuery.data, createTopLevel],
+      archived
+        ? READ_ONLY
+        : groupAuthority(
+            group ?? { id, parent_id: null },
+            myGroupsQuery.data,
+            createTopLevel,
+          ),
+    [archived, group, id, myGroupsQuery.data, createTopLevel],
   );
   const tabs = groupTabs(authority, {
     hasChildren: children.length > 0,
@@ -301,13 +318,19 @@ export default function GroupScreen() {
 
       {/* The one refusal line (relevance B49): a viewer who can change
           nothing here is told once, not once per tab. */}
-      {!authority.manageWork &&
+      {archived ? (
+        <p className="m-0 -mt-3 text-sm text-muted-foreground">
+          Grupul este arhivat; nu se mai poate modifica.
+        </p>
+      ) : (
+        !authority.manageWork &&
         !authority.manageGroup &&
         !authority.appointManager && (
           <p className="m-0 -mt-3 text-sm text-muted-foreground">
             Vezi grupul, dar schimbările îi revin coordonatorului lui.
           </p>
-        )}
+        )
+      )}
 
       {message && <p role="status">{message}</p>}
       {error && (
@@ -377,7 +400,9 @@ export default function GroupScreen() {
             actorLevel={actorLevel}
             authority={authority}
             authorityFor={(child) =>
-              groupAuthority(child, myGroupsQuery.data, createTopLevel)
+              archived
+                ? READ_ONLY
+                : groupAuthority(child, myGroupsQuery.data, createTopLevel)
             }
             busy={busy}
             error={error}
@@ -389,7 +414,12 @@ export default function GroupScreen() {
             <p className="m-0 text-sm text-muted-foreground">
               Raportul unei campanii arată punctele obținute și cine a lucrat.
             </p>
-            <CampaignsPanel group={group} label={group.name} groups={groups} />
+            <CampaignsPanel
+              group={group}
+              label={group.name}
+              groups={groups}
+              readOnly={archived}
+            />
           </div>
         )}
         {tab === 'cereri' && (

@@ -29,7 +29,8 @@ import { TaskActionSuccess } from './TaskActionSuccess';
 import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
-import { TaskGiveUpControl } from './TaskGiveUpControl';
+import { GAVE_UP_RECEIPT, TaskGiveUpControl } from './TaskGiveUpControl';
+import { useReceiptTurn } from './receipt-turn';
 import { SubmitForReviewDialog } from './SubmitForReviewDialog';
 import { SubmissionNote } from './SubmissionNote';
 import { DifficultyStars } from '../../components/tasks/DifficultyStars';
@@ -74,6 +75,8 @@ type TaskCardProps = {
    * and the Audience chip gives way to the sheet's Audiență row (B20).
    */
   inSheet?: boolean;
+  /** The list shows the give-up receipt; the card leaves it (Audit D-3). */
+  onGaveUp?: (taskId: number) => void;
 };
 
 const chipClass =
@@ -263,11 +266,17 @@ export function TaskCard({
   showSubmissionNote = true,
   history,
   inSheet = false,
+  onGaveUp,
 }: TaskCardProps) {
   const readOnly = history !== undefined;
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNoticeState] = useState<string | null>(null);
+  const noticeTurn = useReceiptTurn();
+  const setNotice = (text: string | null) => {
+    setNoticeState(text);
+    if (text) noticeTurn.claim();
+  };
   const titleId = useId();
   const isExecutor =
     !readOnly &&
@@ -465,7 +474,9 @@ export function TaskCard({
             </p>
           )}
           {history}
-          {notice && <TaskActionSuccess>{notice}</TaskActionSuccess>}
+          {notice && noticeTurn.current && (
+            <TaskActionSuccess>{notice}</TaskActionSuccess>
+          )}
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
@@ -500,7 +511,17 @@ export function TaskCard({
                 }
               />
             )}
-            {canGiveUp && <TaskGiveUpControl taskId={task.id} />}
+            {canGiveUp && (
+              <TaskGiveUpControl
+                taskId={task.id}
+                onGaveUp={() =>
+                  // The list shows the receipt when it holds the card; the
+                  // sheet's card keeps it, since the control leaves with the
+                  // Executor's actions (Audit D-3).
+                  onGaveUp ? onGaveUp(task.id) : setNotice(GAVE_UP_RECEIPT)
+                }
+              />
+            )}
           </CardFooter>
         )}
       </Card>

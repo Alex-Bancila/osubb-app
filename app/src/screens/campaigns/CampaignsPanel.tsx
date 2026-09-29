@@ -229,6 +229,7 @@ function CampaignRow({
   onRun,
   onToggle,
   disabled,
+  readOnly,
 }: {
   campaign: Campaign;
   /** The owning Group's name. */
@@ -239,6 +240,8 @@ function CampaignRow({
   /** Runs a change and shows a refusal above the list. */
   onToggle: (change: CampaignChange) => Promise<void>;
   disabled: boolean;
+  /** Only the report: an archived Group changes nothing (Audit D-10). */
+  readOnly: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const reportId = useId();
@@ -247,29 +250,35 @@ function CampaignRow({
       stackAction
       action={
         <>
-          <CampaignNameDialog
-            title="Redenumește campania"
-            label="Numele campaniei"
-            submitLabel="Salvează"
-            trigger="Redenumește"
-            initialName={campaign.name}
-            disabled={disabled}
-            onSave={(name) => onRun({ kind: 'rename', id: campaign.id, name })}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled}
-            onClick={() =>
-              void onToggle({
-                kind: 'active',
-                id: campaign.id,
-                active: !campaign.is_active,
-              })
-            }
-          >
-            {campaign.is_active ? 'Dezactivează' : 'Activează'}
-          </Button>
+          {!readOnly && (
+            <>
+              <CampaignNameDialog
+                title="Redenumește campania"
+                label="Numele campaniei"
+                submitLabel="Salvează"
+                trigger="Redenumește"
+                initialName={campaign.name}
+                disabled={disabled}
+                onSave={(name) =>
+                  onRun({ kind: 'rename', id: campaign.id, name })
+                }
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled}
+                onClick={() =>
+                  void onToggle({
+                    kind: 'active',
+                    id: campaign.id,
+                    active: !campaign.is_active,
+                  })
+                }
+              >
+                {campaign.is_active ? 'Dezactivează' : 'Activează'}
+              </Button>
+            </>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -311,6 +320,7 @@ export function CampaignsPanel({
   label,
   groups,
   range = {},
+  readOnly = false,
 }: {
   group: { id: number; name: string };
   label: string;
@@ -318,6 +328,8 @@ export function CampaignsPanel({
   groups: readonly CampaignOwnerGroup[];
   /** The report's range; `null` while the page's range is inverted. */
   range?: CampaignReportRange | null;
+  /** An archived Group's Campaigns: reports only, no change (Audit D-10). */
+  readOnly?: boolean;
 }) {
   const campaigns = useCampaigns();
   const mutation = useCampaignChange();
@@ -378,6 +390,17 @@ export function CampaignsPanel({
     () => new Map(groups.map((row) => [row.id, row.name])),
     [groups],
   );
+  // The server refuses any change to an archived Group's Campaign
+  // (can_manage_group_work reads the owner's status): report only.
+  const archived = useMemo(
+    () =>
+      new Set(
+        groups
+          .filter((row) => row.status !== undefined && row.status !== 'active')
+          .map((row) => row.id),
+      ),
+    [groups],
+  );
   const listed = useMemo(
     () =>
       subtreeCampaigns(campaigns.data ?? [], groups, group.id).filter(
@@ -392,15 +415,17 @@ export function CampaignsPanel({
       title={label}
       description={`Campaniile grupului și ale subgrupurilor lui. O campanie nouă aparține grupului ${group.name}.`}
       control={
-        <CampaignNameDialog
-          title="Campanie nouă"
-          label="Numele campaniei"
-          submitLabel="Creează"
-          trigger="Campanie nouă"
-          initialName=""
-          disabled={mutation.isPending}
-          onSave={(name) => run({ kind: 'create', groupId: group.id, name })}
-        />
+        !readOnly && (
+          <CampaignNameDialog
+            title="Campanie nouă"
+            label="Numele campaniei"
+            submitLabel="Creează"
+            trigger="Campanie nouă"
+            initialName=""
+            disabled={mutation.isPending}
+            onSave={(name) => run({ kind: 'create', groupId: group.id, name })}
+          />
+        )
       }
       boxClassName="space-y-4"
     >
@@ -452,6 +477,7 @@ export function CampaignsPanel({
               onRun={run}
               onToggle={toggle}
               disabled={mutation.isPending}
+              readOnly={readOnly || archived.has(campaign.group_id)}
             />
           ))}
         </ul>

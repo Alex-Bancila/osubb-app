@@ -61,9 +61,17 @@ describe('Task candidate selector', () => {
     render(<TaskCandidateSelector taskId={17} />);
 
     const submit = screen.getByRole('button', { name: 'Alege executorul' });
-    expect(submit).toBeDisabled();
+    // Never a silent confirm (Audit D-16): each missing choice is named.
+    await user.click(submit);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Alege un candidat din coadă.',
+    );
     await user.click(screen.getByRole('radio', { name: /Ana Pop/ }));
-    expect(submit).toBeDisabled();
+    await user.click(submit);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Alege ce se întâmplă cu celelalte candidaturi.',
+    );
+    expect(hooks.selection.mutateAsync).not.toHaveBeenCalled();
     await user.click(
       screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
     );

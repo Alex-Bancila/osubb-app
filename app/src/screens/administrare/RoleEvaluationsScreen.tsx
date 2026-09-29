@@ -65,10 +65,12 @@ import {
 } from '../../queries/role-evaluations';
 import { ROLE_PANEL_MEMBER_PARAM } from './RolePanel';
 import {
+  computedThresholdText,
   formatDay,
   nextDay,
   promoteHref,
   runConsequences,
+  runResultText,
 } from './role-evaluation-text';
 
 const control =
@@ -214,7 +216,12 @@ function RunPanel({
       });
       setConfirming(false);
       setMessage(
-        `Evaluarea „${values.name}” a rulat: ${result?.candidates ?? 0} candidați la promovare, ${result?.retentionSignals ?? 0} semnale de retenție.`,
+        runResultText({
+          kind: values.kind,
+          name: values.name,
+          candidates: result?.candidates ?? 0,
+          retentionSignals: result?.retentionSignals ?? 0,
+        }),
       );
       setName('');
       setFrom(nextDay(values.to));
@@ -1149,10 +1156,9 @@ function historyColumns(
       accessorFn: (row) => row.threshold_computed,
       header: 'Prag calculat',
       enableSorting: false,
-      cell: ({ row }) =>
-        row.original.threshold_computed === null
-          ? '—'
-          : formatPoints(row.original.threshold_computed),
+      // Below 1 the value is not taken over: the threshold used (beside it)
+      // stays in force (Audit D-9).
+      cell: ({ row }) => computedThresholdText(row.original.threshold_computed),
     },
   ];
 }

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { toAuthErrorMessage } from '../../lib/auth-error-message';
+import {
+  toAuthCodeErrorMessage,
+  toAuthErrorMessage,
+} from '../../lib/auth-error-message';
 import { authCallbackUrl } from '../../lib/auth-destination';
 import { normalizeEmail } from '../../lib/normalize';
 import { rememberSignInRequest } from '../../lib/sign-in-request';
@@ -42,10 +45,17 @@ export default function LoginScreen({
   const [codeStatus, setCodeStatus] = useState<CodeStatus>('idle');
   const [codeError, setCodeError] = useState('');
   const sentHeadingRef = useRef<HTMLHeadingElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  // "Încearcă altă adresă" lands on the address field, not on body (D-14).
+  const backToAddress = useRef(false);
   const address = normalizeEmail(email);
 
   useEffect(() => {
     if (status === 'sent') sentHeadingRef.current?.focus();
+    if (status === 'idle' && backToAddress.current) {
+      backToAddress.current = false;
+      emailRef.current?.focus();
+    }
   }, [status]);
 
   async function requestLink(e: FormEvent) {
@@ -131,7 +141,7 @@ export default function LoginScreen({
       if (import.meta.env.DEV) {
         console.error('Supabase Auth code verification failed', failure);
       }
-      setCodeError(toAuthErrorMessage(failure));
+      setCodeError(toAuthCodeErrorMessage(failure));
       setCodeStatus('error');
       return;
     }
@@ -145,7 +155,7 @@ export default function LoginScreen({
     if (import.meta.env.DEV) {
       console.error('Supabase Auth code verification failed', authError);
     }
-    setCodeError(toAuthErrorMessage(authError));
+    setCodeError(toAuthCodeErrorMessage(authError));
     setCodeStatus('error');
   }
 
@@ -231,6 +241,7 @@ export default function LoginScreen({
         <Button
           variant="outline"
           onClick={() => {
+            backToAddress.current = true;
             setStatus('idle');
             setError('');
             setCode('');
@@ -258,6 +269,7 @@ export default function LoginScreen({
         <Field data-invalid={status === 'error'}>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <input
+            ref={emailRef}
             id="email"
             className={inputClassName}
             type="email"

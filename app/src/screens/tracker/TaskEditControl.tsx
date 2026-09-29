@@ -51,6 +51,7 @@ import {
   type ManagedWorkGroup,
   type TaskFormOptions,
 } from './task-form-model';
+import { useReceiptTurn } from './receipt-turn';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
@@ -70,6 +71,8 @@ export function TaskEditControl({
 }) {
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Only the latest receipt in the sheet shows (Audit D-16).
+  const turn = useReceiptTurn();
   const receipt = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     if (saved) receipt.current?.focus();
@@ -79,7 +82,7 @@ export function TaskEditControl({
   if (!canEdit && !saved) return null;
   return (
     <section aria-label="Editarea taskului" className="space-y-3">
-      {saved && (
+      {saved && turn.current && (
         <p ref={receipt} role="status" tabIndex={-1}>
           Modificările au fost salvate și înregistrate în istoricul taskului.
         </p>
@@ -92,6 +95,7 @@ export function TaskEditControl({
             onSaved={() => {
               setOpen(false);
               setSaved(true);
+              turn.claim();
             }}
           />
         ) : (

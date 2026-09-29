@@ -84,9 +84,7 @@ export function TaskDuplicateControl({
           </DialogHeader>
           <div className="space-y-1">
             <label className="block space-y-1">
-              <span className="font-semibold">
-                Termen nou (ora Bucureștiului)
-              </span>
+              <span className="font-semibold">Termen nou (ora României)</span>
               <input
                 required
                 type="datetime-local"

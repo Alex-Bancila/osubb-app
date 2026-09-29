@@ -56,8 +56,17 @@ vi.mock('../../queries/task-tabs', () => ({
 vi.mock('../../queries/work-filter-options', () => ({
   useCalendarWork: hooks.useCalendarWork,
 }));
+// "Eveniment nou" has its own suite; here it only reports a created Event.
 vi.mock('./NewEventControl', () => ({
-  NewEventControl: () => <button type="button">Eveniment nou</button>,
+  NewEventControl: ({
+    onCreated,
+  }: {
+    onCreated?: (eventId: number) => void;
+  }) => (
+    <button type="button" onClick={() => onCreated?.(9)}>
+      Eveniment nou
+    </button>
+  ),
 }));
 // Who may manage an Event is EventManageControls' own suite; here a card only
 // has to ask for it.
@@ -614,6 +623,24 @@ describe('CalendarScreen', () => {
       renderCalendar('/calendar?event=9');
 
       expect(storage.setItem).not.toHaveBeenCalled();
+    });
+
+    /* Audit D-11: a created Event comes into view (its card carries the
+       receipt, NewEventControl's suite). */
+    it('opens the Agendă on a newly created Event', async () => {
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      const user = userEvent.setup();
+      renderCalendar();
+
+      hooks.useEvent.mockReturnValue(query(pastEvent));
+      setEvents([pastEvent]);
+      await user.click(screen.getByRole('button', { name: 'Eveniment nou' }));
+
+      expect(hooks.useEvent).toHaveBeenLastCalledWith(9);
+      expect(screen.getByRole('button', { name: 'Agendă' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
     });
 
     it('says so when RLS hides the Event', () => {

@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { FieldError } from '../../components/ui/field';
-import { fieldForReason, noteSchema } from '../../lib/schemas/note';
+import { fieldForReason, rejectionNoteSchema } from '../../lib/schemas/note';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { EvaluationFields } from '../../components/tasks/EvaluationFields';
 import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
@@ -68,7 +68,7 @@ function RejectForm({
   onCancel: () => void;
 }) {
   const [note, setNote] = useState('');
-  const form = useFormValidation(noteSchema, { note }, fieldForReason);
+  const form = useFormValidation(rejectionNoteSchema, { note }, fieldForReason);
   async function submit(event: FormEvent) {
     event.preventDefault();
     const values = form.validate();

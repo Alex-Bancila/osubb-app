@@ -348,7 +348,7 @@ it('runs a Voluntar Activ Role Evaluation after a confirmation that names its co
     }),
   ).toBeVisible();
   expect(dialog).toHaveTextContent(
-    'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin 30 puncte devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub 30 puncte devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii 20%, devine pragul în vigoare pentru următoarea evaluare. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.',
+    'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin 30 puncte devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub 30 puncte devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii 20%, devine pragul în vigoare pentru următoarea evaluare, dacă este cel puțin 1. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.',
   );
   expect(db.rpc).not.toHaveBeenCalledWith(
     'run_role_evaluation',
@@ -365,7 +365,7 @@ it('runs a Voluntar Activ Role Evaluation after a confirmation that names its co
   });
   expect(
     await within(run).findByText(
-      'Evaluarea „Semestrul II” a rulat: 2 candidați la promovare, 1 semnale de retenție.',
+      'Evaluarea „Semestrul II” a rulat: 2 candidați la promovare, 1 semnal de retenție.',
     ),
   ).toBeVisible();
   expect(
@@ -412,7 +412,7 @@ it('disables the run while the kind’s threshold is unset, then names the Aduna
   await user.click(button);
   const dialog = await screen.findByRole('dialog');
   expect(dialog).toHaveTextContent(
-    'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de Voluntarii cu Drept de Vot. Cei sub 12 puncte devin semnale de retenție; niciun rol nu se retrage automat. Pragul calculat acum, punctele ultimului Voluntar cu Drept de Vot din primii 25%, devine pragul în vigoare pentru următoarea evaluare a Adunării Generale.',
+    'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de Voluntarii cu Drept de Vot. Cei sub 12 puncte devin semnale de retenție; niciun rol nu se retrage automat. Pragul calculat acum, punctele ultimului Voluntar cu Drept de Vot din primii 25%, devine pragul în vigoare pentru următoarea evaluare a Adunării Generale, dacă este cel puțin 1.',
   );
 });
 

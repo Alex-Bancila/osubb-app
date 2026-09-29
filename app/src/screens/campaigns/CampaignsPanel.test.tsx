@@ -239,3 +239,42 @@ describe('CampaignsPanel', () => {
     expect(screen.getByText(/Corectează perioada/)).toBeVisible();
   });
 });
+
+/* Audit D-10 (CodeRabbit): an archived owner's Campaigns only report, even
+   in an active parent's list; the server refuses any change to them. */
+it("offers only the report for an archived owner's Campaign", () => {
+  render(
+    <MemoryRouter initialEntries={['/administrare/grupuri/2']}>
+      <CampaignsPanel
+        group={{ id: 2, name: 'Echipa' }}
+        label="Echipa"
+        groups={[
+          { id: 2, name: 'Echipa', path: [1, 2], status: 'active' },
+          { id: 3, name: 'Subechipa', path: [1, 2, 3], status: 'archived' },
+        ]}
+      />
+    </MemoryRouter>,
+  );
+  const archivedRow = first(
+    screen
+      .getAllByRole('listitem')
+      .filter((item) => item.textContent?.includes('Mentorat')),
+  );
+  expect(
+    within(archivedRow).queryByRole('button', { name: 'Redenumește' }),
+  ).toBeNull();
+  expect(
+    within(archivedRow).queryByRole('button', { name: 'Dezactivează' }),
+  ).toBeNull();
+  expect(
+    within(archivedRow).getByRole('button', { name: 'Vezi raportul' }),
+  ).toBeVisible();
+  const activeRow = first(
+    screen
+      .getAllByRole('listitem')
+      .filter((item) => item.textContent?.includes('Toamnă')),
+  );
+  expect(
+    within(activeRow).getByRole('button', { name: 'Redenumește' }),
+  ).toBeVisible();
+});

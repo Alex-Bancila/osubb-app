@@ -86,6 +86,17 @@ export function useMyTasks() {
   });
 }
 
+/**
+ * How an Assignment ends when its Member stops holding the Task without the
+ * work being decided: the Task is no longer theirs (Audit D-3).
+ */
+const LEFT_ASSIGNMENT: ReadonlySet<string> = new Set([
+  'gave_up',
+  'replaced',
+  'task_updated',
+  'group_changed',
+]);
+
 export async function fetchMyTasks(
   memberId: string,
 ): Promise<TaskPresentationRow[]> {
@@ -93,7 +104,7 @@ export async function fetchMyTasks(
     supabase
       .from('task_assignments')
       .select(
-        `task:tasks!task_assignments_task_id_fkey(${TASK_PRESENTATION_FIELDS})`,
+        `end_reason, task:tasks!task_assignments_task_id_fkey(${TASK_PRESENTATION_FIELDS})`,
       ),
     'task.submission',
   )
@@ -104,11 +115,16 @@ export async function fetchMyTasks(
 
   // A Member can have several Assignments on the same Task after a reopen or a
   // rejoin. Ordered newest-first above, so the FIRST row seen for a Task id is
-  // its most recent Assignment — keep that one. Never filter ended
-  // Assignments: evaluated work belongs in My tasks too.
+  // its most recent Assignment — that one decides. Evaluated work stays
+  // (completed, failed, cancelled belong in My tasks); a Task the Member no
+  // longer holds — given up, replaced, taken off by an edit — leaves (D-3).
   const tasks = new Map<number, TaskPresentationRow>();
+  const seen = new Set<number>();
   for (const row of data) {
-    if (row.task && !tasks.has(row.task.id)) tasks.set(row.task.id, row.task);
+    if (!row.task || seen.has(row.task.id)) continue;
+    seen.add(row.task.id);
+    if (!LEFT_ASSIGNMENT.has(row.end_reason ?? ''))
+      tasks.set(row.task.id, row.task);
   }
   // Fetch parent titles in one batch. Keep them behind their own Task RLS;
   // the self-referencing embed is ambiguous to the generated client types.

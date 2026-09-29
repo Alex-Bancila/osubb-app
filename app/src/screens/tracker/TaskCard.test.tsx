@@ -538,6 +538,36 @@ describe('Member Task cards', () => {
     ).not.toBeInTheDocument();
   });
 
+  /* CodeRabbit on #862: in the details sheet the card has no list to hand the
+     receipt to; once the refetch shows the Member no longer holds the Task the
+     give-up control leaves, and the card must keep the receipt. */
+  it('keeps the give-up receipt on the card when no list takes it', async () => {
+    const user = userEvent.setup();
+    const task = (holder: string) =>
+      toTaskPresentation(
+        taskRow({
+          status: 'todo',
+          visibleExecutor: { memberId: holder, fullName: 'Membru' },
+        }),
+        new Date('2026-09-15T12:00:00Z'),
+      );
+    const props = { memberId: 'member', onProgress: vi.fn() };
+    const { rerender } = render(<TaskCard task={task('member')} {...props} />);
+    await user.click(screen.getByRole('button', { name: 'Renunță la task' }));
+    await user.type(screen.getByLabelText('Motivul renunțării'), 'Examen');
+    await user.click(
+      screen.getByRole('button', { name: 'Confirmă renunțarea' }),
+    );
+    rerender(<TaskCard task={task('altcineva')} {...props} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Renunță la task' }),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Ai renunțat la task.',
+    );
+  });
+
   it('names the Executor as a button that opens their Member Card', async () => {
     const user = userEvent.setup();
     card(

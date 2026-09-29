@@ -48,8 +48,17 @@ vi.mock('../../queries/group-applications', () => ({
   useApplicationCommand: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('../campaigns/CampaignsPanel', () => ({
-  CampaignsPanel: ({ group: owner }: { group: { name: string } }) => (
-    <p>Campaniile grupului {owner.name}</p>
+  CampaignsPanel: ({
+    group: owner,
+    readOnly,
+  }: {
+    group: { name: string };
+    readOnly?: boolean;
+  }) => (
+    <p>
+      Campaniile grupului {owner.name}
+      {readOnly && ' (doar raport)'}
+    </p>
   ),
 }));
 import GroupScreen from './GroupScreen';
@@ -1112,4 +1121,111 @@ it("gives the parent's Manager, who appoints this Group's coordinator, Roluri an
   show(5);
   expect(tabNames()).toContain('Roluri');
   expect(screen.queryByText(/schimbările îi revin/)).toBeNull();
+});
+
+/* Audit D-10: the server refuses every change to an archived Group with
+   `group_archived`; the page says so once and offers no edit control. */
+it('shows an archived Group read-only, whoever looks', async () => {
+  api.groups.mockReturnValue({
+    data: [
+      tree[0],
+      group(2, 'Logistică', [1, 2], 1, { status: 'archived' }),
+      group(5, 'Foto', [1, 2, 5], 2, { status: 'archived' }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  const user = userEvent.setup();
+  show();
+
+  expect(
+    screen.getByText('Grupul este arhivat; nu se mai poate modifica.'),
+  ).toBeVisible();
+  expect(
+    screen.queryByText(
+      'Vezi grupul, dar schimbările îi revin coordonatorului lui.',
+    ),
+  ).toBeNull();
+  // No Setări or Roluri to edit; Roster, Subgrupuri and Campanii only read.
+  expect(tabNames()).not.toContain('Setări');
+  expect(tabNames()).not.toContain('Roluri');
+  const edits =
+    /Adaugă|Scoate|Numește|Retrage|Arhivează|Salvează|Subgrup nou|Campanie nouă/;
+  expect(screen.queryAllByRole('button', { name: edits })).toEqual([]);
+  await user.click(tab('Grupuri copil'));
+  expect(screen.queryAllByRole('button', { name: edits })).toEqual([]);
+  await user.click(tab('Campanii'));
+  expect(
+    screen.getByText('Campaniile grupului Logistică (doar raport)'),
+  ).toBeVisible();
+});
+
+/* Audit D-16: an empty title is named in Romanian, never by the browser's
+   English tooltip, and "Retrage funcția" asks first, like "Scoate". */
+it('names what an appointment is missing and confirms a withdrawal', async () => {
+  const user = userEvent.setup();
+  api.roster.mockReturnValue({
+    data: [
+      ...roster,
+      {
+        memberId: 'r',
+        name: 'Radu Mihai',
+        avatarColor: null,
+        groupRole: 'responsible',
+        positionTitle: 'Responsabil Foto',
+        status: 'activ',
+        roleLabel: 'Voluntar',
+        level: 1,
+      },
+    ],
+    isPending: false,
+  });
+  show();
+  await user.click(tab('Roluri'));
+
+  await user.click(
+    screen.getByRole('button', { name: 'Numește un responsabil' }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Responsabil în Logistică',
+  });
+  const title = within(dialog).getByLabelText('Numele funcției');
+  expect(title).not.toBeRequired();
+  await user.click(within(dialog).getByRole('button', { name: 'Numește' }));
+  expect(within(dialog).getByText('Alege un membru.')).toBeVisible();
+  expect(title).toHaveAccessibleDescription(
+    'Scrie cum se numește funcția responsabilului.',
+  );
+  expect(api.mutate).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
+
+  await user.click(
+    screen.getByRole('button', { name: 'Retrage funcția lui Radu Mihai' }),
+  );
+  const confirm = await screen.findByRole('dialog', {
+    name: 'Retragi funcția lui Radu Mihai?',
+  });
+  expect(api.mutate).not.toHaveBeenCalled();
+  // A refusal keeps the dialog open with its reason, so the BC can retry.
+  api.mutate.mockRejectedValueOnce(
+    new CommandError(
+      { code: '42501', message: 'group_manage_forbidden' },
+      'nope',
+    ),
+  );
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Retrage funcția' }),
+  );
+  expect(await within(confirm).findByRole('alert')).toBeVisible();
+  expect(confirm).toBeInTheDocument();
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Retrage funcția' }),
+  );
+  expect(api.mutate).toHaveBeenLastCalledWith({
+    kind: 'setRole',
+    groupId: 2,
+    memberId: 'r',
+    groupRole: 'member',
+    positionTitle: null,
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   emailChangeReason,
+  toAuthCodeErrorMessage,
   toAuthErrorMessage,
   toEmailChangeErrorMessage,
 } from './auth-error-message';
@@ -107,5 +108,26 @@ describe('toEmailChangeErrorMessage (#632)', () => {
     ],
   ])('gives %o a safe message', (failure, expected) => {
     expect(toEmailChangeErrorMessage(failure)).toBe(expected);
+  });
+});
+
+/* Audit D-14: a six-digit code is not a link. */
+describe('toAuthCodeErrorMessage', () => {
+  const CODE = 'Codul este greșit sau a expirat. Verifică-l sau cere unul nou.';
+  it.each([
+    [{ code: 'otp_expired', message: 'Token has expired or is invalid' }],
+    [{ code: 'invalid_token', message: 'Invalid token supplied' }],
+  ])('names a refused code as a code: %o', (failure) => {
+    expect(toAuthCodeErrorMessage(failure)).toBe(CODE);
+    expect(toAuthErrorMessage(failure)).not.toBe(CODE);
+  });
+
+  it('keeps the shared copy for everything else', () => {
+    expect(toAuthCodeErrorMessage({ status: 429, message: '' })).toBe(
+      MESSAGE.rateLimit,
+    );
+    expect(toAuthCodeErrorMessage(new TypeError('Failed to fetch'))).toBe(
+      MESSAGE.network,
+    );
   });
 });

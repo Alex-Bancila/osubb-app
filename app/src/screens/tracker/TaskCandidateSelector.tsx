@@ -10,6 +10,7 @@ import {
   usePendingTaskCandidates,
   useSelectTaskCandidate,
 } from '../../queries/task-candidate-selection';
+import { useReceiptTurn } from './receipt-turn';
 
 type QueueDecision = 'keep' | 'close';
 
@@ -40,6 +41,8 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
   );
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Only the latest receipt in the sheet shows (Audit D-16).
+  const turn = useReceiptTurn();
 
   if (candidates.isPending) return <p role="status">Se încarcă coada…</p>;
   if (candidates.isError)
@@ -59,7 +62,7 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
   if (!candidates.data.length)
     return (
       <>
-        {message && (
+        {message && turn.current && (
           <p role="status" className="text-sm text-muted-foreground">
             {message}
           </p>
@@ -81,10 +84,14 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) {
-      setError('Alege un candidat valid din coadă.');
+      setError('Alege un candidat din coadă.');
       return;
     }
-    if (hasRemaining && queueDecision === null) return;
+    // Never a silent confirm (Audit D-16): name the missing choice.
+    if (hasRemaining && queueDecision === null) {
+      setError('Alege ce se întâmplă cu celelalte candidaturi.');
+      return;
+    }
     setError(null);
     setMessage(null);
     try {
@@ -96,6 +103,7 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
       setMessage(
         `${selected.memberNickname || selected.memberName} este acum executorul taskului.`,
       );
+      turn.claim();
       // The chosen person leaves the queue; a stale choice must not linger.
       setCandidateId(null);
       setQueueDecision(null);
@@ -131,7 +139,10 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
         <RadioGroup
           aria-labelledby={candidateHeadingId}
           value={candidateId}
-          onValueChange={(value: number) => setCandidateId(value)}
+          onValueChange={(value: number) => {
+            setCandidateId(value);
+            setError(null);
+          }}
           disabled={selection.isPending}
         >
           {candidates.data.map((candidate, index) => {
@@ -173,7 +184,10 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
           <RadioGroup
             aria-labelledby={remainingHeadingId}
             value={queueDecision}
-            onValueChange={(value: QueueDecision) => setQueueDecision(value)}
+            onValueChange={(value: QueueDecision) => {
+              setQueueDecision(value);
+              setError(null);
+            }}
             disabled={selection.isPending}
           >
             {queueDecisions.map((choice) => (
@@ -208,7 +222,7 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
           {error}
         </p>
       )}
-      {message && (
+      {message && turn.current && (
         <p role="status" className="text-sm text-muted-foreground">
           {message}
         </p>
@@ -216,11 +230,7 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
       <Button
         type="submit"
         className="min-h-11 min-w-11 w-full sm:w-auto"
-        disabled={
-          !selected ||
-          (hasRemaining && queueDecision === null) ||
-          selection.isPending
-        }
+        disabled={selection.isPending}
       >
         {selection.isPending ? 'Se atribuie…' : 'Alege executorul'}
       </Button>

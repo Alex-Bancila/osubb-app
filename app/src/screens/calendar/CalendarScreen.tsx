@@ -82,6 +82,18 @@ export default function CalendarScreen() {
     [relevant, goingIds],
   );
 
+  // A new Event: the Agendă opens on its card, its receipt on it (D-11).
+  function showCreated(eventId: number) {
+    setParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current);
+        nextParams.set('event', String(eventId));
+        return nextParams;
+      },
+      { replace: true },
+    );
+  }
+
   function chooseView(next: CalendarView) {
     storeView(next);
     if (linkedId !== null)
@@ -122,7 +134,7 @@ export default function CalendarScreen() {
               value={view}
               onChange={chooseView}
             />
-            <NewEventControl />
+            <NewEventControl onCreated={showCreated} />
           </>
         }
       />

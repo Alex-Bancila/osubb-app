@@ -1,4 +1,5 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
+import { useReceiptTurn } from './receipt-turn';
 import { useState } from 'react';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
 import { useReopenTask } from '../../queries/task-reopen';
@@ -16,13 +17,15 @@ export function TaskReopenControl({
 }) {
   const capability = useTaskEvaluationCapability(taskId);
   const [done, setDone] = useState(false);
+  // Only the latest receipt in the sheet shows (Audit D-16).
+  const turn = useReceiptTurn();
   const [previousStatus, setPreviousStatus] = useState(status);
   if (previousStatus !== status) {
     setPreviousStatus(status);
     if (status !== 'in_progress') setDone(false);
   }
   if (done)
-    return (
+    return !turn.current ? null : (
       <TaskActionSuccess>
         Taskul este în lucru. Istoricul și punctele au fost actualizate.
       </TaskActionSuccess>
@@ -33,7 +36,15 @@ export function TaskReopenControl({
     kind !== 'task'
   )
     return null;
-  return <ReopenDialog taskId={taskId} onSuccess={() => setDone(true)} />;
+  return (
+    <ReopenDialog
+      taskId={taskId}
+      onSuccess={() => {
+        setDone(true);
+        turn.claim();
+      }}
+    />
+  );
 }
 
 function ReopenDialog({

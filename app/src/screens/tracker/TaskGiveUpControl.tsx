@@ -4,14 +4,30 @@ import { FieldError } from '../../components/ui/field';
 import { fieldForReason, reasonSchema } from '../../lib/schemas/reason';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useGiveUpTask } from '../../queries/task-give-up';
+import { useReceiptTurn } from './receipt-turn';
 
-export function TaskGiveUpControl({ taskId }: { taskId: number }) {
+/** The receipt a give-up leaves (Audit D-3). */
+export const GAVE_UP_RECEIPT =
+  'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.';
+
+export function TaskGiveUpControl({
+  taskId,
+  onGaveUp,
+}: {
+  taskId: number;
+  /**
+   * The list the card sits in shows the receipt: the card itself leaves
+   * Taskurile mele once the Task is no longer the Member's (Audit D-3).
+   */
+  onGaveUp?: () => void;
+}) {
   const mutation = useGiveUpTask();
   const reasonId = useId();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const form = useFormValidation(reasonSchema, { reason }, fieldForReason);
+  const turn = useReceiptTurn();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,9 +39,11 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
       await mutation.mutateAsync({ taskId, reason: values.reason });
       setReason('');
       setOpen(false);
-      setMessage(
-        'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.',
-      );
+      if (onGaveUp) onGaveUp();
+      else {
+        setMessage(GAVE_UP_RECEIPT);
+        turn.claim();
+      }
     } catch (failure) {
       form.fail(failure, 'Nu am putut salva renunțarea. Încearcă din nou.');
     }
@@ -46,7 +64,7 @@ export function TaskGiveUpControl({ taskId }: { taskId: number }) {
         >
           Renunță la task
         </Button>
-        {message && (
+        {message && turn.current && (
           <p role="status" className="text-sm text-muted-foreground">
             {message}
           </p>

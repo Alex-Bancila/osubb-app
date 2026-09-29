@@ -48,8 +48,56 @@ export function runConsequences({
 }): string {
   const prag = formatPoints(threshold);
   return kind === 'voluntar_activ'
-    ? `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin ${prag} puncte devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub ${prag} puncte devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii ${x}%, devine pragul în vigoare pentru următoarea evaluare. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.`
-    : `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu Drept de Vot. Cei sub ${prag} puncte devin semnale de retenție; niciun rol nu se retrage automat. Pragul calculat acum, punctele ultimului Voluntar cu Drept de Vot din primii ${y}%, devine pragul în vigoare pentru următoarea evaluare a Adunării Generale.`;
+    ? `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin ${prag} puncte devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub ${prag} puncte devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii ${x}%, devine pragul în vigoare pentru următoarea evaluare, dacă este cel puțin 1. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.`
+    : `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu Drept de Vot. Cei sub ${prag} puncte devin semnale de retenție; niciun rol nu se retrage automat. Pragul calculat acum, punctele ultimului Voluntar cu Drept de Vot din primii ${y}%, devine pragul în vigoare pentru următoarea evaluare a Adunării Generale, dacă este cel puțin 1.`;
+}
+
+/**
+ * A count with its Romanian noun: one, a few, or "de" from 20 (the rule of
+ * `formatTaskCount`).
+ */
+function counted(count: number, one: string, many: string): string {
+  if (count === 1) return `1 ${one}`;
+  const lastTwo = count % 100;
+  const de = count >= 20 && (lastTwo === 0 || lastTwo >= 20);
+  return `${count} ${de ? 'de ' : ''}${many}`;
+}
+
+/**
+ * What a finished run found (Audit D-9): the plural is right, and an
+ * Adunarea Generală run — which has no promotion path — names no candidates.
+ */
+export function runResultText({
+  kind,
+  name,
+  candidates,
+  retentionSignals,
+}: {
+  kind: RoleEvaluationKind;
+  name: string;
+  candidates: number;
+  retentionSignals: number;
+}): string {
+  const signals = counted(
+    retentionSignals,
+    'semnal de retenție',
+    'semnale de retenție',
+  );
+  return kind === 'voluntar_activ'
+    ? `Evaluarea „${name}” a rulat: ${counted(candidates, 'candidat la promovare', 'candidați la promovare')}, ${signals}.`
+    : `Evaluarea „${name}” a rulat: ${signals}.`;
+}
+
+/**
+ * The computed threshold as the history shows it (Audit D-9). The server
+ * hands a computed value over only when it is at least 1; below that the
+ * threshold used stays in force, so the value reads as not taken over.
+ */
+export function computedThresholdText(computed: number | null): string {
+  if (computed === null) return '—';
+  return computed < 1
+    ? `${formatPoints(computed)} · nepreluat (sub 1)`
+    : formatPoints(computed);
 }
 
 /** Where **Promovează** leads: Roluri on the Member, Voluntar Activ chosen. */

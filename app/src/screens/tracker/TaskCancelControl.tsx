@@ -1,4 +1,5 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
+import { useReceiptTurn } from './receipt-turn';
 import { useState } from 'react';
 import { useCancelTask } from '../../queries/task-cancel';
 import type { TaskStatus } from './task-presentation';
@@ -16,8 +17,10 @@ export function TaskCancelControl({
   canManage: boolean;
 }) {
   const [done, setDone] = useState(false);
+  // Only the latest receipt in the sheet shows (Audit D-16).
+  const turn = useReceiptTurn();
   if (done)
-    return (
+    return !turn.current ? null : (
       <TaskActionSuccess>
         Taskul este anulat. Istoricul rămâne păstrat.
       </TaskActionSuccess>
@@ -28,7 +31,10 @@ export function TaskCancelControl({
     <CancelDialog
       taskId={taskId}
       umbrella={kind === 'umbrella'}
-      onSuccess={() => setDone(true)}
+      onSuccess={() => {
+        setDone(true);
+        turn.claim();
+      }}
     />
   );
 }

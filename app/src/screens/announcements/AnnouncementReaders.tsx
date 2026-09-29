@@ -86,7 +86,11 @@ export default function AnnouncementReaders({
         variant="outline"
         className="min-h-11"
         aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          // The list is current each time it opens (Audit D-4).
+          void readers.refetch();
+          setOpen(true);
+        }}
       >
         Vezi cine a citit
       </Button>

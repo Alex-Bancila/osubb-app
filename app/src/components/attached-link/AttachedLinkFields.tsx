@@ -81,7 +81,7 @@ export function AttachedLinkFields({
           />
         </label>
         <p className="text-xs text-muted-foreground">
-          Adresa începe cu https://
+          Adresa începe cu http:// sau https://
         </p>
         <FieldError {...form.errorProps(urlField)} />
       </div>

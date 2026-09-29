@@ -93,7 +93,7 @@ it('requires a rejection note, calls rejection only, and has no axe violations',
   await user.click(screen.getByRole('button', { name: 'Respinge cererea' }));
   expect(
     screen.getByLabelText('Motivul respingerii (obligatoriu)'),
-  ).toHaveAccessibleDescription('Scrie o notă.');
+  ).toHaveAccessibleDescription('Scrie motivul respingerii.');
   expect(state.mutate).not.toHaveBeenCalled();
   await user.type(
     screen.getByLabelText('Motivul respingerii (obligatoriu)'),

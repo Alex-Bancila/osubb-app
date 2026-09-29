@@ -182,14 +182,28 @@ describe('LoginScreen', () => {
     typeTheCode('000000');
     fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
 
+    // A code, not a link (Audit D-14).
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Linkul de conectare nu este valid. Cere unul nou.',
+      'Codul este greșit sau a expirat. Verifică-l sau cere unul nou.',
     );
     expect(screen.queryByText(/Invalid token supplied/i)).toBeNull();
     const field = screen.getByLabelText('Cod de 6 cifre');
     expect(field).toHaveAttribute('aria-invalid', 'true');
     expect(field).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Conectează-mă' })).toBeEnabled();
+  });
+
+  /* Audit D-14: going back must not drop focus to body. */
+  it('moves focus to the address field after "Încearcă altă adresă"', async () => {
+    render(<LoginScreen />);
+
+    askForTheEmail();
+    await screen.findByRole('heading', { name: 'Verifică-ți emailul' });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Încearcă altă adresă' }),
+    );
+
+    expect(await screen.findByLabelText('Email')).toHaveFocus();
   });
 
   it('shows a safe message for an expired code', async () => {
@@ -207,7 +221,7 @@ describe('LoginScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Linkul a expirat sau a fost deja folosit. Cere unul nou.',
+      'Codul este greșit sau a expirat. Verifică-l sau cere unul nou.',
     );
   });
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import * as axe from 'axe-core';
@@ -59,9 +59,12 @@ it('requires selection and sends a single command, keeps confirmation after refe
   expect(dialog).toContainElement(
     screen.getByRole('button', { name: 'Alege Ana' }),
   );
-  expect(
-    screen.getByRole('button', { name: 'Confirmă atribuirea' }),
-  ).toBeDisabled();
+  // Never a silent confirm (Audit D-16): an empty one names what is missing.
+  await user.click(screen.getByRole('button', { name: 'Confirmă atribuirea' }));
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(
+    'Alege un membru.',
+  );
+  expect(mutation.mutateAsync).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Alege Ana' }));
   await user.dblClick(
     screen.getByRole('button', { name: 'Confirmă atribuirea' }),
