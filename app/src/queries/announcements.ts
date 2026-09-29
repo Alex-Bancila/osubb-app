@@ -10,6 +10,7 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { fetchMemberIdentities } from './member-identities';
+import type { AnnouncementChanges } from '../screens/announcements/announcement-draft';
 import type {
   AnnouncementReader,
   RawAnnouncementRow,
@@ -184,12 +185,94 @@ export function useCreateAnnouncement() {
 
 export type SetAnnouncementPinnedInput = { id: number; pinned: boolean };
 
-/** `announcements_update` refused the row: it filters it out, so nothing comes back. */
-export class AnnouncementPinRefusedError extends Error {
+/**
+ * `announcements_update` or `announcements_delete` refused the row: RLS
+ * filters it out, so nothing comes back.
+ */
+export class AnnouncementRefusedError extends Error {
   constructor() {
-    super('announcement_pin_refused');
-    this.name = 'AnnouncementPinRefusedError';
+    super('announcement_refused');
+    this.name = 'AnnouncementRefusedError';
   }
+}
+
+/** A refusal by `announcements_update` / `_delete`: no row back, or `42501`. */
+export function isAnnouncementRefusal(cause: unknown): boolean {
+  return (
+    cause instanceof AnnouncementRefusedError ||
+    (cause as { code?: string } | null)?.code === '42501'
+  );
+}
+
+export type UpdateAnnouncementInput = {
+  id: number;
+  /** Only the fields the manager changed (`announcementChanges`). */
+  changes: AnnouncementChanges;
+};
+
+/**
+ * Edit a published Announcement (#930): a direct update under
+ * `announcements_update` sending only the changed fields. The authorship
+ * trigger keeps the author and date, the reads stay, and the fan-out is
+ * `after insert` only, so nobody is notified again.
+ */
+export async function updateAnnouncement({
+  id,
+  changes,
+}: UpdateAnnouncementInput): Promise<void> {
+  const { data, error } = await supabase
+    .from('announcements')
+    .update(changes)
+    .eq('id', id)
+    .select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new AnnouncementRefusedError();
+}
+
+/**
+ * Delete an Announcement (#930) under `announcements_delete`; its reads go
+ * with it (`on delete cascade`). An old "Anunț nou" notification still links
+ * to it and opens the "Anunț indisponibil" state.
+ */
+export async function deleteAnnouncement(id: number): Promise<void> {
+  const { data, error } = await supabase
+    .from('announcements')
+    .delete()
+    .eq('id', id)
+    .select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new AnnouncementRefusedError();
+}
+
+/** The feed, the unread badge and the readers all live under `all`. */
+function announcementWriteOptions<Input>(
+  queryClient: QueryClient,
+  mutationFn: (input: Input) => Promise<void>,
+) {
+  return {
+    mutationFn,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: keys.announcements.all });
+    },
+  } as const;
+}
+
+export function updateAnnouncementMutationOptions(queryClient: QueryClient) {
+  return announcementWriteOptions(queryClient, updateAnnouncement);
+}
+
+export function useUpdateAnnouncement() {
+  const queryClient = useQueryClient();
+  return useMutation(updateAnnouncementMutationOptions(queryClient));
+}
+
+export function deleteAnnouncementMutationOptions(queryClient: QueryClient) {
+  return announcementWriteOptions(queryClient, deleteAnnouncement);
+}
+
+export function useDeleteAnnouncement() {
+  const queryClient = useQueryClient();
+  return useMutation(deleteAnnouncementMutationOptions(queryClient));
 }
 
 /**
@@ -209,7 +292,7 @@ export async function setAnnouncementPinned({
     .eq('id', id)
     .select('id');
   if (error) throw error;
-  if (!data || data.length === 0) throw new AnnouncementPinRefusedError();
+  if (!data || data.length === 0) throw new AnnouncementRefusedError();
 }
 
 export function setAnnouncementPinnedMutationOptions(queryClient: QueryClient) {

@@ -276,16 +276,18 @@ export function mayAskForReaders(
 }
 
 /**
- * Whether to offer "Fixează anunțul" / "Anulează fixarea" (#857): the client
- * copy of `announcements_update`. BC/Moderator (`private.can_manage_group_work`'s
- * level ≥ 6 arm, any Group status); a Manager or Responsible on the Origin's
- * path while the Origin is active (the same function's other arm —
- * `my_groups()` carries the inherited Roles); and, for an Organization Group
- * Announcement, anyone holding a Group Role anywhere
- * (`private.holds_any_group_role()`, i.e. `my_capabilities().manages_any_group`).
- * Presentation only: the policy decides.
+ * Whether to offer Editează, "Fixează anunțul" / "Anulează fixarea" and
+ * Șterge (#857, #930): the client copy of `announcements_update` and
+ * `announcements_delete`, whose predicates are the same. BC/Moderator
+ * (`private.can_manage_group_work`'s level ≥ 6 arm, any Group status); a
+ * Manager or Responsible on the Origin's path while the Origin is active (the
+ * same function's other arm — `my_groups()` carries the Roles inherited from a
+ * Group above); and, for an Organization Group Announcement, anyone holding a
+ * Group Role anywhere (`private.holds_any_group_role()`, i.e.
+ * `my_capabilities().manages_any_group`). Being the author grants nothing by
+ * itself. Presentation only: the policies decide.
  */
-export function mayPinAnnouncement(
+export function mayManageAnnouncement(
   announcement: Pick<AnnouncementPresentation, 'groupId' | 'group'>,
   viewer: {
     /** BC/Moderator by live rank (`useCapability('manageRoles')`). */
