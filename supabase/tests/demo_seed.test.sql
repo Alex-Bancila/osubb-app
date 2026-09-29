@@ -59,7 +59,9 @@ select is(
 -- Security pass 2026-09-27 (H3): the password is whatever the caller set in
 -- `app.seed_password`, and only a local stack falls back to the local default
 -- (`parola123`). The off-local refusals and a configured-secret round trip
--- run in scripts/check-seed-rerunnable.sh, which can apply seed.sql itself.
+-- run in scripts/check-seed-rerunnable.sh, which can apply seed.sql itself
+-- (`supabase test db` mounts only supabase/tests). #901's fixture lives there
+-- too: the seed re-runs after the demo Moderator ran a Role Evaluation.
 select is(
   (select count(*) from auth.users
     where email like '%@demo.osubb'
