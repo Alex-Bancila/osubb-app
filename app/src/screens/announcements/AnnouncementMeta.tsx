@@ -79,7 +79,8 @@ export function AnnouncementMeta({
       )}
 
       {announcement.minLevelLabel && (
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
+        // Truncates before the Group's name does: the Origin is the anchor.
+        <span className="min-w-0 shrink-[4] truncate text-xs text-muted-foreground">
           {announcement.minLevelLabel}
         </span>
       )}
