@@ -140,8 +140,8 @@ export function InviteMemberDialog({
           <DialogHeader>
             <DialogTitle>Invită membru</DialogTitle>
             <DialogDescription>
-              Primește pe email un link de autentificare. Apare în listă de
-              acum; contul lui pornește când deschide linkul.
+              Primește pe email un link de autentificare. Apare în listă de acum
+              și intră în aplicație când deschide linkul.
             </DialogDescription>
           </DialogHeader>
 

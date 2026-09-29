@@ -466,7 +466,7 @@ const REASON_COPY = new Map<string, string>([
   ],
   [
     'invite_email_taken',
-    'Există deja un cont cu această adresă. Caută membrul în listă.',
+    'Există deja un membru cu această adresă. Caută-l în listă.',
   ],
   [
     'invite_group_unavailable',
@@ -474,7 +474,7 @@ const REASON_COPY = new Map<string, string>([
   ],
   [
     'invite_group_refused',
-    'Membrul nu poate fi adăugat în grupul ales: e arhivat, își adaugă membrii automat sau cere un rol mai mare. Nu s-a creat niciun cont; alege alt grup sau niciunul.',
+    'Membrul nu poate fi adăugat în grupul ales: e arhivat, își adaugă membrii automat sau cere un rol mai mare. Nu s-a adăugat niciun membru; alege alt grup sau niciunul.',
   ],
 
   /* ---- Role Evaluations, Promotion Thresholds and Candidates (#826, #827) ---- */
