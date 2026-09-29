@@ -106,6 +106,21 @@ vi.mock('./NewTaskControl', () => ({
     </button>
   ),
 }));
+// "Adaugă task finalizat" has its own suite too (#915).
+vi.mock('./AddCompletedTaskControl', () => ({
+  AddCompletedTaskControl: ({
+    onAdded,
+  }: {
+    onAdded: (task: { id: number; title: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => onAdded({ id: 43, title: 'Stand la târg' })}
+    >
+      Adaugă task finalizat
+    </button>
+  ),
+}));
 vi.mock('./TaskDetailsSheet', () => ({
   TaskDetailsSheet: ({
     taskId,
@@ -402,6 +417,24 @@ describe('My tasks screen', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Închide detaliile' }));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('opens a Task added as completed, saying the points were given (#915)', async () => {
+    const user = userEvent.setup();
+    query();
+    render(<TrackerScreen />, { wrapper: Router });
+    // Beside "Task nou", in the page's actions.
+    const add = screen.getByRole('button', { name: 'Adaugă task finalizat' });
+    expect(add.closest('[data-slot="page-actions"]')).toContainElement(
+      screen.getByRole('button', { name: 'Task nou' }),
+    );
+    await user.click(add);
+    expect(
+      screen.getByRole('dialog', { name: 'Detalii task' }),
+    ).toHaveTextContent('Task #43');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
+    );
   });
 
   it('uses live server capability to show All despite stale advisory claims', async () => {

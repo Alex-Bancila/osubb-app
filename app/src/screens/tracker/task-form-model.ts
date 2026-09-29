@@ -149,7 +149,7 @@ export function originFor(values: TaskFormValues, options: TaskFormOptions) {
 
 export function campaignsFor(
   origin: ManagedWorkGroup | undefined,
-  options: TaskFormOptions,
+  options: Pick<TaskFormOptions, 'campaigns'>,
 ) {
   return origin
     ? options.campaigns.filter((campaign) =>

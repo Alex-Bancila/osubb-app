@@ -17,7 +17,7 @@ const score = (reason: string) =>
  * note of at most 1000 characters — `complete_task_review`,
  * `mark_task_unfulfilled` and `approve_completed_work_request`.
  */
-export const evaluationSchema = z.object({
+export const evaluationShape = {
   difficulty: score('invalid_difficulty'),
   rating: score('invalid_rating'),
   note: requiredText({
@@ -25,7 +25,8 @@ export const evaluationSchema = z.object({
     max: 1000,
     tooLong: 'evaluation_note_too_long',
   }),
-});
+};
+export const evaluationSchema = z.object(evaluationShape);
 
 /** Where each reason an evaluating command (or this schema) raises is shown. */
 export const fieldForReason: Readonly<
