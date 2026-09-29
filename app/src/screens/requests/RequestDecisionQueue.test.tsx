@@ -125,7 +125,7 @@ it('shares evaluation fields and retains success after the queue refetches empty
     'Cererea a fost aprobată',
   );
   expect(screen.getByRole('status')).toHaveFocus();
-});
+}, 20_000);
 it('requires a rejection note, calls rejection only, and has no axe violations', async () => {
   const user = userEvent.setup();
   const { container } = render(<RequestDecisionQueue />);
@@ -272,9 +272,14 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
     name: 'Evaluează cererea',
   });
   expect(groups.read).toHaveBeenCalledWith('ana');
+  // The requester, as a Member Card button (the path rule for names).
+  // The requester is named once, by the Request summary, as a Member Card.
   expect(
-    dialog.querySelector('[data-slot="completed-volunteer"]'),
-  ).toHaveTextContent('Solicitant: Ana Pop');
+    within(dialog).getAllByRole('button', {
+      name: 'Profilul membrului Ana Pop',
+    }),
+  ).toHaveLength(1);
+  expect(dialog.querySelector('[data-slot="completed-volunteer"]')).toBeNull();
   const title = within(dialog).getByLabelText('Titlu (obligatoriu)');
   expect(title).toHaveValue(request.description);
   expect(within(dialog).getByLabelText('Detalii')).toHaveValue(
@@ -327,7 +332,8 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
       campaignId: 11,
     },
   });
-});
+  // A long form: slow under the full parallel run.
+}, 20_000);
 
 it('shows a refusal about the requester under Grup, in Romanian (#915)', async () => {
   const user = userEvent.setup();

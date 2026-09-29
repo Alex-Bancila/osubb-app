@@ -122,7 +122,11 @@ comment on function private.request_deciders(bigint) is
   'The single live decider and notification set: BC/Moderator and active ancestor Group Managers; Group Responsibles only for ordinary requesters. Always excludes the requester, including BC/Moderator. Since #915 it is private.work_deciders over the Request''s own Group and requester, so a Request moved to another Group is decided by the same rule.';
 
 -- ==================== Who may be credited with completed work ====================
-create function private.is_completed_work_executor(p_group_id bigint, p_member uuid)
+-- The rule has three parts, split so the pickers pay for a Group Audience once
+-- per Group rather than once per candidate: the caller's standing in the Group
+-- (can_award_in_group), the candidate's place in it (the Group Audience plus
+-- meets_group_min_level) and the decider rule (is_work_decider).
+create function private.meets_group_min_level(p_group_id bigint, p_member uuid)
 returns boolean
 language sql
 stable
@@ -130,21 +134,19 @@ security definer
 set search_path = ''
 as $$
   select coalesce((
-    select exists (select 1 from private.group_audience(grp.id) as member_id
-                    where member_id = p_member)
-       and coalesce(private.actor_level(p_member), -1) >= grp.min_level
+    select coalesce(private.actor_level(p_member), -1) >= grp.min_level
       from public.groups as grp
      where grp.id = p_group_id
   ), false);
 $$;
 
-comment on function private.is_completed_work_executor(bigint, uuid) is
-  '#915: p_member may be credited with completed work in p_group_id -- a live activ Member of the Group or of a Group below it (its Group Audience, private.group_audience) whose live level is at or above the Group''s Minimum Level. Says nothing about the actor or the Group''s status. Internal: executable by no client role.';
+comment on function private.meets_group_min_level(bigint, uuid) is
+  '#915: p_member is a live activ Member whose live level is at or above p_group_id''s Minimum Level. Internal: executable by no client role.';
 
-revoke execute on function private.is_completed_work_executor(bigint, uuid)
+revoke execute on function private.meets_group_min_level(bigint, uuid)
   from public, anon, authenticated, service_role;
 
-create function private.can_award_completed_work(p_group_id bigint, p_executor uuid)
+create function private.can_award_in_group(p_group_id bigint)
 returns boolean
 language sql
 stable
@@ -154,17 +156,63 @@ as $$
   select coalesce(public.auth_is_member(), false)
      and coalesce(private.can_manage_group_work(p_group_id), false)
      and exists (select 1 from public.groups as grp
-                  where grp.id = p_group_id and grp.status = 'active')
-     and private.is_completed_work_executor(p_group_id, p_executor)
-     and private.is_work_decider(p_group_id, p_executor, (select auth.uid()));
+                  where grp.id = p_group_id and grp.status = 'active');
+$$;
+
+comment on function private.can_award_in_group(bigint) is
+  '#915: the caller may record completed work in p_group_id at all -- organization claims, the manage-work authority there, and an active Group -- before any candidate is judged. Internal: executable by no client role.';
+
+revoke execute on function private.can_award_in_group(bigint)
+  from public, anon, authenticated, service_role;
+
+create function private.can_award_completed_work(p_group_id bigint, p_executor uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.can_award_in_group(p_group_id)
+     and private.meets_group_min_level(p_group_id, p_executor)
+     and private.is_work_decider(p_group_id, p_executor, (select auth.uid()))
+     and exists (select 1 from private.group_audience(p_group_id) as member_id
+                  where member_id = p_executor);
 $$;
 
 comment on function private.can_award_completed_work(bigint, uuid) is
-  '#915: the caller may record completed work of p_executor in p_group_id -- the whole rule create_completed_task and a Group-changing approval enforce (manage work there, an active Group, an eligible Executor, the caller in the decider set), without their locks. Read by public.completed_task_groups / completed_task_executors so the pickers offer exactly what the commands accept. Callable predicate, not a write path.';
+  '#915: the caller may record completed work of p_executor in p_group_id -- the whole rule create_completed_task and a Group-changing approval enforce (manage work there, an active Group, an Executor in its Group Audience at or above its Minimum Level, the caller in the decider set), without their locks. Read by public.completed_task_groups, one Group at a time. Callable predicate, not a write path.';
 
 revoke execute on function private.can_award_completed_work(bigint, uuid)
   from public, anon, authenticated, service_role;
 grant execute on function private.can_award_completed_work(bigint, uuid) to authenticated;
+
+create function private.completed_work_executors(p_group_id bigint)
+returns setof uuid
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  -- The caller's standing once, then the Group Audience once, then the
+  -- per-candidate checks: the same rule as can_award_completed_work.
+  if not private.can_award_in_group(p_group_id) then
+    return;
+  end if;
+  return query
+    select member_id
+      from private.group_audience(p_group_id) as member_id
+     where private.meets_group_min_level(p_group_id, member_id)
+       and private.is_work_decider(p_group_id, member_id, (select auth.uid()));
+end;
+$$;
+
+comment on function private.completed_work_executors(bigint) is
+  '#915: every Member the caller may credit with completed work in p_group_id -- exactly those private.can_award_completed_work accepts, computed with one Group Audience. Read by public.completed_task_executors. Callable set, not a write path.';
+
+revoke execute on function private.completed_work_executors(bigint)
+  from public, anon, authenticated, service_role;
+grant execute on function private.completed_work_executors(bigint) to authenticated;
 
 create function private.require_completed_work_group(
   p_group_id           bigint,
@@ -208,7 +256,7 @@ begin
                   where member_id = p_executor) then
     raise sqlstate 'PT409' using message = 'executor_not_group_member';
   end if;
-  if not private.is_completed_work_executor(p_group_id, p_executor) then
+  if not private.meets_group_min_level(p_group_id, p_executor) then
     raise sqlstate 'PT409' using message = 'executor_below_min_level';
   end if;
   if not private.is_work_decider(p_group_id, p_executor, v_actor) then
@@ -613,15 +661,15 @@ security invoker
 set search_path = ''
 as $$
   select profile.id, profile.full_name, profile.nickname, profile.avatar_color
-    from public.profiles_directory as profile
+    from private.completed_work_executors(p_group_id) as candidate
+    join public.profiles_directory as profile on profile.id = candidate
    where coalesce(public.auth_is_member(), false)
      and profile.role not in ('bc', 'moderator')
-     and private.can_award_completed_work(p_group_id, profile.id)
    order by profile.full_name, profile.id;
 $$;
 
 comment on function public.completed_task_executors(bigint) is
-  '#915: the Members the live caller may credit with completed work in p_group_id -- exactly the Executors create_completed_task accepts there (private.can_award_completed_work, less BC and the Moderator), with the name, Nickname and avatar colour a picker shows. Empty for a Group the caller cannot award in.';
+  '#915: the Members the live caller may credit with completed work in p_group_id -- exactly the Executors create_completed_task accepts there (private.completed_work_executors, less BC and the Moderator), with the name, Nickname and avatar colour a picker shows. Empty for a Group the caller cannot award in.';
 
 revoke execute on function public.completed_task_executors(bigint)
   from public, anon, authenticated, service_role;

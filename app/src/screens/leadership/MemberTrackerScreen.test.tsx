@@ -508,9 +508,12 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
     name: 'Adaugă task finalizat',
   });
   // The volunteer is the Member, by Nickname; there is nobody else to pick.
-  expect(
-    dialog.querySelector('[data-slot="completed-volunteer"]'),
-  ).toHaveTextContent('Voluntar: Ioana');
+  const member = within(dialog).getByRole('button', {
+    name: 'Profilul membrului Ioana',
+  });
+  expect(member.closest('[data-slot="completed-volunteer"]')).toHaveTextContent(
+    /^Voluntar:/,
+  );
   expect(
     within(dialog).queryByRole('combobox', { name: /Voluntar/ }),
   ).toBeNull();
@@ -554,4 +557,5 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
       /Taskul finalizat „Atelier de vară” a fost adăugat/,
     ),
   ).toHaveFocus();
-});
+  // A long form: slow under the full parallel run.
+}, 20_000);

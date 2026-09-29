@@ -70,7 +70,7 @@ export function AddCompletedTaskForMember({
       onOpenChange={setOpen}
       options={groups}
       volunteer={volunteer}
-      description={`Înregistrează munca pe care ${volunteer.name} a făcut-o deja într-un grup pe care îl gestionezi și acordă-i punctele.`}
+      description="Înregistrează munca pe care acest membru a făcut-o deja într-un grup pe care îl gestionezi și acordă-i punctele."
       onAdded={onAdded}
     />
   );

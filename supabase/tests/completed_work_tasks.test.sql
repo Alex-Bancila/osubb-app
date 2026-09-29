@@ -26,7 +26,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(68);
+select plan(69);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u915(n integer) returns uuid language sql immutable as $$
@@ -177,6 +177,8 @@ select pg_temp.test_login_leadership(pg_temp.u915(1));
 select set_eq(format($q$ select id::text from public.completed_task_groups(%L) where name like '%% #915' $q$, pg_temp.u915(4)),
   array[pg_temp.g915('Dept A #915')::text, pg_temp.g915('Echipa A1 #915')::text, pg_temp.g915('Sub A1 #915')::text],
   'BC is offered every active Group V1 belongs to, never an archived one');
+select is((select count(*) from public.completed_task_executors(pg_temp.g915('Arhivat #915'))), 0::bigint,
+  'nor anybody to credit in an archived Group, although BC decides there');
 reset role;
 
 select pg_temp.test_login(pg_temp.u915(2), '{"provider":"email"}'::jsonb);

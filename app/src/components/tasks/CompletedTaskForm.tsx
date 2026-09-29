@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { AttachedLinkFields } from '../attached-link/AttachedLinkFields';
 import { SubHeading } from '../layout';
+import { MemberName } from '../member/MemberName';
 import { Button } from '../ui/button';
 import {
   Combobox,
@@ -49,7 +50,11 @@ const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 
 /** A volunteer already decided by where the form opened: the requester, or the tracked Member. */
-export type FixedVolunteer = { id: string; name: string };
+export type FixedVolunteer = {
+  id: string;
+  nickname: string | null;
+  fullName: string;
+};
 
 /**
  * The completed-Task form (#915), one component for both ways a completed
@@ -79,8 +84,11 @@ export function CompletedTaskForm({
   options: CompletedTaskOptions;
   /** `null`: the manager chooses the volunteer after the Group. */
   volunteer: FixedVolunteer | null;
-  /** How the fixed volunteer is named: "Solicitant" on an approval. */
-  volunteerLabel?: string;
+  /**
+   * The line naming the fixed volunteer; null when the host already shows
+   * them (an approval's Request summary names the requester).
+   */
+  volunteerLabel?: string | null;
   initial?: { title?: string; description?: string; groupId?: number | null };
   submitLabel: string;
   isPending: boolean;
@@ -198,10 +206,15 @@ export function CompletedTaskForm({
         className="grid min-w-0 gap-4"
       >
         <SubHeading id={`${id}-task`}>Taskul</SubHeading>
-        {volunteer && (
+        {volunteer && volunteerLabel && (
           <p className="m-0 text-sm" data-slot="completed-volunteer">
             <span className="text-muted-foreground">{volunteerLabel}: </span>
-            <span className="font-semibold">{volunteer.name}</span>
+            <MemberName
+              memberId={volunteer.id}
+              nickname={volunteer.nickname}
+              fullName={volunteer.fullName}
+              className="font-semibold"
+            />
           </p>
         )}
         <div className="grid gap-1.5" {...form.slot('groupId')}>

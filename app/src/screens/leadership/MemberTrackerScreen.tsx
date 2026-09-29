@@ -322,7 +322,8 @@ function MemberHistory({ memberId }: { memberId: string }) {
   const volunteer = card.data
     ? {
         id: memberId,
-        name: card.data.nickname || card.data.fullName || 'Membru OSUBB',
+        nickname: card.data.nickname,
+        fullName: card.data.fullName,
       }
     : null;
   const [added, setAdded] = useState<{ id: number; title: string } | null>(

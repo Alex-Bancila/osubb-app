@@ -160,7 +160,8 @@ function ApproveRequestForm({
   }, [groups.data, request.group_id, request.group_name]);
   const volunteer: FixedVolunteer = {
     id: request.requester_id,
-    name: request.requester_nickname || request.requester_name,
+    nickname: request.requester_nickname ?? null,
+    fullName: request.requester_name,
   };
   if (groups.isPending)
     return <Loading label="Se încarcă grupurile cererii…" />;
@@ -177,7 +178,8 @@ function ApproveRequestForm({
     <CompletedTaskForm
       options={options}
       volunteer={volunteer}
-      volunteerLabel="Solicitant"
+      // The Request summary above already names the requester.
+      volunteerLabel={null}
       initial={{
         // The Task's title is the Request's first 120 characters, as the
         // server writes it when nothing is changed.
