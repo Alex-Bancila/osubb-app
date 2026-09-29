@@ -75,9 +75,7 @@ function rawRow(
     body: 'Vineri la ora 18:00 în Aula Magna.',
     group_id: 1,
     audience: 'org',
-    author: 'BC',
     priority: 'critical',
-    category: 'organizatoric',
     pinned: true,
     form_label: null,
     form_url: null,
@@ -377,11 +375,11 @@ describe('announcements-presentation', () => {
   });
 
   describe('author', () => {
-    it('names the author through created_by, with the byline until the directory answers', () => {
-      const pending = toAnnouncementPresentation(rawRow({ author: 'Ana Pop' }));
+    it('names the author through created_by, with a placeholder until the directory answers', () => {
+      const pending = toAnnouncementPresentation(rawRow());
       expect(pending.authorMember).toEqual({
         memberId: 'd0000000-0000-0000-0000-000000000007',
-        fullName: 'Ana Pop',
+        fullName: 'Membru OSUBB',
       });
       const resolved = toAnnouncementPresentation(
         rawRow(),
@@ -401,10 +399,10 @@ describe('announcements-presentation', () => {
       expect(resolved.authorMember?.nickname).toBe('Ani');
     });
 
-    it('keeps the text byline on a legacy row without created_by', () => {
+    it('names no author on a legacy row without created_by (#936: no text byline)', () => {
       const item = toAnnouncementPresentation(rawRow({ created_by: null }));
       expect(item.authorMember).toBeNull();
-      expect(item.author).toBe('BC');
+      expect(item).not.toHaveProperty('author');
     });
   });
 

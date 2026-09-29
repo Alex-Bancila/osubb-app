@@ -9,7 +9,7 @@ migration="supabase/migrations/20260911104000_tasks_lifecycle_timestamps.sql"
 begin;
 set local client_min_messages = warning;
 
-drop view public.tasks_with_overdue;
+drop view if exists public.tasks_with_overdue;  -- #936 dropped it on main
 alter table public.tasks
   drop column started_at, drop column submitted_at, drop column completed_at,
   drop column unfulfilled_at, drop column cancelled_at,

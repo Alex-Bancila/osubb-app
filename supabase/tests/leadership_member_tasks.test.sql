@@ -27,14 +27,20 @@ select ok(not has_function_privilege('service_role', 'public.leadership_member_t
 
 -- ==================== The drill-down carries the whole Task ====================
 -- J1's row click must render without a second query, so the drill-down has to
--- carry every `tasks_with_overdue` column. Eight are exposed under another
--- name: four would collide with an Assignment-level column (`id`,
--- `created_at`, `created_by`, `kind` -> task_id / task_created_at /
--- task_created_by / task_kind), and `type` is the retired legacy column
--- nothing reads. (#579 dropped the Origin triple with the legacy columns it
--- rendered: group_id / group_name are the whole Origin.) Pinning the *difference* rather than the overlap is
--- what makes this fail the day a migration adds a column to public.tasks --
--- silence would otherwise be mistaken for coverage.
+-- carry every public.tasks column, plus its own computed is_overdue (#936:
+-- tasks_with_overdue -- which used to stand in for "the read surface" here --
+-- is gone; it never carried link_label/link_url either, frozen at CREATE time
+-- before #684 added them, so comparing against the live table surfaces that
+-- gap too). Four columns are exposed under another name because they would
+-- collide with an Assignment-level column (`id`, `created_at`, `created_by`,
+-- `kind` -> task_id / task_created_at / task_created_by / task_kind); `type`
+-- is the retired legacy column nothing reads; `link_label` / `link_url`
+-- (#684, the Attached Link) are simply not carried. (#579 dropped the Origin
+-- triple with the legacy columns it rendered: group_id / group_name are the
+-- whole Origin.) Pinning the *difference* rather than the overlap is what
+-- makes this fail the day a migration adds a column to public.tasks and the
+-- drill-down does not follow -- silence would otherwise be mistaken for
+-- coverage.
 create function pg_temp.drilldown_columns() returns text[]
 language sql as $$
   select coalesce(array_agg(a.name), '{}')
@@ -45,12 +51,17 @@ language sql as $$
 $$;
 
 select set_eq(
-  format($$ select column_name::text from information_schema.columns
-             where table_schema = 'public' and table_name = 'tasks_with_overdue'
-               and column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
+  format($$ with source_columns as (
+               select column_name::text from information_schema.columns
+                where table_schema = 'public' and table_name = 'tasks'
+               union
+               select 'is_overdue'
+             )
+             select column_name from source_columns
+              where column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
   $$ values ('id'::text), ('created_at'), ('created_by'), ('kind'),
-            ('type') $$,
-  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row and the retired legacy `type`');
+            ('link_label'), ('link_url'), ('type') $$,
+  'the drill-down exposes every public.tasks column (plus the computed is_overdue) under its own name except the four renamed for the Assignment row, the Attached Link pair link_label/link_url it never carried, and the retired legacy `type`');
 
 insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000001', 'bce260@example.test'),

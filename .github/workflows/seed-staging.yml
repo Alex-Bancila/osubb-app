@@ -122,7 +122,13 @@ jobs:
           DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: |
           psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          select rank, full_name, role, points from leaderboard order by rank, full_name;
+          -- #936 dropped the leaderboard view; the same per-Member totals from the ledger.
+          select rank() over (order by coalesce(sum(l.delta), 0) desc) as rank,
+                 p.full_name, p.role, coalesce(sum(l.delta), 0) as points
+            from profiles p left join points_ledger l on l.member_id = p.id
+           where p.status = 'activ'
+           group by p.id, p.full_name, p.role
+           order by rank, p.full_name;
 
           select 'demo members' as what, count(*) from profiles where email like '%@demo.osubb'
           union all select 'tasks', count(*) from tasks

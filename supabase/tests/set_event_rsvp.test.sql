@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(26);
 
 
 truncate public.events, public.event_attendance cascade;
@@ -71,13 +71,32 @@ select ok(not coalesce((
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'set_event_rsvp'
-), true), 'the command is SECURITY INVOKER so event and attendance RLS still apply');
+), true), 'the public wrapper stays SECURITY INVOKER (#936)');
 select ok(coalesce((
   select 'search_path=""' = any(p.proconfig)
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'set_event_rsvp'
 ), false), 'the command has an empty search_path');
+-- #936: the wrapper's own RLS no longer matters for writes -- the body behind
+-- it is a SECURITY DEFINER _impl with an empty search_path, and the table
+-- grants that let authenticated write event_attendance directly are gone.
+select ok(coalesce((
+  select p.prosecdef
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'private' and p.proname = 'set_event_rsvp_impl'
+), false), 'private.set_event_rsvp_impl is SECURITY DEFINER (#936)');
+select ok(coalesce((
+  select 'search_path=""' = any(p.proconfig)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'private' and p.proname = 'set_event_rsvp_impl'
+), false), 'private.set_event_rsvp_impl has an empty search_path (#936)');
+select ok(not has_table_privilege('authenticated', 'public.event_attendance', 'insert'),
+  'authenticated can no longer insert public.event_attendance directly (#936)');
+select ok(not has_table_privilege('authenticated', 'public.event_attendance', 'update'),
+  'authenticated can no longer update public.event_attendance directly (#936)');
 select ok(coalesce((
   select has_function_privilege('authenticated', p.oid, 'execute')
     from pg_proc p

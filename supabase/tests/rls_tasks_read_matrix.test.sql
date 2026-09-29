@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(84);
+select plan(81);
 
 -- ==================== Shape of the read surface ====================
 select policies_are('public', 'tasks',
@@ -580,10 +580,6 @@ select pg_temp.login_as('project_member');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['P-loc-open'],
   'plain Project member: open Opportunities only, never the Project''s direct Tasks or closed queues');
-select set_eq(
-  $$ select substr(title, 6) from public.tasks_with_overdue where title like 'm318:%' $$,
-  pg_temp.org_open() || array['P-loc-open'],
-  'tasks_with_overdue is security_invoker: a plain Project member reads the same set through it');
 
 -- R4 over the Department Team: all six DT Tasks, the Umbrella and both
 -- Subtasks. Not D-loc-dir and, since #794, not D-loc-open: a Department Team
@@ -610,10 +606,6 @@ select pg_temp.login_as('executor');
 select set_eq('select * from pg_temp.visible_titles()',
   pg_temp.org_open() || array['X-exec', 'DT-umb-sub'],
   'current Executor reads their Tasks (a Subtask included, not its Umbrella) + open org Opportunities');
-select set_eq(
-  $$ select substr(title, 6) from public.tasks_with_overdue where title like 'm318:%' $$,
-  pg_temp.org_open() || array['X-exec', 'DT-umb-sub'],
-  'tasks_with_overdue follows tasks_read for the Executor too');
 
 -- R2 with an ended Assignment: a past Executor keeps reading their history.
 reset role;
@@ -662,8 +654,6 @@ select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok($$ select count(*) from public.tasks $$, '42501', null,
   'anon has no privilege on tasks at all');
-select throws_ok($$ select count(*) from public.tasks_with_overdue $$, '42501', null,
-  'anon has no privilege on tasks_with_overdue either');
 
 -- ==================== Decision 4: writes vs tasks_read ====================
 -- #318 split the legacy FOR ALL task_write into three write-only policies,

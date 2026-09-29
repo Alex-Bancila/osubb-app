@@ -59,7 +59,7 @@ language sql as $$
     'tasks', 'task_assignments', 'task_candidates',
     'task_activity', 'task_evaluations', 'campaigns',
     'completed_work_requests', 'points_ledger',
-    'tasks_with_overdue', 'task_queue_summary'
+    'task_queue_summary'
   ]
 $$;
 
@@ -152,8 +152,6 @@ insert into expected_table_privs (object_name, role_name, expected) values
   ('campaigns',                'service_role',  'SELECT'),
   ('completed_work_requests',  'authenticated', 'SELECT'),
   ('completed_work_requests',  'service_role',  'SELECT'),
-  ('tasks_with_overdue',       'authenticated', 'SELECT'),
-  ('tasks_with_overdue',       'service_role',  'SELECT'),
   ('task_queue_summary',       'authenticated', 'SELECT'),
   ('task_queue_summary',       'service_role',  'SELECT');
 
@@ -236,12 +234,12 @@ language sql as $$
   select coalesce(array_agg(c.relname order by c.relname), '{}')
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
-   where c.relname in ('tasks_with_overdue', 'task_queue_summary')
+   where c.relname in ('task_queue_summary')
      and coalesce(c.reloptions::text, '') not like '%security_invoker=on%'
 $$;
 
 select is(pg_temp.non_invoker_task_views(), '{}'::text[],
-  'both Task views stay security_invoker=on -- never run as the view owner, bypassing RLS');
+  'the Task view (task_queue_summary; #936 dropped tasks_with_overdue) stays security_invoker=on -- never run as the view owner, bypassing RLS');
 
 -- ==================== 6. Public Task-related functions ====================
 
@@ -278,13 +276,7 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- adds its own row here the same way.
   ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text',
                                                                      false, true,  false, false),
-  -- #328: the second Task command wrapper, added the same way #327's own
-  -- comment above instructs every later wrapper (#329-#345) to.
-  ('update_task_content','p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',
-                                                                     false, true,  false, false),
-  -- #329: the third Task command wrapper, added the same way.
-  ('convert_task_mode',  'p_task_id bigint, p_assignment_mode text, p_audience text',
-                                                                     false, true,  false, false),
+  -- #328 (update_task_content) and #329 (convert_task_mode) were retired by #936.
   -- #330: the Candidate Queue pair, added the same way.
   ('express_task_interest',  'p_task_id bigint',                     false, true,  false, false),
   ('withdraw_task_interest', 'p_task_id bigint',                     false, true,  false, false),
@@ -491,12 +483,11 @@ insert into pinned_private_functions (proname, args, category) values
   ('complete_task_review_impl',                   'p_task_id bigint, p_difficulty integer, p_rating integer, p_note text',                                             'impl'),
   -- #340: the Umbrella rollup -- completes it once every Subtask is terminal.
   ('complete_umbrella_task_impl',                 'p_task_id bigint',                                                                                                   'impl'),
-  ('convert_task_mode_impl',                      'p_task_id bigint, p_assignment_mode text, p_audience text',                                                         'impl'),
   ('create_campaign_impl',                        'p_group_id bigint, p_name text',                                                                                  'impl'),
   -- #344: filing a Completed-work Request -- membership, not management.
   ('create_completed_work_request_impl',          'p_description text, p_group_id bigint',                                            'impl'),
   ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text', 'impl'),
-  -- #259: the Department Cup body behind both the legacy `dept_cup` view and
+  -- #259: the Department Cup body (#936 dropped the legacy `dept_cup` view) behind
   -- the filtered `public.department_cup(p_campaign_id)` wrapper.
   ('department_cup_rows',                         'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',                                                                                               'authenticated_only'),
   -- #341: clone a Task into a brand-new todo Task with a fresh deadline.
@@ -599,8 +590,12 @@ insert into pinned_private_functions (proname, args, category) values
   ('preview_task_update_impl',                    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text', 'impl'),
   ('plan_task_update',                            'p_task tasks, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text', 'none'),
   ('task_update_consequences',                    'p_task_id bigint, p_group_id bigint, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
-  ('update_task_content_impl',                    'p_task_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint',        'impl'),
-  -- #891: the changed-field label map both edit bodies read for the
+  -- #936 retired update_task_content_impl and convert_task_mode_impl. It made
+  -- set_event_rsvp a command (this body) and froze an Announcement's Group and
+  -- Audience with a row guard (granted to nobody).
+  ('set_event_rsvp_impl',                         'p_event_id bigint, p_status text',                                                                                  'impl'),
+  ('guard_announcement_origin',                   '',                                                                                                                   'trigger'),
+  -- #891: the changed-field label map the edit body (update_task_impl) reads for the
   -- Executor's "Modificat: ..." notification. Pure; granted to nobody.
   ('task_field_labels',                           'p_fields text[]',                                                                                                    'none'),
   -- #507: the two Group invariant triggers — the hierarchy/path/Minimum Level
@@ -818,7 +813,7 @@ insert into pinned_private_functions (proname, args, category) values
 
 select is(
   (select count(*) from pinned_private_functions)::int, 175,
-  'the audited roster includes #935''s Promotion Rule command body, #934''s Event manager predicate, #929''s Group member set, notification audience and roster read body, #915''s completed-Task command body, decider rule and set, Minimum Level check, caller standing, award predicate and set, and Group gate, #909''s Announcement Termen and Minimum Level guard trigger body, compose predicate and Event Announcement body, #905''s rank-change effect, #891''s changed-field label map, #861''s Announcement-read Notification trigger body, #866''s share command body, #775''s Email Digest quota read, selection and job body, the security pass''s daily cap and Announcement cap trigger body, the Web Push registration guard trigger body, Announcement authorship stamp trigger body and profile text guard trigger body, #776''s Resend delivery-problem body, #771''s Privacy Acknowledgement command body and status read body, #632''s profile email sync trigger body, #589''s Group coordination reader body, #794''s groups_read org-Opportunity limb predicate, #826''s Role Evaluation core over a range, full ranking and ranking read body, standing read body, three command bodies (run, threshold, reject) and candidate-closing trigger body, #52''s tenure-rule job body and its one-row core, #51''s tenure-rule detection, #512''s eligibility-data read predicate, #769''s Web Push health job body, #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies), and less #590''s three legacy structure predicates (can_read_team, is_active_project_member, can_manage_department_memberships)');
+  'the audited roster includes #936''s RSVP command body and Announcement Group/Audience guard trigger body (less its two retired Task command bodies, update_task_content_impl and convert_task_mode_impl), #935''s Promotion Rule command body, #934''s Event manager predicate, #929''s Group member set, notification audience and roster read body, #915''s completed-Task command body, decider rule and set, Minimum Level check, caller standing, award predicate and set, and Group gate, #909''s Announcement Termen and Minimum Level guard trigger body, compose predicate and Event Announcement body, #905''s rank-change effect, #891''s changed-field label map, #861''s Announcement-read Notification trigger body, #866''s share command body, #775''s Email Digest quota read, selection and job body, the security pass''s daily cap and Announcement cap trigger body, the Web Push registration guard trigger body, Announcement authorship stamp trigger body and profile text guard trigger body, #776''s Resend delivery-problem body, #771''s Privacy Acknowledgement command body and status read body, #632''s profile email sync trigger body, #589''s Group coordination reader body, #794''s groups_read org-Opportunity limb predicate, #826''s Role Evaluation core over a range, full ranking and ranking read body, standing read body, three command bodies (run, threshold, reject) and candidate-closing trigger body, #52''s tenure-rule job body and its one-row core, #51''s tenure-rule detection, #512''s eligibility-data read predicate, #769''s Web Push health job body, #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies), and less #590''s three legacy structure predicates (can_read_team, is_active_project_member, can_manage_department_memberships)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

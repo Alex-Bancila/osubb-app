@@ -8,7 +8,11 @@
 select md5(string_agg(x, '|' order by x))
   from (
     select format('member:%s:%s:%s', full_name, role, status) from profiles
-    union all select format('points:%s:%s:%s', full_name, points, rank) from leaderboard
+    -- #936 dropped the leaderboard view; the per-Member total is summed here.
+    union all select format('points:%s:%s', p.full_name, coalesce(sum(l.delta), 0))
+                from profiles p left join points_ledger l on l.member_id = p.id
+               where p.status = 'activ'
+               group by p.id, p.full_name
     -- Native Groups and their command-appointed rosters are the demo source.
     -- Stable names and settings make a rerun comparable despite new ids.
     union all select format('group:%s:%s:%s:%s:%s:%s:%s:%s:%s', grp.name, grp.category,
