@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { ClipboardCheck } from 'lucide-react';
 import {
   EmptyState,
@@ -20,8 +20,15 @@ import {
 import { FieldError } from '../../components/ui/field';
 import { fieldForReason, rejectionNoteSchema } from '../../lib/schemas/note';
 import { useFormValidation } from '../../lib/use-form-validation';
-import { EvaluationFields } from '../../components/tasks/EvaluationFields';
+import {
+  CompletedTaskForm,
+  type FixedVolunteer,
+} from '../../components/tasks/CompletedTaskForm';
 import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
+import {
+  useCompletedTaskGroups,
+  type CompletedTaskDraft,
+} from '../../queries/completed-tasks';
 import {
   usePendingDecisions,
   useRequestDecision,
@@ -110,6 +117,81 @@ function RejectForm({
         </Button>
       </DialogFooter>
     </form>
+  );
+}
+
+/**
+ * Approving a Request (#915): the decider shapes the completed Task first —
+ * title, details, Group (any Group they may credit the requester in), link,
+ * Campaign — then gives the points. The Request's own Group is always
+ * offered, so an approval without changes works as before.
+ */
+function ApproveRequestForm({
+  request,
+  isPending,
+  onApprove,
+  onCancel,
+}: {
+  request: PendingDecision;
+  isPending: boolean;
+  onApprove: (draft: CompletedTaskDraft) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const groups = useCompletedTaskGroups(request.requester_id);
+  const options = useMemo(() => {
+    if (!groups.data) return null;
+    const offered = groups.data.groups.some(
+      (group) => group.id === request.group_id,
+    );
+    return offered
+      ? groups.data
+      : {
+          ...groups.data,
+          groups: [
+            {
+              id: request.group_id,
+              name: request.group_name,
+              path: [request.group_id],
+              min_level: 0,
+            },
+            ...groups.data.groups,
+          ],
+        };
+  }, [groups.data, request.group_id, request.group_name]);
+  const volunteer: FixedVolunteer = {
+    id: request.requester_id,
+    nickname: request.requester_nickname ?? null,
+    fullName: request.requester_name,
+  };
+  if (groups.isPending)
+    return <Loading label="Se încarcă grupurile cererii…" />;
+  if (groups.isError || !options)
+    return (
+      <ErrorState
+        error={groups.error}
+        text="Nu am putut încărca grupurile cererii."
+        retryLabel="Reîncearcă"
+        onRetry={() => void groups.refetch()}
+      />
+    );
+  return (
+    <CompletedTaskForm
+      options={options}
+      volunteer={volunteer}
+      // The Request summary above already names the requester.
+      volunteerLabel={null}
+      initial={{
+        // The Task's title is the Request's first 120 characters, as the
+        // server writes it when nothing is changed.
+        title: request.description.slice(0, 120),
+        description: request.description,
+        groupId: request.group_id,
+      }}
+      submitLabel="Aprobă și acordă punctele"
+      isPending={isPending}
+      onSubmit={onApprove}
+      onCancel={onCancel}
+    />
   );
 }
 
@@ -235,7 +317,12 @@ export function RequestDecisionQueue({
       >
         <DialogContent
           finalFocus={() => !decided.current}
-          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+          className={
+            selected?.kind === 'approve'
+              ? // A form as long as a Task's: a sheet on a phone (#915).
+                'max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none'
+              : 'max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg'
+          }
         >
           {selected && (
             <>
@@ -245,11 +332,11 @@ export function RequestDecisionQueue({
                     ? 'Evaluează cererea'
                     : 'Respinge cererea'}
                 </DialogTitle>
-                {selected.kind === 'reject' && (
-                  <DialogDescription>
-                    Solicitantul vede motivul în Cererile mele.
-                  </DialogDescription>
-                )}
+                <DialogDescription>
+                  {selected.kind === 'approve'
+                    ? 'Aprobarea creează taskul finalizat așa cum îl lași mai jos și acordă punctele solicitantului.'
+                    : 'Solicitantul vede motivul în Cererile mele.'}
+                </DialogDescription>
               </DialogHeader>
               <div
                 data-slot="request-under-decision"
@@ -258,23 +345,27 @@ export function RequestDecisionQueue({
                 <RequestSummary request={selected.request} />
               </div>
               {selected.kind === 'approve' ? (
-                <EvaluationFields
-                  inDialog
-                  request
-                  executorName={
-                    selected.request.requester_nickname ||
-                    selected.request.requester_name
-                  }
+                <ApproveRequestForm
+                  key={selected.request.id}
+                  request={selected.request}
                   isPending={mutation.isPending}
-                  onEvaluate={(values) =>
+                  onApprove={(draft) =>
                     decide({
                       kind: 'approve',
                       requestId: selected.request.id,
-                      ...values,
+                      difficulty: draft.difficulty,
+                      rating: draft.rating,
+                      note: draft.note,
+                      task: {
+                        title: draft.title,
+                        description: draft.description,
+                        groupId: draft.groupId,
+                        link: draft.link,
+                        campaignId: draft.campaignId,
+                      },
                     })
                   }
                   onCancel={close}
-                  onSuccess={() => {}}
                 />
               ) : (
                 <RejectForm

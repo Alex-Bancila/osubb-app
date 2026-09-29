@@ -6,11 +6,8 @@ import { FieldError } from '../ui/field';
 import { evaluationSchema, fieldForReason } from '../../lib/schemas/evaluation';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useEvaluationScale } from '../../queries/reference';
-import { formatPoints } from '../../lib/format';
 import { RatingGuideDialog } from '../../screens/tracker/RatingGuideDialog';
-import { ratingHint } from '../../screens/tracker/rating-guide-content';
-import { DifficultyStarPicker } from './DifficultyStars';
-import { RatingPicker } from './RatingPicker';
+import { EvaluationInputs } from './EvaluationInputs';
 
 export function EvaluationFields({
   executorName,
@@ -18,7 +15,6 @@ export function EvaluationFields({
   onSuccess,
   onEvaluate,
   isPending,
-  request = false,
   outcome = 'completed',
   inDialog = false,
 }: {
@@ -31,7 +27,6 @@ export function EvaluationFields({
     note: string;
   }) => Promise<unknown>;
   isPending: boolean;
-  request?: boolean;
   /** "unfulfilled" scores an overdue Task as Nerealizat instead of closing it as completed. */
   outcome?: 'completed' | 'unfulfilled';
   /**
@@ -77,11 +72,7 @@ export function EvaluationFields({
       className="min-h-11"
       disabled={isPending || !scale.data}
     >
-      {isPending
-        ? 'Se salvează…'
-        : request
-          ? 'Aprobă cererea'
-          : 'Confirmă evaluarea'}
+      {isPending ? 'Se salvează…' : 'Confirmă evaluarea'}
     </Button>
   );
   const cancelButton = (label: string) => (
@@ -111,10 +102,8 @@ export function EvaluationFields({
         </h3>
       )}
       <p className="text-sm">
-        {request ? 'Solicitant' : 'Executor'}: {executorName ?? 'Membrul'}.{' '}
-        {request
-          ? 'Aprobarea înregistrează activitatea realizată și acordă punctele solicitantului.'
-          : 'Evaluarea încheie taskul și acordă punctele acestei persoane.'}
+        Executor: {executorName ?? 'Membrul'}. Evaluarea încheie taskul și
+        acordă punctele acestei persoane.
       </p>
       {outcome === 'unfulfilled' && (
         <p>
@@ -142,56 +131,22 @@ export function EvaluationFields({
           </Button>
         </div>
       )}
-      <fieldset disabled={isPending || !scale.data} className="space-y-3">
-        <legend className="sr-only">
-          Dificultate, notă și observații obligatorii
-        </legend>
-        <DifficultyStarPicker
-          label="Dificultate (obligatoriu)"
-          prompt="Alege între 1 și 5 stele: 1 e cel mai ușor, 5 cel mai greu."
-          value={difficulty === '' ? null : Number(difficulty)}
-          onChange={(value) => setDifficulty(String(value))}
-          hint={(value) =>
-            scale.data?.difficulties.find((row) => row.stars === value)?.note ??
-            null
-          }
-          disabled={isPending || !scale.data}
-          invalid={form.error('difficulty') !== undefined}
-          errorId={form.errorId('difficulty')}
-          groupRef={form.slot('difficulty').ref}
-        />
-        <FieldError {...form.errorProps('difficulty')} />
-        <RatingPicker
-          label="Nota (obligatoriu)"
-          prompt="Alege o notă între 1 și 5."
-          value={rating === '' ? null : Number(rating)}
-          onChange={(value) => setRating(String(value))}
-          hint={ratingHint}
-          disabled={isPending || !scale.data}
-          invalid={form.error('rating') !== undefined}
-          errorId={form.errorId('rating')}
-          groupRef={form.slot('rating').ref}
-        />
-        <FieldError {...form.errorProps('rating')} />
-        <p role="status" className="rounded-md bg-muted p-3 text-sm">
-          {points === null
-            ? 'Alege dificultatea și nota pentru previzualizare.'
-            : `Previzualizare: ${formatPoints(points)} puncte. ${points < 0 ? 'Se scad puncte.' : points === 0 ? 'Nu se acordă puncte.' : 'Se acordă puncte.'} Serverul confirmă punctajul final.`}
-        </p>
-        <label htmlFor={`${id}-note`} className="block text-sm font-medium">
-          Observații (obligatoriu)
-        </label>
-        <textarea
-          id={`${id}-note`}
-          required
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={3}
-          className="min-h-24 w-full rounded-md border border-input bg-background p-3"
-          {...form.field('note')}
-        />
-        <FieldError {...form.errorProps('note')} />
-      </fieldset>
+      <EvaluationInputs
+        id={id}
+        values={{ difficulty, rating, note }}
+        onChange={(patch) => {
+          if (patch.difficulty !== undefined) setDifficulty(patch.difficulty);
+          if (patch.rating !== undefined) setRating(patch.rating);
+          if (patch.note !== undefined) setNote(patch.note);
+        }}
+        form={form}
+        disabled={isPending || !scale.data}
+        difficultyHint={(value) =>
+          scale.data?.difficulties.find((row) => row.stars === value)?.note ??
+          null
+        }
+        points={points}
+      />
       <FieldError>{form.formError}</FieldError>
       {inDialog ? (
         <DialogFooter>
