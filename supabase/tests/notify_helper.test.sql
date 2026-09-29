@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(74);
+select plan(73);
 
 -- ==================== Definition and privileges ====================
 select is(
@@ -426,32 +426,34 @@ select throws_ok(
   'notify: a whitespace-only title raises PT400 invalid_notification_title'
 );
 
--- ==================== task_managers: Department fallback (no BCE) ====================
+-- ==================== task_managers: Department with no Manager (no BCE) ====================
+-- #929 (R32): BC and the Moderator hear of no Task through Group management, and the
+-- last-resort BC/Moderator fallback of Ruling 24 is retired.
 select ok(
-  '32000000-0000-0000-0000-000000000501'::uuid in (
+  '32000000-0000-0000-0000-000000000501'::uuid not in (
     select member_id from private.task_managers((select dept_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
   ),
-  'task_managers: a Department with no live BCE member falls back to BC/Moderator -- BC fixture included'
+  'task_managers: a Department with no live Manager never falls back to BC (R32) -- BC fixture excluded'
 );
 select ok(
-  '32000000-0000-0000-0000-000000000502'::uuid in (
+  '32000000-0000-0000-0000-000000000502'::uuid not in (
     select member_id from private.task_managers((select dept_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
   ),
-  'task_managers: a Department with no live BCE member falls back to BC/Moderator -- Moderator fixture included'
+  'task_managers: a Department with no live Manager never falls back to the Moderator (R32) -- Moderator fixture excluded'
 );
 
--- ==================== task_managers: Department-Team fallback (no BCE parent) ====================
+-- ==================== task_managers: Department-Team with no Manager on the path ====================
 select ok(
-  '32000000-0000-0000-0000-000000000501'::uuid in (
+  '32000000-0000-0000-0000-000000000501'::uuid not in (
     select member_id from private.task_managers((select deptteam_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
   ),
-  'task_managers: a Department-Team whose parent has no live BCE member falls back to BC/Moderator -- BC fixture included'
+  'task_managers: a Department-Team whose parent has no live Manager never falls back to BC (R32)'
 );
 select ok(
-  '32000000-0000-0000-0000-000000000502'::uuid in (
+  '32000000-0000-0000-0000-000000000502'::uuid not in (
     select member_id from private.task_managers((select deptteam_nobce_task_id from fx), '32000000-0000-0000-0000-000000000701'::uuid) as member_id
   ),
-  'task_managers: a Department-Team whose parent has no live BCE member falls back to BC/Moderator -- Moderator fixture included'
+  'task_managers: a Department-Team whose parent has no live Manager never falls back to the Moderator (R32)'
 );
 
 -- ==================== task_managers: creator active and not the actor ====================
@@ -482,14 +484,14 @@ select is(
 select is(
   (select array_agg(member_id order by member_id)
      from private.task_managers((select indepteam_task_id from fx), '32000000-0000-0000-0000-000000000301'::uuid) as member_id),
-  array(select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and (r.level>=6 or p.id='32000000-0000-0000-0000-000000000302'::uuid) order by p.id),
-  'task_managers: Independent-Team origin -- peers and live BC/Moderator, excluding the actor'
+  array['32000000-0000-0000-0000-000000000302'::uuid],
+  'task_managers: Independent-Team origin -- the peer Responsibles only, excluding the actor, never BC or the Moderator (R32)'
 );
 select is(
   (select array_agg(member_id order by member_id)
      from private.task_managers((select indepteam_task_id from fx), '32000000-0000-0000-0000-000000000302'::uuid) as member_id),
-  array(select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and (r.level>=6 or p.id='32000000-0000-0000-0000-000000000301'::uuid) order by p.id),
-  'task_managers: Independent-Team origin -- peers and BC/Moderator still exclude the acting peer'
+  array['32000000-0000-0000-0000-000000000301'::uuid],
+  'task_managers: Independent-Team origin -- the peers still exclude the acting peer, and BC/Moderator stay out (R32)'
 );
 
 -- ==================== task_managers: Project origin, Responsible included, plain member excluded ====================
@@ -500,30 +502,21 @@ select is(
   'task_managers: Project origin -- the nearest Managers receive fallback; Responsibles do not when a Manager exists'
 );
 
--- ==================== task_managers: empty Origin falls back to BC/Moderator ====================
-select ok(
-  '32000000-0000-0000-0000-000000000502'::uuid in (
-    select member_id from private.task_managers((select emptyteam_task_id from fx), '32000000-0000-0000-0000-000000000501'::uuid) as member_id
-  ),
-  'task_managers: an Independent Team with no members falls back to BC/Moderator -- the Moderator fixture is included'
+-- ==================== task_managers: empty Origin notifies nobody (R32) ====================
+select is(
+  (select count(*) from private.task_managers((select emptyteam_task_id from fx), '32000000-0000-0000-0000-000000000501'::uuid)),
+  0::bigint,
+  'task_managers: an Independent Team with no members notifies nobody -- the BC/Moderator last resort is retired (R32)'
 );
-select ok(
-  '32000000-0000-0000-0000-000000000501'::uuid not in (
-    select member_id from private.task_managers((select emptyteam_task_id from fx), '32000000-0000-0000-0000-000000000501'::uuid) as member_id
-  ),
-  'task_managers: the fallback still excludes the actor, even a BC who would otherwise qualify'
+select is(
+  (select count(*) from private.task_managers((select emptyteam_task_id from fx), '32000000-0000-0000-0000-000000000502'::uuid)),
+  0::bigint,
+  'task_managers: nor when the Moderator is the actor -- BC is not the fallback either (R32)'
 );
-select ok(
-  '32000000-0000-0000-0000-000000000501'::uuid in (
-    select member_id from private.task_managers((select emptyteam_task_id from fx), '32000000-0000-0000-0000-000000000502'::uuid) as member_id
-  ),
-  'task_managers: the BC fixture is included in the fallback when the Moderator is the actor instead'
-);
-select ok(
-  '32000000-0000-0000-0000-000000000503'::uuid not in (
-    select member_id from private.task_managers((select emptyteam_task_id from fx), null::uuid) as member_id
-  ),
-  'task_managers: a plain active Member (neither BC nor Moderator) is never part of the fallback'
+select is(
+  (select count(*) from private.task_managers((select emptyteam_task_id from fx), null::uuid)),
+  0::bigint,
+  'task_managers: with no actor at all, an empty Origin has no recipient -- no BC, no Moderator, no plain Member'
 );
 
 -- ==================== task_managers: unknown task ====================
@@ -581,7 +574,7 @@ select pg_temp.g521_task('project','project',5);
 select pg_temp.g521_task('ind','ind',7);
 select results_eq($$select private.task_managers((select id from g521_tasks where name='project'),pg_temp.g521_uid(5)) order by 1$$,$$select pg_temp.g521_uid(1)$$,'live creator remains the first recipient');
 select results_eq($$select private.task_managers((select id from g521_tasks where name='project'),pg_temp.g521_uid(1)) order by 1$$,$$select pg_temp.g521_uid(2)$$,'creator acting falls back to Group Manager, excluding Responsibles');
-select results_eq($$select private.task_managers((select id from g521_tasks where name='ind'),pg_temp.g521_uid(1)) order by 1$$,$$select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and p.id<>pg_temp.g521_uid(1) and (r.level>=6 or p.id in (pg_temp.g521_uid(6),pg_temp.g521_uid(7))) order by 1$$,'Manager-less chain notifies peers and BC without echo');
+select results_eq($$select private.task_managers((select id from g521_tasks where name='ind'),pg_temp.g521_uid(1)) order by 1$$,$$select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and p.id<>pg_temp.g521_uid(1) and r.level<6 and p.id in (pg_temp.g521_uid(6),pg_temp.g521_uid(7)) order by 1$$,'Manager-less chain notifies its peers without echo, never BC or the Moderator (R32)');
 
 -- ==================== #843: the data update of rows already delivered ====================
 -- The migration rewrites the Notifications already sent to the links the

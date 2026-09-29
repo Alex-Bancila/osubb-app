@@ -21,6 +21,7 @@ vi.mock('../../lib/supabase', async () => {
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({
     session: { user: { id: viewer.id } },
+    claims: { member_level: 3 },
   }),
 }));
 vi.mock('../../lib/capabilities', () => ({
@@ -474,6 +475,204 @@ describe('AnnouncementDetailsSheet', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'Nu poți modifica acest anunț.',
       );
+    });
+  });
+
+  describe('edit and delete (#930)', () => {
+    const local = (overrides: Partial<AnnouncementPresentation> = {}) =>
+      presentation({
+        groupId: 7,
+        group: { id: 7, name: 'Educațional' },
+        audience: 'local',
+        pinned: false,
+        priority: 'normal',
+        title: 'Recrutare toamnă',
+        body: 'Detalii în formular.',
+        authorMember: { memberId: viewer.id, fullName: 'Ana Pop' },
+        ...overrides,
+      });
+    const editButton = () => screen.queryByRole('button', { name: 'Editează' });
+    const deleteButton = () => screen.queryByRole('button', { name: 'Șterge' });
+
+    it('hides both from a plain Member and from the author outside the set', () => {
+      // The viewer wrote it (authorMember) but holds no Role on the Origin.
+      viewer.groups = [{ id: 7, group_role: 'member', status: 'active' }];
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+      expect(editButton()).not.toBeInTheDocument();
+      expect(deleteButton()).not.toBeInTheDocument();
+    });
+
+    it('offers both to BC/Moderator and to a Manager inherited from above', () => {
+      viewer.bcOrModerator = true;
+      const { unmount } = renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+      expect(editButton()).toBeInTheDocument();
+      expect(deleteButton()).toBeInTheDocument();
+      unmount();
+
+      viewer.bcOrModerator = false;
+      viewer.managesAnyGroup = true;
+      // my_groups() lists the Origin with the Role held on its parent.
+      viewer.groups = [
+        { id: 2, group_role: 'manager', status: 'active' },
+        { id: 7, group_role: 'manager', status: 'active' },
+      ];
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+      expect(editButton()).toBeInTheDocument();
+      expect(deleteButton()).toBeInTheDocument();
+    });
+
+    it('opens the fields prefilled, the Origin read-only, and saves only what changed', async () => {
+      const user = userEvent.setup();
+      viewer.groups = [{ id: 7, group_role: 'responsible', status: 'active' }];
+      supabaseMock.select.mockResolvedValueOnce({
+        data: [{ id: 1 }],
+        error: null,
+      });
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Editează' }));
+      const sheet = await screen.findByRole('dialog', {
+        name: 'Editează anunțul',
+      });
+      const title = within(sheet).getByRole('textbox', { name: 'Titlu' });
+      expect(title).toHaveValue('Recrutare toamnă');
+      expect(within(sheet).getByRole('textbox', { name: 'Mesaj' })).toHaveValue(
+        'Detalii în formular.',
+      );
+      // The Group and Audience are shown, never offered.
+      expect(within(sheet).getByText('Educațional')).toBeInTheDocument();
+      expect(within(sheet).getByText('Doar grupul')).toBeInTheDocument();
+      expect(
+        within(sheet).queryByRole('combobox', { name: /Grup de origine/ }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(sheet).queryByRole('radio', { name: 'Toată organizația' }),
+      ).not.toBeInTheDocument();
+
+      await user.clear(title);
+      await user.type(title, 'Recrutare iarnă');
+      await user.click(
+        within(sheet).getByRole('button', { name: 'Salvează modificările' }),
+      );
+
+      expect(supabaseMock.update).toHaveBeenCalledWith({
+        title: 'Recrutare iarnă',
+      });
+      expect(supabaseMock.eq).toHaveBeenCalledWith('id', 1);
+      // No insert: an edit never fans out a new notification.
+      expect(supabaseMock.insert).not.toHaveBeenCalled();
+      expect(
+        await screen.findByText('Anunțul a fost actualizat.'),
+      ).toHaveAttribute('role', 'status');
+    });
+
+    it('says "Nu poți modifica acest anunț." when the server updates no row', async () => {
+      const user = userEvent.setup();
+      viewer.bcOrModerator = true;
+      supabaseMock.select.mockResolvedValueOnce({ data: [], error: null });
+      renderSheet(
+        <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Editează' }));
+      const sheet = await screen.findByRole('dialog', {
+        name: 'Editează anunțul',
+      });
+      await user.type(
+        within(sheet).getByRole('textbox', { name: 'Mesaj' }),
+        ' Mulțumim!',
+      );
+      await user.click(
+        within(sheet).getByRole('button', { name: 'Salvează modificările' }),
+      );
+
+      expect(
+        await within(sheet).findByText('Nu poți modifica acest anunț.'),
+      ).toBeInTheDocument();
+    });
+
+    it('deletes after the confirmation and hands the sheet back', async () => {
+      const user = userEvent.setup();
+      const onDeleted = vi.fn();
+      viewer.bcOrModerator = true;
+      supabaseMock.select.mockResolvedValueOnce({
+        data: [{ id: 1 }],
+        error: null,
+      });
+      renderSheet(
+        <AnnouncementDetailsSheet
+          announcement={local()}
+          onClose={vi.fn()}
+          onDeleted={onDeleted}
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Șterge' }));
+      const confirm = await screen.findByRole('dialog', {
+        name: 'Ștergi anunțul?',
+      });
+      expect(confirm).toHaveTextContent('Membrii nu îl vor mai vedea.');
+      expect(supabaseMock.delete).not.toHaveBeenCalled();
+
+      await user.click(
+        within(confirm).getByRole('button', { name: 'Șterge anunțul' }),
+      );
+
+      expect(supabaseMock.from).toHaveBeenCalledWith('announcements');
+      expect(supabaseMock.delete).toHaveBeenCalled();
+      expect(supabaseMock.eq).toHaveBeenCalledWith('id', 1);
+      await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
+    });
+
+    it('keeps it and says "Nu poți șterge acest anunț." on a refusal; Renunță deletes nothing', async () => {
+      const user = userEvent.setup();
+      const onDeleted = vi.fn();
+      viewer.bcOrModerator = true;
+      supabaseMock.select.mockResolvedValueOnce({ data: [], error: null });
+      renderSheet(
+        <AnnouncementDetailsSheet
+          announcement={local()}
+          onClose={vi.fn()}
+          onDeleted={onDeleted}
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Șterge' }));
+      let confirm = await screen.findByRole('dialog', {
+        name: 'Ștergi anunțul?',
+      });
+      await user.click(
+        within(confirm).getByRole('button', { name: 'Șterge anunțul' }),
+      );
+      expect(await within(confirm).findByRole('alert')).toHaveTextContent(
+        'Nu poți șterge acest anunț.',
+      );
+      expect(onDeleted).not.toHaveBeenCalled();
+
+      await user.click(
+        within(confirm).getByRole('button', { name: 'Renunță' }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', { name: 'Ștergi anunțul?' }),
+        ).not.toBeInTheDocument(),
+      );
+
+      supabaseMock.delete.mockClear();
+      await user.click(screen.getByRole('button', { name: 'Șterge' }));
+      confirm = await screen.findByRole('dialog', { name: 'Ștergi anunțul?' });
+      await user.click(
+        within(confirm).getByRole('button', { name: 'Renunță' }),
+      );
+      expect(supabaseMock.delete).not.toHaveBeenCalled();
     });
   });
 });

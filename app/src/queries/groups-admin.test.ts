@@ -5,6 +5,7 @@ const api = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: api }));
 
 import {
+  explicitRoster,
   fetchAdminGroups,
   fetchGroupRoster,
   groupAuthority,
@@ -18,21 +19,27 @@ beforeEach(() => {
   api.rpc.mockResolvedValue({ data: { id: 1 }, error: null });
 });
 
-/** A PostgREST builder that answers whatever `rows` the table name maps to. */
+/**
+ * A PostgREST builder that answers whatever `rows` the table name maps to —
+ * and the `group_roster` read (#929) from `rows.group_roster`, recording the
+ * arguments it was called with.
+ */
 function tables(rows: Record<string, unknown[]>) {
-  api.from.mockImplementation((table: string) => {
+  const builderFor = (name: string) => {
     const builder = {
       select: () => builder,
       eq: () => builder,
       order: () => builder,
       range: (from: number) =>
         Promise.resolve({
-          data: from === 0 ? (rows[table] ?? []) : [],
+          data: from === 0 ? (rows[name] ?? []) : [],
           error: null,
         }),
     };
     return builder;
-  });
+  };
+  api.from.mockImplementation((table: string) => builderFor(table));
+  api.rpc.mockImplementation((name: string) => builderFor(name));
 }
 
 it('sends every Administrare write through its own command, nulls included', async () => {
@@ -167,18 +174,29 @@ it('raises a translated refusal that still carries the server reason', async () 
   expect((failure as CommandError).message).not.toMatch(/_/);
 });
 
-it('counts a Group by its roster rows and reads every page', async () => {
+it('counts a Group by every member it has, automatic and de drept included (#929)', async () => {
   tables({
     groups: [
       { id: 1, name: 'Educațional', path: [1], parent_id: null },
       { id: 2, name: 'Logistică', path: [1, 2], parent_id: 1 },
+      { id: 3, name: 'Adunarea Generală', path: [3], parent_id: null },
     ],
-    group_members: [{ group_id: 1 }, { group_id: 1 }, { group_id: 2 }],
+    group_roster: [
+      { group_id: 1 },
+      { group_id: 1 },
+      { group_id: 2 },
+      // The Adunarea Generală: two automatic members and one membru de drept.
+      { group_id: 3 },
+      { group_id: 3 },
+      { group_id: 3 },
+    ],
   });
   const groups = await fetchAdminGroups();
+  expect(api.rpc).toHaveBeenCalledWith('group_roster', {});
   expect(groups.map((group) => [group.name, group.memberCount])).toEqual([
     ['Educațional', 2],
     ['Logistică', 1],
+    ['Adunarea Generală', 3],
   ]);
 });
 
@@ -186,9 +204,32 @@ it('shows each Member beside their Membership Status and their own Level', async
   // Deactivation never edits a roster (ruling R22), so an inactive Member is
   // still here — and their Level is what a raised Minimum Level compares to.
   tables({
-    group_members: [
-      { member_id: 'b', group_role: 'manager', position_title: null },
-      { member_id: 'a', group_role: 'member', position_title: null },
+    group_roster: [
+      {
+        member_id: 'b',
+        group_role: 'manager',
+        position_title: null,
+        source: 'roster',
+      },
+      {
+        member_id: 'a',
+        group_role: 'member',
+        position_title: null,
+        source: 'roster',
+      },
+      // #929: an automatic member and a membru de drept carry no Group Role.
+      {
+        member_id: 'c',
+        group_role: null,
+        position_title: null,
+        source: 'automatic',
+      },
+      {
+        member_id: 'd',
+        group_role: null,
+        position_title: null,
+        source: 'board',
+      },
     ],
     profiles_directory: [
       {
@@ -205,13 +246,30 @@ it('shows each Member beside their Membership Status and their own Level', async
         avatar_color: null,
         role: 'bce',
       },
+      {
+        id: 'c',
+        full_name: 'Cezar Vot',
+        status: 'activ',
+        avatar_color: null,
+        role: 'vot',
+      },
+      {
+        id: 'd',
+        full_name: 'Dana Birou',
+        status: 'activ',
+        avatar_color: null,
+        role: 'bc',
+      },
     ],
     roles: [
       { id: 'voluntar', name: 'Voluntar', level: 1 },
+      { id: 'vot', name: 'Voluntar cu Drept de Vot', level: 3 },
       { id: 'bce', name: 'BCE', level: 5 },
+      { id: 'bc', name: 'BC', level: 6 },
     ],
   });
   const roster = await fetchGroupRoster(7);
+  expect(api.rpc).toHaveBeenCalledWith('group_roster', { p_group_id: 7 });
   expect(roster).toEqual([
     {
       memberId: 'a',
@@ -219,7 +277,9 @@ it('shows each Member beside their Membership Status and their own Level', async
       avatarColor: '#123456',
       groupRole: 'member',
       positionTitle: null,
+      source: 'roster',
       status: 'inactiv',
+      roleId: 'voluntar',
       roleLabel: 'Voluntar',
       level: 1,
     },
@@ -229,10 +289,41 @@ it('shows each Member beside their Membership Status and their own Level', async
       avatarColor: null,
       groupRole: 'manager',
       positionTitle: null,
+      source: 'roster',
       status: 'activ',
+      roleId: 'bce',
       roleLabel: 'BCE',
       level: 5,
     },
+    {
+      memberId: 'c',
+      name: 'Cezar Vot',
+      avatarColor: null,
+      groupRole: 'member',
+      positionTitle: null,
+      source: 'automatic',
+      status: 'activ',
+      roleId: 'vot',
+      roleLabel: 'Voluntar cu Drept de Vot',
+      level: 3,
+    },
+    {
+      memberId: 'd',
+      name: 'Dana Birou',
+      avatarColor: null,
+      groupRole: 'member',
+      positionTitle: null,
+      source: 'board',
+      status: 'activ',
+      roleId: 'bc',
+      roleLabel: 'BC',
+      level: 6,
+    },
+  ]);
+  // Roluri and Setări act on the explicit rows alone.
+  expect(explicitRoster(roster).map((entry) => entry.memberId)).toEqual([
+    'a',
+    'b',
   ]);
 });
 

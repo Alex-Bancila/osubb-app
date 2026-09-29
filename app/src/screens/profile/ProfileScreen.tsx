@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   BellRing,
   Calendar,
@@ -99,6 +99,11 @@ export default function ProfileScreen() {
     0;
 
   const onBoard = memberLevel >= BOARD_LEVEL;
+  // #929 (Alex, 2026-09-29): a BCE member belongs to the Adunarea Generală by
+  // Role, so their Profil lists their Groups too — beside the board position,
+  // without the joining parts (#824). BC and the Moderator, members of every
+  // Group, are not listed Group by Group (R32).
+  const bceGroups = onBoard && memberLevel < 6;
   // F-7 (#893, Alex 2026-09-29): the Moderator is not a board position; the
   // function is the Role, with no board title to look up or miss.
   // The loaded Profile is current; a claim can lag a Role change.
@@ -337,36 +342,50 @@ export default function ProfileScreen() {
 
         <PageGrid columns={2}>
           {onBoard ? (
-            <Panel
-              eyebrow={
-                // No area for the Moderator (ruling 2: no eyebrow then).
-                isModerator
-                  ? undefined
-                  : profile.role === 'bce'
-                    ? 'Biroul de Conducere Extins'
-                    : 'Biroul de Conducere'
+            <BoardColumn
+              withGroups={bceGroups}
+              stacked={timelineShown}
+              groups={
+                <Panel eyebrow="Grupuri" icon={Users} title="Grupurile mele">
+                  <div data-testid="groups-card">
+                    <MyGroupsList groups={groupsQuery.data ?? []} />
+                  </div>
+                </Panel>
               }
-              icon={Landmark}
-              title="Funcția în OSUBB"
-              // Alone in its row it takes the row: a half-width box with
-              // nothing beside it reads as a missing neighbour.
-              className={timelineShown ? undefined : 'md:col-span-2'}
             >
-              {isModerator ? (
-                <p
-                  data-testid="board-title"
-                  className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground"
-                >
-                  {roleLabel}
-                </p>
-              ) : (
-                <BoardTitle
-                  roleLabel={roleLabel}
-                  settings={settingsQuery}
-                  membershipRows={groupsQuery.membershipRows}
-                />
-              )}
-            </Panel>
+              <Panel
+                eyebrow={
+                  // No area for the Moderator (ruling 2: no eyebrow then).
+                  isModerator
+                    ? undefined
+                    : profile.role === 'bce'
+                      ? 'Biroul de Conducere Extins'
+                      : 'Biroul de Conducere'
+                }
+                icon={Landmark}
+                title="Funcția în OSUBB"
+                // Alone in its row it takes the row: a half-width box with
+                // nothing beside it reads as a missing neighbour.
+                className={
+                  timelineShown || bceGroups ? undefined : 'md:col-span-2'
+                }
+              >
+                {isModerator ? (
+                  <p
+                    data-testid="board-title"
+                    className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground"
+                  >
+                    {roleLabel}
+                  </p>
+                ) : (
+                  <BoardTitle
+                    roleLabel={roleLabel}
+                    settings={settingsQuery}
+                    membershipRows={groupsQuery.membershipRows}
+                  />
+                )}
+              </Panel>
+            </BoardColumn>
           ) : (
             <Panel eyebrow="Grupuri" icon={Users} title="Grupurile mele">
               <div data-testid="groups-card">
@@ -492,7 +511,42 @@ function BoardTitle({
   );
 }
 
+/**
+ * The board's first grid cell: the position alone, or — for BCE (#929) — the
+ * position with Grupurile mele. Beside the timeline the two stack in one
+ * column; with no timeline they share the row as two cells.
+ */
+function BoardColumn({
+  withGroups,
+  stacked,
+  groups,
+  children,
+}: {
+  withGroups: boolean;
+  stacked: boolean;
+  groups: ReactNode;
+  children: ReactNode;
+}) {
+  if (!withGroups) return children;
+  if (stacked)
+    return (
+      <div className={stackClass}>
+        {children}
+        {groups}
+      </div>
+    );
+  return (
+    <>
+      {children}
+      {groups}
+    </>
+  );
+}
+
 const GROUP_SECTIONS = [
+  // An organization-category Group reaches Profil only by Automatic
+  // Membership (#929): the Adunarea Generală, never the Organization Group.
+  { category: 'organization', heading: 'Organizație' },
   { category: 'department', heading: 'Departamente' },
   { category: 'team', heading: 'Echipe' },
   { category: 'project', heading: 'Proiecte' },
@@ -529,8 +583,11 @@ function MyGroupsList({ groups }: { groups: MemberGroup[] }) {
                 className="relative min-h-11 px-0"
                 value={
                   // Plain membership is what the list already says; only a
-                  // Group Role earns a badge (B40).
-                  group.group_role === 'member' ? undefined : (
+                  // Group Role earns a badge (B40) — and Automatic Membership
+                  // (#929), which no Application or Appointment gave.
+                  group.automatic ? (
+                    <Badge variant="secondary">{group.role_label}</Badge>
+                  ) : group.group_role === 'member' ? undefined : (
                     <Badge variant="outline">{group.role_label}</Badge>
                   )
                 }

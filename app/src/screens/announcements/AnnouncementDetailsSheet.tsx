@@ -1,9 +1,24 @@
 import { useState } from 'react';
-import { ExternalLink, Pin, PinOff, UserRound } from 'lucide-react';
+import {
+  ExternalLink,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+  UserRound,
+} from 'lucide-react';
 import { EmptyState } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
 import {
   Sheet,
   SheetBackdrop,
@@ -16,14 +31,16 @@ import {
 import { useCapability } from '../../lib/capabilities';
 import { safeHttpUrl } from '../../lib/links';
 import {
-  AnnouncementPinRefusedError,
+  isAnnouncementRefusal,
+  useDeleteAnnouncement,
   useSetAnnouncementPinned,
 } from '../../queries/announcements';
 import { useMyGroupRoles } from '../../queries/my-groups';
+import AnnouncementEditSheet from './AnnouncementEditSheet';
 import { AnnouncementMeta } from './AnnouncementMeta';
 import { AnnouncementTermen } from './AnnouncementTermen';
 import {
-  mayPinAnnouncement,
+  mayManageAnnouncement,
   type AnnouncementPresentation,
 } from './announcements-presentation';
 import AnnouncementReaders from './AnnouncementReaders';
@@ -36,12 +53,18 @@ type AnnouncementDetailsSheetProps = {
    */
   unavailable?: boolean;
   onClose: () => void;
+  /**
+   * The Announcement was deleted from this sheet (#930); the screen closes it
+   * and says so. Closing is the default.
+   */
+  onDeleted?: () => void;
 };
 
 export default function AnnouncementDetailsSheet({
   announcement,
   unavailable = false,
   onClose,
+  onDeleted = onClose,
 }: AnnouncementDetailsSheetProps) {
   if (!announcement && !unavailable) return null;
 
@@ -56,7 +79,10 @@ export default function AnnouncementDetailsSheet({
         <SheetBackdrop />
         <SheetPopup side="right" className="max-w-2xl gap-5 p-4 sm:p-6">
           {announcement ? (
-            <AnnouncementDetails announcement={announcement} />
+            <AnnouncementDetails
+              announcement={announcement}
+              onDeleted={onDeleted}
+            />
           ) : (
             <>
               <SheetHeader>
@@ -78,8 +104,10 @@ export default function AnnouncementDetailsSheet({
 
 function AnnouncementDetails({
   announcement,
+  onDeleted,
 }: {
   announcement: AnnouncementPresentation;
+  onDeleted: () => void;
 }) {
   // The Attached Link rule (`safeHttpUrl`): a legacy row that is not http(s)
   // renders no form link rather than an href the server never checked.
@@ -146,36 +174,45 @@ function AnnouncementDetails({
 
       <AnnouncementReaders announcement={announcement} />
 
-      <AnnouncementPinControl
+      <AnnouncementManageActions
         key={announcement.id}
         announcement={announcement}
+        onDeleted={onDeleted}
       />
     </>
   );
 }
 
+type Outcome = { tone: 'status' | 'alert'; text: string };
+
 /**
- * "Fixează anunțul" / "Anulează fixarea" (#857), only for a viewer
- * `announcements_update` lets through (`mayPinAnnouncement`). The feed's
- * refetch moves the card into or out of the pinned band (R15) and flips the
- * pin in the meta line above.
+ * Editează, "Fixează anunțul" / "Anulează fixarea" and Șterge (#857, #930),
+ * only for a viewer `announcements_update` and `announcements_delete` let
+ * through (`mayManageAnnouncement`). The feed's refetch carries every change:
+ * an edit re-renders this sheet, a pin moves the card into or out of the
+ * pinned band (R15), a delete removes the card and closes the sheet.
  */
-function AnnouncementPinControl({
+function AnnouncementManageActions({
   announcement,
+  onDeleted,
 }: {
   announcement: AnnouncementPresentation;
+  onDeleted: () => void;
 }) {
   const bcOrModerator = useCapability('manageRoles').data === true;
   const managesAnyGroup = useCapability('managesAnyGroup').data === true;
   const myGroups = useMyGroupRoles();
   const setPinned = useSetAnnouncementPinned();
-  const [outcome, setOutcome] = useState<{
-    tone: 'status' | 'alert';
-    text: string;
-  } | null>(null);
+  const remove = useDeleteAnnouncement();
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [editing, setEditing] = useState(false);
+  // Each opening of Editează starts from the stored row.
+  const [editOpenings, setEditOpenings] = useState(0);
+  const [confirming, setConfirming] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (
-    !mayPinAnnouncement(announcement, {
+    !mayManageAnnouncement(announcement, {
       bcOrModerator,
       managesAnyGroup,
       groups: myGroups.data,
@@ -184,6 +221,7 @@ function AnnouncementPinControl({
     return null;
 
   const pinned = announcement.pinned;
+  const busy = setPinned.isPending || remove.isPending;
 
   function toggle() {
     setOutcome(null);
@@ -200,32 +238,76 @@ function AnnouncementPinControl({
         onError: (cause) =>
           setOutcome({
             tone: 'alert',
-            text:
-              cause instanceof AnnouncementPinRefusedError ||
-              (cause as { code?: string })?.code === '42501'
-                ? 'Nu poți modifica acest anunț.'
-                : 'Nu am putut schimba fixarea. Încearcă din nou.',
+            text: isAnnouncementRefusal(cause)
+              ? 'Nu poți modifica acest anunț.'
+              : 'Nu am putut schimba fixarea. Încearcă din nou.',
           }),
       },
     );
   }
 
+  function confirmDelete() {
+    setDeleteError(null);
+    remove.mutate(announcement.id, {
+      onSuccess: () => {
+        setConfirming(false);
+        onDeleted();
+      },
+      onError: (cause) =>
+        setDeleteError(
+          isAnnouncementRefusal(cause)
+            ? 'Nu poți șterge acest anunț.'
+            : 'Nu am putut șterge anunțul. Încearcă din nou.',
+        ),
+    });
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4">
-      <Button
-        type="button"
-        variant="outline"
-        className="min-h-11 gap-2"
-        disabled={setPinned.isPending}
-        onClick={toggle}
-      >
-        {pinned ? (
-          <PinOff className="size-4" aria-hidden="true" />
-        ) : (
-          <Pin className="size-4" aria-hidden="true" />
-        )}
-        {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
-      </Button>
+    <div className="space-y-2 border-t pt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2"
+          disabled={busy}
+          onClick={() => {
+            setOutcome(null);
+            setEditOpenings((count) => count + 1);
+            setEditing(true);
+          }}
+        >
+          <Pencil className="size-4" aria-hidden="true" />
+          Editează
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2"
+          disabled={busy}
+          onClick={toggle}
+        >
+          {pinned ? (
+            <PinOff className="size-4" aria-hidden="true" />
+          ) : (
+            <Pin className="size-4" aria-hidden="true" />
+          )}
+          {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
+        </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          className="gap-2 sm:ml-auto"
+          disabled={busy}
+          onClick={() => {
+            setOutcome(null);
+            setDeleteError(null);
+            setConfirming(true);
+          }}
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+          Șterge
+        </Button>
+      </div>
       {outcome && (
         <p
           role={outcome.tone}
@@ -238,6 +320,55 @@ function AnnouncementPinControl({
           {outcome.text}
         </p>
       )}
+
+      <AnnouncementEditSheet
+        key={editOpenings}
+        announcement={announcement}
+        open={editing}
+        onOpenChange={setEditing}
+        onSaved={() => {
+          setEditing(false);
+          setOutcome({ tone: 'status', text: 'Anunțul a fost actualizat.' });
+        }}
+      />
+
+      <Dialog
+        open={confirming}
+        onOpenChange={(next) => {
+          if (remove.isPending) return;
+          setConfirming(next);
+        }}
+      >
+        <DialogContent showCloseButton={!remove.isPending}>
+          <DialogHeader>
+            <DialogTitle>Ștergi anunțul?</DialogTitle>
+            <DialogDescription>Membrii nu îl vor mai vedea.</DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p role="alert" className="m-0 text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={remove.isPending}
+              onClick={() => setConfirming(false)}
+            >
+              Renunță
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={confirmDelete}
+            >
+              {remove.isPending ? 'Se șterge…' : 'Șterge anunțul'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

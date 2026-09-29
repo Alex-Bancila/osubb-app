@@ -25,7 +25,9 @@ vi.mock('../../queries/announcements', () => ({
   useMarkAnnouncementRead: hooks.useMarkAnnouncementRead,
   useAnnouncementReaders: () => ({ data: undefined }),
   useSetAnnouncementPinned: () => ({ mutate: vi.fn(), isPending: false }),
-  AnnouncementPinRefusedError: class extends Error {},
+  useUpdateAnnouncement: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteAnnouncement: () => ({ mutate: vi.fn(), isPending: false }),
+  isAnnouncementRefusal: () => false,
 }));
 vi.mock('../../queries/member-identities', () => ({
   useMemberIdentities: () => ({ data: undefined }),

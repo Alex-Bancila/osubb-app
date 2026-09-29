@@ -94,9 +94,9 @@ export function directoryColumns(
 
 /**
  * The Grup options (B68): the active Groups at least one listed member is in
- * (directly or through a Group below), without the Organization Group and the
- * automatic-membership Groups — the Adunarea Generală is a Role filter
- * (Voluntar cu Drept de Vot and up), not a roster.
+ * (directly or through a Group below), without the Organization Group, which
+ * holds everyone. The Adunarea Generală is offered and filters to its members
+ * by Automatic Membership (#929, ruling R32).
  */
 export function directoryGroupOptions(
   groups: Iterable<Group>,
@@ -109,7 +109,6 @@ export function directoryGroupOptions(
     (group) =>
       group.status === 'active' &&
       !group.is_organization &&
-      !group.automatic_membership &&
       listed.has(group.id),
   );
 }

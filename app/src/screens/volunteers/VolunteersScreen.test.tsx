@@ -526,7 +526,7 @@ describe('Member directory', () => {
     }
   });
 
-  it('offers no automatic-membership Group and no Group without a listed member (B68)', async () => {
+  it('offers the Adunarea Generală by Automatic Membership and filters to its members, but no Group without a listed member (B68, #929)', async () => {
     const user = userEvent.setup();
     const groups = new Map<number, unknown>(byId);
     groups.set(20, {
@@ -574,9 +574,11 @@ describe('Member directory', () => {
     await user.click(within(dialog).getByRole('combobox', { name: 'Grup' }));
     const options = await screen.findAllByRole('option');
     const labels = options.map((option) => option.textContent);
-    expect(labels).not.toContain('Adunarea Generală');
+    expect(labels).toContain('Adunarea Generală');
     expect(labels).not.toContain('Race');
     expect(labels).toContain('Voluntariat de iarnă');
+    await user.click(screen.getByRole('option', { name: 'Adunarea Generală' }));
+    expect(names()).toEqual(['Maria Dobre']);
   });
 
   it('draws the three filter titles alike and hides a filter with one option (V2)', async () => {

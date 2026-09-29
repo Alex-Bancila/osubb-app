@@ -84,15 +84,20 @@ insert into announcement_reads(announcement_id,member_id,read_at) values
 ((select edu_org from ann693),'69300000-0000-0000-0000-000000000005','2026-09-03 10:00+00'),
 ((select edu_org from ann693),'69300000-0000-0000-0000-000000000004','2026-09-03 10:00+00');
 
--- Expected Audiences, computed as owner from the same helper #68's fan-out calls
+-- Expected Audiences, computed as owner from the Group Audience #68's fan-out starts
+-- from, minus BC and the Moderator (#929, R32: never notified through membership, so
+-- never readers)
 -- and, for org, straight from profiles so the helper is not graded by itself.
 create temp table ann693_edu_audience as
-select member_id from private.group_audience((select id from groups where name='Educațional')) as a(member_id);
+select member_id from private.group_audience((select id from groups where name='Educațional')) as a(member_id)
+ where (select r.level from profiles p join roles r on r.id=p.role where p.id=a.member_id) < 6;
 create temp table ann693_child_audience as
-select member_id from private.group_audience((select id from groups where name='Child #693')) as a(member_id);
+select member_id from private.group_audience((select id from groups where name='Child #693')) as a(member_id)
+ where (select r.level from profiles p join roles r on r.id=p.role where p.id=a.member_id) < 6;
 create temp table ann693_pr_audience as
-select member_id from private.group_audience((select id from groups where name='Imagine & PR')) as a(member_id);
-create temp table ann693_active as select id as member_id from profiles where status='activ';
+select member_id from private.group_audience((select id from groups where name='Imagine & PR')) as a(member_id)
+ where (select r.level from profiles p join roles r on r.id=p.role where p.id=a.member_id) < 6;
+create temp table ann693_active as select p.id as member_id from profiles p join roles r on r.id=p.role where p.status='activ' and r.level<6;
 grant select on ann693_edu_audience, ann693_child_audience, ann693_pr_audience, ann693_active to authenticated;
 
 -- ==================== fixture sanity ====================
@@ -128,9 +133,9 @@ select set_eq($$select member_id from announcement_readers((select edu_local fro
 select ok('69300000-0000-0000-0000-000000000007' in
   (select member_id from announcement_readers((select edu_local from ann693))),
   'a Child Group member is inside the parent''s local Audience');
-select ok('69300000-0000-0000-0000-000000000010' in
+select ok('69300000-0000-0000-0000-000000000010' not in
   (select member_id from announcement_readers((select edu_local from ann693))),
-  'an Automatic Membership member of a Group below the Origin is inside its local Audience');
+  'the Moderator, an Automatic Member of a Group below the Origin, is not a reader -- R32: never notified through membership');
 select ok('69300000-0000-0000-0000-000000000011' not in
   (select member_id from announcement_readers((select edu_local from ann693))),
   'an inactive Member is never in the Audience');
@@ -149,7 +154,7 @@ select is((select count(*) from announcement_readers((select edu_local from ann6
   2::bigint,'"x" counts exactly the recipients who read it');
 select set_eq($$select member_id from announcement_readers((select edu_org from ann693))$$,
   $$select member_id from ann693_active$$,
-  'author reads an org Audience equal to every activ profile');
+  'author reads an org Audience equal to every activ profile below BC (R32)');
 select is((select array_agg(r.member_id order by r.ord)
              from announcement_readers((select edu_org from ann693)) with ordinality as r(member_id, read_at, ord)
             where r.read_at is not null),
@@ -262,10 +267,10 @@ select pg_temp.test_login_leadership('69300000-0000-0000-0000-000000000002');
 select is(my_unread_announcements_count(),0,'a read row on a hidden Announcement changes nothing');
 reset role;
 
--- BC reads org and Automatic-free locals only through announcements_read; the
--- count follows the policy, not rank.
+-- BC may read the org Announcement (announcements_read), but no Announcement reaches
+-- BC or the Moderator through membership, so their badge counts none (#929, R32).
 select pg_temp.test_login_leadership('69300000-0000-0000-0000-000000000009');
-select is(my_unread_announcements_count(),1,'BC''s count follows announcements_read (org only), not rank');
+select is(my_unread_announcements_count(),0,'BC''s Anunțuri badge counts no Announcement, not even the org one they may read (R32)');
 reset role;
 
 -- ==================== catalog ====================

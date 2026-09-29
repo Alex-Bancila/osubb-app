@@ -41,6 +41,8 @@ export default function AnnouncementsScreen() {
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
     number | null
   >(null);
+  // #930: the details sheet closes on a delete, so the receipt lives here.
+  const [deleted, setDeleted] = useState(false);
   const markedIdsRef = useRef<Set<number>>(new Set());
   const inFlightIdsRef = useRef<Set<number>>(new Set());
   // The `?anunt=` value already opened on this visit: a rerender or a feed
@@ -69,6 +71,7 @@ export default function AnnouncementsScreen() {
   }
 
   function handleOpenAnnouncement(announcement: AnnouncementPresentation) {
+    setDeleted(false);
     setSelectedAnnouncementId(announcement.id);
     markAsRead(announcement);
   }
@@ -157,6 +160,15 @@ export default function AnnouncementsScreen() {
         actions={<AnnouncementComposeSheet />}
       />
 
+      {deleted && (
+        <p
+          role="status"
+          className="m-0 text-sm text-emerald-700 dark:text-emerald-400"
+        >
+          Anunțul a fost șters.
+        </p>
+      )}
+
       {isPending ? (
         <Loading label="Se încarcă anunțurile…" />
       ) : feedQuery.isError ? (
@@ -198,6 +210,10 @@ export default function AnnouncementsScreen() {
         announcement={selectedAnnouncement}
         unavailable={linkUnavailable}
         onClose={closeDetails}
+        onDeleted={() => {
+          closeDetails();
+          setDeleted(true);
+        }}
       />
     </Page>
   );
