@@ -280,12 +280,14 @@ it('marks an inherited role even when the Manager is a plain member there too (F
     ],
   });
   show();
-  const child = screen.getByRole('link', { name: 'Logistică' }).closest('tr');
+  const child = screen
+    .getByRole('link', { name: 'Logistică' })
+    .closest('tr') as HTMLElement;
   const parent = screen
     .getByRole('link', { name: 'Educațional' })
-    .closest('tr');
-  expect(within(child!).getByText('din grupul de deasupra')).toBeVisible();
-  expect(within(parent!).queryByText('din grupul de deasupra')).toBeNull();
+    .closest('tr') as HTMLElement;
+  expect(within(child).getByText('din grupul de deasupra')).toBeVisible();
+  expect(within(parent).queryByText('din grupul de deasupra')).toBeNull();
 });
 
 it('offers "Creează Grup" only with the capability, and creates through the command', async () => {
@@ -490,7 +492,7 @@ it('shows each Minimum Level in the tree by its Role name, never the number (R29
   ).toBeVisible();
   const project = screen
     .getByRole('link', { name: 'Balul Bobocilor' })
-    .closest('tr');
+    .closest('tr') as HTMLElement;
   expect(within(project as HTMLElement).getByText('BC')).toBeVisible();
   expect(within(project as HTMLElement).queryByText('6')).toBeNull();
 });
